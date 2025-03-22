@@ -4,11 +4,7 @@ import 'package:flutter_memos/services/api_service.dart';
 import 'package:flutter_memos/widgets/filter_menu.dart';
 import 'package:flutter_memos/widgets/memo_card.dart';
 
-class FilterItem {
-  final String label;
-  final String key;
-  FilterItem({required this.label, required this.key});
-}
+
 
 class MemosScreen extends StatefulWidget {
   const MemosScreen({super.key});

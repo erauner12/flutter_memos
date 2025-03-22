@@ -38,8 +38,6 @@ class MyApp extends StatelessWidget {
         '/chat': (context) => const ChatScreen(),
         '/mcp': (context) => const McpScreen(),
         '/new-memo': (context) => const NewMemoScreen(),
-        '/memo-detail': (context) => const MemoDetailScreen(),
-        '/edit-memo': (context) => const EditMemoScreen(),
       },
       onGenerateRoute: (settings) {
         if (settings.name == '/memo-detail') {
