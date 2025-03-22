@@ -14,15 +14,19 @@ class ApiService {
   final String _apiKey = Env.memosApiKey;
 
   Future<http.Response> _get(String endpoint) async {
-    // Don't add a slash if the base URL already ends with one or endpoint starts with one
-    final slash = _baseUrl.endsWith('/') || endpoint.startsWith('/') ? '' : '/';
-    final url = Uri.parse('$_baseUrl$slash$endpoint');
+    // If no endpoint is provided, don't modify the URL at all
+    final url =
+        endpoint.isEmpty
+            ? Uri.parse(_baseUrl)
+            : Uri.parse('$_baseUrl/${endpoint.replaceAll('//', '/')}');
+    
     print('[API] GET => $url');
 
     final response = await http.get(
       url,
       headers: {
         'Content-Type': 'application/json',
+        'Accept': 'application/json',
         'Authorization': 'Bearer $_apiKey',
       },
     );
@@ -91,23 +95,21 @@ class ApiService {
 
   // Memo endpoints
   Future<List<Memo>> listMemos({String? filter, String state = ''}) async {
-    // If the base URL already ends with 'memos', don't add it again
-    String endpoint = _baseUrl.toLowerCase().endsWith('memos') ? '' : 'memos';
-    
-    // Add query parameters
-    List<String> queryParams = [];
-    if (filter != null && filter.isNotEmpty) {
-      queryParams.add('filter=$filter');
-    }
-    if (state.isNotEmpty) {
-      queryParams.add('state=$state');
-    }
-    
-    if (queryParams.isNotEmpty) {
-      endpoint += (endpoint.isEmpty ? '?' : '?') + queryParams.join('&');
-    }
+    // For now, let's make a direct request mimicking the curl command
+    // that works, without adding any query parameters
+    final url = Uri.parse(_baseUrl);
+    print('[API] GET => $url');
 
-    final response = await _get(endpoint);
+    final response = await http.get(
+      url,
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Authorization': 'Bearer $_apiKey',
+      },
+    );
+    
+    print('[API] Response status: ${response.statusCode}');
     
     if (response.statusCode == 200) {
       final Map<String, dynamic> data = json.decode(response.body);
