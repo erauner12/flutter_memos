@@ -35,17 +35,33 @@ class ApiService {
     return response;
   }
 
-  Future<http.Response> _post(String endpoint, Map<String, dynamic> data) async {
-    // Don't add a slash if the base URL already ends with one or endpoint starts with one
-    final slash = _baseUrl.endsWith('/') || endpoint.startsWith('/') ? '' : '/';
-    final url = Uri.parse('$_baseUrl$slash$endpoint');
-    print('[API] POST => $url');
+  Future<http.Response> _patch(String endpoint, Map<String, dynamic> data) async {
+    // Handle the URL construction based on endpoint
+    final url = endpoint.isEmpty ?
+        Uri.parse(_baseUrl) :
+        Uri.parse('$_baseUrl/${endpoint.replaceAll('//', '/')}');
+    
+    // Remove trailing slash if present
+    final finalUrl = url.toString().endsWith('/') ?
+        Uri.parse(url.toString().substring(0, url.toString().length - 1)) :
+        url;
+    
+    print('[API] PATCH => $finalUrl');
+    
+    // Remove trailing slash if present
+    final response = await http.patch(
+      finalUrl,
+        url;
+    
+        'Accept': 'application/json',
+    print('[API] POST => $finalUrl');
     print('[API] Request body: ${jsonEncode(data)}');
 
     final response = await http.post(
-      url,
+      finalUrl,
       headers: {
         'Content-Type': 'application/json',
+        'Accept': 'application/json',
         'Authorization': 'Bearer $_apiKey',
       },
       body: jsonEncode(data),
@@ -141,10 +157,9 @@ class ApiService {
   }
 
   Future<Memo> createMemo(Memo memo) async {
-    // If the base URL already ends with 'memos', don't add it again
-    final endpoint = _baseUrl.toLowerCase().endsWith('memos') ? '' : 'memos';
-
-    final response = await _post(endpoint, memo.toJson());
+    // Make a direct POST to the base URL without any additional path
+    // This follows the format shown in the working curl command
+    final response = await _post('', memo.toJson());
     
     if (response.statusCode == 200 || response.statusCode == 201) {
       return Memo.fromJson(json.decode(response.body));

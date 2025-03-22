@@ -1,6 +1,7 @@
 import 'dart:convert';
-import 'package:http/http.dart' as http;
+
 import 'package:flutter_memos/utils/env.dart';
+import 'package:http/http.dart' as http;
 
 class McpService {
   static final McpService _instance = McpService._internal();
@@ -33,11 +34,18 @@ class McpService {
     print('[mcpRequest] $method => $url');
     print('[mcpRequest] Using key: ***${token.substring(token.length - 4)} (length: ${token.length})');
 
-    // Prepare request
+    // Prepare request with enhanced headers
     final headers = {
       'Content-Type': 'application/json',
+      'Accept': 'application/json',
       'Authorization': 'Bearer $token',
     };
+
+    // Print the full authorization header for debugging (mask most of the token)
+    final authHeader = 'Bearer $token';
+    final maskedAuth =
+        'Bearer ${'*' * (token.length - 6)}${token.substring(token.length - 6)}';
+    print('[mcpRequest] Auth header: $maskedAuth');
 
     http.Response response;
 
@@ -127,10 +135,28 @@ class McpService {
       throw Exception('MCP server not configured properly');
     }
 
-    return _mcpRequest('POST', '/send', data: {
+    // Format data to match what the MCP server expects
+    final requestData = {
       'data': data,
       if (target != null) 'target': target,
-    });
+    };
+
+    print('[sendToMcp] Sending data: ${json.encode(requestData)}');
+
+    // Add a specific error handler for MCP authorization issues
+    try {
+      return await _mcpRequest('POST', '/send', data: requestData);
+    } catch (e) {
+      if (e.toString().contains('401')) {
+        print(
+          '[sendToMcp] Authorization error: MCP server rejected the credentials',
+        );
+        throw Exception(
+          'MCP authorization failed: Please check your MCP_SERVER_KEY',
+        );
+      }
+      rethrow;
+    }
   }
 
   /// Fetch data from MCP server
