@@ -35,7 +35,10 @@ class ApiService {
     return response;
   }
 
-  Future<http.Response> _patch(String endpoint, Map<String, dynamic> data) async {
+  Future<http.Response> _post(
+    String endpoint,
+    Map<String, dynamic> data,
+  ) async {
     // Handle the URL construction based on endpoint
     final url = endpoint.isEmpty ?
         Uri.parse(_baseUrl) :
@@ -46,14 +49,6 @@ class ApiService {
         Uri.parse(url.toString().substring(0, url.toString().length - 1)) :
         url;
     
-    print('[API] PATCH => $finalUrl');
-    
-    // Remove trailing slash if present
-    final response = await http.patch(
-      finalUrl,
-        url;
-    
-        'Accept': 'application/json',
     print('[API] POST => $finalUrl');
     print('[API] Request body: ${jsonEncode(data)}');
 
