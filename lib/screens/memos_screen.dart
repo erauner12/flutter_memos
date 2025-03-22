@@ -116,16 +116,19 @@ class _MemosScreenState extends State<MemosScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: FilterMenu(
-          currentFilterKey: _filterKey,
-          filters: _filters,
-          onFilterSelected: (filter) {
-            setState(() {
-              _filterKey = filter.key;
-            });
-            _fetchMemos();
-          },
-        ),
+        title: const Text('Memos'),
+        actions: [
+          FilterMenu(
+            currentFilterKey: _filterKey,
+            filters: _filters,
+            onFilterSelected: (filter) {
+              setState(() {
+                _filterKey = filter.key;
+              });
+              _fetchMemos();
+            },
+          ),
+        ],
       ),
       body: _buildBody(),
       floatingActionButton: FloatingActionButton(
