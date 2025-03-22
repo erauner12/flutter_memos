@@ -1,8 +1,9 @@
 import 'dart:convert';
-import 'package:http/http.dart' as http;
-import 'package:flutter_memos/models/memo.dart';
+
 import 'package:flutter_memos/models/comment.dart';
+import 'package:flutter_memos/models/memo.dart';
 import 'package:flutter_memos/utils/env.dart';
+import 'package:http/http.dart' as http;
 
 class ApiService {
   static final ApiService _instance = ApiService._internal();
@@ -13,7 +14,9 @@ class ApiService {
   final String _apiKey = Env.memosApiKey;
 
   Future<http.Response> _get(String endpoint) async {
-    final url = Uri.parse('$_baseUrl/$endpoint');
+    // Don't add a slash if the base URL already ends with one or endpoint starts with one
+    final slash = _baseUrl.endsWith('/') || endpoint.startsWith('/') ? '' : '/';
+    final url = Uri.parse('$_baseUrl$slash$endpoint');
     print('[API] GET => $url');
 
     final response = await http.get(
@@ -29,7 +32,9 @@ class ApiService {
   }
 
   Future<http.Response> _post(String endpoint, Map<String, dynamic> data) async {
-    final url = Uri.parse('$_baseUrl/$endpoint');
+    // Don't add a slash if the base URL already ends with one or endpoint starts with one
+    final slash = _baseUrl.endsWith('/') || endpoint.startsWith('/') ? '' : '/';
+    final url = Uri.parse('$_baseUrl$slash$endpoint');
     print('[API] POST => $url');
     print('[API] Request body: ${jsonEncode(data)}');
 
@@ -47,7 +52,9 @@ class ApiService {
   }
 
   Future<http.Response> _patch(String endpoint, Map<String, dynamic> data) async {
-    final url = Uri.parse('$_baseUrl/$endpoint');
+    // Don't add a slash if the base URL already ends with one or endpoint starts with one
+    final slash = _baseUrl.endsWith('/') || endpoint.startsWith('/') ? '' : '/';
+    final url = Uri.parse('$_baseUrl$slash$endpoint');
     print('[API] PATCH => $url');
     print('[API] Request body: ${jsonEncode(data)}');
 
@@ -65,7 +72,9 @@ class ApiService {
   }
 
   Future<http.Response> _delete(String endpoint) async {
-    final url = Uri.parse('$_baseUrl/$endpoint');
+    // Don't add a slash if the base URL already ends with one or endpoint starts with one
+    final slash = _baseUrl.endsWith('/') || endpoint.startsWith('/') ? '' : '/';
+    final url = Uri.parse('$_baseUrl$slash$endpoint');
     print('[API] DELETE => $url');
 
     final response = await http.delete(
@@ -82,7 +91,8 @@ class ApiService {
 
   // Memo endpoints
   Future<List<Memo>> listMemos({String? filter, String state = ''}) async {
-    String endpoint = 'memos';
+    // If the base URL already ends with 'memos', don't add it again
+    String endpoint = _baseUrl.toLowerCase().endsWith('memos') ? '' : 'memos';
     
     // Add query parameters
     List<String> queryParams = [];
@@ -94,7 +104,7 @@ class ApiService {
     }
     
     if (queryParams.isNotEmpty) {
-      endpoint += '?${queryParams.join('&')}';
+      endpoint += (endpoint.isEmpty ? '?' : '?') + queryParams.join('&');
     }
 
     final response = await _get(endpoint);
@@ -111,7 +121,15 @@ class ApiService {
 
   Future<Memo> getMemo(String id) async {
     final formattedId = _formatMemoId(id);
-    final response = await _get(formattedId);
+    // If the base URL already ends with 'memos', adjust the path accordingly
+    final endpoint =
+        _baseUrl.toLowerCase().endsWith('memos')
+            ? id.startsWith('memos/')
+                ? id.substring(6)
+                : id
+            : formattedId;
+
+    final response = await _get(endpoint);
     
     if (response.statusCode == 200) {
       return Memo.fromJson(json.decode(response.body));
@@ -121,7 +139,10 @@ class ApiService {
   }
 
   Future<Memo> createMemo(Memo memo) async {
-    final response = await _post('memos', memo.toJson());
+    // If the base URL already ends with 'memos', don't add it again
+    final endpoint = _baseUrl.toLowerCase().endsWith('memos') ? '' : 'memos';
+
+    final response = await _post(endpoint, memo.toJson());
     
     if (response.statusCode == 200 || response.statusCode == 201) {
       return Memo.fromJson(json.decode(response.body));
@@ -132,7 +153,15 @@ class ApiService {
 
   Future<Memo> updateMemo(String id, Memo memo) async {
     final formattedId = _formatMemoId(id);
-    final response = await _patch(formattedId, memo.toJson());
+    // If the base URL already ends with 'memos', adjust the path accordingly
+    final endpoint =
+        _baseUrl.toLowerCase().endsWith('memos')
+            ? id.startsWith('memos/')
+                ? id.substring(6)
+                : id
+            : formattedId;
+
+    final response = await _patch(endpoint, memo.toJson());
     
     if (response.statusCode == 200) {
       return Memo.fromJson(json.decode(response.body));
@@ -143,7 +172,15 @@ class ApiService {
 
   Future<void> deleteMemo(String id) async {
     final formattedId = _formatMemoId(id);
-    final response = await _delete(formattedId);
+    // If the base URL already ends with 'memos', adjust the path accordingly
+    final endpoint =
+        _baseUrl.toLowerCase().endsWith('memos')
+            ? id.startsWith('memos/')
+                ? id.substring(6)
+                : id
+            : formattedId;
+
+    final response = await _delete(endpoint);
     
     if (response.statusCode != 200 && response.statusCode != 204) {
       throw Exception('Failed to delete memo: ${response.statusCode}');
@@ -153,7 +190,13 @@ class ApiService {
   // Comments endpoints
   Future<List<Comment>> listMemoComments(String memoId) async {
     final formattedId = _formatMemoId(memoId);
-    final response = await _get('$formattedId/comments');
+    // If the base URL already ends with 'memos', adjust the path accordingly
+    final endpoint =
+        _baseUrl.toLowerCase().endsWith('memos')
+            ? '${memoId.startsWith('memos/') ? memoId.substring(6) : memoId}/comments'
+            : '$formattedId/comments';
+
+    final response = await _get(endpoint);
     
     if (response.statusCode == 200) {
       final data = json.decode(response.body);
@@ -165,7 +208,13 @@ class ApiService {
 
   Future<Comment> createMemoComment(String memoId, Comment comment) async {
     final formattedId = _formatMemoId(memoId);
-    final response = await _post('$formattedId/comments', comment.toJson());
+    // If the base URL already ends with 'memos', adjust the path accordingly
+    final endpoint =
+        _baseUrl.toLowerCase().endsWith('memos')
+            ? '${memoId.startsWith('memos/') ? memoId.substring(6) : memoId}/comments'
+            : '$formattedId/comments';
+
+    final response = await _post(endpoint, comment.toJson());
     
     if (response.statusCode == 200 || response.statusCode == 201) {
       return Comment.fromJson(json.decode(response.body));
@@ -212,9 +261,7 @@ class ApiService {
           'createTime': memo['createTime'] != null
               ? DateTime.parse(memo['createTime']).millisecondsSinceEpoch
               : null,
-          'creatorId': memo['creator'] != null
-              ? memo['creator'].toString().replaceAll('users/', '')
-              : null,
+          'creatorId': memo['creator']?.toString().replaceAll('users/', ''),
         };
         return Comment.fromJson(commentData);
       }).toList();

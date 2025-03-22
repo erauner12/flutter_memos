@@ -6,12 +6,13 @@ class Env {
   // API configuration
   static const String apiBaseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'https://api.example.com',
+    defaultValue: 'http://localhost:5230/api/v1/memos',
   );
   
   static const String memosApiKey = String.fromEnvironment(
     'MEMOS_API_KEY',
-    defaultValue: '',
+    defaultValue:
+        'eyJhbGciOiJIUzI1NiIsImtpZCI6InYxIiwidHlwIjoiSldUIn0.eyJuYW1lIjoiZXJhdW5lciIsImlzcyI6Im1lbW9zIiwic3ViIjoiMSIsImF1ZCI6WyJ1c2VyLmFjY2Vzcy10b2tlbiJdLCJpYXQiOjE3NDI1OTc1Nzd9.Wud-szLldpDNlfnzdEusoXLaFGS-NXNYMM3tolPFViY',
   );
   
   // MCP Server configuration
@@ -22,7 +23,7 @@ class Env {
   
   static const String mcpServerKey = String.fromEnvironment(
     'MCP_SERVER_KEY',
-    defaultValue: '',
+    defaultValue: '123456789',
   );
 
   // Helper method to check if configuration is complete
@@ -47,6 +48,6 @@ class Env {
   static String _maskString(String value) {
     if (value.isEmpty) return '';
     if (value.length <= 4) return '****';
-    return '***' + value.substring(value.length - 4);
+    return '***${value.substring(value.length - 4)}';
   }
 }
