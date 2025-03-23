@@ -1,5 +1,3 @@
-import 'dart:math' show min;
-
 import 'package:flutter_memos/api/lib/api.dart';
 import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/models/memo.dart';
@@ -11,80 +9,68 @@ class ApiService {
   factory ApiService() => _instance;
   
   late final MemoServiceApi _memoApi;
+  late final ApiClient _apiClient;
 
-  // This static variable is used to track the original server order for testing
+  // For testing purposes
   static List<String>? _lastServerOrder;
   static List<String> get lastServerOrder => _lastServerOrder ?? [];
 
   ApiService._internal() {
-    // The key is to set up the basePath correctly
-    // The generated API client already includes "/api/v1/" in its paths
+    // Set up the base path correctly (without /api/v1 which is added by the generated client)
     String basePath = Env.apiBaseUrl;
     
-    // Remove trailing slash if present
+    // Remove any API paths from the base URL to avoid duplication
+    if (basePath.toLowerCase().contains('/api/v1')) {
+      final apiIndex = basePath.toLowerCase().indexOf('/api/v1');
+      basePath = basePath.substring(0, apiIndex);
+      print('[API] Extracted base URL: $basePath');
+    } else if (basePath.toLowerCase().endsWith('/memos')) {
+      basePath = basePath.substring(0, basePath.length - 6);
+      print('[API] Removed "/memos" suffix from base URL');
+    }
+    
     if (basePath.endsWith('/')) {
       basePath = basePath.substring(0, basePath.length - 1);
     }
     
-    // Remove "/api/v1/memos" or "/api/v1" suffix if present
-    // as the generated client already includes these path segments
-    if (basePath.toLowerCase().endsWith('/api/v1/memos')) {
-      basePath = basePath.substring(0, basePath.length - 13);
-      print(
-        '[API] Removing "/api/v1/memos" from base path to avoid duplication',
-      );
-    } else if (basePath.toLowerCase().endsWith('/api/v1')) {
-      basePath = basePath.substring(0, basePath.length - 7);
-      print('[API] Removing "/api/v1" from base path to avoid duplication');
-    } else if (basePath.toLowerCase().endsWith('/memos')) {
-      basePath = basePath.substring(0, basePath.length - 6);
-      print(
-        '[API] Removing "/memos" from base path for proper URL construction',
-      );
-    }
-    
-    print('[API] Initializing with base path: $basePath');
-    
-    // Initialize the API client
-    final apiClient = ApiClient(
+    print('[API] Using base path: $basePath');
+
+    // Initialize the API client and authentication
+    _apiClient = ApiClient(
       basePath: basePath,
       authentication: HttpBearerAuth()..accessToken = Env.memosApiKey,
     );
     
-    _memoApi = MemoServiceApi(apiClient);
+    _memoApi = MemoServiceApi(_apiClient);
   }
 
-  // Memo endpoints
+  // MEMO OPERATIONS
+
+  /// List memos with filtering and sorting
   Future<List<Memo>> listMemos({
     String? parent,
     String? filter,
     String state = '',
-    String sort = 'updateTime', // Default sort field
-    String direction = 'DESC', // Default direction (newest first)
+    String sort = 'updateTime',
+    String direction = 'DESC',
   }) async {
-    print('Fetching memos with sort field: $sort');
+    print('[API] Listing memos with sort=$sort, direction=$direction');
     
     try {
-      // Call the appropriate method based on whether parent is provided
       final V1ListMemosResponse? response;
       
+      // Use the appropriate endpoint based on whether parent is specified
       if (parent != null && parent.isNotEmpty) {
-        // Make sure parent is correctly formatted (no leading "users/" if it's already included)
-        String formattedParent = parent;
-        print(
-          '[API] Using memoServiceListMemos2 with parent: $formattedParent',
-        );
-        
         response = await _memoApi.memoServiceListMemos2(
-          formattedParent,
+          parent,
           state: state.isNotEmpty ? state : null,
           sort: sort,
           direction: direction,
           filter: filter,
         );
       } else {
-        print('[API] Using memoServiceListMemos without parent');
         response = await _memoApi.memoServiceListMemos(
+          parent: parent,
           state: state.isNotEmpty ? state : null,
           sort: sort,
           direction: direction,
@@ -92,51 +78,32 @@ class ApiService {
         );
       }
       
-      // Process the response
-      final apiMemos = response?.memos ?? [];
-      print('[API] Response status: 200');
-      print('[API] Received ${apiMemos.length} memos');
-      
-      if (apiMemos.isNotEmpty) {
-        print(
-          '[API] First memo: ${_truncateContent(apiMemos.first.content)}...',
-        );
-        print(
-          '[API] Sort fields - createTime: ${apiMemos.first.createTime}, updateTime: ${apiMemos.first.updateTime}',
-        );
+      if (response == null) {
+        return [];
       }
-      
-      // Convert API memos to app model memos
-      final appMemos = apiMemos.map(_convertApiMemoToAppMemo).toList();
 
-      // Store the original server order for testing
-      final serverOrder = appMemos.map((memo) => memo.id).toList();
-      if (serverOrder.isNotEmpty) {
-        print(
-          '[API] Original server order (first ${min(3, serverOrder.length)} IDs): ${serverOrder.take(min(3, serverOrder.length)).join(", ")}',
-        );
-      }
+      // Convert API models to app models
+      final memos = response.memos.map(_convertApiMemoToAppMemo).toList();
       
-      // Apply client-side sorting
-      print('[API] Applying client-side sorting by $sort');
-      MemoUtils.sortMemos(appMemos, sort);
-
-      // Store the original order in a static variable for testing
-      _lastServerOrder = serverOrder;
+      // Save original order for testing
+      _lastServerOrder = memos.map((memo) => memo.id).toList();
       
-      return appMemos;
+      // Always apply client-side sorting to ensure consistency
+      MemoUtils.sortMemos(memos, sort);
+      
+      return memos;
     } catch (e) {
-      print('[API] Error: $e');
+      print('[API] Error listing memos: $e');
       throw Exception('Failed to load memos: $e');
     }
   }
 
+  /// Get a single memo by ID
   Future<Memo> getMemo(String id) async {
-    final formattedId = _formatMemoId(id);
-    print('[API] Getting memo: $formattedId');
-    
     try {
-      final apiMemo = await _memoApi.memoServiceGetMemo(formattedId);
+      final apiMemo = await _memoApi.memoServiceGetMemo(
+        _formatResourceName(id, 'memos'),
+      );
       
       if (apiMemo == null) {
         throw Exception('Memo not found');
@@ -144,154 +111,143 @@ class ApiService {
       
       return _convertApiMemoToAppMemo(apiMemo);
     } catch (e) {
-      print('[API] Error: $e');
+      print('[API] Error getting memo: $e');
       throw Exception('Failed to load memo: $e');
     }
   }
 
+  /// Create a new memo
   Future<Memo> createMemo(Memo memo) async {
-    print('[API] Creating new memo');
-    
-    // Convert app memo to API memo
-    final apiMemo = _convertAppMemoToApiMemo(memo);
-    
     try {
+      final apiMemo = Apiv1Memo(
+        content: memo.content,
+        pinned: memo.pinned,
+        state: _getApiState(memo.state),
+        visibility: _getApiVisibility(memo.visibility),
+        creator: memo.creator ?? 'users/1',
+      );
+      
       final response = await _memoApi.memoServiceCreateMemo(apiMemo);
       
       if (response == null) {
-        throw Exception('Failed to create memo: No response');
+        throw Exception('Failed to create memo: No response from server');
       }
       
       return _convertApiMemoToAppMemo(response);
     } catch (e) {
-      print('[API] Error: $e');
+      print('[API] Error creating memo: $e');
       throw Exception('Failed to create memo: $e');
     }
   }
 
+  /// Update an existing memo
   Future<Memo> updateMemo(String id, Memo memo) async {
-    final formattedId = _formatMemoId(id);
-    print('[API] Updating memo: $formattedId');
-    
-    // Convert app memo to API memo for update
-    final apiMemo = _convertAppMemoToUpdateMemo(memo);
-    
     try {
+      final updateMemo = TheMemoToUpdateTheNameFieldIsRequired(
+        content: memo.content,
+        pinned: memo.pinned,
+        state: _getApiState(memo.state),
+        visibility: _getApiVisibility(memo.visibility),
+      );
+      
       final response = await _memoApi.memoServiceUpdateMemo(
-        formattedId,
-        apiMemo,
+        _formatResourceName(id, 'memos'),
+        updateMemo,
       );
       
       if (response == null) {
-        throw Exception('Failed to update memo: No response');
+        throw Exception('Failed to update memo: No response from server');
       }
       
       return _convertApiMemoToAppMemo(response);
     } catch (e) {
-      print('[API] Error: $e');
+      print('[API] Error updating memo: $e');
       throw Exception('Failed to update memo: $e');
     }
   }
 
+  /// Delete a memo
   Future<void> deleteMemo(String id) async {
-    final formattedId = _formatMemoId(id);
-    print('[API] Deleting memo: $formattedId');
-    
     try {
-      await _memoApi.memoServiceDeleteMemo(formattedId);
+      await _memoApi.memoServiceDeleteMemo(_formatResourceName(id, 'memos'));
     } catch (e) {
-      print('[API] Error: $e');
+      print('[API] Error deleting memo: $e');
       throw Exception('Failed to delete memo: $e');
     }
   }
 
-  // Comments endpoints
+  // COMMENT OPERATIONS
+
+  /// List comments for a memo
   Future<List<Comment>> listMemoComments(String memoId) async {
-    final formattedId = _formatMemoId(memoId);
-    print('[API] Listing comments for memo: $formattedId');
-    
     try {
-      final response = await _memoApi.memoServiceListMemoComments(formattedId);
+      final response = await _memoApi.memoServiceListMemoComments(
+        _formatResourceName(memoId, 'memos'),
+      );
       
       if (response == null) {
         return [];
       }
       
-      final comments = _parseCommentsFromApiResponse(response);
-      print('[API] Received ${comments.length} comments');
-      
-      return comments;
+      return _parseCommentsFromApiResponse(response);
     } catch (e) {
-      print('[API] Error: $e');
+      print('[API] Error listing comments: $e');
       throw Exception('Failed to load comments: $e');
     }
   }
 
+  /// Create a comment on a memo
   Future<Comment> createMemoComment(String memoId, Comment comment) async {
-    final formattedId = _formatMemoId(memoId);
-    print('[API] Creating comment for memo: $formattedId');
-    
-    // Convert app comment to API memo for comment
-    final apiMemo = _convertAppCommentToApiMemo(comment);
-    
     try {
+      final apiMemo = Apiv1Memo(
+        content: comment.content,
+        creator:
+            comment.creatorId != null
+                ? 'users/${comment.creatorId}'
+                : 'users/1',
+      );
+      
       final response = await _memoApi.memoServiceCreateMemoComment(
-        formattedId,
+        _formatResourceName(memoId, 'memos'),
         apiMemo,
       );
       
       if (response == null) {
-        throw Exception('Failed to create comment: No response');
+        throw Exception('Failed to create comment: No response from server');
       }
       
-      // Convert API response to app Comment
       return Comment(
         id: _extractIdFromName(response.name ?? ''),
         content: response.content ?? '',
-        createTime:
-            response.createTime != null
-                ? response.createTime!.millisecondsSinceEpoch
-                : DateTime.now().millisecondsSinceEpoch,
-        creatorId: _extractCreatorIdFromName(response.creator ?? ''),
+        createTime: response.createTime?.millisecondsSinceEpoch,
+        creatorId: _extractIdFromName(response.creator ?? ''),
       );
     } catch (e) {
-      print('[API] Error: $e');
+      print('[API] Error creating comment: $e');
       throw Exception('Failed to create comment: $e');
     }
   }
 
-  // Helper functions
-  String _formatMemoId(String id) {
-    return id.startsWith('memos/') ? id : 'memos/$id';
+  // HELPER METHODS
+
+  /// Format a resource name to ensure it has the proper prefix
+  String _formatResourceName(String id, String resourceType) {
+    return id.startsWith('$resourceType/') ? id : '$resourceType/$id';
   }
   
+  /// Extract ID portion from a resource name
   String _extractIdFromName(String name) {
     if (name.isEmpty) return '';
+    
+    // For resources named like "users/123" or "memos/abc123"
     final parts = name.split('/');
     return parts.length > 1 ? parts[1] : name;
   }
   
-  String _extractCreatorIdFromName(String creator) {
-    if (creator.isEmpty) return '';
-    final match = RegExp(r'users\/(\d+)').firstMatch(creator);
-    return match != null ? match.group(1) ?? '' : creator;
-  }
-  
-  String _truncateContent(String? content) {
-    if (content == null || content.isEmpty) return '';
-    return content.length > 20 ? content.substring(0, 20) : content;
-  }
-  
-  // Conversion functions between app models and API models
+  /// Convert API memo model to app memo model
   Memo _convertApiMemoToAppMemo(Apiv1Memo apiMemo) {
-    String id = '';
-    if (apiMemo.name != null) {
-      final parts = apiMemo.name!.toString().split('/');
-      id = parts.length > 1 ? parts[1] : apiMemo.name!;
-    }
-
     return Memo(
-      id: id,
+      id: _extractIdFromName(apiMemo.name ?? ''),
       content: apiMemo.content ?? '',
       pinned: apiMemo.pinned ?? false,
       state: _parseApiState(apiMemo.state),
@@ -306,6 +262,7 @@ class ApiService {
     );
   }
   
+  /// Convert API state enum to app state enum
   MemoState _parseApiState(V1State? state) {
     if (state == null) return MemoState.normal;
     
@@ -318,33 +275,7 @@ class ApiService {
     }
   }
   
-  Apiv1Memo _convertAppMemoToApiMemo(Memo memo) {
-    return Apiv1Memo(
-      content: memo.content,
-      pinned: memo.pinned,
-      state: _getApiState(memo.state),
-      visibility: _getApiVisibility(memo.visibility),
-      creator: memo.creator ?? 'users/1',
-    );
-  }
-  
-  TheMemoToUpdateTheNameFieldIsRequired _convertAppMemoToUpdateMemo(Memo memo) {
-    return TheMemoToUpdateTheNameFieldIsRequired(
-      content: memo.content,
-      pinned: memo.pinned,
-      state: _getApiState(memo.state),
-      visibility: _getApiVisibility(memo.visibility),
-    );
-  }
-  
-  Apiv1Memo _convertAppCommentToApiMemo(Comment comment) {
-    return Apiv1Memo(
-      content: comment.content,
-      creator:
-          comment.creatorId != null ? 'users/${comment.creatorId}' : 'users/1',
-    );
-  }
-  
+  /// Convert app state enum to API state enum
   V1State _getApiState(MemoState state) {
     switch (state) {
       case MemoState.archived:
@@ -355,6 +286,7 @@ class ApiService {
     }
   }
   
+  /// Convert visibility string to API visibility enum
   V1Visibility _getApiVisibility(String visibility) {
     switch (visibility.toUpperCase()) {
       case 'PRIVATE':
@@ -367,31 +299,20 @@ class ApiService {
     }
   }
   
+  /// Parse comments from API response
   List<Comment> _parseCommentsFromApiResponse(
     V1ListMemoCommentsResponse response,
   ) {
-    final comments = <Comment>[];
-    
-    for (final memo in response.memos) {
-      // Extract comment details from memo
-      String id = _extractIdFromName(memo.name ?? '');
-      String content = memo.content ?? '';
-      int? timestamp = memo.createTime?.millisecondsSinceEpoch;
-      String? creator =
-          memo.creator != null
-              ? _extractCreatorIdFromName(memo.creator!)
-              : null;
-      
-      comments.add(
-        Comment(
-          id: id,
-          content: content,
-          createTime: timestamp,
-          creatorId: creator,
-        ),
-      );
-    }
-      
-    return comments;
+    return response.memos
+        .map(
+          (memo) => Comment(
+            id: _extractIdFromName(memo.name ?? ''),
+            content: memo.content ?? '',
+            createTime: memo.createTime?.millisecondsSinceEpoch,
+            creatorId:
+                memo.creator != null ? _extractIdFromName(memo.creator!) : null,
+          ),
+        )
+        .toList();
   }
 }
