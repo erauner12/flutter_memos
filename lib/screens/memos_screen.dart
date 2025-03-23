@@ -176,7 +176,7 @@ class _MemosScreenState extends State<MemosScreen> {
       appBar: AppBar(
         title: const Text('Memos'),
         actions: [
-          // Sort toggle button
+          // Sort toggle button with more descriptive text
           TextButton.icon(
             icon: Icon(
               _sortMode == MemoSortMode.byUpdateTime
@@ -185,12 +185,15 @@ class _MemosScreenState extends State<MemosScreen> {
               size: 20,
             ),
             label: Text(
-              _sortMode == MemoSortMode.byUpdateTime ? 'Updated' : 'Created',
+              _sortMode == MemoSortMode.byUpdateTime
+                  ? 'Sort by: Updated'
+                  : 'Sort by: Created',
               style: const TextStyle(fontSize: 12),
             ),
             style: TextButton.styleFrom(
               padding: const EdgeInsets.symmetric(horizontal: 12),
               foregroundColor: Theme.of(context).colorScheme.primary,
+              backgroundColor: Colors.grey[100],
             ),
             onPressed: () {
               _toggleSortMode();
@@ -248,17 +251,43 @@ class _MemosScreenState extends State<MemosScreen> {
 
     return Column(
       children: [
-        // Sort indicator
+        // Sort indicator with more details
         Container(
           color: Colors.grey[200],
           padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
           width: double.infinity,
-          child: Text(
-            'Sorting by ${_sortMode == MemoSortMode.byUpdateTime ? 'update' : 'creation'} date (newest first)',
-            style: TextStyle(
-              color: Colors.grey[700],
-              fontWeight: FontWeight.w500,
-            ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Sorting by ${_sortMode == MemoSortMode.byUpdateTime ? 'last updated' : 'creation date'} (newest first)',
+                      style: TextStyle(
+                        color: Colors.grey[800],
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    Text(
+                      'Client-side sorting applied',
+                      style: TextStyle(
+                        color: Colors.grey[600],
+                        fontSize: 12,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                _sortMode == MemoSortMode.byUpdateTime
+                    ? Icons.update
+                    : Icons.calendar_today,
+                color: Colors.grey[600],
+                size: 16,
+              ),
+            ],
           ),
         ),
 
@@ -336,7 +365,16 @@ class _MemosScreenState extends State<MemosScreen> {
                     pinned: memo.pinned,
                     createdAt: memo.createTime,
                     updatedAt: memo.updateTime,
-                    showTimeStamps: true, // Show timestamps for debugging
+                    showTimeStamps: true,
+                    // Display relevant timestamp based on sort mode
+                    highlightTimestamp:
+                        _sortMode == MemoSortMode.byUpdateTime
+                            ? MemoUtils.formatTimestamp(memo.updateTime)
+                            : MemoUtils.formatTimestamp(memo.createTime),
+                    timestampType:
+                        _sortMode == MemoSortMode.byUpdateTime
+                            ? 'Updated'
+                            : 'Created',
                     onTap: () => _navigateToMemoDetail(memo.id),
                   ),
                 );

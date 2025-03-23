@@ -6,6 +6,8 @@ class MemoCard extends StatelessWidget {
   final String? createdAt;
   final String? updatedAt;
   final bool showTimeStamps;
+  final String? highlightTimestamp;
+  final String? timestampType;
   final VoidCallback? onTap;
 
   const MemoCard({
@@ -15,6 +17,8 @@ class MemoCard extends StatelessWidget {
     this.createdAt,
     this.updatedAt,
     this.showTimeStamps = false,
+    this.highlightTimestamp,
+    this.timestampType,
     this.onTap,
   });
 
@@ -60,9 +64,36 @@ class MemoCard extends StatelessWidget {
                     ),
                   ),
                 ),
-              if (showTimeStamps)
+              if (highlightTimestamp != null)
+                // Display the highlighted timestamp (based on sort mode)
                 Padding(
                   padding: const EdgeInsets.only(top: 8.0),
+                  child: Row(
+                    children: [
+                      Icon(
+                        timestampType == 'Updated'
+                            ? Icons.update
+                            : Icons.calendar_today,
+                        size: 12,
+                        color: Colors.grey[700],
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        '$timestampType: $highlightTimestamp',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.grey[800],
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+              // Show detailed timestamps if needed
+              if (showTimeStamps && (createdAt != null || updatedAt != null))
+                Padding(
+                  padding: const EdgeInsets.only(top: 4.0),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -79,8 +110,7 @@ class MemoCard extends StatelessWidget {
                           'Updated: ${_formatDateTime(updatedAt!)}',
                           style: TextStyle(
                             fontSize: 11,
-                            color: Colors.grey[800],
-                            fontWeight: FontWeight.w500,
+                            color: Colors.grey[600],
                           ),
                         ),
                     ],

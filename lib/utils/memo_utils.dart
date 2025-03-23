@@ -68,4 +68,44 @@ class MemoUtils {
       });
     }
   }
+  
+  /// Get a human readable date string from a timestamp
+  static String formatTimestamp(String? timestamp) {
+    if (timestamp == null) return 'Unknown';
+
+    try {
+      final dateTime = DateTime.parse(timestamp);
+      final now = DateTime.now();
+      final difference = now.difference(dateTime);
+
+      if (difference.inDays == 0) {
+        // Today, show hours and minutes
+        return 'Today at ${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}';
+      } else if (difference.inDays == 1) {
+        // Yesterday
+        return 'Yesterday';
+      } else if (difference.inDays < 7) {
+        // This week
+        return '${difference.inDays} days ago';
+      } else {
+        // Older
+        return '${dateTime.year}-${dateTime.month.toString().padLeft(2, '0')}-${dateTime.day.toString().padLeft(2, '0')}';
+      }
+    } catch (e) {
+      return timestamp;
+    }
+  }
+
+  /// Test if two lists of memos have the same order of IDs
+  static bool haveSameOrder(List<Memo> list1, List<Memo> list2) {
+    if (list1.length != list2.length) return false;
+
+    for (int i = 0; i < list1.length; i++) {
+      if (list1[i].id != list2[i].id) {
+        return false;
+      }
+    }
+
+    return true;
+  }
 }

@@ -120,6 +120,10 @@ class ApiService {
     String sort = 'display_time', // Default sort field
     String direction = 'DESC', // Default direction (newest first)
   }) async {
+    // Note: Even though we pass sort parameters to the server, it appears the
+    // server doesn't respect them and always sorts by update time.
+    // We apply client-side sorting to ensure the correct order.
+    
     // Build query parameters
     final queryParams = <String, String>{};
 
