@@ -7,7 +7,7 @@ echo "Starting direct API client generation..."
 
 # Generate the API client code
 echo "Generating API client code..."
-dart run openapi_generator_cli generate \
+flutter pub run openapi_generator_cli generate \
   -i api/openapi.yaml \
   -g dart2 \
   -o lib/api \
