@@ -1,16 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_memos/models/memo.dart';
-import 'package:flutter_memos/services/api_service.dart';
+import 'package:flutter_memos/providers/api_providers.dart';
+import 'package:flutter_memos/providers/memo_providers.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class NewMemoScreen extends StatefulWidget {
-  const NewMemoScreen({Key? key}) : super(key: key);
+// Provider for creating a new memo
+final createMemoProvider = Provider<Future<void> Function(Memo)>((ref) {
+  return (Memo memo) async {
+    final apiService = ref.read(apiServiceProvider);
+    await apiService.createMemo(memo);
+    ref.invalidate(memosProvider); // Refresh the memos list
+  };
+});
+
+class NewMemoScreen extends ConsumerStatefulWidget {
+  const NewMemoScreen({super.key});
 
   @override
-  State<NewMemoScreen> createState() => _NewMemoScreenState();
+  ConsumerState<NewMemoScreen> createState() => _NewMemoScreenState();
 }
 
-class _NewMemoScreenState extends State<NewMemoScreen> {
-  final ApiService _apiService = ApiService();
+class _NewMemoScreenState extends ConsumerState<NewMemoScreen> {
   final TextEditingController _contentController = TextEditingController();
   final FocusNode _contentFocusNode = FocusNode();
   
@@ -25,35 +35,53 @@ class _NewMemoScreenState extends State<NewMemoScreen> {
   }
 
   Future<void> _handleCreateMemo() async {
-    if (_contentController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter some memo content')),
-      );
+    // Extract content early to avoid any race conditions
+    final content = _contentController.text.trim();
+
+    if (content.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please enter some memo content')),
+        );
+      }
       return;
     }
 
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
+    if (mounted) {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+    }
 
     try {
       final newMemo = Memo(
         id: 'temp',
-        content: _contentController.text.trim(),
+        content: content,
         visibility: 'PUBLIC',
       );
       
-      await _apiService.createMemo(newMemo);
+      // Use the provider to create the memo
+      await ref.read(createMemoProvider)(newMemo);
       
       if (mounted) {
         Navigator.of(context).pop();
       }
     } catch (e) {
-      setState(() {
-        _error = e.toString();
-        _loading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _error = e.toString();
+          _loading = false;
+        });
+        
+        // Show error in snackbar for better visibility
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error creating memo: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 

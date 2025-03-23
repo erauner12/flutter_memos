@@ -168,8 +168,8 @@ void main() {
         // This is a unit test that verifies our logic for handling delete responses
         // It doesn't make actual API calls
         
-        // Create a mock API client that returns an empty response
-        final apiService = ApiService();
+        // Note: No need to actually create an instance for this test
+        // It's just documenting expected behavior
         
         // Test that our handling of empty responses doesn't throw exceptions
         // This is just testing the logic, not making real API calls

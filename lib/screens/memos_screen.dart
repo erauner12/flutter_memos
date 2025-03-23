@@ -1,291 +1,67 @@
-import 'dart:math' show min;
-
 import 'package:flutter/material.dart';
-import 'package:flutter_memos/models/memo.dart';
-import 'package:flutter_memos/services/api_service.dart';
-import 'package:flutter_memos/utils/filter_builder.dart';
-import 'package:flutter_memos/utils/filter_presets.dart';
+import 'package:flutter_memos/providers/filter_providers.dart';
+import 'package:flutter_memos/providers/memo_providers.dart';
 import 'package:flutter_memos/utils/memo_utils.dart';
 import 'package:flutter_memos/widgets/memo_card.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class MemosScreen extends StatefulWidget {
+class MemosScreen extends ConsumerStatefulWidget {
   const MemosScreen({super.key});
 
   @override
-  State<MemosScreen> createState() => _MemosScreenState();
+  ConsumerState<MemosScreen> createState() => _MemosScreenState();
 }
 
-enum MemoSortMode { byUpdateTime, byCreateTime }
-
-class _MemosScreenState extends State<MemosScreen> {
-  final ApiService _apiService = ApiService();
-  List<Memo> _memos = [];
-  bool _loading = false;
-  String? _error;
-  final String _filterKey = 'inbox';
-  MemoSortMode _sortMode = MemoSortMode.byUpdateTime;
-  // Multiple filter types that can be combined
-  String _timeFilterOption =
-      'all'; // Time-based filters (today, this week, etc.)
-  String _statusFilterOption = 'untagged'; // Status filters (tagged/untagged)
-  final Set<String> _hiddenMemoIds = {};
+class _MemosScreenState extends ConsumerState<MemosScreen> {
+  // Keep track only of the UI state that's truly local to this widget
+  // Other state is managed by Riverpod providers
 
   @override
   void initState() {
     super.initState();
-    _loadLastFilterOption();
-    _fetchMemos();
-  }
-
-  Future<void> _loadLastFilterOption() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final lastTimeFilter = prefs.getString('last_time_filter') ?? 'all';
-      final lastStatusFilter =
-          prefs.getString('last_status_filter') ?? 'untagged';
-      
-      setState(() {
-        _timeFilterOption = lastTimeFilter;
-        _statusFilterOption = lastStatusFilter;
-      });
-    } catch (e) {
-      // If there's an error, use defaults
-      setState(() {
-        _timeFilterOption = 'all';
-        _statusFilterOption = 'untagged';
-      });
-    }
-  }
-
-  Future<void> _saveFilterOptions() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      prefs.setString('last_time_filter', _timeFilterOption);
-      prefs.setString('last_status_filter', _statusFilterOption);
-    } catch (e) {
-      // Silently fail if we can't save the preference
-    }
+    // Load saved filter preferences
+    ref.read(loadFilterPreferencesProvider);
   }
 
   void _toggleHideMemo(String memoId) {
-    setState(() {
-      if (_hiddenMemoIds.contains(memoId)) {
-        _hiddenMemoIds.remove(memoId);
-      } else {
-        _hiddenMemoIds.add(memoId);
-      }
-    });
+    final hiddenMemoIds = ref.read(hiddenMemoIdsProvider);
+    if (hiddenMemoIds.contains(memoId)) {
+      ref
+          .read(hiddenMemoIdsProvider.notifier)
+          .update((state) => state..remove(memoId));
+    } else {
+      ref
+          .read(hiddenMemoIdsProvider.notifier)
+          .update((state) => state..add(memoId));
+    }
   }
 
   void _showAllMemos() {
-    setState(() {
-      _hiddenMemoIds.clear();
-    });
+    ref.read(hiddenMemoIdsProvider.notifier).state = {};
   }
 
   void _applyTimeFilter(String filterOption) {
-    setState(() {
-      _timeFilterOption = filterOption;
-      _hiddenMemoIds.clear(); // Reset hidden memos when changing filters
-    });
+    // Update provider state instead of local state
+    ref.read(timeFilterProvider.notifier).state = filterOption;
     
-    _saveFilterOptions();
-    _fetchMemos(); // Apply the new combined filters
+    // Clear any hidden memo IDs when changing filters
+    ref.read(hiddenMemoIdsProvider.notifier).state = {};
+
+    // Save filter preferences
+    final statusFilter = ref.read(statusFilterProvider);
+    ref.read(filterPreferencesProvider)(filterOption, statusFilter);
   }
 
   void _applyStatusFilter(String filterOption) {
-    setState(() {
-      _statusFilterOption = filterOption;
-      _hiddenMemoIds.clear(); // Reset hidden memos when changing filters
-    });
-
-    _saveFilterOptions();
-    _fetchMemos(); // Apply the new combined filters
-  }
-
-  Future<void> _fetchMemos() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
-
-    try {
-      String? filter;
-      String state = '';
-      
-      // Determine sort field based on current sort mode
-      // Using exact field names from API documentation
-      final String sortField =
-          _sortMode == MemoSortMode.byUpdateTime ? 'updateTime' : 'createTime';
-
-      // Apply filter logic for category/visibility
-      if (_filterKey == 'inbox') {
-        state = 'NORMAL';
-      } else if (_filterKey == 'archive') {
-        state = 'ARCHIVED';
-      } else if (_filterKey != 'all') {
-        filter = 'tags=="$_filterKey"';
-      }
-
-      // Apply time-based filter
-      String? timeFilter;
-      switch (_timeFilterOption) {
-        case 'today':
-          timeFilter = FilterPresets.todayFilter();
-          break;
-        case 'created_today':
-          timeFilter = FilterPresets.createdTodayFilter();
-          break;
-        case 'updated_today':
-          timeFilter = FilterPresets.updatedTodayFilter();
-          break;
-        case 'this_week':
-          timeFilter = FilterPresets.thisWeekFilter();
-          break;
-        case 'important':
-          timeFilter = FilterPresets.importantFilter();
-          break;
-        case 'all':
-        default:
-          timeFilter = null; // No time filter
-      }
-
-      // Apply status-based filter
-      String? statusFilter;
-      switch (_statusFilterOption) {
-        case 'untagged':
-          statusFilter = FilterPresets.untaggedFilter();
-          break;
-        case 'tagged':
-          statusFilter = FilterPresets.taggedFilter();
-          break;
-        case 'all':
-        default:
-          statusFilter = null; // No status filter
-      }
-      
-      // Collect all active filters
-      final List<String> activeFilters = [];
-      if (filter != null) activeFilters.add(filter);
-      if (timeFilter != null) activeFilters.add(timeFilter);
-      if (statusFilter != null) activeFilters.add(statusFilter);
-
-      // Combine all active filters
-      String? combinedFilter;
-      if (activeFilters.isNotEmpty) {
-        combinedFilter = FilterBuilder.and(activeFilters);
-      }
-      
-      print(
-        'Fetching memos with sort field: $sortField and filter: $combinedFilter',
-      );
-      
-      // Note: The API service now applies client-side sorting internally
-      // since server-side sorting doesn't work reliably
-      final memos = await _apiService.listMemos(
-        parent: 'users/1', // Specify the current user
-        filter: combinedFilter,
-        state: state,
-        sort: sortField,
-        direction: 'DESC', // Always newest first
-      );
-      // Debug: Print info about the first few memos to see if sorting is working
-      if (memos.isNotEmpty) {
-        print('--- Memos after client-side sorting by $sortField ---');
-        for (int i = 0; i < min(3, memos.length); i++) {
-          print('[${i + 1}] ID: ${memos[i].id}');
-          print(
-            '    Content: ${memos[i].content.substring(0, min(20, memos[i].content.length))}...',
-          );
-          print('    createTime: ${memos[i].createTime}');
-          print('    updateTime: ${memos[i].updateTime}');
-          print('    displayTime: ${memos[i].displayTime}');
-        }
-      }
-      
-      // Apply additional client-side filtering if necessary
-      List<Memo> filteredMemos = memos;
-
-      // Specific client-side handling for untagged filter
-      if (_statusFilterOption == 'untagged' && filteredMemos.isNotEmpty) {
-        // Double-check client-side to ensure we only show truly untagged memos
-        // This is more accurate than just checking for "#" in content
-        filteredMemos =
-            filteredMemos.where((memo) {
-              // Check if the memo has no tags
-              final hasTags =
-                  memo.content.contains('#') ||
-                  (memo.resourceNames != null &&
-                      memo.resourceNames!.isNotEmpty);
-              return !hasTags;
-            }).toList();
-
-        print(
-          '[FILTER] Client-side filtering for untagged memos: ${memos.length} → ${filteredMemos.length}',
-        );
-      }
-      
-      setState(() {
-        _memos = filteredMemos;
-        _loading = false;
-      });
-    } catch (e) {
-      setState(() {
-        _error = e.toString();
-        _loading = false;
-      });
-    }
-  }
-
-  Future<void> _handleArchiveMemo(String id) async {
-    try {
-      // Show a loading indication
-      setState(() {
-        _loading = true;
-      });
-      
-      final memo = await _apiService.getMemo(id);
-      final updatedMemo = memo.copyWith(
-        pinned: false,
-        state: MemoState.archived,
-      );
-
-      await _apiService.updateMemo(id, updatedMemo);
-      
-      // Show success message
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Memo archived successfully'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
-      
-      _fetchMemos(); // Refresh the list
-    } catch (e) {
-      setState(() {
-        _loading = false;
-      });
-
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error: ${e.toString()}')));
-      }
-    }
-  }
-
-  Future<void> _handleDeleteMemo(String id) async {
-    try {
-      await _apiService.deleteMemo(id);
-      _fetchMemos(); // Refresh the list
-    } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Error: ${e.toString()}')));
-    }
+    // Update provider state instead of local state
+    ref.read(statusFilterProvider.notifier).state = filterOption;
+    
+    // Clear any hidden memo IDs when changing filters
+    ref.read(hiddenMemoIdsProvider.notifier).state = {};
+    
+    // Save filter preferences
+    final timeFilter = ref.read(timeFilterProvider);
+    ref.read(filterPreferencesProvider)(timeFilter, filterOption);
   }
 
   void _navigateToMemoDetail(String id) {
@@ -293,10 +69,12 @@ class _MemosScreenState extends State<MemosScreen> {
       context,
       '/memo-detail',
       arguments: {'memoId': id},
-    ).then((_) => _fetchMemos());
+    ).then((_) {
+      // Refresh memos after returning from detail screen
+      ref.invalidate(memosProvider);
+    });
   }
 
-  // Required build method that was missing
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -304,25 +82,30 @@ class _MemosScreenState extends State<MemosScreen> {
         title: const Text('Memos'),
         actions: [
           // Sort toggle button with more descriptive text
-          TextButton.icon(
-            icon: Icon(
-              _sortMode == MemoSortMode.byUpdateTime
-                  ? Icons.update
-                  : Icons.calendar_today,
-              size: 20,
-            ),
-            label: Text(
-              _sortMode == MemoSortMode.byUpdateTime
-                  ? 'Sort by: Updated'
-                  : 'Sort by: Created',
-              style: const TextStyle(fontSize: 12),
-            ),
-            style: TextButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              foregroundColor: Theme.of(context).colorScheme.primary,
-              backgroundColor: Colors.grey[100],
-            ),
-            onPressed: _toggleSortMode,
+          Consumer(
+            builder: (context, ref, child) {
+              final sortMode = ref.watch(memoSortModeProvider);
+              return TextButton.icon(
+                icon: Icon(
+                  sortMode == MemoSortMode.byUpdateTime
+                      ? Icons.update
+                      : Icons.calendar_today,
+                  size: 20,
+                ),
+                label: Text(
+                  sortMode == MemoSortMode.byUpdateTime
+                      ? 'Sort by: Updated'
+                      : 'Sort by: Created',
+                  style: const TextStyle(fontSize: 12),
+                ),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  foregroundColor: Theme.of(context).colorScheme.primary,
+                  backgroundColor: Colors.grey[100],
+                ),
+                onPressed: _toggleSortMode,
+              );
+            },
           ),
           const SizedBox(width: 8),
         ],
@@ -330,7 +113,10 @@ class _MemosScreenState extends State<MemosScreen> {
       body: _buildBody(),
       floatingActionButton: FloatingActionButton(
         onPressed: () {
-          Navigator.pushNamed(context, '/new-memo').then((_) => _fetchMemos());
+          Navigator.pushNamed(context, '/new-memo').then((_) {
+            // Refresh memos after returning from creating a new memo
+            ref.invalidate(memosProvider);
+          });
         },
         backgroundColor: Theme.of(context).colorScheme.primary,
         child: const Icon(Icons.add, color: Colors.white),
@@ -338,24 +124,18 @@ class _MemosScreenState extends State<MemosScreen> {
     );
   }
 
-  // Sorting is now entirely handled in the API service since server-side sorting is unreliable
-
   void _toggleSortMode() {
-    setState(() {
-      _sortMode =
-          _sortMode == MemoSortMode.byUpdateTime
-              ? MemoSortMode.byCreateTime
-              : MemoSortMode.byUpdateTime;
-    });
-    
-    // Refresh the memo list with new sort parameter
-    _fetchMemos();
+    final sortMode = ref.read(memoSortModeProvider);
+    ref.read(memoSortModeProvider.notifier).state =
+        sortMode == MemoSortMode.byUpdateTime
+            ? MemoSortMode.byCreateTime
+            : MemoSortMode.byUpdateTime;
     
     // Show a snackbar to indicate the sort mode changed
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          'Sorting by ${_sortMode == MemoSortMode.byUpdateTime ? 'update time' : 'creation time'} (newest first)',
+          'Sorting by ${ref.read(memoSortModeProvider) == MemoSortMode.byUpdateTime ? 'update time' : 'creation time'} (newest first)',
           style: const TextStyle(color: Colors.white),
         ),
         backgroundColor: Theme.of(context).colorScheme.primary,
@@ -366,6 +146,9 @@ class _MemosScreenState extends State<MemosScreen> {
   }
 
   Widget _buildFilterChips() {
+    final timeFilterOption = ref.watch(timeFilterProvider);
+    final statusFilterOption = ref.watch(statusFilterProvider);
+
     return Container(
       decoration: BoxDecoration(
         color: Colors.grey.shade50,
@@ -396,7 +179,7 @@ class _MemosScreenState extends State<MemosScreen> {
                   ),
                 ),
                 const Spacer(),
-                if (_statusFilterOption != 'all')
+                if (statusFilterOption != 'all')
                   TextButton.icon(
                     onPressed: () => _applyStatusFilter('all'),
                     icon: const Icon(Icons.close, size: 14),
@@ -422,10 +205,10 @@ class _MemosScreenState extends State<MemosScreen> {
                 // Untagged filter
                 FilterChip(
                   label: const Text('Untagged'),
-                  selected: _statusFilterOption == 'untagged',
+                  selected: statusFilterOption == 'untagged',
                   onSelected: (_) => _applyStatusFilter('untagged'),
                   backgroundColor:
-                      _statusFilterOption == 'untagged'
+                      statusFilterOption == 'untagged'
                           ? Colors.blue.shade100
                           : Colors.blue.shade50,
                   shape: RoundedRectangleBorder(
@@ -447,10 +230,10 @@ class _MemosScreenState extends State<MemosScreen> {
                 // Tagged filter
                 FilterChip(
                   label: const Text('Tagged'),
-                  selected: _statusFilterOption == 'tagged',
+                  selected: statusFilterOption == 'tagged',
                   onSelected: (_) => _applyStatusFilter('tagged'),
                   backgroundColor:
-                      _statusFilterOption == 'tagged'
+                      statusFilterOption == 'tagged'
                           ? Colors.green.shade100
                           : Colors.green.shade50,
                   shape: RoundedRectangleBorder(
@@ -472,7 +255,7 @@ class _MemosScreenState extends State<MemosScreen> {
                 // All status filter
                 FilterChip(
                   label: const Text('All Status'),
-                  selected: _statusFilterOption == 'all',
+                  selected: statusFilterOption == 'all',
                   onSelected: (_) => _applyStatusFilter('all'),
                   backgroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
@@ -503,7 +286,7 @@ class _MemosScreenState extends State<MemosScreen> {
                   ),
                 ),
                 const Spacer(),
-                if (_timeFilterOption != 'all')
+                if (timeFilterOption != 'all')
                   TextButton.icon(
                     onPressed: () => _applyTimeFilter('all'),
                     icon: const Icon(Icons.close, size: 14),
@@ -530,7 +313,7 @@ class _MemosScreenState extends State<MemosScreen> {
                 children: [
                   FilterChip(
                     label: const Text('Today'),
-                    selected: _timeFilterOption == 'today',
+                    selected: timeFilterOption == 'today',
                     onSelected: (_) => _applyTimeFilter('today'),
                     backgroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
@@ -541,7 +324,7 @@ class _MemosScreenState extends State<MemosScreen> {
                   const SizedBox(width: 8),
                   FilterChip(
                     label: const Text('Created Today'),
-                    selected: _timeFilterOption == 'created_today',
+                    selected: timeFilterOption == 'created_today',
                     onSelected: (_) => _applyTimeFilter('created_today'),
                     backgroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
@@ -552,7 +335,7 @@ class _MemosScreenState extends State<MemosScreen> {
                   const SizedBox(width: 8),
                   FilterChip(
                     label: const Text('Updated Today'),
-                    selected: _timeFilterOption == 'updated_today',
+                    selected: timeFilterOption == 'updated_today',
                     onSelected: (_) => _applyTimeFilter('updated_today'),
                     backgroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
@@ -563,7 +346,7 @@ class _MemosScreenState extends State<MemosScreen> {
                   const SizedBox(width: 8),
                   FilterChip(
                     label: const Text('This Week'),
-                    selected: _timeFilterOption == 'this_week',
+                    selected: timeFilterOption == 'this_week',
                     onSelected: (_) => _applyTimeFilter('this_week'),
                     backgroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
@@ -574,7 +357,7 @@ class _MemosScreenState extends State<MemosScreen> {
                   const SizedBox(width: 8),
                   FilterChip(
                     label: const Text('Important'),
-                    selected: _timeFilterOption == 'important',
+                    selected: timeFilterOption == 'important',
                     onSelected: (_) => _applyTimeFilter('important'),
                     backgroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
@@ -585,7 +368,7 @@ class _MemosScreenState extends State<MemosScreen> {
                   const SizedBox(width: 8),
                   FilterChip(
                     label: const Text('All Time'),
-                    selected: _timeFilterOption == 'all',
+                    selected: timeFilterOption == 'all',
                     onSelected: (_) => _applyTimeFilter('all'),
                     backgroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
@@ -599,206 +382,65 @@ class _MemosScreenState extends State<MemosScreen> {
           ),
           
           // Show hidden memos section (only if needed)
-          if (_hiddenMemoIds.isNotEmpty)
-            Container(
-              margin: const EdgeInsets.fromLTRB(8.0, 0, 8.0, 8.0),
-              padding: const EdgeInsets.symmetric(
-                vertical: 6.0,
-                horizontal: 12.0,
-              ),
-              decoration: BoxDecoration(
-                color: Colors.blue.shade50,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.blue.shade200),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.visibility_off,
-                    size: 16,
-                    color: Colors.blue.shade700,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    '${_hiddenMemoIds.length} memos hidden',
-                    style: TextStyle(color: Colors.blue.shade700),
-                  ),
-                  const SizedBox(width: 8),
-                  TextButton(
-                    onPressed: _showAllMemos,
-                    child: const Text('Show All'),
-                    style: TextButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 0,
-                      ),
-                      minimumSize: const Size(0, 24),
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          Consumer(
+            builder: (context, ref, child) {
+              final hiddenMemoIds = ref.watch(hiddenMemoIdsProvider);
+              if (hiddenMemoIds.isEmpty) {
+                return const SizedBox.shrink();
+              }
+
+              return Container(
+                margin: const EdgeInsets.fromLTRB(8.0, 0, 8.0, 8.0),
+                padding: const EdgeInsets.symmetric(
+                  vertical: 6.0,
+                  horizontal: 12.0,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.blue.shade200),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.visibility_off,
+                      size: 16,
+                      color: Colors.blue.shade700,
                     ),
-                  ),
-                ],
-              ),
-            ),
+                    const SizedBox(width: 8),
+                    Text(
+                      '${hiddenMemoIds.length} memos hidden',
+                      style: TextStyle(color: Colors.blue.shade700),
+                    ),
+                    const SizedBox(width: 8),
+                    TextButton(
+                      onPressed: _showAllMemos,
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 0,
+                        ),
+                        minimumSize: const Size(0, 24),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      child: const Text('Show All'),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
         ],
       ),
     );
   }
 
   Widget _buildBody() {
-    // Filter out hidden memos first - needed for all cases
-    final visibleMemos =
-        _memos.where((memo) => !_hiddenMemoIds.contains(memo.id)).toList();
-
-    // Loading state
-    if (_loading) {
-      return Column(
-        children: [
-          // Always show filter chips even in loading state
-          _buildFilterChips(),
-          const Expanded(child: Center(child: CircularProgressIndicator())),
-        ],
-      );
-    }
-
-    // Error state
-    if (_error != null) {
-      return Column(
-        children: [
-          // Always show filter chips even in error state
-          _buildFilterChips(),
-          Expanded(
-            child: Center(
-              child: Text(
-                'Error: $_error',
-                style: const TextStyle(color: Colors.red),
-              ),
-            ),
-          ),
-        ],
-      );
-    }
-
-    // Empty state
-    if (visibleMemos.isEmpty) {
-      return Column(
-        children: [
-          // Always show filter chips even when no memos found
-          _buildFilterChips(),
-
-          // Indicator for active filters with no results
-          if (_timeFilterOption != 'all' || _statusFilterOption != 'all')
-            Container(
-              margin: const EdgeInsets.all(16),
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.amber.shade100,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.filter_alt,
-                        color: Colors.amber.shade800,
-                        size: 20,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'No memos found with the current filters',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: Colors.amber.shade900,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  if (_statusFilterOption != 'all')
-                    Padding(
-                      padding: const EdgeInsets.only(left: 28.0, bottom: 4.0),
-                      child: Row(
-                        children: [
-                          Text(
-                            '• Status filter: $_statusFilterOption',
-                            style: TextStyle(color: Colors.amber.shade900),
-                          ),
-                          const Spacer(),
-                          TextButton(
-                            onPressed: () => _applyStatusFilter('all'),
-                            child: const Text('Clear'),
-                            style: TextButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 0,
-                              ),
-                              minimumSize: const Size(0, 24),
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  if (_timeFilterOption != 'all')
-                    Padding(
-                      padding: const EdgeInsets.only(left: 28.0, bottom: 4.0),
-                      child: Row(
-                        children: [
-                          Text(
-                            '• Time filter: $_timeFilterOption',
-                            style: TextStyle(color: Colors.amber.shade900),
-                          ),
-                          const Spacer(),
-                          TextButton(
-                            onPressed: () => _applyTimeFilter('all'),
-                            child: const Text('Clear'),
-                            style: TextButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 0,
-                              ),
-                              minimumSize: const Size(0, 24),
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  Padding(
-                    padding: const EdgeInsets.only(left: 28.0, top: 4.0),
-                    child: TextButton.icon(
-                      onPressed: () {
-                        _applyStatusFilter('all');
-                        _applyTimeFilter('all');
-                      },
-                      icon: const Icon(Icons.clear_all, size: 16),
-                      label: const Text('Clear All Filters'),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            
-          const Expanded(
-            child: Center(
-              child: Text(
-                'No memos found.',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontStyle: FontStyle.italic,
-                  color: Colors.grey,
-                ),
-              ),
-            ),
-          ),
-        ],
-      );
-    }
-
+    // Watch the providers for data changes
+    final memosAsync = ref.watch(visibleMemosProvider);
+    final sortMode = ref.watch(memoSortModeProvider);
+    
     return Column(
       children: [
         // Filter chips for predefined filters - always shown first
@@ -816,7 +458,7 @@ class _MemosScreenState extends State<MemosScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Sorting by ${_sortMode == MemoSortMode.byUpdateTime ? 'last updated' : 'creation date'} (newest first)',
+                      'Sorting by ${sortMode == MemoSortMode.byUpdateTime ? 'last updated' : 'creation date'} (newest first)',
                       style: TextStyle(
                         color: Colors.grey[800],
                         fontWeight: FontWeight.w600,
@@ -852,7 +494,7 @@ class _MemosScreenState extends State<MemosScreen> {
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Icon(
-                  _sortMode == MemoSortMode.byUpdateTime
+                  sortMode == MemoSortMode.byUpdateTime
                       ? Icons.update
                       : Icons.calendar_today,
                   color: Theme.of(context).colorScheme.primary,
@@ -863,123 +505,294 @@ class _MemosScreenState extends State<MemosScreen> {
           ),
         ),
 
+        // Content area
         Expanded(
-          child: RefreshIndicator(
-            onRefresh: _fetchMemos,
-            child: ListView.builder(
-              padding: const EdgeInsets.all(16.0),
-              itemCount: visibleMemos.length,
-              itemBuilder: (context, index) {
-                final memo = visibleMemos[index];
-                return Dismissible(
-                  key: Key(memo.id),
-                  background: Container(
-                    color: Colors.orange,
-                    alignment: Alignment.centerLeft,
-                    padding: const EdgeInsets.only(left: 16.0),
-                    child: const Row(
-                      children: [
-                        SizedBox(width: 16),
-                        Icon(Icons.visibility_off, color: Colors.white),
-                        SizedBox(width: 8),
-                        Text(
-                          'Hide',
+          child: memosAsync.when(
+            data: (memos) {
+              if (memos.isEmpty) {
+                return _buildEmptyState();
+              }
+
+              return RefreshIndicator(
+                onRefresh: () async {
+                  // Invalidate the memosProvider to force refresh
+                  ref.invalidate(memosProvider);
+                },
+                child: ListView.builder(
+                  padding: const EdgeInsets.all(16.0),
+                  itemCount: memos.length,
+                  itemBuilder: (context, index) {
+                    final memo = memos[index];
+                    return Dismissible(
+                      key: Key(memo.id),
+                      background: Container(
+                        color: Colors.orange,
+                        alignment: Alignment.centerLeft,
+                        padding: const EdgeInsets.only(left: 16.0),
+                        child: const Row(
+                          children: [
+                            SizedBox(width: 16),
+                            Icon(Icons.visibility_off, color: Colors.white),
+                            SizedBox(width: 8),
+                            Text(
+                              'Hide',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      secondaryBackground: Container(
+                        color: Colors.red,
+                        alignment: Alignment.centerRight,
+                        padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                        child: const Text(
+                          'Delete',
                           style: TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
+                      ),
+                      onDismissed: (direction) {
+                        if (direction == DismissDirection.endToStart) {
+                          ref.read(deleteMemoProvider(memo.id))();
+                        }
+                      },
+                      confirmDismiss: (direction) async {
+                        if (direction == DismissDirection.startToEnd) {
+                          // Hide memo
+                          _toggleHideMemo(memo.id);
+                          return false; // Don't remove from list
+                        } else if (direction == DismissDirection.endToStart) {
+                          // Delete memo
+                          return await showDialog(
+                            context: context,
+                            builder: (BuildContext context) {
+                              return AlertDialog(
+                                title: const Text('Confirm Delete'),
+                                content: const Text(
+                                  'Are you sure you want to delete this memo?',
+                                ),
+                                actions: <Widget>[
+                                  TextButton(
+                                    onPressed:
+                                        () => Navigator.of(context).pop(false),
+                                    child: const Text('Cancel'),
+                                  ),
+                                  TextButton(
+                                    onPressed:
+                                        () => Navigator.of(context).pop(true),
+                                    child: const Text('Delete'),
+                                  ),
+                                ],
+                              );
+                            },
+                          );
+                        }
+                        return false;
+                      },
+                      child: Stack(
+                        children: [
+                          MemoCard(
+                            content: memo.content,
+                            pinned: memo.pinned,
+                            createdAt: memo.createTime,
+                            updatedAt: memo.updateTime,
+                            showTimeStamps: true,
+                            // Display relevant timestamp based on sort mode
+                            highlightTimestamp:
+                                sortMode == MemoSortMode.byUpdateTime
+                                    ? MemoUtils.formatTimestamp(memo.updateTime)
+                                    : MemoUtils.formatTimestamp(
+                                      memo.createTime,
+                                    ),
+                            timestampType:
+                                sortMode == MemoSortMode.byUpdateTime
+                                    ? 'Updated'
+                                    : 'Created',
+                            onTap: () => _navigateToMemoDetail(memo.id),
+                          ),
+                          // Archive button positioned at top-right corner
+                          Positioned(
+                            top: 4,
+                            right: 4,
+                            child: IconButton(
+                              icon: const Icon(
+                                Icons.archive_outlined,
+                                size: 20,
+                              ),
+                              tooltip: 'Archive',
+                              constraints: const BoxConstraints(),
+                              padding: const EdgeInsets.all(8),
+                              color: Colors.grey[600],
+                              onPressed: () {
+                                // Use the archive memo provider
+                                ref.read(archiveMemoProvider(memo.id))().then((
+                                  _,
+                                ) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                        'Memo archived successfully',
+                                      ),
+                                      backgroundColor: Colors.green,
+                                    ),
+                                  );
+                                });
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              );
+            },
+            loading: () {
+              return const Column(
+                children: [
+                  Expanded(
+                    child: Center(child: CircularProgressIndicator()),
+                  ),
+                ],
+              );
+            },
+            error: (error, stackTrace) {
+              return Column(
+                children: [
+                  Expanded(
+                    child: Center(
+                      child: Text(
+                        'Error: $error',
+                        style: const TextStyle(color: Colors.red),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEmptyState() {
+    final timeFilterOption = ref.watch(timeFilterProvider);
+    final statusFilterOption = ref.watch(statusFilterProvider);
+
+    return Column(
+      children: [
+        // Indicator for active filters with no results
+        if (timeFilterOption != 'all' || statusFilterOption != 'all')
+          Container(
+            margin: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.amber.shade100,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      Icons.filter_alt,
+                      color: Colors.amber.shade800,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'No memos found with the current filters',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.amber.shade900,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                if (statusFilterOption != 'all')
+                  Padding(
+                    padding: const EdgeInsets.only(left: 28.0, bottom: 4.0),
+                    child: Row(
+                      children: [
+                        Text(
+                          '• Status filter: $statusFilterOption',
+                          style: TextStyle(color: Colors.amber.shade900),
+                        ),
+                        const Spacer(),
+                        TextButton(
+                          onPressed: () => _applyStatusFilter('all'),
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 0,
+                            ),
+                            minimumSize: const Size(0, 24),
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          child: const Text('Clear'),
+                        ),
                       ],
                     ),
                   ),
-                  secondaryBackground: Container(
-                    color: Colors.red,
-                    alignment: Alignment.centerRight,
-                    padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                    child: const Text(
-                      'Delete',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                      ),
+                if (timeFilterOption != 'all')
+                  Padding(
+                    padding: const EdgeInsets.only(left: 28.0, bottom: 4.0),
+                    child: Row(
+                      children: [
+                        Text(
+                          '• Time filter: $timeFilterOption',
+                          style: TextStyle(color: Colors.amber.shade900),
+                        ),
+                        const Spacer(),
+                        TextButton(
+                          onPressed: () => _applyTimeFilter('all'),
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 0,
+                            ),
+                            minimumSize: const Size(0, 24),
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          child: const Text('Clear'),
+                        ),
+                      ],
                     ),
                   ),
-                  onDismissed: (direction) {
-                    if (direction == DismissDirection.startToEnd) {
-                      // No longer needed as this is handled in confirmDismiss
-                    } else if (direction == DismissDirection.endToStart) {
-                      _handleDeleteMemo(memo.id);
-                    }
-                  },
-                  confirmDismiss: (direction) async {
-                    if (direction == DismissDirection.startToEnd) {
-                      // Hide memo
-                      _toggleHideMemo(memo.id);
-                      return false; // Don't remove from list
-                    } else if (direction == DismissDirection.endToStart) {
-                      // Delete memo
-                      return await showDialog(
-                        context: context,
-                        builder: (BuildContext context) {
-                          return AlertDialog(
-                            title: const Text('Confirm Delete'),
-                            content: const Text(
-                              'Are you sure you want to delete this memo?',
-                            ),
-                            actions: <Widget>[
-                              TextButton(
-                                onPressed:
-                                    () => Navigator.of(context).pop(false),
-                                child: const Text('Cancel'),
-                              ),
-                              TextButton(
-                                onPressed:
-                                    () => Navigator.of(context).pop(true),
-                                child: const Text('Delete'),
-                              ),
-                            ],
-                          );
-                        },
-                      );
-                    }
-                    return false;
-                  },
-                  child: Stack(
-                    children: [
-                      MemoCard(
-                        content: memo.content,
-                        pinned: memo.pinned,
-                        createdAt: memo.createTime,
-                        updatedAt: memo.updateTime,
-                        showTimeStamps: true,
-                        // Display relevant timestamp based on sort mode
-                        highlightTimestamp:
-                            _sortMode == MemoSortMode.byUpdateTime
-                                ? MemoUtils.formatTimestamp(memo.updateTime)
-                                : MemoUtils.formatTimestamp(memo.createTime),
-                        timestampType:
-                            _sortMode == MemoSortMode.byUpdateTime
-                                ? 'Updated'
-                                : 'Created',
-                        onTap: () => _navigateToMemoDetail(memo.id),
-                      ),
-                      // Archive button positioned at top-right corner
-                      Positioned(
-                        top: 4,
-                        right: 4,
-                        child: IconButton(
-                          icon: const Icon(Icons.archive_outlined, size: 20),
-                          tooltip: 'Archive',
-                          constraints: const BoxConstraints(),
-                          padding: const EdgeInsets.all(8),
-                          color: Colors.grey[600],
-                          onPressed: () => _handleArchiveMemo(memo.id),
-                        ),
-                      ),
-                    ],
+                Padding(
+                  padding: const EdgeInsets.only(left: 28.0, top: 4.0),
+                  child: TextButton.icon(
+                    onPressed: () {
+                      _applyStatusFilter('all');
+                      _applyTimeFilter('all');
+                    },
+                    icon: const Icon(Icons.clear_all, size: 16),
+                    label: const Text('Clear All Filters'),
                   ),
-                );
-              },
+                ),
+              ],
+            ),
+          ),
+
+        const Expanded(
+          child: Center(
+            child: Text(
+              'No memos found.',
+              style: TextStyle(
+                fontSize: 16,
+                fontStyle: FontStyle.italic,
+                color: Colors.grey,
+              ),
             ),
           ),
         ),

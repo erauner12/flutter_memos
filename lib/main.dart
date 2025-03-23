@@ -7,9 +7,10 @@ import 'package:flutter_memos/screens/mcp_screen.dart';
 import 'package:flutter_memos/screens/memo_detail_screen.dart';
 import 'package:flutter_memos/screens/memos_screen.dart';
 import 'package:flutter_memos/screens/new_memo_screen.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 void main() {
-  runApp(const MyApp());
+  runApp(const ProviderScope(child: MyApp()));
 }
 
 class MyApp extends StatelessWidget {
@@ -79,18 +80,18 @@ class MyApp extends StatelessWidget {
   }
 }
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Flutter Memos'),
       ),
       body: Column(
         children: [
-          Expanded(
+          const Expanded(
             child: MemosScreen(),
           ),
           Padding(

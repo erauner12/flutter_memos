@@ -10,6 +10,7 @@ A Flutter implementation of the memo app with assistant chat functionality, port
 4. **Comments** - Add and view comments on memos
 5. **Assistant Chat** – AI-powered assistant that can create, search and manage memos through conversation
 6. **MCP Integration** - Message Control Protocol server for extended functionality
+7. **Riverpod State Management** - Modern state management with dependency injection and reactive UI updates
 
 ## Setup Instructions
 
@@ -107,6 +108,22 @@ For the assistant to work properly:
 - The MCP server must be running
 - You must have a valid OpenAI API key in `mcp-server/.env`
 - The assistant uses function calling to interact with your memos database
+
+## State Management
+
+The app uses Riverpod for state management, providing several benefits:
+
+1. **Dependency Injection**: Services are easily provided throughout the app
+2. **Reactive UI**: UI automatically updates when state changes
+3. **Testability**: Easier to write unit and widget tests with mock providers
+4. **Code Organization**: Separation of concerns between UI and business logic
+
+Key providers include:
+- `apiServiceProvider`: Provides the API service throughout the app
+- `memosProvider`: Fetches and manages the list of memos
+- `filterProviders`: Manages filter state for the memo list
+
+See [RIVERPOD_MIGRATION.md](docs/RIVERPOD_MIGRATION.md) for more details on our approach to Riverpod adoption.
 
 ## Contributing
 

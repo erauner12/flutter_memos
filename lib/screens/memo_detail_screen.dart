@@ -1,10 +1,37 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/models/memo.dart';
-import 'package:flutter_memos/services/api_service.dart';
+import 'package:flutter_memos/providers/api_providers.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class MemoDetailScreen extends StatefulWidget {
+// Provider for memo details
+final memoDetailProvider = FutureProvider.family<Memo, String>((ref, id) async {
+  final apiService = ref.watch(apiServiceProvider);
+  return apiService.getMemo(id);
+});
+
+// Provider for memo comments
+final memoCommentsProvider = FutureProvider.family<List<Comment>, String>((
+  ref,
+  memoId,
+) async {
+  final apiService = ref.watch(apiServiceProvider);
+  return apiService.listMemoComments(memoId);
+});
+
+// Provider for adding a comment
+final addCommentProvider =
+    Provider.family<Future<void> Function(Comment), String>((ref, memoId) {
+      return (Comment comment) async {
+        final apiService = ref.read(apiServiceProvider);
+        await apiService.createMemoComment(memoId, comment);
+        ref.invalidate(memoCommentsProvider(memoId)); // Refresh comments
+      };
+    });
+
+class MemoDetailScreen extends ConsumerStatefulWidget {
   final String memoId;
 
   const MemoDetailScreen({
@@ -13,25 +40,22 @@ class MemoDetailScreen extends StatefulWidget {
   });
 
   @override
-  State<MemoDetailScreen> createState() => _MemoDetailScreenState();
+  ConsumerState<MemoDetailScreen> createState() => _MemoDetailScreenState();
 }
 
-class _MemoDetailScreenState extends State<MemoDetailScreen> {
-  final ApiService _apiService = ApiService();
+class _MemoDetailScreenState extends ConsumerState<MemoDetailScreen> {
   final TextEditingController _commentController = TextEditingController();
   final FocusNode _commentFocusNode = FocusNode();
   
+  // Keep these fields for proper state management
   Memo? _memo;
   List<Comment> _comments = [];
-  bool _loading = false;
   bool _submittingComment = false;
-  String? _error;
 
   @override
   void initState() {
     super.initState();
-    _fetchMemo();
-    _fetchComments();
+    // No need to fetch explicitly - Riverpod will handle this
   }
 
   @override
@@ -41,48 +65,7 @@ class _MemoDetailScreenState extends State<MemoDetailScreen> {
     super.dispose();
   }
 
-  Future<void> _fetchMemo() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
-
-    try {
-      final memo = await _apiService.getMemo(widget.memoId);
-      setState(() {
-        _memo = memo;
-        _loading = false;
-      });
-    } catch (e) {
-      setState(() {
-        _error = 'Failed to load memo: ${e.toString()}';
-        _loading = false;
-      });
-    }
-  }
-
-  Future<void> _fetchComments() async {
-    try {
-      final comments = await _apiService.listMemoComments(widget.memoId);
-      print('[MemoDetail] Fetched ${comments.length} comments');
-      
-      // Log the first few comments for debugging
-      if (comments.isNotEmpty) {
-        for (int i = 0; i < comments.length && i < 3; i++) {
-          print('[MemoDetail] Comment ${i+1}: ${comments[i].content}');
-        }
-      }
-      
-      setState(() {
-        _comments = comments;
-      });
-    } catch (e) {
-      print('[MemoDetail] Error fetching comments: $e');
-      setState(() {
-        _error = 'Failed to load comments: ${e.toString()}';
-      });
-    }
-  }
+  // We'll use the providers to fetch data instead of these methods
 
   Future<void> _handleAddComment() async {
     if (_commentController.text.trim().isEmpty) return;
@@ -98,32 +81,35 @@ class _MemoDetailScreenState extends State<MemoDetailScreen> {
         creatorId: '1', // Default user ID
       );
       
-      await _apiService.createMemoComment(widget.memoId, newComment);
+      // Use the provider to add a comment
+      await ref.read(addCommentProvider(widget.memoId))(newComment);
+      
       _commentController.clear();
       _commentFocusNode.unfocus(); // Clear focus after posting
-      await _fetchComments(); // Refresh comments
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error adding comment: ${e.toString()}')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error adding comment: ${e.toString()}')),
+        );
+      }
     } finally {
-      setState(() {
-        _submittingComment = false;
-      });
+      if (mounted) {
+        setState(() {
+          _submittingComment = false;
+        });
+      }
     }
   }
 
-  void _copyToClipboard() {
-    if (_memo == null) return;
-
+  void _copyToClipboard(Memo memo, List<Comment> comments) {
     // Build clipboard content
-    String clipboardContent = '${_memo!.content}\n\n';
+    String clipboardContent = '${memo.content}\n\n';
 
     // Add comments in chronological order
-    if (_comments.isNotEmpty) {
+    if (comments.isNotEmpty) {
       clipboardContent += 'Comments:\n';
-      for (int i = 0; i < _comments.length; i++) {
-        final comment = _comments[i];
+      for (int i = 0; i < comments.length; i++) {
+        final comment = comments[i];
         final timestamp = comment.createTime != null
             ? DateTime.fromMillisecondsSinceEpoch(comment.createTime!).toString()
             : 'Unknown time';
@@ -133,9 +119,13 @@ class _MemoDetailScreenState extends State<MemoDetailScreen> {
 
     // Copy to clipboard
     Clipboard.setData(ClipboardData(text: clipboardContent)).then((_) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Memo content and comments copied to clipboard')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Memo content and comments copied to clipboard'),
+          ),
+        );
+      }
     });
   }
 
@@ -145,21 +135,20 @@ class _MemoDetailScreenState extends State<MemoDetailScreen> {
       appBar: AppBar(
         title: const Text('Memo Detail'),
         actions: [
-          if (_memo != null)
-            IconButton(
-              icon: const Icon(Icons.edit),
-              onPressed: () {
-                Navigator.pushNamed(
-                  context,
-                  '/edit-memo',
-                  arguments: {'memoId': widget.memoId},
-                ).then((_) {
-                  // Refresh data when returning from edit screen
-                  _fetchMemo();
-                  _fetchComments();
-                });
-              },
-            ),
+          IconButton(
+            icon: const Icon(Icons.edit),
+            onPressed: () {
+              Navigator.pushNamed(
+                context,
+                '/edit-memo',
+                arguments: {'memoId': widget.memoId},
+              ).then((_) {
+                // Refresh data when returning from edit screen
+                ref.invalidate(memoDetailProvider(widget.memoId));
+                ref.invalidate(memoCommentsProvider(widget.memoId));
+              });
+            },
+          ),
         ],
       ),
       body: _buildBody(),
@@ -167,25 +156,59 @@ class _MemoDetailScreenState extends State<MemoDetailScreen> {
   }
 
   Widget _buildBody() {
-    if (_loading && _memo == null) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    if (_error != null && _memo == null) {
-      return Center(
+    final memoAsync = ref.watch(memoDetailProvider(widget.memoId));
+    final commentsAsync = ref.watch(memoCommentsProvider(widget.memoId));
+    
+    // First make sure the memo is loaded
+    return memoAsync.when(
+      data: (memo) {
+        // Store the memo in state for any local UI that might need it
+        if (_memo == null || _memo!.id != memo.id) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              setState(() {
+                _memo = memo;
+              });
+            }
+          });
+        }
+        
+        // We have the memo data, now check comments
+        return commentsAsync.when(
+          data: (comments) {
+            // Update comments in state if needed
+            if (!listEquals(_comments, comments)) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) {
+                  setState(() {
+                    _comments = comments;
+                  });
+                }
+              });
+            }
+            
+            // We have both memo and comments
+            return _buildContent(memo, comments);
+          },
+          loading: () => _buildContent(memo, _comments.isEmpty ? [] : _comments), // Use cached comments if we have them
+          error:
+              (error, __) => _buildContent(
+                memo,
+                _comments.isEmpty ? [] : _comments,
+              ), // Use cached comments if we have them
+        );
+      },
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (error, _) => Center(
         child: Text(
-          '$_error',
+          'Error: $error',
           style: const TextStyle(color: Colors.red),
         ),
-      );
-    }
-
-    if (_memo == null) {
-      return const Center(
-        child: Text('No memo found.'),
-      );
-    }
-
+      ),
+    );
+  }
+  
+  Widget _buildContent(Memo memo, List<Comment> comments) {
     return ListView(
       padding: const EdgeInsets.all(16.0),
       children: [
@@ -197,7 +220,7 @@ class _MemoDetailScreenState extends State<MemoDetailScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  _memo!.content,
+                  memo.content,
                   style: const TextStyle(fontSize: 18),
                 ),
                 const SizedBox(height: 8),
@@ -208,7 +231,7 @@ class _MemoDetailScreenState extends State<MemoDetailScreen> {
                       backgroundColor: Colors.grey[800],
                       foregroundColor: Colors.white,
                     ),
-                    onPressed: _copyToClipboard,
+                    onPressed: () => _copyToClipboard(memo, comments),
                     icon: const Icon(Icons.copy, size: 16),
                     label: const Text('Copy All'),
                   ),
@@ -222,12 +245,12 @@ class _MemoDetailScreenState extends State<MemoDetailScreen> {
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 8.0),
           child: Text(
-            '${_memo!.state == MemoState.archived ? "Archived" : "Active"} | Visibility: ${_memo!.visibility}',
+            '${memo.state == MemoState.archived ? "Archived" : "Active"} | Visibility: ${memo.visibility}',
             style: const TextStyle(color: Colors.grey),
           ),
         ),
         
-        if (_memo!.pinned)
+        if (memo.pinned)
           const Padding(
             padding: EdgeInsets.only(bottom: 8.0),
             child: Text(
@@ -248,7 +271,7 @@ class _MemoDetailScreenState extends State<MemoDetailScreen> {
           ),
         ),
         
-        if (_comments.isEmpty)
+        if (comments.isEmpty)
           const Padding(
             padding: EdgeInsets.only(bottom: 16.0),
             child: Text(
@@ -258,24 +281,27 @@ class _MemoDetailScreenState extends State<MemoDetailScreen> {
           ),
 
         // Comments List
-        ..._comments.reversed.map((comment) => Card(
-          margin: const EdgeInsets.only(bottom: 8.0),
-          child: Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(comment.content),
-                const SizedBox(height: 4),
-                Text(
-                  comment.createTime != null
-                      ? DateTime.fromMillisecondsSinceEpoch(comment.createTime!).toString()
-                      : 'Unknown time',
-                  style: const TextStyle(fontSize: 12, color: Colors.grey),
-                ),
-              ],
+        ...comments.reversed.map(
+          (comment) => Card(
+            margin: const EdgeInsets.only(bottom: 8.0),
+            child: Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(comment.content),
+                  const SizedBox(height: 4),
+                  Text(
+                    comment.createTime != null
+                        ? DateTime.fromMillisecondsSinceEpoch(
+                          comment.createTime!,
+                        ).toString()
+                        : 'Unknown time',
+                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
+                ],
+              ),
             ),
-          ),
           ),
         ),
         

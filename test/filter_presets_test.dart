@@ -1,3 +1,4 @@
+import 'package:flutter_memos/utils/filter_builder.dart';
 import 'package:flutter_memos/utils/filter_presets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
