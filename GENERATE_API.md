@@ -15,7 +15,7 @@ flutter pub get
 To generate API client code from the OpenAPI specification:
 
 ```bash
-flutter pub run build_runner build --delete-conflicting-outputs
+dart run build_runner build --delete-conflicting-outputs
 ```
 
 This will:
@@ -23,13 +23,26 @@ This will:
 2. Generate Dart client code in `lib/api` directory
 3. Create model classes, API clients, and helper utilities
 
-## Manual Generation (Alternative)
+## Troubleshooting
 
-You can also use the OpenAPI Generator CLI directly:
+If the code generation doesn't work:
 
-```bash
-flutter pub run openapi_generator_cli generate -i api/openapi.yaml -g dart2 -o lib/api --additional-properties=pubName=flutter_memos_api,pubVersion=1.0.0,useEnumExtension=true,dateLibrary=time
-```
+1. Try using the CLI directly:
+   ```bash
+   dart run openapi_generator_cli generate -i api/openapi.yaml -g dart2 -o lib/api --additional-properties=pubName=flutter_memos_api,pubVersion=1.0.0,useEnumExtension=true,dateLibrary=time
+   ```
+
+2. Check for errors in the OpenAPI specification file.
+
+3. Ensure all dependencies are correctly installed:
+   ```bash
+   flutter pub get
+   ```
+
+4. Try clearing the build cache:
+   ```bash
+   dart run build_runner clean
+   ```
 
 ## Using Generated Code
 
