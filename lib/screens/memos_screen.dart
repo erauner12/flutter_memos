@@ -6,7 +6,6 @@ import 'package:flutter_memos/services/api_service.dart';
 import 'package:flutter_memos/utils/filter_builder.dart';
 import 'package:flutter_memos/utils/filter_presets.dart';
 import 'package:flutter_memos/utils/memo_utils.dart';
-import 'package:flutter_memos/widgets/filter_menu.dart';
 import 'package:flutter_memos/widgets/memo_card.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -28,16 +27,6 @@ class _MemosScreenState extends State<MemosScreen> {
   MemoSortMode _sortMode = MemoSortMode.byUpdateTime;
   String _currentFilterOption = 'all';
   final Set<String> _hiddenMemoIds = {};
-
-  final List<FilterItem> _filters = [
-    FilterItem(label: 'Inbox', key: 'inbox'),
-    FilterItem(label: 'Archive', key: 'archive'),
-    FilterItem(label: 'All', key: 'all'),
-    FilterItem(label: 'Prompts', key: 'prompts'),
-    FilterItem(label: 'Ideas', key: 'ideas'),
-    FilterItem(label: 'Work ideas', key: 'work'),
-    FilterItem(label: 'Side Project Ideas', key: 'side'),
-  ];
 
   @override
   void initState() {
@@ -189,6 +178,11 @@ class _MemosScreenState extends State<MemosScreen> {
 
   Future<void> _handleArchiveMemo(String id) async {
     try {
+      // Show a loading indication
+      setState(() {
+        _loading = true;
+      });
+      
       final memo = await _apiService.getMemo(id);
       final updatedMemo = memo.copyWith(
         pinned: false,
@@ -196,11 +190,28 @@ class _MemosScreenState extends State<MemosScreen> {
       );
 
       await _apiService.updateMemo(id, updatedMemo);
+      
+      // Show success message
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Memo archived successfully'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+      
       _fetchMemos(); // Refresh the list
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Error: ${e.toString()}')));
+      setState(() {
+        _loading = false;
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: ${e.toString()}')));
+      }
     }
   }
 
@@ -221,6 +232,48 @@ class _MemosScreenState extends State<MemosScreen> {
       '/memo-detail',
       arguments: {'memoId': id},
     ).then((_) => _fetchMemos());
+  }
+
+  // Required build method that was missing
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Memos'),
+        actions: [
+          // Sort toggle button with more descriptive text
+          TextButton.icon(
+            icon: Icon(
+              _sortMode == MemoSortMode.byUpdateTime
+                  ? Icons.update
+                  : Icons.calendar_today,
+              size: 20,
+            ),
+            label: Text(
+              _sortMode == MemoSortMode.byUpdateTime
+                  ? 'Sort by: Updated'
+                  : 'Sort by: Created',
+              style: const TextStyle(fontSize: 12),
+            ),
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              foregroundColor: Theme.of(context).colorScheme.primary,
+              backgroundColor: Colors.grey[100],
+            ),
+            onPressed: _toggleSortMode,
+          ),
+          const SizedBox(width: 8),
+        ],
+      ),
+      body: _buildBody(),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          Navigator.pushNamed(context, '/new-memo').then((_) => _fetchMemos());
+        },
+        backgroundColor: Theme.of(context).colorScheme.primary,
+        child: const Icon(Icons.add, color: Colors.white),
+      ),
+    );
   }
 
   // Sorting is now entirely handled in the API service since server-side sorting is unreliable
@@ -560,9 +613,19 @@ class _MemosScreenState extends State<MemosScreen> {
                     color: Colors.orange,
                     alignment: Alignment.centerLeft,
                     padding: const EdgeInsets.only(left: 16.0),
-                    child: const Icon(
-                      Icons.visibility_off,
-                      color: Colors.white,
+                    child: const Row(
+                      children: [
+                        SizedBox(width: 16),
+                        Icon(Icons.visibility_off, color: Colors.white),
+                        SizedBox(width: 8),
+                        Text(
+                          'Hide',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   secondaryBackground: Container(
@@ -578,7 +641,9 @@ class _MemosScreenState extends State<MemosScreen> {
                     ),
                   ),
                   onDismissed: (direction) {
-                    if (direction == DismissDirection.endToStart) {
+                    if (direction == DismissDirection.startToEnd) {
+                      // No longer needed as this is handled in confirmDismiss
+                    } else if (direction == DismissDirection.endToStart) {
                       _handleDeleteMemo(memo.id);
                     }
                   },
@@ -615,22 +680,39 @@ class _MemosScreenState extends State<MemosScreen> {
                     }
                     return false;
                   },
-                  child: MemoCard(
-                    content: memo.content,
-                    pinned: memo.pinned,
-                    createdAt: memo.createTime,
-                    updatedAt: memo.updateTime,
-                    showTimeStamps: true,
-                    // Display relevant timestamp based on sort mode
-                    highlightTimestamp:
-                        _sortMode == MemoSortMode.byUpdateTime
-                            ? MemoUtils.formatTimestamp(memo.updateTime)
-                            : MemoUtils.formatTimestamp(memo.createTime),
-                    timestampType:
-                        _sortMode == MemoSortMode.byUpdateTime
-                            ? 'Updated'
-                            : 'Created',
-                    onTap: () => _navigateToMemoDetail(memo.id),
+                  child: Stack(
+                    children: [
+                      MemoCard(
+                        content: memo.content,
+                        pinned: memo.pinned,
+                        createdAt: memo.createTime,
+                        updatedAt: memo.updateTime,
+                        showTimeStamps: true,
+                        // Display relevant timestamp based on sort mode
+                        highlightTimestamp:
+                            _sortMode == MemoSortMode.byUpdateTime
+                                ? MemoUtils.formatTimestamp(memo.updateTime)
+                                : MemoUtils.formatTimestamp(memo.createTime),
+                        timestampType:
+                            _sortMode == MemoSortMode.byUpdateTime
+                                ? 'Updated'
+                                : 'Created',
+                        onTap: () => _navigateToMemoDetail(memo.id),
+                      ),
+                      // Archive button positioned at top-right corner
+                      Positioned(
+                        top: 4,
+                        right: 4,
+                        child: IconButton(
+                          icon: const Icon(Icons.archive_outlined, size: 20),
+                          tooltip: 'Archive',
+                          constraints: const BoxConstraints(),
+                          padding: const EdgeInsets.all(8),
+                          color: Colors.grey[600],
+                          onPressed: () => _handleArchiveMemo(memo.id),
+                        ),
+                      ),
+                    ],
                   ),
                 );
               },

@@ -40,7 +40,12 @@ class MemoCard extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.all(12.0),
+          padding: const EdgeInsets.fromLTRB(
+            12.0,
+            12.0,
+            36.0,
+            12.0,
+          ), // Extra padding on right for archive button
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
