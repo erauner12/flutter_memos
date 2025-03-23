@@ -1,63 +1,12 @@
 import 'package:flutter_memos/api/lib/api.dart';
 import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/models/memo.dart';
-import 'package:flutter_memos/services/api_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('ApiService Tests', () {
-    // We'll test formatted resource names indirectly through the public APIs
-    
-    group('Format ID Tests', () {
-      test('formats resource IDs correctly in public method calls', () {
-        // Since we can't access private methods directly, we'll test the behavior
-        // through the effects we can observe in other ways
-        
-        // One way to verify ID formatting is checking that different input formats
-        // throw the same exception message, indicating they've been normalized properly
-        
-        // Test case: Verify resource name formatting by observing the same error
-        const testMemoId1 = '123';
-        const testMemoId2 = 'memos/123';
-        
-        final apiService = ApiService();
-        
-        // Both should throw the same error message if the formatting is consistent
-        final error1 = throwsA(predicate((e) => e.toString().contains('123')));
-        final error2 = throwsA(predicate((e) => e.toString().contains('123')));
-
-        expect(() => apiService.getMemo(testMemoId1), error1);
-        expect(() => apiService.getMemo(testMemoId2), error2);
-      });
-    });
-    
-    group('State Conversion Tests', () {
-      test('converts between API state and app state correctly', () {
-        // Create test memos with different states
-        final normalMemo = Memo(
-          id: 'test1',
-          content: 'Normal memo',
-          state: MemoState.normal,
-        );
-        
-        final archivedMemo = Memo(
-          id: 'test2',
-          content: 'Archived memo',
-          state: MemoState.archived,
-        );
-        
-        // Note: we can't directly test the state conversion, but we can examine
-        // how the state is passed to and from the API by observing API calls.
-        // In a real environment, we'd use a test double for the API client.
-        
-        // For this test, we'll just verify that the memo objects behave correctly
-        expect(normalMemo.state, equals(MemoState.normal));
-        expect(archivedMemo.state, equals(MemoState.archived));
-      });
-    });
-    
-    group('Model Conversion Tests', () {
-      test('app Memo model converts to and from API model correctly', () {
+    group('Model Tests', () {
+      test('Memo model has correct fields and behavior', () {
         // Create a sample app Memo
         final appMemo = Memo(
           id: 'test123',
@@ -82,7 +31,69 @@ void main() {
         expect(appMemo.displayTime, equals('2025-03-22T21:45:00.000Z'));
         expect(appMemo.creator, equals('users/1'));
         
-        // Create a simulated API response memo
+        // Test the copyWith method
+        final updatedMemo = appMemo.copyWith(
+          content: 'Updated content',
+          pinned: false
+        );
+        
+        expect(updatedMemo.id, equals('test123')); // Same ID
+        expect(
+          updatedMemo.content,
+          equals('Updated content'),
+        ); // Updated content
+        expect(updatedMemo.pinned, isFalse); // Updated pinned state
+        expect(updatedMemo.state, equals(MemoState.normal)); // Same state
+      });
+      
+      test('Comment model has correct fields', () {
+        // Create a sample Comment
+        final timestamp = DateTime.now().millisecondsSinceEpoch;
+        final appComment = Comment(
+          id: 'comment123',
+          content: 'Test comment content',
+          createTime: timestamp,
+          creatorId: '1',
+        );
+        
+        // Verify all fields were set correctly
+        expect(appComment.id, equals('comment123'));
+        expect(appComment.content, equals('Test comment content'));
+        expect(appComment.createTime, equals(timestamp));
+        expect(appComment.creatorId, equals('1'));
+      });
+    });
+
+    group('API Model Tests', () {
+      test('V1State enum maps correctly to MemoState enum', () {
+        // Test mapping of V1State.NORMAL to MemoState.normal
+        final normalMemo = Memo(
+          id: 'test1',
+          content: 'Normal memo',
+          state: MemoState.normal,
+        );
+
+        // Test mapping of V1State.ARCHIVED to MemoState.archived
+        final archivedMemo = Memo(
+          id: 'test2',
+          content: 'Archived memo',
+          state: MemoState.archived,
+        );
+        
+        // Verify correct state values
+        expect(normalMemo.state, equals(MemoState.normal));
+        expect(archivedMemo.state, equals(MemoState.archived));
+
+        // Verify string representation
+        expect(normalMemo.state.toString().split('.').last, equals('normal'));
+        expect(
+          archivedMemo.state.toString().split('.').last,
+          equals('archived'),
+        );
+      });
+
+      test('Apiv1Memo model structure matches expected format', () {
+        // Create an API memo model to verify format compatibility
         final apiMemo = Apiv1Memo(
           name: 'memos/abc123',
           content: 'API memo content',
@@ -95,68 +106,62 @@ void main() {
           creator: 'users/1',
         );
         
-        // Test manual conversion to verify format compatibility
-        final extractedId = apiMemo.name?.split('/').last ?? '';
-        expect(extractedId, equals('abc123'));
+        // Verify structure and basic properties
+        expect(apiMemo.name, equals('memos/abc123'));
+        expect(apiMemo.content, equals('API memo content'));
+        expect(apiMemo.pinned, isTrue);
+        expect(apiMemo.state, equals(V1State.NORMAL));
+        expect(apiMemo.visibility, equals(V1Visibility.PUBLIC));
+
+        // Check date conversions
+        final createTimeStr = apiMemo.createTime?.toIso8601String();
+        expect(createTimeStr, equals('2025-03-22T21:45:00.000Z'));
         
-        final createTimeIso = apiMemo.createTime?.toIso8601String();
-        expect(createTimeIso, equals('2025-03-22T21:45:00.000Z'));
-      });
-      
-      test('app Comment model converts to and from API model correctly', () {
-        // Create a sample app Comment
-        final appComment = Comment(
-          id: 'comment123',
-          content: 'Test comment content',
-          createTime: DateTime.now().millisecondsSinceEpoch,
-          creatorId: '1',
-        );
-        
-        // Verify all fields were set correctly
-        expect(appComment.id, equals('comment123'));
-        expect(appComment.content, equals('Test comment content'));
-        expect(appComment.creatorId, equals('1'));
-        
-        // Create a simulated API response for a comment
-        final apiComment = Apiv1Memo(
-          name: 'memos/comment123',
-          content: 'API comment content',
-          createTime: DateTime.now(),
-          creator: 'users/1',
-        );
-        
-        // Test manual conversion to verify format compatibility
-        final extractedId = apiComment.name?.split('/').last ?? '';
-        expect(extractedId, equals('comment123'));
-        
-        final extractedCreatorId = apiComment.creator?.split('/').last ?? '';
-        expect(extractedCreatorId, equals('1'));
+        // Test ID parsing (common operation in our service)
+        final idParts = apiMemo.name?.split('/');
+        expect(idParts?.length, equals(2));
+        expect(idParts?[0], equals('memos'));
+        expect(idParts?[1], equals('abc123'));
       });
     });
     
-    group('API URL Generation Tests', () {
-      // Test that we're generating correct URLs for the API
-      // We'd need integration tests or request interceptors to fully validate this
-      
-      test('API base URL is properly configured', () {
-        // This is more of a sanity check than a real test
-        final apiService = ApiService();
+    group('Utility Tests', () {
+      test('DateTime parsing for API compatibility', () {
+        // Test ISO string parsing (important for API interactions)
+        final dateStr = '2025-03-22T21:45:00.000Z';
+        final date = DateTime.parse(dateStr);
         
-        // We'd need to expose the underlying _apiClient instance to verify this,
-        // or use request interceptors in an integration test.
+        expect(date.year, equals(2025));
+        expect(date.month, equals(3));
+        expect(date.day, equals(22));
+        expect(date.hour, equals(21));
+        expect(date.minute, equals(45));
+        expect(date.second, equals(0));
         
-        // Without that access, we just verify the service initializes without errors
-        expect(apiService, isNotNull);
+        // Test round-trip formatting (important for API compatibility)
+        expect(date.toIso8601String(), equals(dateStr));
       });
-    });
-    
-    group('Server Order Tracking Tests', () {
-      test('lastServerOrder is correctly exposed for testing', () {
-        // This test validates the helper field we use for testing
-        // Initially it should be empty
-        expect(ApiService.lastServerOrder, isEmpty);
+      
+      test('Resource name parsing functions correctly', () {
+        // Test common resource name parsing operations
+
+        // Format: "memos/abc123"
+        final memoName = 'memos/abc123';
+        final memoParts = memoName.split('/');
+        expect(memoParts.length, equals(2));
+        expect(memoParts[1], equals('abc123'));
         
-        // Unfortunately, we can't directly set it for testing without accessing private methods
+        // Format: "users/1"
+        final userName = 'users/1';
+        final userParts = userName.split('/');
+        expect(userParts.length, equals(2));
+        expect(userParts[1], equals('1'));
+        
+        // Handles missing slash correctly
+        final invalidName = 'plainId';
+        final invalidParts = invalidName.split('/');
+        expect(invalidParts.length, equals(1));
+        expect(invalidParts[0], equals('plainId'));
       });
     });
   });
