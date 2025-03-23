@@ -11,6 +11,10 @@ class ApiService {
   static final ApiService _instance = ApiService._internal();
   factory ApiService() => _instance;
   ApiService._internal();
+  
+  // This static variable is used to track the original server order for testing
+  static List<String>? _lastServerOrder;
+  static List<String> get lastServerOrder => _lastServerOrder ?? [];
 
   final String _baseUrl = Env.apiBaseUrl;
   final String _apiKey = Env.memosApiKey;
@@ -196,10 +200,19 @@ class ApiService {
           data['memos'].map((x) => Memo.fromJson(x)),
         );
 
+        // Store the original server order in a way that won't be modified
+        final serverOrder = memos.map((memo) => memo.id).toList();
+        print(
+          '[API] Original server order (first 3 IDs): ${serverOrder.take(3).join(", ")}',
+        );
+        
         // Always apply client-side sorting since server sorting is unreliable
         print('[API] Applying client-side sorting by $sort');
         MemoUtils.sortMemos(memos, sort);
-
+        
+        // For testing purposes, we can store the original order in a public static variable
+        _lastServerOrder = serverOrder;
+        
         return memos;
       }
     }
