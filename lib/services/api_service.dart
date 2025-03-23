@@ -11,9 +11,17 @@ class ApiService {
   factory ApiService() => _instance;
   ApiService._internal() {
     // Normalize the base URL to ensure it doesn't have a trailing slash
+    // and handle the case where it might include "/memos" at the end
     String basePath = Env.apiBaseUrl;
     if (basePath.endsWith('/')) {
       basePath = basePath.substring(0, basePath.length - 1);
+    }
+    
+    // Extract the API base without the "/memos" suffix if present
+    // This helps ensure proper URL construction for different endpoints
+    if (basePath.toLowerCase().endsWith('/memos')) {
+      basePath = basePath.substring(0, basePath.length - 6);
+      print('[API] Detected "/memos" in base path, normalizing to: $basePath');
     }
     
     print('[API] Initializing with base path: $basePath');
@@ -42,41 +50,57 @@ class ApiService {
   }) async {
     print('Fetching memos with sort field: $sort');
     
-    // Check if our base path already contains /memos suffix
-    final bool basePathHasMemos = _memoApi.apiClient.basePath.endsWith('/memos') ||
-                                 _memoApi.apiClient.basePath.endsWith('/memos/');
-    
-    // Log what we're about to do
-    if (parent != null && parent.isNotEmpty) {
-      if (basePathHasMemos) {
-        print('[API] Base path already contains /memos - Using query parameter approach');
-        print('[API] GET => ${_memoApi.apiClient.basePath}?parent=$parent');
-      } else {
-        print('[API] GET => ${_memoApi.apiClient.basePath}/$parent/memos');
-      }
-    } else {
-      print('[API] GET => ${_memoApi.apiClient.basePath}');
-    }
-    
-    print('[API] Using endpoint pattern: ${parent != null ? "/{parent}/memos" : "/memos"}');
-    print('[API] Parent: ${parent ?? "not specified"}');
-    print('[API] Sort parameters: sort=$sort, direction=$direction');
-
-    // Call the appropriate API method based on whether parent is provided
-    final V1ListMemosResponse response;
+    // Try multiple approaches based on API structure and path
+    V1ListMemosResponse response;
     try {
+      // Try direct access to /api/v1 first, removing "/memos" from the path
+      String basePath = _memoApi.apiClient.basePath;
+      if (basePath.endsWith('/memos')) {
+        basePath = basePath.substring(0, basePath.length - 6);
+      }
+      
+      // Construct URL for debugging
+      String requestUrl;
       if (parent != null && parent.isNotEmpty) {
-        if (basePathHasMemos) {
-          // If base path already has /memos, use the query parameter approach
+        // For parent-based path like /api/v1/users/1/memos
+        requestUrl = "$basePath/$parent/memos";
+      } else {
+        // For general path like /api/v1/memos
+        requestUrl = "$basePath/memos";
+      }
+      
+      print('[API] Attempting to access: $requestUrl');
+      print('[API] Parent: ${parent ?? "not specified"}');
+      print('[API] Sort parameters: sort=$sort, direction=$direction');
+      
+      // Try direct call with adjusted parent format - trying several ways
+      try {
+        // Approach 1: If parent is 'users/1', try just '1' for the ID
+        String userId = parent?.contains('/') == true ?
+                       parent!.split('/').last :
+                       parent ?? "";
+        
+        print('[API] Attempt #1: Using parent ID only: $userId');
+        
+        // Direct call without the "users/" prefix, just the ID
+        if (userId.isNotEmpty) {
           response = await _memoApi.memoServiceListMemos(
-            parent: parent,
+            parent: "users/$userId",  // ensure proper format with users/ prefix
             state: state.isNotEmpty ? state : null,
             sort: sort,
             direction: direction,
             filter: filter,
           ) ?? V1ListMemosResponse();
         } else {
-          // Use the parent path approach
+          throw Exception("Skipping first attempt, no valid user ID");
+        }
+      } catch (e) {
+        print('[API] Attempt #1 failed: $e');
+        
+        // Approach 2: Try with the second method and full path
+        if (parent != null && parent.isNotEmpty) {
+          // Try with original parent format
+          print('[API] Attempt #2: Using memoServiceListMemos2 with path parameter: $parent');
           response = await _memoApi.memoServiceListMemos2(
             parent,
             state: state.isNotEmpty ? state : null,
@@ -84,15 +108,16 @@ class ApiService {
             direction: direction,
             filter: filter,
           ) ?? V1ListMemosResponse();
+        } else {
+          // Fallback to standard method without parent
+          print('[API] Attempt #3: Using standard method without parent');
+          response = await _memoApi.memoServiceListMemos(
+            state: state.isNotEmpty ? state : null,
+            sort: sort,
+            direction: direction,
+            filter: filter,
+          ) ?? V1ListMemosResponse();
         }
-      } else {
-        response = await _memoApi.memoServiceListMemos(
-          parent: parent,
-          state: state.isNotEmpty ? state : null,
-          sort: sort,
-          direction: direction,
-          filter: filter,
-        ) ?? V1ListMemosResponse();
       }
 
       // Log response info for debugging
