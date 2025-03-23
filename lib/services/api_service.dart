@@ -10,9 +10,17 @@ class ApiService {
   static final ApiService _instance = ApiService._internal();
   factory ApiService() => _instance;
   ApiService._internal() {
+    // Normalize the base URL to ensure it doesn't have a trailing slash
+    String basePath = Env.apiBaseUrl;
+    if (basePath.endsWith('/')) {
+      basePath = basePath.substring(0, basePath.length - 1);
+    }
+    
+    print('[API] Initializing with base path: $basePath');
+    
     // Initialize the API client and MemoService API
     final apiClient = ApiClient(
-      basePath: Env.apiBaseUrl,
+      basePath: basePath,
       authentication: HttpBearerAuth()..accessToken = Env.memosApiKey,
     );
     _memoApi = MemoServiceApi(apiClient);
@@ -34,12 +42,23 @@ class ApiService {
   }) async {
     print('Fetching memos with sort field: $sort');
     
-    print(
-      '[API] GET => ${_memoApi.apiClient.basePath}/${parent != null ? "$parent/memos" : "memos"}',
-    );
-    print(
-      '[API] Using endpoint pattern: ${parent != null ? "/{parent}/memos" : "/memos"}',
-    );
+    // Check if our base path already contains /memos suffix
+    final bool basePathHasMemos = _memoApi.apiClient.basePath.endsWith('/memos') ||
+                                 _memoApi.apiClient.basePath.endsWith('/memos/');
+    
+    // Log what we're about to do
+    if (parent != null && parent.isNotEmpty) {
+      if (basePathHasMemos) {
+        print('[API] Base path already contains /memos - Using query parameter approach');
+        print('[API] GET => ${_memoApi.apiClient.basePath}?parent=$parent');
+      } else {
+        print('[API] GET => ${_memoApi.apiClient.basePath}/$parent/memos');
+      }
+    } else {
+      print('[API] GET => ${_memoApi.apiClient.basePath}');
+    }
+    
+    print('[API] Using endpoint pattern: ${parent != null ? "/{parent}/memos" : "/memos"}');
     print('[API] Parent: ${parent ?? "not specified"}');
     print('[API] Sort parameters: sort=$sort, direction=$direction');
 
@@ -47,25 +66,33 @@ class ApiService {
     final V1ListMemosResponse response;
     try {
       if (parent != null && parent.isNotEmpty) {
-        response =
-            await _memoApi.memoServiceListMemos2(
-              parent,
-              state: state.isNotEmpty ? state : null,
-              sort: sort,
-              direction: direction,
-              filter: filter,
-            ) ??
-            V1ListMemosResponse();
+        if (basePathHasMemos) {
+          // If base path already has /memos, use the query parameter approach
+          response = await _memoApi.memoServiceListMemos(
+            parent: parent,
+            state: state.isNotEmpty ? state : null,
+            sort: sort,
+            direction: direction,
+            filter: filter,
+          ) ?? V1ListMemosResponse();
+        } else {
+          // Use the parent path approach
+          response = await _memoApi.memoServiceListMemos2(
+            parent,
+            state: state.isNotEmpty ? state : null,
+            sort: sort,
+            direction: direction,
+            filter: filter,
+          ) ?? V1ListMemosResponse();
+        }
       } else {
-        response =
-            await _memoApi.memoServiceListMemos(
-              parent: parent,
-              state: state.isNotEmpty ? state : null,
-              sort: sort,
-              direction: direction,
-              filter: filter,
-            ) ??
-            V1ListMemosResponse();
+        response = await _memoApi.memoServiceListMemos(
+          parent: parent,
+          state: state.isNotEmpty ? state : null,
+          sort: sort,
+          direction: direction,
+          filter: filter,
+        ) ?? V1ListMemosResponse();
       }
 
       // Log response info for debugging
