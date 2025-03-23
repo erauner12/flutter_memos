@@ -31,7 +31,8 @@ class FilterPresets {
   
   /// Untagged content (memos without any tags)
   static String untaggedFilter() {
-    // Using CEL expression to filter for memos where the tags array is empty
-    return 'tags.size() == 0';
+    // The server doesn't support direct access to the tags array size
+    // Instead we use a negative filter to exclude any memo with a tag
+    return '!content.contains("#")';
   }
 }

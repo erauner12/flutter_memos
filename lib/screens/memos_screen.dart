@@ -175,8 +175,30 @@ class _MemosScreenState extends State<MemosScreen> {
         }
       }
       
+      // Apply additional client-side filtering if necessary
+      List<Memo> filteredMemos = memos;
+
+      // Specific client-side handling for untagged filter
+      if (_currentFilterOption == 'untagged' && filteredMemos.isNotEmpty) {
+        // Double-check client-side to ensure we only show truly untagged memos
+        // This is more accurate than just checking for "#" in content
+        filteredMemos =
+            filteredMemos.where((memo) {
+              // Check if the memo has no tags
+              final hasTags =
+                  memo.content.contains('#') ||
+                  (memo.resourceNames != null &&
+                      memo.resourceNames!.isNotEmpty);
+              return !hasTags;
+            }).toList();
+
+        print(
+          '[FILTER] Client-side filtering for untagged memos: ${memos.length} → ${filteredMemos.length}',
+        );
+      }
+      
       setState(() {
-        _memos = memos;
+        _memos = filteredMemos;
         _loading = false;
       });
     } catch (e) {

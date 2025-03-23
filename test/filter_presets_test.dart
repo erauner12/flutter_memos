@@ -45,9 +45,9 @@ void main() {
     
     test('untaggedFilter creates a filter for content without any tags', () {
       final filter = FilterPresets.untaggedFilter();
-
-      // Check that the filter checks for empty tags array
-      expect(filter, contains('tags.size() == 0'));
+      
+      // Check that the filter looks for content without hashtags
+      expect(filter, contains('!content.contains("#")'));
     });
   });
 }
