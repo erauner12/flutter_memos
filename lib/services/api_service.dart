@@ -55,7 +55,7 @@ class ApiService {
     final response = await http.post(
       finalUrl,
       headers: {
-        'Content-Type': 'application/json',
+        'Content-Type': 'text/plain;charset=UTF-8',
         'Accept': 'application/json',
         'Authorization': 'Bearer $_apiKey',
       },
@@ -76,7 +76,8 @@ class ApiService {
     final response = await http.patch(
       url,
       headers: {
-        'Content-Type': 'application/json',
+        'Content-Type': 'text/plain;charset=UTF-8',
+        'Accept': 'application/json',
         'Authorization': 'Bearer $_apiKey',
       },
       body: jsonEncode(data),
@@ -95,7 +96,8 @@ class ApiService {
     final response = await http.delete(
       url,
       headers: {
-        'Content-Type': 'application/json',
+        'Content-Type': 'text/plain;charset=UTF-8',
+        'Accept': 'application/json',
         'Authorization': 'Bearer $_apiKey',
       },
     );
@@ -129,7 +131,7 @@ class ApiService {
       }
     }
     
-    throw Exception('Failed to load memos: ${response.statusCode}');
+    throw Exception('Failed to load memos: ${response.statusCode} - ${response.body}');
   }
 
   Future<Memo> getMemo(String id) async {
@@ -148,19 +150,26 @@ class ApiService {
       return Memo.fromJson(json.decode(response.body));
     }
     
-    throw Exception('Failed to load memo: ${response.statusCode}');
+    throw Exception('Failed to load memo: ${response.statusCode} - ${response.body}');
   }
 
   Future<Memo> createMemo(Memo memo) async {
     // Make a direct POST to the base URL without any additional path
     // This follows the format shown in the working curl command
-    final response = await _post('', memo.toJson());
+    
+    // Add creator field if not present - required by the API
+    final memoData = memo.toJson();
+    if (!memoData.containsKey('creator')) {
+      memoData['creator'] = 'users/1'; // Default creator ID
+    }
+    
+    final response = await _post('', memoData);
     
     if (response.statusCode == 200 || response.statusCode == 201) {
       return Memo.fromJson(json.decode(response.body));
     }
     
-    throw Exception('Failed to create memo: ${response.statusCode}');
+    throw Exception('Failed to create memo: ${response.statusCode} - ${response.body}');
   }
 
   Future<Memo> updateMemo(String id, Memo memo) async {
@@ -179,7 +188,7 @@ class ApiService {
       return Memo.fromJson(json.decode(response.body));
     }
     
-    throw Exception('Failed to update memo: ${response.statusCode}');
+    throw Exception('Failed to update memo: ${response.statusCode} - ${response.body}');
   }
 
   Future<void> deleteMemo(String id) async {
@@ -195,7 +204,7 @@ class ApiService {
     final response = await _delete(endpoint);
     
     if (response.statusCode != 200 && response.statusCode != 204) {
-      throw Exception('Failed to delete memo: ${response.statusCode}');
+      throw Exception('Failed to delete memo: ${response.statusCode} - ${response.body}');
     }
   }
 
@@ -215,7 +224,7 @@ class ApiService {
       return _parseComments(data);
     }
     
-    throw Exception('Failed to load comments: ${response.statusCode}');
+    throw Exception('Failed to load comments: ${response.statusCode} - ${response.body}');
   }
 
   Future<Comment> createMemoComment(String memoId, Comment comment) async {
@@ -232,7 +241,7 @@ class ApiService {
       return Comment.fromJson(json.decode(response.body));
     }
     
-    throw Exception('Failed to create comment: ${response.statusCode}');
+    throw Exception('Failed to create comment: ${response.statusCode} - ${response.body}');
   }
 
   // Helper functions
