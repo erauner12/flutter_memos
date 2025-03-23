@@ -24,7 +24,7 @@ class _MemosScreenState extends State<MemosScreen> {
   List<Memo> _memos = [];
   bool _loading = false;
   String? _error;
-  String _filterKey = 'inbox';
+  final String _filterKey = 'inbox';
   MemoSortMode _sortMode = MemoSortMode.byUpdateTime;
   String _currentFilterOption = 'all';
   final Set<String> _hiddenMemoIds = {};
@@ -251,150 +251,240 @@ class _MemosScreenState extends State<MemosScreen> {
   }
 
   Widget _buildFilterChips() {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8.0),
-        child: Row(
-          children: [
-            FilterChip(
-              label: const Text('All'),
-              selected: _currentFilterOption == 'all',
-              onSelected: (_) => _applyFilter('all'),
-            ),
-            const SizedBox(width: 8),
-            FilterChip(
-              label: const Text('Today'),
-              selected: _currentFilterOption == 'today',
-              onSelected: (_) => _applyFilter('today'),
-            ),
-            const SizedBox(width: 8),
-            FilterChip(
-              label: const Text('Created Today'),
-              selected: _currentFilterOption == 'created_today',
-              onSelected: (_) => _applyFilter('created_today'),
-            ),
-            const SizedBox(width: 8),
-            FilterChip(
-              label: const Text('Updated Today'),
-              selected: _currentFilterOption == 'updated_today',
-              onSelected: (_) => _applyFilter('updated_today'),
-            ),
-            const SizedBox(width: 8),
-            FilterChip(
-              label: const Text('This Week'),
-              selected: _currentFilterOption == 'this_week',
-              onSelected: (_) => _applyFilter('this_week'),
-            ),
-            const SizedBox(width: 8),
-            FilterChip(
-              label: const Text('Important'),
-              selected: _currentFilterOption == 'important',
-              onSelected: (_) => _applyFilter('important'),
-            ),
-
-            // Show All button for hidden memos
-            if (_hiddenMemoIds.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(left: 16.0),
-                child: ActionChip(
-                  label: Text('Show All (${_hiddenMemoIds.length} hidden)'),
-                  onPressed: _showAllMemos,
-                  avatar: const Icon(Icons.visibility, size: 16),
-                ),
-              ),
-          ],
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.grey.shade100,
+        border: Border(
+          bottom: BorderSide(color: Colors.grey.shade300, width: 1),
         ),
       ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Memos'),
-        actions: [
-          // Sort toggle button with more descriptive text
-          TextButton.icon(
-            icon: Icon(
-              _sortMode == MemoSortMode.byUpdateTime
-                  ? Icons.update
-                  : Icons.calendar_today,
-              size: 20,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Title for filter section
+          Padding(
+            padding: const EdgeInsets.only(left: 12.0, top: 6.0, bottom: 4.0),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.filter_alt_outlined,
+                  size: 14,
+                  color: Colors.grey.shade800,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  'Quick Filters:',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.grey.shade800,
+                  ),
+                ),
+                const Spacer(),
+                if (_currentFilterOption != 'all')
+                  TextButton.icon(
+                    onPressed: () => _applyFilter('all'),
+                    icon: const Icon(Icons.close, size: 14),
+                    label: const Text('Clear Filter'),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 2,
+                      ),
+                      minimumSize: const Size(0, 24),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                  ),
+              ],
             ),
-            label: Text(
-              _sortMode == MemoSortMode.byUpdateTime
-                  ? 'Sort by: Updated'
-                  : 'Sort by: Created',
-              style: const TextStyle(fontSize: 12),
-            ),
-            style: TextButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              foregroundColor: Theme.of(context).colorScheme.primary,
-              backgroundColor: Colors.grey[100],
-            ),
-            onPressed: () {
-              _toggleSortMode();
-            },
           ),
-          FilterMenu(
-            currentFilterKey: _filterKey,
-            filters: _filters,
-            onFilterSelected: (filter) {
-              setState(() {
-                _filterKey = filter.key;
-              });
-              _fetchMemos();
-            },
+
+          // Scrollable filter chips
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(8.0, 0, 8.0, 8.0),
+              child: Row(
+                children: [
+                  FilterChip(
+                    label: const Text('All'),
+                    selected: _currentFilterOption == 'all',
+                    onSelected: (_) => _applyFilter('all'),
+                    backgroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      side: BorderSide(color: Colors.grey.shade300),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  FilterChip(
+                    label: const Text('Today'),
+                    selected: _currentFilterOption == 'today',
+                    onSelected: (_) => _applyFilter('today'),
+                    backgroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      side: BorderSide(color: Colors.grey.shade300),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  FilterChip(
+                    label: const Text('Created Today'),
+                    selected: _currentFilterOption == 'created_today',
+                    onSelected: (_) => _applyFilter('created_today'),
+                    backgroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      side: BorderSide(color: Colors.grey.shade300),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  FilterChip(
+                    label: const Text('Updated Today'),
+                    selected: _currentFilterOption == 'updated_today',
+                    onSelected: (_) => _applyFilter('updated_today'),
+                    backgroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      side: BorderSide(color: Colors.grey.shade300),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  FilterChip(
+                    label: const Text('This Week'),
+                    selected: _currentFilterOption == 'this_week',
+                    onSelected: (_) => _applyFilter('this_week'),
+                    backgroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      side: BorderSide(color: Colors.grey.shade300),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  FilterChip(
+                    label: const Text('Important'),
+                    selected: _currentFilterOption == 'important',
+                    onSelected: (_) => _applyFilter('important'),
+                    backgroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      side: BorderSide(color: Colors.grey.shade300),
+                    ),
+                  ),
+
+                  // Show All button for hidden memos
+                  if (_hiddenMemoIds.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 16.0),
+                      child: ActionChip(
+                        label: Text(
+                          'Show All (${_hiddenMemoIds.length} hidden)',
+                        ),
+                        onPressed: _showAllMemos,
+                        avatar: const Icon(Icons.visibility, size: 16),
+                        backgroundColor: Colors.blue.shade50,
+                      ),
+                    ),
+                ],
+              ),
+            ),
           ),
         ],
-      ),
-      body: _buildBody(),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          Navigator.pushNamed(context, '/new-memo').then((_) => _fetchMemos());
-        },
-        backgroundColor: Theme.of(context).colorScheme.primary,
-        child: const Icon(Icons.add, color: Colors.white),
       ),
     );
   }
 
   Widget _buildBody() {
-    if (_loading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    if (_error != null) {
-      return Center(
-        child: Text(
-          'Error: $_error',
-          style: const TextStyle(color: Colors.red),
-        ),
-      );
-    }
-
-    // Filter out hidden memos
+    // Filter out hidden memos first - needed for all cases
     final visibleMemos =
         _memos.where((memo) => !_hiddenMemoIds.contains(memo.id)).toList();
 
-    if (visibleMemos.isEmpty) {
-      return const Center(
-        child: Text(
-          'No memos found.',
-          style: TextStyle(
-            fontSize: 16,
-            fontStyle: FontStyle.italic,
-            color: Colors.grey,
+    // Loading state
+    if (_loading) {
+      return Column(
+        children: [
+          // Always show filter chips even in loading state
+          _buildFilterChips(),
+          const Expanded(child: Center(child: CircularProgressIndicator())),
+        ],
+      );
+    }
+
+    // Error state
+    if (_error != null) {
+      return Column(
+        children: [
+          // Always show filter chips even in error state
+          _buildFilterChips(),
+          Expanded(
+            child: Center(
+              child: Text(
+                'Error: $_error',
+                style: const TextStyle(color: Colors.red),
+              ),
+            ),
           ),
-        ),
+        ],
+      );
+    }
+
+    // Empty state
+    if (visibleMemos.isEmpty) {
+      return Column(
+        children: [
+          // Always show filter chips even when no memos found
+          _buildFilterChips(),
+
+          // Indicator for active filter with no results
+          if (_currentFilterOption != 'all')
+            Container(
+              margin: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.amber.shade100,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.filter_alt,
+                    color: Colors.amber.shade800,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'No memos found with the "$_currentFilterOption" filter.',
+                      style: TextStyle(color: Colors.amber.shade900),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () => _applyFilter('all'),
+                    child: const Text('Show All'),
+                  ),
+                ],
+              ),
+            ),
+            
+          const Expanded(
+            child: Center(
+              child: Text(
+                'No memos found.',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontStyle: FontStyle.italic,
+                  color: Colors.grey,
+                ),
+              ),
+            ),
+          ),
+        ],
       );
     }
 
     return Column(
       children: [
-        // Filter chips for predefined filters
+        // Filter chips for predefined filters - always shown first
         _buildFilterChips(),
         
         // Improved sort indicator with clearer messaging
