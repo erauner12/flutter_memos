@@ -13,6 +13,14 @@ class ApiService {
   final String _baseUrl = Env.apiBaseUrl;
   final String _apiKey = Env.memosApiKey;
 
+  Map<String, String> _getHeaders() {
+    return {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      'Authorization': 'Bearer $_apiKey',
+    };
+  }
+
   Future<http.Response> _get(String endpoint) async {
     // If no endpoint is provided, don't modify the URL at all
     final url =
@@ -21,14 +29,11 @@ class ApiService {
             : Uri.parse('$_baseUrl/${endpoint.replaceAll('//', '/')}');
     
     print('[API] GET => $url');
+    print('[API] Using API key: ***${_apiKey.substring(_apiKey.length - 4)}');
 
     final response = await http.get(
       url,
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        'Authorization': 'Bearer $_apiKey',
-      },
+      headers: _getHeaders(),
     );
 
     print('[API] Response status: ${response.statusCode}');
@@ -50,19 +55,19 @@ class ApiService {
         url;
     
     print('[API] POST => $finalUrl');
+    print('[API] Using API key: ***${_apiKey.substring(_apiKey.length - 4)}');
     print('[API] Request body: ${jsonEncode(data)}');
 
     final response = await http.post(
       finalUrl,
-      headers: {
-        'Content-Type': 'text/plain;charset=UTF-8',
-        'Accept': 'application/json',
-        'Authorization': 'Bearer $_apiKey',
-      },
+      headers: _getHeaders(),
       body: jsonEncode(data),
     );
 
     print('[API] Response status: ${response.statusCode}');
+    if (response.statusCode != 200 && response.statusCode != 201) {
+      print('[API] Error response: ${response.body}');
+    }
     return response;
   }
 
@@ -71,19 +76,19 @@ class ApiService {
     final slash = _baseUrl.endsWith('/') || endpoint.startsWith('/') ? '' : '/';
     final url = Uri.parse('$_baseUrl$slash$endpoint');
     print('[API] PATCH => $url');
+    print('[API] Using API key: ***${_apiKey.substring(_apiKey.length - 4)}');
     print('[API] Request body: ${jsonEncode(data)}');
 
     final response = await http.patch(
       url,
-      headers: {
-        'Content-Type': 'text/plain;charset=UTF-8',
-        'Accept': 'application/json',
-        'Authorization': 'Bearer $_apiKey',
-      },
+      headers: _getHeaders(),
       body: jsonEncode(data),
     );
 
     print('[API] Response status: ${response.statusCode}');
+    if (response.statusCode != 200 && response.statusCode != 201) {
+      print('[API] Error response: ${response.body}');
+    }
     return response;
   }
 
@@ -92,17 +97,17 @@ class ApiService {
     final slash = _baseUrl.endsWith('/') || endpoint.startsWith('/') ? '' : '/';
     final url = Uri.parse('$_baseUrl$slash$endpoint');
     print('[API] DELETE => $url');
+    print('[API] Using API key: ***${_apiKey.substring(_apiKey.length - 4)}');
 
     final response = await http.delete(
       url,
-      headers: {
-        'Content-Type': 'text/plain;charset=UTF-8',
-        'Accept': 'application/json',
-        'Authorization': 'Bearer $_apiKey',
-      },
+      headers: _getHeaders(),
     );
 
     print('[API] Response status: ${response.statusCode}');
+    if (response.statusCode != 200 && response.statusCode != 204) {
+      print('[API] Error response: ${response.body}');
+    }
     return response;
   }
 
@@ -162,8 +167,11 @@ class ApiService {
     if (!memoData.containsKey('creator')) {
       memoData['creator'] = 'users/1'; // Default creator ID
     }
+
+    // Create proper request structure with 'memo' object
+    final requestBody = {'memo': memoData};
     
-    final response = await _post('', memoData);
+    final response = await _post('', requestBody);
     
     if (response.statusCode == 200 || response.statusCode == 201) {
       return Memo.fromJson(json.decode(response.body));
@@ -182,7 +190,10 @@ class ApiService {
                 : id
             : formattedId;
 
-    final response = await _patch(endpoint, memo.toJson());
+    // Create proper request structure with 'memo' object
+    final requestBody = {'memo': memo.toJson()};
+
+    final response = await _patch(endpoint, requestBody);
     
     if (response.statusCode == 200) {
       return Memo.fromJson(json.decode(response.body));
@@ -235,7 +246,10 @@ class ApiService {
             ? '${memoId.startsWith('memos/') ? memoId.substring(6) : memoId}/comments'
             : '$formattedId/comments';
 
-    final response = await _post(endpoint, comment.toJson());
+    // Create proper request structure with 'comment' object
+    final requestBody = {'comment': comment.toJson()};
+
+    final response = await _post(endpoint, requestBody);
     
     if (response.statusCode == 200 || response.statusCode == 201) {
       return Comment.fromJson(json.decode(response.body));

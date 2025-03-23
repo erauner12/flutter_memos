@@ -12,7 +12,7 @@ class Env {
   static const String memosApiKey = String.fromEnvironment(
     'MEMOS_API_KEY',
     defaultValue:
-        'eyJhbGciOiJIUzI1NiIsImtpZCI6InYxIiwidHlwIjoiSldUIn0.eyJuYW1lIjoiZXJhdW5lciIsImlzcyI6Im1lbW9zIiwic3ViIjoiMSIsImF1ZCI6WyJ1c2VyLmFjY2Vzcy10b2tlbiJdLCJpYXQiOjE3NDI1OTc1Nzd9.Wud-szLldpDNlfnzdEusoXLaFGS-NXNYMM3tolPFViY',
+        'eyJhbGciOiJIUzI1NiIsImtpZCI6InYxIiwidHlwIjoiSldUIn0.eyJuYW1lIjoiZXJhdW5lciIsImlzcyI6Im1lbW9zIiwic3ViIjoiMSIsImF1ZCI6WyJ1c2VyLmFjY2Vzcy10b2tlbiJdLCJpYXQiOjE3NDI2ODg2MTl9.O-KWXwJ33ZPDc3N4YD5HFQ7GXONlBo7x6RQVQ4dNdLs',
   );
   
   // MCP Server configuration
