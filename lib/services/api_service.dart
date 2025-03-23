@@ -169,7 +169,20 @@ class ApiService {
   /// Delete a memo
   Future<void> deleteMemo(String id) async {
     try {
-      await _memoApi.memoServiceDeleteMemo(_formatResourceName(id, 'memos'));
+      final formattedId = _formatResourceName(id, 'memos');
+      print('[API] Deleting memo: $formattedId');
+      
+      // Use the lower-level API with HttpInfo to handle response status codes directly
+      final response = await _memoApi.memoServiceDeleteMemoWithHttpInfo(formattedId);
+      
+      // Handle different status codes appropriately
+      if (response.statusCode == 204 || response.statusCode == 200) {
+        print('[API] Successfully deleted memo: $id');
+        return; // Success case
+      } else if (response.statusCode >= 400) {
+        print('[API] Error deleting memo: HTTP ${response.statusCode}');
+        throw Exception('Failed to delete memo: HTTP ${response.statusCode}');
+      }
     } catch (e) {
       print('[API] Error deleting memo: $e');
       throw Exception('Failed to delete memo: $e');
