@@ -66,6 +66,8 @@ class _MemosScreenState extends State<MemosScreen> {
 
       print('Fetching memos with sort field: $sortField');
       
+      // Note: The API service now applies client-side sorting internally
+      // since server-side sorting doesn't work reliably
       final memos = await _apiService.listMemos(
         parent: 'users/1', // Specify the current user
         filter: filter,
@@ -73,10 +75,6 @@ class _MemosScreenState extends State<MemosScreen> {
         sort: sortField,
         direction: 'DESC', // Always newest first
       );
-      
-      // Apply client-side sorting as a fallback since the server might ignore our sort parameter
-      _sortMemosLocally(memos, sortField);
-      
       // Debug: Print info about the first few memos to see if sorting is working
       if (memos.isNotEmpty) {
         print('--- Memos after client-side sorting by $sortField ---');
@@ -139,11 +137,7 @@ class _MemosScreenState extends State<MemosScreen> {
     ).then((_) => _fetchMemos());
   }
 
-  /// Sort memos locally as a fallback since server-side sorting might not be working
-  void _sortMemosLocally(List<Memo> memos, String sortField) {
-    print('Applying client-side sorting by $sortField');
-    MemoUtils.sortMemos(memos, sortField);
-  }
+  // Sorting is now entirely handled in the API service since server-side sorting is unreliable
 
   void _toggleSortMode() {
     setState(() {
@@ -269,12 +263,12 @@ class _MemosScreenState extends State<MemosScreen> {
                         fontWeight: FontWeight.w500,
                       ),
                     ),
-                    Text(
-                      'Client-side sorting applied',
+                    const Text(
+                      'Client-side sorting is always applied (server sorting unavailable)',
                       style: TextStyle(
-                        color: Colors.grey[600],
+                        color: Colors.deepOrange,
                         fontSize: 12,
-                        fontStyle: FontStyle.italic,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
                   ],

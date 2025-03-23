@@ -4,6 +4,7 @@ import 'dart:math' show min;
 import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/models/memo.dart';
 import 'package:flutter_memos/utils/env.dart';
+import 'package:flutter_memos/utils/memo_utils.dart';
 import 'package:http/http.dart' as http;
 
 class ApiService {
@@ -190,7 +191,16 @@ class ApiService {
           );
         }
         
-        return List<Memo>.from(data['memos'].map((x) => Memo.fromJson(x)));
+        // Convert JSON to Memo objects
+        final memos = List<Memo>.from(
+          data['memos'].map((x) => Memo.fromJson(x)),
+        );
+
+        // Always apply client-side sorting since server sorting is unreliable
+        print('[API] Applying client-side sorting by $sort');
+        MemoUtils.sortMemos(memos, sort);
+
+        return memos;
       }
     }
     
