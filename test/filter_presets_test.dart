@@ -42,5 +42,12 @@ void main() {
       // Check that the filter contains the important tag
       expect(filter, contains('tag in ["important"]'));
     });
+    
+    test('untaggedFilter creates a filter for content without any tags', () {
+      final filter = FilterPresets.untaggedFilter();
+
+      // Check that the filter checks for empty tags array
+      expect(filter, contains('tags.size() == 0'));
+    });
   });
 }

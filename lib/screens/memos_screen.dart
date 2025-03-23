@@ -32,6 +32,14 @@ class _MemosScreenState extends State<MemosScreen> {
   void initState() {
     super.initState();
     _loadLastFilterOption();
+    
+    // If this is a new session and no filter preference is saved,
+    // default to untagged to help with the triage workflow
+    if (_currentFilterOption == 'all') {
+      _currentFilterOption = 'untagged';
+      _saveLastFilterOption();
+    }
+    
     _fetchMemos();
   }
 
@@ -126,6 +134,9 @@ class _MemosScreenState extends State<MemosScreen> {
           break;
         case 'important':
           predefinedFilter = FilterPresets.importantFilter();
+          break;
+        case 'untagged':
+          predefinedFilter = FilterPresets.untaggedFilter();
           break;
         case 'all':
         default:
@@ -359,6 +370,30 @@ class _MemosScreenState extends State<MemosScreen> {
               padding: const EdgeInsets.fromLTRB(8.0, 0, 8.0, 8.0),
               child: Row(
                 children: [
+                  // Make the Untagged filter more prominent with a different style
+                  FilterChip(
+                    label: const Text('Untagged'),
+                    selected: _currentFilterOption == 'untagged',
+                    onSelected: (_) => _applyFilter('untagged'),
+                    backgroundColor:
+                        _currentFilterOption == 'untagged'
+                            ? Colors.blue.shade100
+                            : Colors.blue.shade50,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      side: BorderSide(color: Colors.blue.shade300, width: 1.5),
+                    ),
+                    labelStyle: TextStyle(
+                      color: Colors.blue.shade800,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    avatar: Icon(
+                      Icons.new_releases_outlined,
+                      size: 16,
+                      color: Colors.blue.shade700,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
                   FilterChip(
                     label: const Text('All'),
                     selected: _currentFilterOption == 'all',
