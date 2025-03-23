@@ -3,9 +3,12 @@ import 'dart:math' show min;
 import 'package:flutter/material.dart';
 import 'package:flutter_memos/models/memo.dart';
 import 'package:flutter_memos/services/api_service.dart';
+import 'package:flutter_memos/utils/filter_builder.dart';
+import 'package:flutter_memos/utils/filter_presets.dart';
 import 'package:flutter_memos/utils/memo_utils.dart';
 import 'package:flutter_memos/widgets/filter_menu.dart';
 import 'package:flutter_memos/widgets/memo_card.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class MemosScreen extends StatefulWidget {
   const MemosScreen({super.key});
@@ -23,6 +26,8 @@ class _MemosScreenState extends State<MemosScreen> {
   String? _error;
   String _filterKey = 'inbox';
   MemoSortMode _sortMode = MemoSortMode.byUpdateTime;
+  String _currentFilterOption = 'all';
+  final Set<String> _hiddenMemoIds = {};
 
   final List<FilterItem> _filters = [
     FilterItem(label: 'Inbox', key: 'inbox'),
@@ -37,7 +42,58 @@ class _MemosScreenState extends State<MemosScreen> {
   @override
   void initState() {
     super.initState();
+    _loadLastFilterOption();
     _fetchMemos();
+  }
+
+  Future<void> _loadLastFilterOption() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final lastOption = prefs.getString('last_filter_option') ?? 'all';
+      setState(() {
+        _currentFilterOption = lastOption;
+      });
+    } catch (e) {
+      // If there's an error, fall back to 'all'
+      setState(() {
+        _currentFilterOption = 'all';
+      });
+    }
+  }
+
+  Future<void> _saveLastFilterOption() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      prefs.setString('last_filter_option', _currentFilterOption);
+    } catch (e) {
+      // Silently fail if we can't save the preference
+    }
+  }
+
+  void _toggleHideMemo(String memoId) {
+    setState(() {
+      if (_hiddenMemoIds.contains(memoId)) {
+        _hiddenMemoIds.remove(memoId);
+      } else {
+        _hiddenMemoIds.add(memoId);
+      }
+    });
+  }
+
+  void _showAllMemos() {
+    setState(() {
+      _hiddenMemoIds.clear();
+    });
+  }
+
+  void _applyFilter(String filterOption) {
+    setState(() {
+      _currentFilterOption = filterOption;
+      _hiddenMemoIds.clear(); // Reset hidden memos when changing filters
+    });
+
+    _saveLastFilterOption();
+    _fetchMemos(); // This will apply both filter and the current sort mode
   }
 
   Future<void> _fetchMemos() async {
@@ -55,7 +111,7 @@ class _MemosScreenState extends State<MemosScreen> {
       final String sortField =
           _sortMode == MemoSortMode.byUpdateTime ? 'updateTime' : 'createTime';
 
-      // Apply filter logic
+      // Apply filter logic for category/visibility
       if (_filterKey == 'inbox') {
         state = 'NORMAL';
       } else if (_filterKey == 'archive') {
@@ -64,7 +120,37 @@ class _MemosScreenState extends State<MemosScreen> {
         filter = 'tags=="$_filterKey"';
       }
 
-      print('Fetching memos with sort field: $sortField');
+      // Apply additional predefined filter
+      String? predefinedFilter;
+      switch (_currentFilterOption) {
+        case 'today':
+          predefinedFilter = FilterPresets.todayFilter();
+          break;
+        case 'created_today':
+          predefinedFilter = FilterPresets.createdTodayFilter();
+          break;
+        case 'updated_today':
+          predefinedFilter = FilterPresets.updatedTodayFilter();
+          break;
+        case 'this_week':
+          predefinedFilter = FilterPresets.thisWeekFilter();
+          break;
+        case 'important':
+          predefinedFilter = FilterPresets.importantFilter();
+          break;
+        case 'all':
+        default:
+          predefinedFilter = null; // No additional filter
+      }
+
+      // Combine filters if both are present
+      if (filter != null && predefinedFilter != null) {
+        filter = FilterBuilder.and([filter, predefinedFilter]);
+      } else if (predefinedFilter != null) {
+        filter = predefinedFilter;
+      }
+
+      print('Fetching memos with sort field: $sortField and filter: $filter');
       
       // Note: The API service now applies client-side sorting internally
       // since server-side sorting doesn't work reliably
@@ -164,6 +250,65 @@ class _MemosScreenState extends State<MemosScreen> {
     );
   }
 
+  Widget _buildFilterChips() {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8.0),
+        child: Row(
+          children: [
+            FilterChip(
+              label: const Text('All'),
+              selected: _currentFilterOption == 'all',
+              onSelected: (_) => _applyFilter('all'),
+            ),
+            const SizedBox(width: 8),
+            FilterChip(
+              label: const Text('Today'),
+              selected: _currentFilterOption == 'today',
+              onSelected: (_) => _applyFilter('today'),
+            ),
+            const SizedBox(width: 8),
+            FilterChip(
+              label: const Text('Created Today'),
+              selected: _currentFilterOption == 'created_today',
+              onSelected: (_) => _applyFilter('created_today'),
+            ),
+            const SizedBox(width: 8),
+            FilterChip(
+              label: const Text('Updated Today'),
+              selected: _currentFilterOption == 'updated_today',
+              onSelected: (_) => _applyFilter('updated_today'),
+            ),
+            const SizedBox(width: 8),
+            FilterChip(
+              label: const Text('This Week'),
+              selected: _currentFilterOption == 'this_week',
+              onSelected: (_) => _applyFilter('this_week'),
+            ),
+            const SizedBox(width: 8),
+            FilterChip(
+              label: const Text('Important'),
+              selected: _currentFilterOption == 'important',
+              onSelected: (_) => _applyFilter('important'),
+            ),
+
+            // Show All button for hidden memos
+            if (_hiddenMemoIds.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(left: 16.0),
+                child: ActionChip(
+                  label: Text('Show All (${_hiddenMemoIds.length} hidden)'),
+                  onPressed: _showAllMemos,
+                  avatar: const Icon(Icons.visibility, size: 16),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -230,7 +375,11 @@ class _MemosScreenState extends State<MemosScreen> {
       );
     }
 
-    if (_memos.isEmpty) {
+    // Filter out hidden memos
+    final visibleMemos =
+        _memos.where((memo) => !_hiddenMemoIds.contains(memo.id)).toList();
+
+    if (visibleMemos.isEmpty) {
       return const Center(
         child: Text(
           'No memos found.',
@@ -245,6 +394,9 @@ class _MemosScreenState extends State<MemosScreen> {
 
     return Column(
       children: [
+        // Filter chips for predefined filters
+        _buildFilterChips(),
+        
         // Improved sort indicator with clearer messaging
         Container(
           color: Colors.grey[200],
@@ -309,21 +461,18 @@ class _MemosScreenState extends State<MemosScreen> {
             onRefresh: _fetchMemos,
             child: ListView.builder(
               padding: const EdgeInsets.all(16.0),
-              itemCount: _memos.length,
+              itemCount: visibleMemos.length,
               itemBuilder: (context, index) {
-                final memo = _memos[index];
+                final memo = visibleMemos[index];
                 return Dismissible(
                   key: Key(memo.id),
                   background: Container(
-                    color: Colors.amber,
+                    color: Colors.orange,
                     alignment: Alignment.centerLeft,
-                    padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                    child: const Text(
-                      'Archive',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                      ),
+                    padding: const EdgeInsets.only(left: 16.0),
+                    child: const Icon(
+                      Icons.visibility_off,
+                      color: Colors.white,
                     ),
                   ),
                   secondaryBackground: Container(
@@ -339,14 +488,17 @@ class _MemosScreenState extends State<MemosScreen> {
                     ),
                   ),
                   onDismissed: (direction) {
-                    if (direction == DismissDirection.startToEnd) {
-                      _handleArchiveMemo(memo.id);
-                    } else {
+                    if (direction == DismissDirection.endToStart) {
                       _handleDeleteMemo(memo.id);
                     }
                   },
                   confirmDismiss: (direction) async {
-                    if (direction == DismissDirection.endToStart) {
+                    if (direction == DismissDirection.startToEnd) {
+                      // Hide memo
+                      _toggleHideMemo(memo.id);
+                      return false; // Don't remove from list
+                    } else if (direction == DismissDirection.endToStart) {
+                      // Delete memo
                       return await showDialog(
                         context: context,
                         builder: (BuildContext context) {
@@ -371,7 +523,7 @@ class _MemosScreenState extends State<MemosScreen> {
                         },
                       );
                     }
-                    return true;
+                    return false;
                   },
                   child: MemoCard(
                     content: memo.content,
