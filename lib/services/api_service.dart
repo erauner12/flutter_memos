@@ -5,6 +5,7 @@ import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/models/memo.dart';
 import 'package:flutter_memos/utils/env.dart';
 import 'package:flutter_memos/utils/memo_utils.dart';
+import 'package:http/http.dart' as http;
 
 class ApiService {
   static final ApiService _instance = ApiService._internal();
@@ -50,105 +51,105 @@ class ApiService {
   }) async {
     print('Fetching memos with sort field: $sort');
     
-    // Try multiple approaches based on API structure and path
-    V1ListMemosResponse response;
     try {
-      // Try direct access to /api/v1 first, removing "/memos" from the path
-      String basePath = _memoApi.apiClient.basePath;
-      if (basePath.endsWith('/memos')) {
-        basePath = basePath.substring(0, basePath.length - 6);
+      // Extract the base API URL without the trailing '/memos' if it exists
+      String baseApiUrl = _memoApi.apiClient.basePath;
+      if (baseApiUrl.endsWith('/memos')) {
+        baseApiUrl = baseApiUrl.substring(0, baseApiUrl.length - 6);
       }
       
-      // Construct URL for debugging
-      String requestUrl;
+      // Build query parameters exactly as they appeared in the working example
+      final Map<String, String> queryParams = {};
+      if (state.isNotEmpty) {
+        queryParams['state'] = state;
+      }
+      if (sort.isNotEmpty) {
+        queryParams['sort'] = sort;
+      }
+      if (direction.isNotEmpty) {
+        queryParams['direction'] = direction;
+      }
+      if (filter != null && filter.isNotEmpty) {
+        queryParams['filter'] = filter;
+      }
+
+      // Construct the URL exactly as it was in the working example
+      Uri uri;
+      
       if (parent != null && parent.isNotEmpty) {
-        // For parent-based path like /api/v1/users/1/memos
-        requestUrl = "$basePath/$parent/memos";
+        // Format: http://localhost:5230/api/v1/users/1/memos?state=NORMAL&sort=updateTime&direction=DESC
+        uri = Uri.parse(
+          '$baseApiUrl/$parent/memos',
+        ).replace(queryParameters: queryParams);
       } else {
-        // For general path like /api/v1/memos
-        requestUrl = "$basePath/memos";
+        // Format: http://localhost:5230/api/v1/memos?state=NORMAL&sort=updateTime&direction=DESC
+        uri = Uri.parse(
+          '$baseApiUrl/memos',
+        ).replace(queryParameters: queryParams);
       }
       
-      print('[API] Attempting to access: $requestUrl');
+      print('[API] GET => $uri');
+      print(
+        '[API] Using endpoint pattern: ${parent != null ? "/{parent}/memos" : "/memos"}',
+      );
       print('[API] Parent: ${parent ?? "not specified"}');
       print('[API] Sort parameters: sort=$sort, direction=$direction');
       
-      // Try direct call with adjusted parent format - trying several ways
-      try {
-        // Approach 1: If parent is 'users/1', try just '1' for the ID
-        String userId = parent?.contains('/') == true ?
-                       parent!.split('/').last :
-                       parent ?? "";
-        
-        print('[API] Attempt #1: Using parent ID only: $userId');
-        
-        // Direct call without the "users/" prefix, just the ID
-        if (userId.isNotEmpty) {
-          response = await _memoApi.memoServiceListMemos(
-            parent: "users/$userId",  // ensure proper format with users/ prefix
-            state: state.isNotEmpty ? state : null,
-            sort: sort,
-            direction: direction,
-            filter: filter,
-          ) ?? V1ListMemosResponse();
-        } else {
-          throw Exception("Skipping first attempt, no valid user ID");
-        }
-      } catch (e) {
-        print('[API] Attempt #1 failed: $e');
-        
-        // Approach 2: Try with the second method and full path
-        if (parent != null && parent.isNotEmpty) {
-          // Try with original parent format
-          print('[API] Attempt #2: Using memoServiceListMemos2 with path parameter: $parent');
-          response = await _memoApi.memoServiceListMemos2(
-            parent,
-            state: state.isNotEmpty ? state : null,
-            sort: sort,
-            direction: direction,
-            filter: filter,
-          ) ?? V1ListMemosResponse();
-        } else {
-          // Fallback to standard method without parent
-          print('[API] Attempt #3: Using standard method without parent');
-          response = await _memoApi.memoServiceListMemos(
-            state: state.isNotEmpty ? state : null,
-            sort: sort,
-            direction: direction,
-            filter: filter,
-          ) ?? V1ListMemosResponse();
-        }
-      }
-
-      // Log response info for debugging
-      print('[API] Response status: 200');
-      final memos = response.memos ?? [];
-      print('[API] Received ${memos.length} memos');
-      
-      if (memos.isNotEmpty) {
-        print('[API] First memo: ${_truncateContent(memos.first.content)}...');
-        print(
-          '[API] Sort fields - createTime: ${memos.first.createTime}, updateTime: ${memos.first.updateTime}',
-        );
-      }
-      
-      // Convert API memos to app model memos
-      final appMemos = memos.map(_convertApiMemoToAppMemo).toList();
-      
-      // Store the original server order for testing
-      final serverOrder = appMemos.map((memo) => memo.id).toList();
-      print(
-        '[API] Original server order (first 3 IDs): ${serverOrder.take(3).join(", ")}',
+      // Make direct HTTP request
+      final response = await http.get(
+        uri,
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': 'Bearer ${Env.memosApiKey}',
+        },
       );
       
-      // Apply client-side sorting
-      print('[API] Applying client-side sorting by $sort');
-      MemoUtils.sortMemos(appMemos, sort);
+      print('[API] Response status: ${response.statusCode}');
       
-      // Store the original order in a static variable for testing
-      _lastServerOrder = serverOrder;
-      
-      return appMemos;
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data = json.decode(response.body);
+        
+        if (data.containsKey('memos')) {
+          final List<dynamic> rawMemos = data['memos'];
+          print('[API] Received ${rawMemos.length} memos');
+          
+          if (rawMemos.isNotEmpty) {
+            print(
+              '[API] First memo: ${_truncateContent(rawMemos[0]['content'])}...',
+            );
+            print(
+              '[API] Sort fields - createTime: ${rawMemos[0]['createTime']}, updateTime: ${rawMemos[0]['updateTime']}',
+            );
+          }
+          
+          // Convert JSON to Memo objects
+          final List<Memo> memos =
+              rawMemos.map((m) => Memo.fromJson(m)).toList();
+
+          // Store the original server order for testing
+          final serverOrder = memos.map((memo) => memo.id).toList();
+          print(
+            '[API] Original server order (first 3 IDs): ${serverOrder.take(3).join(", ")}',
+          );
+
+          // Apply client-side sorting
+          print('[API] Applying client-side sorting by $sort');
+          MemoUtils.sortMemos(memos, sort);
+
+          // Store the original order in a static variable for testing
+          _lastServerOrder = serverOrder;
+          
+          return memos;
+        } else {
+          print('[API] No memos found in response');
+          return [];
+        }
+      } else {
+        throw Exception(
+          'API request failed with status: ${response.statusCode} - ${response.body}',
+        );
+      }
     } catch (e) {
       print('[API] Error: $e');
       throw Exception('Failed to load memos: $e');
