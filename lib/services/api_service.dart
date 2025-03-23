@@ -190,10 +190,8 @@ class ApiService {
                 : id
             : formattedId;
 
-    // Create proper request structure with 'memo' object
-    final requestBody = {'memo': memo.toJson()};
-
-    final response = await _patch(endpoint, requestBody);
+    // Send memo data directly without wrapping it in a "memo" object
+    final response = await _patch(endpoint, memo.toJson());
     
     if (response.statusCode == 200) {
       return Memo.fromJson(json.decode(response.body));
@@ -264,12 +262,18 @@ class ApiService {
   }
 
   List<Comment> _parseComments(dynamic data) {
+    print('[API] Parsing comments from data: ${json.encode(data)}');
+    
     // Handle different comment data structures
     if (data is List) {
-      if (data.isEmpty) return [];
+      if (data.isEmpty) {
+        print('[API] Data is an empty list');
+        return [];
+      }
       
       // If we have an array of [id, object] pairs
       if (data[0] is List) {
+        print('[API] Data is a list of [id, object] pairs');
         return data.map<Comment>((entry) {
           if (entry is List && entry.length == 2) {
             final commentId = entry[0];
@@ -283,12 +287,14 @@ class ApiService {
       
       // If we have an array of objects with content property
       if (data[0] is Map && data[0].containsKey('content')) {
+        print('[API] Data is a list of objects with content property');
         return data.map<Comment>((x) => Comment.fromJson(x)).toList();
       }
     }
     
     // If data contains a "memos" array (another format we might receive)
     if (data is Map && data.containsKey('memos') && data['memos'] is List) {
+      print('[API] Data contains a "memos" array');
       return data['memos'].map<Comment>((memo) {
         final commentData = {
           'id': memo['name'],
@@ -304,10 +310,11 @@ class ApiService {
     
     // If data contains a "comments" property with an array
     if (data is Map && data.containsKey('comments') && data['comments'] is List) {
+      print('[API] Data contains a "comments" property with an array');
       return data['comments'].map<Comment>((x) => Comment.fromJson(x)).toList();
     }
     
-    print('Unknown comments format, raw data: $data');
+    print('[API] Unknown comments format, raw data: $data');
     return [];
   }
 }

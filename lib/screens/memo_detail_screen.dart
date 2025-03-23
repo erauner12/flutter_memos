@@ -62,10 +62,20 @@ class _MemoDetailScreenState extends State<MemoDetailScreen> {
   Future<void> _fetchComments() async {
     try {
       final comments = await _apiService.listMemoComments(widget.memoId);
+      print('[MemoDetail] Fetched ${comments.length} comments');
+      
+      // Log the first few comments for debugging
+      if (comments.isNotEmpty) {
+        for (int i = 0; i < comments.length && i < 3; i++) {
+          print('[MemoDetail] Comment ${i+1}: ${comments[i].content}');
+        }
+      }
+      
       setState(() {
         _comments = comments;
       });
     } catch (e) {
+      print('[MemoDetail] Error fetching comments: $e');
       setState(() {
         _error = 'Failed to load comments: ${e.toString()}';
       });
