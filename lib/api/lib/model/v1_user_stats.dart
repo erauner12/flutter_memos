@@ -96,7 +96,11 @@ class V1UserStats {
 
       return V1UserStats(
         name: mapValueOfType<String>(json, r'name'),
-        memoDisplayTimestamps: DateTime.listFromJson(json[r'memoDisplayTimestamps']),
+        memoDisplayTimestamps: json[r'memoDisplayTimestamps'] is List
+            ? (json[r'memoDisplayTimestamps'] as List)
+                .map((item) => item is String ? DateTime.parse(item) : DateTime.fromMillisecondsSinceEpoch(0))
+                .toList()
+            : [],
         memoTypeStats: UserStatsMemoTypeStats.fromJson(json[r'memoTypeStats']),
         tagCount: mapCastOfType<String, int>(json, r'tagCount') ?? const {},
       );
@@ -148,4 +152,3 @@ class V1UserStats {
   static const requiredKeys = <String>{
   };
 }
-
