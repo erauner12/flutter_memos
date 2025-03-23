@@ -72,9 +72,12 @@ class _MemosScreenState extends State<MemosScreen> {
         direction: 'DESC', // Always newest first
       );
       
+      // Apply client-side sorting as a fallback since the server might ignore our sort parameter
+      _sortMemosLocally(memos, sortField);
+      
       // Debug: Print info about the first few memos to see if sorting is working
       if (memos.isNotEmpty) {
-        print('--- Memos received (sorted by $sortField) ---');
+        print('--- Memos after client-side sorting by $sortField ---');
         for (int i = 0; i < min(3, memos.length); i++) {
           print('[${i + 1}] ID: ${memos[i].id}');
           print(
@@ -132,6 +135,40 @@ class _MemosScreenState extends State<MemosScreen> {
       '/memo-detail',
       arguments: {'memoId': id},
     ).then((_) => _fetchMemos());
+  }
+
+  /// Sort memos locally as a fallback since server-side sorting might not be working
+  void _sortMemosLocally(List<Memo> memos, String sortField) {
+    print('Applying client-side sorting by $sortField');
+    
+    memos.sort((a, b) {
+      String? timeStrA;
+      String? timeStrB;
+      
+      if (sortField == 'updateTime') {
+        timeStrA = a.updateTime;
+        timeStrB = b.updateTime;
+      } else { // createTime
+        timeStrA = a.createTime;
+        timeStrB = b.createTime;
+      }
+      
+      // If either time is null, fall back to displayTime
+      if (timeStrA == null || timeStrB == null) {
+        timeStrA = a.displayTime;
+        timeStrB = b.displayTime;
+      }
+      
+      // If we still have null values, put them at the end
+      if (timeStrA == null && timeStrB == null) return 0;
+      if (timeStrA == null) return 1;
+      if (timeStrB == null) return -1;
+      
+      // Parse dates and compare (newest first)
+      final dateA = DateTime.parse(timeStrA);
+      final dateB = DateTime.parse(timeStrB);
+      return dateB.compareTo(dateA);
+    });
   }
 
   void _toggleSortMode() {
