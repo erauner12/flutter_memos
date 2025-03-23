@@ -1,0 +1,15 @@
+targets:
+  $default:
+    builders:
+      openapi_generator:
+        options:
+          input: api/openapi.yaml
+          output: lib/api
+          generator_name: dart2
+          global_options:
+            verbose: true
+          additional_properties:
+            pubName: flutter_memos_api
+            pubVersion: 1.0.0
+            useEnumExtension: true
+            dateLibrary: time
