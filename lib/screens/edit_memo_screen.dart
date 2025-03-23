@@ -17,6 +17,7 @@ class EditMemoScreen extends StatefulWidget {
 class _EditMemoScreenState extends State<EditMemoScreen> {
   final ApiService _apiService = ApiService();
   final TextEditingController _contentController = TextEditingController();
+  final FocusNode _contentFocusNode = FocusNode();
   
   bool _loading = false;
   bool _saving = false;
@@ -34,6 +35,7 @@ class _EditMemoScreenState extends State<EditMemoScreen> {
   @override
   void dispose() {
     _contentController.dispose();
+    _contentFocusNode.dispose();
     super.dispose();
   }
 
@@ -147,6 +149,7 @@ class _EditMemoScreenState extends State<EditMemoScreen> {
           const SizedBox(height: 4),
           TextField(
             controller: _contentController,
+            focusNode: _contentFocusNode,
             decoration: const InputDecoration(
               hintText: 'Enter memo content...',
               border: OutlineInputBorder(),
@@ -154,6 +157,10 @@ class _EditMemoScreenState extends State<EditMemoScreen> {
             ),
             maxLines: 10,
             minLines: 5,
+            onSubmitted: (_) {
+              // Clear focus on submission
+              _contentFocusNode.unfocus();
+            },
           ),
           const SizedBox(height: 20),
           

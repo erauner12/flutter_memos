@@ -19,6 +19,7 @@ class MemoDetailScreen extends StatefulWidget {
 class _MemoDetailScreenState extends State<MemoDetailScreen> {
   final ApiService _apiService = ApiService();
   final TextEditingController _commentController = TextEditingController();
+  final FocusNode _commentFocusNode = FocusNode();
   
   Memo? _memo;
   List<Comment> _comments = [];
@@ -36,6 +37,7 @@ class _MemoDetailScreenState extends State<MemoDetailScreen> {
   @override
   void dispose() {
     _commentController.dispose();
+    _commentFocusNode.dispose();
     super.dispose();
   }
 
@@ -98,6 +100,7 @@ class _MemoDetailScreenState extends State<MemoDetailScreen> {
       
       await _apiService.createMemoComment(widget.memoId, newComment);
       _commentController.clear();
+      _commentFocusNode.unfocus(); // Clear focus after posting
       await _fetchComments(); // Refresh comments
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -285,6 +288,7 @@ class _MemoDetailScreenState extends State<MemoDetailScreen> {
               children: [
                 TextField(
                   controller: _commentController,
+                  focusNode: _commentFocusNode,
                   decoration: const InputDecoration(
                     hintText: 'Add a comment...',
                     hintStyle: TextStyle(color: Colors.grey),
@@ -292,6 +296,11 @@ class _MemoDetailScreenState extends State<MemoDetailScreen> {
                     contentPadding: EdgeInsets.all(10),
                   ),
                   maxLines: 3,
+                  onSubmitted: (_) {
+                    if (!_submittingComment && _commentController.text.trim().isNotEmpty) {
+                      _handleAddComment();
+                    }
+                  },
                 ),
                 const SizedBox(height: 8),
                 Align(

@@ -12,6 +12,7 @@ class NewMemoScreen extends StatefulWidget {
 class _NewMemoScreenState extends State<NewMemoScreen> {
   final ApiService _apiService = ApiService();
   final TextEditingController _contentController = TextEditingController();
+  final FocusNode _contentFocusNode = FocusNode();
   
   bool _loading = false;
   String? _error;
@@ -19,6 +20,7 @@ class _NewMemoScreenState extends State<NewMemoScreen> {
   @override
   void dispose() {
     _contentController.dispose();
+    _contentFocusNode.dispose();
     super.dispose();
   }
 
@@ -86,6 +88,7 @@ class _NewMemoScreenState extends State<NewMemoScreen> {
           children: [
             TextField(
               controller: _contentController,
+              focusNode: _contentFocusNode,
               decoration: const InputDecoration(
                 hintText: 'Enter your memo content...',
                 border: OutlineInputBorder(),
@@ -94,6 +97,10 @@ class _NewMemoScreenState extends State<NewMemoScreen> {
               maxLines: 10,
               minLines: 5,
               autofocus: true,
+              onSubmitted: (_) {
+                // Clear focus on submission
+                _contentFocusNode.unfocus();
+              },
             ),
             if (_error != null)
               Padding(

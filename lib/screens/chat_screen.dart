@@ -14,6 +14,7 @@ class _ChatScreenState extends State<ChatScreen> {
   final AssistantService _assistantService = AssistantService();
   final TextEditingController _inputController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+  final FocusNode _inputFocusNode = FocusNode();
 
   String? _conversationId;
   List<Message> _messages = [];
@@ -31,6 +32,7 @@ class _ChatScreenState extends State<ChatScreen> {
   void dispose() {
     _inputController.dispose();
     _scrollController.dispose();
+    _inputFocusNode.dispose();
     super.dispose();
   }
 
@@ -239,6 +241,7 @@ class _ChatScreenState extends State<ChatScreen> {
               Expanded(
                 child: TextField(
                   controller: _inputController,
+                  focusNode: _inputFocusNode,
                   decoration: const InputDecoration(
                     hintText: 'Ask the assistant...',
                     border: OutlineInputBorder(
@@ -251,6 +254,11 @@ class _ChatScreenState extends State<ChatScreen> {
                   ),
                   maxLines: 3,
                   minLines: 1,
+                  onSubmitted: (_) {
+                    if (!_sending && _inputController.text.trim().isNotEmpty) {
+                      _handleSend();
+                    }
+                  },
                 ),
               ),
               const SizedBox(width: 8),

@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_memos/screens/memos_screen.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_memos/screens/chat_screen.dart';
+import 'package:flutter_memos/screens/edit_memo_screen.dart';
 import 'package:flutter_memos/screens/mcp_screen.dart';
 import 'package:flutter_memos/screens/memo_detail_screen.dart';
-import 'package:flutter_memos/screens/edit_memo_screen.dart';
+import 'package:flutter_memos/screens/memos_screen.dart';
 import 'package:flutter_memos/screens/new_memo_screen.dart';
 
 void main() {
@@ -15,7 +16,20 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    // Configure keyboard settings for macOS to avoid key event issues
+    if (Theme.of(context).platform == TargetPlatform.macOS) {
+      ServicesBinding.instance.keyboard.addHandler((KeyEvent event) {
+        // Allow the event to propagate to the framework
+        return false;
+      });
+    }
+    
+    return GestureDetector(
+      onTap: () {
+        // Unfocus when tapping outside of a text field
+        FocusManager.instance.primaryFocus?.unfocus();
+      },
+      child: MaterialApp(
       title: 'Flutter Memos',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
@@ -46,7 +60,7 @@ class MyApp extends StatelessWidget {
             builder: (context) => MemoDetailScreen(
               memoId: args['memoId'] as String,
             ),
-          );
+            );
         } else if (settings.name == '/edit-memo') {
           final args = settings.arguments as Map<String, dynamic>;
           return MaterialPageRoute(
@@ -56,7 +70,8 @@ class MyApp extends StatelessWidget {
           );
         }
         return null;
-      },
+        },
+      ),
     );
   }
 }
