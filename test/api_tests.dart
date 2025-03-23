@@ -1,10 +1,14 @@
-import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter_memos/models/memo.dart';
-import 'package:flutter_memos/services/api_service.dart';
 import 'dart:math' show min;
 
-// Use this annotation to mark tests that should be skipped by default
-@Skip('This test makes API calls to a real server and should be run manually')
+import 'package:flutter_memos/models/memo.dart';
+import 'package:flutter_memos/services/api_service.dart';
+import 'package:flutter_memos/utils/memo_utils.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+// Set this to true to run the API tests
+// Since there's no '--no-skip' flag in Flutter test, we'll use a manual toggle
+const bool RUN_API_TESTS = false;
+
 void main() {
   group('API Server Tests', () {
     late ApiService apiService;
@@ -14,6 +18,12 @@ void main() {
     });
     
     test('Server respects sort parameters', () async {
+      // Skip this test unless RUN_API_TESTS is true
+      if (!RUN_API_TESTS) {
+        print('Skipping API test - set RUN_API_TESTS = true to run this test');
+        return;
+      }
+
       // First, fetch memos sorted by update time
       final memosByUpdateTime = await apiService.listMemos(
         sort: 'updateTime',
@@ -66,7 +76,11 @@ void main() {
     });
     
     test('Verify client-side sorting fixes server sorting issues', () async {
-      // This test verifies that our client-side sorting correctly compensates for server sorting issues
+      // Skip this test unless RUN_API_TESTS is true
+      if (!RUN_API_TESTS) {
+        print('Skipping API test - set RUN_API_TESTS = true to run this test');
+        return;
+      }
       
       // Get memos with server-side sort by updateTime
       final serverSortedMemos = await apiService.listMemos(
@@ -125,6 +139,3 @@ void main() {
     });
   });
 }
-
-// Import this at the top of the file when running these tests
-import 'package:flutter_memos/utils/memo_utils.dart';
