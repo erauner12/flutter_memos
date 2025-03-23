@@ -13,12 +13,18 @@ class MemosScreen extends StatefulWidget {
   State<MemosScreen> createState() => _MemosScreenState();
 }
 
+enum MemoSortMode {
+  byUpdateTime,
+  byCreateTime,
+}
+
 class _MemosScreenState extends State<MemosScreen> {
   final ApiService _apiService = ApiService();
   List<Memo> _memos = [];
   bool _loading = false;
   String? _error;
   String _filterKey = 'inbox';
+  MemoSortMode _sortMode = MemoSortMode.byUpdateTime;
 
   final List<FilterItem> _filters = [
     FilterItem(label: 'Inbox', key: 'inbox'),
@@ -59,6 +65,9 @@ class _MemosScreenState extends State<MemosScreen> {
         filter: filter,
         state: state,
       );
+      
+      // Sort memos based on current sort mode
+      _sortMemos(memos);
       
       setState(() {
         _memos = memos;
@@ -107,6 +116,40 @@ class _MemosScreenState extends State<MemosScreen> {
       arguments: {'memoId': id},
     ).then((_) => _fetchMemos());
   }
+  
+  void _sortMemos(List<Memo> memos) {
+    memos.sort((a, b) {
+      DateTime? timeA;
+      DateTime? timeB;
+      
+      if (_sortMode == MemoSortMode.byUpdateTime) {
+        timeA = a.updateTime != null ? DateTime.tryParse(a.updateTime!) : null;
+        timeB = b.updateTime != null ? DateTime.tryParse(b.updateTime!) : null;
+      } else {
+        timeA = a.createTime != null ? DateTime.tryParse(a.createTime!) : null;
+        timeB = b.createTime != null ? DateTime.tryParse(b.createTime!) : null;
+      }
+      
+      // Handle cases where dates might be null
+      if (timeA == null && timeB == null) return 0;
+      if (timeA == null) return 1;
+      if (timeB == null) return -1;
+      
+      // Sort in descending order (newest first)
+      return timeB.compareTo(timeA);
+    });
+  }
+  
+  void _toggleSortMode() {
+    setState(() {
+      _sortMode = _sortMode == MemoSortMode.byUpdateTime
+          ? MemoSortMode.byCreateTime
+          : MemoSortMode.byUpdateTime;
+      
+      // Re-sort the existing memos
+      _sortMemos(_memos);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -114,6 +157,18 @@ class _MemosScreenState extends State<MemosScreen> {
       appBar: AppBar(
         title: const Text('Memos'),
         actions: [
+          // Sort toggle button
+          IconButton(
+            icon: Icon(_sortMode == MemoSortMode.byUpdateTime
+                ? Icons.update
+                : Icons.calendar_today),
+            tooltip: _sortMode == MemoSortMode.byUpdateTime
+                ? 'Sorting by last updated (newest first)'
+                : 'Sorting by creation date (newest first)',
+            onPressed: () {
+              _toggleSortMode();
+            },
+          ),
           FilterMenu(
             currentFilterKey: _filterKey,
             filters: _filters,
