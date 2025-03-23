@@ -35,4 +35,10 @@ class FilterPresets {
     // Instead we use a negative filter to exclude any memo with a tag
     return '!content.contains("#")';
   }
+  
+  /// Tagged content (memos with at least one tag)
+  static String taggedFilter() {
+    // Filter for memos that contain at least one hashtag
+    return 'content.contains("#")';
+  }
 }

@@ -25,43 +25,44 @@ class _MemosScreenState extends State<MemosScreen> {
   String? _error;
   final String _filterKey = 'inbox';
   MemoSortMode _sortMode = MemoSortMode.byUpdateTime;
-  String _currentFilterOption = 'all';
+  // Multiple filter types that can be combined
+  String _timeFilterOption =
+      'all'; // Time-based filters (today, this week, etc.)
+  String _statusFilterOption = 'untagged'; // Status filters (tagged/untagged)
   final Set<String> _hiddenMemoIds = {};
 
   @override
   void initState() {
     super.initState();
     _loadLastFilterOption();
-    
-    // If this is a new session and no filter preference is saved,
-    // default to untagged to help with the triage workflow
-    if (_currentFilterOption == 'all') {
-      _currentFilterOption = 'untagged';
-      _saveLastFilterOption();
-    }
-    
     _fetchMemos();
   }
 
   Future<void> _loadLastFilterOption() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final lastOption = prefs.getString('last_filter_option') ?? 'all';
+      final lastTimeFilter = prefs.getString('last_time_filter') ?? 'all';
+      final lastStatusFilter =
+          prefs.getString('last_status_filter') ?? 'untagged';
+      
       setState(() {
-        _currentFilterOption = lastOption;
+        _timeFilterOption = lastTimeFilter;
+        _statusFilterOption = lastStatusFilter;
       });
     } catch (e) {
-      // If there's an error, fall back to 'all'
+      // If there's an error, use defaults
       setState(() {
-        _currentFilterOption = 'all';
+        _timeFilterOption = 'all';
+        _statusFilterOption = 'untagged';
       });
     }
   }
 
-  Future<void> _saveLastFilterOption() async {
+  Future<void> _saveFilterOptions() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      prefs.setString('last_filter_option', _currentFilterOption);
+      prefs.setString('last_time_filter', _timeFilterOption);
+      prefs.setString('last_status_filter', _statusFilterOption);
     } catch (e) {
       // Silently fail if we can't save the preference
     }
@@ -83,14 +84,24 @@ class _MemosScreenState extends State<MemosScreen> {
     });
   }
 
-  void _applyFilter(String filterOption) {
+  void _applyTimeFilter(String filterOption) {
     setState(() {
-      _currentFilterOption = filterOption;
+      _timeFilterOption = filterOption;
+      _hiddenMemoIds.clear(); // Reset hidden memos when changing filters
+    });
+    
+    _saveFilterOptions();
+    _fetchMemos(); // Apply the new combined filters
+  }
+
+  void _applyStatusFilter(String filterOption) {
+    setState(() {
+      _statusFilterOption = filterOption;
       _hiddenMemoIds.clear(); // Reset hidden memos when changing filters
     });
 
-    _saveLastFilterOption();
-    _fetchMemos(); // This will apply both filter and the current sort mode
+    _saveFilterOptions();
+    _fetchMemos(); // Apply the new combined filters
   }
 
   Future<void> _fetchMemos() async {
@@ -117,46 +128,64 @@ class _MemosScreenState extends State<MemosScreen> {
         filter = 'tags=="$_filterKey"';
       }
 
-      // Apply additional predefined filter
-      String? predefinedFilter;
-      switch (_currentFilterOption) {
+      // Apply time-based filter
+      String? timeFilter;
+      switch (_timeFilterOption) {
         case 'today':
-          predefinedFilter = FilterPresets.todayFilter();
+          timeFilter = FilterPresets.todayFilter();
           break;
         case 'created_today':
-          predefinedFilter = FilterPresets.createdTodayFilter();
+          timeFilter = FilterPresets.createdTodayFilter();
           break;
         case 'updated_today':
-          predefinedFilter = FilterPresets.updatedTodayFilter();
+          timeFilter = FilterPresets.updatedTodayFilter();
           break;
         case 'this_week':
-          predefinedFilter = FilterPresets.thisWeekFilter();
+          timeFilter = FilterPresets.thisWeekFilter();
           break;
         case 'important':
-          predefinedFilter = FilterPresets.importantFilter();
-          break;
-        case 'untagged':
-          predefinedFilter = FilterPresets.untaggedFilter();
+          timeFilter = FilterPresets.importantFilter();
           break;
         case 'all':
         default:
-          predefinedFilter = null; // No additional filter
+          timeFilter = null; // No time filter
       }
 
-      // Combine filters if both are present
-      if (filter != null && predefinedFilter != null) {
-        filter = FilterBuilder.and([filter, predefinedFilter]);
-      } else if (predefinedFilter != null) {
-        filter = predefinedFilter;
+      // Apply status-based filter
+      String? statusFilter;
+      switch (_statusFilterOption) {
+        case 'untagged':
+          statusFilter = FilterPresets.untaggedFilter();
+          break;
+        case 'tagged':
+          statusFilter = FilterPresets.taggedFilter();
+          break;
+        case 'all':
+        default:
+          statusFilter = null; // No status filter
       }
+      
+      // Collect all active filters
+      final List<String> activeFilters = [];
+      if (filter != null) activeFilters.add(filter);
+      if (timeFilter != null) activeFilters.add(timeFilter);
+      if (statusFilter != null) activeFilters.add(statusFilter);
 
-      print('Fetching memos with sort field: $sortField and filter: $filter');
+      // Combine all active filters
+      String? combinedFilter;
+      if (activeFilters.isNotEmpty) {
+        combinedFilter = FilterBuilder.and(activeFilters);
+      }
+      
+      print(
+        'Fetching memos with sort field: $sortField and filter: $combinedFilter',
+      );
       
       // Note: The API service now applies client-side sorting internally
       // since server-side sorting doesn't work reliably
       final memos = await _apiService.listMemos(
         parent: 'users/1', // Specify the current user
-        filter: filter,
+        filter: combinedFilter,
         state: state,
         sort: sortField,
         direction: 'DESC', // Always newest first
@@ -179,7 +208,7 @@ class _MemosScreenState extends State<MemosScreen> {
       List<Memo> filteredMemos = memos;
 
       // Specific client-side handling for untagged filter
-      if (_currentFilterOption == 'untagged' && filteredMemos.isNotEmpty) {
+      if (_statusFilterOption == 'untagged' && filteredMemos.isNotEmpty) {
         // Double-check client-side to ensure we only show truly untagged memos
         // This is more accurate than just checking for "#" in content
         filteredMemos =
@@ -339,7 +368,7 @@ class _MemosScreenState extends State<MemosScreen> {
   Widget _buildFilterChips() {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.grey.shade100,
+        color: Colors.grey.shade50,
         border: Border(
           bottom: BorderSide(color: Colors.grey.shade300, width: 1),
         ),
@@ -347,19 +376,19 @@ class _MemosScreenState extends State<MemosScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Title for filter section
+          // Status filter group (Tagged/Untagged)
           Padding(
-            padding: const EdgeInsets.only(left: 12.0, top: 6.0, bottom: 4.0),
+            padding: const EdgeInsets.fromLTRB(12.0, 8.0, 12.0, 2.0),
             child: Row(
               children: [
                 Icon(
-                  Icons.filter_alt_outlined,
+                  Icons.label_outline,
                   size: 14,
                   color: Colors.grey.shade800,
                 ),
                 const SizedBox(width: 4),
                 Text(
-                  'Quick Filters:',
+                  'Status:',
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w500,
@@ -367,11 +396,118 @@ class _MemosScreenState extends State<MemosScreen> {
                   ),
                 ),
                 const Spacer(),
-                if (_currentFilterOption != 'all')
+                if (_statusFilterOption != 'all')
                   TextButton.icon(
-                    onPressed: () => _applyFilter('all'),
+                    onPressed: () => _applyStatusFilter('all'),
                     icon: const Icon(Icons.close, size: 14),
-                    label: const Text('Clear Filter'),
+                    label: const Text('Clear'),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 2,
+                      ),
+                      minimumSize: const Size(0, 24),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          
+          // Status filter chips (Tagged/Untagged)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8.0, 0, 8.0, 8.0),
+            child: Row(
+              children: [
+                // Untagged filter
+                FilterChip(
+                  label: const Text('Untagged'),
+                  selected: _statusFilterOption == 'untagged',
+                  onSelected: (_) => _applyStatusFilter('untagged'),
+                  backgroundColor:
+                      _statusFilterOption == 'untagged'
+                          ? Colors.blue.shade100
+                          : Colors.blue.shade50,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    side: BorderSide(color: Colors.blue.shade300, width: 1.5),
+                  ),
+                  labelStyle: TextStyle(
+                    color: Colors.blue.shade800,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  avatar: Icon(
+                    Icons.new_releases_outlined,
+                    size: 16,
+                    color: Colors.blue.shade700,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                
+                // Tagged filter
+                FilterChip(
+                  label: const Text('Tagged'),
+                  selected: _statusFilterOption == 'tagged',
+                  onSelected: (_) => _applyStatusFilter('tagged'),
+                  backgroundColor:
+                      _statusFilterOption == 'tagged'
+                          ? Colors.green.shade100
+                          : Colors.green.shade50,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    side: BorderSide(color: Colors.green.shade300, width: 1.5),
+                  ),
+                  labelStyle: TextStyle(
+                    color: Colors.green.shade800,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  avatar: Icon(
+                    Icons.label,
+                    size: 16,
+                    color: Colors.green.shade700,
+                  ),
+                ),
+                const SizedBox(width: 8),
+
+                // All status filter
+                FilterChip(
+                  label: const Text('All Status'),
+                  selected: _statusFilterOption == 'all',
+                  onSelected: (_) => _applyStatusFilter('all'),
+                  backgroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    side: BorderSide(color: Colors.grey.shade300),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Divider between filter groups
+          Divider(height: 1, thickness: 1, color: Colors.grey.shade200),
+
+          // Time-based filter group
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12.0, 8.0, 12.0, 2.0),
+            child: Row(
+              children: [
+                Icon(Icons.schedule, size: 14, color: Colors.grey.shade800),
+                const SizedBox(width: 4),
+                Text(
+                  'Time Range:',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.grey.shade800,
+                  ),
+                ),
+                const Spacer(),
+                if (_timeFilterOption != 'all')
+                  TextButton.icon(
+                    onPressed: () => _applyTimeFilter('all'),
+                    icon: const Icon(Icons.close, size: 14),
+                    label: const Text('Clear'),
                     style: TextButton.styleFrom(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 8,
@@ -385,52 +521,17 @@ class _MemosScreenState extends State<MemosScreen> {
             ),
           ),
 
-          // Scrollable filter chips
+          // Time-based filter chips
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Padding(
               padding: const EdgeInsets.fromLTRB(8.0, 0, 8.0, 8.0),
               child: Row(
                 children: [
-                  // Make the Untagged filter more prominent with a different style
-                  FilterChip(
-                    label: const Text('Untagged'),
-                    selected: _currentFilterOption == 'untagged',
-                    onSelected: (_) => _applyFilter('untagged'),
-                    backgroundColor:
-                        _currentFilterOption == 'untagged'
-                            ? Colors.blue.shade100
-                            : Colors.blue.shade50,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      side: BorderSide(color: Colors.blue.shade300, width: 1.5),
-                    ),
-                    labelStyle: TextStyle(
-                      color: Colors.blue.shade800,
-                      fontWeight: FontWeight.w500,
-                    ),
-                    avatar: Icon(
-                      Icons.new_releases_outlined,
-                      size: 16,
-                      color: Colors.blue.shade700,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  FilterChip(
-                    label: const Text('All'),
-                    selected: _currentFilterOption == 'all',
-                    onSelected: (_) => _applyFilter('all'),
-                    backgroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      side: BorderSide(color: Colors.grey.shade300),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
                   FilterChip(
                     label: const Text('Today'),
-                    selected: _currentFilterOption == 'today',
-                    onSelected: (_) => _applyFilter('today'),
+                    selected: _timeFilterOption == 'today',
+                    onSelected: (_) => _applyTimeFilter('today'),
                     backgroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
@@ -440,8 +541,8 @@ class _MemosScreenState extends State<MemosScreen> {
                   const SizedBox(width: 8),
                   FilterChip(
                     label: const Text('Created Today'),
-                    selected: _currentFilterOption == 'created_today',
-                    onSelected: (_) => _applyFilter('created_today'),
+                    selected: _timeFilterOption == 'created_today',
+                    onSelected: (_) => _applyTimeFilter('created_today'),
                     backgroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
@@ -451,8 +552,8 @@ class _MemosScreenState extends State<MemosScreen> {
                   const SizedBox(width: 8),
                   FilterChip(
                     label: const Text('Updated Today'),
-                    selected: _currentFilterOption == 'updated_today',
-                    onSelected: (_) => _applyFilter('updated_today'),
+                    selected: _timeFilterOption == 'updated_today',
+                    onSelected: (_) => _applyTimeFilter('updated_today'),
                     backgroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
@@ -462,8 +563,8 @@ class _MemosScreenState extends State<MemosScreen> {
                   const SizedBox(width: 8),
                   FilterChip(
                     label: const Text('This Week'),
-                    selected: _currentFilterOption == 'this_week',
-                    onSelected: (_) => _applyFilter('this_week'),
+                    selected: _timeFilterOption == 'this_week',
+                    onSelected: (_) => _applyTimeFilter('this_week'),
                     backgroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
@@ -473,32 +574,72 @@ class _MemosScreenState extends State<MemosScreen> {
                   const SizedBox(width: 8),
                   FilterChip(
                     label: const Text('Important'),
-                    selected: _currentFilterOption == 'important',
-                    onSelected: (_) => _applyFilter('important'),
+                    selected: _timeFilterOption == 'important',
+                    onSelected: (_) => _applyTimeFilter('important'),
                     backgroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
                       side: BorderSide(color: Colors.grey.shade300),
                     ),
                   ),
-
-                  // Show All button for hidden memos
-                  if (_hiddenMemoIds.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(left: 16.0),
-                      child: ActionChip(
-                        label: Text(
-                          'Show All (${_hiddenMemoIds.length} hidden)',
-                        ),
-                        onPressed: _showAllMemos,
-                        avatar: const Icon(Icons.visibility, size: 16),
-                        backgroundColor: Colors.blue.shade50,
-                      ),
+                  const SizedBox(width: 8),
+                  FilterChip(
+                    label: const Text('All Time'),
+                    selected: _timeFilterOption == 'all',
+                    onSelected: (_) => _applyTimeFilter('all'),
+                    backgroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      side: BorderSide(color: Colors.grey.shade300),
                     ),
+                  ),
                 ],
               ),
             ),
           ),
+          
+          // Show hidden memos section (only if needed)
+          if (_hiddenMemoIds.isNotEmpty)
+            Container(
+              margin: const EdgeInsets.fromLTRB(8.0, 0, 8.0, 8.0),
+              padding: const EdgeInsets.symmetric(
+                vertical: 6.0,
+                horizontal: 12.0,
+              ),
+              decoration: BoxDecoration(
+                color: Colors.blue.shade50,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.blue.shade200),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.visibility_off,
+                    size: 16,
+                    color: Colors.blue.shade700,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    '${_hiddenMemoIds.length} memos hidden',
+                    style: TextStyle(color: Colors.blue.shade700),
+                  ),
+                  const SizedBox(width: 8),
+                  TextButton(
+                    onPressed: _showAllMemos,
+                    child: const Text('Show All'),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 0,
+                      ),
+                      minimumSize: const Size(0, 24),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                  ),
+                ],
+              ),
+            ),
         ],
       ),
     );
@@ -545,8 +686,8 @@ class _MemosScreenState extends State<MemosScreen> {
           // Always show filter chips even when no memos found
           _buildFilterChips(),
 
-          // Indicator for active filter with no results
-          if (_currentFilterOption != 'all')
+          // Indicator for active filters with no results
+          if (_timeFilterOption != 'all' || _statusFilterOption != 'all')
             Container(
               margin: const EdgeInsets.all(16),
               padding: const EdgeInsets.all(12),
@@ -554,23 +695,89 @@ class _MemosScreenState extends State<MemosScreen> {
                 color: Colors.amber.shade100,
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(
-                    Icons.filter_alt,
-                    color: Colors.amber.shade800,
-                    size: 20,
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.filter_alt,
+                        color: Colors.amber.shade800,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'No memos found with the current filters',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.amber.shade900,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'No memos found with the "$_currentFilterOption" filter.',
-                      style: TextStyle(color: Colors.amber.shade900),
+                  const SizedBox(height: 8),
+                  if (_statusFilterOption != 'all')
+                    Padding(
+                      padding: const EdgeInsets.only(left: 28.0, bottom: 4.0),
+                      child: Row(
+                        children: [
+                          Text(
+                            '• Status filter: $_statusFilterOption',
+                            style: TextStyle(color: Colors.amber.shade900),
+                          ),
+                          const Spacer(),
+                          TextButton(
+                            onPressed: () => _applyStatusFilter('all'),
+                            child: const Text('Clear'),
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 0,
+                              ),
+                              minimumSize: const Size(0, 24),
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  TextButton(
-                    onPressed: () => _applyFilter('all'),
-                    child: const Text('Show All'),
+                  if (_timeFilterOption != 'all')
+                    Padding(
+                      padding: const EdgeInsets.only(left: 28.0, bottom: 4.0),
+                      child: Row(
+                        children: [
+                          Text(
+                            '• Time filter: $_timeFilterOption',
+                            style: TextStyle(color: Colors.amber.shade900),
+                          ),
+                          const Spacer(),
+                          TextButton(
+                            onPressed: () => _applyTimeFilter('all'),
+                            child: const Text('Clear'),
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 0,
+                              ),
+                              minimumSize: const Size(0, 24),
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  Padding(
+                    padding: const EdgeInsets.only(left: 28.0, top: 4.0),
+                    child: TextButton.icon(
+                      onPressed: () {
+                        _applyStatusFilter('all');
+                        _applyTimeFilter('all');
+                      },
+                      icon: const Icon(Icons.clear_all, size: 16),
+                      label: const Text('Clear All Filters'),
+                    ),
                   ),
                 ],
               ),

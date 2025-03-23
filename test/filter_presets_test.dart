@@ -49,5 +49,25 @@ void main() {
       // Check that the filter looks for content without hashtags
       expect(filter, contains('!content.contains("#")'));
     });
+    
+    test('taggedFilter creates a filter for content with at least one tag', () {
+      final filter = FilterPresets.taggedFilter();
+
+      // Check that the filter looks for content with hashtags
+      expect(filter, contains('content.contains("#")'));
+    });
+
+    test('multiple filters can be combined correctly', () {
+      final untagged = FilterPresets.untaggedFilter();
+      final today = FilterPresets.todayFilter();
+
+      // Combine filters
+      final combined = FilterBuilder.and([untagged, today]);
+
+      // Verify both conditions are in the combined filter
+      expect(combined, contains('!content.contains("#")'));
+      expect(combined, contains('create_time >='));
+      expect(combined, contains('&&')); // Check for AND operator
+    });
   });
 }
