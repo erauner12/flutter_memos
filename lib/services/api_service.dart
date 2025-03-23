@@ -267,7 +267,7 @@ class ApiService {
         content: response.content ?? '',
         createTime:
             response.createTime != null
-                ? DateTime.parse(response.createTime!).millisecondsSinceEpoch
+                ? response.createTime!.millisecondsSinceEpoch
                 : DateTime.now().millisecondsSinceEpoch,
         creatorId: _extractCreatorIdFromName(response.creator ?? ''),
       );
