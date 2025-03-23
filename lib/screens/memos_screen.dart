@@ -3,6 +3,7 @@ import 'dart:math' show min;
 import 'package:flutter/material.dart';
 import 'package:flutter_memos/models/memo.dart';
 import 'package:flutter_memos/services/api_service.dart';
+import 'package:flutter_memos/utils/memo_utils.dart';
 import 'package:flutter_memos/widgets/filter_menu.dart';
 import 'package:flutter_memos/widgets/memo_card.dart';
 
@@ -140,35 +141,7 @@ class _MemosScreenState extends State<MemosScreen> {
   /// Sort memos locally as a fallback since server-side sorting might not be working
   void _sortMemosLocally(List<Memo> memos, String sortField) {
     print('Applying client-side sorting by $sortField');
-    
-    memos.sort((a, b) {
-      String? timeStrA;
-      String? timeStrB;
-      
-      if (sortField == 'updateTime') {
-        timeStrA = a.updateTime;
-        timeStrB = b.updateTime;
-      } else { // createTime
-        timeStrA = a.createTime;
-        timeStrB = b.createTime;
-      }
-      
-      // If either time is null, fall back to displayTime
-      if (timeStrA == null || timeStrB == null) {
-        timeStrA = a.displayTime;
-        timeStrB = b.displayTime;
-      }
-      
-      // If we still have null values, put them at the end
-      if (timeStrA == null && timeStrB == null) return 0;
-      if (timeStrA == null) return 1;
-      if (timeStrB == null) return -1;
-      
-      // Parse dates and compare (newest first)
-      final dateA = DateTime.parse(timeStrA);
-      final dateB = DateTime.parse(timeStrB);
-      return dateB.compareTo(dateA);
-    });
+    MemoUtils.sortMemos(memos, sortField);
   }
 
   void _toggleSortMode() {
