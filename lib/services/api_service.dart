@@ -117,7 +117,7 @@ class ApiService {
     String? parent,
     String? filter,
     String state = '',
-    String sort = 'display_time', // Default sort field
+    String sort = 'updateTime', // Default sort field
     String direction = 'DESC', // Default direction (newest first)
   }) async {
     // Note: Even though we pass sort parameters to the server, it appears the
@@ -135,39 +135,43 @@ class ApiService {
       queryParams['state'] = state;
     }
 
-    // Add sorting parameters
+    // Add sorting parameters - ensure exact field names as per API docs
     queryParams['sort'] = sort;
     queryParams['direction'] = direction;
 
-    // Determine the base URL based on whether a parent is provided
-    // According to the API docs, the parent is a path parameter: /api/v1/{parent}/memos
-    String baseUrlToUse = _baseUrl;
-
-    // If _baseUrl ends with /memos, we need to adjust it
-    if (_baseUrl.toLowerCase().endsWith('/memos')) {
-      // Remove the trailing /memos
-      baseUrlToUse = _baseUrl.substring(0, _baseUrl.length - 6);
+    // Extract base API URL (without /memos at the end if present)
+    String baseApiUrl = _baseUrl;
+    if (baseApiUrl.toLowerCase().endsWith('/memos')) {
+      baseApiUrl = baseApiUrl.substring(0, baseApiUrl.length - 6);
+    }
+    
+    // Ensure baseApiUrl doesn't end with a slash
+    if (baseApiUrl.endsWith('/')) {
+      baseApiUrl = baseApiUrl.substring(0, baseApiUrl.length - 1);
     }
 
-    // Now construct the final URL with the appropriate parent path
-    String finalPath =
-        parent != null && parent.isNotEmpty
-            ? '$baseUrlToUse/$parent/memos' // With parent parameter
-            : '$baseUrlToUse/users/-/memos'; // Default to all memos
+    // Construct the final URL according to API documentation patterns
+    String finalUrl;
+    if (parent != null && parent.isNotEmpty) {
+      // Use the /{parent}/memos endpoint pattern
+      finalUrl = '$baseApiUrl/$parent/memos';
+    } else {
+      // Use the /memos endpoint pattern
+      finalUrl = '$baseApiUrl/memos';
+    }
     
     // Build the URL with query parameters
-    final uri = Uri.parse(finalPath).replace(queryParameters: queryParams);
+    final uri = Uri.parse(finalUrl).replace(queryParameters: queryParams);
     print('[API] GET => $uri');
-    print('[API] Using parent: ${parent ?? "users/-"} (default all memos)');
+    print(
+      '[API] Using endpoint pattern: ${parent != null ? "/{parent}/memos" : "/memos"}',
+    );
+    print('[API] Parent: ${parent ?? "not specified"}');
     print('[API] Sort parameters: sort=$sort, direction=$direction');
 
     final response = await http.get(
       uri,
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        'Authorization': 'Bearer $_apiKey',
-      },
+      headers: _getHeaders(),
     );
     
     print('[API] Response status: ${response.statusCode}');
