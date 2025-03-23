@@ -11,6 +11,9 @@ class ApiService {
   late final MemoServiceApi _memoApi;
   late final ApiClient _apiClient;
 
+  // Control if sort field should be converted to snake_case (appears to be required by API)
+  static bool useSnakeCaseSort = true;
+
   // For testing purposes
   static List<String>? _lastServerOrder;
   static List<String> get lastServerOrder => _lastServerOrder ?? [];
@@ -54,7 +57,10 @@ class ApiService {
     String sort = 'updateTime',
     String direction = 'DESC',
   }) async {
-    print('[API] Listing memos with sort=$sort, direction=$direction');
+    // Convert camelCase field names to snake_case if configured to do so
+    final apiSortField = useSnakeCaseSort ? _toSnakeCase(sort) : sort;
+    
+    print('[API] Listing memos with sort=$sort (API field: $apiSortField), direction=$direction');
     
     try {
       final V1ListMemosResponse? response;
@@ -64,7 +70,7 @@ class ApiService {
         response = await _memoApi.memoServiceListMemos2(
           parent,
           state: state.isNotEmpty ? state : null,
-          sort: sort,
+          sort: apiSortField,  // Use snake_case field name
           direction: direction,
           filter: filter,
         );
@@ -72,7 +78,7 @@ class ApiService {
         response = await _memoApi.memoServiceListMemos(
           parent: parent,
           state: state.isNotEmpty ? state : null,
-          sort: sort,
+          sort: apiSortField,  // Use snake_case field name
           direction: direction,
           filter: filter,
         );
@@ -241,7 +247,15 @@ class ApiService {
     }
   }
 
-  // HELPER METHODS
+  /// HELPER METHODS
+
+  /// Convert camelCase to snake_case for API compatibility
+  String _toSnakeCase(String camelCase) {
+    return camelCase.replaceAllMapped(
+      RegExp(r'([A-Z])'),
+      (match) => '_${match.group(0)!.toLowerCase()}',
+    );
+  }
 
   /// Format a resource name to ensure it has the proper prefix
   String _formatResourceName(String id, String resourceType) {

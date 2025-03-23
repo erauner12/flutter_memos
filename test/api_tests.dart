@@ -14,6 +14,8 @@ void main() {
     
     setUp(() {
       apiService = ApiService();
+      // Make sure snake_case conversion is enabled for API requests
+      ApiService.useSnakeCaseSort = true;
     });
     
     test('Server respects sort parameters', () async {
@@ -124,6 +126,10 @@ void main() {
         return;
       }
       
+      print(
+        '\nUsing snake_case for API sort field: ${ApiService.useSnakeCaseSort}',
+      );
+      
       // Get memos with server-side sort by updateTime
       final memos = await apiService.listMemos(
         parent: 'users/1', // Specify the user ID
@@ -222,6 +228,71 @@ void main() {
       } else {
         print('⚠️ Server did NOT sort correctly by updateTime');
       }
+    });
+    
+    test('Compare snake_case vs camelCase API sorting', () async {
+      // Skip this test unless RUN_API_TESTS is true
+      if (!RUN_API_TESTS) {
+        print('Skipping API test - set RUN_API_TESTS = true to run this test');
+        return;
+      }
+
+      // First try with snake_case conversion ENABLED
+      ApiService.useSnakeCaseSort = true;
+      print('\n[TEST] Using snake_case sort fields (enabled)');
+
+      final memosWithSnakeCase = await apiService.listMemos(
+        parent: 'users/1',
+        sort: 'createTime',
+        direction: 'DESC',
+      );
+
+      final snakeCaseOrder = List<String>.from(ApiService.lastServerOrder);
+
+      // Then try with snake_case conversion DISABLED
+      ApiService.useSnakeCaseSort = false;
+      print('\n[TEST] Using camelCase sort fields (disabled snake_case)');
+
+      final memosWithCamelCase = await apiService.listMemos(
+        parent: 'users/1',
+        sort: 'createTime',
+        direction: 'DESC',
+      );
+
+      final camelCaseOrder = List<String>.from(ApiService.lastServerOrder);
+
+      // Compare the results
+      bool ordersAreDifferent = false;
+      for (
+        int i = 0;
+        i < min(snakeCaseOrder.length, camelCaseOrder.length);
+        i++
+      ) {
+        if (snakeCaseOrder[i] != camelCaseOrder[i]) {
+          ordersAreDifferent = true;
+          break;
+        }
+      }
+
+      print('\n--- Snake Case vs Camel Case API Field Comparison ---');
+      if (ordersAreDifferent) {
+        print(
+          '✅ API response orders are different when using snake_case vs camelCase',
+        );
+        print(
+          'This confirms the API requires snake_case field names for sorting.',
+        );
+      } else {
+        print(
+          '⚠️ API response orders are identical with snake_case and camelCase',
+        );
+        print(
+          'The server may not be respecting either format for sort fields.',
+        );
+      }
+
+      // Re-enable snake_case for future tests
+      ApiService.useSnakeCaseSort = true;
     });
   });
 }
