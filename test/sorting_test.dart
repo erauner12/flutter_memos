@@ -3,6 +3,34 @@ import 'package:flutter_memos/models/memo.dart';
 import 'package:flutter_memos/services/api_service.dart';
 import 'dart:math';
 
+// Utility function to sort by update time
+void sortMemosByUpdateTime(List<Memo> memos) {
+  memos.sort((a, b) {
+    final dateA = a.updateTime != null ? DateTime.parse(a.updateTime!) : null;
+    final dateB = b.updateTime != null ? DateTime.parse(b.updateTime!) : null;
+    
+    if (dateA == null && dateB == null) return 0;
+    if (dateA == null) return 1;
+    if (dateB == null) return -1;
+    
+    return dateB.compareTo(dateA);
+  });
+}
+
+// Utility function to sort by creation time
+void sortMemosByCreateTime(List<Memo> memos) {
+  memos.sort((a, b) {
+    final dateA = a.createTime != null ? DateTime.parse(a.createTime!) : null;
+    final dateB = b.createTime != null ? DateTime.parse(b.createTime!) : null;
+    
+    if (dateA == null && dateB == null) return 0;
+    if (dateA == null) return 1;
+    if (dateB == null) return -1;
+    
+    return dateB.compareTo(dateA);
+  });
+}
+
 void main() {
   group('Memo Sorting Tests', () {
     late ApiService apiService;
@@ -88,33 +116,5 @@ void main() {
       expect(memos[1].id, '2');
       expect(memos[2].id, '1');
     });
-    
-    // Utility function to sort by update time
-    void sortMemosByUpdateTime(List<Memo> memos) {
-      memos.sort((a, b) {
-        final dateA = a.updateTime != null ? DateTime.parse(a.updateTime!) : null;
-        final dateB = b.updateTime != null ? DateTime.parse(b.updateTime!) : null;
-        
-        if (dateA == null && dateB == null) return 0;
-        if (dateA == null) return 1;
-        if (dateB == null) return -1;
-        
-        return dateB.compareTo(dateA);
-      });
-    }
-    
-    // Utility function to sort by creation time
-    void sortMemosByCreateTime(List<Memo> memos) {
-      memos.sort((a, b) {
-        final dateA = a.createTime != null ? DateTime.parse(a.createTime!) : null;
-        final dateB = b.createTime != null ? DateTime.parse(b.createTime!) : null;
-        
-        if (dateA == null && dateB == null) return 0;
-        if (dateA == null) return 1;
-        if (dateB == null) return -1;
-        
-        return dateB.compareTo(dateA);
-      });
-    }
   });
 }
