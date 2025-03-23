@@ -35,6 +35,7 @@ dev_dependencies:
   openapi_generator_annotations: ^6.1.0
   retrofit_generator: ^9.1.9
   built_value_generator: ^8.6.1
+  mockito: ^5.4.4
 
 flutter:
   uses-material-design: true
