@@ -397,13 +397,6 @@ packages:
       url: "https://pub.flutter-io.cn"
     source: hosted
     version: "4.9.0"
-  json_serializable:
-    dependency: "direct dev"
-    description:
-      name: json_serializable
-      url: "https://pub.flutter-io.cn"
-    source: hosted
-    version: "6.9.4"
   leak_tracker:
     dependency: transitive
     description:
