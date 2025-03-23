@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_memos/screens/chat_screen.dart';
 import 'package:flutter_memos/screens/edit_memo_screen.dart';
+import 'package:flutter_memos/screens/filter_demo_screen.dart'; // Add this import
 import 'package:flutter_memos/screens/mcp_screen.dart';
 import 'package:flutter_memos/screens/memo_detail_screen.dart';
 import 'package:flutter_memos/screens/memos_screen.dart';
@@ -52,6 +53,8 @@ class MyApp extends StatelessWidget {
         '/chat': (context) => const ChatScreen(),
         '/mcp': (context) => const McpScreen(),
         '/new-memo': (context) => const NewMemoScreen(),
+          '/filter-demo':
+              (context) => const FilterDemoScreen(), // Add this route
       },
       onGenerateRoute: (settings) {
         if (settings.name == '/memo-detail') {
@@ -119,6 +122,20 @@ class HomeScreen extends StatelessWidget {
                       Navigator.pushNamed(context, '/chat');
                     },
                     child: const Text('Assistant Chat'),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF4CAF50),
+                      foregroundColor: Colors.white,
+                    ),
+                    onPressed: () {
+                      Navigator.pushNamed(context, '/filter-demo');
+                    },
+                    child: const Text('Filter Demo'),
                   ),
                 ),
               ],

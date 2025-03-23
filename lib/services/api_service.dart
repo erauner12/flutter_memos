@@ -2,6 +2,7 @@ import 'package:flutter_memos/api/lib/api.dart';
 import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/models/memo.dart';
 import 'package:flutter_memos/utils/env.dart';
+import 'package:flutter_memos/utils/filter_builder.dart';
 import 'package:flutter_memos/utils/memo_utils.dart';
 
 class ApiService {
@@ -12,20 +13,23 @@ class ApiService {
   late final ApiClient _apiClient;
 
   // Configuration flags
-  static const bool CLIENT_SIDE_SORTING_ENABLED =
-      true; // Always use client-side sorting
-  static bool verboseLogging = true; // Enable detailed logging
+  static const bool CLIENT_SIDE_SORTING_ENABLED = true; // Always use client-side sorting
+  static bool verboseLogging = true;  // Enable detailed logging
+  static bool useFilterExpressions = true; // Enable CEL filter expressions
 
   // For testing purposes
   static List<String>? _lastServerOrder;
   static List<String> get lastServerOrder => _lastServerOrder ?? [];
   
-  // Document the sorting limitation
+  // Document the sorting limitation and filter support
   static const String SORTING_LIMITATION = """
     NOTE: The Memos server doesn't fully support dynamic sort fields.
     The backend code uses specific boolean flags (OrderByUpdatedTs, OrderByTimeAsc)
     rather than a generic sort parameter. Client-side sorting is used as a reliable
     alternative.
+    
+    However, the server does support powerful filtering using CEL expressions.
+    This can be used to filter memos by tags, visibility, content, and timestamps.
   """;
 
   ApiService._internal() {
@@ -61,21 +65,120 @@ class ApiService {
 
   /// List memos with filtering and sorting
   /// 
+  /// List memos with filtering and sorting
+  ///
   /// Note: Although sort parameters are passed to the server, it doesn't fully
   /// support dynamic sorting. Client-side sorting is always applied to ensure
   /// consistent results.
+  ///
+  /// The server does support powerful filtering using CEL expressions which can be
+  /// used to filter memos by tags, visibility, content, and timestamps.
   Future<List<Memo>> listMemos({
     String? parent,
     String? filter,
     String state = '',
     String sort = 'updateTime',
     String direction = 'DESC',
+    // Optional list of tags to filter by
+    List<String>? tags,
+    // Optional visibility to filter by
+    dynamic visibility,
+    // Optional content search
+    String? contentSearch,
+    // Optional time range for filtering
+    DateTime? createdAfter,
+    DateTime? createdBefore,
+    DateTime? updatedAfter,
+    DateTime? updatedBefore,
+    // Optional time expression (e.g., "today", "this week")
+    String? timeExpression,
+    bool useUpdateTimeForExpression = false,
   }) async {
     if (verboseLogging) {
       print('[API] Listing memos with sort=$sort, direction=$direction');
-      print(
-        '[API] NOTE: Server has limited sort support, using client-side sorting',
-      );
+    }
+    
+    // If filter expressions are enabled, build a CEL filter
+    String? celFilter = filter;
+    if (useFilterExpressions) {
+      final filterList = <String>[];
+      
+      // Add tags filter
+      if (tags != null && tags.isNotEmpty) {
+        filterList.add(FilterBuilder.byTags(tags));
+      }
+      
+      // Add visibility filter
+      if (visibility != null) {
+        filterList.add(FilterBuilder.byVisibility(visibility));
+      }
+      
+      // Add content search
+      if (contentSearch != null && contentSearch.isNotEmpty) {
+        filterList.add(FilterBuilder.byContent(contentSearch));
+      }
+      
+      // Add time filters
+      if (createdAfter != null && createdBefore != null) {
+        filterList.add(
+          FilterBuilder.byCreateTimeRange(createdAfter, createdBefore),
+        );
+      } else {
+        if (createdAfter != null) {
+          filterList.add(
+            FilterBuilder.byCreateTime(createdAfter, operator: '>='),
+          );
+        }
+        if (createdBefore != null) {
+          filterList.add(
+            FilterBuilder.byCreateTime(createdBefore, operator: '<='),
+          );
+        }
+      }
+      
+      if (updatedAfter != null && updatedBefore != null) {
+        filterList.add(
+          FilterBuilder.byUpdateTimeRange(updatedAfter, updatedBefore),
+        );
+      } else {
+        if (updatedAfter != null) {
+          filterList.add(
+            FilterBuilder.byUpdateTime(updatedAfter, operator: '>='),
+          );
+        }
+        if (updatedBefore != null) {
+          filterList.add(
+            FilterBuilder.byUpdateTime(updatedBefore, operator: '<='),
+          );
+        }
+      }
+      
+      // Add time expression
+      if (timeExpression != null && timeExpression.isNotEmpty) {
+        final expressionFilter = FilterBuilder.byTimeExpression(
+          timeExpression,
+          useUpdateTime: useUpdateTimeForExpression,
+        );
+        if (expressionFilter.isNotEmpty) {
+          filterList.add(expressionFilter);
+        }
+      }
+      
+      // Combine filters with AND
+      if (filterList.isNotEmpty) {
+        final combinedFilter = FilterBuilder.and(filterList);
+        
+        // If the user provided a filter, combine it with our generated filter
+        if (filter != null && filter.isNotEmpty) {
+          celFilter = FilterBuilder.and([filter, combinedFilter]);
+        } else {
+          celFilter = combinedFilter;
+        }
+        
+        if (verboseLogging) {
+          print('[API] Using CEL filter: $celFilter');
+        }
+      }
     }
     
     try {
@@ -89,7 +192,7 @@ class ApiService {
           // We still pass sort parameters but don't rely on them
           sort: sort,
           direction: direction,
-          filter: filter,
+          filter: celFilter,
         );
       } else {
         response = await _memoApi.memoServiceListMemos(
@@ -98,7 +201,7 @@ class ApiService {
           // We still pass sort parameters but don't rely on them
           sort: sort, 
           direction: direction,
-          filter: filter,
+          filter: celFilter,
         );
       }
       
