@@ -114,6 +114,7 @@ class ApiService {
 
   // Memo endpoints
   Future<List<Memo>> listMemos({
+    String? parent,
     String? filter,
     String state = '',
     String sort = 'display_time', // Default sort field
@@ -134,9 +135,26 @@ class ApiService {
     queryParams['sort'] = sort;
     queryParams['direction'] = direction;
 
+    // Determine the base URL based on whether a parent is provided
+    // According to the API docs, the parent is a path parameter: /api/v1/{parent}/memos
+    String baseUrlToUse = _baseUrl;
+
+    // If _baseUrl ends with /memos, we need to adjust it
+    if (_baseUrl.toLowerCase().endsWith('/memos')) {
+      // Remove the trailing /memos
+      baseUrlToUse = _baseUrl.substring(0, _baseUrl.length - 6);
+    }
+
+    // Now construct the final URL with the appropriate parent path
+    String finalPath =
+        parent != null && parent.isNotEmpty
+            ? '$baseUrlToUse/$parent/memos' // With parent parameter
+            : '$baseUrlToUse/users/-/memos'; // Default to all memos
+    
     // Build the URL with query parameters
-    final uri = Uri.parse(_baseUrl).replace(queryParameters: queryParams);
+    final uri = Uri.parse(finalPath).replace(queryParameters: queryParams);
     print('[API] GET => $uri');
+    print('[API] Using parent: ${parent ?? "users/-"} (default all memos)');
     print('[API] Sort parameters: sort=$sort, direction=$direction');
 
     final response = await http.get(

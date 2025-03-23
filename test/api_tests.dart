@@ -26,12 +26,14 @@ void main() {
 
       // First, fetch memos sorted by update time
       final memosByUpdateTime = await apiService.listMemos(
+        parent: 'users/1', // Specify the user ID
         sort: 'updateTime',
         direction: 'DESC',
       );
       
       // Then fetch memos sorted by create time
       final memosByCreateTime = await apiService.listMemos(
+        parent: 'users/1', // Specify the user ID
         sort: 'createTime',
         direction: 'DESC',
       );
@@ -84,6 +86,7 @@ void main() {
       
       // Get memos with server-side sort by updateTime
       final serverSortedMemos = await apiService.listMemos(
+        parent: 'users/1', // Specify the user ID
         sort: 'updateTime',
         direction: 'DESC',
       );

@@ -67,6 +67,7 @@ class _MemosScreenState extends State<MemosScreen> {
       print('Fetching memos with sort field: $sortField');
       
       final memos = await _apiService.listMemos(
+        parent: 'users/1', // Specify the current user
         filter: filter,
         state: state,
         sort: sortField,
