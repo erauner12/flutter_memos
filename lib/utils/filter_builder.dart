@@ -1,5 +1,3 @@
-
-
 /// Utility class for building CEL filter expressions for Memos API
 /// 
 /// Based on the Memos documentation about filter expressions:
@@ -96,7 +94,17 @@ class FilterBuilder {
     if (validFilters.isEmpty) return '';
     if (validFilters.length == 1) return validFilters.first;
     
-    return validFilters.join(' && ');
+    // Process each filter to properly handle nested expressions
+    final processedFilters = validFilters.map((filter) {
+      // If the filter contains a standalone OR operator not already in parentheses,
+      // wrap it in parentheses to ensure proper operator precedence
+      if (filter.contains('||') && !filter.startsWith('(')) {
+        return '($filter)';
+      }
+      return filter;
+    }).toList();
+    
+    return processedFilters.join(' && ');
   }
 
   /// Combines multiple filters with logical OR (||)

@@ -1,12 +1,11 @@
 import 'dart:math' show min;
 
-import 'package:flutter_memos/models/memo.dart';
 import 'package:flutter_memos/services/api_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 // Set this to true to run the API tests
 // Since there's no '--no-skip' flag in Flutter test, we'll use a manual toggle
-const bool RUN_FILTER_API_TESTS = false;
+const bool RUN_FILTER_API_TESTS = true;
 
 void main() {
   group('Filter Expression API Tests', () {
