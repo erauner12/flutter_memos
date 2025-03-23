@@ -1,7 +1,6 @@
 import 'dart:math';
 
 import 'package:flutter_memos/models/memo.dart';
-import 'package:flutter_memos/services/api_service.dart';
 import 'package:flutter_memos/utils/memo_utils.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -146,77 +145,10 @@ void main() {
       // Test create time sorting
       MemoUtils.sortByCreateTime(memos);
       expect(
-        memos[0].content.contains('All times present') ||
-            memos[0].content.contains('Null update time'),
-        isTrue,
+        memos[0].id,
+        equals('3'),
         reason: 'Memo with valid create time should come first',
       );
-    });
-  });
-
-  group('Server-side Sorting Tests', () {
-    late ApiService apiService;
-
-    setUp(() {
-      apiService = ApiService();
-    });
-
-    // This test will make actual API calls, so it may need to be skipped
-    // if running in a CI environment or without a real server
-    test('API server respects sort parameters', () async {
-      // First, fetch memos sorted by update time
-      final memosByUpdateTime = await apiService.listMemos(
-        sort: 'updateTime',
-        direction: 'DESC',
-      );
-
-      // Then fetch memos sorted by create time
-      final memosByCreateTime = await apiService.listMemos(
-        sort: 'createTime',
-        direction: 'DESC',
-      );
-
-      // Log the first few memos from each query to help debug
-      print('\n--- First 3 memos sorted by updateTime ---');
-      for (int i = 0; i < min(3, memosByUpdateTime.length); i++) {
-        print('[${i + 1}] ID: ${memosByUpdateTime[i].id}');
-        print('    updateTime: ${memosByUpdateTime[i].updateTime}');
-        print('    createTime: ${memosByUpdateTime[i].createTime}');
-      }
-
-      print('\n--- First 3 memos sorted by createTime ---');
-      for (int i = 0; i < min(3, memosByCreateTime.length); i++) {
-        print('[${i + 1}] ID: ${memosByCreateTime[i].id}');
-        print('    updateTime: ${memosByCreateTime[i].updateTime}');
-        print('    createTime: ${memosByCreateTime[i].createTime}');
-      }
-
-      // Check if the orders are different, which would indicate the server is respecting sort parameters
-      bool ordersAreDifferent = false;
-      for (
-        int i = 0;
-        i < min(memosByUpdateTime.length, memosByCreateTime.length);
-        i++
-      ) {
-        if (memosByUpdateTime[i].id != memosByCreateTime[i].id) {
-          ordersAreDifferent = true;
-          break;
-        }
-      }
-
-      // We can uncomment this line if we want the test to actually check the result
-      // expect(ordersAreDifferent, isTrue, reason: 'Server should return different orders for different sort parameters');
-
-      // For now, just print the result for manual verification
-      if (ordersAreDifferent) {
-        print(
-          '✅ Server is respecting sort parameters - returned different orders',
-        );
-      } else {
-        print(
-          '❌ Server is NOT respecting sort parameters - returned same order for both queries',
-        );
-      }
     });
   });
 }
