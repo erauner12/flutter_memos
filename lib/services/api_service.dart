@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math' show min;
 
 import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/models/memo.dart';
@@ -152,6 +153,17 @@ class ApiService {
     if (response.statusCode == 200) {
       final Map<String, dynamic> data = json.decode(response.body);
       if (data.containsKey('memos')) {
+        // Log a bit more info about the response to debug sorting
+        print('[API] Received ${data['memos'].length} memos');
+        if (data['memos'].isNotEmpty) {
+          print(
+            '[API] First memo: ${data['memos'][0]['content']?.toString().substring(0, min(20, data['memos'][0]['content'].toString().length))}...',
+          );
+          print(
+            '[API] Sort fields - createTime: ${data['memos'][0]['createTime']}, updateTime: ${data['memos'][0]['updateTime']}',
+          );
+        }
+        
         return List<Memo>.from(data['memos'].map((x) => Memo.fromJson(x)));
       }
     }

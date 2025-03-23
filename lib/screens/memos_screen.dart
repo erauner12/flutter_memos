@@ -1,3 +1,5 @@
+import 'dart:math' show min;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_memos/models/memo.dart';
 import 'package:flutter_memos/services/api_service.dart';
@@ -48,10 +50,9 @@ class _MemosScreenState extends State<MemosScreen> {
       String state = '';
       
       // Determine sort field based on current sort mode
+      // Using exact field names from API documentation
       final String sortField =
-          _sortMode == MemoSortMode.byUpdateTime
-              ? 'update_time'
-              : 'create_time';
+          _sortMode == MemoSortMode.byUpdateTime ? 'updateTime' : 'createTime';
 
       // Apply filter logic
       if (_filterKey == 'inbox') {
@@ -70,6 +71,20 @@ class _MemosScreenState extends State<MemosScreen> {
         sort: sortField,
         direction: 'DESC', // Always newest first
       );
+      
+      // Debug: Print info about the first few memos to see if sorting is working
+      if (memos.isNotEmpty) {
+        print('--- Memos received (sorted by $sortField) ---');
+        for (int i = 0; i < min(3, memos.length); i++) {
+          print('[${i + 1}] ID: ${memos[i].id}');
+          print(
+            '    Content: ${memos[i].content.substring(0, min(20, memos[i].content.length))}...',
+          );
+          print('    createTime: ${memos[i].createTime}');
+          print('    updateTime: ${memos[i].updateTime}');
+          print('    displayTime: ${memos[i].displayTime}');
+        }
+      }
       
       setState(() {
         _memos = memos;
@@ -308,6 +323,9 @@ class _MemosScreenState extends State<MemosScreen> {
                   child: MemoCard(
                     content: memo.content,
                     pinned: memo.pinned,
+                    createdAt: memo.createTime,
+                    updatedAt: memo.updateTime,
+                    showTimeStamps: true, // Show timestamps for debugging
                     onTap: () => _navigateToMemoDetail(memo.id),
                   ),
                 );
