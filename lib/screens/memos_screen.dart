@@ -245,7 +245,7 @@ class _MemosScreenState extends State<MemosScreen> {
 
     return Column(
       children: [
-        // Sort indicator with more details
+        // Improved sort indicator with clearer messaging
         Container(
           color: Colors.grey[200],
           padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
@@ -260,26 +260,45 @@ class _MemosScreenState extends State<MemosScreen> {
                       'Sorting by ${_sortMode == MemoSortMode.byUpdateTime ? 'last updated' : 'creation date'} (newest first)',
                       style: TextStyle(
                         color: Colors.grey[800],
-                        fontWeight: FontWeight.w500,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
-                    const Text(
-                      'Client-side sorting is always applied (server sorting unavailable)',
-                      style: TextStyle(
-                        color: Colors.deepOrange,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                      ),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.info_outline,
+                          size: 12,
+                          color: Colors.blue[700],
+                        ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            'Client-side sorting is used (server has limited sort support)',
+                            style: TextStyle(
+                              color: Colors.blue[700],
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
               ),
-              Icon(
-                _sortMode == MemoSortMode.byUpdateTime
-                    ? Icons.update
-                    : Icons.calendar_today,
-                color: Colors.grey[600],
-                size: 16,
+              Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Icon(
+                  _sortMode == MemoSortMode.byUpdateTime
+                      ? Icons.update
+                      : Icons.calendar_today,
+                  color: Theme.of(context).colorScheme.primary,
+                  size: 16,
+                ),
               ),
             ],
           ),

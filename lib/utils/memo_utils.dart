@@ -49,23 +49,63 @@ class MemoUtils {
   }
 
   /// Sort memos by the specified field (newest first)
+  /// This is used for reliable client-side sorting
   static void sortMemos(List<Memo> memos, String sortField) {
-    if (sortField == 'updateTime') {
-      sortByUpdateTime(memos);
-    } else if (sortField == 'createTime') {
-      sortByCreateTime(memos);
-    } else {
-      // Default to sort by displayTime
-      memos.sort((a, b) {
-        final dateA = a.displayTime != null ? DateTime.parse(a.displayTime!) : null;
-        final dateB = b.displayTime != null ? DateTime.parse(b.displayTime!) : null;
-        
-        if (dateA == null && dateB == null) return 0;
-        if (dateA == null) return 1;
-        if (dateB == null) return -1;
-        
-        return dateB.compareTo(dateA);
-      });
+    switch (sortField) {
+      case 'updateTime':
+        print('[SORT] Client-side sorting by updateTime (newest first)');
+        sortByUpdateTime(memos);
+        break;
+      case 'createTime':
+        print('[SORT] Client-side sorting by createTime (newest first)');
+        sortByCreateTime(memos);
+        break;
+      case 'displayTime':
+        print('[SORT] Client-side sorting by displayTime (newest first)');
+        memos.sort((a, b) {
+          final dateA =
+              a.displayTime != null ? DateTime.parse(a.displayTime!) : null;
+          final dateB =
+              b.displayTime != null ? DateTime.parse(b.displayTime!) : null;
+
+          if (dateA == null && dateB == null) return 0;
+          if (dateA == null) return 1;
+          if (dateB == null) return -1;
+
+          return dateB.compareTo(dateA);
+        });
+        break;
+      default:
+        print(
+          '[SORT] Client-side sorting by unknown field "$sortField", defaulting to updateTime',
+        );
+        sortByUpdateTime(memos);
+    }
+
+    // Verify the sort results for the first few items (debugging)
+    if (memos.isNotEmpty) {
+      final count = memos.length > 3 ? 3 : memos.length;
+      String fieldLabel = sortField;
+
+      print(
+        '\n[SORT] First $count memos after client-side sorting by $fieldLabel:',
+      );
+      for (int i = 0; i < count; i++) {
+        String value = "N/A";
+        switch (sortField) {
+          case 'updateTime':
+            value = memos[i].updateTime ?? "null";
+            break;
+          case 'createTime':
+            value = memos[i].createTime ?? "null";
+            break;
+          case 'displayTime':
+            value = memos[i].displayTime ?? "null";
+            break;
+        }
+        print('  [${i + 1}] ID: ${memos[i].id}, $fieldLabel: $value');
+      }
+      print('');
     }
   }
   

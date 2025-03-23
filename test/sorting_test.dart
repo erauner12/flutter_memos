@@ -4,6 +4,13 @@ import 'package:flutter_memos/models/memo.dart';
 import 'package:flutter_memos/utils/memo_utils.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+/// These tests verify that our client-side sorting works correctly,
+/// independently of any server-side sorting issues.
+///
+/// The Memos server has limited support for dynamic sorting as it uses
+/// specific boolean flags (OrderByUpdatedTs, OrderByTimeAsc) rather than
+/// generic sort fields. Our app implements reliable client-side sorting
+/// as a solution.
 void main() {
   group('Client-side Sorting Tests', () {
     test('sortByUpdateTime correctly sorts memos', () {

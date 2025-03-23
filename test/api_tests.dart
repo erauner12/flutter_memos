@@ -8,14 +8,20 @@ import 'package:flutter_test/flutter_test.dart';
 // Since there's no '--no-skip' flag in Flutter test, we'll use a manual toggle
 const bool RUN_API_TESTS = true;
 
+/// These tests document the limitations of the server-side sorting functionality
+/// and verify that our client-side sorting solution works correctly.
+///
+/// After examining the server code, we found that it doesn't support dynamic sort fields
+/// as it uses specific boolean flags (OrderByUpdatedTs, OrderByTimeAsc) rather than
+/// a generic sort parameter. Our app implements reliable client-side sorting as a solution.
 void main() {
-  group('API Server Tests', () {
+  group('API Server Tests - Sorting Behavior', () {
     late ApiService apiService;
     
     setUp(() {
       apiService = ApiService();
+      ApiService.verboseLogging = true;
       // Make sure snake_case conversion is enabled for API requests
-      ApiService.useSnakeCaseSort = true;
     });
     
     test('Server respects sort parameters', () async {
@@ -119,16 +125,16 @@ void main() {
       }
     });
     
-    test('Verify client-side sorting fixes server sorting issues', () async {
+    test('Verify client-side sorting behavior', () async {
       // Skip this test unless RUN_API_TESTS is true
       if (!RUN_API_TESTS) {
         print('Skipping API test - set RUN_API_TESTS = true to run this test');
         return;
       }
-      
-      print(
-        '\nUsing snake_case for API sort field: ${ApiService.useSnakeCaseSort}',
-      );
+
+      print('\n=== SERVER SORTING LIMITATION DOCUMENTATION ===');
+      print(ApiService.SORTING_LIMITATION);
+      print('\n=== TESTING CLIENT-SIDE SORTING CAPABILITIES ===');
       
       // Get memos with server-side sort by updateTime
       final memos = await apiService.listMemos(
@@ -237,8 +243,6 @@ void main() {
         return;
       }
 
-      // First try with snake_case conversion ENABLED
-      ApiService.useSnakeCaseSort = true;
       print('\n[TEST] Using snake_case sort fields (enabled)');
 
       final memosWithSnakeCase = await apiService.listMemos(
@@ -250,9 +254,6 @@ void main() {
       final snakeCaseOrder = List<String>.from(ApiService.lastServerOrder);
 
       // Then try with snake_case conversion DISABLED
-      ApiService.useSnakeCaseSort = false;
-      print('\n[TEST] Using camelCase sort fields (disabled snake_case)');
-
       final memosWithCamelCase = await apiService.listMemos(
         parent: 'users/1',
         sort: 'createTime',
@@ -292,7 +293,6 @@ void main() {
       }
 
       // Re-enable snake_case for future tests
-      ApiService.useSnakeCaseSort = true;
     });
   });
 }

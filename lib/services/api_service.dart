@@ -11,12 +11,22 @@ class ApiService {
   late final MemoServiceApi _memoApi;
   late final ApiClient _apiClient;
 
-  // Control if sort field should be converted to snake_case (appears to be required by API)
-  static bool useSnakeCaseSort = true;
+  // Configuration flags
+  static const bool CLIENT_SIDE_SORTING_ENABLED =
+      true; // Always use client-side sorting
+  static bool verboseLogging = true; // Enable detailed logging
 
   // For testing purposes
   static List<String>? _lastServerOrder;
   static List<String> get lastServerOrder => _lastServerOrder ?? [];
+  
+  // Document the sorting limitation
+  static const String SORTING_LIMITATION = """
+    NOTE: The Memos server doesn't fully support dynamic sort fields.
+    The backend code uses specific boolean flags (OrderByUpdatedTs, OrderByTimeAsc)
+    rather than a generic sort parameter. Client-side sorting is used as a reliable
+    alternative.
+  """;
 
   ApiService._internal() {
     // Set up the base path correctly (without /api/v1 which is added by the generated client)
@@ -50,6 +60,10 @@ class ApiService {
   // MEMO OPERATIONS
 
   /// List memos with filtering and sorting
+  /// 
+  /// Note: Although sort parameters are passed to the server, it doesn't fully
+  /// support dynamic sorting. Client-side sorting is always applied to ensure
+  /// consistent results.
   Future<List<Memo>> listMemos({
     String? parent,
     String? filter,
@@ -57,10 +71,12 @@ class ApiService {
     String sort = 'updateTime',
     String direction = 'DESC',
   }) async {
-    // Convert camelCase field names to snake_case if configured to do so
-    final apiSortField = useSnakeCaseSort ? _toSnakeCase(sort) : sort;
-    
-    print('[API] Listing memos with sort=$sort (API field: $apiSortField), direction=$direction');
+    if (verboseLogging) {
+      print('[API] Listing memos with sort=$sort, direction=$direction');
+      print(
+        '[API] NOTE: Server has limited sort support, using client-side sorting',
+      );
+    }
     
     try {
       final V1ListMemosResponse? response;
@@ -70,7 +86,8 @@ class ApiService {
         response = await _memoApi.memoServiceListMemos2(
           parent,
           state: state.isNotEmpty ? state : null,
-          sort: apiSortField,  // Use snake_case field name
+          // We still pass sort parameters but don't rely on them
+          sort: sort,
           direction: direction,
           filter: filter,
         );
@@ -78,7 +95,8 @@ class ApiService {
         response = await _memoApi.memoServiceListMemos(
           parent: parent,
           state: state.isNotEmpty ? state : null,
-          sort: apiSortField,  // Use snake_case field name
+          // We still pass sort parameters but don't rely on them
+          sort: sort, 
           direction: direction,
           filter: filter,
         );
@@ -91,11 +109,42 @@ class ApiService {
       // Convert API models to app models
       final memos = response.memos.map(_convertApiMemoToAppMemo).toList();
       
-      // Save original order for testing
+      // Store the original server ordering for testing/debugging
       _lastServerOrder = memos.map((memo) => memo.id).toList();
       
-      // Always apply client-side sorting to ensure consistency
-      MemoUtils.sortMemos(memos, sort);
+      if (verboseLogging) {
+        print('[API-DEBUG] Server returned ${memos.length} memos');
+        if (memos.isNotEmpty) {
+          print(
+            '[API-DEBUG] First memo: ${memos[0].id}, updateTime: ${memos[0].updateTime}, createTime: ${memos[0].createTime}',
+          );
+        }
+      }
+
+      // IMPORTANT: Always apply client-side sorting
+      // This is because server-side sorting is unreliable
+      if (CLIENT_SIDE_SORTING_ENABLED) {
+        // Save the pre-sorted state for diagnostics
+        final preSortOrder = memos.map((memo) => memo.id).toList();
+
+        // Apply appropriate sorting based on the requested field
+        MemoUtils.sortMemos(memos, sort);
+        
+        // Compare pre-sort and post-sort ordering for diagnostics
+        final postSortOrder = memos.map((memo) => memo.id).toList();
+        final orderingChanged = !_areListsEqual(preSortOrder, postSortOrder);
+
+        if (verboseLogging) {
+          print(
+            '[API-DEBUG] Client-side sorting by "$sort" ${orderingChanged ? "changed" : "preserved"} the order',
+          );
+          if (orderingChanged && memos.isNotEmpty) {
+            print(
+              '[API-DEBUG] First memo after sorting: ${memos[0].id}, $sort: ${sort == 'updateTime' ? memos[0].updateTime : memos[0].createTime}',
+            );
+          }
+        }
+      }
       
       return memos;
     } catch (e) {
@@ -341,5 +390,14 @@ class ApiService {
           ),
         )
         .toList();
+  }
+
+  /// Compare two lists for equality
+  bool _areListsEqual(List<String> list1, List<String> list2) {
+    if (list1.length != list2.length) return false;
+    for (int i = 0; i < list1.length; i++) {
+      if (list1[i] != list2[i]) return false;
+    }
+    return true;
   }
 }
