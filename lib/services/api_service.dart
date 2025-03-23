@@ -112,14 +112,34 @@ class ApiService {
   }
 
   // Memo endpoints
-  Future<List<Memo>> listMemos({String? filter, String state = ''}) async {
-    // For now, let's make a direct request mimicking the curl command
-    // that works, without adding any query parameters
-    final url = Uri.parse(_baseUrl);
-    print('[API] GET => $url');
+  Future<List<Memo>> listMemos({
+    String? filter,
+    String state = '',
+    String sort = 'display_time', // Default sort field
+    String direction = 'DESC', // Default direction (newest first)
+  }) async {
+    // Build query parameters
+    final queryParams = <String, String>{};
+
+    if (filter != null && filter.isNotEmpty) {
+      queryParams['filter'] = filter;
+    }
+
+    if (state.isNotEmpty) {
+      queryParams['state'] = state;
+    }
+
+    // Add sorting parameters
+    queryParams['sort'] = sort;
+    queryParams['direction'] = direction;
+
+    // Build the URL with query parameters
+    final uri = Uri.parse(_baseUrl).replace(queryParameters: queryParams);
+    print('[API] GET => $uri');
+    print('[API] Sort parameters: sort=$sort, direction=$direction');
 
     final response = await http.get(
-      url,
+      uri,
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',

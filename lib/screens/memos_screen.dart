@@ -1,5 +1,3 @@
-import 'dart:math' show min;
-
 import 'package:flutter/material.dart';
 import 'package:flutter_memos/models/memo.dart';
 import 'package:flutter_memos/services/api_service.dart';
@@ -48,6 +46,12 @@ class _MemosScreenState extends State<MemosScreen> {
     try {
       String? filter;
       String state = '';
+      
+      // Determine sort field based on current sort mode
+      final String sortField =
+          _sortMode == MemoSortMode.byUpdateTime
+              ? 'update_time'
+              : 'create_time';
 
       // Apply filter logic
       if (_filterKey == 'inbox') {
@@ -58,11 +62,15 @@ class _MemosScreenState extends State<MemosScreen> {
         filter = 'tags=="$_filterKey"';
       }
 
-      final memos = await _apiService.listMemos(filter: filter, state: state);
-
-      // Sort memos based on current sort mode
-      _sortMemos(memos);
-
+      print('Fetching memos with sort field: $sortField');
+      
+      final memos = await _apiService.listMemos(
+        filter: filter,
+        state: state,
+        sort: sortField,
+        direction: 'DESC', // Always newest first
+      );
+      
       setState(() {
         _memos = memos;
         _loading = false;
@@ -111,70 +119,6 @@ class _MemosScreenState extends State<MemosScreen> {
     ).then((_) => _fetchMemos());
   }
 
-  void _sortMemos(List<Memo> memos) {
-    print(
-      'Sorting memos by: ${_sortMode == MemoSortMode.byUpdateTime ? "update time" : "creation time"}',
-    );
-
-    memos.sort((a, b) {
-      int? timeA;
-      int? timeB;
-
-      // First try to use displayTime for consistent sorting
-      if (a.displayTime != null && b.displayTime != null) {
-        final dateA = DateTime.tryParse(a.displayTime!);
-        final dateB = DateTime.tryParse(b.displayTime!);
-
-        if (dateA != null && dateB != null) {
-          return dateB.compareTo(dateA); // Newest first
-        }
-      }
-
-      // If displayTime parsing fails, fall back to specific time fields
-      if (_sortMode == MemoSortMode.byUpdateTime) {
-        // Try to parse updateTime
-        if (a.updateTime != null) {
-          final dateA = DateTime.tryParse(a.updateTime!);
-          timeA = dateA?.millisecondsSinceEpoch;
-        }
-
-        if (b.updateTime != null) {
-          final dateB = DateTime.tryParse(b.updateTime!);
-          timeB = dateB?.millisecondsSinceEpoch;
-        }
-      } else {
-        // Try to parse createTime
-        if (a.createTime != null) {
-          final dateA = DateTime.tryParse(a.createTime!);
-          timeA = dateA?.millisecondsSinceEpoch;
-        }
-
-        if (b.createTime != null) {
-          final dateB = DateTime.tryParse(b.createTime!);
-          timeB = dateB?.millisecondsSinceEpoch;
-        }
-      }
-
-      // Handle cases where dates might be null
-      if (timeA == null && timeB == null) return 0;
-      if (timeA == null) return 1; // Push items with null dates to the end
-      if (timeB == null) return -1;
-
-      // Sort in descending order (newest first)
-      return timeB.compareTo(timeA);
-    });
-
-    // Debug - print first few memos after sorting
-    if (memos.isNotEmpty) {
-      print(
-        'First memo after sorting: ${memos[0].content.substring(0, min(20, memos[0].content.length))}...',
-      );
-      print(
-        'Time values: create=${memos[0].createTime}, update=${memos[0].updateTime}, display=${memos[0].displayTime}',
-      );
-    }
-  }
-
   void _toggleSortMode() {
     setState(() {
       _sortMode =
@@ -182,10 +126,10 @@ class _MemosScreenState extends State<MemosScreen> {
               ? MemoSortMode.byCreateTime
               : MemoSortMode.byUpdateTime;
     });
-
-    // Refresh the memo list
+    
+    // Refresh the memo list with new sort parameter
     _fetchMemos();
-
+    
     // Show a snackbar to indicate the sort mode changed
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
