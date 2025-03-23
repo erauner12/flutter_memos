@@ -164,15 +164,6 @@ void main() {
     // This test will make actual API calls, so it may need to be skipped
     // if running in a CI environment or without a real server
     test('API server respects sort parameters', () async {
-      // Skip this test in CI or if server is not available
-      final shouldSkip = true; // Change to false to run against a real server
-      if (shouldSkip) {
-        print(
-          'Skipping server-side sorting test - set shouldSkip = false to run against a real server',
-        );
-        return;
-      }
-
       // First, fetch memos sorted by update time
       final memosByUpdateTime = await apiService.listMemos(
         sort: 'updateTime',
