@@ -13,9 +13,6 @@ final memoSortModeProvider = StateProvider<MemoSortMode>((ref) => MemoSortMode.b
 /// Provider for the list of hidden memo IDs
 final hiddenMemoIdsProvider = StateProvider<Set<String>>((ref) => {});
 
-/// Provider for the current filter key ('inbox', 'archive', 'all', or a tag)
-final filterKeyProvider = StateProvider<String>((ref) => 'inbox');
-
 /// Provider that fetches memos and applies filters and sorting
 final memosProvider = FutureProvider<List<Memo>>((ref) async {
   final apiService = ref.watch(apiServiceProvider);

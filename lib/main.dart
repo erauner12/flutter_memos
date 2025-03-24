@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_memos/screens/chat_screen.dart';
+import 'package:flutter_memos/screens/codegen_test_screen.dart'; // Add this import
 import 'package:flutter_memos/screens/edit_memo_screen.dart';
-import 'package:flutter_memos/screens/filter_demo_screen.dart'; // Add this import
+import 'package:flutter_memos/screens/filter_demo_screen.dart';
 import 'package:flutter_memos/screens/mcp_screen.dart';
 import 'package:flutter_memos/screens/memo_detail_screen.dart';
 import 'package:flutter_memos/screens/memos_screen.dart';
 import 'package:flutter_memos/screens/new_memo_screen.dart';
+import 'package:flutter_memos/screens/riverpod_demo_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 void main() {
@@ -54,8 +56,9 @@ class MyApp extends StatelessWidget {
         '/chat': (context) => const ChatScreen(),
         '/mcp': (context) => const McpScreen(),
         '/new-memo': (context) => const NewMemoScreen(),
-          '/filter-demo':
-              (context) => const FilterDemoScreen(), // Add this route
+          '/filter-demo': (context) => const FilterDemoScreen(),
+          '/riverpod-demo': (context) => const RiverpodDemoScreen(),
+          '/codegen-test': (context) => const CodegenTestScreen(),
       },
       onGenerateRoute: (settings) {
         if (settings.name == '/memo-detail') {
@@ -137,6 +140,34 @@ class HomeScreen extends ConsumerWidget {
                       Navigator.pushNamed(context, '/filter-demo');
                     },
                     child: const Text('Filter Demo'),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF9C27B0),
+                      foregroundColor: Colors.white,
+                    ),
+                    onPressed: () {
+                      Navigator.pushNamed(context, '/riverpod-demo');
+                    },
+                    child: const Text('Riverpod Demo'),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF673AB7),
+                      foregroundColor: Colors.white,
+                    ),
+                    onPressed: () {
+                      Navigator.pushNamed(context, '/codegen-test');
+                    },
+                    child: const Text('Riverpod Codegen Test'),
                   ),
                 ),
               ],

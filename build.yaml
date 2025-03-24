@@ -1,6 +1,11 @@
 targets:
   $default:
     builders:
+      # Configure Riverpod generator
+      riverpod_generator:
+        enabled: true
+        
+      # Configure other generators
       openapi_generator:
         options:
           input: api/openapi.yaml
@@ -13,3 +18,11 @@ targets:
             pubVersion: 1.0.0
             useEnumExtension: true
             dateLibrary: time
+        generate_for:
+          - lib/api/**
+        
+      # Disable retrofit generator for Riverpod files
+      retrofit_generator:
+        generate_for:
+          exclude:
+            - lib/providers/**

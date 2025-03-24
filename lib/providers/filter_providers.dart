@@ -1,6 +1,6 @@
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_memos/utils/filter_builder.dart';
 import 'package:flutter_memos/utils/filter_presets.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Provider for the time-based filter option ('today', 'this_week', etc.)
@@ -8,6 +8,9 @@ final timeFilterProvider = StateProvider<String>((ref) => 'all');
 
 /// Provider for the status-based filter option ('untagged', 'tagged', 'all')
 final statusFilterProvider = StateProvider<String>((ref) => 'untagged');
+
+/// Provider for the current filter key ('inbox', 'archive', 'all', or a tag)
+final filterKeyProvider = StateProvider<String>((ref) => 'inbox');
 
 /// Provider that combines all filter options into a single filter string
 final combinedFilterProvider = Provider<String>((ref) {
