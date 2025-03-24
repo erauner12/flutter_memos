@@ -12,7 +12,7 @@ class ServerConfigNotifier extends StateNotifier<ServerConfig> {
     try {
       final prefs = await SharedPreferences.getInstance();
       
-      final serverUrl = prefs.getString('server_url') ?? 'http://localhost:5230';
+      final serverUrl = prefs.getString('server_url') ?? '';
       final authToken = prefs.getString('auth_token') ?? '';
       
       state = ServerConfig(

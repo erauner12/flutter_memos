@@ -32,14 +32,14 @@ class ServerConfig {
   /// Create from a map (from storage)
   factory ServerConfig.fromJson(Map<String, dynamic> json) {
     return ServerConfig(
-      serverUrl: json['serverUrl'] as String? ?? 'http://localhost:5230',
+      serverUrl: json['serverUrl'] as String? ?? '',
       authToken: json['authToken'] as String? ?? '',
     );
   }
 
   /// Default configuration
   static ServerConfig get defaultConfig => const ServerConfig(
-        serverUrl: 'http://localhost:5230',
+        serverUrl: '',
         authToken: '',
       );
 
