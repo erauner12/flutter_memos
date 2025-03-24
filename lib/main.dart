@@ -22,7 +22,27 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     // Configure keyboard settings for macOS to avoid key event issues
     if (Theme.of(context).platform == TargetPlatform.macOS) {
+      // Create a set to track pressed keys
+      final pressedKeys = <int>{};
+      
       ServicesBinding.instance.keyboard.addHandler((KeyEvent event) {
+        // For KeyDownEvent, check if we've already seen this key
+        if (event is KeyDownEvent) {
+          final keyCode = event.physicalKey.usbHidUsage;
+
+          // If key is already tracked as pressed, consume the event to prevent duplicates
+          if (pressedKeys.contains(keyCode)) {
+            return true; // Handle the event (don't propagate)
+          }
+
+          // Track the key as pressed
+          pressedKeys.add(keyCode);
+        }
+        // For KeyUpEvent, remove from our tracking set
+        else if (event is KeyUpEvent) {
+          pressedKeys.remove(event.physicalKey.usbHidUsage);
+        }
+        
         // Allow the event to propagate to the framework
         return false;
       });
