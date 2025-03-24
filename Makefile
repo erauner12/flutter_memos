@@ -169,27 +169,29 @@ test-integration-all:
 		flutter drive --driver=test_driver/integration_test_driver.dart --target=$$test_file -d "macos"; \
 	done
 
-# Install the app from the DMG to /Applications
+# Install the app from the newly built DMG in ~/Documents
 install-dmg-locally: make-dmg
 	@echo "Attaching DMG from $(HOME)/Documents/flutter_memos_release/flutter_memos.dmg ..."
-	# We'll store the hdiutil output in a variable so we can parse the mount path
+	# We'll store the hdiutil output in a variable so we can parse the mount point
 	$(eval HDI_OUTPUT := $(shell hdiutil attach "$(HOME)/Documents/flutter_memos_release/flutter_memos.dmg" | tee /dev/stderr))
-	
+
 	@echo "Searching for the mount point in the hdiutil output..."
-	# This extracts the last column from any line containing "Flutter Memos Installer"
-	$(eval MOUNT_PATH := $(shell echo "$(HDI_OUTPUT)" | grep "Flutter Memos Installer" | tail -1 | awk '{print $$3}'))
+	# This extracts the mount point path (/Volumes/xxx) by looking for Apple_HFS
+	$(eval MOUNT_PATH := $(shell echo "$(HDI_OUTPUT)" | grep "Apple_HFS" | awk '{print $$3}'))
 	@if [ -z "$(MOUNT_PATH)" ]; then \
-	echo "ERROR: Could not find '/Volumes/Flutter Memos Installer' in hdiutil output."; \
-	exit 1; \
+		echo "ERROR: Could not find mount point in hdiutil output."; \
+		echo "Full output:"; \
+		echo "$(HDI_OUTPUT)"; \
+		exit 1; \
 	fi
-	
+
 	@echo "Mount path is: $(MOUNT_PATH)"
-	@echo "Copying flutter_memos.app from '$(MOUNT_PATH)' to /Applications (requires sudo)..."
+	@echo "Copying flutter_memos.app from '$(MOUNT_PATH)' to /Applications..."
 	cp -R "$(MOUNT_PATH)/flutter_memos.app" "/Applications"
-	
+
 	@echo "Detaching DMG..."
 	hdiutil detach "$(MOUNT_PATH)" || true
-	
+
 	@echo "Install from DMG complete. You can now run flutter_memos.app from /Applications."
 
 # Install the app from a user-specified DMG path:
@@ -203,14 +205,17 @@ install-dmg-from:
 	$(eval HDI_OUTPUT := $(shell hdiutil attach "$(DMG_PATH)" | tee /dev/stderr))
 	
 	@echo "Parsing hdiutil output for mount path..."
-	$(eval MOUNT_PATH := $(shell echo "$(HDI_OUTPUT)" | grep "Flutter Memos Installer" | tail -1 | awk '{print $$3}'))
+	# This extracts the mount point path (/Volumes/xxx) by looking for Apple_HFS
+	$(eval MOUNT_PATH := $(shell echo "$(HDI_OUTPUT)" | grep "Apple_HFS" | awk '{print $$3}'))
 	@if [ -z "$(MOUNT_PATH)" ]; then \
-		echo "ERROR: Could not find '/Volumes/Flutter Memos Installer' in hdiutil output."; \
+		echo "ERROR: Could not find mount point in hdiutil output."; \
+		echo "Full output:"; \
+		echo "$(HDI_OUTPUT)"; \
 		exit 1; \
 	fi
 	
 	@echo "Mount path is: $(MOUNT_PATH)"
-	@echo "Copying flutter_memos.app from '$(MOUNT_PATH)' to /Applications (requires sudo)..."
+	@echo "Copying flutter_memos.app from '$(MOUNT_PATH)' to /Applications..."
 	cp -R "$(MOUNT_PATH)/flutter_memos.app" "/Applications"
 	
 	@echo "Detaching DMG..."
