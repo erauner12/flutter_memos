@@ -133,6 +133,7 @@ class RiverpodDemoScreen extends ConsumerWidget {
                           itemBuilder: (context, index) {
                             final memo = memos[index];
                             return MemoCard(
+                              id: memo.id,
                               content: memo.content,
                               pinned: memo.pinned,
                               createdAt: memo.createTime,

@@ -1,6 +1,9 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_memos/widgets/memo_context_menu.dart';
 
-class MemoCard extends StatelessWidget {
+class MemoCard extends StatefulWidget {
   final String content;
   final bool pinned;
   final String? createdAt;
@@ -9,6 +12,11 @@ class MemoCard extends StatelessWidget {
   final String? highlightTimestamp;
   final String? timestampType;
   final VoidCallback? onTap;
+  final String id;
+  final VoidCallback? onArchive;
+  final VoidCallback? onDelete;
+  final VoidCallback? onHide;
+  final VoidCallback? onTogglePin;
 
   const MemoCard({
     super.key,
@@ -20,8 +28,20 @@ class MemoCard extends StatelessWidget {
     this.highlightTimestamp,
     this.timestampType,
     this.onTap,
+    this.id = '',
+    this.onArchive,
+    this.onDelete,
+    this.onHide,
+    this.onTogglePin,
   });
 
+  @override
+  State<MemoCard> createState() => _MemoCardState();
+}
+
+class _MemoCardState extends State<MemoCard> {
+  Offset _tapPosition = Offset.zero;
+  
   // Helper method to format date strings for display
   String _formatDateTime(String dateTimeString) {
     try {
@@ -30,6 +50,76 @@ class MemoCard extends StatelessWidget {
     } catch (e) {
       return dateTimeString;
     }
+  }
+  
+  // Store position for context menu
+  void _storePosition(TapDownDetails details) {
+    _tapPosition = details.globalPosition;
+  }
+
+  // Show the context menu
+  void _showContextMenu() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) => MemoContextMenu(
+        memoId: widget.id,
+        isPinned: widget.pinned,
+            position: _tapPosition,
+        parentContext: context,
+        onClose: () {
+          Navigator.pop(context);
+        },
+        onView: widget.onTap,
+        onEdit: () {
+              Navigator.pop(context);
+          Navigator.pushNamed(
+            context,
+            '/edit-memo',
+            arguments: {'memoId': widget.id},
+          );
+        },
+        onArchive: () {
+              Navigator.pop(context);
+          if (widget.onArchive != null) {
+            widget.onArchive!();
+          }
+        },
+        onDelete: () {
+              Navigator.pop(context);
+          if (widget.onDelete != null) {
+            widget.onDelete!();
+          }
+        },
+        onHide: () {
+              Navigator.pop(context);
+          if (widget.onHide != null) {
+            widget.onHide!();
+          }
+        },
+        onPin: () {
+              Navigator.pop(context);
+          if (widget.onTogglePin != null) {
+            widget.onTogglePin!();
+          }
+        },
+        onCopy: () {
+              Navigator.pop(context);
+          Clipboard.setData(ClipboardData(text: widget.content)).then((_) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Memo content copied to clipboard'),
+                      duration: Duration(seconds: 2),
+                    ),
+                  );
+                }
+          });
+        },
+      ),
+    );
   }
 
   @override
@@ -42,13 +132,15 @@ class MemoCard extends StatelessWidget {
       color: isDarkMode ? const Color(0xFF262626) : null,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(8),
-        side:
-            isDarkMode
-                ? BorderSide(color: Colors.grey[850]!, width: 0.5)
-                : BorderSide.none,
+        side: isDarkMode
+            ? BorderSide(color: Colors.grey[850]!, width: 0.5)
+            : BorderSide.none,
       ),
       child: InkWell(
-        onTap: onTap,
+        onTap: widget.onTap,
+        onLongPress: _showContextMenu,
+        onDoubleTap: kIsWeb ? _showContextMenu : null,
+        onTapDown: _storePosition,
         borderRadius: BorderRadius.circular(8),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(
@@ -61,7 +153,7 @@ class MemoCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                content,
+                widget.content,
                 style: TextStyle(
                   fontSize: 16,
                   color:
@@ -72,7 +164,7 @@ class MemoCard extends StatelessWidget {
                 maxLines: 5,
                 overflow: TextOverflow.ellipsis,
               ),
-              if (pinned)
+              if (widget.pinned)
                 Padding(
                   padding: const EdgeInsets.only(top: 8.0),
                   child: Text(
@@ -86,14 +178,14 @@ class MemoCard extends StatelessWidget {
                     ),
                   ),
                 ),
-              if (highlightTimestamp != null)
+              if (widget.highlightTimestamp != null)
                 // Display the highlighted timestamp (based on sort mode)
                 Padding(
                   padding: const EdgeInsets.only(top: 8.0),
                   child: Row(
                     children: [
                       Icon(
-                        timestampType == 'Updated'
+                        widget.timestampType == 'Updated'
                             ? Icons.update
                             : Icons.calendar_today,
                         size: 12,
@@ -104,7 +196,7 @@ class MemoCard extends StatelessWidget {
                       ),
                       const SizedBox(width: 4),
                       Text(
-                        '$timestampType: $highlightTimestamp',
+                        '${widget.timestampType}: ${widget.highlightTimestamp}',
                         style: TextStyle(
                           fontSize: 11,
                           color:
@@ -119,15 +211,15 @@ class MemoCard extends StatelessWidget {
                 ),
 
               // Show detailed timestamps if needed
-              if (showTimeStamps && (createdAt != null || updatedAt != null))
+              if (widget.showTimeStamps && (widget.createdAt != null || widget.updatedAt != null))
                 Padding(
                   padding: const EdgeInsets.only(top: 4.0),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      if (createdAt != null)
+                      if (widget.createdAt != null)
                         Text(
-                          'Created: ${_formatDateTime(createdAt!)}',
+                          'Created: ${_formatDateTime(widget.createdAt!)}',
                           style: TextStyle(
                             fontSize: 11,
                             color:
@@ -136,9 +228,9 @@ class MemoCard extends StatelessWidget {
                                     : Colors.grey[600],
                           ),
                         ),
-                      if (updatedAt != null)
+                      if (widget.updatedAt != null)
                         Text(
-                          'Updated: ${_formatDateTime(updatedAt!)}',
+                          'Updated: ${_formatDateTime(widget.updatedAt!)}',
                           style: TextStyle(
                             fontSize: 11,
                             color:
@@ -156,4 +248,4 @@ class MemoCard extends StatelessWidget {
       ),
     );
   }
-} // End of MemoCard class
+}

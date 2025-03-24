@@ -334,6 +334,7 @@ class _FilterDemoScreenState extends ConsumerState<FilterDemoScreen> {
           itemBuilder: (context, index) {
             final memo = memos[index];
             return MemoCard(
+              id: memo.id,
               content: memo.content,
               pinned: memo.pinned,
               createdAt: memo.createTime,

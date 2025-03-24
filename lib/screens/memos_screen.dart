@@ -613,6 +613,7 @@ class _MemosScreenState extends ConsumerState<MemosScreen> {
                       child: Stack(
                         children: [
                           MemoCard(
+                            id: memo.id,
                             content: memo.content,
                             pinned: memo.pinned,
                             createdAt: memo.createTime,
@@ -630,6 +631,44 @@ class _MemosScreenState extends ConsumerState<MemosScreen> {
                                     ? 'Updated'
                                     : 'Created',
                             onTap: () => _navigateToMemoDetail(memo.id),
+                            onArchive:
+                                () => ref.read(archiveMemoProvider(memo.id))(),
+                            onDelete: () async {
+                              final confirm = await showDialog<bool>(
+                                context: context,
+                                builder: (BuildContext context) {
+                                  return AlertDialog(
+                                    title: const Text('Confirm Delete'),
+                                    content: const Text(
+                                      'Are you sure you want to delete this memo?',
+                                    ),
+                                    actions: <Widget>[
+                                      TextButton(
+                                        onPressed:
+                                            () => Navigator.of(
+                                              context,
+                                            ).pop(false),
+                                        child: const Text('Cancel'),
+                                      ),
+                                      TextButton(
+                                        onPressed:
+                                            () =>
+                                                Navigator.of(context).pop(true),
+                                        child: const Text('Delete'),
+                                      ),
+                                    ],
+                                  );
+                                },
+                              );
+
+                              if (confirm == true) {
+                                ref.read(deleteMemoProvider(memo.id))();
+                              }
+                            },
+                            onHide: () => _toggleHideMemo(memo.id),
+                            onTogglePin:
+                                () =>
+                                    ref.read(togglePinMemoProvider(memo.id))(),
                           ),
                           // Archive button positioned at top-right corner
                           Positioned(

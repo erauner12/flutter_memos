@@ -332,6 +332,7 @@ You can migrate to code generation later when the tooling issues are resolved.
                     itemBuilder: (context, index) {
                       final memo = memos[index];
                       return MemoCard(
+                        id: memo.id,
                         content: memo.content,
                         pinned: memo.pinned,
                         createdAt: memo.createTime,
