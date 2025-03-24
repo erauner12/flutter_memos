@@ -79,6 +79,7 @@ class _MemoDetailScreenState extends ConsumerState<MemoDetailScreen> {
         id: 'temp-${DateTime.now().millisecondsSinceEpoch}',
         content: _commentController.text.trim(),
         creatorId: '1', // Default user ID
+        createTime: DateTime.now().millisecondsSinceEpoch,
       );
       
       // Use the provider to add a comment
@@ -111,7 +112,9 @@ class _MemoDetailScreenState extends ConsumerState<MemoDetailScreen> {
       for (int i = 0; i < comments.length; i++) {
         final comment = comments[i];
         final timestamp = comment.createTime != null
-            ? DateTime.fromMillisecondsSinceEpoch(comment.createTime!).toString()
+                ? DateTime.fromMillisecondsSinceEpoch(
+                  comment.createTime,
+                ).toString()
             : 'Unknown time';
         clipboardContent += '${i + 1}. ${comment.content} ($timestamp)\n';
       }
@@ -294,7 +297,7 @@ class _MemoDetailScreenState extends ConsumerState<MemoDetailScreen> {
                   Text(
                     comment.createTime != null
                         ? DateTime.fromMillisecondsSinceEpoch(
-                          comment.createTime!,
+                          comment.createTime,
                         ).toString()
                         : 'Unknown time',
                     style: const TextStyle(fontSize: 12, color: Colors.grey),

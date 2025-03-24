@@ -390,7 +390,9 @@ class ApiService {
       return Comment(
         id: _extractIdFromName(response.name ?? ''),
         content: response.content ?? '',
-        createTime: response.createTime?.millisecondsSinceEpoch,
+        createTime:
+            response.createTime?.millisecondsSinceEpoch ??
+            DateTime.now().millisecondsSinceEpoch,
         creatorId: _extractIdFromName(response.creator ?? ''),
       );
     } catch (e) {
@@ -487,7 +489,9 @@ class ApiService {
           (memo) => Comment(
             id: _extractIdFromName(memo.name ?? ''),
             content: memo.content ?? '',
-            createTime: memo.createTime?.millisecondsSinceEpoch,
+            createTime:
+                memo.createTime?.millisecondsSinceEpoch ??
+                DateTime.now().millisecondsSinceEpoch,
             creatorId:
                 memo.creator != null ? _extractIdFromName(memo.creator!) : null,
           ),
