@@ -88,6 +88,17 @@ fflutter drive --driver=test_driver/integration_test_driver.dart \
 flutter test integration_test/memo_card_actions_test.dart -d macos
 ```
 
+## Running Web Integration Tests
+
+For web integration tests,
+
+```bash
+flutter drive \
+  --driver=test_driver/integration_test_driver.dart \
+  --target=integration_test/memo_card_actions_test.dart \
+  -d web-server
+```
+
 ## Troubleshooting
 
 ### Common Issues and Solutions
