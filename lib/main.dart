@@ -14,10 +14,9 @@ import 'package:flutter_memos/utils/provider_logger.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 void main() {
-  runApp(ProviderScope(
-    observers: [LoggingProviderObserver()],
-    child: const MyApp(),
-  ));
+  runApp(
+    ProviderScope(observers: [LoggingProviderObserver()], child: const MyApp()),
+  );
 }
 
 class MyApp extends ConsumerWidget {
@@ -36,12 +35,12 @@ class MyApp extends ConsumerWidget {
         }
       });
     });
-    
+
     // Configure keyboard settings for macOS to avoid key event issues
     if (Theme.of(context).platform == TargetPlatform.macOS) {
       // Create a set to track pressed keys
       final pressedKeys = <int>{};
-      
+
       ServicesBinding.instance.keyboard.addHandler((KeyEvent event) {
         // For KeyDownEvent, check if we've already seen this key
         if (event is KeyDownEvent) {
@@ -59,80 +58,101 @@ class MyApp extends ConsumerWidget {
         else if (event is KeyUpEvent) {
           pressedKeys.remove(event.physicalKey.usbHidUsage);
         }
-        
+
         // Allow the event to propagate to the framework
         return false;
       });
     }
-    
+
     return GestureDetector(
       onTap: () {
         // Unfocus when tapping outside of a text field
         FocusManager.instance.primaryFocus?.unfocus();
       },
       child: MaterialApp(
-      title: 'Flutter Memos',
-      debugShowCheckedModeBanner: false,
+        title: 'Flutter Memos',
+        debugShowCheckedModeBanner: false,
         // Light theme configuration
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFFDC4C3E),
-          primary: const Color(0xFFDC4C3E),
-        ),
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Colors.white,
-          foregroundColor: Color(0xFFDC4C3E),
-          elevation: 0,
-        ),
-        scaffoldBackgroundColor: const Color(0xFFF8F8F8),
-        useMaterial3: true,
-      ),
-        // Dark theme configuration
-        darkTheme: ThemeData(
+        theme: ThemeData(
           colorScheme: ColorScheme.fromSeed(
             seedColor: const Color(0xFFDC4C3E),
             primary: const Color(0xFFDC4C3E),
-            brightness: Brightness.dark,
           ),
-          appBarTheme: AppBarTheme(
-            backgroundColor: Colors.grey[900],
-            foregroundColor: const Color(0xFFDC4C3E),
+          appBarTheme: const AppBarTheme(
+            backgroundColor: Colors.white,
+            foregroundColor: Color(0xFFDC4C3E),
             elevation: 0,
           ),
-          scaffoldBackgroundColor: const Color(0xFF121212),
-          cardColor: const Color(0xFF1E1E1E),
-          dividerColor: Colors.grey[800],
+          scaffoldBackgroundColor: const Color(0xFFF8F8F8),
+          useMaterial3: true,
+        ),
+        // Dark theme configuration
+        darkTheme: ThemeData(
+          brightness: Brightness.dark,
+          colorScheme: const ColorScheme.dark(
+            primary: Color(0xFFDC4C3E),
+            secondary: Color(0xFFDC4C3E),
+            surface: Color(0xFF282828),
+            onSurface: Color(0xFFE0E0E0),
+          ),
+          scaffoldBackgroundColor: const Color(0xFF1E1E1E),
+          cardColor: const Color(0xFF282828),
+          canvasColor: const Color(0xFF282828),
+          appBarTheme: const AppBarTheme(
+            backgroundColor: Color(0xFF262626),
+            foregroundColor: Color(0xFFDC4C3E),
+            elevation: 0,
+            iconTheme: IconThemeData(color: Color(0xFFDC4C3E)),
+          ),
+          dividerColor: const Color(0xFF404040),
+          textTheme: const TextTheme(
+            bodyLarge: TextStyle(color: Color(0xFFE0E0E0)),
+            bodyMedium: TextStyle(color: Color(0xFFE0E0E0)),
+            bodySmall: TextStyle(color: Color(0xFFBDBDBD)),
+            titleLarge: TextStyle(color: Color(0xFFE0E0E0)),
+            titleMedium: TextStyle(color: Color(0xFFE0E0E0)),
+            titleSmall: TextStyle(color: Color(0xFFE0E0E0)),
+          ),
+          chipTheme: const ChipThemeData(
+            backgroundColor: Color(0xFF323232),
+            disabledColor: Color(0xFF323232),
+            selectedColor: Color(0xFF404040),
+            secondarySelectedColor: Color(0xFF505050),
+            padding: EdgeInsets.all(4),
+            labelStyle: TextStyle(color: Color(0xFFE0E0E0)),
+            secondaryLabelStyle: TextStyle(color: Color(0xFFE0E0E0)),
+            brightness: Brightness.dark,
+          ),
           useMaterial3: true,
         ),
         themeMode: themeMode, // Use the theme mode from the provider
-      initialRoute: '/',
-      routes: {
-        '/': (context) => const HomeScreen(),
-        '/memos': (context) => const MemosScreen(),
-        '/chat': (context) => const ChatScreen(),
-        '/mcp': (context) => const McpScreen(),
-        '/new-memo': (context) => const NewMemoScreen(),
+        initialRoute: '/',
+        routes: {
+          '/': (context) => const HomeScreen(),
+          '/memos': (context) => const MemosScreen(),
+          '/chat': (context) => const ChatScreen(),
+          '/mcp': (context) => const McpScreen(),
+          '/new-memo': (context) => const NewMemoScreen(),
           '/filter-demo': (context) => const FilterDemoScreen(),
           '/riverpod-demo': (context) => const RiverpodDemoScreen(),
           '/codegen-test': (context) => const CodegenTestScreen(),
-      },
-      onGenerateRoute: (settings) {
-        if (settings.name == '/memo-detail') {
-          final args = settings.arguments as Map<String, dynamic>;
-          return MaterialPageRoute(
-            builder: (context) => MemoDetailScreen(
-              memoId: args['memoId'] as String,
-            ),
+        },
+        onGenerateRoute: (settings) {
+          if (settings.name == '/memo-detail') {
+            final args = settings.arguments as Map<String, dynamic>;
+            return MaterialPageRoute(
+              builder:
+                  (context) =>
+                      MemoDetailScreen(memoId: args['memoId'] as String),
             );
-        } else if (settings.name == '/edit-memo') {
-          final args = settings.arguments as Map<String, dynamic>;
-          return MaterialPageRoute(
-            builder: (context) => EditMemoScreen(
-              memoId: args['memoId'] as String,
-            ),
-          );
-        }
-        return null;
+          } else if (settings.name == '/edit-memo') {
+            final args = settings.arguments as Map<String, dynamic>;
+            return MaterialPageRoute(
+              builder:
+                  (context) => EditMemoScreen(memoId: args['memoId'] as String),
+            );
+          }
+          return null;
         },
       ),
     );
@@ -145,7 +165,7 @@ class HomeScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final themeMode = ref.watch(themeModeProvider);
-    
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Flutter Memos'),
@@ -164,9 +184,7 @@ class HomeScreen extends ConsumerWidget {
       ),
       body: Column(
         children: [
-          const Expanded(
-            child: MemosScreen(),
-          ),
+          const Expanded(child: MemosScreen()),
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: Column(

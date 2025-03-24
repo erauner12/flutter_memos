@@ -35,12 +35,21 @@ class MemoCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    
+
     return Card(
-      elevation: 1,
+      elevation: isDarkMode ? 0 : 1,
       margin: const EdgeInsets.only(bottom: 6),
+      color: isDarkMode ? const Color(0xFF262626) : null,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side:
+            isDarkMode
+                ? BorderSide(color: Colors.grey[850]!, width: 0.5)
+                : BorderSide.none,
+      ),
       child: InkWell(
         onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(
             12.0,
@@ -55,7 +64,10 @@ class MemoCard extends StatelessWidget {
                 content,
                 style: TextStyle(
                   fontSize: 16,
-                  color: isDarkMode ? Colors.white : const Color(0xFF333333),
+                  color:
+                      isDarkMode
+                          ? const Color(0xFFE0E0E0)
+                          : const Color(0xFF333333),
                 ),
                 maxLines: 5,
                 overflow: TextOverflow.ellipsis,
@@ -68,7 +80,9 @@ class MemoCard extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 13,
                       color:
-                          isDarkMode ? Colors.greenAccent : Colors.green[700],
+                          isDarkMode
+                              ? const Color(0xFF9CCC65)
+                              : Colors.green[700],
                     ),
                   ),
                 ),
@@ -83,7 +97,10 @@ class MemoCard extends StatelessWidget {
                             ? Icons.update
                             : Icons.calendar_today,
                         size: 12,
-                        color: isDarkMode ? Colors.grey[400] : Colors.grey[700],
+                        color:
+                            isDarkMode
+                                ? const Color(0xFF9E9E9E)
+                                : Colors.grey[700],
                       ),
                       const SizedBox(width: 4),
                       Text(
@@ -91,7 +108,9 @@ class MemoCard extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 11,
                           color:
-                              isDarkMode ? Colors.grey[400] : Colors.grey[800],
+                              isDarkMode
+                                  ? const Color(0xFF9E9E9E)
+                                  : Colors.grey[800],
                           fontWeight: FontWeight.w500,
                         ),
                       ),
@@ -113,7 +132,7 @@ class MemoCard extends StatelessWidget {
                             fontSize: 11,
                             color:
                                 isDarkMode
-                                    ? Colors.grey[400]
+                                    ? const Color(0xFF9E9E9E)
                                     : Colors.grey[600],
                           ),
                         ),
@@ -124,7 +143,7 @@ class MemoCard extends StatelessWidget {
                             fontSize: 11,
                             color:
                                 isDarkMode
-                                    ? Colors.grey[400]
+                                    ? const Color(0xFF9E9E9E)
                                     : Colors.grey[600],
                           ),
                         ),
@@ -137,4 +156,4 @@ class MemoCard extends StatelessWidget {
       ),
     );
   }
-}
+} // End of MemoCard class
