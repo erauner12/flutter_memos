@@ -125,7 +125,7 @@ install-macos: release-macos
 # to generate a DMG in build/macos/Build/Products/Release/installer.
 
 make-dmg: release-macos
-	@echo "Packaging flutter_memos.app into a DMG (verbose)..."
+	@echo "Packaging flutter_memos.app into a DMG (using --hdiutil-verbose)..."
 
 	# Attempt to detach any leftover disk images for this volume name to avoid "Resource busy"
 	@hdiutil info | grep "Flutter Memos Installer" -B 1 | grep /dev/disk | awk '{print $1}' | xargs -I{} hdiutil detach -force {} 2>/dev/null || true
@@ -135,7 +135,7 @@ make-dmg: release-macos
 	rm -f ~/Documents/flutter_memos_release/flutter_memos.dmg
 
 	# Run create-dmg with --verbose for detailed logs
-	create-dmg --verbose \
+	create-dmg --hdiutil-verbose \
 		--volname "Flutter Memos Installer" \
 		--background "solid-white" \
 		--icon-size 160 \
