@@ -25,7 +25,9 @@ final apiServiceProvider = Provider<ApiService>((ref) {
   // Configure the service
   ApiService.verboseLogging = config['verboseLogging'] ?? true;
   ApiService.useFilterExpressions = config['useFilterExpressions'] ?? true;
-  ApiService.CLIENT_SIDE_SORTING_ENABLED = config['clientSideSorting'] ?? true;
+  
+  // Note: CLIENT_SIDE_SORTING_ENABLED is a const and always enabled by default
+  // We don't need to configure it as we always want client-side sorting
 
   if (kDebugMode) {
     print('[apiServiceProvider] Created API service with config: $config');
@@ -67,7 +69,13 @@ Future<void> _checkApiHealth(Ref ref) async {
   try {
     // In a real implementation, you might have a health endpoint
     // This is just a placeholder using existing methods
-    await apiService.listMemos(limit: 1);
+    // Fix: removed 'limit' parameter which doesn't exist in the API
+    await apiService.listMemos(
+      parent: 'users/1',
+      // We're just checking if the API responds, we don't need data
+      // If we need to limit results, use the appropriate parameter:
+      // TODO: Add proper pagination parameters if needed
+    );
 
     // If we get here, the API is available
     ref.read(apiStatusProvider.notifier).state = 'available';
