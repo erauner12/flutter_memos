@@ -1,6 +1,9 @@
 # Makefile for running Flutter Memos integration tests on various platforms
 
-.PHONY: test-integration-macos test-integration-ios test-integration-ipad-portrait test-integration-ipad-landscape test-integration-web kill-simulator
+.PHONY: test-integration-macos test-integration-ios test-integration-ipad-portrait test-integration-ipad-landscape test-integration-web kill-simulator test-integration-iphone
+
+# iOS device ID - change this to your device ID
+IPHONE_DEVICE_ID ?= 00008140-0016052002FB001C
 
 test-integration-macos:
 	@echo "Running macOS integration tests..."
@@ -8,6 +11,14 @@ test-integration-macos:
 		--driver=test_driver/integration_test_driver.dart \
 		--target=integration_test/memo_card_actions_test.dart \
 		-d "macos"
+
+# New target for physical iPhone testing
+test-integration-iphone:
+	@echo "Running integration tests on physical iPhone with ID $(IPHONE_DEVICE_ID)..."
+	flutter drive \
+		--driver=test_driver/integration_test_driver.dart \
+		--target=integration_test/memo_card_actions_test.dart \
+		-d $(IPHONE_DEVICE_ID)
 
 test-integration-ios:
 	@echo "Creating iPhone 16 Pro simulator..."
