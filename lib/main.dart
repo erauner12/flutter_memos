@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_memos/providers/theme_provider.dart';
@@ -26,11 +27,16 @@ class MyApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     // Watch the theme mode provider
     final themeMode = ref.watch(themeModeProvider);
-
+    
     // Load saved theme preference when the app starts
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(loadThemeModeProvider).whenData((savedMode) {
         if (savedMode != ref.read(themeModeProvider)) {
+          if (kDebugMode) {
+            print(
+              '[MyApp] Updating theme mode to saved preference: $savedMode',
+            );
+          }
           ref.read(themeModeProvider.notifier).state = savedMode;
         }
       });
@@ -40,7 +46,7 @@ class MyApp extends ConsumerWidget {
     if (Theme.of(context).platform == TargetPlatform.macOS) {
       // Create a set to track pressed keys
       final pressedKeys = <int>{};
-
+      
       ServicesBinding.instance.keyboard.addHandler((KeyEvent event) {
         // For KeyDownEvent, check if we've already seen this key
         if (event is KeyDownEvent) {
@@ -58,16 +64,21 @@ class MyApp extends ConsumerWidget {
         else if (event is KeyUpEvent) {
           pressedKeys.remove(event.physicalKey.usbHidUsage);
         }
-
+        
         // Allow the event to propagate to the framework
         return false;
       });
     }
-
+    
+    if (kDebugMode) {
+      print('[MyApp] Current theme mode: $themeMode');
+    }
+    
     return GestureDetector(
       onTap: () {
         // Unfocus when tapping outside of a text field
         FocusManager.instance.primaryFocus?.unfocus();
+        ref.read(toggleThemeModeProvider)();
       },
       child: MaterialApp(
         title: 'Flutter Memos',

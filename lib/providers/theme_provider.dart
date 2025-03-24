@@ -1,9 +1,13 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Provider for the current theme mode
 final themeModeProvider = StateProvider<ThemeMode>((ref) {
+  if (kDebugMode) {
+    print('[themeModeProvider] Initializing with dark theme');
+  }
   return ThemeMode.dark; // Default to dark theme
 }, name: 'themeMode');
 
@@ -11,6 +15,10 @@ final themeModeProvider = StateProvider<ThemeMode>((ref) {
 final loadThemeModeProvider = FutureProvider<ThemeMode>((ref) async {
   final prefs = await SharedPreferences.getInstance();
   final savedThemeMode = prefs.getString('theme_mode');
+  
+  if (kDebugMode) {
+    print('[loadThemeModeProvider] Loaded theme from preferences: $savedThemeMode');
+  }
   
   if (savedThemeMode == 'light') {
     return ThemeMode.light;
@@ -41,6 +49,10 @@ final saveThemeModeProvider = Provider<Future<bool> Function(ThemeMode)>((ref) {
         break;
     }
     
+    if (kDebugMode) {
+      print('[saveThemeModeProvider] Saving theme mode preference: $modeString');
+    }
+    
     return prefs.setString('theme_mode', modeString);
   };
 });
@@ -49,9 +61,30 @@ final saveThemeModeProvider = Provider<Future<bool> Function(ThemeMode)>((ref) {
 final toggleThemeModeProvider = Provider<void Function()>((ref) {
   return () {
     final currentMode = ref.read(themeModeProvider);
-    final newMode = currentMode == ThemeMode.dark
-        ? ThemeMode.light
-        : ThemeMode.dark;
+    
+    if (kDebugMode) {
+      print('[toggleThemeModeProvider] Current theme mode: $currentMode');
+    }
+    
+    ThemeMode newMode;
+
+    switch (currentMode) {
+      case ThemeMode.dark:
+        newMode = ThemeMode.light;
+        break;
+      case ThemeMode.light:
+        newMode = ThemeMode.system;
+        break;
+      case ThemeMode.system:
+        newMode = ThemeMode.dark;
+        break;
+      default:
+        newMode = ThemeMode.dark;
+    }
+    
+    if (kDebugMode) {
+      print('[toggleThemeModeProvider] Changing to: $newMode');
+    }
     
     // Update the theme mode provider
     ref.read(themeModeProvider.notifier).state = newMode;
