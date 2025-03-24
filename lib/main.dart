@@ -289,86 +289,45 @@ class HomeScreen extends ConsumerWidget {
           ),
         ],
       ),
-      body: Column(
+      body: const Column(
         children: [
-          const Expanded(child: MemosScreen()),
+          Expanded(child: MemosScreen()),
+
+          // Demo UI components have been temporarily removed but preserved in code
+          // The following code is commented out but kept for future reference
+          /*
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: Column(
               children: [
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF0079BF),
-                      foregroundColor: Colors.white,
-                    ),
-                    onPressed: () {
-                      Navigator.pushNamed(context, '/mcp');
-                    },
-                    child: const Text('MCP Integration Demo'),
-                  ),
-                ),
+                // MCP Integration Demo
+                DemoService.buildMCPIntegrationDemo(context: context),
                 const SizedBox(height: 10),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFDC4C3E),
-                      foregroundColor: Colors.white,
-                    ),
-                    onPressed: () {
-                      Navigator.pushNamed(context, '/chat');
-                    },
-                    child: const Text('Assistant Chat'),
-                  ),
-                ),
+                
+                // Assistant Chat - partially implemented
+                DemoService.buildAssistantChat(context: context),
                 const SizedBox(height: 10),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF4CAF50),
-                      foregroundColor: Colors.white,
-                    ),
-                    onPressed: () {
-                      Navigator.pushNamed(context, '/filter-demo');
-                    },
-                    child: const Text('Filter Demo'),
-                  ),
-                ),
+                
+                // Filter Demo
+                DemoService.buildFilterDemo(context: context),
                 const SizedBox(height: 10),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF9C27B0),
-                      foregroundColor: Colors.white,
-                    ),
-                    onPressed: () {
-                      Navigator.pushNamed(context, '/riverpod-demo');
-                    },
-                    child: const Text('Riverpod Demo'),
-                  ),
-                ),
+                
+                // Riverpod Demo
+                DemoService.buildRiverpodDemo(context: context),
                 const SizedBox(height: 10),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF673AB7),
-                      foregroundColor: Colors.white,
-                    ),
-                    onPressed: () {
-                      Navigator.pushNamed(context, '/codegen-test');
-                    },
-                    child: const Text('Riverpod Codegen Test'),
-                  ),
-                ),
+                
+                // Riverpod Codegen Test
+                DemoService.buildRiverpodCodegenTest(context: context),
                 const SizedBox(height: 10),
               ],
             ),
           ),
+          */
+
+          // TODO: To restore demo functionality:
+          // 1. Uncomment the code block above
+          // 2. All demo buttons are now encapsulated in the DemoService class
+          // 3. Demo code is still present in respective screen files, ready to be used
         ],
       ),
     );
