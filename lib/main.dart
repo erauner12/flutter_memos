@@ -14,8 +14,11 @@ import 'package:flutter_memos/utils/provider_logger.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 void main() {
-  runApp(
-    ProviderScope(observers: [LoggingProviderObserver()], child: const MyApp()),
+  runApp(ProviderScope(
+    observers: [LoggingProviderObserver()],
+    child: const MyApp(),
+  ));
+}
   );
 }
 
