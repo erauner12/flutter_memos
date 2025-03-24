@@ -32,7 +32,7 @@ test-integration-ipad-portrait:
 	echo "Opening iOS Simulator (iPad Pro 11-inch) with UDID $$UDID..."; \
 	open -a Simulator --args -CurrentDeviceUDID $$UDID; \
 	echo "Waiting for iPad simulator to start..."; \
-	sleep 15; \
+	sleep 20; \
 	echo "Running integration tests on 'iPad Pro 11-inch' (Portrait)..."; \
 	flutter drive \
 		--driver=test_driver/integration_test_driver.dart \
@@ -48,10 +48,10 @@ test-integration-ipad-landscape:
 	echo "Opening iOS Simulator (iPad Pro 11-inch) with UDID $$UDID..."; \
 	open -a Simulator --args -CurrentDeviceUDID $$UDID; \
 	echo "Waiting for iPad simulator to start..."; \
-	sleep 15; \
+	sleep 20; \
 	echo "Rotating Simulator to Landscape via AppleScript..."; \
 	osascript -e 'tell application "Simulator" to activate' -e 'tell application "System Events" to key code 123 using {command down}'; \
-	sleep 2; \
+	sleep 3; \
 	echo "Running integration tests on 'iPad Pro 11-inch' (Landscape)..."; \
 	flutter drive \
 		--driver=test_driver/integration_test_driver.dart \
