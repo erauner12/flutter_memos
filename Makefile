@@ -1,6 +1,6 @@
 # Makefile for running Flutter Memos integration tests on various platforms
 
-.PHONY: test-integration-macos test-integration-ios test-integration-ipad-portrait test-integration-ipad-landscape test-integration-web kill-simulator test-integration-iphone run-iphone install-dmg-locally
+.PHONY: test-integration-macos test-integration-ios test-integration-ipad-portrait test-integration-ipad-landscape test-integration-web kill-simulator test-integration-iphone run-iphone install-dmg-locally install-dmg-from
 
 # iOS device ID - change this to your device ID
 IPHONE_DEVICE_ID ?= 00008140-0016052002FB001C
@@ -191,3 +191,29 @@ install-dmg-locally: make-dmg
 	hdiutil detach "$(MOUNT_PATH)" || true
 	
 	@echo "Install from DMG complete. You can now run flutter_memos.app from /Applications."
+
+# Install the app from a user-specified DMG path:
+# Usage: make install-dmg-from DMG_PATH=/path/to/flutter_memos.dmg
+install-dmg-from:
+	@if [ -z "$(DMG_PATH)" ]; then \
+		echo "ERROR: Please specify DMG_PATH=/path/to/flutter_memos.dmg"; \
+		exit 1; \
+	fi
+	@echo "Attaching DMG from $(DMG_PATH) ..."
+	$(eval HDI_OUTPUT := $(shell hdiutil attach "$(DMG_PATH)" | tee /dev/stderr))
+	
+	@echo "Parsing hdiutil output for mount path..."
+	$(eval MOUNT_PATH := $(shell echo "$(HDI_OUTPUT)" | grep "Flutter Memos Installer" | tail -1 | awk '{print $$3}'))
+	@if [ -z "$(MOUNT_PATH)" ]; then \
+		echo "ERROR: Could not find '/Volumes/Flutter Memos Installer' in hdiutil output."; \
+		exit 1; \
+	fi
+	
+	@echo "Mount path is: $(MOUNT_PATH)"
+	@echo "Copying flutter_memos.app from '$(MOUNT_PATH)' to /Applications (requires sudo)..."
+	cp -R "$(MOUNT_PATH)/flutter_memos.app" "/Applications"
+	
+	@echo "Detaching DMG..."
+	hdiutil detach "$(MOUNT_PATH)" || true
+	
+	@echo "Install from DMG (from $(DMG_PATH)) complete. You can now run flutter_memos.app from /Applications."
