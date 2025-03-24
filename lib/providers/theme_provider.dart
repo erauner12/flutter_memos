@@ -13,49 +13,68 @@ final themeModeProvider = StateProvider<ThemeMode>((ref) {
 
 /// Provider for loading the saved theme mode from preferences
 final loadThemeModeProvider = FutureProvider<ThemeMode>((ref) async {
-  final prefs = await SharedPreferences.getInstance();
-  final savedThemeMode = prefs.getString('theme_mode');
-  
-  if (kDebugMode) {
-    print('[loadThemeModeProvider] Loaded theme from preferences: $savedThemeMode');
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final savedThemeMode = prefs.getString('theme_mode');
+    
+    if (kDebugMode) {
+      print('[loadThemeModeProvider] Loaded theme from preferences: $savedThemeMode');
+    }
+    
+    if (savedThemeMode == 'light') {
+      return ThemeMode.light;
+    } else if (savedThemeMode == 'dark') {
+      return ThemeMode.dark;
+    } else if (savedThemeMode == 'system') {
+      return ThemeMode.system;
+    }
+    
+    return ThemeMode.dark; // Default to dark if no saved preference
+  } catch (e) {
+    if (kDebugMode) {
+      print('[loadThemeModeProvider] Error loading theme preferences: $e');
+    }
+    return ThemeMode.dark; // Default to dark on error
   }
-  
-  if (savedThemeMode == 'light') {
-    return ThemeMode.light;
-  } else if (savedThemeMode == 'dark') {
-    return ThemeMode.dark;
-  } else if (savedThemeMode == 'system') {
-    return ThemeMode.system;
-  }
-  
-  return ThemeMode.dark; // Default to dark if no saved preference
-});
+}, name: 'loadThemeMode');
 
 /// Provider for saving theme preference
 final saveThemeModeProvider = Provider<Future<bool> Function(ThemeMode)>((ref) {
   return (ThemeMode mode) async {
-    final prefs = await SharedPreferences.getInstance();
-    String modeString;
-    
-    switch (mode) {
-      case ThemeMode.light:
-        modeString = 'light';
-        break;
-      case ThemeMode.dark:
-        modeString = 'dark';
-        break;
-      case ThemeMode.system:
-        modeString = 'system';
-        break;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      String modeString;
+      
+      switch (mode) {
+        case ThemeMode.light:
+          modeString = 'light';
+          break;
+        case ThemeMode.dark:
+          modeString = 'dark';
+          break;
+        case ThemeMode.system:
+          modeString = 'system';
+          break;
+      }
+      
+      if (kDebugMode) {
+        print('[saveThemeModeProvider] Saving theme mode preference: $modeString');
+      }
+      
+      final result = await prefs.setString('theme_mode', modeString);
+      
+      // Force invalidate the loadThemeModeProvider to avoid stale data
+      ref.invalidate(loadThemeModeProvider);
+      
+      return result;
+    } catch (e) {
+      if (kDebugMode) {
+        print('[saveThemeModeProvider] Error saving theme preferences: $e');
+      }
+      return false;
     }
-    
-    if (kDebugMode) {
-      print('[saveThemeModeProvider] Saving theme mode preference: $modeString');
-    }
-    
-    return prefs.setString('theme_mode', modeString);
   };
-});
+}, name: 'saveThemeMode');
 
 /// Provider for toggling between light and dark mode
 final toggleThemeModeProvider = Provider<void Function()>((ref) {

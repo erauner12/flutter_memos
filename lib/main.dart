@@ -20,27 +20,55 @@ void main() {
   );
 }
 
-class MyApp extends ConsumerWidget {
+class MyApp extends ConsumerStatefulWidget {
   const MyApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends ConsumerState<MyApp> {
+  bool _initialThemeLoaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    
+    // Load theme preference once in initState instead of every build
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadInitialTheme();
+    });
+  }
+  
+  void _loadInitialTheme() {
+    if (!_initialThemeLoaded) {
+      if (kDebugMode) {
+        print('[MyApp] Loading initial theme preference');
+      }
+      
+      final prefs = ref.read(loadThemeModeProvider);
+      prefs.whenData((savedMode) {
+        if (mounted) {
+          if (kDebugMode) {
+            print('[MyApp] Setting initial theme to: $savedMode');
+          }
+          ref.read(themeModeProvider.notifier).state = savedMode;
+          setState(() {
+            _initialThemeLoaded = true;
+          });
+        }
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     // Watch the theme mode provider
     final themeMode = ref.watch(themeModeProvider);
     
-    // Load saved theme preference only on initial app start
-    bool initialThemeLoaded = false;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!initialThemeLoaded) {
-        ref.read(loadThemeModeProvider).whenData((savedMode) {
-          if (kDebugMode) {
-            print('[MyApp] Loading initial theme preference: $savedMode');
-          }
-          ref.read(themeModeProvider.notifier).state = savedMode;
-          initialThemeLoaded = true;
-        });
-      }
-    });
+    if (kDebugMode) {
+      print('[MyApp] Building with theme mode: $themeMode');
+    }
 
     // Configure keyboard settings for macOS to avoid key event issues
     if (Theme.of(context).platform == TargetPlatform.macOS) {
@@ -201,12 +229,29 @@ class HomeScreen extends ConsumerWidget {
               themeMode == ThemeMode.dark
                   ? Icons.dark_mode
                   : themeMode == ThemeMode.light
-                  ? Icons.light_mode
-                  : Icons.brightness_auto,
+                      ? Icons.light_mode
+                      : Icons.brightness_auto,
             ),
-            onSelected: (ThemeMode selectedMode) {
+            onSelected: (ThemeMode selectedMode) async {
+              if (kDebugMode) {
+                print('[HomeScreen] User selected theme: $selectedMode');
+              }
+              
+              // Set the theme mode first
               ref.read(themeModeProvider.notifier).state = selectedMode;
-              ref.read(saveThemeModeProvider)(selectedMode);
+              
+              // Then save the preference
+              await ref.read(saveThemeModeProvider)(selectedMode);
+              
+              // Provide user feedback
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Theme set to ${selectedMode.toString().split('.').last}'),
+                    duration: const Duration(seconds: 1),
+                  ),
+                );
+              }
             },
             itemBuilder:
                 (BuildContext context) => <PopupMenuEntry<ThemeMode>>[
