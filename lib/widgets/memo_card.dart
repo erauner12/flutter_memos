@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_memos/widgets/memo_context_menu.dart';
+import 'package:flutter_memos/widgets/memo_context_menu.dart' as memo_menu;
 
 class MemoCard extends StatefulWidget {
   final String content;
@@ -71,7 +71,7 @@ class _MemoCardState extends State<MemoCard> {
           maxChildSize: 1.0,
           expand: false,
           builder: (BuildContext context, ScrollController scrollController) {
-            return MemoContextMenu(
+            return memo_menu.MemoContextMenu(
               memoId: widget.id,
               isPinned: widget.pinned,
               position: _tapPosition,
@@ -79,8 +79,9 @@ class _MemoCardState extends State<MemoCard> {
               scrollController: scrollController,
               onClose: () => Navigator.pop(context),
               onView: widget.onTap,
-              onEdit: () {
+              onEdit: () async {
                 Navigator.pop(context);
+                if (!mounted) return;
                 Navigator.pushNamed(
                   context,
                   '/edit-memo',
@@ -103,20 +104,16 @@ class _MemoCardState extends State<MemoCard> {
                 Navigator.pop(context);
                 widget.onTogglePin?.call();
               },
-              onCopy: () {
+              onCopy: () async {
                 Navigator.pop(context);
-                Clipboard.setData(ClipboardData(text: widget.content)).then((
-                  _,
-                ) {
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Memo content copied to clipboard'),
-                        duration: Duration(seconds: 2),
-                      ),
-                    );
-                  }
-                });
+                await Clipboard.setData(ClipboardData(text: widget.content));
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Memo content copied to clipboard'),
+                    duration: Duration(seconds: 2),
+                  ),
+                );
               },
             );
           },
