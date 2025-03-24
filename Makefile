@@ -163,8 +163,8 @@ install-dmg-locally: make-dmg
 	$(eval HDI_OUTPUT := $(shell hdiutil attach "$(HOME)/Documents/flutter_memos_release/flutter_memos.dmg" | tee /dev/stderr))
 
 	@echo "Searching for the mount point in the hdiutil output..."
-	# Extract the mount point path (/Volumes/xxx) - using grep to find /Volumes/ path
-	$(eval MOUNT_PATH := $(shell echo "$(HDI_OUTPUT)" | grep -Eo "/Volumes/[^ ]+"))
+	# Extract the mount point path (/Volumes/xxx) by finding the Apple_HFS line and extracting volume path
+	$(eval MOUNT_PATH := $(shell echo "$(HDI_OUTPUT)" | grep "Apple_HFS" | sed -E 's/.*Apple_HFS[[:space:]]+(.+)/\1/'))
 	@if [ -z "$(MOUNT_PATH)" ]; then \
 		echo "ERROR: Could not find mount point in hdiutil output."; \
 		echo "Full output:"; \
@@ -195,13 +195,14 @@ install-dmg-locally: make-dmg
 
 	@echo "Install from DMG complete. You can now run flutter_memos.app from /Applications."
 
-# Install the app from a user-specified DMG path:
+# Install the app from a user-specified DMG path (key=value format)
 # Usage: make install-dmg-from DMG_PATH=/path/to/flutter_memos.dmg
-# IMPORTANT: Use DMG_PATH=path format (no space after install-dmg-from)
+# IMPORTANT: Use DMG_PATH=path format with equals sign
 install-dmg-from:
 	@if [ -z "$(DMG_PATH)" ]; then \
 		echo "ERROR: Please specify DMG_PATH=/path/to/flutter_memos.dmg"; \
 		echo "Example: make install-dmg-from DMG_PATH=~/Documents/flutter_memos_release/flutter_memos.dmg"; \
+		echo "Or use: make install-dmg-path /path/to/flutter_memos.dmg"; \
 		exit 1; \
 	fi
 	@echo "Attaching DMG from $(DMG_PATH) ..."
@@ -230,3 +231,50 @@ install-dmg-from:
 	hdiutil detach "$(MOUNT_PATH)" || true
 	
 	@echo "Install from DMG (from $(DMG_PATH)) complete. You can now run flutter_memos.app from /Applications."
+	
+# Install the app from a DMG path specified as a positional argument
+# Usage: make install-dmg-path /path/to/flutter_memos.dmg
+install-dmg-path:
+	@if [ -z "$(filter-out $@,$(MAKECMDGOALS))" ]; then \
+		echo "ERROR: Please specify the DMG path"; \
+		echo "Example: make install-dmg-path ~/Documents/flutter_memos_release/flutter_memos.dmg"; \
+		exit 1; \
+	fi
+	@echo "Attaching DMG from $(filter-out $@,$(MAKECMDGOALS)) ..."
+	$(eval DMG_PATH := $(filter-out $@,$(MAKECMDGOALS)))
+	$(eval DMG_EXPANDED_PATH := $(shell eval echo $(DMG_PATH)))
+	@if [ ! -f "$(DMG_EXPANDED_PATH)" ]; then \
+		echo "ERROR: DMG file not found at: $(DMG_EXPANDED_PATH)"; \
+		exit 1; \
+	fi
+	$(eval HDI_OUTPUT := $(shell hdiutil attach "$(DMG_EXPANDED_PATH)" | tee /dev/stderr))
+	
+	@echo "Parsing hdiutil output for mount path..."
+	# Extract the mount point path (/Volumes/xxx) by finding the Apple_HFS line and extracting volume path
+	$(eval MOUNT_PATH := $(shell echo "$(HDI_OUTPUT)" | grep "Apple_HFS" | sed -E 's/.*Apple_HFS[[:space:]]+(.+)/\1/'))
+	@if [ -z "$(MOUNT_PATH)" ]; then \
+		echo "ERROR: Could not find mount point in hdiutil output."; \
+		echo "Full output:"; \
+		echo "$(HDI_OUTPUT)"; \
+		exit 1; \
+	fi
+	
+	@echo "Mount path is: $(MOUNT_PATH)"
+	@if [ ! -d "$(MOUNT_PATH)/flutter_memos.app" ]; then \
+		echo "ERROR: Could not find flutter_memos.app in $(MOUNT_PATH)"; \
+		echo "Available files in $(MOUNT_PATH):"; \
+		ls -la "$(MOUNT_PATH)"; \
+		hdiutil detach "$(MOUNT_PATH)" || true; \
+		exit 1; \
+	fi
+	@echo "Copying flutter_memos.app from '$(MOUNT_PATH)' to /Applications..."
+	cp -R "$(MOUNT_PATH)/flutter_memos.app" "/Applications"
+	
+	@echo "Detaching DMG..."
+	hdiutil detach "$(MOUNT_PATH)" || true
+	
+	@echo "Install from DMG complete. You can now run flutter_memos.app from /Applications."
+
+# Allow arbitrary arguments to be passed to the install-dmg-path target
+%:
+	@:
