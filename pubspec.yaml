@@ -37,6 +37,7 @@ dev_dependencies:
   retrofit_generator: ^9.1.9
   built_value_generator: ^8.6.1
   mockito: ^5.4.4
+  # Remove all custom_lint related packages
   # Temporarily comment out linting packages to avoid conflicts
   # custom_lint: ^0.5.7
   # riverpod_lint: ^2.3.7
