@@ -163,8 +163,8 @@ install-dmg-locally: make-dmg
 	$(eval HDI_OUTPUT := $(shell hdiutil attach "$(HOME)/Documents/flutter_memos_release/flutter_memos.dmg" | tee /dev/stderr))
 
 	@echo "Searching for the mount point in the hdiutil output..."
-	# Extract the mount point path (/Volumes/xxx) - use the last field from the line with Apple_HFS
-	$(eval MOUNT_PATH := $(shell echo "$(HDI_OUTPUT)" | grep -E "Apple_HFS" | awk '{print $$NF}'))
+	# Extract the mount point path (/Volumes/xxx) - using grep to find /Volumes/ path
+	$(eval MOUNT_PATH := $(shell echo "$(HDI_OUTPUT)" | grep -Eo "/Volumes/[^ ]+"))
 	@if [ -z "$(MOUNT_PATH)" ]; then \
 		echo "ERROR: Could not find mount point in hdiutil output."; \
 		echo "Full output:"; \
@@ -173,6 +173,20 @@ install-dmg-locally: make-dmg
 	fi
 
 	@echo "Mount path is: $(MOUNT_PATH)"
+	@if [ ! -d "$(MOUNT_PATH)/flutter_memos.app" ]; then \
+		echo "ERROR: Could not find flutter_memos.app in $(MOUNT_PATH)"; \
+		echo "Available files in $(MOUNT_PATH):"; \
+		ls -la "$(MOUNT_PATH)"; \
+		hdiutil detach "$(MOUNT_PATH)" || true; \
+		exit 1; \
+	fi
+	@if [ ! -d "$(MOUNT_PATH)/flutter_memos.app" ]; then \
+		echo "ERROR: Could not find flutter_memos.app in $(MOUNT_PATH)"; \
+	
+		ls -la "$(MOUNT_PATH)"; \
+		hdiutil detach "$(MOUNT_PATH)" || true; \
+		exit 1; \
+	fi
 	@echo "Copying flutter_memos.app from '$(MOUNT_PATH)' to /Applications..."
 	cp -R "$(MOUNT_PATH)/flutter_memos.app" "/Applications"
 
@@ -183,17 +197,24 @@ install-dmg-locally: make-dmg
 
 # Install the app from a user-specified DMG path:
 # Usage: make install-dmg-from DMG_PATH=/path/to/flutter_memos.dmg
+# IMPORTANT: Use DMG_PATH=path format (no space after install-dmg-from)
 install-dmg-from:
 	@if [ -z "$(DMG_PATH)" ]; then \
 		echo "ERROR: Please specify DMG_PATH=/path/to/flutter_memos.dmg"; \
+		echo "Example: make install-dmg-from DMG_PATH=~/Documents/flutter_memos_release/flutter_memos.dmg"; \
 		exit 1; \
 	fi
 	@echo "Attaching DMG from $(DMG_PATH) ..."
-	$(eval HDI_OUTPUT := $(shell hdiutil attach "$(DMG_PATH)" | tee /dev/stderr))
+	$(eval DMG_EXPANDED_PATH := $(shell eval echo $(DMG_PATH)))
+	@if [ ! -f "$(DMG_EXPANDED_PATH)" ]; then \
+		echo "ERROR: DMG file not found at: $(DMG_EXPANDED_PATH)"; \
+		exit 1; \
+	fi
+	$(eval HDI_OUTPUT := $(shell hdiutil attach "$(DMG_EXPANDED_PATH)" | tee /dev/stderr))
 	
 	@echo "Parsing hdiutil output for mount path..."
-	# Extract the mount point path (/Volumes/xxx) - use the last field from the line with Apple_HFS
-	$(eval MOUNT_PATH := $(shell echo "$(HDI_OUTPUT)" | grep -E "Apple_HFS" | awk '{print $$NF}'))
+	# Extract the mount point path (/Volumes/xxx) - using grep to find /Volumes/ path
+	$(eval MOUNT_PATH := $(shell echo "$(HDI_OUTPUT)" | grep -Eo "/Volumes/[^ ]+"))
 	@if [ -z "$(MOUNT_PATH)" ]; then \
 		echo "ERROR: Could not find mount point in hdiutil output."; \
 		echo "Full output:"; \
