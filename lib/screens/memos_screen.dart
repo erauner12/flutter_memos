@@ -653,26 +653,14 @@ class _MemosScreenState extends ConsumerState<MemosScreen> {
               );
             },
             loading: () {
-              return const Column(
-                children: [
-                  Expanded(
-                    child: Center(child: CircularProgressIndicator()),
-                  ),
-                ],
-              );
+              return const Center(child: CircularProgressIndicator());
             },
             error: (error, stackTrace) {
-              return Column(
-                children: [
-                  Expanded(
-                    child: Center(
-                      child: Text(
-                        'Error: $error',
-                        style: const TextStyle(color: Colors.red),
-                      ),
-                    ),
-                  ),
-                ],
+              return Center(
+                child: Text(
+                  'Error: $error',
+                  style: const TextStyle(color: Colors.red),
+                ),
               );
             },
           ),
