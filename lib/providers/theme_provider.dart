@@ -68,6 +68,7 @@ final toggleThemeModeProvider = Provider<void Function()>((ref) {
     
     ThemeMode newMode;
 
+    // Simplified cycle: dark -> light -> system -> dark
     switch (currentMode) {
       case ThemeMode.dark:
         newMode = ThemeMode.light;
@@ -92,4 +93,19 @@ final toggleThemeModeProvider = Provider<void Function()>((ref) {
     // Save the preference
     ref.read(saveThemeModeProvider)(newMode);
   };
-});
+}, name: 'toggleThemeMode');
+
+/// Direct method to set a specific theme
+final setThemeModeProvider = Provider<void Function(ThemeMode)>((ref) {
+  return (ThemeMode mode) {
+    if (kDebugMode) {
+      print('[setThemeModeProvider] Setting theme to: $mode');
+    }
+
+    // Update the theme mode provider
+    ref.read(themeModeProvider.notifier).state = mode;
+
+    // Save the preference
+    ref.read(saveThemeModeProvider)(mode);
+  };
+}, name: 'setThemeMode');

@@ -28,18 +28,18 @@ class MyApp extends ConsumerWidget {
     // Watch the theme mode provider
     final themeMode = ref.watch(themeModeProvider);
     
-    // Load saved theme preference when the app starts
+    // Load saved theme preference only on initial app start
+    bool initialThemeLoaded = false;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(loadThemeModeProvider).whenData((savedMode) {
-        if (savedMode != ref.read(themeModeProvider)) {
+      if (!initialThemeLoaded) {
+        ref.read(loadThemeModeProvider).whenData((savedMode) {
           if (kDebugMode) {
-            print(
-              '[MyApp] Updating theme mode to saved preference: $savedMode',
-            );
+            print('[MyApp] Loading initial theme preference: $savedMode');
           }
           ref.read(themeModeProvider.notifier).state = savedMode;
-        }
-      });
+          initialThemeLoaded = true;
+        });
+      }
     });
 
     // Configure keyboard settings for macOS to avoid key event issues
@@ -78,7 +78,7 @@ class MyApp extends ConsumerWidget {
       onTap: () {
         // Unfocus when tapping outside of a text field
         FocusManager.instance.primaryFocus?.unfocus();
-        ref.read(toggleThemeModeProvider)();
+        // Don't toggle theme on general taps
       },
       child: MaterialApp(
         title: 'Flutter Memos',
@@ -101,38 +101,51 @@ class MyApp extends ConsumerWidget {
         darkTheme: ThemeData(
           brightness: Brightness.dark,
           colorScheme: const ColorScheme.dark(
-            primary: Color(0xFFDC4C3E),
-            secondary: Color(0xFFDC4C3E),
+            primary: Color(0xFFFF6B58), // Brighter primary color
+            secondary: Color(0xFFFF8A7A), // Brighter secondary
             surface: Color(0xFF282828),
-            onSurface: Color(0xFFE0E0E0),
+            onSurface: Color(0xFFF0F0F0), // Brighter text on background
+            error: Color(0xFFFF5252), // Error color
           ),
-          scaffoldBackgroundColor: const Color(0xFF1E1E1E),
-          cardColor: const Color(0xFF282828),
-          canvasColor: const Color(0xFF282828),
+          scaffoldBackgroundColor: const Color(0xFF1A1A1A), // Darker scaffold
+          cardColor: const Color(0xFF2C2C2C), // Slightly lighter card
+          canvasColor: const Color(0xFF2C2C2C),
           appBarTheme: const AppBarTheme(
-            backgroundColor: Color(0xFF262626),
-            foregroundColor: Color(0xFFDC4C3E),
+            backgroundColor: Color(0xFF252525), // Darker app bar
+            foregroundColor: Color(0xFFFF6B58), // Brighter text/icons
             elevation: 0,
-            iconTheme: IconThemeData(color: Color(0xFFDC4C3E)),
+            iconTheme: IconThemeData(color: Color(0xFFFF6B58)),
           ),
           dividerColor: const Color(0xFF404040),
           textTheme: const TextTheme(
-            bodyLarge: TextStyle(color: Color(0xFFE0E0E0)),
-            bodyMedium: TextStyle(color: Color(0xFFE0E0E0)),
-            bodySmall: TextStyle(color: Color(0xFFBDBDBD)),
-            titleLarge: TextStyle(color: Color(0xFFE0E0E0)),
-            titleMedium: TextStyle(color: Color(0xFFE0E0E0)),
-            titleSmall: TextStyle(color: Color(0xFFE0E0E0)),
+            bodyLarge: TextStyle(color: Color(0xFFF0F0F0)),
+            bodyMedium: TextStyle(color: Color(0xFFF0F0F0)),
+            bodySmall: TextStyle(color: Color(0xFFD0D0D0)),
+            titleLarge: TextStyle(color: Color(0xFFF0F0F0)),
+            titleMedium: TextStyle(color: Color(0xFFF0F0F0)),
+            titleSmall: TextStyle(color: Color(0xFFF0F0F0)),
           ),
           chipTheme: const ChipThemeData(
-            backgroundColor: Color(0xFF323232),
+            backgroundColor: Color(0xFF383838),
             disabledColor: Color(0xFF323232),
-            selectedColor: Color(0xFF404040),
-            secondarySelectedColor: Color(0xFF505050),
+            selectedColor: Color(0xFF505050),
+            secondarySelectedColor: Color(0xFF606060),
             padding: EdgeInsets.all(4),
-            labelStyle: TextStyle(color: Color(0xFFE0E0E0)),
-            secondaryLabelStyle: TextStyle(color: Color(0xFFE0E0E0)),
+            labelStyle: TextStyle(color: Color(0xFFF0F0F0)),
+            secondaryLabelStyle: TextStyle(color: Color(0xFFF0F0F0)),
             brightness: Brightness.dark,
+          ),
+          // Ensure better visibility for widgets like TextFields, Buttons, etc.
+          inputDecorationTheme: const InputDecorationTheme(
+            fillColor: Color(0xFF353535),
+            filled: true,
+            border: OutlineInputBorder(
+              borderSide: BorderSide(color: Color(0xFF505050)),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderSide: BorderSide(color: Color(0xFFFF6B58), width: 2),
+            ),
+            labelStyle: TextStyle(color: Color(0xFFD0D0D0)),
           ),
           useMaterial3: true,
         ),
@@ -181,15 +194,53 @@ class HomeScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Flutter Memos'),
         actions: [
-          // Theme toggle button
-          IconButton(
+          // Theme toggle button with dropdown
+          PopupMenuButton<ThemeMode>(
+            tooltip: 'Select theme',
             icon: Icon(
-              themeMode == ThemeMode.dark ? Icons.light_mode : Icons.dark_mode,
+              themeMode == ThemeMode.dark
+                  ? Icons.dark_mode
+                  : themeMode == ThemeMode.light
+                  ? Icons.light_mode
+                  : Icons.brightness_auto,
             ),
-            onPressed: () {
-              ref.read(toggleThemeModeProvider)();
+            onSelected: (ThemeMode selectedMode) {
+              ref.read(themeModeProvider.notifier).state = selectedMode;
+              ref.read(saveThemeModeProvider)(selectedMode);
             },
-            tooltip: 'Toggle theme',
+            itemBuilder:
+                (BuildContext context) => <PopupMenuEntry<ThemeMode>>[
+                  const PopupMenuItem<ThemeMode>(
+                    value: ThemeMode.light,
+                    child: Row(
+                      children: [
+                        Icon(Icons.light_mode, size: 18),
+                        SizedBox(width: 8),
+                        Text('Light Mode'),
+                      ],
+                    ),
+                  ),
+                  const PopupMenuItem<ThemeMode>(
+                    value: ThemeMode.dark,
+                    child: Row(
+                      children: [
+                        Icon(Icons.dark_mode, size: 18),
+                        SizedBox(width: 8),
+                        Text('Dark Mode'),
+                      ],
+                    ),
+                  ),
+                  const PopupMenuItem<ThemeMode>(
+                    value: ThemeMode.system,
+                    child: Row(
+                      children: [
+                        Icon(Icons.brightness_auto, size: 18),
+                        SizedBox(width: 8),
+                        Text('System Default'),
+                      ],
+                    ),
+                  ),
+                ],
           ),
         ],
       ),
