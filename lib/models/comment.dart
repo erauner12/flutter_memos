@@ -1,54 +1,71 @@
+/// Model class for memo comments
 class Comment {
   final String id;
   final String content;
-  final int? createTime;
   final String? creatorId;
-
+  final int createTime;
+  final int? updateTime;
+  
   Comment({
     required this.id,
     required this.content,
-    this.createTime,
     this.creatorId,
+    required this.createTime,
+    this.updateTime,
   });
-
-  factory Comment.fromJson(Map<String, dynamic> json) {
-    String id = '';
-    if (json['id'] != null) {
-      id = json['id'];
-    } else if (json['name'] != null) {
-      final idMatch = RegExp(r'comments\/(\d+)$').firstMatch(json['name']);
-      id = idMatch != null ? idMatch.group(1)! : json['name'];
-    }
-
-    int? timestamp;
-    if (json['createTime'] != null) {
-      if (json['createTime'] is int) {
-        timestamp = json['createTime'];
-      } else if (json['createTime'] is String) {
-        timestamp = DateTime.parse(json['createTime']).millisecondsSinceEpoch;
-      }
-    }
-
-    String? creator;
-    if (json['creatorId'] != null) {
-      creator = json['creatorId'].toString();
-    } else if (json['creator'] != null) {
-      final creatorMatch = RegExp(r'users\/(\d+)').firstMatch(json['creator']);
-      creator = creatorMatch != null ? creatorMatch.group(1) : json['creator'];
-    }
-
+  
+  /// Create a copy of this comment with some fields replaced
+  Comment copyWith({String? content, int? updateTime}) {
     return Comment(
       id: id,
-      content: json['content'] ?? '',
-      createTime: timestamp,
-      creatorId: creator,
+      content: content ?? this.content,
+      creatorId: creatorId,
+      createTime: createTime,
+      updateTime: updateTime ?? this.updateTime,
     );
   }
-
+  
+  /// Convert from JSON representation
+  factory Comment.fromJson(Map<String, dynamic> json) {
+    return Comment(
+      id: json['id'] as String,
+      content: json['content'] as String,
+      creatorId: json['creatorId'] as String?,
+      createTime: json['createTime'] as int,
+      updateTime: json['updateTime'] as int?,
+    );
+  }
+  
+  /// Convert to JSON representation
   Map<String, dynamic> toJson() {
     return {
+      'id': id,
       'content': content,
-      'creator': creatorId != null ? 'users/$creatorId' : 'users/1',
+      if (creatorId != null) 'creatorId': creatorId,
+      'createTime': createTime,
+      if (updateTime != null) 'updateTime': updateTime,
     };
+  }
+  
+  @override
+  String toString() {
+    return 'Comment(id: $id, content: ${content.substring(0, content.length > 20 ? 20 : content.length)}...)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+
+    return other is Comment &&
+        other.id == id &&
+        other.content == content &&
+        other.creatorId == creatorId &&
+        other.createTime == createTime &&
+        other.updateTime == updateTime;
+  }
+
+  @override
+  int get hashCode {
+    return Object.hash(id, content, creatorId, createTime, updateTime);
   }
 }

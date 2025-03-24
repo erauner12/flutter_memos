@@ -110,4 +110,5 @@ class Memo {
   }
 }
 
-enum MemoState { normal, archived }
+/// Enum for memo states
+enum MemoState { normal, archived, deleted }
