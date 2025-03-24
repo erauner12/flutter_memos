@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_memos/providers/theme_provider.dart';
 import 'package:flutter_memos/screens/chat_screen.dart';
 import 'package:flutter_memos/screens/codegen_test_screen.dart';
 import 'package:flutter_memos/screens/edit_memo_screen.dart';
@@ -19,11 +20,23 @@ void main() {
   ));
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends ConsumerWidget {
   const MyApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Watch the theme mode provider
+    final themeMode = ref.watch(themeModeProvider);
+
+    // Load saved theme preference when the app starts
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(loadThemeModeProvider).whenData((savedMode) {
+        if (savedMode != ref.read(themeModeProvider)) {
+          ref.read(themeModeProvider.notifier).state = savedMode;
+        }
+      });
+    });
+    
     // Configure keyboard settings for macOS to avoid key event issues
     if (Theme.of(context).platform == TargetPlatform.macOS) {
       // Create a set to track pressed keys
@@ -60,6 +73,7 @@ class MyApp extends StatelessWidget {
       child: MaterialApp(
       title: 'Flutter Memos',
       debugShowCheckedModeBanner: false,
+        // Light theme configuration
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
           seedColor: const Color(0xFFDC4C3E),
@@ -73,6 +87,24 @@ class MyApp extends StatelessWidget {
         scaffoldBackgroundColor: const Color(0xFFF8F8F8),
         useMaterial3: true,
       ),
+        // Dark theme configuration
+        darkTheme: ThemeData(
+          colorScheme: ColorScheme.fromSeed(
+            seedColor: const Color(0xFFDC4C3E),
+            primary: const Color(0xFFDC4C3E),
+            brightness: Brightness.dark,
+          ),
+          appBarTheme: AppBarTheme(
+            backgroundColor: Colors.grey[900],
+            foregroundColor: const Color(0xFFDC4C3E),
+            elevation: 0,
+          ),
+          scaffoldBackgroundColor: const Color(0xFF121212),
+          cardColor: const Color(0xFF1E1E1E),
+          dividerColor: Colors.grey[800],
+          useMaterial3: true,
+        ),
+        themeMode: themeMode, // Use the theme mode from the provider
       initialRoute: '/',
       routes: {
         '/': (context) => const HomeScreen(),
@@ -112,9 +144,23 @@ class HomeScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final themeMode = ref.watch(themeModeProvider);
+    
     return Scaffold(
       appBar: AppBar(
         title: const Text('Flutter Memos'),
+        actions: [
+          // Theme toggle button
+          IconButton(
+            icon: Icon(
+              themeMode == ThemeMode.dark ? Icons.light_mode : Icons.dark_mode,
+            ),
+            onPressed: () {
+              ref.read(toggleThemeModeProvider)();
+            },
+            tooltip: 'Toggle theme',
+          ),
+        ],
       ),
       body: Column(
         children: [
@@ -195,7 +241,6 @@ class HomeScreen extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(height: 10),
-
               ],
             ),
           ),

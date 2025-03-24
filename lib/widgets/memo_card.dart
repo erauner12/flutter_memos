@@ -34,6 +34,8 @@ class MemoCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    
     return Card(
       elevation: 1,
       margin: const EdgeInsets.only(bottom: 6),
@@ -51,9 +53,9 @@ class MemoCard extends StatelessWidget {
             children: [
               Text(
                 content,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 16,
-                  color: Color(0xFF333333),
+                  color: isDarkMode ? Colors.white : const Color(0xFF333333),
                 ),
                 maxLines: 5,
                 overflow: TextOverflow.ellipsis,
@@ -65,7 +67,8 @@ class MemoCard extends StatelessWidget {
                     'Pinned',
                     style: TextStyle(
                       fontSize: 13,
-                      color: Colors.green[700],
+                      color:
+                          isDarkMode ? Colors.greenAccent : Colors.green[700],
                     ),
                   ),
                 ),
@@ -80,14 +83,15 @@ class MemoCard extends StatelessWidget {
                             ? Icons.update
                             : Icons.calendar_today,
                         size: 12,
-                        color: Colors.grey[700],
+                        color: isDarkMode ? Colors.grey[400] : Colors.grey[700],
                       ),
                       const SizedBox(width: 4),
                       Text(
                         '$timestampType: $highlightTimestamp',
                         style: TextStyle(
                           fontSize: 11,
-                          color: Colors.grey[800],
+                          color:
+                              isDarkMode ? Colors.grey[400] : Colors.grey[800],
                           fontWeight: FontWeight.w500,
                         ),
                       ),
@@ -107,7 +111,10 @@ class MemoCard extends StatelessWidget {
                           'Created: ${_formatDateTime(createdAt!)}',
                           style: TextStyle(
                             fontSize: 11,
-                            color: Colors.grey[600],
+                            color:
+                                isDarkMode
+                                    ? Colors.grey[400]
+                                    : Colors.grey[600],
                           ),
                         ),
                       if (updatedAt != null)
@@ -115,7 +122,10 @@ class MemoCard extends StatelessWidget {
                           'Updated: ${_formatDateTime(updatedAt!)}',
                           style: TextStyle(
                             fontSize: 11,
-                            color: Colors.grey[600],
+                            color:
+                                isDarkMode
+                                    ? Colors.grey[400]
+                                    : Colors.grey[600],
                           ),
                         ),
                     ],
