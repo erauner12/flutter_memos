@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_memos/screens/chat_screen.dart';
-import 'package:flutter_memos/screens/codegen_example_screen.dart';
 import 'package:flutter_memos/screens/codegen_test_screen.dart';
 import 'package:flutter_memos/screens/edit_memo_screen.dart';
 import 'package:flutter_memos/screens/filter_demo_screen.dart';
@@ -84,7 +83,6 @@ class MyApp extends StatelessWidget {
           '/filter-demo': (context) => const FilterDemoScreen(),
           '/riverpod-demo': (context) => const RiverpodDemoScreen(),
           '/codegen-test': (context) => const CodegenTestScreen(),
-          '/codegen-example': (context) => const CodegenExampleScreen(),
       },
       onGenerateRoute: (settings) {
         if (settings.name == '/memo-detail') {
@@ -197,19 +195,7 @@ class HomeScreen extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(height: 10),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF009688),
-                      foregroundColor: Colors.white,
-                    ),
-                    onPressed: () {
-                      Navigator.pushNamed(context, '/codegen-example');
-                    },
-                    child: const Text('Riverpod Codegen Example'),
-                  ),
-                ),
+
               ],
             ),
           ),
