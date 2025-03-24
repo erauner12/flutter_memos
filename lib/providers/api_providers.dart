@@ -28,6 +28,10 @@ final apiServiceProvider = Provider<ApiService>((ref) {
   ApiService.verboseLogging = config['verboseLogging'] ?? true;
   ApiService.useFilterExpressions = config['useFilterExpressions'] ?? true;
   
+  if (kDebugMode) {
+    print('[apiServiceProvider] Configuring API service with URL: ${serverConfig.serverUrl}');
+  }
+  
   // Apply server configuration from serverConfigProvider
   apiService.configureService(
     baseUrl: serverConfig.serverUrl,

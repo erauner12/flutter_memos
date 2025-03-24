@@ -9,8 +9,8 @@ class ApiService {
   static final ApiService _instance = ApiService._internal();
   factory ApiService() => _instance;
   
-  late final MemoServiceApi _memoApi;
-  late final ApiClient _apiClient;
+  late MemoServiceApi _memoApi;
+  late ApiClient _apiClient;
   
   // New fields for server configuration
   String _baseUrl = '';
@@ -45,55 +45,79 @@ class ApiService {
   void configureService({required String baseUrl, required String authToken}) {
     if (_baseUrl == baseUrl && _authToken == authToken) {
       // No change in configuration, skip re-initialization
+      if (verboseLogging) {
+        print('[API] Configuration unchanged, skipping re-initialization');
+      }
       return;
+    }
+
+    if (verboseLogging) {
+      print(
+        '[API] Updating configuration to: $baseUrl with ${authToken.isNotEmpty ? "token" : "no token"}',
+      );
     }
 
     _baseUrl = baseUrl;
     _authToken = authToken;
 
-    // Re-initialize the client with new configuration
-    _initializeClient(baseUrl, authToken);
+    try {
+      // Re-initialize the client with new configuration
+      _initializeClient(baseUrl, authToken);
+    } catch (e) {
+      print('[API] Error during re-initialization: $e');
+      // Re-throw to ensure caller is aware of the error
+      rethrow;
+    }
   }
 
   /// Initialize the API client with the given base URL and auth token
   void _initializeClient(String baseUrl, String authToken) {
-    if (baseUrl.isEmpty) {
-      // Fallback to environment default
-      baseUrl = Env.apiBaseUrl;
-    }
-
-    // Clean up the base URL
-    if (baseUrl.toLowerCase().contains('/api/v1')) {
-      final apiIndex = baseUrl.toLowerCase().indexOf('/api/v1');
-      baseUrl = baseUrl.substring(0, apiIndex);
-      if (verboseLogging) {
-        print('[API] Extracted base URL: $baseUrl');
+    try {
+      if (baseUrl.isEmpty) {
+        // Fallback to environment default
+        baseUrl = Env.apiBaseUrl;
       }
-    } else if (baseUrl.toLowerCase().endsWith('/memos')) {
-      baseUrl = baseUrl.substring(0, baseUrl.length - 6);
-      if (verboseLogging) {
-        print('[API] Removed "/memos" suffix from base URL');
+
+      // Clean up the base URL
+      if (baseUrl.toLowerCase().contains('/api/v1')) {
+        final apiIndex = baseUrl.toLowerCase().indexOf('/api/v1');
+        baseUrl = baseUrl.substring(0, apiIndex);
+        if (verboseLogging) {
+          print('[API] Extracted base URL: $baseUrl');
+        }
+      } else if (baseUrl.toLowerCase().endsWith('/memos')) {
+        baseUrl = baseUrl.substring(0, baseUrl.length - 6);
+        if (verboseLogging) {
+          print('[API] Removed "/memos" suffix from base URL');
+        }
       }
-    }
-    
-    if (baseUrl.endsWith('/')) {
-      baseUrl = baseUrl.substring(0, baseUrl.length - 1);
-    }
-    
-    if (verboseLogging) {
-      print('[API] Using base path: $baseUrl');
-    }
 
-    // Use provided auth token or fallback to environment
-    final token = authToken.isNotEmpty ? authToken : Env.memosApiKey;
+      if (baseUrl.endsWith('/')) {
+        baseUrl = baseUrl.substring(0, baseUrl.length - 1);
+      }
 
-    // Initialize the API client and authentication
-    _apiClient = ApiClient(
-      basePath: baseUrl,
-      authentication: HttpBearerAuth()..accessToken = token,
-    );
-    
-    _memoApi = MemoServiceApi(_apiClient);
+      if (verboseLogging) {
+        print('[API] Using base path: $baseUrl');
+      }
+
+      // Use provided auth token or fallback to environment
+      final token = authToken.isNotEmpty ? authToken : Env.memosApiKey;
+
+      // Initialize the API client and authentication
+      _apiClient = ApiClient(
+        basePath: baseUrl,
+        authentication: HttpBearerAuth()..accessToken = token,
+      );
+
+      _memoApi = MemoServiceApi(_apiClient);
+      
+      if (verboseLogging) {
+        print('[API] Successfully initialized client with base URL: $baseUrl');
+      }
+    } catch (e) {
+      print('[API] Error initializing client: $e');
+      throw Exception('Failed to initialize API client: $e');
+    }
   }
 
   // MEMO OPERATIONS
