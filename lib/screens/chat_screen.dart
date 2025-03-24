@@ -4,7 +4,7 @@ import 'package:flutter_memos/models/message.dart';
 import 'package:flutter_memos/services/assistant_service.dart';
 
 class ChatScreen extends StatefulWidget {
-  const ChatScreen({Key? key}) : super(key: key);
+  const ChatScreen({super.key});
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();

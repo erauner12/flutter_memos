@@ -4,7 +4,7 @@ import 'package:flutter_memos/utils/env.dart';
 import 'package:flutter_memos/widgets/mcp_demo_widget.dart';
 
 class McpScreen extends StatefulWidget {
-  const McpScreen({Key? key}) : super(key: key);
+  const McpScreen({super.key});
 
   @override
   State<McpScreen> createState() => _McpScreenState();

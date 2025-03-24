@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_memos/services/mcp_service.dart';
 
 class McpDemoWidget extends StatefulWidget {
-  const McpDemoWidget({Key? key}) : super(key: key);
+  const McpDemoWidget({super.key});
 
   @override
   State<McpDemoWidget> createState() => _McpDemoWidgetState();
