@@ -10,9 +10,8 @@
 include: package:flutter_lints/flutter.yaml
 
 analyzer:
-  # Temporarily disable custom_lint
-  # plugins:
-  #   - custom_lint
+  plugins:
+    - custom_lint
 
 linter:
   # The lint rules applied to this project can be customized in the
@@ -34,16 +33,12 @@ linter:
     use_build_context_synchronously: true
     prefer_const_constructors: true
 
-# Temporarily disable custom_lint
-# custom_lint:
-#   rules:
-#     # Riverpod lint rules
-#     - riverpod_generator_hooked_widget_constructor
-#     - riverpod_generator_hookwidget_constructor
-#     - riverpod_generator_provider_name
-#     - riverpod_avoid_ref_read
-#     - riverpod_async_notifier_provider_snippet
-#     - riverpod_notifier_provider_snippet
+custom_lint:
+  rules:
+    # Riverpod lint rules (removed code generation specific rules)
+    - riverpod_avoid_ref_read
+    - riverpod_async_notifier_provider_snippet
+    - riverpod_notifier_provider_snippet
 
 # Additional information about this file can be found at
 # https://dart.dev/guides/language/analysis-options

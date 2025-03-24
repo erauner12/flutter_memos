@@ -1,11 +1,7 @@
 targets:
   $default:
     builders:
-      # Configure Riverpod generator
-      riverpod_generator:
-        enabled: true
-        
-      # Configure other generators
+      # Configure generators
       openapi_generator:
         options:
           input: api/openapi.yaml

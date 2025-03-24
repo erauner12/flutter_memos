@@ -36,6 +36,11 @@ dev_dependencies:
   retrofit_generator: ^9.1.9
   built_value_generator: ^8.6.1
   mockito: ^5.4.4
+  custom_lint: ^0.5.7
+  riverpod_lint: ^2.3.7
+  # Code generation temporarily disabled
+  # riverpod_generator: ^2.3.9
+  # riverpod_annotation: ^2.3.3
 
 flutter:
   uses-material-design: true
