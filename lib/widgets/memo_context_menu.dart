@@ -97,6 +97,7 @@ class MemoContextMenu extends StatelessWidget {
             // Scrollable content area
             Flexible(
               child: SingleChildScrollView(
+                key: const Key('memo_context_menu_scroll'),
                 controller: scrollController,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -121,6 +122,7 @@ class MemoContextMenu extends StatelessWidget {
                       isDarkMode: isDarkMode,
                     ),
                     _buildMenuItem(
+                      key: const Key('archive_menu_item'),  // Key for testing
                       icon: Icons.archive_outlined,
                       label: 'Archive',
                       onTap: onArchive,
@@ -168,6 +170,7 @@ class MemoContextMenu extends StatelessWidget {
   }
 
   Widget _buildMenuItem({
+    Key? key,
     required IconData icon,
     required String label,
     required bool isDarkMode,
@@ -175,6 +178,7 @@ class MemoContextMenu extends StatelessWidget {
     Color? color,
   }) {
     return InkWell(
+      key: key,
       onTap: onTap,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
