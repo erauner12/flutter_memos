@@ -163,8 +163,8 @@ install-dmg-locally: make-dmg
 	$(eval HDI_OUTPUT := $(shell hdiutil attach "$(HOME)/Documents/flutter_memos_release/flutter_memos.dmg" | tee /dev/stderr))
 
 	@echo "Searching for the mount point in the hdiutil output..."
-	# This extracts the mount point path (/Volumes/xxx) by looking for Apple_HFS
-	$(eval MOUNT_PATH := $(shell echo "$(HDI_OUTPUT)" | grep "Apple_HFS" | awk '{print $$3}'))
+	# Extract the mount point path (/Volumes/xxx) - use the last field from the line with Apple_HFS
+	$(eval MOUNT_PATH := $(shell echo "$(HDI_OUTPUT)" | grep -E "Apple_HFS" | awk '{print $$NF}'))
 	@if [ -z "$(MOUNT_PATH)" ]; then \
 		echo "ERROR: Could not find mount point in hdiutil output."; \
 		echo "Full output:"; \
@@ -192,8 +192,8 @@ install-dmg-from:
 	$(eval HDI_OUTPUT := $(shell hdiutil attach "$(DMG_PATH)" | tee /dev/stderr))
 	
 	@echo "Parsing hdiutil output for mount path..."
-	# This extracts the mount point path (/Volumes/xxx) by looking for Apple_HFS
-	$(eval MOUNT_PATH := $(shell echo "$(HDI_OUTPUT)" | grep "Apple_HFS" | awk '{print $$3}'))
+	# Extract the mount point path (/Volumes/xxx) - use the last field from the line with Apple_HFS
+	$(eval MOUNT_PATH := $(shell echo "$(HDI_OUTPUT)" | grep -E "Apple_HFS" | awk '{print $$NF}'))
 	@if [ -z "$(MOUNT_PATH)" ]; then \
 		echo "ERROR: Could not find mount point in hdiutil output."; \
 		echo "Full output:"; \
