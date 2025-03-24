@@ -252,27 +252,113 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
             const SizedBox(height: 32),
             
-            // Save button
-            SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Theme.of(context).colorScheme.primary,
-                  foregroundColor: Colors.white,
+            // Save and Test buttons container
+            Row(
+              children: [
+                Expanded(
+                  child: SizedBox(
+                    height: 50,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Theme.of(context).colorScheme.primary,
+                        foregroundColor: Colors.white,
+                      ),
+                      onPressed:
+                          _hasChanges && !_isLoading
+                              ? _saveConfiguration
+                              : null,
+                      child:
+                          _isLoading
+                              ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                              : const Text('Save Changes'),
+                    ),
+                  ),
                 ),
-                onPressed: _hasChanges && !_isLoading ? _saveConfiguration : null,
-                child: _isLoading
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
-                    : const Text('Save Changes'),
-              ),
+                const SizedBox(width: 8),
+                ElevatedButton.icon(
+                  icon: const Icon(Icons.link),
+                  label: const Text('Test'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.deepPurple,
+                    foregroundColor: Colors.white,
+                    minimumSize: const Size(90, 50),
+                  ),
+                  onPressed: () async {
+                    // We’ll force-save first if there are unsaved changes
+                    if (_hasChanges &&
+                        !_isLoading &&
+                        _formKey.currentState!.validate()) {
+                      setState(() => _isLoading = true);
+                      final serverUrl = _serverUrlController.text.trim();
+                      final authToken = _authTokenController.text.trim();
+                      final newConfig = ServerConfig(
+                        serverUrl: serverUrl,
+                        authToken: authToken,
+                      );
+
+                      final success = await ref
+                          .read(serverConfigProvider.notifier)
+                          .saveToPreferences(newConfig);
+
+                      if (!success && mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Failed to save settings'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                        setState(() => _isLoading = false);
+                        return;
+                      }
+                      ref.invalidate(apiServiceProvider); // Re-init the service
+                      setState(() {
+                        _hasChanges = false;
+                        _initialConfig = newConfig;
+                        _isLoading = false;
+                      });
+                    }
+
+                    // Now test the connection
+                    // For example, call listMemos or any health-check endpoint
+                    final apiService = ref.read(apiServiceProvider);
+                    try {
+                      setState(() => _isLoading = true);
+                      final testMemos = await apiService.listMemos(
+                        parent: 'users/1',
+                        sort: 'createTime',
+                        direction: 'DESC',
+                      );
+                      if (mounted) {
+                        setState(() => _isLoading = false);
+                        final count = testMemos.length;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Success! Found $count memos.'),
+                            backgroundColor: Colors.green,
+                          ),
+                        );
+                      }
+                    } catch (e) {
+                      if (mounted) {
+                        setState(() => _isLoading = false);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Error testing connection: $e'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                      }
+                    }
+                  },
+                ),
+              ],
             ),
           ],
         ),
