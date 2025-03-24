@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  memos:
+    # Use a pinned Memos version, e.g. 0.24.0. Update as needed.
+    image: neosmemo/memos:0.24.0
+    container_name: memos-server
+    environment:
+      MEMOS_MODE: 'prod'
+      MEMOS_PORT: '5230'
+      TZ: 'UTC'
+    volumes:
+      # Map the local memos-data directory to persist your Memos data
+      - ./memos-data:/var/opt/memos
+    ports:
+      # Expose port 5230 on localhost
+      - '5230:5230'
+    restart: unless-stopped
