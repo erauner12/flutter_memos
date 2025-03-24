@@ -28,14 +28,29 @@ class _MemosScreenState extends ConsumerState<MemosScreen> {
   void _toggleHideMemo(String memoId) {
     final hiddenMemoIds = ref.read(hiddenMemoIdsProvider);
     if (hiddenMemoIds.contains(memoId)) {
+      // Unhide memo
       ref
           .read(hiddenMemoIdsProvider.notifier)
           .update((state) => state..remove(memoId));
     } else {
+      // Hide memo
       ref
           .read(hiddenMemoIdsProvider.notifier)
           .update((state) => state..add(memoId));
+      
+      // Show a confirmation that the memo was hidden
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Memo hidden'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
     }
+
+    // Force UI refresh to update visibility
+    ref.invalidate(memosProvider);
   }
 
   void _showAllMemos() {
