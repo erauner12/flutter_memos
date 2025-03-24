@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter_memos/providers/server_config_provider.dart';
 import 'package:flutter_memos/services/api_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -18,6 +19,7 @@ final apiConfigProvider = StateProvider<Map<String, dynamic>>((ref) {
 final apiServiceProvider = Provider<ApiService>((ref) {
   // Listen for configuration changes
   final config = ref.watch(apiConfigProvider);
+  final serverConfig = ref.watch(serverConfigProvider);
 
   // Create the API service
   final apiService = ApiService();
@@ -26,11 +28,15 @@ final apiServiceProvider = Provider<ApiService>((ref) {
   ApiService.verboseLogging = config['verboseLogging'] ?? true;
   ApiService.useFilterExpressions = config['useFilterExpressions'] ?? true;
   
-  // Note: CLIENT_SIDE_SORTING_ENABLED is a const and always enabled by default
-  // We don't need to configure it as we always want client-side sorting
-
+  // Apply server configuration from serverConfigProvider
+  apiService.configureService(
+    baseUrl: serverConfig.serverUrl,
+    authToken: serverConfig.authToken,
+  );
+  
   if (kDebugMode) {
     print('[apiServiceProvider] Created API service with config: $config');
+    print('[apiServiceProvider] Using server: ${serverConfig.serverUrl}');
   }
 
   // OPTIMIZATION: Add cleanup when this provider is disposed

@@ -11,6 +11,10 @@ class ApiService {
   
   late final MemoServiceApi _memoApi;
   late final ApiClient _apiClient;
+  
+  // New fields for server configuration
+  String _baseUrl = '';
+  String _authToken = '';
 
   // Configuration flags
   static const bool CLIENT_SIDE_SORTING_ENABLED = true; // Always use client-side sorting
@@ -33,29 +37,60 @@ class ApiService {
   """;
 
   ApiService._internal() {
-    // Set up the base path correctly (without /api/v1 which is added by the generated client)
-    String basePath = Env.apiBaseUrl;
-    
-    // Remove any API paths from the base URL to avoid duplication
-    if (basePath.toLowerCase().contains('/api/v1')) {
-      final apiIndex = basePath.toLowerCase().indexOf('/api/v1');
-      basePath = basePath.substring(0, apiIndex);
-      print('[API] Extracted base URL: $basePath');
-    } else if (basePath.toLowerCase().endsWith('/memos')) {
-      basePath = basePath.substring(0, basePath.length - 6);
-      print('[API] Removed "/memos" suffix from base URL');
+    // Default initialization will be replaced by configureService
+    _initializeClient('', '');
+  }
+
+  /// Configure the service with custom server URL and auth token
+  void configureService({required String baseUrl, required String authToken}) {
+    if (_baseUrl == baseUrl && _authToken == authToken) {
+      // No change in configuration, skip re-initialization
+      return;
+    }
+
+    _baseUrl = baseUrl;
+    _authToken = authToken;
+
+    // Re-initialize the client with new configuration
+    _initializeClient(baseUrl, authToken);
+  }
+
+  /// Initialize the API client with the given base URL and auth token
+  void _initializeClient(String baseUrl, String authToken) {
+    if (baseUrl.isEmpty) {
+      // Fallback to environment default
+      baseUrl = Env.apiBaseUrl;
+    }
+
+    // Clean up the base URL
+    if (baseUrl.toLowerCase().contains('/api/v1')) {
+      final apiIndex = baseUrl.toLowerCase().indexOf('/api/v1');
+      baseUrl = baseUrl.substring(0, apiIndex);
+      if (verboseLogging) {
+        print('[API] Extracted base URL: $baseUrl');
+      }
+    } else if (baseUrl.toLowerCase().endsWith('/memos')) {
+      baseUrl = baseUrl.substring(0, baseUrl.length - 6);
+      if (verboseLogging) {
+        print('[API] Removed "/memos" suffix from base URL');
+      }
     }
     
-    if (basePath.endsWith('/')) {
-      basePath = basePath.substring(0, basePath.length - 1);
+    if (baseUrl.endsWith('/')) {
+      baseUrl = baseUrl.substring(0, baseUrl.length - 1);
     }
     
-    print('[API] Using base path: $basePath');
+    if (verboseLogging) {
+      print('[API] Using base path: $baseUrl');
+    }
+
+    // Use provided auth token or fallback to environment
+    final token = authToken.isNotEmpty ? authToken : Env.memosApiKey;
 
     // Initialize the API client and authentication
     _apiClient = ApiClient(
-      basePath: basePath,
-      authentication: HttpBearerAuth()..accessToken = Env.memosApiKey,
+      basePath: baseUrl,
+      authentication: HttpBearerAuth()..accessToken = token,
     );
     
     _memoApi = MemoServiceApi(_apiClient);
@@ -64,33 +99,19 @@ class ApiService {
   // MEMO OPERATIONS
 
   /// List memos with filtering and sorting
-  /// 
-  /// List memos with filtering and sorting
-  ///
-  /// Note: Although sort parameters are passed to the server, it doesn't fully
-  /// support dynamic sorting. Client-side sorting is always applied to ensure
-  /// consistent results.
-  ///
-  /// The server does support powerful filtering using CEL expressions which can be
-  /// used to filter memos by tags, visibility, content, and timestamps.
   Future<List<Memo>> listMemos({
     String? parent,
     String? filter,
     String state = '',
     String sort = 'updateTime',
     String direction = 'DESC',
-    // Optional list of tags to filter by
     List<String>? tags,
-    // Optional visibility to filter by
     dynamic visibility,
-    // Optional content search
     String? contentSearch,
-    // Optional time range for filtering
     DateTime? createdAfter,
     DateTime? createdBefore,
     DateTime? updatedAfter,
     DateTime? updatedBefore,
-    // Optional time expression (e.g., "today", "this week")
     String? timeExpression,
     bool useUpdateTimeForExpression = false,
   }) async {
@@ -189,7 +210,6 @@ class ApiService {
         response = await _memoApi.memoServiceListMemos2(
           parent,
           state: state.isNotEmpty ? state : null,
-          // We still pass sort parameters but don't rely on them
           sort: sort,
           direction: direction,
           filter: celFilter,
@@ -198,7 +218,6 @@ class ApiService {
         response = await _memoApi.memoServiceListMemos(
           parent: parent,
           state: state.isNotEmpty ? state : null,
-          // We still pass sort parameters but don't rely on them
           sort: sort, 
           direction: direction,
           filter: celFilter,
@@ -209,10 +228,8 @@ class ApiService {
         return [];
       }
 
-      // Convert API models to app models
       final memos = response.memos.map(_convertApiMemoToAppMemo).toList();
       
-      // Store the original server ordering for testing/debugging
       _lastServerOrder = memos.map((memo) => memo.id).toList();
       
       if (verboseLogging) {
@@ -224,16 +241,9 @@ class ApiService {
         }
       }
 
-      // IMPORTANT: Always apply client-side sorting
-      // This is because server-side sorting is unreliable
       if (CLIENT_SIDE_SORTING_ENABLED) {
-        // Save the pre-sorted state for diagnostics
         final preSortOrder = memos.map((memo) => memo.id).toList();
-
-        // Apply appropriate sorting based on the requested field
         MemoUtils.sortMemos(memos, sort);
-        
-        // Compare pre-sort and post-sort ordering for diagnostics
         final postSortOrder = memos.map((memo) => memo.id).toList();
         final orderingChanged = !_areListsEqual(preSortOrder, postSortOrder);
 
@@ -330,13 +340,11 @@ class ApiService {
       final formattedId = _formatResourceName(id, 'memos');
       print('[API] Deleting memo: $formattedId');
       
-      // Use the lower-level API with HttpInfo to handle response status codes directly
       final response = await _memoApi.memoServiceDeleteMemoWithHttpInfo(formattedId);
       
-      // Handle different status codes appropriately
       if (response.statusCode == 204 || response.statusCode == 200) {
         print('[API] Successfully deleted memo: $id');
-        return; // Success case
+        return;
       } else if (response.statusCode >= 400) {
         print('[API] Error deleting memo: HTTP ${response.statusCode}');
         throw Exception('Failed to delete memo: HTTP ${response.statusCode}');
@@ -403,7 +411,6 @@ class ApiService {
 
   /// HELPER METHODS
 
-  /// Convert camelCase to snake_case for API compatibility
   String _toSnakeCase(String camelCase) {
     return camelCase.replaceAllMapped(
       RegExp(r'([A-Z])'),
@@ -411,21 +418,16 @@ class ApiService {
     );
   }
 
-  /// Format a resource name to ensure it has the proper prefix
   String _formatResourceName(String id, String resourceType) {
     return id.startsWith('$resourceType/') ? id : '$resourceType/$id';
   }
   
-  /// Extract ID portion from a resource name
   String _extractIdFromName(String name) {
     if (name.isEmpty) return '';
-    
-    // For resources named like "users/123" or "memos/abc123"
     final parts = name.split('/');
     return parts.length > 1 ? parts[1] : name;
   }
   
-  /// Convert API memo model to app memo model
   Memo _convertApiMemoToAppMemo(Apiv1Memo apiMemo) {
     return Memo(
       id: _extractIdFromName(apiMemo.name ?? ''),
@@ -443,7 +445,6 @@ class ApiService {
     );
   }
   
-  /// Convert API state enum to app state enum
   MemoState _parseApiState(V1State? state) {
     if (state == null) return MemoState.normal;
     
@@ -456,7 +457,6 @@ class ApiService {
     }
   }
   
-  /// Convert app state enum to API state enum
   V1State _getApiState(MemoState state) {
     switch (state) {
       case MemoState.archived:
@@ -467,7 +467,6 @@ class ApiService {
     }
   }
   
-  /// Convert visibility string to API visibility enum
   V1Visibility _getApiVisibility(String visibility) {
     switch (visibility.toUpperCase()) {
       case 'PRIVATE':
@@ -480,7 +479,6 @@ class ApiService {
     }
   }
   
-  /// Parse comments from API response
   List<Comment> _parseCommentsFromApiResponse(
     V1ListMemoCommentsResponse response,
   ) {
@@ -499,7 +497,6 @@ class ApiService {
         .toList();
   }
 
-  /// Compare two lists for equality
   bool _areListsEqual(List<String> list1, List<String> list2) {
     if (list1.length != list2.length) return false;
     for (int i = 0; i < list1.length; i++) {

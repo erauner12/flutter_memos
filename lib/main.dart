@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_memos/providers/server_config_provider.dart';
 import 'package:flutter_memos/providers/theme_provider.dart';
 import 'package:flutter_memos/screens/chat_screen.dart';
 import 'package:flutter_memos/screens/codegen_test_screen.dart';
@@ -11,6 +12,7 @@ import 'package:flutter_memos/screens/memo_detail_screen.dart';
 import 'package:flutter_memos/screens/memos_screen.dart';
 import 'package:flutter_memos/screens/new_memo_screen.dart';
 import 'package:flutter_memos/screens/riverpod_demo_screen.dart';
+import 'package:flutter_memos/screens/settings_screen.dart';
 import 'package:flutter_memos/utils/provider_logger.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -29,14 +31,16 @@ class MyApp extends ConsumerStatefulWidget {
 
 class _MyAppState extends ConsumerState<MyApp> {
   bool _initialThemeLoaded = false;
+  bool _initialConfigLoaded = false;
 
   @override
   void initState() {
     super.initState();
     
-    // Load theme preference once in initState instead of every build
+    // Load theme and server config once in initState instead of every build
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadInitialTheme();
+      _loadServerConfig();
     });
   }
   
@@ -56,6 +60,26 @@ class _MyAppState extends ConsumerState<MyApp> {
           setState(() {
             _initialThemeLoaded = true;
           });
+        }
+      });
+    }
+  }
+  
+  void _loadServerConfig() {
+    if (!_initialConfigLoaded) {
+      if (kDebugMode) {
+        print('[MyApp] Loading server configuration');
+      }
+
+      final configLoader = ref.read(loadServerConfigProvider);
+      configLoader.whenData((_) {
+        if (mounted) {
+          setState(() {
+            _initialConfigLoaded = true;
+          });
+          if (kDebugMode) {
+            print('[MyApp] Server configuration loaded');
+          }
         }
       });
     }
@@ -188,6 +212,7 @@ class _MyAppState extends ConsumerState<MyApp> {
           '/filter-demo': (context) => const FilterDemoScreen(),
           '/riverpod-demo': (context) => const RiverpodDemoScreen(),
           '/codegen-test': (context) => const CodegenTestScreen(),
+          '/settings': (context) => const SettingsScreen(),
         },
         onGenerateRoute: (settings) {
           if (settings.name == '/memo-detail') {
@@ -222,8 +247,16 @@ class HomeScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Flutter Memos'),
         actions: [
+          // Settings button
+          IconButton(
+            icon: const Icon(Icons.settings),
+            tooltip: 'Settings',
+            onPressed: () {
+              Navigator.pushNamed(context, '/settings');
+            },
+          ),
           // Theme toggle button with dropdown
-          PopupMenuButton<ThemeMode>(
+          PopupMenuButton<Object>(
             tooltip: 'Select theme',
             icon: Icon(
               themeMode == ThemeMode.dark
@@ -232,30 +265,41 @@ class HomeScreen extends ConsumerWidget {
                       ? Icons.light_mode
                       : Icons.brightness_auto,
             ),
-            onSelected: (ThemeMode selectedMode) async {
-              if (kDebugMode) {
-                print('[HomeScreen] User selected theme: $selectedMode');
-              }
-              
-              // Set the theme mode first
-              ref.read(themeModeProvider.notifier).state = selectedMode;
-              
-              // Then save the preference
-              await ref.read(saveThemeModeProvider)(selectedMode);
-              
-              // Provide user feedback
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Theme set to ${selectedMode.toString().split('.').last}'),
-                    duration: const Duration(seconds: 1),
+            onSelected: (Object value) async {
+              if (value is ThemeMode) {
+                if (kDebugMode) {
+                  print('[HomeScreen] User selected theme: $value');
+                }
+
+                // Set the theme mode first
+                ref.read(themeModeProvider.notifier).state = value;
+
+                // Then save the preference
+                await ref.read(saveThemeModeProvider)(value);
+
+                // Provide user feedback
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        'Theme set to ${value.toString().split('.').last}',
+                      ),
+                      duration: const Duration(seconds: 1),
+                    ),
+                  );
+                }
+              } else if (value == 'settings') {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const SettingsScreen(),
                   ),
                 );
               }
             },
             itemBuilder:
-                (BuildContext context) => <PopupMenuEntry<ThemeMode>>[
-                  const PopupMenuItem<ThemeMode>(
+                (BuildContext context) => <PopupMenuEntry<Object>>[
+                  const PopupMenuItem<Object>(
                     value: ThemeMode.light,
                     child: Row(
                       children: [
@@ -265,7 +309,7 @@ class HomeScreen extends ConsumerWidget {
                       ],
                     ),
                   ),
-                  const PopupMenuItem<ThemeMode>(
+                  const PopupMenuItem<Object>(
                     value: ThemeMode.dark,
                     child: Row(
                       children: [
@@ -275,13 +319,23 @@ class HomeScreen extends ConsumerWidget {
                       ],
                     ),
                   ),
-                  const PopupMenuItem<ThemeMode>(
+                  const PopupMenuItem<Object>(
                     value: ThemeMode.system,
                     child: Row(
                       children: [
                         Icon(Icons.brightness_auto, size: 18),
                         SizedBox(width: 8),
                         Text('System Default'),
+                      ],
+                    ),
+                  ),
+                  const PopupMenuItem<Object>(
+                    value: 'settings',
+                    child: Row(
+                      children: [
+                        Icon(Icons.settings, size: 18),
+                        SizedBox(width: 8),
+                        Text('Settings'),
                       ],
                     ),
                   ),
