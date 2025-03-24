@@ -26,21 +26,20 @@ test-integration-ios:
 	@echo "Killing iOS simulator after tests..."
 	make kill-simulator
 
-# Replaces the Android target with an iPad integration test
 test-integration-ipad:
-	@echo "Opening iOS Simulator (iPad)..."
-	open -a Simulator
-
-	@echo "Waiting for iPad simulator to start..."
-	sleep 15
-
-	@echo "Running integration tests on 'iPad Pro (12.9-inch) (6th generation)'..."
+	@echo "Creating iPad Pro 11-inch simulator..."
+	@UDID=$$(xcrun simctl create "iPad Pro 11-inch" "com.apple.CoreSimulator.SimDeviceType.iPad-Pro-11-inch-M4-16GB" "com.apple.CoreSimulator.SimRuntime.iOS-18-3"); \
+	echo "Simulator created with UDID: $$UDID"; \
+	echo "Opening iOS Simulator (iPad Pro 11-inch) with UDID $$UDID..."; \
+	open -a Simulator --args -CurrentDeviceUDID $$UDID; \
+	echo "Waiting for iPad simulator to start..."; \
+	sleep 15; \
+	echo "Running integration tests on 'iPad Pro 11-inch'..."; \
 	flutter drive \
 		--driver=test_driver/integration_test_driver.dart \
 		--target=integration_test/memo_card_actions_test.dart \
-		-d "iPad Pro (12.9-inch) (6th generation)"
-
-	@echo "Killing iOS simulator after iPad tests..."
+		-d $$UDID; \
+	echo "Killing iOS simulator after iPad tests..."; \
 	make kill-simulator
 
 test-integration-web:
