@@ -152,7 +152,6 @@ make-dmg: release-macos
 	@echo "You can open or distribute this DMG. No automatic open performed."
 	create-dmg --hdiutil-verbose \
 		--volname "Flutter Memos Installer" \
-		--background "solid-white" \
 		--icon-size 160 \
 		--app-drop-link 300 200 \
 		--window-pos 100 100 \
