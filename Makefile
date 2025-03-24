@@ -125,11 +125,10 @@ install-macos: release-macos
 # to generate a DMG in build/macos/Build/Products/Release/installer.
 
 make-dmg: release-macos
-make-dmg: release-macos
 	@echo "Packaging flutter_memos.app into a DMG (no custom background, using $(HOME) instead of ~)"
 
 	# Attempt to detach leftover disk images for "Flutter Memos Installer" volume name
-	@hdiutil info | grep "Flutter Memos Installer" -B 1 | grep /dev/disk | awk '{print $1}' | xargs -I{} hdiutil detach -force {} 2>/dev/null || true
+	@hdiutil info | grep "Flutter Memos Installer" -B 1 | grep /dev/disk | awk '{print $$1}' | xargs -I{} hdiutil detach -force {} 2>/dev/null || true
 	# Short delay may reduce resource-busy issues
 	sleep 2
 
@@ -150,18 +149,6 @@ make-dmg: release-macos
 
 	@echo "DMG created at: $(HOME)/Documents/flutter_memos_release/flutter_memos.dmg"
 	@echo "You can open or distribute this DMG. No automatic open performed."
-	create-dmg --hdiutil-verbose \
-		--volname "Flutter Memos Installer" \
-		--icon-size 160 \
-		--app-drop-link 300 200 \
-		--window-pos 100 100 \
-		--window-size 600 400 \
-		--volicon "build/macos/Build/Products/Release/flutter_memos.app/Contents/Resources/AppIcon.icns" \
-		"~/Documents/flutter_memos_release/flutter_memos.dmg" \
-		"build/macos/Build/Products/Release/flutter_memos.app"
-
-	@echo "DMG created at: ~/Documents/flutter_memos_release/flutter_memos.dmg"
-	@echo "You can open or distribute this DMG to install the app. No automatic open performed."
 
 # Run all tests on macOS
 test-integration-all:
