@@ -126,112 +126,137 @@ class _MyAppState extends ConsumerState<MyApp> {
       print('[MyApp] Current theme mode: $themeMode');
     }
     
-    return GestureDetector(
-      onTap: () {
-        // Unfocus when tapping outside of a text field
-        FocusManager.instance.primaryFocus?.unfocus();
-        // Don't toggle theme on general taps
+    final configLoad = ref.watch(loadServerConfigProvider);
+
+    return configLoad.when(
+      loading: () {
+        // While loading config from SharedPreferences, show a splash or loading screen
+        return const MaterialApp(
+          debugShowCheckedModeBanner: false,
+          home: Scaffold(body: Center(child: CircularProgressIndicator())),
+        );
       },
-      child: MaterialApp(
-        title: 'Flutter Memos',
-        debugShowCheckedModeBanner: false,
-        // Light theme configuration
-        theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: const Color(0xFFDC4C3E),
-            primary: const Color(0xFFDC4C3E),
+      error: (err, stack) {
+        // If config fails to load, show an error or fallback
+        return MaterialApp(
+          debugShowCheckedModeBanner: false,
+          home: Scaffold(
+            body: Center(child: Text('Error loading config: $err')),
           ),
-          appBarTheme: const AppBarTheme(
-            backgroundColor: Colors.white,
-            foregroundColor: Color(0xFFDC4C3E),
-            elevation: 0,
-          ),
-          scaffoldBackgroundColor: const Color(0xFFF8F8F8),
-          useMaterial3: true,
-        ),
-        // Dark theme configuration
-        darkTheme: ThemeData(
-          brightness: Brightness.dark,
-          colorScheme: const ColorScheme.dark(
-            primary: Color(0xFFFF6B58), // Brighter primary color
-            secondary: Color(0xFFFF8A7A), // Brighter secondary
-            surface: Color(0xFF282828),
-            onSurface: Color(0xFFF0F0F0), // Brighter text on background
-            error: Color(0xFFFF5252), // Error color
-          ),
-          scaffoldBackgroundColor: const Color(0xFF1A1A1A), // Darker scaffold
-          cardColor: const Color(0xFF2C2C2C), // Slightly lighter card
-          canvasColor: const Color(0xFF2C2C2C),
-          appBarTheme: const AppBarTheme(
-            backgroundColor: Color(0xFF252525), // Darker app bar
-            foregroundColor: Color(0xFFFF6B58), // Brighter text/icons
-            elevation: 0,
-            iconTheme: IconThemeData(color: Color(0xFFFF6B58)),
-          ),
-          dividerColor: const Color(0xFF404040),
-          textTheme: const TextTheme(
-            bodyLarge: TextStyle(color: Color(0xFFF0F0F0)),
-            bodyMedium: TextStyle(color: Color(0xFFF0F0F0)),
-            bodySmall: TextStyle(color: Color(0xFFD0D0D0)),
-            titleLarge: TextStyle(color: Color(0xFFF0F0F0)),
-            titleMedium: TextStyle(color: Color(0xFFF0F0F0)),
-            titleSmall: TextStyle(color: Color(0xFFF0F0F0)),
-          ),
-          chipTheme: const ChipThemeData(
-            backgroundColor: Color(0xFF383838),
-            disabledColor: Color(0xFF323232),
-            selectedColor: Color(0xFF505050),
-            secondarySelectedColor: Color(0xFF606060),
-            padding: EdgeInsets.all(4),
-            labelStyle: TextStyle(color: Color(0xFFF0F0F0)),
-            secondaryLabelStyle: TextStyle(color: Color(0xFFF0F0F0)),
-            brightness: Brightness.dark,
-          ),
-          // Ensure better visibility for widgets like TextFields, Buttons, etc.
-          inputDecorationTheme: const InputDecorationTheme(
-            fillColor: Color(0xFF353535),
-            filled: true,
-            border: OutlineInputBorder(
-              borderSide: BorderSide(color: Color(0xFF505050)),
+        );
+      },
+      data: (_) {
+        // Once config is successfully loaded, build the actual app
+        return GestureDetector(
+          onTap: () {
+            // Unfocus when tapping outside of a text field
+            FocusManager.instance.primaryFocus?.unfocus();
+          },
+          child: MaterialApp(
+            title: 'Flutter Memos',
+            debugShowCheckedModeBanner: false,
+            // Light theme configuration
+            theme: ThemeData(
+              colorScheme: ColorScheme.fromSeed(
+                seedColor: const Color(0xFFDC4C3E),
+                primary: const Color(0xFFDC4C3E),
+              ),
+              appBarTheme: const AppBarTheme(
+                backgroundColor: Colors.white,
+                foregroundColor: Color(0xFFDC4C3E),
+                elevation: 0,
+              ),
+              scaffoldBackgroundColor: const Color(0xFFF8F8F8),
+              useMaterial3: true,
             ),
-            focusedBorder: OutlineInputBorder(
-              borderSide: BorderSide(color: Color(0xFFFF6B58), width: 2),
+            // Dark theme configuration
+            darkTheme: ThemeData(
+              brightness: Brightness.dark,
+              colorScheme: const ColorScheme.dark(
+                primary: Color(0xFFFF6B58), // Brighter primary color
+                secondary: Color(0xFFFF8A7A), // Brighter secondary
+                surface: Color(0xFF282828),
+                onSurface: Color(0xFFF0F0F0), // Brighter text on background
+                error: Color(0xFFFF5252), // Error color
+              ),
+              scaffoldBackgroundColor: const Color(
+                0xFF1A1A1A,
+              ), // Darker scaffold
+              cardColor: const Color(0xFF2C2C2C), // Slightly lighter card
+              canvasColor: const Color(0xFF2C2C2C),
+              appBarTheme: const AppBarTheme(
+                backgroundColor: Color(0xFF252525), // Darker app bar
+                foregroundColor: Color(0xFFFF6B58), // Brighter text/icons
+                elevation: 0,
+                iconTheme: IconThemeData(color: Color(0xFFFF6B58)),
+              ),
+              dividerColor: const Color(0xFF404040),
+              textTheme: const TextTheme(
+                bodyLarge: TextStyle(color: Color(0xFFF0F0F0)),
+                bodyMedium: TextStyle(color: Color(0xFFF0F0F0)),
+                bodySmall: TextStyle(color: Color(0xFFD0D0D0)),
+                titleLarge: TextStyle(color: Color(0xFFF0F0F0)),
+                titleMedium: TextStyle(color: Color(0xFFF0F0F0)),
+                titleSmall: TextStyle(color: Color(0xFFF0F0F0)),
+              ),
+              chipTheme: const ChipThemeData(
+                backgroundColor: Color(0xFF383838),
+                disabledColor: Color(0xFF323232),
+                selectedColor: Color(0xFF505050),
+                secondarySelectedColor: Color(0xFF606060),
+                padding: EdgeInsets.all(4),
+                labelStyle: TextStyle(color: Color(0xFFF0F0F0)),
+                secondaryLabelStyle: TextStyle(color: Color(0xFFF0F0F0)),
+                brightness: Brightness.dark,
+              ),
+              // Ensure better visibility for widgets like TextFields, Buttons, etc.
+              inputDecorationTheme: const InputDecorationTheme(
+                fillColor: Color(0xFF353535),
+                filled: true,
+                border: OutlineInputBorder(
+                  borderSide: BorderSide(color: Color(0xFF505050)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderSide: BorderSide(color: Color(0xFFFF6B58), width: 2),
+                ),
+                labelStyle: TextStyle(color: Color(0xFFD0D0D0)),
+              ),
+              useMaterial3: true,
             ),
-            labelStyle: TextStyle(color: Color(0xFFD0D0D0)),
+            themeMode: themeMode, // Use the theme mode from the provider
+            initialRoute: '/',
+            routes: {
+              '/': (context) => const HomeScreen(),
+              '/memos': (context) => const MemosScreen(),
+              '/chat': (context) => const ChatScreen(),
+              '/mcp': (context) => const McpScreen(),
+              '/new-memo': (context) => const NewMemoScreen(),
+              '/filter-demo': (context) => const FilterDemoScreen(),
+              '/riverpod-demo': (context) => const RiverpodDemoScreen(),
+              '/codegen-test': (context) => const CodegenTestScreen(),
+              '/settings': (context) => const SettingsScreen(),
+            },
+            onGenerateRoute: (settings) {
+              if (settings.name == '/memo-detail') {
+                final args = settings.arguments as Map<String, dynamic>;
+                return MaterialPageRoute(
+                  builder:
+                      (context) =>
+                          MemoDetailScreen(memoId: args['memoId'] as String),
+                );
+              } else if (settings.name == '/edit-memo') {
+                final args = settings.arguments as Map<String, dynamic>;
+                return MaterialPageRoute(
+                  builder:
+                      (context) =>
+                          EditMemoScreen(memoId: args['memoId'] as String),
+                );
+              }
+              return null;
+            },
           ),
-          useMaterial3: true,
-        ),
-        themeMode: themeMode, // Use the theme mode from the provider
-        initialRoute: '/',
-        routes: {
-          '/': (context) => const HomeScreen(),
-          '/memos': (context) => const MemosScreen(),
-          '/chat': (context) => const ChatScreen(),
-          '/mcp': (context) => const McpScreen(),
-          '/new-memo': (context) => const NewMemoScreen(),
-          '/filter-demo': (context) => const FilterDemoScreen(),
-          '/riverpod-demo': (context) => const RiverpodDemoScreen(),
-          '/codegen-test': (context) => const CodegenTestScreen(),
-          '/settings': (context) => const SettingsScreen(),
-        },
-        onGenerateRoute: (settings) {
-          if (settings.name == '/memo-detail') {
-            final args = settings.arguments as Map<String, dynamic>;
-            return MaterialPageRoute(
-              builder:
-                  (context) =>
-                      MemoDetailScreen(memoId: args['memoId'] as String),
-            );
-          } else if (settings.name == '/edit-memo') {
-            final args = settings.arguments as Map<String, dynamic>;
-            return MaterialPageRoute(
-              builder:
-                  (context) => EditMemoScreen(memoId: args['memoId'] as String),
-            );
-          }
-          return null;
-        },
-      ),
+        );
+      }
     );
   }
 }
