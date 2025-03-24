@@ -64,12 +64,27 @@ class _MemoCardState extends State<MemoCard> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
+      constraints: const BoxConstraints(
+        // Limit maximum height to prevent overflow issues
+        maxHeight: double.infinity,
+      ),
+      // Use useSafeArea to respect device safe areas
+      useSafeArea: true,
       builder: (context) {
+        // Get screen dimensions to adapt the sheet size
+        final screenHeight = MediaQuery.of(context).size.height;
+
+        // Dynamic initial size based on screen height
+        // Smaller on phones, larger on tablets/desktop
+        final initialSize = screenHeight < 600 ? 0.6 : 0.4;
+        
         return DraggableScrollableSheet(
-          initialChildSize: 0.4,
-          minChildSize: 0.2,
-          maxChildSize: 1.0,
+          initialChildSize: initialSize,
+          minChildSize: 0.25,
+          maxChildSize: 0.85, // Prevent taking the full screen
           expand: false,
+          snap: true, // Enable snapping to common sizes
+          snapSizes: const [0.4, 0.6, 0.85], // Common snap points
           builder: (BuildContext context, ScrollController scrollController) {
             return memo_menu.MemoContextMenu(
               memoId: widget.id,

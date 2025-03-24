@@ -14,7 +14,7 @@ class MemoContextMenu extends StatelessWidget {
   final VoidCallback? onCopy;
   final VoidCallback? onClose;
   final BuildContext parentContext;
-  final ScrollController? scrollController; // optional, but unused in old layout
+  final ScrollController? scrollController;
 
   const MemoContextMenu({
     super.key,
@@ -36,9 +36,14 @@ class MemoContextMenu extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final screenHeight = MediaQuery.of(context).size.height;
+
+    // Calculate a maximum height for the menu content
+    // This ensures it won't overflow on smaller screens
+    final maxContentHeight = screenHeight * 0.7;
 
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 12),
+      constraints: BoxConstraints(maxHeight: maxContentHeight),
       decoration: BoxDecoration(
         color: isDarkMode ? const Color(0xFF2C2C2C) : Colors.white,
         borderRadius: const BorderRadius.only(
@@ -54,7 +59,7 @@ class MemoContextMenu extends StatelessWidget {
             Container(
               width: 40,
               height: 4,
-              margin: const EdgeInsets.only(bottom: 12),
+              margin: const EdgeInsets.only(top: 12, bottom: 12),
               decoration: BoxDecoration(
                 color: isDarkMode ? Colors.grey[700] : Colors.grey[300],
                 borderRadius: BorderRadius.circular(2),
@@ -79,63 +84,82 @@ class MemoContextMenu extends StatelessWidget {
                     icon: const Icon(Icons.close),
                     onPressed: onClose,
                     color: isDarkMode ? Colors.white70 : Colors.black54,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(
+                      minWidth: 40,
+                      minHeight: 40,
+                    ),
                   ),
                 ],
               ),
             ),
 
-            // The menu items in a simple Column (no scrolling needed)
-            _buildMenuItem(
-              icon: Icons.visibility,
-              label: 'View Memo',
-              onTap: onView,
-              isDarkMode: isDarkMode,
-            ),
-            _buildMenuItem(
-              icon: Icons.edit,
-              label: 'Edit',
-              onTap: onEdit,
-              isDarkMode: isDarkMode,
-            ),
-            _buildMenuItem(
-              icon: isPinned ? Icons.push_pin : Icons.push_pin_outlined,
-              label: isPinned ? 'Unpin' : 'Pin',
-              onTap: onPin,
-              isDarkMode: isDarkMode,
-            ),
-            _buildMenuItem(
-              icon: Icons.archive_outlined,
-              label: 'Archive',
-              onTap: onArchive,
-              isDarkMode: isDarkMode,
-            ),
-            _buildMenuItem(
-              icon: Icons.visibility_off,
-              label: 'Hide',
-              onTap: onHide,
-              isDarkMode: isDarkMode,
-            ),
-            _buildMenuItem(
-              icon: Icons.content_copy,
-              label: 'Copy Text',
-              onTap: onCopy,
-              isDarkMode: isDarkMode,
-            ),
+            // Scrollable content area
+            Flexible(
+              child: SingleChildScrollView(
+                controller: scrollController,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Menu items in the scrollable area
+                    _buildMenuItem(
+                      icon: Icons.visibility,
+                      label: 'View Memo',
+                      onTap: onView,
+                      isDarkMode: isDarkMode,
+                    ),
+                    _buildMenuItem(
+                      icon: Icons.edit,
+                      label: 'Edit',
+                      onTap: onEdit,
+                      isDarkMode: isDarkMode,
+                    ),
+                    _buildMenuItem(
+                      icon: isPinned ? Icons.push_pin : Icons.push_pin_outlined,
+                      label: isPinned ? 'Unpin' : 'Pin',
+                      onTap: onPin,
+                      isDarkMode: isDarkMode,
+                    ),
+                    _buildMenuItem(
+                      icon: Icons.archive_outlined,
+                      label: 'Archive',
+                      onTap: onArchive,
+                      isDarkMode: isDarkMode,
+                    ),
+                    _buildMenuItem(
+                      icon: Icons.visibility_off,
+                      label: 'Hide',
+                      onTap: onHide,
+                      isDarkMode: isDarkMode,
+                    ),
+                    _buildMenuItem(
+                      icon: Icons.content_copy,
+                      label: 'Copy Text',
+                      onTap: onCopy,
+                      isDarkMode: isDarkMode,
+                    ),
 
-            Divider(
-              color: isDarkMode ? Colors.grey[700] : Colors.grey[300],
-              height: 1,
-              indent: 16,
-              endIndent: 16,
-            ),
+                    Divider(
+                      color: isDarkMode ? Colors.grey[700] : Colors.grey[300],
+                      height: 1,
+                      indent: 16,
+                      endIndent: 16,
+                    ),
 
-            // Delete option (in red)
-            _buildMenuItem(
-              icon: Icons.delete_outline,
-              label: 'Delete',
-              onTap: onDelete,
-              color: Colors.red,
-              isDarkMode: isDarkMode,
+                    // Delete option (in red)
+                    _buildMenuItem(
+                      icon: Icons.delete_outline,
+                      label: 'Delete',
+                      onTap: onDelete,
+                      color: Colors.red,
+                      isDarkMode: isDarkMode,
+                    ),
+
+                    // Add a little space at the bottom for better appearance
+                    const SizedBox(height: 8),
+                  ],
+                ),
+              ),
             ),
           ],
         ),
