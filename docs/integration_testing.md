@@ -64,6 +64,32 @@ for test_file in integration_test/*_test.dart; do
 done
 ```
 
+## macOS Integration Testing
+
+For macOS integration tests, additional configuration is required to properly report test results:
+
+1. The `integration_test_macos` package is added to dev_dependencies in pubspec.yaml
+2. A `RunnerTests.swift` file is created in the macos/RunnerTests directory
+3. The macOS XCScheme is updated to include the test target
+4. The integration test driver is configured to capture screenshots and report results
+
+This configuration eliminates the "integration_test plugin was not detected" warning.
+
+### Running macOS Tests
+
+You can run the tests using either of these approaches:
+
+```bash
+# Using flutter drive (typical approach)
+flutter drive \
+	--driver=test_driver/integration_test_driver.dart \
+	--target=integration_test/memo_card_actions_test.dart \
+	-d "macos"
+
+# Using Flutter test directly (alternative approach)
+flutter test integration_test/memo_card_actions_test.dart -d macos
+```
+
 ## Troubleshooting
 
 ### Common Issues and Solutions
