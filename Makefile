@@ -110,3 +110,10 @@ build-iphone:
 release-iphone: build-iphone
 	@echo "Installing Flutter Memos to iPhone device with ID $(IPHONE_DEVICE_ID)..."
 	flutter install -d $(IPHONE_DEVICE_ID)
+
+install-macos: release-macos
+	@echo "Copying flutter_memos.app to ~/Downloads..."
+	mkdir -p ~/Downloads/flutter_memos_app
+	cp -rf build/macos/Build/Products/Release/flutter_memos.app ~/Downloads/flutter_memos_app/flutter_memos.app
+	@echo "Opening flutter_memos.app from ~/Downloads..."
+	open ~/Downloads/flutter_memos_app/flutter_memos.app
