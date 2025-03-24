@@ -1,6 +1,6 @@
 # Makefile for running Flutter Memos integration tests on various platforms
 
-.PHONY: test-integration-macos test-integration-ios test-integration-ipad test-integration-web kill-simulator
+.PHONY: test-integration-macos test-integration-ios test-integration-ipad-portrait test-integration-ipad-landscape test-integration-web kill-simulator
 
 test-integration-macos:
 	@echo "Running macOS integration tests..."
@@ -25,15 +25,34 @@ test-integration-ios:
 	echo "Killing iOS simulator after tests..."; \
 	make kill-simulator
 
-test-integration-ipad:
-	@echo "Creating iPad Pro 11-inch simulator..."
+test-integration-ipad-portrait:
+	@echo "Creating iPad Pro 11-inch simulator in portrait mode..."
 	@UDID=$$(xcrun simctl create "iPad Pro 11-inch" "com.apple.CoreSimulator.SimDeviceType.iPad-Pro-11-inch-M4-16GB" "com.apple.CoreSimulator.SimRuntime.iOS-18-3"); \
 	echo "Simulator created with UDID: $$UDID"; \
 	echo "Opening iOS Simulator (iPad Pro 11-inch) with UDID $$UDID..."; \
 	open -a Simulator --args -CurrentDeviceUDID $$UDID; \
 	echo "Waiting for iPad simulator to start..."; \
 	sleep 15; \
-	echo "Running integration tests on 'iPad Pro 11-inch'..."; \
+	echo "Running integration tests on 'iPad Pro 11-inch' (Portrait)..."; \
+	flutter drive \
+		--driver=test_driver/integration_test_driver.dart \
+		--target=integration_test/memo_card_actions_test.dart \
+		-d $$UDID; \
+	echo "Killing iOS simulator after iPad tests..."; \
+	make kill-simulator
+
+test-integration-ipad-landscape:
+	@echo "Creating iPad Pro 11-inch simulator in landscape mode..."
+	@UDID=$$(xcrun simctl create "iPad Pro 11-inch" "com.apple.CoreSimulator.SimDeviceType.iPad-Pro-11-inch-M4-16GB" "com.apple.CoreSimulator.SimRuntime.iOS-18-3"); \
+	echo "Simulator created with UDID: $$UDID"; \
+	echo "Opening iOS Simulator (iPad Pro 11-inch) with UDID $$UDID..."; \
+	open -a Simulator --args -CurrentDeviceUDID $$UDID; \
+	echo "Waiting for iPad simulator to start..."; \
+	sleep 15; \
+	echo "Rotating Simulator to Landscape via AppleScript..."; \
+	osascript -e 'tell application "Simulator" to activate' -e 'tell application "System Events" to key code 123 using {command down}'; \
+	sleep 2; \
+	echo "Running integration tests on 'iPad Pro 11-inch' (Landscape)..."; \
 	flutter drive \
 		--driver=test_driver/integration_test_driver.dart \
 		--target=integration_test/memo_card_actions_test.dart \
