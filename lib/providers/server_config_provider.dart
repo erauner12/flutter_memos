@@ -21,11 +21,13 @@ class ServerConfigNotifier extends StateNotifier<ServerConfig> {
       );
       
       if (kDebugMode) {
-        print('[ServerConfigNotifier] Loaded config: serverUrl=$serverUrl, token=${authToken.isNotEmpty ? "present" : "empty"}');
+        print(
+          '[ServerConfigNotifier][loadFromPreferences] iOS or otherwise, got serverUrl=$serverUrl, token=${authToken.isNotEmpty ? "present" : "empty"}',
+        );
       }
     } catch (e) {
       if (kDebugMode) {
-        print('[ServerConfigNotifier] Error loading config: $e');
+        print('[ServerConfigNotifier][loadFromPreferences] Error: $e');
       }
       // Keep the default configuration
     }
@@ -34,8 +36,13 @@ class ServerConfigNotifier extends StateNotifier<ServerConfig> {
   /// Save configuration to SharedPreferences
   Future<bool> saveToPreferences(ServerConfig config) async {
     try {
+      if (kDebugMode) {
+        print(
+          '[ServerConfigNotifier][saveToPreferences] Attempting to save: serverUrl=${config.serverUrl}, token=${config.authToken.isNotEmpty ? "present" : "empty"}',
+        );
+      }
+
       final prefs = await SharedPreferences.getInstance();
-      
       final results = await Future.wait([
         prefs.setString('server_url', config.serverUrl),
         prefs.setString('auth_token', config.authToken),
@@ -45,14 +52,22 @@ class ServerConfigNotifier extends StateNotifier<ServerConfig> {
       state = config;
       
       if (kDebugMode) {
-        print('[ServerConfigNotifier] Saved config: serverUrl=${config.serverUrl}, token=${config.authToken.isNotEmpty ? "present" : "empty"}');
+        print(
+          '[ServerConfigNotifier][saveToPreferences] Saved config. Results: $results',
+        );
       }
       
       // Return true if all operations succeeded
-      return results.every((result) => result);
+      final allGood = results.every((result) => result);
+      if (kDebugMode && !allGood) {
+        print(
+          '[ServerConfigNotifier][saveToPreferences] At least one operation returned false',
+        );
+      }
+      return allGood;
     } catch (e) {
       if (kDebugMode) {
-        print('[ServerConfigNotifier] Error saving config: $e');
+        print('[ServerConfigNotifier][saveToPreferences] Error: $e');
       }
       return false;
     }
