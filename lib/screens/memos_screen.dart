@@ -514,181 +514,252 @@ class _MemosScreenState extends ConsumerState<MemosScreen> {
     final memosAsync = ref.watch(visibleMemosProvider);
     final sortMode = ref.watch(memoSortModeProvider);
     
-    return Column(
-      children: [
-        // Filter chips for predefined filters - always shown first
-        _buildFilterChips(),
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 200),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Filter chips for predefined filters - always shown first
+          _buildFilterChips(),
 
-        // Expanded to let memo list take up all available space
-        Expanded(
-          child: memosAsync.when(
-            data: (memos) {
-              if (memos.isEmpty) {
-                return _buildEmptyState();
-              }
-
-              return RefreshIndicator(
-                onRefresh: () async {
-                  // Invalidate the memosProvider to force refresh
-                  ref.invalidate(memosProvider);
-                },
-                child: ListView.builder(
-                  padding: const EdgeInsets.all(16.0),
-                  itemCount: memos.length,
-                  itemBuilder: (context, index) {
-                    final memo = memos[index];
-                    return Dismissible(
-                      key: Key(memo.id),
-                      background: Container(
-                        color: Colors.orange,
-                        alignment: Alignment.centerLeft,
-                        padding: const EdgeInsets.only(left: 16.0),
-                        child: const Row(
-                          children: [
-                            SizedBox(width: 16),
-                            Icon(Icons.visibility_off, color: Colors.white),
-                            SizedBox(width: 8),
-                            Text(
-                              'Hide',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
+          // Improved sort indicator with clearer messaging
+          Container(
+            color: Colors.grey[200],
+            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+            width: double.infinity,
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Sorting by ${sortMode == MemoSortMode.byUpdateTime ? 'last updated' : 'creation date'} (newest first)',
+                        style: TextStyle(
+                          color: Colors.grey[800],
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
-                      secondaryBackground: Container(
-                        color: Colors.red,
-                        alignment: Alignment.centerRight,
-                        padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                        child: const Text(
-                          'Delete',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                      onDismissed: (direction) {
-                        if (direction == DismissDirection.endToStart) {
-                          ref.read(deleteMemoProvider(memo.id))();
-                        }
-                      },
-                      confirmDismiss: (direction) async {
-                        if (direction == DismissDirection.startToEnd) {
-                          // Hide memo
-                          _toggleHideMemo(memo.id);
-                          return false; // Don't remove from list
-                        } else if (direction == DismissDirection.endToStart) {
-                          // Delete memo
-                          return await showDialog(
-                            context: context,
-                            builder: (BuildContext context) {
-                              return AlertDialog(
-                                title: const Text('Confirm Delete'),
-                                content: const Text(
-                                  'Are you sure you want to delete this memo?',
-                                ),
-                                actions: <Widget>[
-                                  TextButton(
-                                    onPressed:
-                                        () => Navigator.of(context).pop(false),
-                                    child: const Text('Cancel'),
-                                  ),
-                                  TextButton(
-                                    onPressed:
-                                        () => Navigator.of(context).pop(true),
-                                    child: const Text('Delete'),
-                                  ),
-                                ],
-                              );
-                            },
-                          );
-                        }
-                        return false;
-                      },
-                      child: Stack(
+                      Row(
                         children: [
-                          MemoCard(
-                            content: memo.content,
-                            pinned: memo.pinned,
-                            createdAt: memo.createTime,
-                            updatedAt: memo.updateTime,
-                            showTimeStamps: true,
-                            // Display relevant timestamp based on sort mode
-                            highlightTimestamp:
-                                sortMode == MemoSortMode.byUpdateTime
-                                    ? MemoUtils.formatTimestamp(memo.updateTime)
-                                    : MemoUtils.formatTimestamp(
-                                      memo.createTime,
-                                    ),
-                            timestampType:
-                                sortMode == MemoSortMode.byUpdateTime
-                                    ? 'Updated'
-                                    : 'Created',
-                            onTap: () => _navigateToMemoDetail(memo.id),
+                          Icon(
+                            Icons.info_outline,
+                            size: 12,
+                            color: Colors.blue[700],
                           ),
-                          // Archive button positioned at top-right corner
-                          Positioned(
-                            top: 4,
-                            right: 4,
-                            child: IconButton(
-                              icon: const Icon(
-                                Icons.archive_outlined,
-                                size: 20,
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              'Client-side sorting is used (server has limited sort support)',
+                              style: TextStyle(
+                                color: Colors.blue[700],
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
                               ),
-                              tooltip: 'Archive',
-                              constraints: const BoxConstraints(),
-                              padding: const EdgeInsets.all(8),
-                              color: Colors.grey[600],
-                              onPressed: () {
-                                // Use the archive memo provider
-                                ref.read(archiveMemoProvider(memo.id))().then((
-                                  _,
-                                ) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text(
-                                        'Memo archived successfully',
-                                      ),
-                                      backgroundColor: Colors.green,
-                                    ),
-                                  );
-                                });
-                              },
                             ),
                           ),
                         ],
                       ),
-                    );
-                  },
-                ),
-              );
-            },
-            loading: () {
-              return const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(20.0),
-                  child: CircularProgressIndicator(),
-                ),
-              );
-            },
-            error: (error, stackTrace) {
-              return Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(20.0),
-                  child: Text(
-                    'Error loading memos: ${error.toString().substring(0, Math.min(error.toString().length, 100))}',
-                    style: const TextStyle(color: Colors.red),
-                    textAlign: TextAlign.center,
+                    ],
                   ),
                 ),
-              );
-            },
+                Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.primary.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Icon(
+                    sortMode == MemoSortMode.byUpdateTime
+                        ? Icons.update
+                        : Icons.calendar_today,
+                    color: Theme.of(context).colorScheme.primary,
+                    size: 16,
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-      ],
+
+          // Content area
+          SizedBox(
+            height: 300,
+            child: memosAsync.when(
+              data: (memos) {
+                if (memos.isEmpty) {
+                  return _buildEmptyState();
+                }
+
+                return RefreshIndicator(
+                  onRefresh: () async {
+                    // Invalidate the memosProvider to force refresh
+                    ref.invalidate(memosProvider);
+                  },
+                  child: ListView.builder(
+                    padding: const EdgeInsets.all(16.0),
+                    itemCount: memos.length,
+                    itemBuilder: (context, index) {
+                      final memo = memos[index];
+                      return Dismissible(
+                        key: Key(memo.id),
+                        background: Container(
+                          color: Colors.orange,
+                          alignment: Alignment.centerLeft,
+                          padding: const EdgeInsets.only(left: 16.0),
+                          child: const Row(
+                            children: [
+                              SizedBox(width: 16),
+                              Icon(Icons.visibility_off, color: Colors.white),
+                              SizedBox(width: 8),
+                              Text(
+                                'Hide',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        secondaryBackground: Container(
+                          color: Colors.red,
+                          alignment: Alignment.centerRight,
+                          padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                          child: const Text(
+                            'Delete',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        onDismissed: (direction) {
+                          if (direction == DismissDirection.endToStart) {
+                            ref.read(deleteMemoProvider(memo.id))();
+                          }
+                        },
+                        confirmDismiss: (direction) async {
+                          if (direction == DismissDirection.startToEnd) {
+                            // Hide memo
+                            _toggleHideMemo(memo.id);
+                            return false; // Don't remove from list
+                          } else if (direction == DismissDirection.endToStart) {
+                            // Delete memo
+                            return await showDialog(
+                              context: context,
+                              builder: (BuildContext context) {
+                                return AlertDialog(
+                                  title: const Text('Confirm Delete'),
+                                  content: const Text(
+                                    'Are you sure you want to delete this memo?',
+                                  ),
+                                  actions: <Widget>[
+                                    TextButton(
+                                      onPressed:
+                                          () =>
+                                              Navigator.of(context).pop(false),
+                                      child: const Text('Cancel'),
+                                    ),
+                                    TextButton(
+                                      onPressed:
+                                          () => Navigator.of(context).pop(true),
+                                      child: const Text('Delete'),
+                                    ),
+                                  ],
+                                );
+                              },
+                            );
+                          }
+                          return false;
+                        },
+                        child: Stack(
+                          children: [
+                            MemoCard(
+                              content: memo.content,
+                              pinned: memo.pinned,
+                              createdAt: memo.createTime,
+                              updatedAt: memo.updateTime,
+                              showTimeStamps: true,
+                              // Display relevant timestamp based on sort mode
+                              highlightTimestamp:
+                                  sortMode == MemoSortMode.byUpdateTime
+                                      ? MemoUtils.formatTimestamp(
+                                        memo.updateTime,
+                                      )
+                                      : MemoUtils.formatTimestamp(
+                                        memo.createTime,
+                                      ),
+                              timestampType:
+                                  sortMode == MemoSortMode.byUpdateTime
+                                      ? 'Updated'
+                                      : 'Created',
+                              onTap: () => _navigateToMemoDetail(memo.id),
+                            ),
+                            // Archive button positioned at top-right corner
+                            Positioned(
+                              top: 4,
+                              right: 4,
+                              child: IconButton(
+                                icon: const Icon(
+                                  Icons.archive_outlined,
+                                  size: 20,
+                                ),
+                                tooltip: 'Archive',
+                                constraints: const BoxConstraints(),
+                                padding: const EdgeInsets.all(8),
+                                color: Colors.grey[600],
+                                onPressed: () {
+                                  // Use the archive memo provider
+                                  ref.read(archiveMemoProvider(memo.id))().then(
+                                    (_) {
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
+                                        const SnackBar(
+                                          content: Text(
+                                            'Memo archived successfully',
+                                          ),
+                                          backgroundColor: Colors.green,
+                                        ),
+                                      );
+                                    },
+                                  );
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                );
+              },
+              loading: () {
+                return const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(20.0),
+                    child: CircularProgressIndicator(),
+                  ),
+                );
+              },
+              error: (error, stackTrace) {
+                return Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(20.0),
+                    child: Text(
+                      'Error loading memos: ${error.toString().substring(0, Math.min(error.toString().length, 100))}',
+                      style: const TextStyle(color: Colors.red),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
     );
   }
 
