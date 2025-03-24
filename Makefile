@@ -1,6 +1,6 @@
 # Makefile for running Flutter Memos integration tests on various platforms
 
-.PHONY: test-integration-macos test-integration-ios test-integration-ipad-portrait test-integration-ipad-landscape test-integration-web kill-simulator test-integration-iphone run-iphone
+.PHONY: test-integration-macos test-integration-ios test-integration-ipad-portrait test-integration-ipad-landscape test-integration-web kill-simulator test-integration-iphone run-iphone install-dmg-locally
 
 # iOS device ID - change this to your device ID
 IPHONE_DEVICE_ID ?= 00008140-0016052002FB001C
@@ -162,3 +162,32 @@ make-dmg: release-macos
 
 	@echo "DMG created at: ~/Documents/flutter_memos_release/flutter_memos.dmg"
 	@echo "You can open or distribute this DMG to install the app. No automatic open performed."
+
+# Run all tests on macOS
+test-integration-all:
+	for test_file in integration_test/*_test.dart; do \
+		flutter drive --driver=test_driver/integration_test_driver.dart --target=$$test_file -d "macos"; \
+	done
+
+# Install the app from the DMG to /Applications
+install-dmg-locally: make-dmg
+	@echo "Attaching DMG from $(HOME)/Documents/flutter_memos_release/flutter_memos.dmg ..."
+	# We'll store the hdiutil output in a variable so we can parse the mount path
+	$(eval HDI_OUTPUT := $(shell hdiutil attach "$(HOME)/Documents/flutter_memos_release/flutter_memos.dmg" | tee /dev/stderr))
+	
+	@echo "Searching for the mount point in the hdiutil output..."
+	# This extracts the last column from any line containing "Flutter Memos Installer"
+	$(eval MOUNT_PATH := $(shell echo "$(HDI_OUTPUT)" | grep "Flutter Memos Installer" | tail -1 | awk '{print $$3}'))
+	@if [ -z "$(MOUNT_PATH)" ]; then \
+	echo "ERROR: Could not find '/Volumes/Flutter Memos Installer' in hdiutil output."; \
+	exit 1; \
+	fi
+	
+	@echo "Mount path is: $(MOUNT_PATH)"
+	@echo "Copying flutter_memos.app from '$(MOUNT_PATH)' to /Applications (requires sudo)..."
+	sudo cp -R "$(MOUNT_PATH)/flutter_memos.app" "/Applications"
+	
+	@echo "Detaching DMG..."
+	hdiutil detach "$(MOUNT_PATH)" || true
+	
+	@echo "Install from DMG complete. You can now run flutter_memos.app from /Applications."
