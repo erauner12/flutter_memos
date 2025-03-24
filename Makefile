@@ -185,7 +185,7 @@ install-dmg-locally: make-dmg
 	
 	@echo "Mount path is: $(MOUNT_PATH)"
 	@echo "Copying flutter_memos.app from '$(MOUNT_PATH)' to /Applications (requires sudo)..."
-	sudo cp -R "$(MOUNT_PATH)/flutter_memos.app" "/Applications"
+	cp -R "$(MOUNT_PATH)/flutter_memos.app" "/Applications"
 	
 	@echo "Detaching DMG..."
 	hdiutil detach "$(MOUNT_PATH)" || true
