@@ -1,11 +1,11 @@
 import 'package:integration_test/integration_test_driver.dart';
 
 Future<void> main() => integrationDriver(
-  // Enable screenshot capture for macOS tests
-  captureScreenshots: true,
-  // Setup for proper reporting
-  responseDataCallback: (data) async {
-    print('Integration test results: ${data.toString()}');
-    return data;
+  // Remove unsupported parameters; fix return type mismatch
+  responseDataCallback: (Map<String, dynamic>? data) async {
+    print('Integration test results: $data');
+    // We can't return a Map if the function must be Future<void>.
+    // So just return nothing.
+    return;
   },
 );

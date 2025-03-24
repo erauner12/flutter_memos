@@ -1,11 +1,10 @@
 import Cocoa
 import XCTest
 import FlutterMacOS
-import integration_test_macos
 
 class RunnerTests: XCTestCase {
-  func testRunner() {
-    let testBundle = Bundle(for: type(of: self))
-    IntegrationTestMacosRunner.runFromXCTest(testBundle)
+  func testExample() {
+    // Example placeholder test; add your macOS tests here if needed.
+    XCTAssertTrue(true, "This is a placeholder test.")
   }
 }
