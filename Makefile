@@ -156,10 +156,24 @@ test-integration-all:
 		flutter drive --driver=test_driver/integration_test_driver.dart --target=$$test_file -d "macos"; \
 	done
 
+# Build the DMG without installing it
+build-dmg: release-macos
+	@echo "Building DMG..."
+	make make-dmg
+
+# Install the app from the previously built DMG in ~/Documents (no rebuilding)
+install-from-latest-dmg:
+	@echo "Attaching DMG from $(HOME)/Documents/flutter_memos_release/flutter_memos.dmg ..."
+	@if [ ! -f "$(HOME)/Documents/flutter_memos_release/flutter_memos.dmg" ]; then \
+		echo "ERROR: DMG file not found at: $(HOME)/Documents/flutter_memos_release/flutter_memos.dmg"; \
+		echo "Run 'make build-dmg' first to create the DMG."; \
+		exit 1; \
+	fi
+	$(eval HDI_OUTPUT := $(shell hdiutil attach "$(HOME)/Documents/flutter_memos_release/flutter_memos.dmg" | tee /dev/stderr))
+
 # Install the app from the newly built DMG in ~/Documents
 install-dmg-locally: make-dmg
 	@echo "Attaching DMG from $(HOME)/Documents/flutter_memos_release/flutter_memos.dmg ..."
-	# We'll store the hdiutil output in a variable so we can parse the mount point
 	$(eval HDI_OUTPUT := $(shell hdiutil attach "$(HOME)/Documents/flutter_memos_release/flutter_memos.dmg" | tee /dev/stderr))
 
 	@echo "Searching for the mount point in the hdiutil output..."
