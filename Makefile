@@ -95,3 +95,18 @@ test-integration-web:
 kill-simulator:
 	@echo "Killing iOS simulator..."
 	pkill Simulator || true
+
+build-macos:
+	@echo "Building Flutter Memos for macOS (release mode)..."
+	flutter build macos --release
+
+release-macos: build-macos
+	@echo "Release build for macOS complete. You can find the app in build/macos/Build/Products/Release/"
+
+build-iphone:
+	@echo "Building Flutter Memos for iPhone (iOS release mode)..."
+	flutter build ios --release
+
+release-iphone: build-iphone
+	@echo "Installing Flutter Memos to iPhone device with ID $(IPHONE_DEVICE_ID)..."
+	flutter install -d $(IPHONE_DEVICE_ID)
