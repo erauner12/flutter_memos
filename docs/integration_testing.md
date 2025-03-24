@@ -32,10 +32,9 @@ flutter drive \
 
 ```bash
 # Ensure an iOS simulator is running or physical device is connected
-flutter drive \
-	--driver=test_driver/integration_test_driver.dart \
-	--target=integration_test/memo_card_actions_test.dart \
-	-d "iPhone"  # Or specify device ID
+flutter drive --driver=test_driver/integration_test_driver.dart \
+             --target=integration_test/memo_card_actions_test.dart \
+             -d "iPhone 16 Pro"
 ```
 
 ### On Android
@@ -81,10 +80,9 @@ You can run the tests using either of these approaches:
 
 ```bash
 # Using flutter drive (typical approach)
-flutter drive \
-	--driver=test_driver/integration_test_driver.dart \
-	--target=integration_test/memo_card_actions_test.dart \
-	-d "macos"
+fflutter drive --driver=test_driver/integration_test_driver.dart \
+             --target=integration_test/memo_card_actions_test.dart \
+             -d "macos"
 
 # Using Flutter test directly (alternative approach)
 flutter test integration_test/memo_card_actions_test.dart -d macos
