@@ -10,20 +10,19 @@ test-integration-macos:
 		-d "macos"
 
 test-integration-ios:
-	@echo "Opening iOS Simulator..."
-	open -a Simulator
-
-	# Give the simulator time to launch and register
-	@echo "Waiting for iOS simulator to start..."
-	sleep 15
-
-	@echo "Running iOS integration tests on 'iPhone 16 Pro'..."
+	@echo "Creating iPhone 16 Pro simulator..."
+	@UDID=$$(xcrun simctl create "iPhone 16 Pro" "com.apple.CoreSimulator.SimDeviceType.iPhone-16-Pro" "com.apple.CoreSimulator.SimRuntime.iOS-18-3"); \
+	echo "Simulator created with UDID: $$UDID"; \
+	echo "Opening iOS Simulator (iPhone 16 Pro) with UDID $$UDID..."; \
+	open -a Simulator --args -CurrentDeviceUDID $$UDID; \
+	echo "Waiting for iOS simulator to start..."; \
+	sleep 15; \
+	echo "Running integration tests on 'iPhone 16 Pro'..."; \
 	flutter drive \
 		--driver=test_driver/integration_test_driver.dart \
 		--target=integration_test/memo_card_actions_test.dart \
-		-d "iPhone 16 Pro"
-
-	@echo "Killing iOS simulator after tests..."
+		-d $$UDID; \
+	echo "Killing iOS simulator after tests..."; \
 	make kill-simulator
 
 test-integration-ipad:
