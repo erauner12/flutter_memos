@@ -57,68 +57,71 @@ class _MemoCardState extends State<MemoCard> {
     _tapPosition = details.globalPosition;
   }
 
-  // Show the context menu
   void _showContextMenu() {
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
-      builder: (context) => MemoContextMenu(
-        memoId: widget.id,
-        isPinned: widget.pinned,
-            position: _tapPosition,
-        parentContext: context,
-        onClose: () {
-          Navigator.pop(context);
-        },
-        onView: widget.onTap,
-        onEdit: () {
-              Navigator.pop(context);
-          Navigator.pushNamed(
-            context,
-            '/edit-memo',
-            arguments: {'memoId': widget.id},
-          );
-        },
-        onArchive: () {
-              Navigator.pop(context);
-          if (widget.onArchive != null) {
-            widget.onArchive!();
-          }
-        },
-        onDelete: () {
-              Navigator.pop(context);
-          if (widget.onDelete != null) {
-            widget.onDelete!();
-          }
-        },
-        onHide: () {
-              Navigator.pop(context);
-          if (widget.onHide != null) {
-            widget.onHide!();
-          }
-        },
-        onPin: () {
-              Navigator.pop(context);
-          if (widget.onTogglePin != null) {
-            widget.onTogglePin!();
-          }
-        },
-        onCopy: () {
-              Navigator.pop(context);
-          Clipboard.setData(ClipboardData(text: widget.content)).then((_) {
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Memo content copied to clipboard'),
-                      duration: Duration(seconds: 2),
-                    ),
-                  );
-                }
-          });
-        },
-      ),
+      builder: (context) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.4,
+          minChildSize: 0.2,
+          maxChildSize: 1.0,
+          expand: false,
+          builder: (BuildContext context, ScrollController scrollController) {
+            return MemoContextMenu(
+              memoId: widget.id,
+              isPinned: widget.pinned,
+              position: _tapPosition,
+              parentContext: context,
+              scrollController: scrollController,
+              onClose: () => Navigator.pop(context),
+              onView: widget.onTap,
+              onEdit: () {
+                Navigator.pop(context);
+                Navigator.pushNamed(
+                  context,
+                  '/edit-memo',
+                  arguments: {'memoId': widget.id},
+                );
+              },
+              onArchive: () {
+                Navigator.pop(context);
+                widget.onArchive?.call();
+              },
+              onDelete: () {
+                Navigator.pop(context);
+                widget.onDelete?.call();
+              },
+              onHide: () {
+                Navigator.pop(context);
+                widget.onHide?.call();
+              },
+              onPin: () {
+                Navigator.pop(context);
+                widget.onTogglePin?.call();
+              },
+              onCopy: () {
+                Navigator.pop(context);
+                Clipboard.setData(ClipboardData(text: widget.content)).then((
+                  _,
+                ) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Memo content copied to clipboard'),
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
+                  }
+                });
+              },
+            );
+          },
+        );
+      },
     );
   }
 
