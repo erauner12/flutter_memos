@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_memos/screens/chat_screen.dart';
 import 'package:flutter_memos/screens/codegen_example_screen.dart';
-import 'package:flutter_memos/screens/codegen_test_screen.dart'; // Add this import
+import 'package:flutter_memos/screens/codegen_test_screen.dart';
 import 'package:flutter_memos/screens/edit_memo_screen.dart';
 import 'package:flutter_memos/screens/filter_demo_screen.dart';
 import 'package:flutter_memos/screens/mcp_screen.dart';
@@ -18,8 +18,6 @@ void main() {
     observers: [LoggingProviderObserver()],
     child: const MyApp(),
   ));
-}
-  );
 }
 
 class MyApp extends StatelessWidget {
