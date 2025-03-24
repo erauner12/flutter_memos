@@ -1,6 +1,7 @@
 import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/gestures.dart' show kSecondaryButton;
 import 'package:flutter/material.dart';
 // Import your actual app entrypoint and widget types needed
 import 'package:flutter_memos/main.dart' as app;
@@ -26,7 +27,7 @@ void main() {
 
       // Open context menu with appropriate gesture for the platform
       if (kIsWeb) {
-        await tester.tap(memoCardFinder, buttons: kSecondaryMouseButton);
+        await tester.tap(memoCardFinder, buttons: kSecondaryButton);
       } else {
         await tester.longPress(memoCardFinder);
       }
