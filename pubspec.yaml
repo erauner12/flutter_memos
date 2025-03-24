@@ -33,7 +33,7 @@ dev_dependencies:
   retrofit_generator: ^9.1.9
   built_value_generator: ^8.6.1
   mockito: ^5.4.4
-  custom_lint: ^0.5.7
+  custom_lint: ^0.7.0
   riverpod_lint: ^2.3.7
   # NOTE: these usually mess with when you try to migrate to generated code
   # NOTE: Keep the following commented out until you migrate to generated code:
