@@ -117,3 +117,29 @@ install-macos: release-macos
 	cp -rf build/macos/Build/Products/Release/flutter_memos.app ~/Downloads/flutter_memos_app/flutter_memos.app
 	@echo "Opening flutter_memos.app from ~/Downloads..."
 	open ~/Downloads/flutter_memos_app/flutter_memos.app
+
+# Be sure to have create-dmg installed, for example using:
+#   brew install create-dmg
+#
+# Then run: `make make-dmg`
+# to generate a DMG in build/macos/Build/Products/Release/installer.
+
+make-dmg: release-macos
+	@echo "Packaging flutter_memos.app into a DMG..."
+	mkdir -p build/macos/Build/Products/Release/installer
+	rm -f build/macos/Build/Products/Release/installer/flutter_memos.dmg
+
+	# Run create-dmg. (You may customize background, icon size, etc.)
+	# See https://github.com/andreyvit/create-dmg for advanced options
+	create-dmg \
+		--volname "Flutter Memos Installer" \
+		--background "solid-white" \
+		--icon-size 160 \
+		--app-drop-link 300 200 \
+		--window-pos 100 100 \
+		--window-size 600 400 \
+		--volicon "build/macos/Build/Products/Release/flutter_memos.app/Contents/Resources/AppIcon.icns" \
+		build/macos/Build/Products/Release/installer/flutter_memos.dmg \
+		build/macos/Build/Products/Release/flutter_memos.app
+
+	@echo "DMG created at: build/macos/Build/Products/Release/installer/flutter_memos.dmg"
