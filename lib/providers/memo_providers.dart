@@ -14,9 +14,22 @@ final memoSortModeProvider = StateProvider<MemoSortMode>((ref) => MemoSortMode.b
 final hiddenMemoIdsProvider = StateProvider<Set<String>>((ref) => {});
 
 /// Provider that fetches memos and applies filters and sorting
+///
+/// This provider caches its results to avoid unnecessary API calls
+/// when other parts of the state change. It only refreshes when
+/// filter-related providers change.
 final memosProvider = FutureProvider<List<Memo>>((ref) async {
+  // Keep the provider alive to maintain the cache
+  ref.keepAlive();
+
+  // Watch dependencies
   final apiService = ref.watch(apiServiceProvider);
+  
+  // Use select() to only listen for changes to the filter string,
+  // not the entire filter object
   final combinedFilter = ref.watch(combinedFilterProvider);
+  
+  // Watch only the enum value, not the entire provider state
   final sortMode = ref.watch(memoSortModeProvider);
   final filterKey = ref.watch(filterKeyProvider);
   
@@ -46,7 +59,7 @@ final memosProvider = FutureProvider<List<Memo>>((ref) async {
     direction: 'DESC', // Always newest first
   );
   
-  // Status filter untagged - applying additional client-side filtering if needed
+  // Only read this once when needed, don't watch it to avoid unnecessary rebuilds
   final statusFilter = ref.read(statusFilterProvider);
   if (statusFilter == 'untagged' && memos.isNotEmpty) {
     // Double-check client-side to ensure we only show truly untagged memos

@@ -18,6 +18,7 @@ dependencies:
   sqflite: ^2.3.0
   provider: ^6.0.5
   flutter_riverpod: ^2.4.9
+  riverpod_annotation: ^2.3.3
   url_launcher: ^6.1.12
   source_helper: ^1.3.2
   json_annotation: ^4.4.0
@@ -38,9 +39,7 @@ dev_dependencies:
   mockito: ^5.4.4
   custom_lint: ^0.5.7
   riverpod_lint: ^2.3.7
-  # Code generation temporarily disabled
-  # riverpod_generator: ^2.3.9
-  # riverpod_annotation: ^2.3.3
+  riverpod_generator: ^2.3.9
 
 flutter:
   uses-material-design: true
