@@ -664,10 +664,13 @@ class ApiService {
         apiRelations.add(relation.toApiRelation());
       }
       
-      // Create the request using the API's class
-      final request = V1SetMemoRelationsRequest(relations: apiRelations);
+      // Create the proper request body with the relations
+      final requestBody = MemoServiceSetMemoRelationsBody(
+        relations: apiRelations,
+      );
       
-      await _memoApi.memoServiceSetMemoRelations(formattedId, request);
+      // Use the API's method to set relations with the proper request body
+      await _memoApi.memoServiceSetMemoRelations(formattedId, requestBody);
       
       if (verboseLogging) {
         print('[API] Successfully set relations for memo: $memoId');
@@ -677,6 +680,7 @@ class ApiService {
       throw Exception('Failed to set memo relations: $e');
     }
   }
+
   Future<List<MemoRelation>> listMemoRelations(String memoId) async {
     try {
       final formattedId = _formatResourceName(memoId, 'memos');
