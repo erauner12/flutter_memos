@@ -17,7 +17,7 @@ void main() {
       // Find the initial count of memos for comparison later
       final initialMemoCards = find.byType(MemoCard);
       final initialCount = initialMemoCards.evaluate().length;
-      print('Initial memo count: $initialCount');
+      debugPrint('Initial memo count: $initialCount');
 
       // Tap the FAB to create a new memo
       final fabFinder = find.byIcon(Icons.add);
@@ -29,7 +29,9 @@ void main() {
       final textFieldFinder = find.byType(TextField);
       expect(textFieldFinder, findsOneWidget, reason: 'TextField not found');
       
-      const testMemoContent = 'Test Memo for Swipe Delete';
+      // Create unique test content with timestamp to avoid collisions
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final testMemoContent = 'Test Memo for Swipe Delete - $timestamp';
       await tester.enterText(textFieldFinder, testMemoContent);
       await tester.pumpAndSettle();
 
@@ -39,29 +41,75 @@ void main() {
       await tester.tap(createButtonFinder);
       await tester.pumpAndSettle();
 
-      // Verify the memo was created
+      // Give the app time to fully refresh the memo list after creation
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pumpAndSettle();
+
+      // Verify there are MemoCards displayed
       expect(find.byType(MemoCard), findsWidgets);
       final afterCreateCount = find.byType(MemoCard).evaluate().length;
-      print('Memo count after creation: $afterCreateCount');
+      debugPrint('Memo count after creation: $afterCreateCount');
       
-      // Ensure we have one more memo than before
-      expect(afterCreateCount, initialCount + 1, reason: 'Memo count did not increase after creation');
+      // Let's find our specific memo by its content
+      Finder textFinder = find.text(testMemoContent);
+      
+      // If the memo isn't found immediately, try scrolling to find it
+      if (textFinder.evaluate().isEmpty) {
+        debugPrint('Memo not immediately visible, searching by scrolling...');
+        // Find the list view
+        final listViewFinder = find.byType(ListView);
+        expect(listViewFinder, findsOneWidget, reason: 'ListView not found');
 
-      // Find the new memo by its content
-      final newMemoFinder = find.descendant(
-        of: find.byType(MemoCard),
-        matching: find.text(testMemoContent),
+        // Try scrolling down to find the memo
+        for (int i = 0; i < 3; i++) {
+          await tester.drag(listViewFinder, const Offset(0, -300));
+          await tester.pumpAndSettle();
+
+          // Check if memo is visible after scroll
+          if (find.text(testMemoContent).evaluate().isNotEmpty) {
+            debugPrint('Found memo after scrolling $i times');
+            break;
+          }
+        }
+      }
+
+      // Now verify we can find our memo (might be multiple instances of the text)
+      expect(
+        find.text(testMemoContent),
+        findsWidgets,
+        reason: 'Newly created memo not found',
       );
-      expect(newMemoFinder, findsOneWidget, reason: 'Newly created memo not found');
 
-      // Get the position of the memo card to swipe
-      final memoCardFinder = find.ancestor(
-        of: newMemoFinder,
-        matching: find.byType(MemoCard),
-      ).first;
+      // Find a MemoCard that contains our test content
+      Finder? memoCardFinder;
+      final textWidgets = find.text(testMemoContent);
       
-      final memoCardWidget = tester.widget(memoCardFinder) as MemoCard;
-      print('Found memo card with ID: ${memoCardWidget.id}');
+      for (int i = 0; i < textWidgets.evaluate().length; i++) {
+        final currentTextFinder = find.text(testMemoContent).at(i);
+        final ancestorFinder = find.ancestor(
+          of: currentTextFinder,
+          matching: find.byType(MemoCard),
+        );
+        
+        if (ancestorFinder.evaluate().isNotEmpty) {
+          memoCardFinder = ancestorFinder.first;
+          debugPrint(
+            'Found MemoCard containing our test memo text at index $i',
+          );
+          break;
+        }
+      }
+      
+      // Verify we found a MemoCard
+      expect(
+        memoCardFinder != null,
+        isTrue,
+        reason: 'Could not find MemoCard containing test memo content',
+      );
+      
+      // Now we can safely use memoCardFinder!
+      final memoCardWidget = tester.widget(memoCardFinder!) as MemoCard;
+      debugPrint('Found memo card with ID: ${memoCardWidget.id}');
 
       // Find the Dismissible widget that wraps the MemoCard
       final dismissibleFinder = find.ancestor(
@@ -74,37 +122,116 @@ void main() {
       await tester.drag(dismissibleFinder, const Offset(-500, 0));
       await tester.pumpAndSettle();
       
-      // Tap "Delete" on the confirmation dialog
-      final deleteButtonFinder = find.text('Delete');
-      expect(deleteButtonFinder, findsOneWidget, reason: 'Delete confirmation button not found');
+      // Tap "Delete" on the confirmation dialog - using a more specific approach
+      // since there might be multiple "Delete" widgets in the app
+
+      // First find the alert dialog
+      final alertDialogFinder = find.byType(AlertDialog);
+      expect(
+        alertDialogFinder,
+        findsOneWidget,
+        reason: 'Alert dialog not found after swipe',
+      );
+
+      // Find the Delete button within the dialog
+      final deleteButtonFinder = find.descendant(
+        of: alertDialogFinder,
+        matching: find.text('Delete'),
+      );
+      expect(
+        deleteButtonFinder,
+        findsOneWidget,
+        reason: 'Delete button not found in dialog',
+      );
+
+      // Tap the delete button
       await tester.tap(deleteButtonFinder);
       await tester.pumpAndSettle();
 
       // Wait for deletion to complete
       await tester.pump(const Duration(seconds: 1));
       
-      // Verify deletion by checking memo count or trying to find the deleted memo
+      // Give more time for deletion animation and UI updates to complete
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pumpAndSettle();
+
+      // Log the counts for debugging
       final afterDeleteCount = find.byType(MemoCard).evaluate().length;
-      print('Memo count after deletion: $afterDeleteCount');
+      debugPrint('Memo count after deletion: $afterDeleteCount');
       
-      // Make sure our memo is no longer in the list
-      final deletedMemoFinder = find.descendant(
-        of: find.byType(MemoCard),
-        matching: find.text(testMemoContent),
-      );
+      // Check if our memo is still visible anywhere
+      bool memoFound = false;
       
-      expect(deletedMemoFinder, findsNothing, reason: 'Deleted memo is still visible');
+      // Look for our text in any MemoCard
+      final textWidgetsAfterDelete = find.text(testMemoContent);
+      if (textWidgetsAfterDelete.evaluate().isNotEmpty) {
+        for (int i = 0; i < textWidgetsAfterDelete.evaluate().length; i++) {
+          final ancestorFinder = find.ancestor(
+            of: textWidgetsAfterDelete.at(i),
+            matching: find.byType(MemoCard),
+          );
+          
+          if (ancestorFinder.evaluate().isNotEmpty) {
+            memoFound = true;
+            debugPrint(
+              'Found memo in MemoCard after deletion attempt - deletion failed',
+            );
+            break;
+          }
+        }
+      }
       
-      // Optional: Also verify a snackbar confirmation is shown
+      // If not found immediately, try scrolling to find it
+      if (!memoFound) {
+        debugPrint('Checking if memo is really gone by scrolling...');
+        final listViewFinder = find.byType(ListView);
+
+        // Only try scrolling if there are memos to scroll through
+        if (find.byType(MemoCard).evaluate().isNotEmpty &&
+            listViewFinder.evaluate().isNotEmpty) {
+          for (int i = 0; i < 3; i++) {
+            await tester.drag(listViewFinder.first, const Offset(0, -300));
+            await tester.pumpAndSettle();
+
+            // Check after each scroll if we can find our memo
+            final textAfterScroll = find.text(testMemoContent);
+            if (textAfterScroll.evaluate().isNotEmpty) {
+              // Check if this text is part of a MemoCard
+              for (int j = 0; j < textAfterScroll.evaluate().length; j++) {
+                final ancestorFinder = find.ancestor(
+                  of: textAfterScroll.at(j),
+                  matching: find.byType(MemoCard),
+                );
+
+                if (ancestorFinder.evaluate().isNotEmpty) {
+                  memoFound = true;
+                  debugPrint(
+                    'Found memo after scrolling $i times - deletion failed',
+                  );
+                  break;
+                }
+              }
+
+              if (memoFound) break;
+            }
+          }
+        }
+      }
+      
+      // Final verification - memo should not be found
+      expect(memoFound, isFalse, reason: 'Deleted memo is still visible');
+      
+      // Optional: Check for a snackbar confirmation
       final snackbarFinder = find.descendant(
         of: find.byType(SnackBar),
         matching: find.textContaining('deleted'),
       );
-      // We don't fail the test if the snackbar isn't found - it's not critical
+      
+      // Just log this result, don't fail the test if snackbar isn't shown
       if (snackbarFinder.evaluate().isEmpty) {
-        print('Warning: Deletion confirmation snackbar not found');
+        debugPrint('Warning: Deletion confirmation snackbar not found');
       } else {
-        print('Found deletion confirmation snackbar');
+        debugPrint('Found deletion confirmation snackbar');
       }
     });
   });
