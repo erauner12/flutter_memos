@@ -30,10 +30,14 @@ void main() {
       await tester.enterText(textFieldFinder, 'Integration Test Memo');
       await tester.pumpAndSettle();
 
-      // Tap the "Save" button
-      final saveButtonFinder = find.text('Save');
-      expect(saveButtonFinder, findsOneWidget, reason: 'Save button not found');
-      await tester.tap(saveButtonFinder);
+      // Tap the "Create Memo" button
+      final createButtonFinder = find.text('Create Memo');
+      expect(
+        createButtonFinder,
+        findsOneWidget,
+        reason: 'Create Memo button not found',
+      );
+      await tester.tap(createButtonFinder);
       await tester.pumpAndSettle();
 
       // Find the MemoCard widget
