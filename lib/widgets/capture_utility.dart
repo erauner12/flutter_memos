@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/models/memo.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_memos/screens/memo_detail/memo_detail_providers.dart';
 import 'package:flutter_memos/screens/new_memo/new_memo_providers.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 enum CaptureMode { createMemo, addComment }
 
@@ -131,6 +131,7 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility> {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final size = MediaQuery.of(context).size;
     final keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
+    final edgeInsets = MediaQuery.of(context).padding;
     
     // Determine text based on mode
     final hintText =
@@ -154,18 +155,23 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility> {
     final tooltip =
         widget.mode == CaptureMode.createMemo ? 'Add memo' : 'Add comment';
     
-    // Responsive width based on screen size
+    // Responsive width based on screen size, accounting for safe areas
     double containerWidth;
     if (size.width > 800) {
       containerWidth = 400; // Desktop-style narrower box
     } else {
-      containerWidth = size.width * 0.95; // Mobile-friendly
+      // Calculate available width accounting for horizontal safe areas
+      final availableWidth = size.width - edgeInsets.left - edgeInsets.right - 32; // 16px padding on each side
+      containerWidth = availableWidth > 0 ? availableWidth : size.width * 0.85;
     }
 
-    return Padding(
-      padding: EdgeInsets.only(bottom: keyboardHeight > 0 ? 0 : 16),
-      child: Container(
-        width: containerWidth,
+    return SafeArea(
+      bottom: true,
+      minimum: const EdgeInsets.symmetric(horizontal: 16.0),
+      child: Padding(
+        padding: EdgeInsets.only(bottom: keyboardHeight > 0 ? 0 : 8),
+        child: Container(
+          width: containerWidth,
         decoration: BoxDecoration(
           color: isDarkMode ? const Color(0xFF2C2C2C) : Colors.white,
           borderRadius: BorderRadius.circular(12),

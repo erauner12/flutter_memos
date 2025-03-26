@@ -47,14 +47,11 @@ class _MemoDetailScreenState extends ConsumerState<MemoDetailScreen> {
           // Content area (expandable)
           Expanded(child: _buildBody()),
           // Fixed bottom area for CaptureUtility
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 16.0),
-            child: CaptureUtility(
-              mode: CaptureMode.addComment,
-              memoId: widget.memoId,
-              hintText: 'Add a comment...',
-              buttonText: 'Add Comment',
-            ),
+          CaptureUtility(
+            mode: CaptureMode.addComment,
+            memoId: widget.memoId,
+            hintText: 'Add a comment...',
+            buttonText: 'Add Comment',
           ),
         ],
       ),

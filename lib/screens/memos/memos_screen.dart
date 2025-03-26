@@ -75,7 +75,6 @@ class _MemosScreenState extends ConsumerState<MemosScreen> {
               );
             },
           ),
-          const SizedBox(width: 8),
         ],
       ),
       body: const Stack(
