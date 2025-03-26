@@ -22,11 +22,45 @@ class MemoComments extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Comments header
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 8.0),
-            child: Text(
-              'Comments',
-              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16.0),
+            child: Row(
+              children: [
+                const Text(
+                  'Comments',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(width: 8),
+                // Optional comment counter
+                commentsAsync.maybeWhen(
+                  data: (comments) {
+                    if (comments.isNotEmpty) {
+                      return Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.primary.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          '${comments.length}',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                        ),
+                      );
+                    }
+                    return const SizedBox.shrink();
+                  },
+                  orElse: () => const SizedBox.shrink(),
+                ),
+              ],
             ),
           ),
           
@@ -34,18 +68,55 @@ class MemoComments extends ConsumerWidget {
           commentsAsync.when(
             data: (comments) {
               if (comments.isEmpty) {
-                return const Padding(
-                  padding: EdgeInsets.only(bottom: 16.0),
-                  child: Text(
-                    'No comments yet.',
-                    style: TextStyle(fontStyle: FontStyle.italic, color: Colors.grey),
+                final isDarkMode =
+                    Theme.of(context).brightness == Brightness.dark;
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 24.0),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 16.0,
+                      horizontal: 12.0,
+                    ),
+                    decoration: BoxDecoration(
+                      color:
+                          isDarkMode
+                              ? const Color(0xFF1E1E1E)
+                              : const Color(0xFFF5F5F5),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color:
+                            isDarkMode ? Colors.grey[800]! : Colors.grey[300]!,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.chat_bubble_outline,
+                          size: 18,
+                          color:
+                              isDarkMode ? Colors.grey[400] : Colors.grey[600],
+                        ),
+                        const SizedBox(width: 10),
+                        Text(
+                          'No comments yet.',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontStyle: FontStyle.italic,
+                            color:
+                                isDarkMode
+                                    ? Colors.grey[400]
+                                    : Colors.grey[600],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 );
               }
               
               return Column(
                 children: comments.reversed.map(
-                  (comment) => _buildCommentCard(comment),
+                  (comment) => _buildCommentCard(comment, context),
                 ).toList(),
               );
             },
@@ -70,25 +141,84 @@ class MemoComments extends ConsumerWidget {
     );
   }
   
-  Widget _buildCommentCard(Comment comment) {
+  Widget _buildCommentCard(Comment comment, [BuildContext? context]) {
+    // Use the provided context or null if not provided
+    final buildContext = context!;
+    final isDarkMode = Theme.of(buildContext).brightness == Brightness.dark;
+
+    // Format the timestamp in a more readable way
+    final DateTime commentDate = DateTime.fromMillisecondsSinceEpoch(
+      comment.createTime,
+    );
+    final String formattedDate = _formatCommentDate(commentDate);
+    
     return Card(
-      margin: const EdgeInsets.only(bottom: 8.0),
+      elevation: isDarkMode ? 0 : 1,
+      margin: const EdgeInsets.only(bottom: 12.0),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(10),
+        side:
+            isDarkMode
+                ? BorderSide(color: Colors.grey[850]!, width: 0.5)
+                : BorderSide.none,
+      ),
       child: Padding(
-        padding: const EdgeInsets.all(8.0),
+        padding: const EdgeInsets.all(14.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(comment.content),
-            const SizedBox(height: 4),
+            // Comment content with proper styling
             Text(
-              DateTime.fromMillisecondsSinceEpoch(
-                comment.createTime,
-              ).toString(),
-              style: const TextStyle(fontSize: 12, color: Colors.grey),
+              comment.content,
+              style: TextStyle(
+                fontSize: 16,
+                color: isDarkMode ? Colors.grey[100] : Colors.grey[800],
+              ),
+            ),
+            const SizedBox(height: 10),
+
+            // Timestamp with better formatting
+            Row(
+              children: [
+                Icon(
+                  Icons.schedule,
+                  size: 14,
+                  color: isDarkMode ? Colors.grey[400] : Colors.grey[600],
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  formattedDate,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: isDarkMode ? Colors.grey[400] : Colors.grey[600],
+                    fontWeight: FontWeight.w400,
+                  ),
+                ),
+              ],
             ),
           ],
         ),
       ),
     );
+  }
+  
+  // Helper method to format comment date in a human-readable format
+  String _formatCommentDate(DateTime dateTime) {
+    final now = DateTime.now();
+    final difference = now.difference(dateTime);
+
+    if (difference.inDays == 0) {
+      // Today - show time only
+      return 'Today at ${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}';
+    } else if (difference.inDays == 1) {
+      // Yesterday
+      return 'Yesterday at ${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}';
+    } else if (difference.inDays < 7) {
+      // This week
+      return '${difference.inDays} days ago';
+    } else {
+      // Show full date
+      return '${dateTime.year}-${dateTime.month.toString().padLeft(2, '0')}-${dateTime.day.toString().padLeft(2, '0')} ${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}';
+    }
   }
 }

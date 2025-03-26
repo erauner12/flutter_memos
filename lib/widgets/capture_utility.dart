@@ -40,7 +40,9 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility> {
   }
 
   Future<void> _handlePaste() async {
-    ClipboardData? clipboardData = await Clipboard.getData(Clipboard.kTextPlain);
+    ClipboardData? clipboardData = await Clipboard.getData(
+      Clipboard.kTextPlain,
+    );
     if (clipboardData != null && clipboardData.text != null) {
       setState(() {
         _textController.text = clipboardData.text!;
@@ -92,7 +94,7 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility> {
 
     // Use the existing createMemo provider
     await ref.read(createMemoProvider)(newMemo);
-    
+
     // Show success message
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -114,7 +116,7 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility> {
 
     // Use the addComment provider from memo detail
     await ref.read(addCommentProvider(memoId))(newComment);
-    
+
     // Show success message
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -132,7 +134,7 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility> {
     final size = MediaQuery.of(context).size;
     final keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
     final edgeInsets = MediaQuery.of(context).padding;
-    
+
     // Determine text based on mode
     final hintText =
         widget.hintText ??
@@ -154,14 +156,18 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility> {
 
     final tooltip =
         widget.mode == CaptureMode.createMemo ? 'Add memo' : 'Add comment';
-    
+
     // Responsive width based on screen size, accounting for safe areas
     double containerWidth;
     if (size.width > 800) {
       containerWidth = 400; // Desktop-style narrower box
     } else {
       // Calculate available width accounting for horizontal safe areas
-      final availableWidth = size.width - edgeInsets.left - edgeInsets.right - 32; // 16px padding on each side
+      final availableWidth =
+          size.width -
+          edgeInsets.left -
+          edgeInsets.right -
+          32; // 16px padding on each side
       containerWidth = availableWidth > 0 ? availableWidth : size.width * 0.85;
     }
 
@@ -172,141 +178,159 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility> {
         padding: EdgeInsets.only(bottom: keyboardHeight > 0 ? 0 : 8),
         child: Container(
           width: containerWidth,
-        decoration: BoxDecoration(
-          color: isDarkMode ? const Color(0xFF2C2C2C) : Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.1),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
-          border: Border.all(
-            color: isDarkMode ? Colors.grey[800]! : Colors.grey[300]!,
-            width: 1,
-          ),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Text field area
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Expand/collapse icon
-                  if (_isExpanded)
-                    IconButton(
-                      icon: const Icon(Icons.unfold_less),
-                      onPressed: () {
-                        setState(() {
-                          _isExpanded = false;
-                        });
-                      },
-                      tooltip: 'Collapse',
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
-                      iconSize: 20,
-                    ),
-                  if (!_isExpanded)
-                    IconButton(
-                      icon: Icon(icon),
-                      onPressed: () {
-                        setState(() {
-                          _isExpanded = true;
-                        });
-                        _focusNode.requestFocus();
-                      },
-                      tooltip: tooltip,
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
-                      iconSize: 20,
-                    ),
-                    
-                  const SizedBox(width: 8),
-                  
-                  // Text field - expanded or single line
-                  Expanded(
-                    child: _isExpanded
-                      ? TextField(
-                          controller: _textController,
-                          focusNode: _focusNode,
-                              decoration: InputDecoration(
-                                hintText: hintText,
-                            border: InputBorder.none,
-                          ),
-                          maxLines: 5,
-                              minLines:
-                                  widget.mode == CaptureMode.createMemo ? 3 : 2,
-                          textCapitalization: TextCapitalization.sentences,
-                        )
-                      : InkWell(
-                          onTap: () {
-                            setState(() {
-                              _isExpanded = true;
-                            });
-                            _focusNode.requestFocus();
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            child: Text(
-                                  placeholderText,
-                              style: TextStyle(
-                                color: isDarkMode ? Colors.grey[400] : Colors.grey[600],
-                              ),
-                            ),
-                          ),
-                        ),
-                  ),
-                ],
+          decoration: BoxDecoration(
+            color: isDarkMode ? const Color(0xFF2C2C2C) : Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.1),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
               ),
+            ],
+            border: Border.all(
+              color: isDarkMode ? Colors.grey[800]! : Colors.grey[300]!,
+              width: 1,
             ),
-            
-            // Buttons row - only visible when expanded
-            if (_isExpanded)
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Text field area
               Padding(
-                padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
                 child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Paste button
-                    TextButton.icon(
-                      onPressed: _handlePaste,
-                      icon: const Icon(Icons.content_paste, size: 16),
-                      label: const Text('Paste'),
-                      style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        minimumSize: Size.zero,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    // Expand/collapse icon
+                    if (_isExpanded)
+                      IconButton(
+                        icon: const Icon(Icons.unfold_less),
+                        onPressed: () {
+                          setState(() {
+                            _isExpanded = false;
+                          });
+                        },
+                        tooltip: 'Collapse',
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        iconSize: 20,
                       ),
-                    ),
-                    
-                    // Submit button
-                    ElevatedButton(
-                      onPressed: _isSubmitting ? null : _handleSubmit,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Theme.of(context).colorScheme.primary,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        minimumSize: Size.zero,
+                    if (!_isExpanded)
+                      IconButton(
+                        icon: Icon(icon),
+                        onPressed: () {
+                          setState(() {
+                            _isExpanded = true;
+                          });
+                          _focusNode.requestFocus();
+                        },
+                        tooltip: tooltip,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        iconSize: 20,
                       ),
-                      child: _isSubmitting
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                              : Text(buttonText),
+
+                    const SizedBox(width: 8),
+
+                    // Text field - expanded or single line
+                    Expanded(
+                      child:
+                          _isExpanded
+                              ? TextField(
+                                controller: _textController,
+                                focusNode: _focusNode,
+                                decoration: InputDecoration(
+                                  hintText: hintText,
+                                  border: InputBorder.none,
+                                ),
+                                maxLines: 5,
+                                minLines:
+                                    widget.mode == CaptureMode.createMemo
+                                        ? 3
+                                        : 2,
+                                textCapitalization:
+                                    TextCapitalization.sentences,
+                              )
+                              : InkWell(
+                                onTap: () {
+                                  setState(() {
+                                    _isExpanded = true;
+                                  });
+                                  _focusNode.requestFocus();
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 12,
+                                  ),
+                                  child: Text(
+                                    placeholderText,
+                                    style: TextStyle(
+                                      color:
+                                          isDarkMode
+                                              ? Colors.grey[400]
+                                              : Colors.grey[600],
+                                    ),
+                                  ),
+                                ),
+                              ),
                     ),
                   ],
                 ),
               ),
-          ],
+
+              // Buttons row - only visible when expanded
+              if (_isExpanded)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      // Paste button
+                      TextButton.icon(
+                        onPressed: _handlePaste,
+                        icon: const Icon(Icons.content_paste, size: 16),
+                        label: const Text('Paste'),
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                      ),
+
+                      // Submit button
+                      ElevatedButton(
+                        onPressed: _isSubmitting ? null : _handleSubmit,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor:
+                              Theme.of(context).colorScheme.primary,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
+                          minimumSize: Size.zero,
+                        ),
+                        child:
+                            _isSubmitting
+                                ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                                : Text(buttonText),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );
