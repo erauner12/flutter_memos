@@ -75,13 +75,14 @@ class _MemosScreenState extends ConsumerState<MemosScreen> {
               );
             },
           ),
+          const SizedBox(width: 8),
         ],
       ),
-      body: Stack(
+      body: const Stack(
         alignment: Alignment.bottomCenter,
         children: [
           Column(
-            children: const [
+            children: [
               // Filter area
               MemosFilterBar(),
               // Main content area
@@ -89,7 +90,7 @@ class _MemosScreenState extends ConsumerState<MemosScreen> {
             ],
           ),
           // Pinned capture utility at bottom for creating new memos
-          const CaptureUtility(
+          CaptureUtility(
             mode: CaptureMode.createMemo,
             hintText: 'Type or paste memo content...',
             buttonText: 'Add Memo',

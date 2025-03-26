@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'comment_form.dart';
 import 'memo_detail_providers.dart';
 
 class MemoComments extends ConsumerWidget {

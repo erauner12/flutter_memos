@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_memos/widgets/capture_utility.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'memo_comments.dart';
 import 'memo_content.dart';
@@ -41,61 +41,53 @@ class _MemoDetailScreenState extends ConsumerState<MemoDetailScreen> {
           ),
         ],
       ),
-      body: Stack(
+      // Use a Column for vertical layout - this ensures proper bottom alignment
+      body: Column(
         children: [
-          _buildBody(),
-          // Position the CaptureUtility at the bottom
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: Padding(
-              padding: const EdgeInsets.only(bottom: 16.0),
-              child: Center(
-                child: CaptureUtility(
-                  mode: CaptureMode.addComment,
-                  memoId: widget.memoId,
-                  hintText: 'Add a comment...',
-                  buttonText: 'Add Comment',
-                ),
-              ),
+          // Content area (expandable)
+          Expanded(child: _buildBody()),
+          // Fixed bottom area for CaptureUtility
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16.0),
+            child: CaptureUtility(
+              mode: CaptureMode.addComment,
+              memoId: widget.memoId,
+              hintText: 'Add a comment...',
+              buttonText: 'Add Comment',
             ),
           ),
         ],
       ),
     );
   }
-Widget _buildBody() {
+
+  Widget _buildBody() {
     final memoAsync = ref.watch(memoDetailProvider(widget.memoId));
-    
+
     return memoAsync.when(
       data: (memo) {
         return SingleChildScrollView(
-          child: Padding(
-            padding: const EdgeInsets.only(
-              bottom: 100,
-            ), // Increased padding for floating CaptureUtility
-            child: Column(
-              children: [
-                // Memo content section
-                MemoContent(memo: memo, memoId: widget.memoId),
-                
-                // Divider between content and comments
-                const Divider(),
-                
-                // Comments section
-                MemoComments(memoId: widget.memoId),
-              ],
-            ),
+          child: Column(
+            children: [
+              // Memo content section
+              MemoContent(memo: memo, memoId: widget.memoId),
+
+              // Divider between content and comments
+              const Divider(),
+
+              // Comments section
+              MemoComments(memoId: widget.memoId),
+            ],
           ),
         );
       },
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (error, _) => Center(
-        child: Text(
-          'Error: $error',
-          style: const TextStyle(color: Colors.red),
-        ),
+      error:
+          (error, _) => Center(
+            child: Text(
+              'Error: $error',
+              style: const TextStyle(color: Colors.red),
+            ),
       ),
     );
   }
