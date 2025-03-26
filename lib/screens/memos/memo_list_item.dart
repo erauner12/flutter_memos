@@ -54,7 +54,7 @@ class MemoListItem extends ConsumerWidget {
     final sortMode = ref.watch(memoSortModeProvider);
     
     return Dismissible(
-      key: Key(memo.id),
+      key: ValueKey('dismissible-${memo.id}'),
       background: Container(
         color: Colors.orange,
         alignment: Alignment.centerLeft,
@@ -88,13 +88,40 @@ class MemoListItem extends ConsumerWidget {
       ),
       onDismissed: (direction) {
         if (direction == DismissDirection.endToStart) {
-          // Call delete without awaiting to avoid rebuild issues
-          // The provider will handle refreshing the list
-          ref.read(deleteMemoProvider(memo.id))();
+          // First, immediately add the memo to hidden IDs to remove it from UI
+          ref
+              .read(hiddenMemoIdsProvider.notifier)
+              .update((state) => state..add(memo.id));
           
-          // Also invalidate the memos provider to ensure the UI updates
+          // Then trigger the API delete operation
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            ref.invalidate(memosProvider);
+            // Create a local reference to the providers we need to call
+            // outside the async callback
+            final deleteMemo = ref.read(deleteMemoProvider(memo.id));
+            final String memoId = memo.id; // Capture memo ID
+
+            // Execute delete operation
+            deleteMemo()
+                .then((_) {
+                  // Use a post-frame callback for UI updates to avoid build phase issues
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    // These operations are safe even if the widget is no longer mounted
+                    // because they just update provider state
+                    ref.invalidate(memosProvider);
+                    ref
+                        .read(hiddenMemoIdsProvider.notifier)
+                        .update((state) => state..remove(memoId));
+                  });
+                })
+                .catchError((e) {
+                  // If delete fails, handle errors and clean up
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    ref.invalidate(memosProvider);
+                    ref
+                        .read(hiddenMemoIdsProvider.notifier)
+                        .update((state) => state..remove(memoId));
+                  });
+                });
           });
         }
       },

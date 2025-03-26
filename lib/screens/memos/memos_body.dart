@@ -17,7 +17,14 @@ class MemosBody extends ConsumerWidget {
     
     return memosAsync.when(
       data: (memos) {
-        if (memos.isEmpty) {
+        // Get hidden memo IDs
+        final hiddenIds = ref.watch(hiddenMemoIdsProvider);
+
+        // Filter out hidden memos
+        final visibleMemos =
+            memos.where((memo) => !hiddenIds.contains(memo.id)).toList();
+
+        if (visibleMemos.isEmpty) {
           return const MemosEmptyState();
         }
 
@@ -28,9 +35,9 @@ class MemosBody extends ConsumerWidget {
           },
           child: ListView.builder(
             padding: const EdgeInsets.all(16.0),
-            itemCount: memos.length,
+            itemCount: visibleMemos.length,
             itemBuilder: (context, index) {
-              final memo = memos[index];
+              final memo = visibleMemos[index];
               return MemoListItem(memo: memo);
             },
           ),
