@@ -8,7 +8,7 @@ import 'package:flutter_memos/screens/codegen_test_screen.dart';
 import 'package:flutter_memos/screens/edit_memo_screen.dart';
 import 'package:flutter_memos/screens/filter_demo_screen.dart';
 import 'package:flutter_memos/screens/mcp_screen.dart';
-import 'package:flutter_memos/screens/memo_detail_screen.dart';
+import 'package:flutter_memos/screens/memo_detail/memo_detail_screen.dart';
 import 'package:flutter_memos/screens/memos/memos_screen.dart';
 import 'package:flutter_memos/screens/new_memo_screen.dart';
 import 'package:flutter_memos/screens/riverpod_demo_screen.dart';

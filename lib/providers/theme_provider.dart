@@ -98,8 +98,6 @@ final toggleThemeModeProvider = Provider<void Function()>((ref) {
       case ThemeMode.system:
         newMode = ThemeMode.dark;
         break;
-      default:
-        newMode = ThemeMode.dark;
     }
     
     if (kDebugMode) {

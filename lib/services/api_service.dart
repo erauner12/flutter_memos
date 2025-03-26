@@ -435,13 +435,6 @@ class ApiService {
 
   /// HELPER METHODS
 
-  String _toSnakeCase(String camelCase) {
-    return camelCase.replaceAllMapped(
-      RegExp(r'([A-Z])'),
-      (match) => '_${match.group(0)!.toLowerCase()}',
-    );
-  }
-
   String _formatResourceName(String id, String resourceType) {
     return id.startsWith('$resourceType/') ? id : '$resourceType/$id';
   }
