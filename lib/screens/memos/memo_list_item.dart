@@ -88,7 +88,14 @@ class MemoListItem extends ConsumerWidget {
       ),
       onDismissed: (direction) {
         if (direction == DismissDirection.endToStart) {
+          // Call delete without awaiting to avoid rebuild issues
+          // The provider will handle refreshing the list
           ref.read(deleteMemoProvider(memo.id))();
+          
+          // Also invalidate the memos provider to ensure the UI updates
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            ref.invalidate(memosProvider);
+          });
         }
       },
       confirmDismiss: (direction) async {
