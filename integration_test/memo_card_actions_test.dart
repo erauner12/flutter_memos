@@ -1,17 +1,16 @@
 // Import required packages
-import 'package:flutter/material.dart'; // Add missing import for Icons and TextField
-// For RenderBox
+import 'package:flutter/material.dart';
 import 'package:flutter_memos/main.dart' as app;
-// For MemoState
 import 'package:flutter_memos/widgets/memo_card.dart';
+import 'package:flutter_memos/widgets/capture_utility.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
+
 void main() {
   // Initialize integration test binding
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   group('MemoCard Context Menu Integration Tests', () {
-    // Fix testWidgets function parameter format
     testWidgets('Open context menu and verify Archive action', (
       WidgetTester tester,
     ) async {
@@ -19,25 +18,24 @@ void main() {
       app.main();
       await tester.pumpAndSettle();
 
-      // Create a new memo via the UI
-      final fabFinder = find.byIcon(Icons.add);
-      expect(fabFinder, findsOneWidget, reason: 'FAB not found');
-      await tester.tap(fabFinder);
+      // Create a new memo via the CaptureUtility
+      final captureUtilityFinder = find.byType(CaptureUtility);
+      expect(captureUtilityFinder, findsOneWidget, reason: 'CaptureUtility not found');
+      
+      // Tap on the CaptureUtility to expand it
+      await tester.tap(find.text('Capture something ...'));
       await tester.pumpAndSettle();
 
+      // Enter text in the expanded text field
       final textFieldFinder = find.byType(TextField);
-      expect(textFieldFinder, findsOneWidget, reason: 'New memo text field not found');
-      await tester.enterText(textFieldFinder, 'Integration Test Memo');
+      expect(textFieldFinder, findsAtLeastNWidgets(1), reason: 'TextField not found after expanding CaptureUtility');
+      await tester.enterText(textFieldFinder.first, 'Integration Test Memo');
       await tester.pumpAndSettle();
 
-      // Tap the "Create Memo" button
-      final createButtonFinder = find.text('Create Memo');
-      expect(
-        createButtonFinder,
-        findsOneWidget,
-        reason: 'Create Memo button not found',
-      );
-      await tester.tap(createButtonFinder);
+      // Tap the "Add Memo" button
+      final addMemoButtonFinder = find.text('Add Memo');
+      expect(addMemoButtonFinder, findsOneWidget, reason: 'Add Memo button not found');
+      await tester.tap(addMemoButtonFinder);
       await tester.pumpAndSettle();
 
       // Find the MemoCard widget

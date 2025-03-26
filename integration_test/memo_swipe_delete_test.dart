@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_memos/main.dart' as app;
 import 'package:flutter_memos/widgets/memo_card.dart';
+import 'package:flutter_memos/widgets/capture_utility.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
@@ -19,26 +20,28 @@ void main() {
       final initialCount = initialMemoCards.evaluate().length;
       debugPrint('Initial memo count: $initialCount');
 
-      // Tap the FAB to create a new memo
-      final fabFinder = find.byIcon(Icons.add);
-      expect(fabFinder, findsOneWidget, reason: 'FAB not found');
-      await tester.tap(fabFinder);
+      // Find and tap the CaptureUtility to expand it
+      final captureUtilityFinder = find.byType(CaptureUtility);
+      expect(captureUtilityFinder, findsOneWidget, reason: 'CaptureUtility not found');
+      
+      // Tap on the placeholder text to expand
+      await tester.tap(find.text('Capture something ...'));
       await tester.pumpAndSettle();
 
       // Enter text in the memo content field
       final textFieldFinder = find.byType(TextField);
-      expect(textFieldFinder, findsOneWidget, reason: 'TextField not found');
+      expect(textFieldFinder, findsAtLeastNWidgets(1), reason: 'TextField not found after expanding CaptureUtility');
       
       // Create unique test content with timestamp to avoid collisions
       final timestamp = DateTime.now().millisecondsSinceEpoch;
       final testMemoContent = 'Test Memo for Swipe Delete - $timestamp';
-      await tester.enterText(textFieldFinder, testMemoContent);
+      await tester.enterText(textFieldFinder.first, testMemoContent);
       await tester.pumpAndSettle();
 
-      // Tap the "Create Memo" button
-      final createButtonFinder = find.text('Create Memo');
-      expect(createButtonFinder, findsOneWidget, reason: 'Create Memo button not found');
-      await tester.tap(createButtonFinder);
+      // Tap the "Add Memo" button
+      final addMemoButtonFinder = find.text('Add Memo');
+      expect(addMemoButtonFinder, findsOneWidget, reason: 'Add Memo button not found');
+      await tester.tap(addMemoButtonFinder);
       await tester.pumpAndSettle();
 
       // Give the app time to fully refresh the memo list after creation
