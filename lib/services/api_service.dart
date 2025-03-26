@@ -1,6 +1,7 @@
 import 'package:flutter_memos/api/lib/api.dart';
 import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/models/memo.dart';
+import 'package:flutter_memos/models/memo_relation.dart';
 import 'package:flutter_memos/utils/env.dart';
 import 'package:flutter_memos/utils/filter_builder.dart';
 import 'package:flutter_memos/utils/memo_utils.dart';
@@ -657,7 +658,11 @@ class ApiService {
       }
       
       // Convert our model relations to API relations
-      final apiRelations = relations.map((relation) => relation.toApiRelation()).toList();
+      // We need to handle null safety explicitly with a non-nullable list
+      final List<V1MemoRelation> apiRelations = [];
+      for (final relation in relations) {
+        apiRelations.add(relation.toApiRelation());
+      }
       
       final request = V1SetMemoRelationsRequest(relations: apiRelations);
       
@@ -701,18 +706,18 @@ class ApiService {
     }
   }      
 
-  /// Parse relation type from string(relation) => MemoRelation.fromApiRelation(relation))
-  RelationType _parseRelationType(String? type) {
-    if (type == null) return RelationType.linked;
+  /// Parse relation type from string
+  String _parseRelationType(String? type) {
+    if (type == null) return MemoRelation.typeLinked;
 
-    switch (type.toUpperCase()) {ception('Failed to list memo relations: $e');
+    switch (type.toUpperCase()) {
       case 'REFERENCE':
-        return RelationType.reference;
+        return MemoRelation.typeReference;
       case 'INSPIRED_BY':
-        return RelationType.inspiredBy;
+        return MemoRelation.typeInspiredBy;
       case 'LINKED':
-      default:f (type == null) return RelationType.linked;
-        return RelationType.linked;
-    }    switch (type.toUpperCase()) {
+      default:
+        return MemoRelation.typeLinked;
+    }
   }
 }

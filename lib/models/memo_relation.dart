@@ -38,10 +38,16 @@ class MemoRelation {
   }
   
   /// Convert to API V1MemoRelation
+  /// Convert to API V1MemoRelation
   V1MemoRelation toApiRelation() {
+    // Format the memo ID correctly for the API
+    String formattedId = relatedMemoId;
+    if (!formattedId.contains('/')) {
+      formattedId = 'memos/$formattedId';
+    }
+    
     return V1MemoRelation(
-      relatedMemo:
-          relatedMemoId.contains('/') ? relatedMemoId : 'memos/$relatedMemoId',
+      relatedMemo: formattedId,
       type: type,
     );
   }
