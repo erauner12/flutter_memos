@@ -186,7 +186,7 @@ void main() {
         );
         expect(relations, isNotEmpty);
         expect(relations.first.relatedMemoId, equals(memo.id));
-        expect(relations.first.type, equals(RelationType.linked));
+        expect(relations.first.type, equals(MemoRelation.typeLinked));
       },
     );
   });

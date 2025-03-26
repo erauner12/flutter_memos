@@ -648,34 +648,21 @@ class ApiService {
   }
   
   /// Create or update relations for a memo
-  Future<void> setMemoRelations(
-    String memoId,
-    List<MemoRelation> relations,
-  ) async {
+  Future<void> setMemoRelations(String memoId, List<MemoRelation> relations) async {
     try {
       final formattedId = _formatResourceName(memoId, 'memos');
-
+      
       if (verboseLogging) {
         print('[API] Setting relations for memo: $formattedId');
       }
-
-      final relationList =
-          relations
-              .map(
-                (relation) => V1MemoRelation(
-                  relatedMemo: _formatResourceName(
-                    relation.relatedMemoId,
-                    'memos',
-                  ),
-                  type: relation.type.toString().split('.').last.toUpperCase(),
-                ),
-              )
-              .toList();
-
-      final request = V1SetMemoRelationsRequest(relations: relationList);
-
+      
+      // Convert our model relations to API relations
+      final apiRelations = relations.map((relation) => relation.toApiRelation()).toList();
+      
+      final request = V1SetMemoRelationsRequest(relations: apiRelations);
+      
       await _memoApi.memoServiceSetMemoRelations(formattedId, request);
-
+      
       if (verboseLogging) {
         print('[API] Successfully set relations for memo: $memoId');
       }
@@ -702,30 +689,30 @@ class ApiService {
 
       return response.relations
           .map(
-            (relation) => MemoRelation(
+            (relation) => MemoRelation(      
               relatedMemoId: _extractIdFromName(relation.relatedMemo ?? ''),
               type: _parseRelationType(relation.type),
             ),
-          )
+          )      
           .toList();
-    } catch (e) {
+    } catch (e) {      
       print('[API] Error listing memo relations: $e');
       throw Exception('Failed to list memo relations: $e');
     }
-  }
+  }      
 
-  /// Parse relation type from string
+  /// Parse relation type from string(relation) => MemoRelation.fromApiRelation(relation))
   RelationType _parseRelationType(String? type) {
     if (type == null) return RelationType.linked;
 
-    switch (type.toUpperCase()) {
+    switch (type.toUpperCase()) {ception('Failed to list memo relations: $e');
       case 'REFERENCE':
         return RelationType.reference;
       case 'INSPIRED_BY':
         return RelationType.inspiredBy;
       case 'LINKED':
-      default:
+      default:f (type == null) return RelationType.linked;
         return RelationType.linked;
-    }
+    }    switch (type.toUpperCase()) {
   }
 }

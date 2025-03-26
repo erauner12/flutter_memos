@@ -131,20 +131,19 @@ final convertCommentToMemoProvider = Provider.family<
 >((ref, id) {
   return () async {
     final apiService = ref.read(apiServiceProvider);
-
+    
     try {
       // Extract parts from the combined ID (format: "memoId/commentId")
       final parts = id.split('/');
       final memoId = parts.isNotEmpty ? parts.first : '';
-      final commentId = parts.length > 1 ? parts.last : id;
-
+      
       if (kDebugMode) {
         print('[convertCommentToMemoProvider] Converting comment to memo: $id');
       }
-
+      
       // Get the comment
       final comment = await apiService.getMemoComment(id);
-
+      
       // Create a new memo from the comment's content
       final newMemo = Memo(
         id: 'temp-${DateTime.now().millisecondsSinceEpoch}',
@@ -154,29 +153,29 @@ final convertCommentToMemoProvider = Provider.family<
         state: MemoState.normal,
         visibility: 'PUBLIC', // Default visibility
       );
-
+      
       // Create the new memo
       final createdMemo = await apiService.createMemo(newMemo);
-
+      
       // Create a relation between the new memo and the original memo
       if (memoId.isNotEmpty) {
         final relation = MemoRelation(
           relatedMemoId: memoId,
-          type: RelationType.linked,
+          type: MemoRelation.typeLinked,
         );
-
+        
         await apiService.setMemoRelations(createdMemo.id, [relation]);
       }
-
+      
       // Refresh memos list
       ref.invalidate(memosProvider);
-
+      
       if (kDebugMode) {
         print(
           '[convertCommentToMemoProvider] Converted comment to memo: ${createdMemo.id}',
         );
       }
-
+      
       return createdMemo;
     } catch (e) {
       if (kDebugMode) {

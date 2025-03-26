@@ -315,14 +315,41 @@ class MockApiService implements ApiService {
     String memoId,
     List<MemoRelation> relations,
   ) async {
+    // Ensure we store it with a consistent ID format
     final formattedId = memoId.contains('/') ? memoId.split('/').last : memoId;
-    _mockMemoRelations[formattedId] = List.from(relations);
+    
+    // Create a deep copy to avoid shared references
+    _mockMemoRelations[formattedId] =
+        relations
+            .map(
+              (relation) => MemoRelation(
+                relatedMemoId: relation.relatedMemoId,
+                type: relation.type,
+              ),
+            )
+            .toList();
+    
     return Future.value();
   }
 
   @override
   Future<List<MemoRelation>> listMemoRelations(String memoId) async {
+    // Ensure we retrieve with a consistent ID format
     final formattedId = memoId.contains('/') ? memoId.split('/').last : memoId;
-    return Future.value(_mockMemoRelations[formattedId] ?? []);
+    
+    // Return a deep copy to prevent mutations affecting stored data
+    final relations = _mockMemoRelations[formattedId];
+    if (relations == null) {
+      return [];
+    }
+
+    return relations
+        .map(
+          (relation) => MemoRelation(
+            relatedMemoId: relation.relatedMemoId,
+            type: relation.type,
+          ),
+        )
+        .toList();
   }
 }
