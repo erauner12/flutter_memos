@@ -664,6 +664,7 @@ class ApiService {
         apiRelations.add(relation.toApiRelation());
       }
       
+      // Create the request using the API's class
       final request = V1SetMemoRelationsRequest(relations: apiRelations);
       
       await _memoApi.memoServiceSetMemoRelations(formattedId, request);
@@ -676,8 +677,6 @@ class ApiService {
       throw Exception('Failed to set memo relations: $e');
     }
   }
-
-  /// List relations for a memo
   Future<List<MemoRelation>> listMemoRelations(String memoId) async {
     try {
       final formattedId = _formatResourceName(memoId, 'memos');
@@ -692,13 +691,9 @@ class ApiService {
         return [];
       }
 
+      // Use the fromApiRelation factory to handle the conversion properly
       return response.relations
-          .map(
-            (relation) => MemoRelation(      
-              relatedMemoId: _extractIdFromName(relation.relatedMemo ?? ''),
-              type: _parseRelationType(relation.type),
-            ),
-          )      
+          .map((relation) => MemoRelation.fromApiRelation(relation))
           .toList();
     } catch (e) {      
       print('[API] Error listing memo relations: $e');
@@ -706,11 +701,14 @@ class ApiService {
     }
   }      
 
-  /// Parse relation type from string
-  String _parseRelationType(String? type) {
+  /// Parse relation type from string - converts API type to string constant
+  String _parseRelationType(dynamic type) {
     if (type == null) return MemoRelation.typeLinked;
+    
+    // Handle different type possibilities
+    String typeStr = type.toString();
 
-    switch (type.toUpperCase()) {
+    switch (typeStr.toUpperCase()) {
       case 'REFERENCE':
         return MemoRelation.typeReference;
       case 'INSPIRED_BY':
