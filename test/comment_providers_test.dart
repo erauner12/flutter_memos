@@ -1,5 +1,6 @@
 import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/models/memo.dart';
+import 'package:flutter_memos/models/memo_relation.dart';
 import 'package:flutter_memos/providers/api_providers.dart';
 import 'package:flutter_memos/providers/comment_providers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -150,5 +151,43 @@ void main() {
       final finalState = container.read(hiddenCommentIdsProvider);
       expect(finalState.contains(commentId), isFalse);
     });
+    
+    test(
+      'convertCommentToMemoProvider converts a comment to a memo with relation',
+      () async {
+        // Set up test memo and comment
+        final memo = await mockApiService.createMemo(
+          Memo(id: 'test-memo-convert', content: 'Test memo for conversion'),
+        );
+
+        final comment = await mockApiService.createMemoComment(
+          memo.id,
+          Comment(
+            id: 'test-comment-convert',
+            content: 'Comment to convert to memo',
+            createTime: DateTime.now().millisecondsSinceEpoch,
+          ),
+        );
+
+        // Get combined ID
+        final fullId = '${memo.id}/${comment.id}';
+
+        // Call the convert provider
+        final createdMemo =
+            await container.read(convertCommentToMemoProvider(fullId))();
+
+        // Verify memo was created
+        expect(createdMemo, isNotNull);
+        expect(createdMemo.content, equals(comment.content));
+
+        // Verify relation was created
+        final relations = await mockApiService.listMemoRelations(
+          createdMemo.id,
+        );
+        expect(relations, isNotEmpty);
+        expect(relations.first.relatedMemoId, equals(memo.id));
+        expect(relations.first.type, equals(RelationType.linked));
+      },
+    );
   });
 }

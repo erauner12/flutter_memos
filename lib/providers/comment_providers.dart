@@ -1,4 +1,7 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter_memos/models/memo.dart';
+import 'package:flutter_memos/models/memo_relation.dart';
+import 'package:flutter_memos/providers/memo_providers.dart';
 import 'package:flutter_memos/screens/memo_detail/memo_detail_providers.dart'
     show memoCommentsProvider;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -119,6 +122,71 @@ final togglePinCommentProvider = Provider.family<Future<void> Function(), String
 final isCommentHiddenProvider = Provider.family<bool, String>((ref, id) {
   final hiddenCommentIds = ref.watch(hiddenCommentIdsProvider);
   return hiddenCommentIds.contains(id);
+});
+
+/// Provider for converting a comment to a full memo
+final convertCommentToMemoProvider = Provider.family<
+  Future<Memo> Function(),
+  String
+>((ref, id) {
+  return () async {
+    final apiService = ref.read(apiServiceProvider);
+
+    try {
+      // Extract parts from the combined ID (format: "memoId/commentId")
+      final parts = id.split('/');
+      final memoId = parts.isNotEmpty ? parts.first : '';
+      final commentId = parts.length > 1 ? parts.last : id;
+
+      if (kDebugMode) {
+        print('[convertCommentToMemoProvider] Converting comment to memo: $id');
+      }
+
+      // Get the comment
+      final comment = await apiService.getMemoComment(id);
+
+      // Create a new memo from the comment's content
+      final newMemo = Memo(
+        id: 'temp-${DateTime.now().millisecondsSinceEpoch}',
+        content: comment.content,
+        // Reset pinned state for the new memo
+        pinned: false,
+        state: MemoState.normal,
+        visibility: 'PUBLIC', // Default visibility
+      );
+
+      // Create the new memo
+      final createdMemo = await apiService.createMemo(newMemo);
+
+      // Create a relation between the new memo and the original memo
+      if (memoId.isNotEmpty) {
+        final relation = MemoRelation(
+          relatedMemoId: memoId,
+          type: RelationType.linked,
+        );
+
+        await apiService.setMemoRelations(createdMemo.id, [relation]);
+      }
+
+      // Refresh memos list
+      ref.invalidate(memosProvider);
+
+      if (kDebugMode) {
+        print(
+          '[convertCommentToMemoProvider] Converted comment to memo: ${createdMemo.id}',
+        );
+      }
+
+      return createdMemo;
+    } catch (e) {
+      if (kDebugMode) {
+        print(
+          '[convertCommentToMemoProvider] Error converting comment to memo: $e',
+        );
+      }
+      rethrow;
+    }
+  };
 });
 
 /// Provider for toggling visibility of a comment in the current view

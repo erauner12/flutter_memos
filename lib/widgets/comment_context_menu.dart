@@ -8,6 +8,7 @@ class CommentContextMenu extends StatelessWidget {
   final VoidCallback? onHide;
   final VoidCallback? onTogglePin;
   final VoidCallback? onCopy;
+  final VoidCallback? onConvertToMemo;
   final VoidCallback? onClose;
   final ScrollController? scrollController;
 
@@ -20,6 +21,7 @@ class CommentContextMenu extends StatelessWidget {
     this.onHide,
     this.onTogglePin,
     this.onCopy,
+    this.onConvertToMemo,
     this.onClose,
     this.scrollController,
   });
@@ -116,6 +118,13 @@ class CommentContextMenu extends StatelessWidget {
                       icon: Icons.content_copy,
                       label: 'Copy Text',
                       onTap: onCopy,
+                      isDarkMode: isDarkMode,
+                    ),
+                    _buildMenuItem(
+                      key: const Key('convert_to_memo_menu_item'),
+                      icon: Icons.note_add,
+                      label: 'Convert to Memo',
+                      onTap: onConvertToMemo,
                       isDarkMode: isDarkMode,
                     ),
 

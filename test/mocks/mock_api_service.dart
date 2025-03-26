@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/models/memo.dart';
+import 'package:flutter_memos/models/memo_relation.dart';
 import 'package:flutter_memos/services/api_service.dart';
 
 /// A manual mock implementation of ApiService for testing
@@ -9,6 +10,7 @@ class MockApiService implements ApiService {
   List<Memo> _mockMemos = [];
   Map<String, Memo> _mockMemoById = {};
   final Map<String, List<Comment>> _mockComments = {};
+  final Map<String, List<MemoRelation>> _mockMemoRelations = {};
   
   // Mock control - to verify calls
   int listMemosCallCount = 0;
@@ -306,5 +308,21 @@ class MockApiService implements ApiService {
     }
 
     return Future.value();
+  }
+  
+  @override
+  Future<void> setMemoRelations(
+    String memoId,
+    List<MemoRelation> relations,
+  ) async {
+    final formattedId = memoId.contains('/') ? memoId.split('/').last : memoId;
+    _mockMemoRelations[formattedId] = List.from(relations);
+    return Future.value();
+  }
+
+  @override
+  Future<List<MemoRelation>> listMemoRelations(String memoId) async {
+    final formattedId = memoId.contains('/') ? memoId.split('/').last : memoId;
+    return Future.value(_mockMemoRelations[formattedId] ?? []);
   }
 }

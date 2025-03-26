@@ -110,6 +110,41 @@ class CommentCard extends ConsumerWidget {
             Navigator.pop(context);
             _copyToClipboard(context);
           },
+          onConvertToMemo: () async {
+            Navigator.pop(context);
+            try {
+              final fullId = '$memoId/${comment.id}';
+              final createdMemo =
+                  await ref.read(convertCommentToMemoProvider(fullId))();
+
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: const Text('Comment converted to memo'),
+                    action: SnackBarAction(
+                      label: 'View',
+                      onPressed: () {
+                        Navigator.pushNamed(
+                          context,
+                          '/memo-detail',
+                          arguments: {'memoId': createdMemo.id},
+                        );
+                      },
+                    ),
+                  ),
+                );
+              }
+            } catch (e) {
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Error converting comment: $e'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              }
+            }
+          },
         );
       },
     );
