@@ -46,7 +46,22 @@ class _MemoCardState extends State<MemoCard> {
   String _formatDateTime(String dateTimeString) {
     try {
       final dateTime = DateTime.parse(dateTimeString);
-      return '${dateTime.year}-${dateTime.month.toString().padLeft(2, '0')}-${dateTime.day.toString().padLeft(2, '0')} ${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}';
+      final now = DateTime.now();
+      final difference = now.difference(dateTime);
+
+      if (difference.inDays == 0) {
+        // Today - show time only
+        return 'Today at ${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}';
+      } else if (difference.inDays == 1) {
+        // Yesterday
+        return 'Yesterday at ${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}';
+      } else if (difference.inDays < 7) {
+        // This week
+        return '${difference.inDays} days ago';
+      } else {
+        // Older
+        return '${dateTime.year}-${dateTime.month.toString().padLeft(2, '0')}-${dateTime.day.toString().padLeft(2, '0')} ${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}';
+      }
     } catch (e) {
       return dateTimeString;
     }
@@ -143,10 +158,10 @@ class _MemoCardState extends State<MemoCard> {
 
     return Card(
       elevation: isDarkMode ? 0 : 1,
-      margin: const EdgeInsets.only(bottom: 6),
+      margin: const EdgeInsets.only(bottom: 12),
       color: isDarkMode ? const Color(0xFF262626) : null,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(10),
         side: isDarkMode
             ? BorderSide(color: Colors.grey[850]!, width: 0.5)
             : BorderSide.none,
@@ -156,13 +171,13 @@ class _MemoCardState extends State<MemoCard> {
         onLongPress: _showContextMenu,
         onDoubleTap: kIsWeb ? _showContextMenu : null,
         onTapDown: _storePosition,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(10),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(
-            12.0,
-            12.0,
-            36.0,
-            12.0,
+            16.0,
+            16.0,
+            40.0,
+            16.0,
           ), // Extra padding on right for archive button
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -170,7 +185,8 @@ class _MemoCardState extends State<MemoCard> {
               Text(
                 widget.content,
                 style: TextStyle(
-                  fontSize: 16,
+                  fontSize: 17,
+                  height: 1.3,
                   color:
                       isDarkMode
                           ? const Color(0xFFE0E0E0)
@@ -179,80 +195,127 @@ class _MemoCardState extends State<MemoCard> {
                 maxLines: 5,
                 overflow: TextOverflow.ellipsis,
               ),
+              const SizedBox(height: 10),
+
+              // Pinned indicator with improved styling
               if (widget.pinned)
                 Padding(
-                  padding: const EdgeInsets.only(top: 8.0),
-                  child: Text(
-                    'Pinned',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color:
-                          isDarkMode
-                              ? const Color(0xFF9CCC65)
-                              : Colors.green[700],
-                    ),
-                  ),
-                ),
-              if (widget.highlightTimestamp != null)
-                // Display the highlighted timestamp (based on sort mode)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8.0),
+                  padding: const EdgeInsets.only(bottom: 8.0),
                   child: Row(
                     children: [
                       Icon(
-                        widget.timestampType == 'Updated'
-                            ? Icons.update
-                            : Icons.calendar_today,
-                        size: 12,
+                        Icons.push_pin,
+                        size: 14,
                         color:
                             isDarkMode
-                                ? const Color(0xFF9E9E9E)
-                                : Colors.grey[700],
+                                ? const Color(0xFF9CCC65)
+                                : Colors.green[700],
                       ),
                       const SizedBox(width: 4),
                       Text(
-                        '${widget.timestampType}: ${widget.highlightTimestamp}',
+                        'Pinned',
                         style: TextStyle(
-                          fontSize: 11,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
                           color:
                               isDarkMode
-                                  ? const Color(0xFF9E9E9E)
-                                  : Colors.grey[800],
-                          fontWeight: FontWeight.w500,
+                              ? const Color(0xFF9CCC65)
+                              : Colors.green[700],
                         ),
                       ),
                     ],
                   ),
                 ),
 
-              // Show detailed timestamps if needed
-              if (widget.showTimeStamps && (widget.createdAt != null || widget.updatedAt != null))
+              // Primary timestamp display with better formatting
+              if (widget.highlightTimestamp != null)
                 Padding(
                   padding: const EdgeInsets.only(top: 4.0),
+                  child: Row(
+                    children: [
+                      Icon(
+                        widget.timestampType == 'Updated'
+                            ? Icons.update
+                            : Icons.calendar_today,
+                        size: 14,
+                        color:
+                            isDarkMode
+                                ? const Color(0xFF9E9E9E)
+                                : Colors.grey[700],
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        '${widget.timestampType}: ${widget.highlightTimestamp}',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color:
+                              isDarkMode
+                                  ? const Color(0xFF9E9E9E)
+                                  : Colors.grey[700],
+                          fontWeight: FontWeight.w400,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+              // Show detailed timestamps with improved styling
+              if (widget.showTimeStamps && (widget.createdAt != null || widget.updatedAt != null))
+                Padding(
+                  padding: const EdgeInsets.only(top: 8.0),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       if (widget.createdAt != null)
-                        Text(
-                          'Created: ${_formatDateTime(widget.createdAt!)}',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color:
-                                isDarkMode
-                                    ? const Color(0xFF9E9E9E)
-                                    : Colors.grey[600],
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 4.0),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.create,
+                                size: 14,
+                                color:
+                                    isDarkMode
+                                        ? const Color(0xFF9E9E9E)
+                                        : Colors.grey[600],
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Created: ${_formatDateTime(widget.createdAt!)}',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color:
+                                      isDarkMode
+                                          ? const Color(0xFF9E9E9E)
+                                          : Colors.grey[600],
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       if (widget.updatedAt != null)
-                        Text(
-                          'Updated: ${_formatDateTime(widget.updatedAt!)}',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color:
-                                isDarkMode
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.update,
+                              size: 14,
+                              color:
+                                  isDarkMode
+                                      ? const Color(0xFF9E9E9E)
+                                      : Colors.grey[600],
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Updated: ${_formatDateTime(widget.updatedAt!)}',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color:
+                                    isDarkMode
                                     ? const Color(0xFF9E9E9E)
                                     : Colors.grey[600],
-                          ),
+                              ),
+                            ),
+                          ],
                         ),
                     ],
                   ),
