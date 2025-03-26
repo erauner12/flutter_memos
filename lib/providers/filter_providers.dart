@@ -210,7 +210,7 @@ final filterHistoryProvider = StateProvider<List<Map<String, String>>>((ref) {
 }, name: 'filterHistory');
 
 /// OPTIMIZATION: A listener that adds configurations to history when they change
-final _filterHistoryTrackerProvider = Provider<void>((ref) {
+final filterHistoryTrackerProvider = Provider<void>((ref) {
   // Set up a listener for filter changes
   ref.listen<String>(timeFilterProvider, (previous, current) {
     if (previous != current) {
