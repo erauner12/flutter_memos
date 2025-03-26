@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_memos/models/memo.dart';
 import 'package:flutter_memos/providers/api_providers.dart';
-import 'package:flutter_memos/screens/edit_memo_screen.dart';
+import 'package:flutter_memos/screens/edit_memo/edit_memo_screen.dart';
 import 'package:flutter_memos/services/api_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
