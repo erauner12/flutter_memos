@@ -65,8 +65,7 @@ class MemoComments extends ConsumerWidget {
             ),
           ),
           
-          // Comment form
-          CommentForm(memoId: memoId),
+          // Comment form removed as we're now using CaptureUtility
         ],
       ),
     );

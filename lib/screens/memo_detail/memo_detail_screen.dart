@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_memos/widgets/capture_utility.dart';
 
 import 'memo_comments.dart';
 import 'memo_content.dart';
@@ -40,7 +41,19 @@ class _MemoDetailScreenState extends ConsumerState<MemoDetailScreen> {
           ),
         ],
       ),
-      body: _buildBody(),
+      body: Stack(
+        alignment: Alignment.bottomCenter,
+        children: [
+          _buildBody(),
+          // Add CaptureUtility for adding comments
+          CaptureUtility(
+            mode: CaptureMode.addComment,
+            memoId: widget.memoId,
+            hintText: 'Add a comment...',
+            buttonText: 'Add Comment',
+          ),
+        ],
+      ),
     );
   }
 
@@ -50,20 +63,22 @@ class _MemoDetailScreenState extends ConsumerState<MemoDetailScreen> {
     return memoAsync.when(
       data: (memo) {
         return SingleChildScrollView(
-          child: Column(
-            children: [
-              // Memo content section
-              MemoContent(
-                memo: memo,
-                memoId: widget.memoId,
-              ),
-              
-              // Divider between content and comments
-              const Divider(),
-              
-              // Comments section
-              MemoComments(memoId: widget.memoId),
-            ],
+          child: Padding(
+            padding: const EdgeInsets.only(
+              bottom: 80,
+            ), // Add padding for CaptureUtility
+            child: Column(
+              children: [
+                // Memo content section
+                MemoContent(memo: memo, memoId: widget.memoId),
+
+                // Divider between content and comments
+                const Divider(),
+
+                // Comments section
+                MemoComments(memoId: widget.memoId),
+              ],
+            ),
           ),
         );
       },
