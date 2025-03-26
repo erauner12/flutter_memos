@@ -15,6 +15,10 @@ final archiveCommentProvider = Provider.family<Future<void> Function(), String>(
     final apiService = ref.read(apiServiceProvider);
     
     try {
+        // Extract memoId from combined ID (format: "memoId/commentId")
+        final parts = id.split('/');
+        final String memoId = parts.isNotEmpty ? parts[0] : '';
+      
       // Get the comment
       final comment = await apiService.getMemoComment(id);
       
@@ -27,8 +31,7 @@ final archiveCommentProvider = Provider.family<Future<void> Function(), String>(
       // Save the updated comment
       await apiService.updateMemoComment(id, updatedComment);
       
-      // Refresh comments for this memo
-      final memoId = id.split('/').first; // Assuming format "memoId/commentId"
+        // Refresh comments for this memo
       if (memoId.isNotEmpty) {
         ref.invalidate(memoCommentsProvider(memoId));
       }
@@ -51,11 +54,12 @@ final deleteCommentProvider = Provider.family<Future<void> Function(), String>((
     final apiService = ref.read(apiServiceProvider);
     
     try {
-      // Delete the comment
+      // Extract parts from the combined ID (format: "memoId/commentId")
       final parts = id.split('/');
       final memoId = parts.isNotEmpty ? parts.first : '';
       final commentId = parts.length > 1 ? parts.last : id;
       
+      // Delete the comment
       await apiService.deleteMemoComment(memoId, commentId);
       
       // Refresh comments for this memo
@@ -79,8 +83,12 @@ final deleteCommentProvider = Provider.family<Future<void> Function(), String>((
 final togglePinCommentProvider = Provider.family<Future<void> Function(), String>((ref, id) {
   return () async {
     final apiService = ref.read(apiServiceProvider);
-    
+
     try {
+          // Extract memoId from combined ID (format: "memoId/commentId")
+          final parts = id.split('/');
+          final String memoId = parts.isNotEmpty ? parts[0] : '';
+      
       // Get the comment
       final comment = await apiService.getMemoComment(id);
       
@@ -90,8 +98,7 @@ final togglePinCommentProvider = Provider.family<Future<void> Function(), String
       // Update through API
       await apiService.updateMemoComment(id, updatedComment);
       
-      // Refresh comments for this memo
-      final memoId = id.split('/').first; // Assuming format "memoId/commentId"
+          // Refresh comments for this memo
       if (memoId.isNotEmpty) {
         ref.invalidate(memoCommentsProvider(memoId));
       }

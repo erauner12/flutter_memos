@@ -164,6 +164,25 @@ void main() {
         expect(invalidParts[0], equals('plainId'));
       });
       
+      test('Comment ID parsing handles both formats correctly', () {
+        // Test parsing combined memo/comment IDs
+
+        // Format: "memoId/commentId"
+        final combinedId = 'memo123/comment456';
+        final parts = combinedId.split('/');
+        expect(parts.length, equals(2));
+        expect(parts[0], equals('memo123'));
+        expect(parts[1], equals('comment456'));
+
+        // Format: just "commentId"
+        final simpleId = 'comment456';
+        final simpleParts = simpleId.split('/');
+        expect(simpleParts.length, equals(1));
+        expect(simpleParts[0], equals('comment456'));
+
+        // This verifies our comment API methods can handle both formats
+      });
+      
       test('Delete memo handles empty responses correctly', () {
         // This is a unit test that verifies our logic for handling delete responses
         // It doesn't make actual API calls

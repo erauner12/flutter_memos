@@ -314,7 +314,7 @@ class ApiService {
       final apiMemo = Apiv1Memo(
         content: memo.content,
         pinned: memo.pinned,
-        state: _getApiState(memo.state),
+        state: _getMemoState(memo.state),
         visibility: _getApiVisibility(memo.visibility),
         creator: memo.creator ?? 'users/1',
       );
@@ -338,7 +338,7 @@ class ApiService {
       final updateMemo = TheMemoToUpdateTheNameFieldIsRequired(
         content: memo.content,
         pinned: memo.pinned,
-        state: _getApiState(memo.state),
+        state: _getMemoState(memo.state),
         visibility: _getApiVisibility(memo.visibility),
       );
       
@@ -408,6 +408,8 @@ class ApiService {
             comment.creatorId != null
                 ? 'users/${comment.creatorId}'
                 : 'users/1',
+        pinned: comment.pinned,
+        state: _getApiStateFromCommentState(comment.state),
       );
       
       final response = await _memoApi.memoServiceCreateMemoComment(
@@ -419,17 +421,101 @@ class ApiService {
         throw Exception('Failed to create comment: No response from server');
       }
       
-      return Comment(
-        id: _extractIdFromName(response.name ?? ''),
-        content: response.content ?? '',
-        createTime:
-            response.createTime?.millisecondsSinceEpoch ??
-            DateTime.now().millisecondsSinceEpoch,
-        creatorId: _extractIdFromName(response.creator ?? ''),
-      );
+      return _convertApiMemoToComment(response);
     } catch (e) {
       print('[API] Error creating comment: $e');
       throw Exception('Failed to create comment: $e');
+    }
+  }
+
+  /// Get a single comment
+  /// commentId should be the child memo's ID without 'memos/' prefix
+  Future<Comment> getMemoComment(String commentId) async {
+    try {
+      if (verboseLogging) {
+        print('[API] Getting comment: $commentId');
+      }
+
+      // Process combined IDs in format "memoId/commentId" if needed
+      final String childId = commentId.contains('/') ?
+          commentId.split('/').last : commentId;
+          
+      final response = await _memoApi.memoServiceGetMemo(
+        _formatResourceName(childId, 'memos'),
+      );
+      
+      if (response == null) {
+        throw Exception('Comment not found');
+      }
+      
+      return _convertApiMemoToComment(response);
+    } catch (e) {
+      print('[API] Error getting comment: $e');
+      throw Exception('Failed to load comment: $e');
+    }
+  }
+
+  /// Update a comment
+  /// commentId should be the child memo's ID (can be in the format "memoId/commentId")
+  Future<Comment> updateMemoComment(String commentId, Comment comment) async {
+    try {
+      if (verboseLogging) {
+        print('[API] Updating comment: $commentId');
+      }
+
+      // Process combined IDs in format "memoId/commentId" if needed
+      final String childId = commentId.contains('/') ?
+          commentId.split('/').last : commentId;
+      
+      final updateMemo = TheMemoToUpdateTheNameFieldIsRequired(
+        content: comment.content,
+        pinned: comment.pinned,
+        state: _getApiStateFromCommentState(comment.state),
+      );
+      
+      final response = await _memoApi.memoServiceUpdateMemo(
+        _formatResourceName(childId, 'memos'),
+        updateMemo,
+      );
+      
+      if (response == null) {
+        throw Exception('Failed to update comment: No response from server');
+      }
+      
+      return _convertApiMemoToComment(response);
+    } catch (e) {
+      print('[API] Error updating comment: $e');
+      throw Exception('Failed to update comment: $e');
+    }
+  }
+
+  /// Delete a comment
+  /// commentId should be the child memo's ID (can be in the format "memoId/commentId")
+  Future<void> deleteMemoComment(String memoId, String commentId) async {
+    try {
+      // Process combined IDs in format "memoId/commentId" if needed
+      final String childId = commentId.contains('/') ?
+          commentId.split('/').last : commentId;
+          
+      if (verboseLogging) {
+        print('[API] Deleting comment: $childId (from memo: $memoId)');
+      }
+      
+      final formattedId = _formatResourceName(childId, 'memos');
+      final response = await _memoApi.memoServiceDeleteMemoWithHttpInfo(formattedId);
+      
+      if (response.statusCode == 204 || response.statusCode == 200) {
+        if (verboseLogging) {
+          print('[API] Successfully deleted comment: $childId');
+        }
+        return;
+      } else if (response.statusCode >= 400) {
+        print('[API] Error deleting comment: HTTP ${response.statusCode}');
+        throw Exception('Failed to delete comment: HTTP ${response.statusCode}');
+      }
+    } catch (e) {
+      print('[API] Error deleting comment: $e');
+      throw Exception('Failed to delete comment: $e');
     }
   }
 
@@ -464,7 +550,6 @@ class ApiService {
   
   MemoState _parseApiState(V1State? state) {
     if (state == null) return MemoState.normal;
-    
     switch (state) {
       case V1State.ARCHIVED:
         return MemoState.archived;
@@ -473,8 +558,9 @@ class ApiService {
         return MemoState.normal;
     }
   }
-  
-  V1State _getApiState(MemoState state) {
+
+  /// Convert MemoState to V1State
+  V1State _getMemoState(MemoState state) {
     switch (state) {
       case MemoState.archived:
         return V1State.ARCHIVED;
@@ -483,7 +569,10 @@ class ApiService {
         return V1State.NORMAL;
     }
   }
-  
+
+  // HELPER METHODS FOR API STATE AND VISIBILITY
+
+  /// Convert a string visibility to V1Visibility enum
   V1Visibility _getApiVisibility(String visibility) {
     switch (visibility.toUpperCase()) {
       case 'PRIVATE':
@@ -495,23 +584,59 @@ class ApiService {
         return V1Visibility.PUBLIC;
     }
   }
-  
+
+  // COMMENT STATE CONVERSION HELPERS
+
+  /// Convert API state to Comment state
+  CommentState _parseCommentStateFromApi(V1State? state) {
+    if (state == null) return CommentState.normal;
+    switch (state) {
+      case V1State.ARCHIVED:
+        return CommentState.archived;
+      case V1State.NORMAL:
+        return CommentState.normal;
+      default:
+        return CommentState.normal;
+    }
+  }
+
+  /// Convert Comment state to API state
+  V1State _getApiStateFromCommentState(CommentState state) {
+    switch (state) {
+      case CommentState.archived:
+        return V1State.ARCHIVED;
+      case CommentState.deleted:
+        // The Memos API doesn't have a separate DELETED, so treat it as archived
+        return V1State.ARCHIVED;
+      case CommentState.normal:
+        return V1State.NORMAL;
+    }
+  }
+
+  /// Convert an API memo object to a Comment object
+  Comment _convertApiMemoToComment(Apiv1Memo apiMemo) {
+    final commentId = _extractIdFromName(apiMemo.name ?? '');
+    
+    return Comment(
+      id: commentId,
+      content: apiMemo.content ?? '',
+      createTime:
+          apiMemo.createTime?.millisecondsSinceEpoch 
+        ?? DateTime.now().millisecondsSinceEpoch,
+      updateTime: apiMemo.updateTime?.millisecondsSinceEpoch,
+      creatorId: apiMemo.creator != null
+        ? _extractIdFromName(apiMemo.creator!)
+        : null,
+      pinned: apiMemo.pinned ?? false,
+      state: _parseCommentStateFromApi(apiMemo.state),
+    );
+  }
+
   List<Comment> _parseCommentsFromApiResponse(
     V1ListMemoCommentsResponse response,
   ) {
-    return response.memos
-        .map(
-          (memo) => Comment(
-            id: _extractIdFromName(memo.name ?? ''),
-            content: memo.content ?? '',
-            createTime:
-                memo.createTime?.millisecondsSinceEpoch ??
-                DateTime.now().millisecondsSinceEpoch,
-            creatorId:
-                memo.creator != null ? _extractIdFromName(memo.creator!) : null,
-          ),
-        )
-        .toList();
+    // Use the existing convertApiMemoToComment method for consistency
+    return response.memos.map(_convertApiMemoToComment).toList();
   }
 
   bool _areListsEqual(List<String> list1, List<String> list2) {
