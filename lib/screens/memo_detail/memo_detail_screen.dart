@@ -42,22 +42,30 @@ class _MemoDetailScreenState extends ConsumerState<MemoDetailScreen> {
         ],
       ),
       body: Stack(
-        alignment: Alignment.bottomCenter,
         children: [
           _buildBody(),
-          // Add CaptureUtility for adding comments
-          CaptureUtility(
-            mode: CaptureMode.addComment,
-            memoId: widget.memoId,
-            hintText: 'Add a comment...',
-            buttonText: 'Add Comment',
+          // Position the CaptureUtility at the bottom
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 16.0),
+              child: Center(
+                child: CaptureUtility(
+                  mode: CaptureMode.addComment,
+                  memoId: widget.memoId,
+                  hintText: 'Add a comment...',
+                  buttonText: 'Add Comment',
+                ),
+              ),
+            ),
           ),
         ],
       ),
     );
   }
-
-  Widget _buildBody() {
+Widget _buildBody() {
     final memoAsync = ref.watch(memoDetailProvider(widget.memoId));
     
     return memoAsync.when(
@@ -65,16 +73,16 @@ class _MemoDetailScreenState extends ConsumerState<MemoDetailScreen> {
         return SingleChildScrollView(
           child: Padding(
             padding: const EdgeInsets.only(
-              bottom: 80,
-            ), // Add padding for CaptureUtility
+              bottom: 100,
+            ), // Increased padding for floating CaptureUtility
             child: Column(
               children: [
                 // Memo content section
                 MemoContent(memo: memo, memoId: widget.memoId),
-
+                
                 // Divider between content and comments
                 const Divider(),
-
+                
                 // Comments section
                 MemoComments(memoId: widget.memoId),
               ],
