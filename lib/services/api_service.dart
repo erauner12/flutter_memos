@@ -646,4 +646,86 @@ class ApiService {
     }
     return true;
   }
+  
+  /// Create or update relations for a memo
+  Future<void> setMemoRelations(
+    String memoId,
+    List<MemoRelation> relations,
+  ) async {
+    try {
+      final formattedId = _formatResourceName(memoId, 'memos');
+
+      if (verboseLogging) {
+        print('[API] Setting relations for memo: $formattedId');
+      }
+
+      final relationList =
+          relations
+              .map(
+                (relation) => V1MemoRelation(
+                  relatedMemo: _formatResourceName(
+                    relation.relatedMemoId,
+                    'memos',
+                  ),
+                  type: relation.type.toString().split('.').last.toUpperCase(),
+                ),
+              )
+              .toList();
+
+      final request = V1SetMemoRelationsRequest(relations: relationList);
+
+      await _memoApi.memoServiceSetMemoRelations(formattedId, request);
+
+      if (verboseLogging) {
+        print('[API] Successfully set relations for memo: $memoId');
+      }
+    } catch (e) {
+      print('[API] Error setting memo relations: $e');
+      throw Exception('Failed to set memo relations: $e');
+    }
+  }
+
+  /// List relations for a memo
+  Future<List<MemoRelation>> listMemoRelations(String memoId) async {
+    try {
+      final formattedId = _formatResourceName(memoId, 'memos');
+
+      if (verboseLogging) {
+        print('[API] Listing relations for memo: $formattedId');
+      }
+
+      final response = await _memoApi.memoServiceListMemoRelations(formattedId);
+
+      if (response == null) {
+        return [];
+      }
+
+      return response.relations
+          .map(
+            (relation) => MemoRelation(
+              relatedMemoId: _extractIdFromName(relation.relatedMemo ?? ''),
+              type: _parseRelationType(relation.type),
+            ),
+          )
+          .toList();
+    } catch (e) {
+      print('[API] Error listing memo relations: $e');
+      throw Exception('Failed to list memo relations: $e');
+    }
+  }
+
+  /// Parse relation type from string
+  RelationType _parseRelationType(String? type) {
+    if (type == null) return RelationType.linked;
+
+    switch (type.toUpperCase()) {
+      case 'REFERENCE':
+        return RelationType.reference;
+      case 'INSPIRED_BY':
+        return RelationType.inspiredBy;
+      case 'LINKED':
+      default:
+        return RelationType.linked;
+    }
+  }
 }
