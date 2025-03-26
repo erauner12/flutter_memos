@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_memos/widgets/capture_utility.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -21,26 +22,40 @@ class MemoDetailScreen extends ConsumerStatefulWidget {
 class _MemoDetailScreenState extends ConsumerState<MemoDetailScreen> {
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Memo Detail'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.edit),
-            onPressed: () {
-              Navigator.pushNamed(
-                context,
-                '/edit-memo',
-                arguments: {'memoId': widget.memoId},
-              ).then((_) {
-                // Refresh data when returning from edit screen
-                ref.invalidate(memoDetailProvider(widget.memoId));
-                ref.invalidate(memoCommentsProvider(widget.memoId));
-              });
-            },
-          ),
-        ],
-      ),
+    return Focus(
+      autofocus: true,
+      canRequestFocus: true,
+      onKeyEvent: (FocusNode node, KeyEvent event) {
+        if (event is KeyDownEvent) {
+          // Handle Command+Left Arrow to go back
+          if (event.logicalKey == LogicalKeyboardKey.arrowLeft &&
+              HardwareKeyboard.instance.isMetaPressed) {
+            Navigator.of(context).pop();
+            return KeyEventResult.handled;
+          }
+        }
+        return KeyEventResult.ignored;
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Memo Detail'),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.edit),
+              onPressed: () {
+                Navigator.pushNamed(
+                  context,
+                  '/edit-memo',
+                  arguments: {'memoId': widget.memoId},
+                ).then((_) {
+                  // Refresh data when returning from edit screen
+                  ref.invalidate(memoDetailProvider(widget.memoId));
+                  ref.invalidate(memoCommentsProvider(widget.memoId));
+                });
+              },
+            ),
+          ],
+        ),
       // Use a Column for vertical layout - this ensures proper bottom alignment
       body: Column(
         children: [
@@ -55,7 +70,8 @@ class _MemoDetailScreenState extends ConsumerState<MemoDetailScreen> {
           ),
         ],
       ),
-    );
+      ),
+    ); // Added closing parenthesis for the Focus widget
   }
 
   Widget _buildBody() {

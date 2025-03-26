@@ -17,6 +17,7 @@ class MemoCard extends StatefulWidget {
   final VoidCallback? onDelete;
   final VoidCallback? onHide;
   final VoidCallback? onTogglePin;
+  final bool isSelected; // Add isSelected property for keyboard navigation
 
   const MemoCard({
     super.key,
@@ -33,6 +34,7 @@ class MemoCard extends StatefulWidget {
     this.onDelete,
     this.onHide,
     this.onTogglePin,
+    this.isSelected = false, // Default to not selected
   });
 
   @override
@@ -168,12 +170,21 @@ class _MemoCardState extends State<MemoCard> {
     return Card(
       elevation: isDarkMode ? 0 : 1,
       margin: const EdgeInsets.only(bottom: 12),
-      color: isDarkMode ? const Color(0xFF262626) : null,
+      color:
+          widget.isSelected
+              ? (isDarkMode ? const Color(0xFF3A3A3A) : Colors.blue.shade50)
+              : (isDarkMode ? const Color(0xFF262626) : null),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(10),
-        side: isDarkMode
-            ? BorderSide(color: Colors.grey[850]!, width: 0.5)
-            : BorderSide.none,
+        side:
+            widget.isSelected
+                ? BorderSide(
+                  color: Theme.of(context).colorScheme.primary,
+                  width: 2,
+                )
+                : (isDarkMode
+                    ? BorderSide(color: Colors.grey[850]!, width: 0.5)
+                    : BorderSide.none),
       ),
       child: InkWell(
         onTap: widget.onTap,

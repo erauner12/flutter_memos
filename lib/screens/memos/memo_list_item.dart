@@ -1,16 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_memos/models/memo.dart';
 import 'package:flutter_memos/providers/memo_providers.dart';
+import 'package:flutter_memos/providers/ui_providers.dart';
 import 'package:flutter_memos/utils/memo_utils.dart';
 import 'package:flutter_memos/widgets/memo_card.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class MemoListItem extends ConsumerWidget {
   final Memo memo;
+  final int index; // Add index for selection tracking
   
   const MemoListItem({
     super.key,
     required this.memo,
+    required this.index,
   });
 
   void _toggleHideMemo(BuildContext context, WidgetRef ref) {
@@ -165,6 +168,9 @@ class MemoListItem extends ConsumerWidget {
             createdAt: memo.createTime,
             updatedAt: memo.updateTime,
             showTimeStamps: true,
+            isSelected:
+                ref.watch(selectedMemoIndexProvider) ==
+                index, // Add selected state
             // Display relevant timestamp based on sort mode
             highlightTimestamp:
                 sortMode == MemoSortMode.byUpdateTime
@@ -221,14 +227,15 @@ class MemoListItem extends ConsumerWidget {
               color: Colors.grey[600],
               onPressed: () {
                 // Use the archive memo provider
+                // Store context to use after async operation
+                final currentContext = context;
                 ref.read(archiveMemoProvider(memo.id))().then((
                   _,
                 ) {
-                  ScaffoldMessenger.of(context).showSnackBar(
+                  // Use the stored context instead of checking mounted
+                  ScaffoldMessenger.of(currentContext).showSnackBar(
                     const SnackBar(
-                      content: Text(
-                        'Memo archived successfully',
-                      ),
+                      content: Text('Memo archived successfully'),
                       backgroundColor: Colors.green,
                     ),
                   );

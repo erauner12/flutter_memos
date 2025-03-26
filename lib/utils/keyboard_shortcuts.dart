@@ -1,0 +1,34 @@
+import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart';
+
+/// Defines all keyboard shortcut intents for the application
+/// This centralizes our shortcut definitions in one place
+
+// Define custom intents
+class SubmitIntent extends Intent {}
+class NavigateBackIntent extends Intent {}
+class NavigateForwardIntent extends Intent {}
+class SelectPreviousMemoIntent extends Intent {}
+class SelectNextMemoIntent extends Intent {}
+
+/// Creates a map of keyboard shortcuts to intents
+Map<ShortcutActivator, Intent> buildGlobalShortcuts() {
+  return {
+    // Command + Enter => Submit
+    const SingleActivator(LogicalKeyboardKey.enter, meta: true): SubmitIntent(),
+
+    // Command + Left Arrow => Navigate Back
+    const SingleActivator(LogicalKeyboardKey.arrowLeft, meta: true): NavigateBackIntent(),
+
+    // Command + Right Arrow => Navigate Forward
+    const SingleActivator(LogicalKeyboardKey.arrowRight, meta: true): NavigateForwardIntent(),
+
+    // Slack-style navigation with J/K keys
+    const SingleActivator(LogicalKeyboardKey.keyJ): SelectNextMemoIntent(),
+    const SingleActivator(LogicalKeyboardKey.keyK): SelectPreviousMemoIntent(),
+
+    // Also support Shift+Up/Down for navigation
+    const SingleActivator(LogicalKeyboardKey.arrowUp, shift: true): SelectPreviousMemoIntent(),
+    const SingleActivator(LogicalKeyboardKey.arrowDown, shift: true): SelectNextMemoIntent(),
+  };
+}

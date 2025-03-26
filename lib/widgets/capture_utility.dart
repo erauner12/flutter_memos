@@ -128,6 +128,13 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility> {
     }
   }
 
+  /// Public method to submit content if not empty
+  void submitIfNotEmpty() {
+    if (_textController.text.trim().isNotEmpty) {
+      _handleSubmit();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
@@ -171,168 +178,183 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility> {
       containerWidth = availableWidth > 0 ? availableWidth : size.width * 0.85;
     }
 
-    return SafeArea(
-      bottom: true,
-      minimum: const EdgeInsets.symmetric(horizontal: 16.0),
-      child: Padding(
-        padding: EdgeInsets.only(bottom: keyboardHeight > 0 ? 0 : 8),
-        child: Container(
-          width: containerWidth,
-          decoration: BoxDecoration(
-            color: isDarkMode ? const Color(0xFF2C2C2C) : Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.1),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
+    // Wrap with Focus widget to handle keyboard shortcuts
+    return Focus(
+      canRequestFocus: false, // Don't steal focus from text field
+      onKeyEvent: (FocusNode node, KeyEvent event) {
+        if (event is KeyDownEvent) {
+          // Handle Command+Enter to submit
+          if (event.logicalKey == LogicalKeyboardKey.enter &&
+              HardwareKeyboard.instance.isMetaPressed) {
+            submitIfNotEmpty();
+            return KeyEventResult.handled;
+          }
+        }
+        return KeyEventResult.ignored; // Let other keys pass through
+      },
+      child: SafeArea(
+        bottom: true,
+        minimum: const EdgeInsets.symmetric(horizontal: 16.0),
+        child: Padding(
+          padding: EdgeInsets.only(bottom: keyboardHeight > 0 ? 0 : 8),
+          child: Container(
+            width: containerWidth,
+            decoration: BoxDecoration(
+              color: isDarkMode ? const Color(0xFF2C2C2C) : Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+              border: Border.all(
+                color: isDarkMode ? Colors.grey[800]! : Colors.grey[300]!,
+                width: 1,
               ),
-            ],
-            border: Border.all(
-              color: isDarkMode ? Colors.grey[800]! : Colors.grey[300]!,
-              width: 1,
             ),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Text field area
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Expand/collapse icon
-                    if (_isExpanded)
-                      IconButton(
-                        icon: const Icon(Icons.unfold_less),
-                        onPressed: () {
-                          setState(() {
-                            _isExpanded = false;
-                          });
-                        },
-                        tooltip: 'Collapse',
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                        iconSize: 20,
-                      ),
-                    if (!_isExpanded)
-                      IconButton(
-                        icon: Icon(icon),
-                        onPressed: () {
-                          setState(() {
-                            _isExpanded = true;
-                          });
-                          _focusNode.requestFocus();
-                        },
-                        tooltip: tooltip,
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                        iconSize: 20,
-                      ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Text field area
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Expand/collapse icon
+                      if (_isExpanded)
+                        IconButton(
+                          icon: const Icon(Icons.unfold_less),
+                          onPressed: () {
+                            setState(() {
+                              _isExpanded = false;
+                            });
+                          },
+                          tooltip: 'Collapse',
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                          iconSize: 20,
+                        ),
+                      if (!_isExpanded)
+                        IconButton(
+                          icon: Icon(icon),
+                          onPressed: () {
+                            setState(() {
+                              _isExpanded = true;
+                            });
+                            _focusNode.requestFocus();
+                          },
+                          tooltip: tooltip,
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                          iconSize: 20,
+                        ),
 
-                    const SizedBox(width: 8),
+                      const SizedBox(width: 8),
 
-                    // Text field - expanded or single line
-                    Expanded(
-                      child:
-                          _isExpanded
-                              ? TextField(
-                                controller: _textController,
-                                focusNode: _focusNode,
-                                decoration: InputDecoration(
-                                  hintText: hintText,
-                                  border: InputBorder.none,
-                                ),
-                                maxLines: 5,
-                                minLines:
-                                    widget.mode == CaptureMode.createMemo
-                                        ? 3
-                                        : 2,
-                                textCapitalization:
-                                    TextCapitalization.sentences,
-                              )
-                              : InkWell(
-                                onTap: () {
-                                  setState(() {
-                                    _isExpanded = true;
-                                  });
-                                  _focusNode.requestFocus();
-                                },
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 12,
+                      // Text field - expanded or single line
+                      Expanded(
+                        child:
+                            _isExpanded
+                                ? TextField(
+                                  controller: _textController,
+                                  focusNode: _focusNode,
+                                  decoration: InputDecoration(
+                                    hintText: hintText,
+                                    border: InputBorder.none,
                                   ),
-                                  child: Text(
-                                    placeholderText,
-                                    style: TextStyle(
-                                      color:
-                                          isDarkMode
-                                              ? Colors.grey[400]
-                                              : Colors.grey[600],
+                                  maxLines: 5,
+                                  minLines:
+                                      widget.mode == CaptureMode.createMemo
+                                          ? 3
+                                          : 2,
+                                  textCapitalization:
+                                      TextCapitalization.sentences,
+                                )
+                                : InkWell(
+                                  onTap: () {
+                                    setState(() {
+                                      _isExpanded = true;
+                                    });
+                                    _focusNode.requestFocus();
+                                  },
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 12,
+                                    ),
+                                    child: Text(
+                                      placeholderText,
+                                      style: TextStyle(
+                                        color:
+                                            isDarkMode
+                                                ? Colors.grey[400]
+                                                : Colors.grey[600],
+                                      ),
                                     ),
                                   ),
                                 ),
-                              ),
-                    ),
-                  ],
-                ),
-              ),
-
-              // Buttons row - only visible when expanded
-              if (_isExpanded)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      // Paste button
-                      TextButton.icon(
-                        onPressed: _handlePaste,
-                        icon: const Icon(Icons.content_paste, size: 16),
-                        label: const Text('Paste'),
-                        style: TextButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 8,
-                          ),
-                          minimumSize: Size.zero,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                      ),
-
-                      // Submit button
-                      ElevatedButton(
-                        onPressed: _isSubmitting ? null : _handleSubmit,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor:
-                              Theme.of(context).colorScheme.primary,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 8,
-                          ),
-                          minimumSize: Size.zero,
-                        ),
-                        child:
-                            _isSubmitting
-                                ? const SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Colors.white,
-                                  ),
-                                )
-                                : Text(buttonText),
                       ),
                     ],
                   ),
                 ),
-            ],
+
+                // Buttons row - only visible when expanded
+                if (_isExpanded)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        // Paste button
+                        TextButton.icon(
+                          onPressed: _handlePaste,
+                          icon: const Icon(Icons.content_paste, size: 16),
+                          label: const Text('Paste'),
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                        ),
+
+                        // Submit button
+                        ElevatedButton(
+                          onPressed: _isSubmitting ? null : _handleSubmit,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor:
+                                Theme.of(context).colorScheme.primary,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 8,
+                            ),
+                            minimumSize: Size.zero,
+                          ),
+                          child:
+                              _isSubmitting
+                                  ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                  : Text(buttonText),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
           ),
         ),
       ),
-    );
+    ); // Fixed closing bracket for Focus widget
   }
 }
