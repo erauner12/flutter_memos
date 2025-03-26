@@ -208,6 +208,7 @@ class _MyAppState extends ConsumerState<MyApp> {
           '/memos': (context) => const MemosScreen(),
           '/chat': (context) => const ChatScreen(),
           '/mcp': (context) => const McpScreen(),
+          // Keep new-memo route for backward compatibility but it's no longer the primary way to create memos
           '/new-memo': (context) => const NewMemoScreen(),
           '/filter-demo': (context) => const FilterDemoScreen(),
           '/riverpod-demo': (context) => const RiverpodDemoScreen(),

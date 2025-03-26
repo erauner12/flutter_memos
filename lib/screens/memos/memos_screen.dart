@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_memos/providers/filter_providers.dart';
 import 'package:flutter_memos/providers/memo_providers.dart';
+import 'package:flutter_memos/widgets/capture_utility.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'memos_body.dart';
@@ -74,27 +75,28 @@ class _MemosScreenState extends ConsumerState<MemosScreen> {
               );
             },
           ),
-          const SizedBox(width: 8),
         ],
       ),
-      body: const Column(
+      body: Stack(
+        alignment: Alignment.bottomCenter,
         children: [
-          // Filter area
-          MemosFilterBar(),
-          // Main content area
-          Expanded(child: MemosBody()),
+          Column(
+            children: const [
+              // Filter area
+              MemosFilterBar(),
+              // Main content area
+              Expanded(child: MemosBody()),
+            ],
+          ),
+          // Pinned capture utility at bottom for creating new memos
+          const CaptureUtility(
+            mode: CaptureMode.createMemo,
+            hintText: 'Type or paste memo content...',
+            buttonText: 'Add Memo',
+          ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          Navigator.pushNamed(context, '/new-memo').then((_) {
-            // Refresh memos after returning from creating a new memo
-            ref.invalidate(memosProvider);
-          });
-        },
-        backgroundColor: Theme.of(context).colorScheme.primary,
-        child: const Icon(Icons.add, color: Colors.white),
-      ),
+      // FloatingActionButton removed as it's replaced by the CaptureUtility
     );
   }
 }
