@@ -118,17 +118,26 @@ class MemoUtils {
       final now = DateTime.now();
       final difference = now.difference(dateTime);
 
-      if (difference.inDays == 0) {
-        // Today, show hours and minutes
-        return 'Today at ${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}';
-      } else if (difference.inDays == 1) {
-        // Yesterday
+      // For very recent content (less than 1 hour)
+      if (difference.inMinutes < 1) {
+        return 'Just now';
+      } else if (difference.inMinutes < 60) {
+        return '${difference.inMinutes} ${difference.inMinutes == 1 ? 'minute' : 'minutes'} ago';
+      }
+      // For content from today (less than 24 hours)
+      else if (difference.inHours < 24) {
+        return '${difference.inHours} ${difference.inHours == 1 ? 'hour' : 'hours'} ago';
+      }
+      // Yesterday
+      else if (difference.inDays == 1) {
         return 'Yesterday';
-      } else if (difference.inDays < 7) {
-        // This week
+      }
+      // Recent days
+      else if (difference.inDays < 7) {
         return '${difference.inDays} days ago';
-      } else {
-        // Older
+      }
+      // Older content
+      else {
         return '${dateTime.year}-${dateTime.month.toString().padLeft(2, '0')}-${dateTime.day.toString().padLeft(2, '0')}';
       }
     } catch (e) {
