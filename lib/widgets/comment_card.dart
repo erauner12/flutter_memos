@@ -90,6 +90,11 @@ class _CommentCardState extends ConsumerState<CommentCard> {
             if (confirmed != true || !mounted) return;
 
             try {
+              // Mark as deleting to remove from widget tree immediately
+              setState(() {
+                _isDeleting = true;
+              });
+              
               await ref.read(deleteCommentProvider(fullId))();
 
               // Show success message only if the widget is still mounted
@@ -99,8 +104,12 @@ class _CommentCardState extends ConsumerState<CommentCard> {
                 );
               }
             } catch (e) {
-              // Show error message only if the widget is still mounted
+              // In case of error, restore visibility
               if (mounted) {
+                setState(() {
+                  _isDeleting = false;
+                });
+                
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(content: Text('Error deleting comment: $e')),
                 );
@@ -156,14 +165,16 @@ class _CommentCardState extends ConsumerState<CommentCard> {
             Navigator.of(bottomSheetContext).pop();
 
             try {
-              final memo =
-                  await ref.read(convertCommentToMemoProvider(fullId))();
+              final fullId = '${widget.memoId}/${widget.comment.id}';
+              final convertFunction = ref.read(
+                convertCommentToMemoProvider(fullId),
+              );
+              final memo = await convertFunction();
 
               // Show success message only if the widget is still mounted
               if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Comment converted to memo: ${memo.id}'),
+                  const SnackBar(content: Text('Comment converted to memo'),
                   ),
                 );
               }
@@ -246,12 +257,12 @@ class _CommentCardState extends ConsumerState<CommentCard> {
           setState(() {
             _isDeleting = true;
           });
-
+          
           final fullId = '${widget.memoId}/${widget.comment.id}';
-
+          
           try {
             await ref.read(deleteCommentProvider(fullId))();
-
+            
             // Only show snackbar if still mounted
             if (mounted) {
               ScaffoldMessenger.of(
@@ -262,6 +273,11 @@ class _CommentCardState extends ConsumerState<CommentCard> {
           } catch (e) {
             // Only show error if still mounted
             if (mounted) {
+              // In case of error, restore visibility
+              setState(() {
+                _isDeleting = false;
+              });
+              
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(content: Text('Error deleting comment: $e')),
               );

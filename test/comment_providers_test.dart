@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/models/memo.dart';
 import 'package:flutter_memos/models/memo_relation.dart';
@@ -15,12 +16,10 @@ void main() {
 
     setUp(() {
       mockApiService = MockApiService();
-      
+
       // Override the apiServiceProvider to use our mock
       container = ProviderContainer(
-        overrides: [
-          apiServiceProvider.overrideWithValue(mockApiService),
-        ],
+        overrides: [apiServiceProvider.overrideWithValue(mockApiService)],
       );
     });
 
@@ -31,12 +30,9 @@ void main() {
     test('archiveCommentProvider archives a comment correctly', () async {
       // Set up test memo and comment
       final memo = await mockApiService.createMemo(
-        Memo(
-          id: 'test-memo-1',
-          content: 'Test memo',
-        ),
+        Memo(id: 'test-memo-1', content: 'Test memo'),
       );
-      
+
       final comment = await mockApiService.createMemoComment(
         memo.id,
         Comment(
@@ -45,13 +41,13 @@ void main() {
           createTime: DateTime.now().millisecondsSinceEpoch,
         ),
       );
-      
+
       // Construct the combined ID format
       final fullId = '${memo.id}/${comment.id}';
-      
+
       // Call the archive provider
       await container.read(archiveCommentProvider(fullId))();
-      
+
       // Verify the comment was archived
       // We would need to retrieve the comment again to check its state
       final updatedComment = await mockApiService.getMemoComment(fullId);
@@ -61,12 +57,9 @@ void main() {
     test('deleteCommentProvider deletes a comment correctly', () async {
       // Set up test memo and comment
       final memo = await mockApiService.createMemo(
-        Memo(
-          id: 'test-memo-2',
-          content: 'Test memo',
-        ),
+        Memo(id: 'test-memo-2', content: 'Test memo'),
       );
-      
+
       final comment = await mockApiService.createMemoComment(
         memo.id,
         Comment(
@@ -75,17 +68,17 @@ void main() {
           createTime: DateTime.now().millisecondsSinceEpoch,
         ),
       );
-      
+
       // Verify comment exists
       final comments = await mockApiService.listMemoComments(memo.id);
       expect(comments.any((c) => c.id == comment.id), isTrue);
-      
+
       // Get combined ID
       final fullId = '${memo.id}/${comment.id}';
-      
+
       // Call the delete provider
       await container.read(deleteCommentProvider(fullId))();
-      
+
       // Verify comment was deleted
       final commentsAfter = await mockApiService.listMemoComments(memo.id);
       expect(commentsAfter.any((c) => c.id == comment.id), isFalse);
@@ -94,12 +87,9 @@ void main() {
     test('togglePinCommentProvider toggles comment pin state', () async {
       // Set up test memo and comment
       final memo = await mockApiService.createMemo(
-        Memo(
-          id: 'test-memo-3',
-          content: 'Test memo',
-        ),
+        Memo(id: 'test-memo-3', content: 'Test memo'),
       );
-      
+
       // Create an unpinned comment
       final comment = await mockApiService.createMemoComment(
         memo.id,
@@ -110,20 +100,20 @@ void main() {
           pinned: false,
         ),
       );
-      
+
       // Get combined ID
       final fullId = '${memo.id}/${comment.id}';
-      
+
       // Toggle pin state to true
       await container.read(togglePinCommentProvider(fullId))();
-      
+
       // Verify pin state changed
       final pinnedComment = await mockApiService.getMemoComment(fullId);
       expect(pinnedComment.pinned, isTrue);
-      
+
       // Toggle pin state back to false
       await container.read(togglePinCommentProvider(fullId))();
-      
+
       // Verify pin state changed back
       final unpinnedComment = await mockApiService.getMemoComment(fullId);
       expect(unpinnedComment.pinned, isFalse);
@@ -132,26 +122,26 @@ void main() {
     test('hiddenCommentIdsProvider basic state operations', () {
       // Test direct state manipulation
       final commentId = 'memo1/comment1';
-      
+
       // Initial state should be empty
       final initialState = container.read(hiddenCommentIdsProvider);
       expect(initialState.isEmpty, isTrue);
-      
+
       // Directly modify the state to add the comment ID
       container.read(hiddenCommentIdsProvider.notifier).state = {commentId};
-      
+
       // Verify the state was updated
       final updatedState = container.read(hiddenCommentIdsProvider);
       expect(updatedState.contains(commentId), isTrue);
-      
+
       // Directly modify the state to remove the comment ID
       container.read(hiddenCommentIdsProvider.notifier).state = {};
-      
+
       // Verify the state was updated
       final finalState = container.read(hiddenCommentIdsProvider);
       expect(finalState.contains(commentId), isFalse);
     });
-    
+
     test(
       'convertCommentToMemoProvider converts a comment to a memo with relation',
       () async {
@@ -172,9 +162,11 @@ void main() {
         // Get combined ID
         final fullId = '${memo.id}/${comment.id}';
 
-        // Call the convert provider
-        final createdMemo =
-            await container.read(convertCommentToMemoProvider(fullId))();
+        // Get the function from the provider and then call it
+        final convertFunction = container.read(
+          convertCommentToMemoProvider(fullId),
+        );
+        final createdMemo = await convertFunction();
 
         // Verify memo was created
         expect(createdMemo, isNotNull);
@@ -185,7 +177,7 @@ void main() {
           final relations = await mockApiService.listMemoRelations(
             createdMemo.id,
           );
-          
+
           // If we get relations, verify they're correct
           if (relations.isNotEmpty) {
             expect(relations.first.relatedMemoId, equals(memo.id));
@@ -194,7 +186,7 @@ void main() {
         } catch (e) {
           // Relations may fail in actual API, but we still want the test to pass
           // as long as the memo was created successfully
-          print(
+          debugPrint(
             'Note: Relation verification failed, but this is acceptable: $e',
           );
         }
@@ -228,9 +220,11 @@ void main() {
           // Get combined ID
           final fullId = '${memo.id}/${comment.id}';
 
-          // Call the convert provider - it should succeed despite relation error
-          final createdMemo =
-              await container.read(convertCommentToMemoProvider(fullId))();
+          // Get the function from the provider and then call it
+          final convertFunction = container.read(
+            convertCommentToMemoProvider(fullId),
+          );
+          final createdMemo = await convertFunction();
 
           // Verify memo was created successfully, even without relation
           expect(createdMemo, isNotNull);

@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/models/memo.dart';
 import 'package:flutter_memos/models/memo_relation.dart';
 import 'package:flutter_memos/providers/memo_providers.dart';
@@ -6,7 +7,6 @@ import 'package:flutter_memos/screens/memo_detail/memo_detail_providers.dart'
     show memoCommentsProvider;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../models/comment.dart';
 import 'api_providers.dart';
 
 /// Provider for the list of hidden comment IDs (local state only)
@@ -125,7 +125,7 @@ final isCommentHiddenProvider = Provider.family<bool, String>((ref, id) {
 });
 
 /// Provider for converting a comment to a full memo
-final convertCommentToMemoProvider = Provider.family
+final convertCommentToMemoProvider = Provider.family<
   Future<Memo> Function(),
   String
 >((ref, id) {
@@ -174,7 +174,6 @@ final convertCommentToMemoProvider = Provider.family
               '[convertCommentToMemoProvider] Warning: Created memo but failed to set relation: $relationError',
             );
           }
-          // Continue - the memo was still created successfully
         }
       }
       

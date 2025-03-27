@@ -320,9 +320,7 @@ class MockApiService implements ApiService {
   ) async {
     // Simulate API failures if the flag is set
     if (shouldFailRelations) {
-      throw Exception(
-        'Simulated API error: Could not find a suitable class for deserialization',
-      );
+      throw Exception('Simulated API error: Could not find a suitable class for deserialization');
     }
     
     // Ensure we store it with a consistent ID format
@@ -361,5 +359,23 @@ class MockApiService implements ApiService {
           ),
         )
         .toList();
+  }
+  
+  @override
+  String parseRelationType(dynamic type) {
+    if (type == null) return MemoRelation.typeLinked;
+
+    // Handle different type possibilities
+    String typeStr = type.toString();
+
+    switch (typeStr.toUpperCase()) {
+      case 'REFERENCE':
+        return MemoRelation.typeReference;
+      case 'INSPIRED_BY':
+        return MemoRelation.typeInspiredBy;
+      case 'LINKED':
+      default:
+        return MemoRelation.typeLinked;
+    }
   }
 }

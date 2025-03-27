@@ -82,7 +82,6 @@ class MemoRelation {
       type: relationType,
     );
   }
-  
   /// Get relation type constants
   static const String typeLinked = 'LINKED';
   static const String typeReference = 'REFERENCE';

@@ -670,19 +670,17 @@ class ApiService {
       final List<V1MemoRelation> apiRelations = [];
       for (final relation in relations) {
         final apiRelation = relation.toApiRelation();
-
+        
         // Update the memo reference to use the target memo ID
         if (apiRelation.memo != null) {
           apiRelation.memo!.name = formattedId;
         }
-
+        
         apiRelations.add(apiRelation);
       }
-
+      
       if (verboseLogging) {
-        print(
-          '[API] Prepared ${apiRelations.length} relations for memo: $memoId',
-        );
+        print('[API] Prepared ${apiRelations.length} relations for memo: $memoId');
       }
       
       // Create the proper request body with the relations
@@ -704,9 +702,7 @@ class ApiService {
       if (e.toString().contains('deserialization') ||
           e.toString().contains('500')) {
         print('[API] This appears to be an API compatibility issue.');
-        print(
-          '[API] The memo was created successfully, but relation setting failed.',
-        );
+        print('[API] The memo was created successfully, but relation setting failed.');
         // We don't rethrow here to allow the operation to "succeed" despite relation failure
         return;
       }
@@ -740,7 +736,7 @@ class ApiService {
   }      
 
   /// Parse relation type from string - converts API type to string constant
-  String _parseRelationType(dynamic type) {
+  String parseRelationType(dynamic type) {
     if (type == null) return MemoRelation.typeLinked;
     
     // Handle different type possibilities
