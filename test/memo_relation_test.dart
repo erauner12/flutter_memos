@@ -8,7 +8,7 @@ void main() {
       // Create a test relation
       final relation = MemoRelation(
         relatedMemoId: 'test123',
-        type: MemoRelation.typeLinked
+        type: MemoRelation.typeComment
       );
       
       // Convert to API relation
@@ -37,14 +37,14 @@ void main() {
       final refApiRelation = referenceRelation.toApiRelation();
       expect(refApiRelation.type, equals(V1MemoRelationType.REFERENCE));
       
-      // Test inspired by type
-      final inspiredRelation = MemoRelation(
-        relatedMemoId: 'insp123',
-        type: MemoRelation.typeInspiredBy
+      // Test unspecified type
+      final unspecifiedRelation = MemoRelation(
+        relatedMemoId: 'unsp123',
+        type: MemoRelation.typeUnspecified
       );
       
-      final inspApiRelation = inspiredRelation.toApiRelation();
-      expect(inspApiRelation.type, equals(V1MemoRelationType.TYPE_UNSPECIFIED));
+      final unspApiRelation = unspecifiedRelation.toApiRelation();
+      expect(unspApiRelation.type, equals(V1MemoRelationType.TYPE_UNSPECIFIED));
     });
   });
 }

@@ -7,14 +7,14 @@ class MemoRelation {
   
   MemoRelation({
     required this.relatedMemoId,
-    this.type = 'LINKED',
+    this.type = 'COMMENT', // Default to COMMENT type (was LINKED)
   });
   
   /// Create from a map
   factory MemoRelation.fromJson(Map<String, dynamic> json) {
     return MemoRelation(
       relatedMemoId: json['relatedMemoId'] as String,
-      type: json['type'] as String? ?? 'LINKED',
+      type: json['type'] as String? ?? 'COMMENT',
     );
   }
   
@@ -43,7 +43,7 @@ class MemoRelation {
     }
     
     // Convert the type to string
-    String typeStr = 'LINKED';
+    String typeStr = 'COMMENT'; // Default
     if (relation.type != null) {
       typeStr = relation.type.toString();
     }
@@ -57,16 +57,15 @@ class MemoRelation {
     final formattedId =
         relatedMemoId.contains('/') ? relatedMemoId : 'memos/$relatedMemoId';
     
-    // Convert string type to V1MemoRelationType enum
+    // Convert string type to V1MemoRelationType enum based on actual API spec
     V1MemoRelationType? relationType;
     switch (type.toUpperCase()) {
       case 'REFERENCE':
         relationType = V1MemoRelationType.REFERENCE;
         break;
-      case 'INSPIRED_BY':
+      case 'TYPE_UNSPECIFIED':
         relationType = V1MemoRelationType.TYPE_UNSPECIFIED;
         break;
-      case 'LINKED':
       case 'COMMENT':
       default:
         relationType = V1MemoRelationType.COMMENT;
@@ -82,8 +81,9 @@ class MemoRelation {
       type: relationType,
     );
   }
-  /// Get relation type constants
-  static const String typeLinked = 'LINKED';
+  
+  /// Use API constants for relation types
+  static const String typeComment = 'COMMENT';
   static const String typeReference = 'REFERENCE';
-  static const String typeInspiredBy = 'INSPIRED_BY';
+  static const String typeUnspecified = 'TYPE_UNSPECIFIED';
 }

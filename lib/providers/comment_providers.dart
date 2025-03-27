@@ -163,7 +163,7 @@ final convertCommentToMemoProvider = Provider.family<
         try {
           final relation = MemoRelation(
             relatedMemoId: memoId,
-            type: MemoRelation.typeLinked,
+            type: MemoRelation.typeComment,
           );
           
           await apiService.setMemoRelations(createdMemo.id, [relation]);

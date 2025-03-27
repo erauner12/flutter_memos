@@ -363,7 +363,7 @@ class MockApiService implements ApiService {
   
   @override
   String parseRelationType(dynamic type) {
-    if (type == null) return MemoRelation.typeLinked;
+    if (type == null) return MemoRelation.typeComment;
 
     // Handle different type possibilities
     String typeStr = type.toString();
@@ -371,11 +371,11 @@ class MockApiService implements ApiService {
     switch (typeStr.toUpperCase()) {
       case 'REFERENCE':
         return MemoRelation.typeReference;
-      case 'INSPIRED_BY':
-        return MemoRelation.typeInspiredBy;
-      case 'LINKED':
+      case 'TYPE_UNSPECIFIED':
+        return MemoRelation.typeUnspecified;
+      case 'COMMENT':
       default:
-        return MemoRelation.typeLinked;
+        return MemoRelation.typeComment;
     }
   }
 }

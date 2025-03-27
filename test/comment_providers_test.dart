@@ -181,7 +181,7 @@ void main() {
           // If we get relations, verify they're correct
           if (relations.isNotEmpty) {
             expect(relations.first.relatedMemoId, equals(memo.id));
-            expect(relations.first.type, equals(MemoRelation.typeLinked));
+            expect(relations.first.type, equals(MemoRelation.typeComment));
           }
         } catch (e) {
           // Relations may fail in actual API, but we still want the test to pass
