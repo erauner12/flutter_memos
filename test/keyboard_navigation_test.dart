@@ -157,22 +157,21 @@ void main() {
         physicalKey: PhysicalKeyboardKey.arrowDown,
         logicalKey: LogicalKeyboardKey.arrowDown,
         timeStamp: testTimestamp,
-        // Use the keyboard object to represent the state of modifiers
         character: null,
         synthesized: false,
       );
       
-      // Set the keyboard state for testing
-      // Instead of trying to simulate a raw keyboard event, we'll just
-      // use HardwareKeyboard directly to set the shift key state
-      HardwareKeyboard.instance.addHandler((KeyEvent event) {
-        // This is just to add a handler, we'll manually set the state
-        return false;
-      });
+      // Properly set up HardwareKeyboard to recognize shift as pressed
+      HardwareKeyboard.instance.addHandler((KeyEvent event) => false);
       
-      // Simulate shift key being pressed
-      final shiftKey = LogicalKeyboardKey.shift;
-      HardwareKeyboard.instance.keyIsPressed(shiftKey);
+      // Simulate shift key being pressed by updating the key mapping in HardwareKeyboard
+      ServicesBinding.instance.keyboard.handleKeyEvent(
+        KeyDownEvent(
+          physicalKey: PhysicalKeyboardKey.shiftLeft,
+          logicalKey: LogicalKeyboardKey.shift,
+          timeStamp: testTimestamp,
+        ),
+      );
       
       state.testHandleKeyEvent(shiftDownEvent);
       expect(state.nextCalled, equals(2));

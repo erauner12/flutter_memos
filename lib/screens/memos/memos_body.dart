@@ -20,12 +20,34 @@ class MemosBody extends ConsumerStatefulWidget {
 class _MemosBodyState extends ConsumerState<MemosBody>
     with KeyboardNavigationMixin<MemosBody> {
 
+  // Focus node to manage focus state
+  final FocusNode _focusNode = FocusNode(debugLabel: 'MemosBodyFocus');
+  
+  @override
+  void initState() {
+    super.initState();
+    // Request focus after the first frame is rendered
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _focusNode.requestFocus();
+    });
+  }
+  
+  @override
+  void dispose() {
+    _focusNode.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     // Watch the providers for data changes
     final memosAsync = ref.watch(visibleMemosProvider);
     
+    // Ensure initial selection
+    _ensureInitialSelection();
+    
     return Focus(
+      focusNode: _focusNode,
       autofocus: true, // Allow focusing without requiring user clicks
       canRequestFocus: true,
       onKeyEvent: (FocusNode node, KeyEvent event) {
@@ -149,6 +171,23 @@ class _MemosBodyState extends ConsumerState<MemosBody>
         '/memo-detail',
         arguments: {'memoId': selectedMemo.id},
       );
+    }
+  }
+  
+  // Ensure there's always a selection when memos are available
+  void _ensureInitialSelection() {
+    final memosAsync = ref.read(visibleMemosProvider);
+    if (memosAsync is! AsyncData<List<Memo>>) return;
+    
+    final memos = memosAsync.value;
+    if (memos.isEmpty) return;
+    
+    final currentIndex = ref.read(selectedMemoIndexProvider);
+    if (currentIndex < 0 && memos.isNotEmpty) {
+      // Initialize selection to the first memo if nothing is selected
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ref.read(selectedMemoIndexProvider.notifier).state = 0;
+      });
     }
   }
 }
