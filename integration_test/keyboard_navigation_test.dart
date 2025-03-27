@@ -8,7 +8,9 @@ void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   group('Keyboard Navigation Integration Tests', () {
-    testWidgets('Navigate through memos and comments using keyboard', (WidgetTester tester) async {
+    testWidgets(
+      'Navigate through memos and comments using consistent keyboard shortcuts',
+      (WidgetTester tester) async {
       // Launch the app
       app.main();
       await tester.pumpAndSettle();
@@ -27,6 +29,29 @@ void main() {
 
       // Find the first memo card
       final firstMemoCard = find.byType(MemoCard).first;
+      
+        // Check if the memo is selected after keyboard navigation
+        final selectedElements =
+            find
+                .descendant(
+                  of: find.byType(MemoCard),
+                  matching: find.byWidgetPredicate(
+                    (widget) => widget is MemoCard && widget.isSelected,
+                  ),
+                )
+                .evaluate();
+
+        final previousSelectedIndex =
+            selectedElements.isNotEmpty
+                ? find
+                    .byType(MemoCard)
+                    .evaluate()
+                    .toList()
+                    .indexOf(selectedElements.first)
+                : -1;
+
+        // Should have a selected memo now
+        expect(previousSelectedIndex, isNot(equals(-1)));
       
       // Tap on the first memo to enter detail view
       await tester.tap(firstMemoCard);
@@ -55,6 +80,28 @@ void main() {
       await tester.sendKeyUpEvent(LogicalKeyboardKey.shift);
       await tester.pumpAndSettle();
 
+        // Test all the keyboard navigation combinations to ensure consistency
+
+        // 1. Test J key (down)
+        await tester.sendKeyEvent(LogicalKeyboardKey.keyJ);
+        await tester.pumpAndSettle();
+
+        // 2. Test K key (up)
+        await tester.sendKeyEvent(LogicalKeyboardKey.keyK);
+        await tester.pumpAndSettle();
+
+        // 3. Test Shift+Down (down)
+        await tester.sendKeyDownEvent(LogicalKeyboardKey.shift);
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+        await tester.sendKeyUpEvent(LogicalKeyboardKey.shift);
+        await tester.pumpAndSettle();
+
+        // 4. Test Shift+Up (up)
+        await tester.sendKeyDownEvent(LogicalKeyboardKey.shift);
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+        await tester.sendKeyUpEvent(LogicalKeyboardKey.shift);
+        await tester.pumpAndSettle();
+      
       // Navigate back to the main screen
       await tester.sendKeyDownEvent(LogicalKeyboardKey.meta);
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
@@ -63,6 +110,25 @@ void main() {
 
       // Verify we're back on the main screen
       expect(find.text('Flutter Memos'), findsOneWidget);
+      
+        // Test navigation in the main screen again to verify it still works
+
+        // 1. Test J key (next memo)
+        await tester.sendKeyEvent(LogicalKeyboardKey.keyJ);
+        await tester.pumpAndSettle();
+
+        // 2. Test K key (previous memo)
+        await tester.sendKeyEvent(LogicalKeyboardKey.keyK);
+        await tester.pumpAndSettle();
+
+        // 3. Test Command+Right to open selected memo
+        await tester.sendKeyDownEvent(LogicalKeyboardKey.meta);
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+        await tester.sendKeyUpEvent(LogicalKeyboardKey.meta);
+        await tester.pumpAndSettle();
+
+        // We should be back in the detail screen
+        expect(find.text('Memo Detail'), findsOneWidget);
     });
   });
 }

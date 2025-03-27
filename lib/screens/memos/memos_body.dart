@@ -5,16 +5,24 @@ import 'package:flutter/services.dart';
 import 'package:flutter_memos/models/memo.dart';
 import 'package:flutter_memos/providers/memo_providers.dart';
 import 'package:flutter_memos/providers/ui_providers.dart';
+import 'package:flutter_memos/utils/keyboard_navigation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'memo_list_item.dart';
 import 'memos_empty_state.dart';
 
-class MemosBody extends ConsumerWidget {
+class MemosBody extends ConsumerStatefulWidget {
   const MemosBody({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<MemosBody> createState() => _MemosBodyState();
+}
+
+class _MemosBodyState extends ConsumerState<MemosBody> with KeyboardNavigationMixin {
+  const MemosBody({super.key});
+
+  @override
+  Widget build(BuildContext context) {
     // Watch the providers for data changes
     final memosAsync = ref.watch(visibleMemosProvider);
     
@@ -22,29 +30,14 @@ class MemosBody extends ConsumerWidget {
       autofocus: true, // Allow focusing without requiring user clicks
       canRequestFocus: true,
       onKeyEvent: (FocusNode node, KeyEvent event) {
-        if (event is KeyDownEvent) {
-          // Handle J/K navigation
-          if (event.logicalKey == LogicalKeyboardKey.keyJ ||
-              (event.logicalKey == LogicalKeyboardKey.arrowDown &&
-                  HardwareKeyboard.instance.isShiftPressed)) {
-            _selectNextMemo(ref);
-            return KeyEventResult.handled;
-          }
-          // Handle K for previous item
-          else if (event.logicalKey == LogicalKeyboardKey.keyK ||
-              (event.logicalKey == LogicalKeyboardKey.arrowUp &&
-                  HardwareKeyboard.instance.isShiftPressed)) {
-            _selectPreviousMemo(ref);
-            return KeyEventResult.handled;
-          }
-          // Handle Command+Right Arrow to open selected memo
-          else if (event.logicalKey == LogicalKeyboardKey.arrowRight &&
-                   HardwareKeyboard.instance.isMetaPressed) {
-            _openSelectedMemo(ref, context);
-            return KeyEventResult.handled;
-          }
-        }
-        return KeyEventResult.ignored; // Let other keys pass through
+        // Use the shared keyboard navigation handler
+        return handleKeyEvent(
+          event,
+          ref,
+          onUp: () => _selectPreviousMemo(),
+          onDown: () => _selectNextMemo(),
+          onForward: () => _openSelectedMemo(context),
+        );
       },
       child: memosAsync.when(
       data: (memos) {
@@ -99,7 +92,7 @@ class MemosBody extends ConsumerWidget {
   }
   
   // Helper methods for keyboard navigation
-  void _selectNextMemo(WidgetRef ref) {
+  void _selectNextMemo() {
     // Get the current list of visible memos
     final memosAsync = ref.read(visibleMemosProvider);
     if (memosAsync is! AsyncData<List<Memo>>) return;
@@ -107,15 +100,20 @@ class MemosBody extends ConsumerWidget {
     final memos = memosAsync.value;
     if (memos.isEmpty) return;
     
-    // Get the current selection and calculate next index
+    // Get the current selection
     final currentIndex = ref.read(selectedMemoIndexProvider);
-    final nextIndex = currentIndex < 0 ? 0 : (currentIndex + 1) % memos.length;
     
-    // Update the selection
-    ref.read(selectedMemoIndexProvider.notifier).state = nextIndex;
+    // Calculate next index using helper from mixin
+    final nextIndex = getNextIndex(currentIndex, memos.length);
+    
+    // Only update if the index actually changed, to avoid unnecessary rebuilds
+    if (nextIndex != currentIndex) {
+      // Update the selection
+      ref.read(selectedMemoIndexProvider.notifier).state = nextIndex;
+    }
   }
 
-  void _selectPreviousMemo(WidgetRef ref) {
+  void _selectPreviousMemo() {
     // Get the current list of visible memos
     final memosAsync = ref.read(visibleMemosProvider);
     if (memosAsync is! AsyncData<List<Memo>>) return;
@@ -123,17 +121,20 @@ class MemosBody extends ConsumerWidget {
     final memos = memosAsync.value;
     if (memos.isEmpty) return;
     
-    // Get the current selection and calculate previous index with wraparound
+    // Get the current selection
     final currentIndex = ref.read(selectedMemoIndexProvider);
-    final prevIndex = currentIndex < 0
-        ? memos.length - 1  // If nothing selected, select the last item
-        : (currentIndex - 1 + memos.length) % memos.length;
     
-    // Update the selection
-    ref.read(selectedMemoIndexProvider.notifier).state = prevIndex;
+    // Calculate previous index using helper from mixin
+    final prevIndex = getPreviousIndex(currentIndex, memos.length);
+    
+    // Only update if the index actually changed, to avoid unnecessary rebuilds
+    if (prevIndex != currentIndex) {
+      // Update the selection
+      ref.read(selectedMemoIndexProvider.notifier).state = prevIndex;
+    }
   }
 
-  void _openSelectedMemo(WidgetRef ref, BuildContext context) {
+  void _openSelectedMemo(BuildContext context) {
     // Get the current list of visible memos
     final memosAsync = ref.read(visibleMemosProvider);
     if (memosAsync is! AsyncData<List<Memo>>) return;
