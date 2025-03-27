@@ -48,6 +48,20 @@ mixin KeyboardNavigationMixin<T extends ConsumerStatefulWidget>
         return KeyEventResult.handled;
       }
     }
+    // Navigate down (next item) - J key or Shift+Down
+    else if (event.logicalKey == LogicalKeyboardKey.keyJ ||
+        (event.logicalKey == LogicalKeyboardKey.arrowDown &&
+            HardwareKeyboard.instance.isLogicalKeyPressed(
+              LogicalKeyboardKey.shift,
+            ))) {
+      if (onDown != null) {
+        if (kDebugMode) {
+          print('[KeyboardNavigation] Processing DOWN navigation');
+        }
+        onDown();
+        return KeyEventResult.handled;
+      }
+    }
     
     // Navigate back - Command+Left (macOS) or Alt+Left (Windows/Linux)
     else if (event.logicalKey == LogicalKeyboardKey.arrowLeft &&
