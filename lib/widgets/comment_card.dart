@@ -9,11 +9,13 @@ import 'package:intl/intl.dart';
 class CommentCard extends ConsumerStatefulWidget {
   final Comment comment;
   final String memoId;
+  final bool isSelected;
 
   const CommentCard({
     super.key,
     required this.comment,
     required this.memoId,
+    this.isSelected = false,
   });
 
   @override
@@ -285,9 +287,22 @@ class _CommentCardState extends ConsumerState<CommentCard> {
           }
         },
         child: Card(
-          elevation: 1,
+          elevation: widget.isSelected ? 3 : 1,
           margin: EdgeInsets.zero,
-          color: isDarkMode ? const Color(0xFF222222) : Colors.white,
+          color:
+              widget.isSelected
+                  ? (isDarkMode ? const Color(0xFF3A3A3A) : Colors.blue.shade50)
+                  : (isDarkMode ? const Color(0xFF222222) : Colors.white),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+            side:
+                widget.isSelected
+                    ? BorderSide(
+                      color: Theme.of(context).colorScheme.primary,
+                      width: 2,
+                    )
+                    : BorderSide.none,
+          ),
           child: InkWell(
             onLongPress: () => _showContextMenu(context),
             child: Padding(

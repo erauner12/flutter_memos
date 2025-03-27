@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/providers/comment_providers.dart'
     as comment_providers;
+import 'package:flutter_memos/providers/ui_providers.dart';
 import 'package:flutter_memos/widgets/comment_card.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -114,13 +115,15 @@ class MemoComments extends ConsumerWidget {
                 );
               }
 
+              final reversedComments = comments.reversed.toList();
+              
               return Column(
                 children:
-                    comments.reversed
-                        .map(
-                          (comment) => _buildCommentCard(comment, context, ref),
-                        )
-                        .toList(),
+                    reversedComments.asMap().entries.map((entry) {
+                      final index = entry.key;
+                      final comment = entry.value;
+                      return _buildCommentCard(comment, context, ref, index);
+                    }).toList(),
               );
             },
             loading:
@@ -148,6 +151,7 @@ class MemoComments extends ConsumerWidget {
     Comment comment,
     BuildContext context,
     WidgetRef ref,
+    int index,
   ) {
     // Get hidden comment IDs
     final hiddenCommentIds = ref.watch(
@@ -160,7 +164,14 @@ class MemoComments extends ConsumerWidget {
       return const SizedBox.shrink();
     }
 
+    // Get the selected comment index
+    final selectedIndex = ref.watch(selectedCommentIndexProvider);
+
     // Use CommentCard instead of a basic Card
-    return CommentCard(comment: comment, memoId: memoId);
+    return CommentCard(
+      comment: comment,
+      memoId: memoId,
+      isSelected: index == selectedIndex,
+    );
   }
 }

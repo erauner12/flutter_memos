@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_memos/providers/ui_providers.dart';
 import 'package:flutter_memos/widgets/capture_utility.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -31,6 +32,18 @@ class _MemoDetailScreenState extends ConsumerState<MemoDetailScreen> {
           if (event.logicalKey == LogicalKeyboardKey.arrowLeft &&
               HardwareKeyboard.instance.isMetaPressed) {
             Navigator.of(context).pop();
+            return KeyEventResult.handled;
+          }
+          // Handle J/K or Shift+Down/Up for comment navigation
+          else if (event.logicalKey == LogicalKeyboardKey.keyJ ||
+              (event.logicalKey == LogicalKeyboardKey.arrowDown &&
+                  HardwareKeyboard.instance.isShiftPressed)) {
+            _selectNextComment(ref);
+            return KeyEventResult.handled;
+          } else if (event.logicalKey == LogicalKeyboardKey.keyK ||
+              (event.logicalKey == LogicalKeyboardKey.arrowUp &&
+                  HardwareKeyboard.instance.isShiftPressed)) {
+            _selectPreviousComment(ref);
             return KeyEventResult.handled;
           }
         }
@@ -72,6 +85,50 @@ class _MemoDetailScreenState extends ConsumerState<MemoDetailScreen> {
       ),
       ),
     ); // Added closing parenthesis for the Focus widget
+  }
+
+  // Helper methods for keyboard navigation
+  void _selectNextComment(WidgetRef ref) {
+    // Get the current list of comments
+    final commentsAsync = ref.read(memoCommentsProvider(widget.memoId));
+    
+    commentsAsync.whenData((comments) {
+      if (comments.isEmpty) return;
+      
+      // Get the current selection and calculate next index
+      final currentIndex = ref.read(selectedCommentIndexProvider);
+      final nextIndex =
+          currentIndex < 0 ? 0 : (currentIndex + 1) % comments.length;
+      
+      // Update the selection
+      ref.read(selectedCommentIndexProvider.notifier).state = nextIndex;
+      
+      // Optional: Scroll to the selected comment
+      // This would require keeping scroll controller references or using global keys
+    });
+  }
+
+  void _selectPreviousComment(WidgetRef ref) {
+    // Get the current list of comments
+    final commentsAsync = ref.read(memoCommentsProvider(widget.memoId));
+    
+    commentsAsync.whenData((comments) {
+      if (comments.isEmpty) return;
+      
+      // Get the current selection and calculate previous index with wraparound
+      final currentIndex = ref.read(selectedCommentIndexProvider);
+      final prevIndex =
+          currentIndex < 0
+              ? comments.length -
+                  1 // If nothing selected, select the last item
+              : (currentIndex - 1 + comments.length) % comments.length;
+      
+      // Update the selection
+      ref.read(selectedCommentIndexProvider.notifier).state = prevIndex;
+      
+      // Optional: Scroll to the selected comment
+      // This would require keeping scroll controller references or using global keys
+    });
   }
 
   Widget _buildBody() {
