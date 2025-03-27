@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_memos/models/memo.dart';
 import 'package:flutter_memos/providers/memo_providers.dart';
@@ -55,6 +56,11 @@ class MemoListItem extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final sortMode = ref.watch(memoSortModeProvider);
+    final isSelected = ref.watch(selectedMemoIndexProvider) == index;
+
+    if (isSelected && kDebugMode) {
+      print('[MemoListItem] Memo at index $index is selected');
+    }
     
     return Dismissible(
       key: ValueKey('dismissible-${memo.id}'),

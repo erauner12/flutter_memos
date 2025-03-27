@@ -166,8 +166,13 @@ class _MemoCardState extends State<MemoCard> {
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    
+    // Create a key if this card is selected to make it easier to find in tests
+    final Key? cardKey =
+        widget.isSelected ? Key('selected-memo-card-${widget.id}') : null;
 
     return Card(
+      key: cardKey,
       elevation: isDarkMode ? 0 : 1,
       margin: const EdgeInsets.only(bottom: 12),
       color:
@@ -179,8 +184,12 @@ class _MemoCardState extends State<MemoCard> {
         side:
             widget.isSelected
                 ? BorderSide(
-                  color: Theme.of(context).colorScheme.primary,
-                  width: 2,
+                  // Use a more visible color for testing purposes
+                  color:
+                      kDebugMode
+                          ? Colors.red
+                          : Theme.of(context).colorScheme.primary,
+                  width: kDebugMode ? 3 : 2,
                 )
                 : (isDarkMode
                     ? BorderSide(color: Colors.grey[850]!, width: 0.5)
@@ -202,6 +211,18 @@ class _MemoCardState extends State<MemoCard> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Log selection state in debug mode
+              if (widget.isSelected && kDebugMode)
+                Builder(
+                  builder: (context) {
+                    // Use post-frame callback to avoid layout phase
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      print('[MemoCard] Rendering selected card: ${widget.id}');
+                    });
+                    return const SizedBox.shrink();
+                  },
+                ),
+              
               Text(
                 widget.content,
                 style: TextStyle(

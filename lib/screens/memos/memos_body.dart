@@ -31,17 +31,29 @@ class _MemosBodyState extends ConsumerState<MemosBody>
     // Request focus after the first frame is rendered
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _focusNode.requestFocus();
-      
-      // Automatically select the first memo when the widget is mounted
-      final memosAsync = ref.read(visibleMemosProvider);
-      if (memosAsync is AsyncData<List<Memo>> && memosAsync.value.isNotEmpty) {
-        // Select first memo by default for keyboard navigation
-        ref.read(selectedMemoIndexProvider.notifier).state = 0;
-        if (kDebugMode) {
-          print('[MemosBody] Auto-selected first memo for keyboard navigation');
-        }
-      }
     });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    // Select the first memo when data is available
+    final memosAsync = ref.watch(visibleMemosProvider);
+    if (memosAsync is AsyncData<List<Memo>> &&
+        memosAsync.value.isNotEmpty &&
+        ref.read(selectedMemoIndexProvider) < 0) {
+      
+      // Use another post-frame callback to ensure UI is ready
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          ref.read(selectedMemoIndexProvider.notifier).state = 0;
+          if (kDebugMode) {
+            print('[MemosBody] Selected first memo at index 0');
+          }
+        }
+      });
+    }
   }
   
   @override
