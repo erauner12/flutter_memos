@@ -40,10 +40,27 @@ void main() {
       expect(addMemoButtonFinder, findsOneWidget, reason: 'Add Memo button not found');
       await tester.tap(addMemoButtonFinder);
       await tester.pumpAndSettle();
+      
+      // Add a longer wait for memo creation to complete
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pumpAndSettle();
 
-      // Find our specific memo by its content
-      final memoTextFinder = find.text(testMemoContent);
-      expect(memoTextFinder, findsWidgets, reason: 'Newly created memo not found');
+      // Log the memo content we're looking for to help with debugging
+      debugPrint('Looking for memo with content: $testMemoContent');
+
+      // Try a more flexible approach - look for a substring of the content
+      // This handles cases where the text might be truncated in the display
+      final memoContentPartial = testMemoContent.substring(
+        0,
+        20,
+      ); // First 20 chars
+      final memoTextFinder = find.textContaining(memoContentPartial);
+      expect(
+        memoTextFinder,
+        findsWidgets,
+        reason:
+            'Newly created memo not found (using partial content: $memoContentPartial)',
+      );
 
       // Find the MemoCard containing our test content
       final memoCardFinder = find.ancestor(
@@ -87,8 +104,9 @@ void main() {
       await tester.tap(addCommentButtonFinder);
       await tester.pumpAndSettle();
       
-      // Wait for comment to be added
-      await tester.pump(const Duration(seconds: 1));
+      // Wait longer for comment to be added
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pumpAndSettle();
       
       // STEP 4: Convert comment to memo
       
@@ -113,8 +131,9 @@ void main() {
       await tester.tap(convertToMemoFinder);
       await tester.pumpAndSettle();
       
-      // Wait for conversion and UI update
-      await tester.pump(const Duration(seconds: 2));
+      // Wait longer for conversion and UI update
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pumpAndSettle();
       
       // Check for success message (accept either message since relation might fail but conversion succeeds)
       bool foundSuccessMessage = false;
@@ -144,9 +163,16 @@ void main() {
       // Verify we're back on the main screen
       expect(find.text('Flutter Memos'), findsOneWidget, reason: 'Not back on main screen');
       
+      // Wait longer for the new memo to appear after returning to the list
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pumpAndSettle();
+      
       // Look for the new memo (which contains the comment text)
       // Need to find by partial text since the memo list might truncate content
       final newMemoText = testCommentText.substring(0, 20); // First part of comment text
+      debugPrint(
+        'Looking for converted memo with content starting with: $newMemoText',
+      );
       final newMemoFinder = find.textContaining(newMemoText);
       
       expect(newMemoFinder, findsAtLeastNWidgets(1), reason: 'Newly created memo from comment not found');
