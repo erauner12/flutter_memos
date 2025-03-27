@@ -22,6 +22,41 @@ class MemoDetailScreen extends ConsumerStatefulWidget {
 
 class _MemoDetailScreenState extends ConsumerState<MemoDetailScreen> {
   @override
+  void initState() {
+    super.initState();
+    
+    // Register a global key handler for keyboard events
+    RawKeyboard.instance.addListener(_handleGlobalKeyEvent);
+  }
+  
+  @override
+  void dispose() {
+    // Clean up the keyboard listener
+    RawKeyboard.instance.removeListener(_handleGlobalKeyEvent);
+    super.dispose();
+  }
+  
+  // Global key event handler
+  void _handleGlobalKeyEvent(RawKeyEvent event) {
+    if (!mounted) return;
+    
+    // Only process key down events
+    if (event is! RawKeyDownEvent) return;
+    
+    // Handle keyboard shortcuts
+    if (event.logicalKey == LogicalKeyboardKey.keyJ ||
+        (event.logicalKey == LogicalKeyboardKey.arrowDown &&
+         event.isShiftPressed)) {
+      _selectNextComment(ref);
+    }
+    else if (event.logicalKey == LogicalKeyboardKey.keyK ||
+             (event.logicalKey == LogicalKeyboardKey.arrowUp &&
+              event.isShiftPressed)) {
+      _selectPreviousComment(ref);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Focus(
       autofocus: true,
@@ -32,18 +67,6 @@ class _MemoDetailScreenState extends ConsumerState<MemoDetailScreen> {
           if (event.logicalKey == LogicalKeyboardKey.arrowLeft &&
               HardwareKeyboard.instance.isMetaPressed) {
             Navigator.of(context).pop();
-            return KeyEventResult.handled;
-          }
-          // Handle J/K or Shift+Down/Up for comment navigation
-          else if (event.logicalKey == LogicalKeyboardKey.keyJ ||
-              (event.logicalKey == LogicalKeyboardKey.arrowDown &&
-                  HardwareKeyboard.instance.isShiftPressed)) {
-            _selectNextComment(ref);
-            return KeyEventResult.handled;
-          } else if (event.logicalKey == LogicalKeyboardKey.keyK ||
-              (event.logicalKey == LogicalKeyboardKey.arrowUp &&
-                  HardwareKeyboard.instance.isShiftPressed)) {
-            _selectPreviousComment(ref);
             return KeyEventResult.handled;
           }
         }
@@ -69,22 +92,22 @@ class _MemoDetailScreenState extends ConsumerState<MemoDetailScreen> {
             ),
           ],
         ),
-      // Use a Column for vertical layout - this ensures proper bottom alignment
-      body: Column(
-        children: [
-          // Content area (expandable)
-          Expanded(child: _buildBody()),
-          // Fixed bottom area for CaptureUtility
-          CaptureUtility(
-            mode: CaptureMode.addComment,
-            memoId: widget.memoId,
-            hintText: 'Add a comment...',
-            buttonText: 'Add Comment',
-          ),
-        ],
+        // Use a Column for vertical layout - this ensures proper bottom alignment
+        body: Column(
+          children: [
+            // Content area (expandable)
+            Expanded(child: _buildBody()),
+            // Fixed bottom area for CaptureUtility
+            CaptureUtility(
+              mode: CaptureMode.addComment,
+              memoId: widget.memoId,
+              hintText: 'Add a comment...',
+              buttonText: 'Add Comment',
+            ),
+          ],
+        ),
       ),
-      ),
-    ); // Added closing parenthesis for the Focus widget
+    );
   }
 
   // Helper methods for keyboard navigation
