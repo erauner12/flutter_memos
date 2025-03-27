@@ -3,7 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// A mixin for consistent keyboard navigation handling across the app
-mixin KeyboardNavigationMixin on ConsumerState<StatefulWidget> {
+mixin KeyboardNavigationMixin<T extends ConsumerStatefulWidget>
+    on ConsumerState<T> {
   /// Handle a key event with standard navigation shortcuts
   KeyEventResult handleKeyEvent(KeyEvent event, WidgetRef ref, {
     VoidCallback? onUp,

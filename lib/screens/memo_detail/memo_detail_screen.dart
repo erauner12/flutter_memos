@@ -21,7 +21,7 @@ class MemoDetailScreen extends ConsumerStatefulWidget {
 }
 
 class _MemoDetailScreenState extends ConsumerState<MemoDetailScreen>
-    with KeyboardNavigationMixin {
+    with KeyboardNavigationMixin<MemoDetailScreen> {
   @override
   Widget build(BuildContext context) {
     return Focus(

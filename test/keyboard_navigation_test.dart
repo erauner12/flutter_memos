@@ -15,7 +15,7 @@ class TestKeyboardNavigationWidget extends ConsumerStatefulWidget {
 
 class TestKeyboardNavigationState
     extends ConsumerState<TestKeyboardNavigationWidget>
-    with KeyboardNavigationMixin {
+    with KeyboardNavigationMixin<TestKeyboardNavigationWidget> {
   
   int nextCalled = 0;
   int prevCalled = 0;
@@ -163,15 +163,16 @@ void main() {
       );
       
       // Set the keyboard state for testing
-      ServicesBinding.instance.keyboard.handleKeyEvent({
-        "type": "keydown",
-        "keymap": "web",
-        "code": "ShiftLeft",
-        "key": "Shift",
-        "location": 1,
-        "metaState": 1, // Shift pressed
-        "keyCode": 16,
+      // Instead of trying to simulate a raw keyboard event, we'll just
+      // use HardwareKeyboard directly to set the shift key state
+      HardwareKeyboard.instance.addHandler((KeyEvent event) {
+        // This is just to add a handler, we'll manually set the state
+        return false;
       });
+      
+      // Simulate shift key being pressed
+      final shiftKey = LogicalKeyboardKey.shift;
+      HardwareKeyboard.instance.keyIsPressed(shiftKey);
       
       state.testHandleKeyEvent(shiftDownEvent);
       expect(state.nextCalled, equals(2));

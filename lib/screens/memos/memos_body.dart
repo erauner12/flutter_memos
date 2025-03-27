@@ -1,7 +1,6 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_memos/models/memo.dart';
 import 'package:flutter_memos/providers/memo_providers.dart';
 import 'package:flutter_memos/providers/ui_providers.dart';
@@ -18,8 +17,8 @@ class MemosBody extends ConsumerStatefulWidget {
   ConsumerState<MemosBody> createState() => _MemosBodyState();
 }
 
-class _MemosBodyState extends ConsumerState<MemosBody> with KeyboardNavigationMixin {
-  const MemosBody({super.key});
+class _MemosBodyState extends ConsumerState<MemosBody>
+    with KeyboardNavigationMixin<MemosBody> {
 
   @override
   Widget build(BuildContext context) {
