@@ -12,6 +12,9 @@ class MockApiService implements ApiService {
   final Map<String, List<Comment>> _mockComments = {};
   final Map<String, List<MemoRelation>> _mockMemoRelations = {};
   
+  // Flag to simulate API failures for testing error handling
+  bool shouldFailRelations = false;
+  
   // Mock control - to verify calls
   int listMemosCallCount = 0;
   int getMemoCallCount = 0;
@@ -315,6 +318,13 @@ class MockApiService implements ApiService {
     String memoId,
     List<MemoRelation> relations,
   ) async {
+    // Simulate API failures if the flag is set
+    if (shouldFailRelations) {
+      throw Exception(
+        'Simulated API error: Could not find a suitable class for deserialization',
+      );
+    }
+    
     // Ensure we store it with a consistent ID format
     final formattedId = memoId.contains('/') ? memoId.split('/').last : memoId;
     

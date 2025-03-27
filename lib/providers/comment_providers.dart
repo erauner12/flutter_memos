@@ -125,7 +125,7 @@ final isCommentHiddenProvider = Provider.family<bool, String>((ref, id) {
 });
 
 /// Provider for converting a comment to a full memo
-final convertCommentToMemoProvider = Provider.family<
+final convertCommentToMemoProvider = Provider.family
   Future<Memo> Function(),
   String
 >((ref, id) {
@@ -157,14 +157,25 @@ final convertCommentToMemoProvider = Provider.family<
       // Create the new memo
       final createdMemo = await apiService.createMemo(newMemo);
       
-      // Create a relation between the new memo and the original memo
+      // Try to create a relation between the new memo and the original memo
+      // But continue even if this part fails
       if (memoId.isNotEmpty) {
-        final relation = MemoRelation(
-          relatedMemoId: memoId,
-          type: MemoRelation.typeLinked,
-        );
-        
-        await apiService.setMemoRelations(createdMemo.id, [relation]);
+        try {
+          final relation = MemoRelation(
+            relatedMemoId: memoId,
+            type: MemoRelation.typeLinked,
+          );
+          
+          await apiService.setMemoRelations(createdMemo.id, [relation]);
+        } catch (relationError) {
+          // Log but don't fail the whole conversion if relation setting fails
+          if (kDebugMode) {
+            print(
+              '[convertCommentToMemoProvider] Warning: Created memo but failed to set relation: $relationError',
+            );
+          }
+          // Continue - the memo was still created successfully
+        }
       }
       
       // Refresh memos list

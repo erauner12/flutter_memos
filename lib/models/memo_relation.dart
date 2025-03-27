@@ -59,27 +59,26 @@ class MemoRelation {
     
     // Convert string type to V1MemoRelationType enum
     V1MemoRelationType? relationType;
-    switch (type) {
-      case typeLinked:
-        relationType =
-            V1MemoRelationType.COMMENT; // Changed from LINKED to COMMENT
+    switch (type.toUpperCase()) {
+      case 'REFERENCE':
+        relationType = V1MemoRelationType.REFERENCE;
         break;
-      case typeReference:
-        relationType = V1MemoRelationType.REFERENCE; // This one is correct
+      case 'INSPIRED_BY':
+        relationType = V1MemoRelationType.TYPE_UNSPECIFIED;
         break;
-      case typeInspiredBy:
-        relationType =
-            V1MemoRelationType
-                .TYPE_UNSPECIFIED; // Changed from INSPIRED_BY to TYPE_UNSPECIFIED
-        break;
+      case 'LINKED':
+      case 'COMMENT':
       default:
-        relationType =
-            V1MemoRelationType.COMMENT; // Changed from LINKED to COMMENT
+        relationType = V1MemoRelationType.COMMENT;
     }
     
+    // Create memo references for both sides of the relation
+    final memoRef = V1MemoRelationMemo(name: 'memos/placeholder');
+    final relatedMemoRef = V1MemoRelationMemo(name: formattedId);
+    
     return V1MemoRelation(
-      // Create a V1MemoRelationMemo object
-      relatedMemo: V1MemoRelationMemo(name: formattedId),
+      memo: memoRef,
+      relatedMemo: relatedMemoRef,
       type: relationType,
     );
   }
