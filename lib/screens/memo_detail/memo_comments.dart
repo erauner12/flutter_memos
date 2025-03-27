@@ -168,10 +168,19 @@ class MemoComments extends ConsumerWidget {
     final selectedIndex = ref.watch(selectedCommentIndexProvider);
 
     // Use CommentCard instead of a basic Card
-    return CommentCard(
-      comment: comment,
-      memoId: memoId,
-      isSelected: index == selectedIndex,
+    return GestureDetector(
+      // Ensure tapping comment cards doesn't steal focus from main screen
+      onTap: () {
+        final focusScope = FocusScope.of(context);
+        if (!focusScope.hasPrimaryFocus) {
+          focusScope.unfocus();
+        }
+      },
+      child: CommentCard(
+        comment: comment,
+        memoId: memoId,
+        isSelected: index == selectedIndex,
+      ),
     );
   }
 }

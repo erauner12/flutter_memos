@@ -22,11 +22,34 @@ class MemoDetailScreen extends ConsumerStatefulWidget {
 
 class _MemoDetailScreenState extends ConsumerState<MemoDetailScreen>
     with KeyboardNavigationMixin<MemoDetailScreen> {
+  // Create a focus node to manage focus for the entire screen
+  final FocusNode _screenFocusNode = FocusNode(
+    debugLabel: 'MemoDetailScreenFocus',
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    // Request focus after the widget is built
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _screenFocusNode.requestFocus();
+    });
+  }
+
+  @override
+  void dispose() {
+    _screenFocusNode.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Focus(
+      focusNode: _screenFocusNode,
       autofocus: true,
       canRequestFocus: true,
+      skipTraversal: false,
+      includeSemantics: true,
       onKeyEvent: (FocusNode node, KeyEvent event) {
         // Use the shared keyboard navigation handler
         return handleKeyEvent(
@@ -37,7 +60,11 @@ class _MemoDetailScreenState extends ConsumerState<MemoDetailScreen>
           onBack: () => Navigator.of(context).pop(),
         );
       },
-      child: Scaffold(
+      child: GestureDetector(
+        // Ensure tapping anywhere gives focus back to the screen
+        onTap: () => _screenFocusNode.requestFocus(),
+        behavior: HitTestBehavior.translucent,
+        child: Scaffold(
         appBar: AppBar(
           title: const Text('Memo Detail'),
           actions: [
@@ -71,6 +98,7 @@ class _MemoDetailScreenState extends ConsumerState<MemoDetailScreen>
             ),
           ],
         ),
+      ),
       ),
     );
   }

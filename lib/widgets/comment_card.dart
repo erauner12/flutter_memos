@@ -287,6 +287,10 @@ class _CommentCardState extends ConsumerState<CommentCard> {
           }
         },
         child: Card(
+          key:
+              widget.isSelected
+                  ? Key('selected-comment-card-${widget.comment.id}')
+                  : null,
           elevation: widget.isSelected ? 3 : 1,
           margin: EdgeInsets.zero,
           color:
@@ -298,8 +302,11 @@ class _CommentCardState extends ConsumerState<CommentCard> {
             side:
                 widget.isSelected
                     ? BorderSide(
-                      color: Theme.of(context).colorScheme.primary,
-                      width: 2,
+                      color:
+                          widget.isSelected
+                              ? Colors.red
+                              : Theme.of(context).colorScheme.primary,
+                      width: widget.isSelected ? 3 : 2,
                     )
                     : BorderSide.none,
           ),
