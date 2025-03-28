@@ -102,6 +102,16 @@ class CommentContextMenu extends StatelessWidget {
                       isDarkMode: isDarkMode,
                     ),
                     _buildMenuItem(
+                      icon: Icons.edit,
+                      label: 'Edit',
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        // Navigate to edit screen
+                        // This would need to be implemented
+                      },
+                      isDarkMode: isDarkMode,
+                    ),
+                    _buildMenuItem(
                       key: const Key('archive_comment_menu_item'),
                       icon: Icons.archive_outlined,
                       label: 'Archive',

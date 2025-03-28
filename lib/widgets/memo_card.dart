@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_memos/widgets/memo_context_menu.dart' as memo_menu;
+import 'package:flutter_slidable/flutter_slidable.dart';
 
 class MemoCard extends StatefulWidget {
   final String content;
@@ -43,14 +44,14 @@ class MemoCard extends StatefulWidget {
 
 class _MemoCardState extends State<MemoCard> {
   Offset _tapPosition = Offset.zero;
-  
+
   // Helper method to format date strings for display
   String _formatDateTime(String dateTimeString) {
     try {
       final dateTime = DateTime.parse(dateTimeString);
       final now = DateTime.now();
       final difference = now.difference(dateTime);
-      
+
       // For very recent content (less than 1 hour)
       if (difference.inMinutes < 1) {
         return 'Just now';
@@ -77,7 +78,7 @@ class _MemoCardState extends State<MemoCard> {
       return dateTimeString;
     }
   }
-  
+
   // Store position for context menu
   void _storePosition(TapDownDetails details) {
     _tapPosition = details.globalPosition;
@@ -103,7 +104,7 @@ class _MemoCardState extends State<MemoCard> {
         // Dynamic initial size based on screen height
         // Smaller on phones, larger on tablets/desktop
         final initialSize = screenHeight < 600 ? 0.6 : 0.4;
-        
+
         return DraggableScrollableSheet(
           initialChildSize: initialSize,
           minChildSize: 0.25,
@@ -163,157 +164,291 @@ class _MemoCardState extends State<MemoCard> {
     );
   }
 
+  void _onEdit(BuildContext context) {
+    Navigator.pushNamed(
+      context,
+      '/edit-memo',
+      arguments: {'memoId': widget.id},
+    );
+  }
+
+  void _onDelete(BuildContext context) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: const Text('Confirm Delete'),
+          content: const Text('Are you sure you want to delete this memo?'),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirm == true && context.mounted && widget.onDelete != null) {
+      widget.onDelete!();
+    }
+  }
+
+  void _onArchive(BuildContext context) {
+    if (widget.onArchive != null) {
+      widget.onArchive!();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Memo archived successfully'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    }
+  }
+
+  void _onTogglePin(BuildContext context) {
+    if (widget.onTogglePin != null) {
+      widget.onTogglePin!();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(widget.pinned ? 'Memo unpinned' : 'Memo pinned'),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    
+
     // Create a key if this card is selected to make it easier to find in tests
     final Key? cardKey =
         widget.isSelected ? Key('selected-memo-card-${widget.id}') : null;
 
-    return Card(
-      key: cardKey,
-      elevation: isDarkMode ? 0 : 1,
-      margin: const EdgeInsets.only(bottom: 12),
-      color:
-          widget.isSelected
-              ? (isDarkMode ? const Color(0xFF3A3A3A) : Colors.blue.shade50)
-              : (isDarkMode ? const Color(0xFF262626) : null),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(10),
-        side:
+    return Slidable(
+      key: ValueKey('slidable-${widget.id}'),
+
+      // Left side (start) actions
+      startActionPane: ActionPane(
+        motion: const BehindMotion(),
+        children: [
+          SlidableAction(
+            onPressed: (context) => _onEdit(context),
+            backgroundColor: Colors.blue,
+            foregroundColor: Colors.white,
+            icon: Icons.edit,
+            label: 'Edit',
+            autoClose: true,
+          ),
+          SlidableAction(
+            onPressed: (context) => _onTogglePin(context),
+            backgroundColor: Colors.orange,
+            foregroundColor: Colors.white,
+            icon: widget.pinned ? Icons.push_pin_outlined : Icons.push_pin,
+            label: widget.pinned ? 'Unpin' : 'Pin',
+            autoClose: true,
+          ),
+        ],
+      ),
+      
+      // Right side (end) actions
+      endActionPane: ActionPane(
+        motion: const BehindMotion(),
+        children: [
+          SlidableAction(
+            onPressed: (context) => _onDelete(context),
+            backgroundColor: Colors.red,
+            foregroundColor: Colors.white,
+            icon: Icons.delete,
+            label: 'Delete',
+            autoClose: true,
+          ),
+          SlidableAction(
+            onPressed: (context) => _onArchive(context),
+            backgroundColor: Colors.purple,
+            foregroundColor: Colors.white,
+            icon: Icons.archive,
+            label: 'Archive',
+            autoClose: true,
+          ),
+        ],
+      ),
+
+      child: Card(
+        key: cardKey,
+        elevation: isDarkMode ? 0 : 1,
+        margin: const EdgeInsets.only(bottom: 12),
+        color:
             widget.isSelected
-                ? BorderSide(
+                ? (isDarkMode ? const Color(0xFF3A3A3A) : Colors.blue.shade50)
+                : (isDarkMode ? const Color(0xFF262626) : null),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+          side:
+              widget.isSelected
+                  ? BorderSide(
                   // Use a more visible color for testing purposes
-                  color:
-                      kDebugMode
-                          ? Colors.red
-                          : Theme.of(context).colorScheme.primary,
+                    color:
+                        kDebugMode
+                            ? Colors.red
+                            : Theme.of(context).colorScheme.primary,
                   width: kDebugMode ? 3 : 2,
                 )
-                : (isDarkMode
-                    ? BorderSide(color: Colors.grey[850]!, width: 0.5)
-                    : BorderSide.none),
-      ),
-      child: InkWell(
-        onTap: widget.onTap,
-        onLongPress: _showContextMenu,
-        onDoubleTap: kIsWeb ? _showContextMenu : null,
-        onTapDown: _storePosition,
-        borderRadius: BorderRadius.circular(10),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(
-            16.0,
-            16.0,
-            40.0,
-            16.0,
-          ), // Extra padding on right for archive button
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Log selection state in debug mode
-              if (widget.isSelected && kDebugMode)
-                Builder(
-                  builder: (context) {
-                    // Use post-frame callback to avoid layout phase
-                    WidgetsBinding.instance.addPostFrameCallback((_) {
-                      print('[MemoCard] Rendering selected card: ${widget.id}');
-                    });
-                    return const SizedBox.shrink();
-                  },
-                ),
-              
-              Text(
-                widget.content,
-                style: TextStyle(
-                  fontSize: 17,
-                  height: 1.3,
-                  color:
-                      isDarkMode
-                          ? const Color(0xFFE0E0E0)
-                          : const Color(0xFF333333),
-                ),
-                maxLines: 5,
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 10),
+                  : (isDarkMode
+                      ? BorderSide(color: Colors.grey[850]!, width: 0.5)
+                      : BorderSide.none),
+        ),
+        child: InkWell(
+          onTap: widget.onTap,
+          onLongPress: _showContextMenu,
+          onDoubleTap: kIsWeb ? _showContextMenu : null,
+          onTapDown: _storePosition,
+          borderRadius: BorderRadius.circular(10),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(
+              16.0,
+              16.0,
+              40.0,
+              16.0,
+            ), // Extra padding on right for archive button
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Log selection state in debug mode
+                if (widget.isSelected && kDebugMode)
+                  Builder(
+                    builder: (context) {
+                      // Use post-frame callback to avoid layout phase
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        print(
+                          '[MemoCard] Rendering selected card: ${widget.id}',
+                        );
+                      });
+                      return const SizedBox.shrink();
+                    },
+                  ),
 
-              // Pinned indicator with improved styling
-              if (widget.pinned)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 8.0),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.push_pin,
-                        size: 14,
-                        color:
-                            isDarkMode
-                                ? const Color(0xFF9CCC65)
-                                : Colors.green[700],
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        'Pinned',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
+                Text(
+                  widget.content,
+                  style: TextStyle(
+                    fontSize: 17,
+                    height: 1.3,
+                    color:
+                        isDarkMode
+                            ? const Color(0xFFE0E0E0)
+                            : const Color(0xFF333333),
+                  ),
+                  maxLines: 5,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 10),
+
+                // Pinned indicator with improved styling
+                if (widget.pinned)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8.0),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.push_pin,
+                          size: 14,
                           color:
                               isDarkMode
-                              ? const Color(0xFF9CCC65)
-                              : Colors.green[700],
+                                  ? const Color(0xFF9CCC65)
+                                  : Colors.green[700],
                         ),
-                      ),
-                    ],
+                        const SizedBox(width: 4),
+                        Text(
+                          'Pinned',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                            color:
+                                isDarkMode
+                                    ? const Color(0xFF9CCC65)
+                                    : Colors.green[700],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
 
-              // Primary timestamp display with better formatting
-              if (widget.highlightTimestamp != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 4.0),
-                  child: Row(
-                    children: [
-                      Icon(
-                        widget.timestampType == 'Updated'
-                            ? Icons.update
-                            : Icons.calendar_today,
-                        size: 14,
-                        color:
-                            isDarkMode
-                                ? const Color(0xFF9E9E9E)
-                                : Colors.grey[700],
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        '${widget.timestampType}: ${widget.highlightTimestamp}',
-                        style: TextStyle(
-                          fontSize: 14,
+                // Primary timestamp display with better formatting
+                if (widget.highlightTimestamp != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4.0),
+                    child: Row(
+                      children: [
+                        Icon(
+                          widget.timestampType == 'Updated'
+                              ? Icons.update
+                              : Icons.calendar_today,
+                          size: 14,
                           color:
                               isDarkMode
                                   ? const Color(0xFF9E9E9E)
                                   : Colors.grey[700],
-                          fontWeight: FontWeight.w400,
                         ),
-                      ),
-                    ],
+                        const SizedBox(width: 6),
+                        Text(
+                          '${widget.timestampType}: ${widget.highlightTimestamp}',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color:
+                                isDarkMode
+                                    ? const Color(0xFF9E9E9E)
+                                    : Colors.grey[700],
+                            fontWeight: FontWeight.w400,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
 
-              // Show detailed timestamps with improved styling
-              if (widget.showTimeStamps && (widget.createdAt != null || widget.updatedAt != null))
-                Padding(
-                  padding: const EdgeInsets.only(top: 8.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (widget.createdAt != null)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 4.0),
-                          child: Row(
+                // Show detailed timestamps with improved styling
+                if (widget.showTimeStamps &&
+                    (widget.createdAt != null || widget.updatedAt != null))
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (widget.createdAt != null)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 4.0),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.create,
+                                  size: 14,
+                                  color:
+                                      isDarkMode
+                                          ? const Color(0xFF9E9E9E)
+                                          : Colors.grey[600],
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  'Created: ${_formatDateTime(widget.createdAt!)}',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color:
+                                        isDarkMode
+                                            ? const Color(0xFF9E9E9E)
+                                            : Colors.grey[600],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        if (widget.updatedAt != null)
+                          Row(
                             children: [
                               Icon(
-                                Icons.create,
+                                Icons.update,
                                 size: 14,
                                 color:
                                     isDarkMode
@@ -322,7 +457,7 @@ class _MemoCardState extends State<MemoCard> {
                               ),
                               const SizedBox(width: 4),
                               Text(
-                                'Created: ${_formatDateTime(widget.createdAt!)}',
+                                'Updated: ${_formatDateTime(widget.updatedAt!)}',
                                 style: TextStyle(
                                   fontSize: 13,
                                   color:
@@ -333,35 +468,11 @@ class _MemoCardState extends State<MemoCard> {
                               ),
                             ],
                           ),
-                        ),
-                      if (widget.updatedAt != null)
-                        Row(
-                          children: [
-                            Icon(
-                              Icons.update,
-                              size: 14,
-                              color:
-                                  isDarkMode
-                                      ? const Color(0xFF9E9E9E)
-                                      : Colors.grey[600],
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              'Updated: ${_formatDateTime(widget.updatedAt!)}',
-                              style: TextStyle(
-                                fontSize: 13,
-                                color:
-                                    isDarkMode
-                                    ? const Color(0xFF9E9E9E)
-                                    : Colors.grey[600],
-                              ),
-                            ),
-                          ],
-                        ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
