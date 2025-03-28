@@ -173,27 +173,9 @@ class _MemoCardState extends State<MemoCard> {
   }
 
   void _onDelete(BuildContext context) async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (BuildContext dialogContext) {
-        return AlertDialog(
-          title: const Text('Confirm Delete'),
-          content: const Text('Are you sure you want to delete this memo?'),
-          actions: <Widget>[
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(true),
-              child: const Text('Delete'),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (confirm == true && context.mounted && widget.onDelete != null) {
+    if (widget.onDelete != null) {
+      // Call onDelete callback directly without showing another dialog
+      // since the dialog will be shown in MemoListItem
       widget.onDelete!();
     }
   }

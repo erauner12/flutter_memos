@@ -110,13 +110,37 @@ final archiveMemoProvider = Provider.family<Future<void> Function(), String>((re
 /// Provider for deleting a memo
 final deleteMemoProvider = Provider.family<Future<void> Function(), String>((ref, id) {
   return () async {
+    if (kDebugMode) {
+      print('[deleteMemoProvider] Deleting memo: $id');
+    }
+    
     final apiService = ref.read(apiServiceProvider);
     
-    // Delete the memo
-    await apiService.deleteMemo(id);
-    
-    // Refresh the memos list
-    ref.invalidate(memosProvider);
+    try {
+      // Delete the memo
+      await apiService.deleteMemo(id);
+      
+      if (kDebugMode) {
+        print('[deleteMemoProvider] Successfully deleted memo: $id');
+      }
+      
+      // Refresh the memos list
+      ref.invalidate(memosProvider);
+      
+      // Also clear from hidden IDs cache if it's there
+      ref
+          .read(hiddenMemoIdsProvider.notifier)
+          .update((state) => state.contains(id) ? (state..remove(id)) : state);
+
+      return;
+    } catch (e, stackTrace) {
+      if (kDebugMode) {
+        print('[deleteMemoProvider] Error deleting memo $id: $e');
+        print(stackTrace);
+      }
+      // Rethrow to allow proper error handling upstream
+      rethrow;
+    }
   };
 });
 

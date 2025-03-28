@@ -43,13 +43,14 @@ class MemoListItem extends ConsumerWidget {
     ref.invalidate(memosProvider);
   }
 
-  void _navigateToMemoDetail(BuildContext context) {
+  void _navigateToMemoDetail(BuildContext context, WidgetRef ref) {
     Navigator.pushNamed(
       context,
       '/memo-detail',
       arguments: {'memoId': memo.id},
     ).then((_) {
       // Refresh memos after returning from detail screen
+      ref.invalidate(memosProvider);
     });
   }
 
@@ -186,12 +187,13 @@ class MemoListItem extends ConsumerWidget {
                 sortMode == MemoSortMode.byUpdateTime
                     ? 'Updated'
                     : 'Created',
-            onTap: () => _navigateToMemoDetail(context),
+            onTap: () => _navigateToMemoDetail(context, ref),
             onArchive: () => ref.read(archiveMemoProvider(memo.id))(),
             onDelete: () async {
+              // Show confirmation dialog first
               final confirm = await showDialog<bool>(
                 context: context,
-                builder: (BuildContext context) {
+                builder: (BuildContext dialogContext) {
                   return AlertDialog(
                     title: const Text('Confirm Delete'),
                     content: const Text(
@@ -199,11 +201,11 @@ class MemoListItem extends ConsumerWidget {
                     ),
                     actions: <Widget>[
                       TextButton(
-                        onPressed: () => Navigator.of(context).pop(false),
+                        onPressed: () => Navigator.of(dialogContext).pop(false),
                         child: const Text('Cancel'),
                       ),
                       TextButton(
-                        onPressed: () => Navigator.of(context).pop(true),
+                        onPressed: () => Navigator.of(dialogContext).pop(true),
                         child: const Text('Delete'),
                       ),
                     ],
@@ -211,8 +213,49 @@ class MemoListItem extends ConsumerWidget {
                 },
               );
 
-              if (confirm == true) {
-                ref.read(deleteMemoProvider(memo.id))();
+              if (confirm == true && context.mounted) {
+                try {
+                  if (kDebugMode) {
+                    print(
+                      '[MemoListItem] Calling deleteMemoProvider for memo ID: ${memo.id}',
+                    );
+                  }
+
+                  // First, immediately add the memo to hidden IDs to remove it from UI
+                  ref
+                      .read(hiddenMemoIdsProvider.notifier)
+                      .update((state) => state..add(memo.id));
+
+                  // Then perform the actual delete operation
+                  await ref.read(deleteMemoProvider(memo.id))();
+
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Memo deleted successfully'),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  // If deletion fails, show error and remove from hidden IDs
+                  ref
+                      .read(hiddenMemoIdsProvider.notifier)
+                      .update((state) => state..remove(memo.id));
+
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Error deleting memo: $e'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+
+                  if (kDebugMode) {
+                    print('[MemoListItem] Error deleting memo: $e');
+                  }
+                }
               }
             },
             onHide: () => _toggleHideMemo(context, ref),

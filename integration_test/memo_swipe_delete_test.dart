@@ -131,16 +131,41 @@ void main() {
       await tester.tap(deleteConfirmButtonFinder);
       await tester.pumpAndSettle();
 
-      // Wait for deletion to complete
+      // Wait longer for deletion to complete and UI to refresh
       await tester.pump(const Duration(seconds: 1));
+      await tester.pumpAndSettle();
+      
+      // Force an additional pump with delay to ensure all animations and state updates complete
+      await tester.pump(const Duration(seconds: 2));
       await tester.pumpAndSettle();
 
       // Log the counts for debugging
       final afterDeleteCount = find.byType(MemoCard).evaluate().length;
       debugPrint('Memo count after deletion: $afterDeleteCount');
       
-      // Check if our memo is still visible anywhere
+      // Check if our memo is still visible anywhere - add more debugging
       bool memoFound = find.text(testMemoContent).evaluate().isNotEmpty;
+      if (memoFound) {
+        debugPrint(
+          'WARNING: Memo content still found in the UI after deletion!',
+        );
+
+        // Log all visible memos for debugging
+        final allVisibleMemoCards = find.byType(MemoCard);
+        debugPrint(
+          'Number of memo cards visible: ${allVisibleMemoCards.evaluate().length}',
+        );
+
+        // Try to find our specific text again and get more details
+        final specificTextFinder = find.text(testMemoContent);
+        debugPrint(
+          'Number of instances of memo text: ${specificTextFinder.evaluate().length}',
+        );
+      } else {
+        debugPrint(
+          'SUCCESS: Memo content no longer found in the UI after deletion',
+        );
+      }
       
       // If not found immediately, try scrolling to find it
       if (!memoFound) {
