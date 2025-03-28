@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
@@ -54,7 +55,32 @@ class _MemoContentState extends ConsumerState<MemoContent> {
   @override
   Widget build(BuildContext context) {
     final commentsAsync = ref.watch(memoCommentsProvider(widget.memoId));
-    
+  
+    // Debug logging for memo content
+    if (kDebugMode) {
+      print('[MemoContent] Rendering memo ${widget.memo.id}');
+      print(
+        '[MemoContent] Content length: ${widget.memo.content.length} chars',
+      );
+      if (widget.memo.content.length < 200) {
+        print('[MemoContent] Content preview: "${widget.memo.content}"');
+      } else {
+        print(
+          '[MemoContent] Content preview: "${widget.memo.content.substring(0, 197)}..."',
+        );
+      }
+
+      // Detect URLs in content
+      final urlRegex = RegExp(r'(https?://[^\s]+)|([\w-]+://[^\s]+)');
+      final matches = urlRegex.allMatches(widget.memo.content);
+      if (matches.isNotEmpty) {
+        print('[MemoContent] URLs found in content:');
+        for (final match in matches) {
+          print('[MemoContent]   - ${match.group(0)}');
+        }
+      }
+    }
+  
     return commentsAsync.when(
       data: (comments) {
         return Card(
@@ -76,6 +102,11 @@ class _MemoContentState extends ConsumerState<MemoContent> {
                     textScaleFactor: 1.0,
                   ),
                   onTapLink: (text, href, title) {
+                    if (kDebugMode) {
+                      print(
+                        '[MemoContent] Link tapped: text="$text", href="$href", title="$title"',
+                      );
+                    }
                     if (href != null) {
                       UrlHelper.launchUrl(href, context: context);
                     }

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_memos/models/memo.dart';
@@ -37,6 +38,20 @@ class _EditMemoFormState extends ConsumerState<EditMemoForm> {
     _contentController.text = widget.memo.content;
     _pinned = widget.memo.pinned;
     _archived = widget.memo.state == MemoState.archived;
+    
+    if (kDebugMode) {
+      print('[EditMemoForm] Initialized with memo ID: ${widget.memoId}');
+      print(
+        '[EditMemoForm] Content length: ${widget.memo.content.length} chars',
+      );
+      if (widget.memo.content.length < 200) {
+        print('[EditMemoForm] Content: "${widget.memo.content}"');
+      } else {
+        print(
+          '[EditMemoForm] Content preview: "${widget.memo.content.substring(0, 197)}..."',
+        );
+      }
+    }
   }
 
   @override
@@ -83,6 +98,14 @@ class _EditMemoFormState extends ConsumerState<EditMemoForm> {
       _saving = true;
     });
 
+    if (kDebugMode) {
+      print('[EditMemoForm] Saving memo ${widget.memoId}');
+      print(
+        '[EditMemoForm] Content length: ${_contentController.text.trim().length} characters',
+      );
+      print('[EditMemoForm] Settings: pinned=$_pinned, archived=$_archived');
+    }
+
     try {
       final updatedMemo = widget.memo.copyWith(
         content: _contentController.text.trim(),
@@ -92,8 +115,14 @@ class _EditMemoFormState extends ConsumerState<EditMemoForm> {
       
       // Use the provider to save the memo
       await ref.read(saveMemoProvider(widget.memoId))(updatedMemo);
+      if (kDebugMode) {
+        print('[EditMemoForm] Memo saved successfully: ${widget.memoId}');
+      }
       if (mounted) Navigator.pop(context);
     } catch (e) {
+      if (kDebugMode) {
+        print('[EditMemoForm] Error saving memo: $e');
+      }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error: ${e.toString()}')),
@@ -184,6 +213,31 @@ class _EditMemoFormState extends ConsumerState<EditMemoForm> {
                 onPressed: () {
                   setState(() {
                     _previewMode = !_previewMode;
+                    if (kDebugMode) {
+                      print(
+                        '[EditMemoForm] Switched to ${_previewMode ? "preview" : "edit"} mode',
+                      );
+
+                      // When entering preview mode, analyze content for helpful debugging
+                      if (_previewMode) {
+                        final content = _contentController.text;
+                        print(
+                          '[EditMemoForm] Previewing content with ${content.length} chars',
+                        );
+
+                        // Check for URLs that might cause issues
+                        final urlRegex = RegExp(
+                          r'(https?://[^\s]+)|([\w-]+://[^\s]+)',
+                        );
+                        final matches = urlRegex.allMatches(content);
+                        if (matches.isNotEmpty) {
+                          print('[EditMemoForm] URLs in preview content:');
+                          for (final match in matches) {
+                            print('[EditMemoForm]   - ${match.group(0)}');
+                          }
+                        }
+                      }
+                    }
                   });
                 },
               ),
@@ -210,8 +264,21 @@ class _EditMemoFormState extends ConsumerState<EditMemoForm> {
                       ),
                     ),
                     onTapLink: (text, href, title) async {
+                      if (kDebugMode) {
+                        print(
+                          '[EditMemoForm] Link tapped in preview: text="$text", href="$href"',
+                        );
+                      }
                       if (href != null) {
                         final Uri url = Uri.parse(href);
+                        if (kDebugMode) {
+                          print(
+                            '[EditMemoForm] Attempting to launch URL: $href',
+                          );
+                          print(
+                            '[EditMemoForm] Scheme: ${url.scheme}, Path: ${url.path}',
+                          );
+                        }
                         if (!await launchUrl(url)) {
                           if (context.mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(

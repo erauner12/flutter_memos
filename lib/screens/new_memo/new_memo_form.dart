@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_memos/models/memo.dart';
@@ -67,6 +68,28 @@ class _NewMemoFormState extends ConsumerState<NewMemoForm> {
       return;
     }
 
+    if (kDebugMode) {
+      print('[NewMemoForm] Creating new memo');
+      print('[NewMemoForm] Content length: ${content.length} characters');
+      if (content.length < 200) {
+        print('[NewMemoForm] Content: "$content"');
+      } else {
+        print(
+          '[NewMemoForm] Content preview: "${content.substring(0, 197)}..."',
+        );
+      }
+
+      // Check for URLs that might cause issues
+      final urlRegex = RegExp(r'(https?://[^\s]+)|([\w-]+://[^\s]+)');
+      final matches = urlRegex.allMatches(content);
+      if (matches.isNotEmpty) {
+        print('[NewMemoForm] URLs in content:');
+        for (final match in matches) {
+          print('[NewMemoForm]   - ${match.group(0)}');
+        }
+      }
+    }
+
     if (mounted) {
       setState(() {
         _loading = true;
@@ -84,10 +107,18 @@ class _NewMemoFormState extends ConsumerState<NewMemoForm> {
       // Use the provider to create the memo
       await ref.read(createMemoProvider)(newMemo);
       
+      if (kDebugMode) {
+        print('[NewMemoForm] Memo created successfully');
+      }
+      
       if (mounted) {
         Navigator.of(context).pop();
       }
     } catch (e) {
+      if (kDebugMode) {
+        print('[NewMemoForm] Error creating memo: $e');
+      }
+      
       if (mounted) {
         setState(() {
           _error = e.toString();
@@ -181,6 +212,31 @@ class _NewMemoFormState extends ConsumerState<NewMemoForm> {
                 onPressed: () {
                   setState(() {
                     _previewMode = !_previewMode;
+                    if (kDebugMode) {
+                      print(
+                        '[NewMemoForm] Switched to ${_previewMode ? "preview" : "edit"} mode',
+                      );
+
+                      // When entering preview mode, analyze content for helpful debugging
+                      if (_previewMode) {
+                        final content = _contentController.text;
+                        print(
+                          '[NewMemoForm] Previewing content with ${content.length} chars',
+                        );
+
+                        // Check for URLs that might cause issues
+                        final urlRegex = RegExp(
+                          r'(https?://[^\s]+)|([\w-]+://[^\s]+)',
+                        );
+                        final matches = urlRegex.allMatches(content);
+                        if (matches.isNotEmpty) {
+                          print('[NewMemoForm] URLs in preview content:');
+                          for (final match in matches) {
+                            print('[NewMemoForm]   - ${match.group(0)}');
+                          }
+                        }
+                      }
+                    }
                   });
                 },
               ),
@@ -207,8 +263,21 @@ class _NewMemoFormState extends ConsumerState<NewMemoForm> {
                       ),
                     ),
                     onTapLink: (text, href, title) async {
+                      if (kDebugMode) {
+                        print(
+                          '[NewMemoForm] Link tapped in preview: text="$text", href="$href"',
+                        );
+                      }
                       if (href != null) {
                         final Uri url = Uri.parse(href);
+                        if (kDebugMode) {
+                          print(
+                            '[NewMemoForm] Attempting to launch URL: $href',
+                          );
+                          print(
+                            '[NewMemoForm] Scheme: ${url.scheme}, Path: ${url.path}',
+                          );
+                        }
                         if (!await launchUrl(url)) {
                           if (context.mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(

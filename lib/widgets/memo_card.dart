@@ -209,6 +209,30 @@ class _MemoCardState extends State<MemoCard> {
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
+    // Debug logging for memo card rendering
+    if (kDebugMode && widget.isSelected) {
+      print('[MemoCard] Building selected memo card: ${widget.id}');
+
+      // Log content details
+      if (widget.content.length < 100) {
+        print('[MemoCard] Content: "${widget.content}"');
+      } else {
+        print(
+          '[MemoCard] Content preview: "${widget.content.substring(0, 97)}..."',
+        );
+      }
+
+      // Check for URLs that might cause issues
+      final urlRegex = RegExp(r'(https?://[^\s]+)|([\w-]+://[^\s]+)');
+      final matches = urlRegex.allMatches(widget.content);
+      if (matches.isNotEmpty) {
+        print('[MemoCard] URLs in content:');
+        for (final match in matches) {
+          print('[MemoCard]   - ${match.group(0)}');
+        }
+      }
+    }
+
     // Create a key if this card is selected to make it easier to find in tests
     final Key? cardKey =
         widget.isSelected ? Key('selected-memo-card-${widget.id}') : null;
@@ -334,6 +358,11 @@ class _MemoCardState extends State<MemoCard> {
                   shrinkWrap: true,
                   fitContent: true,
                   onTapLink: (text, href, title) {
+                    if (kDebugMode) {
+                      print(
+                        '[MemoCard] Link tapped in memo ${widget.id}: "$text" -> "$href"',
+                      );
+                    }
                     if (href != null) {
                       UrlHelper.launchUrl(href, context: context);
                     }

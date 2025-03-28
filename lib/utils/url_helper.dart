@@ -6,16 +6,24 @@ class UrlHelper {
   /// Launch URL in browser or handle custom schemes
   static Future<bool> launchUrl(String url, {BuildContext? context}) async {
     if (kDebugMode) {
-      print('Launching URL: $url');
+      print('[URL] Launching URL: $url');
     }
     
     // Check if it's a valid URL
     final uri = Uri.tryParse(url);
     if (uri == null) {
       if (kDebugMode) {
-        print('Invalid URL: $url');
+        print('[URL] Invalid URL: $url');
       }
       return false;
+    }
+    
+    // Enhanced debug info
+    if (kDebugMode) {
+      print(
+        '[URL] Scheme: ${uri.scheme}, Path: ${uri.path}, Query: ${uri.query}',
+      );
+      print('[URL] Fragment: ${uri.fragment}, Authority: ${uri.authority}');
     }
     
     // Handle different URL schemes
@@ -27,7 +35,7 @@ class UrlHelper {
     } else if (uri.scheme == 'memo') {
       // Handle internal memo links, e.g., memo://123 to open memo with ID 123
       if (kDebugMode) {
-        print('Handling internal memo link: $url');
+        print('[URL] Handling internal memo link: $url');
       }
       // Implement custom routing logic here
       return true;
@@ -39,12 +47,15 @@ class UrlHelper {
         uri.scheme == 'mailto' ||
         _isCustomAppScheme(uri.scheme)) {
       if (kDebugMode) {
-        print('Handling app URL scheme: ${uri.scheme}');
+        print('[URL] Handling app URL scheme: ${uri.scheme}');
       }
 
       try {
         // Try to launch the app URL
         final canLaunch = await url_launcher.canLaunchUrl(uri);
+        if (kDebugMode) {
+          print('[URL] Can launch: $canLaunch');
+        }
         if (canLaunch) {
           return await url_launcher.launchUrl(uri);
         } else {
@@ -55,13 +66,13 @@ class UrlHelper {
             ).showSnackBar(SnackBar(content: Text('Cannot open: $url')));
           }
           if (kDebugMode) {
-            print('Cannot launch URL: $url');
+            print('[URL] Cannot launch URL: $url');
           }
           return false;
         }
       } catch (e) {
         if (kDebugMode) {
-          print('Error launching URL $url: $e');
+          print('[URL] Error launching URL $url: $e');
         }
         return false;
       }
@@ -69,10 +80,13 @@ class UrlHelper {
 
     // Try to launch other schemes
     try {
+      if (kDebugMode) {
+        print('[URL] Attempting to launch URL with scheme: ${uri.scheme}');
+      }
       return await url_launcher.launchUrl(uri);
     } catch (e) {
       if (kDebugMode) {
-        print('Error launching URL $url: $e');
+        print('[URL] Error launching URL $url: $e');
       }
       return false;
     }
@@ -98,13 +112,26 @@ class UrlHelper {
       'venmo',
       'cashapp',
       'zelle',
+      'drafts', // Added drafts scheme
+      'things',
+      'omnifocus',
+      'bear',
+      'notion',
+      'obsidian'
     ];
 
     // Check if the scheme is in our list or follows common patterns
-    return customSchemes.contains(scheme.toLowerCase()) ||
+    final isCustom =
+        customSchemes.contains(scheme.toLowerCase()) ||
         scheme.contains(
           '.',
         ) || // Often used in reverse-domain notation (com.example.app)
         scheme.length >= 3; // Most custom schemes are at least 3 chars
+
+    if (kDebugMode && isCustom) {
+      print('[URL] Identified custom app scheme: $scheme');
+    }
+
+    return isCustom;
   }
 }

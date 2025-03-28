@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
@@ -319,6 +320,11 @@ class _CommentCardState extends ConsumerState<CommentCard> {
                     ),
                     shrinkWrap: true,
                     onTapLink: (text, href, title) {
+                      if (kDebugMode) {
+                        print(
+                          '[CommentCard] Link tapped in comment ${widget.comment.id}: "$text" -> "$href"',
+                        );
+                      }
                       if (href != null) {
                         UrlHelper.launchUrl(href);
                       }
