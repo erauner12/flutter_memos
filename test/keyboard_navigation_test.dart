@@ -101,7 +101,15 @@ void main() {
     setUp(() {
       testKey = GlobalKey<TestKeyboardNavigationState>();
       providerScope = ProviderScope(
-        child: MaterialApp(home: TestKeyboardNavigationWidget(key: testKey),
+        child: MaterialApp(
+          home: Scaffold(
+            body: Column(
+              children: [
+                const TextField(key: Key('testTextField')),
+                TestKeyboardNavigationWidget(key: testKey),
+              ],
+            ),
+          ),
         ),
       );
     });
@@ -151,6 +159,63 @@ void main() {
       state.testHandleKeyEvent(kKeyEvent);
       expect(state.nextCalled, equals(1));
       expect(state.prevCalled, equals(1));
+    });
+
+    testWidgets('j/k keys are ignored when text input is focused', (
+      WidgetTester tester,
+    ) async {
+      await tester.pumpWidget(providerScope);
+
+      final state = testKey.currentState!;
+      final Duration testTimestamp = const Duration(milliseconds: 10);
+
+      // First, focus the text field
+      await tester.tap(find.byKey(const Key('testTextField')));
+      await tester.pump();
+
+      // The initial count of navigation calls
+      final initialNextCalled = state.nextCalled;
+      final initialPrevCalled = state.prevCalled;
+
+      // Test J key while text field is focused - should be ignored
+      final jKeyEvent = KeyDownEvent(
+        physicalKey: PhysicalKeyboardKey.keyJ,
+        logicalKey: LogicalKeyboardKey.keyJ,
+        timeStamp: testTimestamp,
+      );
+      final jResult = state.testHandleKeyEvent(jKeyEvent);
+
+      // Test K key while text field is focused - should be ignored
+      final kKeyEvent = KeyDownEvent(
+        physicalKey: PhysicalKeyboardKey.keyK,
+        logicalKey: LogicalKeyboardKey.keyK,
+        timeStamp: testTimestamp,
+      );
+      final kResult = state.testHandleKeyEvent(kKeyEvent);
+
+      // Verify navigation was not triggered
+      expect(
+        state.nextCalled,
+        equals(initialNextCalled),
+        reason: 'nextCalled should not increase',
+      );
+      expect(
+        state.prevCalled,
+        equals(initialPrevCalled),
+        reason: 'prevCalled should not increase',
+      );
+
+      // Verify the key events were ignored
+      expect(
+        jResult,
+        equals(KeyEventResult.ignored),
+        reason: 'J key should be ignored',
+      );
+      expect(
+        kResult,
+        equals(KeyEventResult.ignored),
+        reason: 'K key should be ignored',
+      );
       
       // Test Shift+Down using KeyDownEvent with proper initialization
       final shiftDownEvent = KeyDownEvent(

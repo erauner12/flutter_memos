@@ -6,6 +6,28 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 /// A mixin for consistent keyboard navigation handling across the app
 mixin KeyboardNavigationMixin<T extends ConsumerStatefulWidget>
     on ConsumerState<T> {
+  /// Check if the current focus is on a text input field
+  bool _isTextInputFocused() {
+    final focusNode = FocusManager.instance.primaryFocus;
+    if (focusNode == null) return false;
+
+    // Check if the widget type suggests it's a text input
+    final widget = focusNode.context?.widget;
+    if (widget == null) return false;
+
+    final typeStr = widget.runtimeType.toString().toLowerCase();
+    final isTextInput =
+        typeStr.contains('text') ||
+        typeStr.contains('edit') ||
+        typeStr.contains('field');
+
+    if (isTextInput && kDebugMode) {
+      print('[KeyboardNavigation] Text input focused: $typeStr');
+    }
+
+    return isTextInput;
+  }
+
   /// Handle a key event with standard navigation shortcuts
   KeyEventResult handleKeyEvent(KeyEvent event, WidgetRef ref, {
     VoidCallback? onUp,
@@ -21,6 +43,16 @@ mixin KeyboardNavigationMixin<T extends ConsumerStatefulWidget>
       print(
         '[KeyboardNavigation] Received key event: ${event.logicalKey.keyLabel}',
       );
+    }
+    
+    // Check if j or k keys should be passed through to a text input
+    if ((event.logicalKey == LogicalKeyboardKey.keyJ ||
+            event.logicalKey == LogicalKeyboardKey.keyK) &&
+        _isTextInputFocused()) {
+      if (kDebugMode) {
+        print('[KeyboardNavigation] Ignoring j/k key in text input');
+      }
+      return KeyEventResult.ignored;
     }
     
     // Navigate up (previous item) - K key or Shift+Up
