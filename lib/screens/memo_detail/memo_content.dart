@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/models/memo.dart';
+import 'package:flutter_memos/utils/url_helper.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'memo_detail_providers.dart';
@@ -62,9 +64,22 @@ class _MemoContentState extends ConsumerState<MemoContent> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  widget.memo.content,
-                  style: const TextStyle(fontSize: 18),
+                MarkdownBody(
+                  data: widget.memo.content,
+                  selectable: true,
+                  styleSheet: MarkdownStyleSheet(
+                    p: const TextStyle(fontSize: 18),
+                    a: TextStyle(
+                      color: Theme.of(context).colorScheme.primary,
+                      decoration: TextDecoration.underline,
+                    ),
+                    textScaleFactor: 1.0,
+                  ),
+                  onTapLink: (text, href, title) {
+                    if (href != null) {
+                      UrlHelper.launchUrl(href, context: context);
+                    }
+                  },
                 ),
                 const SizedBox(height: 8),
                 Align(

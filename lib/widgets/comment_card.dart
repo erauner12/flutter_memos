@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/providers/comment_providers.dart';
+import 'package:flutter_memos/utils/url_helper.dart';
 import 'package:flutter_memos/widgets/comment_context_menu.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
@@ -301,16 +303,26 @@ class _CommentCardState extends ConsumerState<CommentCard> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    widget.comment.content,
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: textColor,
-                      fontWeight:
-                          widget.comment.pinned
-                              ? FontWeight.w500
-                              : FontWeight.normal,
+                  MarkdownBody(
+                    data: widget.comment.content,
+                    selectable: true,
+                    styleSheet: MarkdownStyleSheet(
+                      p: TextStyle(
+                        fontSize: 16,
+                        color: textColor,
+                        fontWeight:
+                            widget.comment.pinned
+                                ? FontWeight.w500
+                                : FontWeight.normal,
+                      ),
+                      textScaleFactor: 1.0,
                     ),
+                    shrinkWrap: true,
+                    onTapLink: (text, href, title) {
+                      if (href != null) {
+                        UrlHelper.launchUrl(href);
+                      }
+                    },
                   ),
                   const SizedBox(height: 4),
                   Row(

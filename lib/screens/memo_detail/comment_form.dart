@@ -27,6 +27,57 @@ class _CommentFormState extends ConsumerState<CommentForm> {
     _focusNode.dispose();
     super.dispose();
   }
+  
+  void _showMarkdownHelp() {
+    showDialog(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Markdown Syntax'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildHelpRow('**Bold**', 'Bold'),
+                  _buildHelpRow('*Italic*', 'Italic'),
+                  _buildHelpRow('[Link](url)', 'Link'),
+                  _buildHelpRow('# Heading', 'Heading'),
+                  _buildHelpRow('- List item', 'List item'),
+                  _buildHelpRow('1. Numbered', 'Numbered list'),
+                  _buildHelpRow('> Quote', 'Blockquote'),
+                  _buildHelpRow('`Code`', 'Code'),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Close'),
+              ),
+            ],
+          ),
+    );
+  }
+
+  Widget _buildHelpRow(String syntax, String description) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Text(
+            syntax,
+            style: const TextStyle(
+              fontFamily: 'monospace',
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Text('→ $description'),
+        ],
+      ),
+    );
+  }
 
   Future<void> _handleAddComment() async {
     if (_controller.text.trim().isEmpty) return;
@@ -76,11 +127,16 @@ class _CommentFormState extends ConsumerState<CommentForm> {
             TextField(
               controller: _controller,
               focusNode: _focusNode,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 hintText: 'Add a comment...',
-                hintStyle: TextStyle(color: Colors.grey),
-                border: OutlineInputBorder(),
-                contentPadding: EdgeInsets.all(10),
+                hintStyle: const TextStyle(color: Colors.grey),
+                border: const OutlineInputBorder(),
+                contentPadding: const EdgeInsets.all(10),
+                suffixIcon: IconButton(
+                  icon: const Icon(Icons.text_format),
+                  tooltip: 'Markdown formatting',
+                  onPressed: _showMarkdownHelp,
+                ),
               ),
               maxLines: 3,
               onSubmitted: (_) {

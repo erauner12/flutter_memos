@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:flutter_memos/utils/url_helper.dart';
 import 'package:flutter_memos/widgets/memo_context_menu.dart' as memo_menu;
 import 'package:flutter_slidable/flutter_slidable.dart';
 
@@ -314,18 +316,28 @@ class _MemoCardState extends State<MemoCard> {
                     },
                   ),
 
-                Text(
-                  widget.content,
-                  style: TextStyle(
-                    fontSize: 17,
-                    height: 1.3,
-                    color:
-                        isDarkMode
-                            ? const Color(0xFFE0E0E0)
-                            : const Color(0xFF333333),
+                MarkdownBody(
+                  data: widget.content,
+                  selectable: true,
+                  styleSheet: MarkdownStyleSheet(
+                    p: TextStyle(
+                      fontSize: 17,
+                      height: 1.3,
+                      color: isDarkMode ? const Color(0xFFE0E0E0) : const Color(0xFF333333),
+                    ),
+                    a: TextStyle(
+                      color: Theme.of(context).colorScheme.primary,
+                      decoration: TextDecoration.underline,
+                    ),
+                    textScaleFactor: 1.0,
                   ),
-                  maxLines: 5,
-                  overflow: TextOverflow.ellipsis,
+                  shrinkWrap: true,
+                  fitContent: true,
+                  onTapLink: (text, href, title) {
+                    if (href != null) {
+                      UrlHelper.launchUrl(href, context: context);
+                    }
+                  },
                 ),
                 const SizedBox(height: 10),
 
