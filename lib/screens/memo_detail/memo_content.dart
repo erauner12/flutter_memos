@@ -108,7 +108,34 @@ class _MemoContentState extends ConsumerState<MemoContent> {
                       );
                     }
                     if (href != null) {
-                      UrlHelper.launchUrl(href, context: context);
+                      // First, try to launch the URL
+                      UrlHelper.launchUrl(href, context: context).then((
+                        success,
+                      ) {
+                        if (!success && context.mounted) {
+                          // If launch failed, show a more detailed message with copy option
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Could not open link: $href'),
+                              action: SnackBarAction(
+                                label: 'Copy URL',
+                                onPressed: () {
+                                  Clipboard.setData(ClipboardData(text: href));
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                          'URL copied to clipboard',
+                                        ),
+                                      ),
+                                    );
+                                  }
+                                },
+                              ),
+                            ),
+                          );
+                        }
+                      });
                     }
                   },
                 ),

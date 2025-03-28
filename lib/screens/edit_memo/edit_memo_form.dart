@@ -2,8 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_memos/models/memo.dart';
+import 'package:flutter_memos/utils/url_helper.dart'; // Add this import
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import 'edit_memo_providers.dart';
 
@@ -270,22 +270,17 @@ class _EditMemoFormState extends ConsumerState<EditMemoForm> {
                         );
                       }
                       if (href != null) {
-                        final Uri url = Uri.parse(href);
+                        // Use UrlHelper for consistent URL handling
+                        final success = await UrlHelper.launchUrl(
+                          href,
+                          context: context,
+                        );
+                        
                         if (kDebugMode) {
-                          print(
-                            '[EditMemoForm] Attempting to launch URL: $href',
-                          );
-                          print(
-                            '[EditMemoForm] Scheme: ${url.scheme}, Path: ${url.path}',
-                          );
+                          print('[EditMemoForm] URL launch result: $success');
                         }
-                        if (!await launchUrl(url)) {
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('Could not launch $href')),
-                            );
-                          }
-                        }
+                        
+                        // Feedback is now handled by UrlHelper
                       }
                     },
                   ),

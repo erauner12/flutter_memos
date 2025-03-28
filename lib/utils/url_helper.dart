@@ -1,5 +1,8 @@
+import 'dart:io' show Platform; // Added to check platform
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // Added for Clipboard
 import 'package:url_launcher/url_launcher.dart' as url_launcher;
 
 class UrlHelper {
@@ -51,19 +54,51 @@ class UrlHelper {
       }
 
       try {
-        // Try to launch the app URL
+        // For macOS and custom schemes, use platformBrowserLaunch which has better
+        // support for handling custom URL schemes on desktop platforms
+        if (Platform.isMacOS && _isCustomAppScheme(uri.scheme)) {
+          if (kDebugMode) {
+            print('[URL] Using platform-specific launch for macOS: $url');
+          }
+
+          // Try to launch with universal_links first, which has better macOS support
+          return await url_launcher.launchUrl(
+            uri,
+            mode: url_launcher.LaunchMode.externalApplication,
+          );
+        }
+
+        // For other platforms or schemes, try standard launch
         final canLaunch = await url_launcher.canLaunchUrl(uri);
         if (kDebugMode) {
           print('[URL] Can launch: $canLaunch');
         }
+        
         if (canLaunch) {
-          return await url_launcher.launchUrl(uri);
+          return await url_launcher.launchUrl(
+            uri,
+            mode:
+                url_launcher
+                    .LaunchMode
+                    .externalApplication, // Changed from default to ensure external app launch
+          );
         } else {
           // Show a snackbar if the URL can't be launched and we have context
           if (context != null) {
-            ScaffoldMessenger.of(
-              context,
-            ).showSnackBar(SnackBar(content: Text('Cannot open: $url')));
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Cannot open: $url'),
+                action: SnackBarAction(
+                  label: 'Copy',
+                  onPressed: () {
+                    Clipboard.setData(ClipboardData(text: url));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('URL copied to clipboard')),
+                    );
+                  },
+                ),
+              ),
+            );
           }
           if (kDebugMode) {
             print('[URL] Cannot launch URL: $url');
@@ -74,6 +109,24 @@ class UrlHelper {
         if (kDebugMode) {
           print('[URL] Error launching URL $url: $e');
         }
+        
+        // Show error message to user if context is available
+        if (context != null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Could not open "$url": ${e.toString()}'),
+              action: SnackBarAction(
+                label: 'Copy URL',
+                onPressed: () {
+                  Clipboard.setData(ClipboardData(text: url));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('URL copied to clipboard')),
+                  );
+                },
+              ),
+            ),
+          );
+        }
         return false;
       }
     }
@@ -83,10 +136,34 @@ class UrlHelper {
       if (kDebugMode) {
         print('[URL] Attempting to launch URL with scheme: ${uri.scheme}');
       }
-      return await url_launcher.launchUrl(uri);
+      return await url_launcher.launchUrl(
+        uri,
+        mode:
+            url_launcher
+                .LaunchMode
+                .externalApplication, // Use external app mode for all URLs
+      );
     } catch (e) {
       if (kDebugMode) {
         print('[URL] Error launching URL $url: $e');
+      }
+      
+      // Show error message to user if context is available
+      if (context != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error opening URL: ${e.toString()}'),
+            action: SnackBarAction(
+              label: 'Copy',
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: url));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('URL copied to clipboard')),
+                );
+              },
+            ),
+          ),
+        );
       }
       return false;
     }
@@ -112,15 +189,28 @@ class UrlHelper {
       'venmo',
       'cashapp',
       'zelle',
-      'drafts', // Added drafts scheme
+      'drafts', // Drafts app scheme
       'things',
       'omnifocus',
       'bear',
       'notion',
-      'obsidian'
+      'obsidian',
+      'tweetbot',
+      'twitterrific',
+      'mastodon',
+      'testflight',
+      'shortcuts',
+      'workflow',
+      'dropbox',
+      'evernote',
+      'onenote',
+      'pocket',
+      'overcast',
+      'castro',
+      'pcast',
     ];
 
-    // Check if the scheme is in our list or follows common patterns
+    // More advanced scheme detection and logging
     final isCustom =
         customSchemes.contains(scheme.toLowerCase()) ||
         scheme.contains(
@@ -128,10 +218,20 @@ class UrlHelper {
         ) || // Often used in reverse-domain notation (com.example.app)
         scheme.length >= 3; // Most custom schemes are at least 3 chars
 
-    if (kDebugMode && isCustom) {
-      print('[URL] Identified custom app scheme: $scheme');
-    }
+    if (kDebugMode) {
+      if (isCustom) {
+        print('[URL] Identified scheme "$scheme" as a custom app scheme');
 
+        if (customSchemes.contains(scheme.toLowerCase())) {
+          print('[URL] Matched "$scheme" in known app schemes list');
+        } else if (scheme.contains('.')) {
+          print('[URL] Detected "$scheme" as likely reverse-domain format');
+        }
+      } else {
+        print('[URL] Scheme "$scheme" not identified as a custom app scheme');
+      }
+    }
+    
     return isCustom;
   }
 }
