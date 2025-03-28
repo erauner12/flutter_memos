@@ -111,6 +111,8 @@ class _NewMemoFormState extends ConsumerState<NewMemoForm> {
       padding: const EdgeInsets.all(16.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        // Add mainAxisSize.min to prevent unbounded height problem
+        mainAxisSize: MainAxisSize.min,
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -243,7 +245,8 @@ class _NewMemoFormState extends ConsumerState<NewMemoForm> {
                 style: const TextStyle(color: Colors.red),
               ),
             ),
-          const Spacer(),
+          // Replace Spacer with fixed height SizedBox to avoid layout issues
+          const SizedBox(height: 20),
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(

@@ -1,0 +1,88 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:flutter_memos/screens/new_memo/new_memo_form.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+void main() {
+  group('NewMemoForm Markdown Preview Tests', () {
+    testWidgets('Preview mode shows rendered markdown', (WidgetTester tester) async {
+      // Build the actual NewMemoForm
+      await tester.pumpWidget(
+        const ProviderScope(
+          child: MaterialApp(home: Scaffold(body: NewMemoForm())),
+        ),
+      );
+
+      // Enter some markdown text
+      const testMarkdown = '# Test Heading\n**Bold text**\n*Italic text*';
+      await tester.enterText(find.byType(TextField), testMarkdown);
+
+      // Pump after text entry so widget can rebuild
+      await tester.pumpAndSettle();
+
+      // Initially we should see the TextField, not the MarkdownBody
+      expect(find.byType(TextField), findsOneWidget);
+      expect(find.byType(MarkdownBody), findsNothing);
+
+      // Tap "Preview" button to toggle `_previewMode`
+      await tester.tap(find.text('Preview'));
+      await tester.pumpAndSettle();
+
+      // Now the text field should be replaced by MarkdownBody
+      expect(find.byType(TextField), findsNothing);
+      expect(find.byType(MarkdownBody), findsOneWidget);
+
+      // Check that the typed markdown is rendered
+      expect(find.textContaining('Test Heading'), findsOneWidget);
+      expect(find.textContaining('Bold text'), findsOneWidget);
+      expect(find.textContaining('Italic text'), findsOneWidget);
+    });
+
+    testWidgets('Markdown help toggle displays help information', (WidgetTester tester) async {
+      // Build the form with a fixed-height container to prevent overflow errors
+      await tester.pumpWidget(
+        const ProviderScope(
+          child: MaterialApp(
+            home: Scaffold(
+              body: SizedBox(
+                width: 800,
+                height: 600,
+                child: SingleChildScrollView(child: NewMemoForm()),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      // Initially help should not be shown
+      expect(find.text('Markdown Syntax Guide'), findsNothing);
+
+      // Pump and settle to ensure widgets are properly laid out
+      await tester.pumpAndSettle();
+
+      // Tap the help button with some extra pumps to ensure it's visible
+      await tester.ensureVisible(find.text('Markdown Help'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Markdown Help'));
+      await tester.pumpAndSettle();
+
+      // Help should now be visible
+      expect(find.text('Markdown Syntax Guide'), findsOneWidget);
+    
+      // Check for some help content
+      await tester.ensureVisible(find.text('Heading 1'));
+      expect(find.text('Heading 1'), findsOneWidget);
+      expect(find.text('Bold text'), findsOneWidget);
+    
+      // Now find and tap the hide help button
+      await tester.ensureVisible(find.text('Hide Help'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Hide Help'));
+      await tester.pumpAndSettle();
+
+      // Help should be hidden again
+      expect(find.text('Markdown Syntax Guide'), findsNothing);
+    });
+  });
+}
