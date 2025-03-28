@@ -40,6 +40,7 @@ mixin KeyboardNavigationMixin<T extends ConsumerStatefulWidget>
     VoidCallback? onBack,
     VoidCallback? onForward,
     VoidCallback? onSubmit,
+    VoidCallback? onEscape,
   }) {
     // Only handle key down events to avoid duplicate handling
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
@@ -50,31 +51,46 @@ mixin KeyboardNavigationMixin<T extends ConsumerStatefulWidget>
       );
     }
     
-    // If any text input is focused, ignore navigation keys
+    // Always handle Command+Enter for submission regardless of focus
+    if (event.logicalKey == LogicalKeyboardKey.enter &&
+        HardwareKeyboard.instance.isLogicalKeyPressed(LogicalKeyboardKey.meta)) {
+      if (onSubmit != null) {
+        if (kDebugMode) {
+          print('[KeyboardNavigation] Processing SUBMIT command');
+        }
+        onSubmit();
+        return KeyEventResult.handled;
+      }
+    }
+    
+    // Always handle Escape key to exit text input focus
+    if (event.logicalKey == LogicalKeyboardKey.escape) {
+      if (onEscape != null) {
+        if (kDebugMode) {
+          print('[KeyboardNavigation] Processing ESCAPE command');
+        }
+        onEscape();
+        return KeyEventResult.handled;
+      }
+      
+      // Default behavior: unfocus current focus node
+      if (_isTextInputFocused()) {
+        FocusManager.instance.primaryFocus?.unfocus();
+        return KeyEventResult.handled;
+      }
+    }
+    
+    // If any text input is focused, ignore other navigation keys
     if (_isTextInputFocused()) {
       if (kDebugMode) {
         print('[KeyboardNavigation] Ignoring navigation keys in text input');
       }
-      
-      // Only handle Command+Enter for submission even when text input is focused
-      if (event.logicalKey == LogicalKeyboardKey.enter &&
-          HardwareKeyboard.instance.isLogicalKeyPressed(
-            LogicalKeyboardKey.meta,
-          )) {
-        if (onSubmit != null) {
-          onSubmit();
-          return KeyEventResult.handled;
-        }
-      }
-      
       return KeyEventResult.ignored;
     }
     
     // Navigate up (previous item) - Shift+Up
     if (event.logicalKey == LogicalKeyboardKey.arrowUp &&
-        HardwareKeyboard.instance.isLogicalKeyPressed(
-          LogicalKeyboardKey.shift,
-        )) {
+        HardwareKeyboard.instance.isLogicalKeyPressed(LogicalKeyboardKey.shift)) {
       if (onUp != null) {
         if (kDebugMode) {
           print('[KeyboardNavigation] Processing UP navigation');
@@ -86,9 +102,7 @@ mixin KeyboardNavigationMixin<T extends ConsumerStatefulWidget>
     
     // Navigate down (next item) - Shift+Down
     else if (event.logicalKey == LogicalKeyboardKey.arrowDown &&
-        HardwareKeyboard.instance.isLogicalKeyPressed(
-          LogicalKeyboardKey.shift,
-        )) {
+            HardwareKeyboard.instance.isLogicalKeyPressed(LogicalKeyboardKey.shift)) {
       if (onDown != null) {
         if (kDebugMode) {
           print('[KeyboardNavigation] Processing DOWN navigation');
@@ -114,15 +128,6 @@ mixin KeyboardNavigationMixin<T extends ConsumerStatefulWidget>
            HardwareKeyboard.instance.isLogicalKeyPressed(LogicalKeyboardKey.alt))) {
       if (onForward != null) {
         onForward();
-        return KeyEventResult.handled;
-      }
-    }
-    
-    // Submit - Command+Enter
-    else if (event.logicalKey == LogicalKeyboardKey.enter &&
-           HardwareKeyboard.instance.isLogicalKeyPressed(LogicalKeyboardKey.meta)) {
-      if (onSubmit != null) {
-        onSubmit();
         return KeyEventResult.handled;
       }
     }

@@ -79,6 +79,11 @@ class _MemosBodyState extends ConsumerState<MemosBody>
           onUp: () => selectPreviousMemo(),
           onDown: () => selectNextMemo(),
           onForward: () => openSelectedMemo(context),
+          onEscape: () {
+            // Clear any text input focus and return focus to the list
+            FocusManager.instance.primaryFocus?.unfocus();
+            _focusNode.requestFocus();
+          },
         );
         
         // For integration testing, we need to manually trigger a selection

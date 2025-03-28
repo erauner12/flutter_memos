@@ -128,6 +128,28 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility> {
     }
   }
 
+  // Add event handler for escape key
+  void _handleKeyEvent(RawKeyEvent event) {
+    if (event is RawKeyDownEvent) {
+      if (event.logicalKey == LogicalKeyboardKey.escape) {
+        // If expanded, collapse on escape
+        if (_isExpanded) {
+          setState(() {
+            _isExpanded = false;
+          });
+          // Clear focus
+          _focusNode.unfocus();
+        }
+      } else if (event.logicalKey == LogicalKeyboardKey.enter &&
+          event.isMetaPressed) {
+        // Submit on Command+Enter
+        if (_isExpanded && !_isSubmitting) {
+          _handleSubmit();
+        }
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
@@ -237,20 +259,30 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility> {
                     Expanded(
                       child:
                           _isExpanded
-                              ? TextField(
-                                controller: _textController,
-                                focusNode: _focusNode,
-                                decoration: InputDecoration(
-                                  hintText: hintText,
-                                  border: InputBorder.none,
+                              ? RawKeyboardListener(
+                                focusNode: FocusNode(),
+                                onKey: _handleKeyEvent,
+                                child: TextField(
+                                  controller: _textController,
+                                  focusNode: _focusNode,
+                                  decoration: InputDecoration(
+                                    hintText: hintText,
+                                    border: InputBorder.none,
+                                  ),
+                                  maxLines: 5,
+                                  minLines:
+                                      widget.mode == CaptureMode.createMemo
+                                          ? 3
+                                          : 2,
+                                  textCapitalization:
+                                      TextCapitalization.sentences,
+                                  onSubmitted: (_) {
+                                    // Handle Enter key
+                                    if (!_isSubmitting) {
+                                      _handleSubmit();
+                                    }
+                                  },
                                 ),
-                                maxLines: 5,
-                                minLines:
-                                    widget.mode == CaptureMode.createMemo
-                                        ? 3
-                                        : 2,
-                                textCapitalization:
-                                    TextCapitalization.sentences,
                               )
                               : InkWell(
                                 onTap: () {

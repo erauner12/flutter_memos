@@ -58,6 +58,11 @@ class _MemoDetailScreenState extends ConsumerState<MemoDetailScreen>
           onUp: () => _selectPreviousComment(),
           onDown: () => _selectNextComment(),
           onBack: () => Navigator.of(context).pop(),
+          onEscape: () {
+            // Clear any text input focus and return focus to screen
+            FocusManager.instance.primaryFocus?.unfocus();
+            _screenFocusNode.requestFocus();
+          },
         );
       },
       child: GestureDetector(

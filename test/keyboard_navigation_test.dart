@@ -21,11 +21,15 @@ class TestKeyboardNavigationState
   int prevCalled = 0;
   int backCalled = 0;
   int forwardCalled = 0;
+  int submitCalled = 0;
+  int escapeCalled = 0;
   
   void onNext() => nextCalled++;
   void onPrev() => prevCalled++;
   void onBack() => backCalled++;
   void onForward() => forwardCalled++;
+  void onSubmit() => submitCalled++;
+  void onEscape() => escapeCalled++;
   
   KeyEventResult testHandleKeyEvent(KeyEvent event) {
     return handleKeyEvent(
@@ -35,6 +39,8 @@ class TestKeyboardNavigationState
       onDown: onNext,
       onBack: onBack,
       onForward: onForward,
+      onSubmit: onSubmit,
+      onEscape: onEscape,
     );
   }
   
@@ -144,7 +150,7 @@ void main() {
       
       // Properly set up HardwareKeyboard to recognize shift as pressed
       HardwareKeyboard.instance.addHandler((KeyEvent event) => false);
-
+      
       // Simulate shift key being pressed
       ServicesBinding.instance.keyboard.handleKeyEvent(
         KeyDownEvent(
@@ -162,7 +168,7 @@ void main() {
         character: null,
         synthesized: false,
       );
-
+      
       state.testHandleKeyEvent(shiftDownEvent);
       expect(state.nextCalled, equals(1));
       expect(state.prevCalled, equals(0));
@@ -180,6 +186,79 @@ void main() {
       expect(state.nextCalled, equals(1));
       expect(state.prevCalled, equals(1));
       
+      // Reset keyboard state
+      ServicesBinding.instance.keyboard.clearState();
+    });
+    
+    testWidgets('Command+Enter works regardless of text input focus', (
+      WidgetTester tester,
+    ) async {
+      await tester.pumpWidget(providerScope);
+
+      final state = testKey.currentState!;
+      final Duration testTimestamp = const Duration(milliseconds: 10);
+
+      // First, focus the text field
+      await tester.tap(find.byKey(const Key('testTextField')));
+      await tester.pump();
+
+      // Simulate Command key being pressed
+      ServicesBinding.instance.keyboard.handleKeyEvent(
+        KeyDownEvent(
+          physicalKey: PhysicalKeyboardKey.metaLeft,
+          logicalKey: LogicalKeyboardKey.meta,
+          timeStamp: testTimestamp,
+        ),
+      );
+
+      // Test Command+Enter while text field is focused
+      final commandEnterEvent = KeyDownEvent(
+        physicalKey: PhysicalKeyboardKey.enter,
+        logicalKey: LogicalKeyboardKey.enter,
+        timeStamp: testTimestamp,
+        character: null,
+        synthesized: false,
+      );
+
+      state.testHandleKeyEvent(commandEnterEvent);
+      expect(
+        state.submitCalled,
+        equals(1),
+        reason: 'Submit should be called even with text input focus',
+      );
+
+      // Reset keyboard state
+      ServicesBinding.instance.keyboard.clearState();
+    });
+
+    testWidgets('Escape key works to dismiss text input focus', (
+      WidgetTester tester,
+    ) async {
+      await tester.pumpWidget(providerScope);
+
+      final state = testKey.currentState!;
+      final Duration testTimestamp = const Duration(milliseconds: 10);
+
+      // First, focus the text field
+      await tester.tap(find.byKey(const Key('testTextField')));
+      await tester.pump();
+
+      // Test Escape key
+      final escapeEvent = KeyDownEvent(
+        physicalKey: PhysicalKeyboardKey.escape,
+        logicalKey: LogicalKeyboardKey.escape,
+        timeStamp: testTimestamp,
+        character: null,
+        synthesized: false,
+      );
+
+      state.testHandleKeyEvent(escapeEvent);
+      expect(
+        state.escapeCalled,
+        equals(1),
+        reason: 'Escape handler should be called',
+      );
+
       // Reset keyboard state
       ServicesBinding.instance.keyboard.clearState();
     });
