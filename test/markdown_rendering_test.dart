@@ -12,10 +12,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'mocks/mock_api_service.dart';
+import 'utils/test_debug.dart'; // Add this import if missing
 
 void main() {
   group('Markdown Rendering Tests', () {
     testWidgets('Basic markdown elements render correctly in MarkdownBody', (WidgetTester tester) async {
+      debugMarkdown('Testing basic markdown elements rendering');
+      
       const markdownText = '''
 # Heading 1
 ## Heading 2
@@ -29,6 +32,7 @@ void main() {
 > Blockquote
 `Code`
 ''';
+      debugMarkdown('Test markdown content: $markdownText');
 
       // Build a basic MarkdownBody widget
       await tester.pumpWidget(
@@ -42,6 +46,9 @@ void main() {
       );
 
       await tester.pumpAndSettle();
+      
+      // Debug output all rendered content
+      dumpRichTextContent(tester);
 
       // Verify markdown elements are rendered, using textContaining for more reliable results
       expect(find.textContaining('Heading 1'), findsOneWidget);
@@ -55,6 +62,7 @@ void main() {
       expect(find.textContaining('Numbered item 2'), findsOneWidget);
       expect(find.textContaining('Blockquote'), findsOneWidget);
       expect(find.textContaining('Code'), findsOneWidget);
+      debugMarkdown('Found all expected markdown elements in rendered output');
 
       // Verify RichText widgets exist (this is how markdown ultimately renders)
       expect(find.byType(RichText), findsWidgets);

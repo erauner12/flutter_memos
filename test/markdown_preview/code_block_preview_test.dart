@@ -4,10 +4,13 @@ import 'package:flutter_memos/models/memo.dart';
 import 'package:flutter_memos/screens/edit_memo/edit_memo_form.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import '../utils/test_debug.dart'; // Add this import
 
 void main() {
   group('Markdown Code Block Preview Tests', () {
     testWidgets('Markdown code blocks are rendered with monospace font', (WidgetTester tester) async {
+      debugMarkdown('Testing code block rendering with monospace font');
+      
       // Create a memo with code content
       final memo = Memo(
         id: 'test-id',
@@ -22,6 +25,8 @@ void main() {
         pinned: false,
         state: MemoState.normal,
       );
+
+      debugMarkdown('Memo content: ${memo.content}');
 
       // Build the EditMemoForm widget
       await tester.pumpWidget(
@@ -40,6 +45,7 @@ void main() {
       // Check if we're already in preview mode, if not switch to it
       final previewButtonFinder = find.text('Preview');
       if (previewButtonFinder.evaluate().isNotEmpty) {
+        debugMarkdown('Switching to preview mode');
         // If we see "Preview," that means we're in edit mode. Tap it to switch to preview mode
         await tester.tap(previewButtonFinder);
         await tester.pumpAndSettle();
@@ -47,6 +53,9 @@ void main() {
       
       // Add additional pumps to ensure rendering completes
       await tester.pump(const Duration(milliseconds: 300));
+
+      // Debug dump all RichText content
+      dumpRichTextContent(tester);
 
       // Verify code block content is visible
       expect(find.textContaining('void main'), findsOneWidget);
@@ -59,6 +68,8 @@ void main() {
       final richTextWidgets = tester.widgetList<RichText>(
         find.byType(RichText),
       );
+      
+      debugMarkdown('Found ${richTextWidgets.length} RichText widgets');
       
       // More flexible check for monospace font
       bool hasMonospaceStyle = false;
@@ -90,11 +101,15 @@ void main() {
         
         // Check if this text contains code block content
         if (text.contains('void main') || text.contains('Hello world')) {
+          debugMarkdown('Found code content: "$text"');
+          
           // Function to recursively check for monospace font in a span and its children
           void checkForMonospace(InlineSpan span) {
             if (span is TextSpan && span.style?.fontFamily != null) {
+              debugMarkdown('Font family: ${span.style!.fontFamily}');
               if (isLikelyMonospace(span.style!.fontFamily)) {
                 hasMonospaceStyle = true;
+                debugMarkdown('Found monospace font: ${span.style!.fontFamily}');
               }
             }
 
@@ -112,6 +127,7 @@ void main() {
       // If we couldn't find explicit monospace font, use a fallback approach
       // In test environments, flutter_markdown might not apply real fonts
       if (!hasMonospaceStyle) {
+        debugMarkdown('Could not find explicit monospace font, using fallback check');
         // Consider the test successful if we at least found the code content
         hasMonospaceStyle = true;
       }

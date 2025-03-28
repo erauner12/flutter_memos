@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_test/flutter_test.dart';
+import '../utils/test_debug.dart';  // Add this import
 
 void main() {
   group('Special URL Schemes Tests', () {
     test('UrlHelper parses and validates different URL schemes', () {
+      debugMarkdown('Testing URL scheme parsing and validation');
+      
       // Test standard schemes
       expect(Uri.tryParse('https://example.com'), isNotNull);
       expect(Uri.tryParse('http://localhost:3000'), isNotNull);
@@ -21,17 +24,21 @@ void main() {
       
       // Edge cases and problematic URLs
       final invalidUrl = Uri.tryParse('not a url');
+      debugMarkdown('Invalid URL parse result: $invalidUrl');
       expect(invalidUrl, isNotNull); // Creates a Uri with path="not a url"
       expect(invalidUrl?.scheme, isEmpty); // but scheme will be empty
       
       // URL with spaces (should be encoded in real usage)
       final urlWithSpaces = Uri.tryParse('https://example.com/path with spaces');
+      debugMarkdown('URL with spaces parse result: $urlWithSpaces');
       expect(urlWithSpaces, isNotNull);
       // URLs often encode spaces, so we shouldn't expect raw spaces
       expect(urlWithSpaces?.path.contains('with'), isTrue);
     });
 
     testWidgets('Custom scheme links render correctly and can be tapped', (WidgetTester tester) async {
+      debugMarkdown('Testing custom scheme links rendering and tapping');
+      
       // Track link taps
       String? tappedScheme;
       String? tappedPath;
@@ -50,6 +57,7 @@ void main() {
                       final uri = Uri.tryParse(href);
                       tappedScheme = uri?.scheme;
                       tappedPath = uri?.path;
+                      debugMarkdown('Tapped memo link: scheme=$tappedScheme, path=$tappedPath');
                     }
                   },
                 ),
@@ -76,10 +84,14 @@ void main() {
       
       await tester.pumpAndSettle();
       
+      // Debug output of all RichText widgets
+      dumpRichTextContent(tester);
+      
       // Find the Memo Link text more precisely - by looking for a widget with ONLY that text
       final memoLinkFinder = find.byWidgetPredicate((widget) {
         if (widget is RichText) {
           final text = widget.text.toPlainText();
+          debugMarkdown('Checking RichText: "$text"');
           return text == 'Memo Link'; // Must match exactly
         }
         return false;
@@ -91,10 +103,12 @@ void main() {
         reason: 'Could not find "Memo Link" text',
       );
       
+      debugMarkdown('Tapping on memo link...');
       await tester.tap(memoLinkFinder);
       await tester.pump();
 
       // Verify correct scheme was detected
+      debugMarkdown('Tap result: scheme=$tappedScheme, path=$tappedPath');
       expect(tappedScheme, equals('memo'));
       
       // Reset and find phone link specifically

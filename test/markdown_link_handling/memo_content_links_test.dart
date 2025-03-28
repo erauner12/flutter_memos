@@ -12,8 +12,8 @@ import '../utils/test_debug.dart';
 void main() {
   group('MemoContent Link Handling Tests', () {
     testWidgets('MemoContent handles link taps correctly', (WidgetTester tester) async {
-      // Enable debug logs for this test if needed
-      markdownDebugEnabled = false; // Set to true to enable verbose logging
+      // Debug logs now enabled by default from test_debug.dart
+      debugMarkdown('Starting MemoContent link tap test');
 
       // Create a memo with a link
       final memo = Memo(
@@ -31,6 +31,8 @@ void main() {
           createTime: DateTime.now().millisecondsSinceEpoch,
         )
       ];
+
+      debugMarkdown('Building MemoContent with memo: ${memo.content}');
 
       // Build MemoContent with the memo using a ProviderScope with overrides
       await tester.pumpWidget(
@@ -61,12 +63,10 @@ void main() {
         find.byType(RichText),
       );
       
-      // Debug log if enabled
-      if (markdownDebugEnabled) {
-        debugMarkdown('\nAll RichText widgets content:');
-        for (final widget in richTextWidgets) {
-          debugMarkdown('- "${widget.text.toPlainText()}"');
-        }
+      // Debug log all RichText content
+      debugMarkdown('\nAll RichText widgets content:');
+      for (final widget in richTextWidgets) {
+        debugMarkdown('- "${widget.text.toPlainText()}"');
       }
 
       // More flexible approach to find our link text
@@ -76,12 +76,15 @@ void main() {
       try {
         expect(find.textContaining('Example Link'), findsAtLeastNWidgets(1));
         foundLinkText = true;
+        debugMarkdown('Found "Example Link" with direct text search');
       } catch (_) {
+        debugMarkdown('Direct text search failed, searching in RichText widgets');
         // Not found with direct search, try searching in RichText widgets
         for (final widget in richTextWidgets) {
           final text = widget.text.toPlainText();
           if (text.contains('Example Link')) {
             foundLinkText = true;
+            debugMarkdown('Found "Example Link" in RichText: $text');
             break;
           }
         }
@@ -98,6 +101,7 @@ void main() {
         find.byType(MarkdownBody).first,
       );
       expect(markdownBody.onTapLink, isNotNull);
+      debugMarkdown('MarkdownBody onTapLink is properly configured');
     });
 
     testWidgets('MemoContent handles different link types (HTTP, HTTPS, memo://, etc)',

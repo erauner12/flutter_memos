@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../utils/test_debug.dart'; // Import the debug utilities
+
 void main() {
   group('Basic Markdown Link Tests', () {
     testWidgets('MarkdownBody passes link tap events to callback', (WidgetTester tester) async {
@@ -18,6 +20,9 @@ void main() {
               onTapLink: (text, href, title) {
                 linkTapped = true;
                 tappedUrl = href;
+                debugMarkdown(
+                  'Link tapped: $text, URL: $href',
+                ); // Add debug output
               },
             ),
           ),
@@ -27,6 +32,9 @@ void main() {
       // Find and tap the link
       await tester.tap(find.text('Test Link'));
       await tester.pump();
+
+      // Log the result
+      debugMarkdown('Link tap registered: $linkTapped, URL: $tappedUrl');
 
       // Verify callback was called with correct URL
       expect(linkTapped, isTrue);
@@ -66,6 +74,9 @@ void main() {
 
       await tester.pumpAndSettle();
 
+      // Debug: print all RichText content
+      dumpRichTextContent(tester);
+
       // Check if the links are present in the rendered output
       final linkTexts = [
         'Regular link',
@@ -84,6 +95,7 @@ void main() {
         for (final richText in richTextWidgets) {
           if (richText.text.toPlainText().contains(linkText)) {
             foundText = true;
+            debugMarkdown('Found link text: $linkText'); // Add debug log
             break;
           }
         }
@@ -105,6 +117,9 @@ void main() {
           // Check if this span has underline decoration
           if (span.style?.decoration == TextDecoration.underline) {
             foundUnderlinedText = true;
+            debugMarkdown(
+              'Found underlined text: ${span.text}',
+            ); // Add debug log
           }
         
           // Check children if they exist

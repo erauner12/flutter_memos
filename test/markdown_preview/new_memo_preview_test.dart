@@ -3,10 +3,13 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_memos/screens/new_memo/new_memo_form.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import '../utils/test_debug.dart'; // Add this import
 
 void main() {
   group('NewMemoForm Markdown Preview Tests', () {
     testWidgets('Preview mode shows rendered markdown', (WidgetTester tester) async {
+      debugMarkdown('Testing preview mode rendering in NewMemoForm');
+      
       // Build the actual NewMemoForm
       await tester.pumpWidget(
         const ProviderScope(
@@ -16,6 +19,7 @@ void main() {
 
       // Enter some markdown text
       const testMarkdown = '# Test Heading\n**Bold text**\n*Italic text*';
+      debugMarkdown('Entering text: $testMarkdown');
       await tester.enterText(find.byType(TextField), testMarkdown);
 
       // Pump after text entry so widget can rebuild
@@ -24,19 +28,26 @@ void main() {
       // Initially we should see the TextField, not the MarkdownBody
       expect(find.byType(TextField), findsOneWidget);
       expect(find.byType(MarkdownBody), findsNothing);
+      debugMarkdown('Initial state: TextField visible, MarkdownBody not visible');
 
       // Tap "Preview" button to toggle `_previewMode`
+      debugMarkdown('Tapping Preview button');
       await tester.tap(find.text('Preview'));
       await tester.pumpAndSettle();
 
       // Now the text field should be replaced by MarkdownBody
       expect(find.byType(TextField), findsNothing);
       expect(find.byType(MarkdownBody), findsOneWidget);
+      debugMarkdown('After toggle: TextField hidden, MarkdownBody visible');
+
+      // Debug output the rendered content
+      dumpRichTextContent(tester);
 
       // Check that the typed markdown is rendered
       expect(find.textContaining('Test Heading'), findsOneWidget);
       expect(find.textContaining('Bold text'), findsOneWidget);
       expect(find.textContaining('Italic text'), findsOneWidget);
+      debugMarkdown('Found all expected content in the rendered markdown');
     });
 
     testWidgets('Markdown help toggle displays help information', (WidgetTester tester) async {
