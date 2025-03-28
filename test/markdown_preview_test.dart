@@ -48,9 +48,40 @@ void main() {
 
       // Help should be hidden again
       expect(find.text('Markdown Syntax Guide'), findsNothing);
-    });
+      testWidgets('NewMemoForm preview mode shows rendered markdown', (
+        WidgetTester tester,
+      ) async {
+        // 1. Build the actual NewMemoForm
+        await tester.pumpWidget(
+          const ProviderScope(
+            child: MaterialApp(home: Scaffold(body: NewMemoForm())),
+          ),
+        );
 
-    testWidgets('NewMemoForm preview mode shows rendered markdown', (WidgetTester tester) async {
+        // 2. Enter some markdown text
+        const testMarkdown = '# Test Heading\n**Bold text**\n*Italic text*';
+        await tester.enterText(find.byType(TextField), testMarkdown);
+
+        // 3. Pump after text entry so widget can rebuild
+        await tester.pumpAndSettle();
+
+        // Initially we should see the TextField, not the MarkdownBody
+        expect(find.byType(TextField), findsOneWidget);
+        expect(find.byType(MarkdownBody), findsNothing);
+
+        // 4. Tap "Preview" button to toggle `_previewMode`
+        await tester.tap(find.text('Preview'));
+        await tester.pumpAndSettle();
+
+        // Now the text field should be replaced by MarkdownBody
+        expect(find.byType(TextField), findsNothing);
+        expect(find.byType(MarkdownBody), findsOneWidget);
+
+        // 5. Check that the typed markdown is rendered
+        expect(find.textContaining('Test Heading'), findsOneWidget);
+        expect(find.textContaining('Bold text'), findsOneWidget);
+        expect(find.textContaining('Italic text'), findsOneWidget);
+      });
       // Build the NewMemoForm widget
       await tester.pumpWidget(
         const ProviderScope(
