@@ -15,11 +15,16 @@ mixin KeyboardNavigationMixin<T extends ConsumerStatefulWidget>
     final widget = focusNode.context?.widget;
     if (widget == null) return false;
 
+    // Check for EditableText or TextField or TextFormField or any input-related widgets
     final typeStr = widget.runtimeType.toString().toLowerCase();
     final isTextInput =
         typeStr.contains('text') ||
         typeStr.contains('edit') ||
-        typeStr.contains('field');
+        typeStr.contains('field') ||
+        typeStr.contains('input') ||
+        widget is EditableText ||
+        widget is TextField ||
+        widget is TextFormField;
 
     if (isTextInput && kDebugMode) {
       print('[KeyboardNavigation] Text input focused: $typeStr');
@@ -45,20 +50,31 @@ mixin KeyboardNavigationMixin<T extends ConsumerStatefulWidget>
       );
     }
     
-    // Check if j or k keys should be passed through to a text input
-    if ((event.logicalKey == LogicalKeyboardKey.keyJ ||
-            event.logicalKey == LogicalKeyboardKey.keyK) &&
-        _isTextInputFocused()) {
+    // If any text input is focused, ignore navigation keys
+    if (_isTextInputFocused()) {
       if (kDebugMode) {
-        print('[KeyboardNavigation] Ignoring j/k key in text input');
+        print('[KeyboardNavigation] Ignoring navigation keys in text input');
       }
+      
+      // Only handle Command+Enter for submission even when text input is focused
+      if (event.logicalKey == LogicalKeyboardKey.enter &&
+          HardwareKeyboard.instance.isLogicalKeyPressed(
+            LogicalKeyboardKey.meta,
+          )) {
+        if (onSubmit != null) {
+          onSubmit();
+          return KeyEventResult.handled;
+        }
+      }
+      
       return KeyEventResult.ignored;
     }
     
-    // Navigate up (previous item) - K key or Shift+Up
-    if (event.logicalKey == LogicalKeyboardKey.keyK ||
-        (event.logicalKey == LogicalKeyboardKey.arrowUp &&
-         HardwareKeyboard.instance.isLogicalKeyPressed(LogicalKeyboardKey.shift))) {
+    // Navigate up (previous item) - Shift+Up
+    if (event.logicalKey == LogicalKeyboardKey.arrowUp &&
+        HardwareKeyboard.instance.isLogicalKeyPressed(
+          LogicalKeyboardKey.shift,
+        )) {
       if (onUp != null) {
         if (kDebugMode) {
           print('[KeyboardNavigation] Processing UP navigation');
@@ -68,10 +84,11 @@ mixin KeyboardNavigationMixin<T extends ConsumerStatefulWidget>
       }
     }
     
-    // Navigate down (next item) - J key or Shift+Down
-    else if (event.logicalKey == LogicalKeyboardKey.keyJ ||
-             (event.logicalKey == LogicalKeyboardKey.arrowDown &&
-              HardwareKeyboard.instance.isLogicalKeyPressed(LogicalKeyboardKey.shift))) {
+    // Navigate down (next item) - Shift+Down
+    else if (event.logicalKey == LogicalKeyboardKey.arrowDown &&
+        HardwareKeyboard.instance.isLogicalKeyPressed(
+          LogicalKeyboardKey.shift,
+        )) {
       if (onDown != null) {
         if (kDebugMode) {
           print('[KeyboardNavigation] Processing DOWN navigation');

@@ -134,34 +134,57 @@ void main() {
       expect(state.testGetPreviousIndex(0, 0), equals(-1)); // Empty list
     });
     
-    testWidgets('key events handled correctly', (WidgetTester tester) async {
+    testWidgets('arrow key events handled correctly when not in text input', (
+      WidgetTester tester,
+    ) async {
       await tester.pumpWidget(providerScope);
       
       final state = testKey.currentState!;
       final Duration testTimestamp = const Duration(milliseconds: 10);
       
-      // Test J key
-      final jKeyEvent = KeyDownEvent(
-        physicalKey: PhysicalKeyboardKey.keyJ,
-        logicalKey: LogicalKeyboardKey.keyJ,
-        timeStamp: testTimestamp,
+      // Properly set up HardwareKeyboard to recognize shift as pressed
+      HardwareKeyboard.instance.addHandler((KeyEvent event) => false);
+
+      // Simulate shift key being pressed
+      ServicesBinding.instance.keyboard.handleKeyEvent(
+        KeyDownEvent(
+          physicalKey: PhysicalKeyboardKey.shiftLeft,
+          logicalKey: LogicalKeyboardKey.shift,
+          timeStamp: testTimestamp,
+        ),
       );
-      state.testHandleKeyEvent(jKeyEvent);
+      
+      // Test Shift+Down
+      final shiftDownEvent = KeyDownEvent(
+        physicalKey: PhysicalKeyboardKey.arrowDown,
+        logicalKey: LogicalKeyboardKey.arrowDown,
+        timeStamp: testTimestamp,
+        character: null,
+        synthesized: false,
+      );
+
+      state.testHandleKeyEvent(shiftDownEvent);
       expect(state.nextCalled, equals(1));
       expect(state.prevCalled, equals(0));
       
-      // Test K key
-      final kKeyEvent = KeyDownEvent(
-        physicalKey: PhysicalKeyboardKey.keyK,
-        logicalKey: LogicalKeyboardKey.keyK,
+      // Test Shift+Up
+      final shiftUpEvent = KeyDownEvent(
+        physicalKey: PhysicalKeyboardKey.arrowUp,
+        logicalKey: LogicalKeyboardKey.arrowUp,
         timeStamp: testTimestamp,
+        character: null,
+        synthesized: false,
       );
-      state.testHandleKeyEvent(kKeyEvent);
+      
+      state.testHandleKeyEvent(shiftUpEvent);
       expect(state.nextCalled, equals(1));
       expect(state.prevCalled, equals(1));
+      
+      // Reset keyboard state
+      ServicesBinding.instance.keyboard.clearState();
     });
 
-    testWidgets('j/k keys are ignored when text input is focused', (
+    testWidgets('navigation keys are ignored when text input is focused', (
       WidgetTester tester,
     ) async {
       await tester.pumpWidget(providerScope);
@@ -177,21 +200,34 @@ void main() {
       final initialNextCalled = state.nextCalled;
       final initialPrevCalled = state.prevCalled;
 
-      // Test J key while text field is focused - should be ignored
-      final jKeyEvent = KeyDownEvent(
-        physicalKey: PhysicalKeyboardKey.keyJ,
-        logicalKey: LogicalKeyboardKey.keyJ,
-        timeStamp: testTimestamp,
+      // Simulate shift key being pressed
+      ServicesBinding.instance.keyboard.handleKeyEvent(
+        KeyDownEvent(
+          physicalKey: PhysicalKeyboardKey.shiftLeft,
+          logicalKey: LogicalKeyboardKey.shift,
+          timeStamp: testTimestamp,
+        ),
       );
-      final jResult = state.testHandleKeyEvent(jKeyEvent);
+      
+      // Test Shift+Down while text field is focused - should be ignored
+      final shiftDownEvent = KeyDownEvent(
+        physicalKey: PhysicalKeyboardKey.arrowDown,
+        logicalKey: LogicalKeyboardKey.arrowDown,
+        timeStamp: testTimestamp,
+        character: null,
+        synthesized: false,
+      );
+      final downResult = state.testHandleKeyEvent(shiftDownEvent);
 
-      // Test K key while text field is focused - should be ignored
-      final kKeyEvent = KeyDownEvent(
-        physicalKey: PhysicalKeyboardKey.keyK,
-        logicalKey: LogicalKeyboardKey.keyK,
+      // Test Shift+Up while text field is focused - should be ignored
+      final shiftUpEvent = KeyDownEvent(
+        physicalKey: PhysicalKeyboardKey.arrowUp,
+        logicalKey: LogicalKeyboardKey.arrowUp,
         timeStamp: testTimestamp,
+        character: null,
+        synthesized: false,
       );
-      final kResult = state.testHandleKeyEvent(kKeyEvent);
+      final upResult = state.testHandleKeyEvent(shiftUpEvent);
 
       // Verify navigation was not triggered
       expect(
@@ -207,39 +243,15 @@ void main() {
 
       // Verify the key events were ignored
       expect(
-        jResult,
+        downResult,
         equals(KeyEventResult.ignored),
-        reason: 'J key should be ignored',
+        reason: 'Shift+Down should be ignored',
       );
       expect(
-        kResult,
+        upResult,
         equals(KeyEventResult.ignored),
-        reason: 'K key should be ignored',
+        reason: 'Shift+Up should be ignored',
       );
-      
-      // Test Shift+Down using KeyDownEvent with proper initialization
-      final shiftDownEvent = KeyDownEvent(
-        physicalKey: PhysicalKeyboardKey.arrowDown,
-        logicalKey: LogicalKeyboardKey.arrowDown,
-        timeStamp: testTimestamp,
-        character: null,
-        synthesized: false,
-      );
-      
-      // Properly set up HardwareKeyboard to recognize shift as pressed
-      HardwareKeyboard.instance.addHandler((KeyEvent event) => false);
-      
-      // Simulate shift key being pressed by updating the key mapping in HardwareKeyboard
-      ServicesBinding.instance.keyboard.handleKeyEvent(
-        KeyDownEvent(
-          physicalKey: PhysicalKeyboardKey.shiftLeft,
-          logicalKey: LogicalKeyboardKey.shift,
-          timeStamp: testTimestamp,
-        ),
-      );
-      
-      state.testHandleKeyEvent(shiftDownEvent);
-      expect(state.nextCalled, equals(2));
       
       // Reset keyboard state
       ServicesBinding.instance.keyboard.clearState();

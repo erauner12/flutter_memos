@@ -94,11 +94,15 @@ void main() {
         await tester.tap(find.text('Comments'));
         await tester.pumpAndSettle();
         
-        // Try keyboard navigation
-        await tester.sendKeyEvent(LogicalKeyboardKey.keyJ);
+        // Try keyboard navigation with Shift+Arrow keys
+        await tester.sendKeyDownEvent(LogicalKeyboardKey.shift);
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+        await tester.sendKeyUpEvent(LogicalKeyboardKey.shift);
         await tester.pumpAndSettle();
         
-        await tester.sendKeyEvent(LogicalKeyboardKey.keyK);
+        await tester.sendKeyDownEvent(LogicalKeyboardKey.shift);
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+        await tester.sendKeyUpEvent(LogicalKeyboardKey.shift);
         await tester.pumpAndSettle();
         
         // STEP 4: Test keyboard navigation after focusing on different UI elements
@@ -110,7 +114,9 @@ void main() {
           await tester.pumpAndSettle();
           
           // Try navigation after tapping a comment
-          await tester.sendKeyEvent(LogicalKeyboardKey.keyJ);
+          await tester.sendKeyDownEvent(LogicalKeyboardKey.shift);
+          await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+          await tester.sendKeyUpEvent(LogicalKeyboardKey.shift);
           await tester.pumpAndSettle();
         }
         
@@ -120,8 +126,10 @@ void main() {
           await tester.tap(commentTextBox);
           await tester.pumpAndSettle();
           
-          // Try to navigate while text input has focus
-          await tester.sendKeyEvent(LogicalKeyboardKey.keyK);
+          // Try to navigate while text input has focus (should be ignored)
+          await tester.sendKeyDownEvent(LogicalKeyboardKey.shift);
+          await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+          await tester.sendKeyUpEvent(LogicalKeyboardKey.shift);
           await tester.pumpAndSettle();
           
           // Tap outside to unfocus

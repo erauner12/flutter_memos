@@ -24,12 +24,16 @@ void main() {
       final memoCards = find.byType(MemoCard);
       expect(memoCards, findsWidgets, reason: 'Should find memo cards');
         
-      // Send a J key to move selection down
-      await tester.sendKeyEvent(LogicalKeyboardKey.keyJ);
+      // Send Shift+Down to move selection down
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.shift);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.shift);
       await tester.pumpAndSettle();
         
-      // Send a K key to move selection up
-      await tester.sendKeyEvent(LogicalKeyboardKey.keyK);
+      // Send Shift+Up to move selection up
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.shift);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.shift);
       await tester.pumpAndSettle();
         
       // Test navigation to detail screen by tapping on a memo
@@ -40,11 +44,11 @@ void main() {
       expect(find.text('Memo Detail'), findsOneWidget);
         
       // Go back to main screen
-        await tester.pageBack();
+      await tester.pageBack();
       await tester.pumpAndSettle();
 
       // Verify we're back on the main screen
-        expect(find.text('Flutter Memos'), findsOneWidget);
+      expect(find.text('Flutter Memos'), findsOneWidget);
     });
 
     testWidgets('Can type j and k in text input fields', (

@@ -23,11 +23,7 @@ Map<ShortcutActivator, Intent> buildGlobalShortcuts() {
     // Command + Right Arrow => Navigate Forward
     const SingleActivator(LogicalKeyboardKey.arrowRight, meta: true): NavigateForwardIntent(),
 
-    // Slack-style navigation with J/K keys
-    const SingleActivator(LogicalKeyboardKey.keyJ): SelectNextMemoIntent(),
-    const SingleActivator(LogicalKeyboardKey.keyK): SelectPreviousMemoIntent(),
-
-    // Also support Shift+Up/Down for navigation
+    // Support Shift+Up/Down for navigation
     const SingleActivator(LogicalKeyboardKey.arrowUp, shift: true): SelectPreviousMemoIntent(),
     const SingleActivator(LogicalKeyboardKey.arrowDown, shift: true): SelectNextMemoIntent(),
   };
