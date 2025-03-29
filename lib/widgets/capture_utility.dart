@@ -91,6 +91,8 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
   void _collapse() {
     _animationController.reverse();
     _focusNode.unfocus();
+    // Ensure the height is reset to collapsed state
+    _currentHeight = _collapsedHeight;
   }
 
   // Handle vertical drag to expand/collapse
@@ -120,14 +122,18 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
           details.primaryVelocity != null && details.primaryVelocity! > 0;
       final isUpwardSwipe =
           details.primaryVelocity != null && details.primaryVelocity! < 0;
-
-      // If strong velocity in either direction, use that to determine state
-      if (isDownwardSwipe && details.primaryVelocity!.abs() > 200) {
+      
+      // Use stronger velocity thresholds to ensure drags are detected properly
+      if (isDownwardSwipe && details.primaryVelocity!.abs() > 100) {
+        // Force collapse on downward swipe with velocity
+        _animationController.animateTo(0.0);
         _collapse();
-      } else if (isUpwardSwipe && details.primaryVelocity!.abs() > 200) {
+      } else if (isUpwardSwipe && details.primaryVelocity!.abs() > 100) {
+        // Force expand on upward swipe with velocity
+        _animationController.animateTo(1.0);
         _expand();
       }
-      // Otherwise use position threshold to determine state (more forgiving at 0.3)
+      // Otherwise use position threshold to determine state
       else if (_animationController.value > 0.3) {
         _expand();
       } else {
@@ -327,82 +333,82 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
                 width: 1,
               ),
             ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Drag indicator pill
-                Container(
-                  width: 40,
-                  height: 4,
-                  margin: const EdgeInsets.only(top: 8, bottom: 4),
-                  decoration: BoxDecoration(
-                    color: isDarkMode ? Colors.grey[700] : Colors.grey[300],
-                    borderRadius: BorderRadius.circular(2),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Column(
+                mainAxisSize: MainAxisSize.max, // Changed from min to max
+                children: [
+                  // Drag indicator pill
+                  Container(
+                    width: 40,
+                    height: 4,
+                    margin: const EdgeInsets.only(top: 8, bottom: 4),
+                    decoration: BoxDecoration(
+                      color: isDarkMode ? Colors.grey[700] : Colors.grey[300],
+                      borderRadius: BorderRadius.circular(2),
+                    ),
                   ),
-                ),
 
-                // Text field area
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Text field - expanded or single line
-                      Expanded(
-                        child:
-                            _isExpanded
-                                ? RawKeyboardListener(
-                                  focusNode: FocusNode(),
-                                  onKey: _handleKeyEvent,
-                                  child: TextField(
-                                    controller: _textController,
-                                    focusNode: _focusNode,
-                                    decoration: InputDecoration(
-                                      hintText: hintText,
-                                      border: InputBorder.none,
+                  // Text field area - always takes minimal space needed
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Text field - expanded or single line
+                        Expanded(
+                          child:
+                              _isExpanded
+                                  ? RawKeyboardListener(
+                                    focusNode: FocusNode(),
+                                    onKey: _handleKeyEvent,
+                                    child: TextField(
+                                      controller: _textController,
+                                      focusNode: _focusNode,
+                                      decoration: InputDecoration(
+                                        hintText: hintText,
+                                        border: InputBorder.none,
+                                      ),
+                                      maxLines: null, // Allow multiple lines
+                                      minLines:
+                                          widget.mode == CaptureMode.createMemo
+                                              ? 3
+                                              : 2,
+                                      textCapitalization:
+                                          TextCapitalization.sentences,
+                                      onSubmitted: (_) {
+                                        if (!_isSubmitting) {
+                                          _handleSubmit();
+                                        }
+                                      },
                                     ),
-                                    maxLines: 5,
-                                    minLines:
-                                        widget.mode == CaptureMode.createMemo
-                                            ? 3
-                                            : 2,
-                                    textCapitalization:
-                                        TextCapitalization.sentences,
-                                    onSubmitted: (_) {
-                                      // Handle Enter key
-                                      if (!_isSubmitting) {
-                                        _handleSubmit();
-                                      }
-                                    },
-                                  ),
-                                )
-                                : SizedBox(
-                                  height:
-                                      32, // Fixed height to prevent overflow in collapsed state
-                                  child: Align(
-                                    alignment: Alignment.centerLeft,
-                                    child: Text(
-                                      placeholderText,
-                                      style: TextStyle(
-                                        color:
-                                            isDarkMode
-                                                ? Colors.grey[400]
-                                                : Colors.grey[600],
+                                  )
+                                  : SizedBox(
+                                    height:
+                                        32, // Fixed height to prevent overflow
+                                    child: Align(
+                                      alignment: Alignment.centerLeft,
+                                      child: Text(
+                                        placeholderText,
+                                        style: TextStyle(
+                                          color:
+                                              isDarkMode
+                                                  ? Colors.grey[400]
+                                                  : Colors.grey[600],
+                                        ),
                                       ),
                                     ),
                                   ),
-                                ),
-                      ),
-                    ],
+                        ),
+                      ],
+                    ),
                   ),
-                ),
 
-                // Buttons row - only visible when expanded
-                if (_isExpanded)
-                  Expanded(
-                    child: Align(
-                      alignment: Alignment.bottomCenter,
-                      child: Padding(
+                  // Buttons row - only visible when expanded, and consumes remaining space
+                  if (_isExpanded)
+                    Expanded(
+                      child: Container(
+                        alignment: Alignment.bottomCenter,
                         padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -451,8 +457,8 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
                         ),
                       ),
                     ),
-                  ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

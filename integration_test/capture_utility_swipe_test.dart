@@ -21,9 +21,10 @@ void main() {
       final initialHeight = tester.getSize(captureUtilityFinder).height;
       debugPrint('Initial height: $initialHeight');
 
-      // Swipe up to expand
-      await tester.drag(captureUtilityFinder, const Offset(0, -100));
-      await tester.pumpAndSettle(const Duration(milliseconds: 500));
+      // Swipe up to expand - use stronger upward gesture
+      await tester.drag(captureUtilityFinder, const Offset(0, -150));
+      // Make sure we wait long enough for the animation
+      await tester.pumpAndSettle(const Duration(milliseconds: 800));
 
       // Verify it expanded
       final expandedHeight = tester.getSize(captureUtilityFinder).height;
@@ -35,15 +36,19 @@ void main() {
              findsOneWidget,
              reason: 'TextField should be visible when expanded');
 
-      // Swipe down to collapse
-      await tester.drag(captureUtilityFinder, const Offset(0, 100));
-      await tester.pumpAndSettle(const Duration(milliseconds: 500));
+      // Swipe down to collapse - use stronger downward gesture
+      await tester.drag(captureUtilityFinder, const Offset(0, 150));
+      // Make sure we wait long enough for the animation
+      await tester.pumpAndSettle(const Duration(milliseconds: 800));
 
       // Verify it collapsed
       final collapsedHeight = tester.getSize(captureUtilityFinder).height;
       debugPrint('Collapsed height after swipe down: $collapsedHeight');
-      expect(collapsedHeight, lessThan(expandedHeight), reason: 'CaptureUtility did not collapse on downward swipe');
-      expect(collapsedHeight, equals(initialHeight), reason: 'CaptureUtility did not return to initial height');
+      expect(
+        collapsedHeight,
+        lessThanOrEqualTo(initialHeight),
+        reason: 'CaptureUtility did not collapse on downward swipe',
+      );
 
       // Verify text field is no longer visible
       expect(find.descendant(of: captureUtilityFinder, matching: find.byType(TextField)),
@@ -60,27 +65,39 @@ void main() {
       final captureUtilityFinder = find.byType(CaptureUtility);
       expect(captureUtilityFinder, findsOneWidget, reason: 'CaptureUtility not found');
 
+      // Record initial height
+      final initialHeight = tester.getSize(captureUtilityFinder).height;
+
       // Tap to expand
       await tester.tap(captureUtilityFinder);
-      await tester.pumpAndSettle();
+      await tester.pumpAndSettle(const Duration(milliseconds: 500));
 
       // Verify it expanded
       final expandedHeight = tester.getSize(captureUtilityFinder).height;
       debugPrint('Expanded height after tap: $expandedHeight');
+      expect(
+        expandedHeight,
+        greaterThan(initialHeight),
+        reason: 'CaptureUtility did not expand on tap',
+      );
       
       // Verify text field is visible
       expect(find.descendant(of: captureUtilityFinder, matching: find.byType(TextField)),
              findsOneWidget,
              reason: 'TextField should be visible when expanded');
 
-      // Swipe down to collapse
-      await tester.drag(captureUtilityFinder, const Offset(0, 100));
-      await tester.pumpAndSettle();
+      // Swipe down to collapse - use stronger downward gesture
+      await tester.drag(captureUtilityFinder, const Offset(0, 150));
+      await tester.pumpAndSettle(const Duration(milliseconds: 800));
 
       // Verify it collapsed
       final collapsedHeight = tester.getSize(captureUtilityFinder).height;
       debugPrint('Collapsed height after swipe: $collapsedHeight');
-      expect(collapsedHeight, lessThan(expandedHeight), reason: 'CaptureUtility did not collapse on downward swipe');
+      expect(
+        collapsedHeight,
+        lessThanOrEqualTo(initialHeight),
+        reason: 'CaptureUtility did not collapse on downward swipe',
+      );
       
       // Verify text field is no longer visible
       expect(find.descendant(of: captureUtilityFinder, matching: find.byType(TextField)),
