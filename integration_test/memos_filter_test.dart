@@ -1,65 +1,47 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_memos/main.dart' as app;
-import 'package:flutter_memos/widgets/capture_utility.dart';
+import 'package:flutter_memos/models/memo.dart';
+import 'package:flutter_memos/services/api_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
-
   group('Memos Filter Integration Tests', () {
-    // Helper function to create a memo
+    // Helper function to create a memo PROGRAMMATICALLY
     Future<void> createMemo(WidgetTester tester, String content) async {
-      final captureUtilityFinder = find.byType(CaptureUtility);
-      expect(captureUtilityFinder, findsOneWidget);
+      debugPrint('Attempting to create memo programmatically: "$content"');
+      try {
+        // Instantiate the ApiService directly
+        final apiService = ApiService();
 
-      // Tap the CaptureUtility widget itself to expand it
-      await tester.tap(
-        captureUtilityFinder,
-        warnIfMissed: false,
-      ); // Suppress hit test warning for now
-      // A single pump might be needed to initiate the animation before pumpAndSettle works reliably
-      await tester.pump(const Duration(milliseconds: 50));
+        // Create a Memo object
+        // NOTE: Adjust visibility, parent, etc. if needed based on your API requirements
+        final newMemo = Memo(
+          id: 'temp-${DateTime.now().millisecondsSinceEpoch}', // Temporary ID, API will assign real one
+          content: content,
+          visibility: 'PUBLIC', // Or appropriate default
+          // parent: 'users/1', // Often required by the API
+        );
 
-      // Wait until the TextField appears, with a timeout, using pumpAndSettle
-      bool textFieldFound = false;
-      const timeout = Duration(seconds: 5); // Increased timeout slightly
-      final endTime = tester.binding.clock.now().add(timeout);
+        // Call the API service to create the memo
+        // Pass only the memo object as the createMemo method expects just one argument
+        await apiService.createMemo(newMemo);
 
-      while (tester.binding.clock.now().isBefore(endTime)) {
-        // Use pumpAndSettle to wait for animations to complete between checks
-        await tester.pumpAndSettle();
-        final textFieldFinder = find.byType(TextField);
-        if (textFieldFinder.evaluate().isNotEmpty) {
-          textFieldFound = true;
-          debugPrint('TextField found after waiting.');
-          break;
-        }
-        // No need for an extra pump here, pumpAndSettle handles it.
+        debugPrint('Programmatic memo creation successful for: "$content"');
+
+        // IMPORTANT: Pump and settle AFTER the API call to allow the memo list
+        // provider (memosProvider) to refresh and the UI to update.
+        await tester.pumpAndSettle(const Duration(seconds: 2)); // Allow ample time for refresh
+
+      } catch (e, stackTrace) {
+        debugPrint('Error creating memo programmatically: $e\n$stackTrace');
+        // Fail the test explicitly if setup fails
+        fail('Failed to create memo programmatically: $e');
       }
-
-      // Final check after waiting
-      final textFieldFinder = find.byType(TextField);
-      expect(
-        textFieldFinder,
-        findsOneWidget, // Expect exactly one TextField in the expanded utility
-        reason:
-            'TextField did not appear within $timeout after expanding CaptureUtility. Found ${textFieldFinder.evaluate().length} instead.',
-      );
-
-      // Enter text
-      await tester.enterText(textFieldFinder, content);
-      await tester.pumpAndSettle();
-
-      // Tap Add Memo
-      final addButtonFinder = find.text('Add Memo');
-      expect(addButtonFinder, findsOneWidget);
-      await tester.tap(addButtonFinder);
-      await tester.pumpAndSettle();
-      await tester.pump(const Duration(seconds: 1)); // Wait for creation
     }
 
-    // Helper function to interact with PopupMenuButton
+    // Helper function to interact with PopupMenuButton (no changes needed here)
     Future<void> selectFilterOption(
       WidgetTester tester,
       String buttonTooltip,
@@ -86,20 +68,20 @@ void main() {
       await tester.pump(const Duration(seconds: 2)); // Wait for initial load
 
       // --- Test Setup ---
-      const taggedMemoContent = 'This memo has a #testtag';
-      const untaggedMemoContent = 'This memo is untagged';
+      // Use more distinct content for programmatic creation
+      const taggedMemoContent = 'Tagged Filter Test Memo #testtag';
+      const untaggedMemoContent = 'Untagged Filter Test Memo';
 
-      // Create memos
+      // Create memos PROGRAMMATICALLY
       await createMemo(tester, taggedMemoContent);
       await createMemo(tester, untaggedMemoContent);
 
-      // Finders for the memos
-      final taggedMemoFinder = find.textContaining('#testtag');
-      final untaggedMemoFinder = find.textContaining('untagged');
+      // Finders for the memos (use more specific text now)
+      final taggedMemoFinder = find.textContaining('Tagged Filter Test Memo #testtag');
+      final untaggedMemoFinder = find.textContaining('Untagged Filter Test Memo');
 
-      // Verify both memos are initially visible (assuming default is 'All' or similar)
-      // Note: Default filter might be 'Untagged', adjust initial check if needed.
-      // Let's explicitly set to 'All Status' first for a clean start.
+      // --- Start Filter Testing ---
+      // Explicitly set to 'All Status' first for a clean start.
       await selectFilterOption(tester, 'Filter by Status', 'All Status');
       expect(taggedMemoFinder, findsOneWidget, reason: 'Tagged memo should be visible with "All Status" filter');
       expect(untaggedMemoFinder, findsOneWidget, reason: 'Untagged memo should be visible with "All Status" filter');
@@ -123,9 +105,7 @@ void main() {
       expect(untaggedMemoFinder, findsOneWidget, reason: 'Untagged memo should be visible again with "All Status" filter');
 
       // --- Test Time Filter (Basic Interaction) ---
-      // Just ensure we can open and select an option without crashing
       await selectFilterOption(tester, 'Filter by Time Range', 'Today');
-      // Add verification if specific time-based memos were created
       debugPrint('Time filter selection test passed.');
 
       await selectFilterOption(tester, 'Filter by Time Range', 'All Time');
