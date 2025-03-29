@@ -283,6 +283,13 @@ class ApiService {
           }
         }
       }
+
+      // Add logging *after* client-side sorting
+      if (verboseLogging && memos.isNotEmpty) {
+        print(
+          '[API-DEBUG] First memo AFTER client-side sort by "$sort": ID=${memos.first.id}, updateTime=${memos.first.updateTime}, createTime=${memos.first.createTime}',
+        );
+      }
       
       return memos;
     } catch (e) {
@@ -579,10 +586,22 @@ class ApiService {
               .toList(), // Example: Convert to JSON map if needed by Memo model
       parent: apiMemo.parent,
       creator: apiMemo.creator,
-      createTime: apiMemo.createTime?.toIso8601String(),
-      updateTime: apiMemo.updateTime?.toIso8601String(),
-      displayTime: apiMemo.displayTime?.toIso8601String(),
+      // Use helper to safely convert DateTime? to String?
+      createTime: _safeIsoString(apiMemo.createTime),
+      updateTime: _safeIsoString(apiMemo.updateTime),
+      displayTime: _safeIsoString(apiMemo.displayTime),
     );
+  }
+
+  // Helper to safely convert DateTime? to ISO8601 String?
+  String? _safeIsoString(DateTime? dt) {
+    if (dt == null) return null;
+    try {
+      return dt.toIso8601String();
+    } catch (e) {
+      print('[API Conversion Error] Failed to format DateTime $dt: $e');
+      return null;
+    }
   }
   
   MemoState _parseApiState(V1State? state) {
