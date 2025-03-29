@@ -85,10 +85,6 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
 
     final simulationVelocity = velocity ?? _animationController.velocity;
 
-    debugPrint(
-      '[CaptureUtility] AnimateTo: target=$targetValue, startValue=${_animationController.value.toStringAsFixed(3)}, velocity=${simulationVelocity.toStringAsFixed(3)}',
-    );
-
     final simulation = SpringSimulation(
       _springDescription,
       _animationController.value,
@@ -97,9 +93,6 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
     );
 
     _animationController.animateWith(simulation).whenCompleteOrCancel(() {
-      debugPrint(
-        '[CaptureUtility] AnimateTo Complete/Cancel: target=$targetValue, finalValue=${_animationController.value.toStringAsFixed(3)}, _isDragging=$_isDragging',
-      );
       // Ensure final state consistency only if not dragging and component is still mounted
       if (!_isDragging && mounted) {
         setState(() {
@@ -107,9 +100,6 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
               targetValue == 1.0 ? _expandedHeight : _collapsedHeight;
           // Ensure controller value matches target precisely at the end
           if ((_animationController.value - targetValue).abs() > 0.01) {
-            debugPrint(
-              '[CaptureUtility] AnimateTo Complete: Correcting final controller value to $targetValue',
-            );
             _animationController.value = targetValue;
           }
         });
@@ -147,10 +137,6 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
       _animationController.value =
           (_currentHeight - _collapsedHeight) /
           (_expandedHeight - _collapsedHeight);
-      // Add logging
-      debugPrint(
-        '[CaptureUtility] Drag Update: _currentHeight=$_currentHeight, _animationController.value=${_animationController.value.toStringAsFixed(3)}',
-      );
     });
   }
 
@@ -161,10 +147,6 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
     final simulationVelocity =
         -dragVelocity / (_expandedHeight - _collapsedHeight);
     final currentFraction = _animationController.value;
-
-    debugPrint(
-      '[CaptureUtility] Drag End: dragVelocity=$dragVelocity, simulationVelocity=${simulationVelocity.toStringAsFixed(3)}, currentFraction=${currentFraction.toStringAsFixed(3)}',
-    );
 
     _isDragging = false; // Set dragging to false *after* calculations
 
@@ -178,20 +160,13 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
       // Positive simulationVelocity (upward swipe) -> target 1.0 (expand)
       // Negative simulationVelocity (downward swipe) -> target 0.0 (collapse)
       targetValue = simulationVelocity > 0 ? 1.0 : 0.0;
-      debugPrint(
-        '[CaptureUtility] Drag End: Target decided by velocity -> $targetValue',
-      );
     } else {
       targetValue = currentFraction > positionThreshold ? 1.0 : 0.0;
-      debugPrint(
-        '[CaptureUtility] Drag End: Target decided by position -> $targetValue',
-      );
     }
 
     // Check if close to target and velocity is low to snap directly
     if ((targetValue - currentFraction).abs() < 0.05 &&
         simulationVelocity.abs() < velocityThreshold / 2) {
-      debugPrint('[CaptureUtility] Drag End: Snapping to target $targetValue');
       // Ensure state is updated correctly when snapping
       setState(() {
         _currentHeight =
@@ -200,9 +175,6 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
         _animationController.value = targetValue;
       });
     } else {
-      debugPrint(
-        '[CaptureUtility] Drag End: Animating to target $targetValue with velocity ${simulationVelocity.toStringAsFixed(3)}',
-      );
       _animateTo(targetValue, velocity: simulationVelocity);
     }
   }
@@ -213,9 +185,6 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
     setState(() {
       _isDragging = true;
     });
-    debugPrint(
-      '[CaptureUtility] Drag Start: _isDragging=true, Stopping animation.',
-    );
   }
 
   Future<void> _handlePaste() async {
