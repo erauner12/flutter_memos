@@ -345,12 +345,22 @@ class ApiService {
     try {
       // Use the createTime from the memo object passed in, which should be the original.
       final originalCreateTime = memo.createTime;
+      final clientNow = DateTime.now().toUtc(); // Get client's current time
+
+      if (verboseLogging) {
+        print(
+          '[API updateMemo] Sending client time as updateTime: ${clientNow.toIso8601String()}',
+        );
+      }
 
       final updatePayload = TheMemoToUpdateTheNameFieldIsRequired(
         content: memo.content,
         pinned: memo.pinned,
         state: _getMemoState(memo.state),
         visibility: _getApiVisibility(memo.visibility),
+        // *** Send client's current time as updateTime ***
+        updateTime: clientNow,
+        // createTime: null, // Explicitly not sending createTime
       );
       
       final response = await _memoApi.memoServiceUpdateMemo(
