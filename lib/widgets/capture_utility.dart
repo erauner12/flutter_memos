@@ -26,17 +26,115 @@ class CaptureUtility extends ConsumerStatefulWidget {
   ConsumerState<CaptureUtility> createState() => _CaptureUtilityState();
 }
 
-class _CaptureUtilityState extends ConsumerState<CaptureUtility> {
+class _CaptureUtilityState extends ConsumerState<CaptureUtility>
+    with SingleTickerProviderStateMixin {
   final TextEditingController _textController = TextEditingController();
   final FocusNode _focusNode = FocusNode();
-  bool _isExpanded = false;
   bool _isSubmitting = false;
+
+  // Animation controller for smooth transitions
+  late AnimationController _animationController;
+  late Animation<double> _heightAnimation;
+
+  // Track if user is currently dragging
+  bool _isDragging = false;
+
+  // Define min/max heights for the utility
+  final double _collapsedHeight = 56.0; // Height when collapsed
+  final double _expandedHeight = 200.0; // Maximum expanded height
+  double _currentHeight = 56.0; // Current height (starts collapsed)
+
+  @override
+  void initState() {
+    super.initState();
+
+    // Initialize animation controller
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 250),
+    );
+
+    // Set up height animation
+    _heightAnimation = Tween<double>(
+      begin: _collapsedHeight,
+      end: _expandedHeight,
+    ).animate(
+      CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
+    );
+
+    // Listen to animation changes
+    _animationController.addListener(() {
+      setState(() {
+        _currentHeight = _heightAnimation.value;
+      });
+    });
+  }
 
   @override
   void dispose() {
     _textController.dispose();
     _focusNode.dispose();
+    _animationController.dispose();
     super.dispose();
+  }
+
+  // Property to check if expanded (for state management)
+  bool get _isExpanded => _animationController.value > 0.5;
+
+  // Expand the capture utility
+  void _expand() {
+    _animationController.forward();
+    _focusNode.requestFocus();
+  }
+
+  // Collapse the capture utility
+  void _collapse() {
+    _animationController.reverse();
+    _focusNode.unfocus();
+  }
+
+  // Toggle expanded state
+  void _toggleExpanded() {
+    if (_isExpanded) {
+      _collapse();
+    } else {
+      _expand();
+    }
+  }
+
+  // Handle vertical drag to expand/collapse
+  void _handleDragUpdate(DragUpdateDetails details) {
+    setState(() {
+      _isDragging = true;
+      // Calculate new height based on drag (negative dy means up)
+      _currentHeight -= details.delta.dy;
+
+      // Constrain height within min/max bounds
+      _currentHeight = _currentHeight.clamp(_collapsedHeight, _expandedHeight);
+
+      // Update animation controller value based on current height
+      _animationController.value =
+          (_currentHeight - _collapsedHeight) /
+          (_expandedHeight - _collapsedHeight);
+    });
+  }
+
+  void _handleDragEnd(DragEndDetails details) {
+    setState(() {
+      _isDragging = false;
+      // Determine whether to snap to expanded or collapsed state based on position
+      if (_animationController.value > 0.3) {
+        _expand();
+      } else {
+        _collapse();
+      }
+    });
+  }
+
+  void _handleDragStart(DragStartDetails details) {
+    setState(() {
+      _isDragging = true;
+    });
   }
 
   Future<void> _handlePaste() async {
@@ -46,9 +144,11 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility> {
     if (clipboardData != null && clipboardData.text != null) {
       setState(() {
         _textController.text = clipboardData.text!;
-        _isExpanded = true;
       });
-      _focusNode.requestFocus();
+      // Ensure we're expanded when pasting content
+      if (!_isExpanded) {
+        _expand();
+      }
     }
   }
 
@@ -70,9 +170,11 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility> {
 
       setState(() {
         _textController.clear();
-        _isExpanded = false;
         _isSubmitting = false;
       });
+
+      // Collapse after successful submission
+      _collapse();
     } catch (e) {
       setState(() {
         _isSubmitting = false;
@@ -94,7 +196,7 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility> {
 
     // Use the existing createMemo provider
     await ref.read(createMemoProvider)(newMemo);
-    
+
     // Show success message
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -116,7 +218,7 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility> {
 
     // Use the addComment provider from memo detail
     await ref.read(addCommentProvider(memoId))(newComment);
-    
+
     // Show success message
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -128,17 +230,12 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility> {
     }
   }
 
-  // Add event handler for escape key
   void _handleKeyEvent(RawKeyEvent event) {
     if (event is RawKeyDownEvent) {
       if (event.logicalKey == LogicalKeyboardKey.escape) {
         // If expanded, collapse on escape
         if (_isExpanded) {
-          setState(() {
-            _isExpanded = false;
-          });
-          // Clear focus
-          _focusNode.unfocus();
+          _collapse();
         }
       } else if (event.logicalKey == LogicalKeyboardKey.enter &&
           event.isMetaPressed) {
@@ -156,7 +253,7 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility> {
     final size = MediaQuery.of(context).size;
     final keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
     final edgeInsets = MediaQuery.of(context).padding;
-    
+
     // Determine text based on mode
     final hintText =
         widget.hintText ??
@@ -173,12 +270,6 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility> {
             ? 'Capture something ...'
             : 'Add a comment...';
 
-    final icon =
-        widget.mode == CaptureMode.createMemo ? Icons.add : Icons.comment;
-
-    final tooltip =
-        widget.mode == CaptureMode.createMemo ? 'Add memo' : 'Add comment';
-    
     // Responsive width based on screen size, accounting for safe areas
     double containerWidth;
     if (size.width > 800) {
@@ -198,102 +289,91 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility> {
       minimum: const EdgeInsets.symmetric(horizontal: 16.0),
       child: Padding(
         padding: EdgeInsets.only(bottom: keyboardHeight > 0 ? 0 : 8),
-        child: Container(
-          width: containerWidth,
-          decoration: BoxDecoration(
-            color: isDarkMode ? const Color(0xFF2C2C2C) : Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.1),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
+        child: GestureDetector(
+          onVerticalDragStart: _handleDragStart,
+          onVerticalDragUpdate: _handleDragUpdate,
+          onVerticalDragEnd: _handleDragEnd,
+          onTap: () {
+            if (!_isExpanded) {
+              _expand();
+            }
+          },
+          child: AnimatedContainer(
+            duration:
+                _isDragging
+                    ? Duration
+                        .zero // No animation during active drag
+                    : const Duration(milliseconds: 250),
+            curve: Curves.easeInOut,
+            width: containerWidth,
+            height: _currentHeight,
+            decoration: BoxDecoration(
+              color: isDarkMode ? const Color(0xFF2C2C2C) : Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+              border: Border.all(
+                color: isDarkMode ? Colors.grey[800]! : Colors.grey[300]!,
+                width: 1,
               ),
-            ],
-            border: Border.all(
-              color: isDarkMode ? Colors.grey[800]! : Colors.grey[300]!,
-              width: 1,
             ),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Text field area
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Expand/collapse icon
-                    if (_isExpanded)
-                      IconButton(
-                        icon: const Icon(Icons.unfold_less),
-                        onPressed: () {
-                          setState(() {
-                            _isExpanded = false;
-                          });
-                        },
-                        tooltip: 'Collapse',
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                        iconSize: 20,
-                      ),
-                    if (!_isExpanded)
-                      IconButton(
-                        icon: Icon(icon),
-                        onPressed: () {
-                          setState(() {
-                            _isExpanded = true;
-                          });
-                          _focusNode.requestFocus();
-                        },
-                        tooltip: tooltip,
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                        iconSize: 20,
-                      ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Drag indicator pill
+                Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(top: 8, bottom: 4),
+                  decoration: BoxDecoration(
+                    color: isDarkMode ? Colors.grey[700] : Colors.grey[300],
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
 
-                    const SizedBox(width: 8),
-
-                    // Text field - expanded or single line
-                    Expanded(
-                      child:
-                          _isExpanded
-                              ? RawKeyboardListener(
-                                focusNode: FocusNode(),
-                                onKey: _handleKeyEvent,
-                                child: TextField(
-                                  controller: _textController,
-                                  focusNode: _focusNode,
-                                  decoration: InputDecoration(
-                                    hintText: hintText,
-                                    border: InputBorder.none,
+                // Text field area
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Text field - expanded or single line
+                      Expanded(
+                        child:
+                            _isExpanded
+                                ? RawKeyboardListener(
+                                  focusNode: FocusNode(),
+                                  onKey: _handleKeyEvent,
+                                  child: TextField(
+                                    controller: _textController,
+                                    focusNode: _focusNode,
+                                    decoration: InputDecoration(
+                                      hintText: hintText,
+                                      border: InputBorder.none,
+                                    ),
+                                    maxLines: 5,
+                                    minLines:
+                                        widget.mode == CaptureMode.createMemo
+                                            ? 3
+                                            : 2,
+                                    textCapitalization:
+                                        TextCapitalization.sentences,
+                                    onSubmitted: (_) {
+                                      // Handle Enter key
+                                      if (!_isSubmitting) {
+                                        _handleSubmit();
+                                      }
+                                    },
                                   ),
-                                  maxLines: 5,
-                                  minLines:
-                                      widget.mode == CaptureMode.createMemo
-                                          ? 3
-                                          : 2,
-                                  textCapitalization:
-                                      TextCapitalization.sentences,
-                                  onSubmitted: (_) {
-                                    // Handle Enter key
-                                    if (!_isSubmitting) {
-                                      _handleSubmit();
-                                    }
-                                  },
-                                ),
-                              )
-                              : InkWell(
-                                onTap: () {
-                                  setState(() {
-                                    _isExpanded = true;
-                                  });
-                                  _focusNode.requestFocus();
-                                },
-                                child: Container(
+                                )
+                                : Padding(
                                   padding: const EdgeInsets.symmetric(
-                                    vertical: 12,
+                                    vertical: 12.0,
                                   ),
                                   child: Text(
                                     placeholderText,
@@ -305,63 +385,68 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility> {
                                     ),
                                   ),
                                 ),
-                              ),
-                    ),
-                  ],
-                ),
-              ),
-
-              // Buttons row - only visible when expanded
-              if (_isExpanded)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      // Paste button
-                      TextButton.icon(
-                        onPressed: _handlePaste,
-                        icon: const Icon(Icons.content_paste, size: 16),
-                        label: const Text('Paste'),
-                        style: TextButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 8,
-                          ),
-                          minimumSize: Size.zero,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                      ),
-
-                      // Submit button
-                      ElevatedButton(
-                        onPressed: _isSubmitting ? null : _handleSubmit,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor:
-                              Theme.of(context).colorScheme.primary,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 8,
-                          ),
-                          minimumSize: Size.zero,
-                        ),
-                        child:
-                            _isSubmitting
-                                ? const SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Colors.white,
-                                  ),
-                                )
-                                : Text(buttonText),
                       ),
                     ],
                   ),
                 ),
-            ],
+
+                // Buttons row - only visible when expanded
+                if (_isExpanded)
+                  Expanded(
+                    child: Align(
+                      alignment: Alignment.bottomCenter,
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            // Paste button
+                            TextButton.icon(
+                              onPressed: _handlePaste,
+                              icon: const Icon(Icons.content_paste, size: 16),
+                              label: const Text('Paste'),
+                              style: TextButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 8,
+                                ),
+                                minimumSize: Size.zero,
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              ),
+                            ),
+
+                            // Submit button
+                            ElevatedButton(
+                              onPressed: _isSubmitting ? null : _handleSubmit,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor:
+                                    Theme.of(context).colorScheme.primary,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 8,
+                                ),
+                                minimumSize: Size.zero,
+                              ),
+                              child:
+                                  _isSubmitting
+                                      ? const SizedBox(
+                                        width: 16,
+                                        height: 16,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: Colors.white,
+                                        ),
+                                      )
+                                      : Text(buttonText),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ),
         ),
       ),
