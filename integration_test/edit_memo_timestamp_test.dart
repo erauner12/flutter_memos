@@ -2,13 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_memos/main.dart' as app;
 import 'package:flutter_memos/models/memo.dart';
-import 'package:flutter_memos/providers/memo_providers.dart';
 import 'package:flutter_memos/screens/edit_memo/edit_memo_screen.dart';
 import 'package:flutter_memos/screens/memo_detail/memo_detail_screen.dart';
 import 'package:flutter_memos/screens/memos/memos_screen.dart';
 import 'package:flutter_memos/services/api_service.dart';
 import 'package:flutter_memos/widgets/memo_card.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
@@ -21,8 +19,6 @@ import 'package:integration_test/integration_test.dart';
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  // Use a ProviderContainer to access providers directly in the test setup
-  ProviderContainer? container;
   ApiService? apiService;
   String? createdMemoId;
 
@@ -46,7 +42,6 @@ void main() {
       }
       createdMemoId = null;
     }
-    container?.dispose(); // Dispose container if used
   });
 
   testWidgets('Edit memo, save, and verify position in list sorted by update time', (WidgetTester tester) async {
@@ -65,21 +60,42 @@ void main() {
     app.main();
     // Wait significantly longer for initial load, API calls, and rendering
     await tester.pumpAndSettle(const Duration(seconds: 5));
+    debugPrint('[Test Setup] App settled.');
 
-    // Get the ProviderContainer from the app's root widget
-    final element = tester.element(find.byType(ProviderScope));
-    container = ProviderScope.containerOf(element);
+    // Ensure we are on the MemosScreen
+    expect(
+      find.byType(MemosScreen),
+      findsOneWidget,
+      reason: 'Should be on MemosScreen after launch',
+    );
+    debugPrint('[Test Setup] ProviderContainer access removed.');
 
-    // Ensure we are on the MemosScreen and sorting by Updated Time
-    expect(find.byType(MemosScreen), findsOneWidget, reason: 'Should be on MemosScreen');
-    final sortMode = container!.read(memoSortModeProvider);
-    if (sortMode != MemoSortMode.byUpdateTime) {
-      debugPrint('[Test Action] Setting sort mode to byUpdateTime');
-      await tester.tap(find.textContaining('Sort by:'));
-      await tester.pumpAndSettle();
+    // Ensure sorting by Updated Time via UI
+    debugPrint('[Test Action] Ensuring sort mode is byUpdateTime via UI...');
+    final sortByCreatedFinder = find.text('Sort by: Created');
+    final sortByUpdatedFinder = find.text('Sort by: Updated');
+
+    // Check if the "Sort by: Created" button exists
+    if (sortByCreatedFinder.evaluate().isNotEmpty) {
+      debugPrint(
+        '[Test Action] Found "Sort by: Created", tapping to switch...',
+      );
+      await tester.tap(sortByCreatedFinder);
+      await tester.pumpAndSettle(const Duration(seconds: 1));
+      expect(
+        sortByUpdatedFinder,
+        findsOneWidget,
+        reason: 'Should switch to Sort by: Updated',
+      );
+      debugPrint('[Test Action] Switched sort mode.');
+    } else {
+      expect(
+        sortByUpdatedFinder,
+        findsOneWidget,
+        reason: 'Should already be sorting by Updated',
+      );
+      debugPrint('[Test State] Sort mode is already byUpdateTime.');
     }
-    expect(container!.read(memoSortModeProvider), MemoSortMode.byUpdateTime);
-    debugPrint('[Test State] Sort mode is byUpdateTime');
 
     // Refresh list to ensure the new memo is visible
     debugPrint('[Test Action] Refreshing memo list...');
