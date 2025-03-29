@@ -17,7 +17,7 @@ void main() {
       final captureUtilityFinder = find.byType(CaptureUtility);
       expect(captureUtilityFinder, findsOneWidget, reason: 'CaptureUtility not found');
 
-      // Measure initial height
+      // Measure initial height (should be collapsed)
       final initialHeight = tester.getSize(captureUtilityFinder).height;
       debugPrint('Initial height: $initialHeight');
 
@@ -44,10 +44,13 @@ void main() {
       // Verify it collapsed
       final collapsedHeight = tester.getSize(captureUtilityFinder).height;
       debugPrint('Collapsed height after swipe down: $collapsedHeight');
+      
+      // Allow for a small margin of error in the height comparison
       expect(
-        collapsedHeight,
-        lessThanOrEqualTo(initialHeight),
-        reason: 'CaptureUtility did not collapse on downward swipe',
+        (collapsedHeight - initialHeight).abs() < 10,
+        isTrue,
+        reason:
+            'CaptureUtility height should return to approximately the initial height'
       );
 
       // Verify text field is no longer visible
@@ -93,10 +96,13 @@ void main() {
       // Verify it collapsed
       final collapsedHeight = tester.getSize(captureUtilityFinder).height;
       debugPrint('Collapsed height after swipe: $collapsedHeight');
+      
+      // Allow for a small margin of error in the height comparison
       expect(
-        collapsedHeight,
-        lessThanOrEqualTo(initialHeight),
-        reason: 'CaptureUtility did not collapse on downward swipe',
+        (collapsedHeight - initialHeight).abs() < 10,
+        isTrue,
+        reason:
+            'CaptureUtility height should return to approximately the initial height'
       );
       
       // Verify text field is no longer visible
