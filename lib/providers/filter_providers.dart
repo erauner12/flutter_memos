@@ -1,8 +1,56 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart'; // Import Material for IconData
 import 'package:flutter_memos/utils/filter_builder.dart';
 import 'package:flutter_memos/utils/filter_presets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+/// OPTIMIZATION: Define a class for filter options
+class FilterOption {
+  final String key;
+  final String label;
+  final IconData? icon; // Optional icon
+
+  const FilterOption({required this.key, required this.label, this.icon});
+}
+
+/// OPTIMIZATION: Constant list for status filter options
+const List<FilterOption> statusFilterOptions = [
+  FilterOption(
+    key: 'untagged',
+    label: 'Untagged',
+    icon: Icons.new_releases_outlined,
+  ),
+  FilterOption(key: 'tagged', label: 'Tagged', icon: Icons.label),
+  FilterOption(key: 'all', label: 'All Status', icon: Icons.select_all),
+];
+
+/// OPTIMIZATION: Constant list for time filter options
+const List<FilterOption> timeFilterOptions = [
+  FilterOption(key: 'today', label: 'Today', icon: Icons.today),
+  FilterOption(
+    key: 'created_today',
+    label: 'Created Today',
+    icon: Icons.add_circle_outline,
+  ),
+  FilterOption(
+    key: 'updated_today',
+    label: 'Updated Today',
+    icon: Icons.update,
+  ),
+  FilterOption(
+    key: 'this_week',
+    label: 'This Week',
+    icon: Icons.calendar_view_week,
+  ),
+  FilterOption(
+    key: 'important',
+    label: 'Important',
+    icon: Icons.star_border,
+  ), // Assuming 'important' maps to a tag
+  FilterOption(key: 'all', label: 'All Time', icon: Icons.calendar_month),
+];
+
 
 /// Provider for the time-based filter option ('today', 'this_week', etc.)
 ///
