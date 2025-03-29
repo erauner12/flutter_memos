@@ -99,13 +99,13 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
   void _handleDragUpdate(DragUpdateDetails details) {
     setState(() {
       _isDragging = true;
-      
+
       // Calculate new height based on drag (negative dy means up, positive means down)
       final newHeight = _currentHeight - details.delta.dy;
-      
+
       // Constrain height within min/max bounds
       _currentHeight = newHeight.clamp(_collapsedHeight, _expandedHeight);
-      
+
       // Update animation controller value based on current height
       _animationController.value =
           (_currentHeight - _collapsedHeight) /
@@ -116,13 +116,13 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
   void _handleDragEnd(DragEndDetails details) {
     setState(() {
       _isDragging = false;
-      
+
       // Calculate velocity direction - positive velocity means downward swipe
       final isDownwardSwipe =
           details.primaryVelocity != null && details.primaryVelocity! > 0;
       final isUpwardSwipe =
           details.primaryVelocity != null && details.primaryVelocity! < 0;
-      
+
       // Use stronger velocity thresholds to ensure drags are detected properly
       if (isDownwardSwipe && details.primaryVelocity!.abs() > 100) {
         // Force collapse on downward swipe with velocity
