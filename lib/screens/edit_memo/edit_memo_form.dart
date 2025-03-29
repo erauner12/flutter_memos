@@ -2,7 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_memos/models/memo.dart';
-import 'package:flutter_memos/utils/url_helper.dart'; // Add this import
+import 'package:flutter_memos/utils/keyboard_navigation.dart'; // Import the mixin
+import 'package:flutter_memos/utils/url_helper.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'edit_memo_providers.dart';
@@ -21,10 +22,12 @@ class EditMemoForm extends ConsumerStatefulWidget {
   ConsumerState<EditMemoForm> createState() => _EditMemoFormState();
 }
 
-class _EditMemoFormState extends ConsumerState<EditMemoForm> {
+class _EditMemoFormState extends ConsumerState<EditMemoForm>
+    with KeyboardNavigationMixin<EditMemoForm> {
   final TextEditingController _contentController = TextEditingController();
   final FocusNode _contentFocusNode = FocusNode();
-  
+  final FocusNode _formFocusNode = FocusNode(debugLabel: 'EditMemoFormFocus');
+
   bool _saving = false;
   bool _pinned = false;
   bool _archived = false;
@@ -38,7 +41,7 @@ class _EditMemoFormState extends ConsumerState<EditMemoForm> {
     _contentController.text = widget.memo.content;
     _pinned = widget.memo.pinned;
     _archived = widget.memo.state == MemoState.archived;
-    
+
     if (kDebugMode) {
       print('[EditMemoForm] Initialized with memo ID: ${widget.memoId}');
       print(
@@ -52,15 +55,23 @@ class _EditMemoFormState extends ConsumerState<EditMemoForm> {
         );
       }
     }
+    // Request focus for the form area after the first frame
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        // Initially focus the text field
+        FocusScope.of(context).requestFocus(_contentFocusNode);
+      }
+    });
   }
 
   @override
   void dispose() {
     _contentController.dispose();
     _contentFocusNode.dispose();
+    _formFocusNode.dispose(); // Dispose the form focus node
     super.dispose();
   }
-  
+
   Widget _buildMarkdownHelpItem(String syntax, String description) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
@@ -99,7 +110,7 @@ class _EditMemoFormState extends ConsumerState<EditMemoForm> {
     });
 
     if (kDebugMode) {
-      print('[EditMemoForm] Saving memo ${widget.memoId}');
+      print('[EditMemoForm] Saving memo ${widget.memoId} via _handleSave');
       print(
         '[EditMemoForm] Content length: ${_contentController.text.trim().length} characters',
       );
@@ -112,7 +123,7 @@ class _EditMemoFormState extends ConsumerState<EditMemoForm> {
         pinned: _pinned,
         state: _archived ? MemoState.archived : MemoState.normal,
       );
-      
+
       // Use the provider to save the memo
       await ref.read(saveMemoProvider(widget.memoId))(updatedMemo);
       if (kDebugMode) {
@@ -139,228 +150,258 @@ class _EditMemoFormState extends ConsumerState<EditMemoForm> {
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'CONTENT',
-                style: TextStyle(
-                  color: Colors.grey,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 14,
+    return Focus(
+      focusNode: _formFocusNode,
+      onKeyEvent: (node, event) {
+        final result = handleKeyEvent(
+          event,
+          ref,
+          onSubmit: _handleSave,
+          onEscape: () {
+            if (_contentFocusNode.hasFocus) {
+              _contentFocusNode.unfocus();
+              _formFocusNode.requestFocus();
+            } else {
+              Navigator.of(context).pop();
+            }
+          },
+        );
+        if (result == KeyEventResult.handled) {
+          return KeyEventResult.handled;
+        }
+        return KeyEventResult.ignored;
+      },
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'CONTENT',
+                  style: TextStyle(
+                    color: Colors.grey,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                  ),
                 ),
-              ),
-              TextButton.icon(
-                icon: Icon(_showMarkdownHelp ? Icons.help_outline : Icons.help),
-                label: Text(_showMarkdownHelp ? 'Hide Help' : 'Markdown Help'),
-                onPressed: () {
-                  setState(() {
-                    _showMarkdownHelp = !_showMarkdownHelp;
-                  });
-                },
-              ),
-            ],
-          ),
-
-          // Show markdown help if toggled
-          if (_showMarkdownHelp)
-            Card(
-              margin: const EdgeInsets.only(bottom: 16),
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Markdown Syntax Guide',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    _buildMarkdownHelpItem('# Heading 1', 'Heading 1'),
-                    _buildMarkdownHelpItem('## Heading 2', 'Heading 2'),
-                    _buildMarkdownHelpItem('**Bold text**', 'Bold text'),
-                    _buildMarkdownHelpItem('*Italic text*', 'Italic text'),
-                    _buildMarkdownHelpItem(
-                      '[Link](https://example.com)',
-                      'Link',
-                    ),
-                    _buildMarkdownHelpItem('- Bullet point', 'Bullet point'),
-                    _buildMarkdownHelpItem('1. Numbered item', 'Numbered item'),
-                    _buildMarkdownHelpItem('`Code`', 'Code'),
-                    _buildMarkdownHelpItem('> Blockquote', 'Blockquote'),
-                  ],
+                TextButton.icon(
+                  icon: Icon(
+                    _showMarkdownHelp ? Icons.help_outline : Icons.help,
+                  ),
+                  label: Text(
+                    _showMarkdownHelp ? 'Hide Help' : 'Markdown Help',
+                  ),
+                  onPressed: () {
+                    setState(() {
+                      _showMarkdownHelp = !_showMarkdownHelp;
+                    });
+                  },
                 ),
-              ),
+              ],
             ),
-            
-          const SizedBox(height: 4),
-          
-          // Toggle between preview and edit mode
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              TextButton.icon(
-                icon: Icon(_previewMode ? Icons.edit : Icons.visibility),
-                label: Text(_previewMode ? 'Edit' : 'Preview'),
-                onPressed: () {
-                  setState(() {
-                    _previewMode = !_previewMode;
-                    if (kDebugMode) {
-                      print(
-                        '[EditMemoForm] Switched to ${_previewMode ? "preview" : "edit"} mode',
-                      );
 
-                      // When entering preview mode, analyze content for helpful debugging
-                      if (_previewMode) {
-                        final content = _contentController.text;
+            if (_showMarkdownHelp)
+              Card(
+                margin: const EdgeInsets.only(bottom: 16),
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Markdown Syntax Guide',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      _buildMarkdownHelpItem('# Heading 1', 'Heading 1'),
+                      _buildMarkdownHelpItem('## Heading 2', 'Heading 2'),
+                      _buildMarkdownHelpItem('**Bold text**', 'Bold text'),
+                      _buildMarkdownHelpItem('*Italic text*', 'Italic text'),
+                      _buildMarkdownHelpItem(
+                        '[Link](https://example.com)',
+                        'Link',
+                      ),
+                      _buildMarkdownHelpItem('- Bullet point', 'Bullet point'),
+                      _buildMarkdownHelpItem(
+                        '1. Numbered item',
+                        'Numbered item',
+                      ),
+                      _buildMarkdownHelpItem('`Code`', 'Code'),
+                      _buildMarkdownHelpItem('> Blockquote', 'Blockquote'),
+                    ],
+                  ),
+                ),
+              ),
+
+            const SizedBox(height: 4),
+
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton.icon(
+                  icon: Icon(_previewMode ? Icons.edit : Icons.visibility),
+                  label: Text(_previewMode ? 'Edit' : 'Preview'),
+                  onPressed: () {
+                    setState(() {
+                      _previewMode = !_previewMode;
+                      if (kDebugMode) {
                         print(
-                          '[EditMemoForm] Previewing content with ${content.length} chars',
+                          '[EditMemoForm] Switched to ${_previewMode ? "preview" : "edit"} mode',
                         );
 
-                        // Check for URLs that might cause issues
-                        final urlRegex = RegExp(
-                          r'(https?://[^\s]+)|([\w-]+://[^\s]+)',
-                        );
-                        final matches = urlRegex.allMatches(content);
-                        if (matches.isNotEmpty) {
-                          print('[EditMemoForm] URLs in preview content:');
-                          for (final match in matches) {
-                            print('[EditMemoForm]   - ${match.group(0)}');
+                        if (_previewMode) {
+                          final content = _contentController.text;
+                          print(
+                            '[EditMemoForm] Previewing content with ${content.length} chars',
+                          );
+                          final urlRegex = RegExp(
+                            r'(https?://[^\s]+)|([\w-]+://[^\s]+)',
+                          );
+                          final matches = urlRegex.allMatches(content);
+                          if (matches.isNotEmpty) {
+                            print('[EditMemoForm] URLs in preview content:');
+                            for (final match in matches) {
+                              print('[EditMemoForm]   - ${match.group(0)}');
+                            }
                           }
                         }
                       }
-                    }
-                  });
-                },
-              ),
-            ],
-          ),
-
-          _previewMode
-              ? Container(
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey.shade400),
-                  borderRadius: BorderRadius.circular(4),
+                      // Ensure correct focus when switching modes
+                      if (!_previewMode) {
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          if (mounted) _contentFocusNode.requestFocus();
+                        });
+                      } else {
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          if (mounted) _formFocusNode.requestFocus();
+                        });
+                      }
+                    });
+                  },
                 ),
-                padding: const EdgeInsets.all(12),
-                width: double.infinity,
-                constraints: const BoxConstraints(minHeight: 200),
-                child: SingleChildScrollView(
-                  child: MarkdownBody(
-                    data: _contentController.text,
-                    selectable: true,
-                    styleSheet: MarkdownStyleSheet(
-                      a: TextStyle(
-                        color: Theme.of(context).colorScheme.primary,
-                        decoration: TextDecoration.underline,
-                      ),
-                    ),
-                    onTapLink: (text, href, title) async {
-                      if (kDebugMode) {
-                        print(
-                          '[EditMemoForm] Link tapped in preview: text="$text", href="$href"',
-                        );
-                      }
-                      if (href != null) {
-                        // Use UrlHelper for consistent URL handling
-                        final success = await UrlHelper.launchUrl(
-                          href,
-                          context: context,
-                        );
-                        
-                        if (kDebugMode) {
-                          print('[EditMemoForm] URL launch result: $success');
-                        }
-                        
-                        // Feedback is now handled by UrlHelper
-                      }
-                    },
+              ],
+            ),
+
+            _previewMode
+                ? Container(
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey.shade400),
+                    borderRadius: BorderRadius.circular(4),
                   ),
-                ),
-              )
-              : TextField(
-                controller: _contentController,
-                focusNode: _contentFocusNode,
-                decoration: const InputDecoration(
-                  hintText: 'Enter memo content...',
-                  border: OutlineInputBorder(),
-                  contentPadding: EdgeInsets.all(12),
-                ),
-                maxLines: 10,
-                minLines: 5,
-                onSubmitted: (_) {
-                  // Clear focus on submission
-                  _contentFocusNode.unfocus();
-                },
-              ),
-          const SizedBox(height: 20),
-          
-          Card(
-            margin: EdgeInsets.zero,
-            child: ListTile(
-              title: const Text('Pinned'),
-              trailing: Switch(
-                value: _pinned,
-                onChanged: (value) {
-                  setState(() {
-                    _pinned = value;
-                  });
-                },
-                activeColor: Theme.of(context).colorScheme.primary,
-              ),
-            ),
-          ),
-          
-          const SizedBox(height: 12),
-          
-          Card(
-            margin: EdgeInsets.zero,
-            child: ListTile(
-              title: const Text('Archived'),
-              trailing: Switch(
-                value: _archived,
-                onChanged: (value) {
-                  setState(() {
-                    _archived = value;
-                  });
-                },
-                activeColor: Theme.of(context).colorScheme.primary,
-              ),
-            ),
-          ),
-
-          const SizedBox(height: 24),
-          
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Theme.of(context).colorScheme.primary,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 12),
-              ),
-              onPressed: _saving ? null : _handleSave,
-              child: _saving
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
+                  padding: const EdgeInsets.all(12),
+                  width: double.infinity,
+                  constraints: const BoxConstraints(minHeight: 200),
+                  child: SingleChildScrollView(
+                    child: MarkdownBody(
+                      data: _contentController.text,
+                      selectable: true,
+                      styleSheet: MarkdownStyleSheet(
+                        a: TextStyle(
+                          color: Theme.of(context).colorScheme.primary,
+                          decoration: TextDecoration.underline,
+                        ),
                       ),
-                    )
-                  : const Text('Save Changes'),
+                      onTapLink: (text, href, title) async {
+                        if (kDebugMode) {
+                          print(
+                            '[EditMemoForm] Link tapped in preview: text="$text", href="$href"',
+                          );
+                        }
+                        if (href != null) {
+                          final success = await UrlHelper.launchUrl(
+                            href,
+                            context: context,
+                          );
+                          if (kDebugMode) {
+                            print('[EditMemoForm] URL launch result: $success');
+                          }
+                        }
+                      },
+                    ),
+                  ),
+                )
+                : TextField(
+                  controller: _contentController,
+                  focusNode: _contentFocusNode,
+                  decoration: const InputDecoration(
+                    hintText: 'Enter memo content...',
+                    border: OutlineInputBorder(),
+                    contentPadding: EdgeInsets.all(12),
+                  ),
+                  maxLines: 10,
+                  minLines: 5,
+                  autofocus: true,
+                  onSubmitted: (_) {},
+                ),
+
+            const SizedBox(height: 20),
+
+            Card(
+              margin: EdgeInsets.zero,
+              child: ListTile(
+                title: const Text('Pinned'),
+                trailing: Switch(
+                  value: _pinned,
+                  onChanged: (value) {
+                    setState(() {
+                      _pinned = value;
+                    });
+                  },
+                  activeColor: Theme.of(context).colorScheme.primary,
+                ),
+              ),
             ),
-          ),
-        ],
+
+            const SizedBox(height: 12),
+
+            Card(
+              margin: EdgeInsets.zero,
+              child: ListTile(
+                title: const Text('Archived'),
+                trailing: Switch(
+                  value: _archived,
+                  onChanged: (value) {
+                    setState(() {
+                      _archived = value;
+                    });
+                  },
+                  activeColor: Theme.of(context).colorScheme.primary,
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 24),
+
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Theme.of(context).colorScheme.primary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+                onPressed: _saving ? null : _handleSave,
+                child:
+                    _saving
+                        ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                        : const Text('Save Changes'),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
