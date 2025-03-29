@@ -174,7 +174,10 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
     const positionThreshold = 0.5;
 
     if (simulationVelocity.abs() > velocityThreshold) {
-      targetValue = simulationVelocity < 0 ? 1.0 : 0.0;
+      // Corrected logic:
+      // Positive simulationVelocity (upward swipe) -> target 1.0 (expand)
+      // Negative simulationVelocity (downward swipe) -> target 0.0 (collapse)
+      targetValue = simulationVelocity > 0 ? 1.0 : 0.0;
       debugPrint(
         '[CaptureUtility] Drag End: Target decided by velocity -> $targetValue',
       );
