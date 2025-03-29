@@ -146,21 +146,40 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
     final simulationVelocity =
         -dragVelocity / (_expandedHeight - _collapsedHeight);
 
+    // Use the controller's value which was updated during drag
     final currentFraction = _animationController.value;
     double targetValue;
 
-    // Use absolute velocity for threshold check
-    if (simulationVelocity.abs() > 0.5) {
+    // Determine target based on velocity primarily, then position
+    // Thresholds might need tuning based on testing feel
+    const velocityThreshold = 0.5; // Normalized velocity threshold
+    const positionThreshold = 0.5; // Fraction threshold
+
+    if (simulationVelocity.abs() > velocityThreshold) {
+      // If swipe velocity is significant, use it to determine direction
       targetValue =
           simulationVelocity < 0
               ? 1.0
-              : 0.0; // Negative velocity -> expand (target 1.0)
+              : 0.0; // Negative velocity (up) -> expand (1.0)
     } else {
-      targetValue = currentFraction > 0.5 ? 1.0 : 0.0;
+      // If velocity is low, decide based on final position
+      targetValue = currentFraction > positionThreshold ? 1.0 : 0.0;
     }
 
-    // Pass the calculated velocity to _animateTo
-    _animateTo(targetValue, velocity: simulationVelocity);
+    // If the widget is already very close to the target, don't animate unnecessarily
+    // This prevents tiny animations if the drag ends near a boundary without much velocity
+    if ((targetValue - currentFraction).abs() < 0.05 &&
+        simulationVelocity.abs() < velocityThreshold / 2) {
+      // Snap to the target value without animation if close and velocity is low
+      setState(() {
+        _currentHeight =
+            targetValue == 1.0 ? _expandedHeight : _collapsedHeight;
+        _animationController.value = targetValue;
+      });
+    } else {
+      // Otherwise, animate to the target state using physics
+      _animateTo(targetValue, velocity: simulationVelocity);
+    }
   }
 
   void _handleDragStart(DragStartDetails details) {
@@ -330,12 +349,28 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
             width: containerWidth,
             height: frameHeight,
             decoration: BoxDecoration(
-              color: Colors.transparent,
+              // Add a subtle background color based on theme
+              color:
+                  isDarkMode
+                      ? Colors.grey[900]?.withOpacity(
+                        0.95,
+                      ) // Dark theme background
+                      : Colors.white.withOpacity(
+                        0.95,
+                      ), // Light theme background
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
                 color: isDarkMode ? Colors.grey[800]! : Colors.grey[300]!,
                 width: 0.5,
               ),
+              // Add a subtle shadow for better separation
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 5,
+                  offset: const Offset(0, 2),
+                ),
+              ],
             ),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(12),
