@@ -161,14 +161,15 @@ class _NewMemoFormState extends ConsumerState<NewMemoForm>
         // Explicitly check for Command+Enter first using event properties
         if (event is KeyDownEvent &&
             event.logicalKey == LogicalKeyboardKey.enter &&
-            HardwareKeyboard.instance.isMetaPressed) {
-          // Use HardwareKeyboard.instance.isMetaPressed
+            HardwareKeyboard.instance.isLogicalKeyPressed(
+              LogicalKeyboardKey.meta,
+            )) {
           if (!_loading) {
             // Prevent double submission
             if (kDebugMode) {
               // Ensure this debug print exists
               print(
-                '[NewMemoForm] Command+Enter detected (using HardwareKeyboard.instance.isMetaPressed), calling _handleCreateMemo',
+                '[NewMemoForm] Command+Enter detected, calling _handleCreateMemo',
               );
             }
             _handleCreateMemo();

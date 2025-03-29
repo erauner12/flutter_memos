@@ -157,14 +157,15 @@ class _EditMemoFormState extends ConsumerState<EditMemoForm>
         // Explicitly check for Command+Enter first using event properties
         if (event is KeyDownEvent &&
             event.logicalKey == LogicalKeyboardKey.enter &&
-            event.isMetaPressed) {
-          // Use event.isMetaPressed
+            HardwareKeyboard.instance.isLogicalKeyPressed(
+              LogicalKeyboardKey.meta,
+            )) {
           if (!_saving) {
             // Prevent double submission
             if (kDebugMode) {
               // Ensure this debug print exists
               print(
-                '[EditMemoForm] Command+Enter detected (using event.isMetaPressed), calling _handleSave',
+                '[EditMemoForm] Command+Enter detected, calling _handleSave',
               );
             }
             _handleSave();
