@@ -340,17 +340,19 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
               ),
             ),
             child: ClipRRect(
+              // Ensures content stays within rounded corners
               borderRadius: BorderRadius.circular(12),
-              // Use a Stack for better layout control during transitions
               child: Stack(
-                clipBehavior: Clip.hardEdge,
+                // Use Stack for potential layering if needed later
+                clipBehavior: Clip.hardEdge, // Clip overflow from children
                 children: [
-                  // Main content column - this will clip automatically due to parent constraints
+                  // Main content column
                   Column(
+                    // Use max size to fill the AnimatedContainer height
                     mainAxisSize: MainAxisSize.max,
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      // Drag indicator pill - always visible but with minimal height
+                      // Drag indicator pill - minimal height, always visible
                       Container(
                         width: 40,
                         height: 3, // Reduced height
@@ -361,31 +363,37 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
                         ),
                       ),
 
-                      // Text field area - take minimal space in collapsed state
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-                        child: ConstrainedBox(
-                          constraints: BoxConstraints(
-                            maxHeight: _isExpanded ? double.infinity : 40,
+                      // Content Area: Use Expanded to fill remaining vertical space
+                      Expanded(
+                        child: Padding(
+                          // Apply consistent padding within the main content area
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 2,
                           ),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              // Text field - either expanded input or compact placeholder
-                              Expanded(
-                                child: _isExpanded
-                                        ? RawKeyboardListener(
-                                          focusNode: FocusNode(),
+                          child:
+                              _isExpanded
+                                  // Expanded State: TextField + Buttons Column
+                                  ? Column(
+                                    children: [
+                                      Expanded(
+                                        // TextField takes available space in the nested Column
+                                        child: RawKeyboardListener(
+                                          focusNode:
+                                              FocusNode(), // Use a local focus node for listener
                                           onKey: _handleKeyEvent,
                                           child: TextField(
                                             controller: _textController,
-                                            focusNode: _focusNode,
+                                            focusNode:
+                                                _focusNode, // Use the state's focus node for input
                                             decoration: InputDecoration(
                                               hintText: hintText,
                                               border: InputBorder.none,
                                               isDense:
                                                   true, // More compact layout
-                                              contentPadding: EdgeInsets.zero,
+                                              contentPadding:
+                                                  EdgeInsets
+                                                      .zero, // Remove extra padding
                                             ),
                                             maxLines:
                                                 null, // Allow multiple lines
@@ -397,94 +405,100 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
                                             textCapitalization:
                                                 TextCapitalization.sentences,
                                             onSubmitted: (_) {
-                                              if (!_isSubmitting) {
+                                              if (!_isSubmitting)
                                                 _handleSubmit();
-                                              }
                                             },
                                           ),
-                                        )
-                                        : SizedBox(
-                                          height:
-                                              30, // Reduced height for collapsed state
-                                          child: Align(
-                                            alignment: Alignment.centerLeft,
-                                            child: Text(
-                                              placeholderText,
-                                              style: TextStyle(
-                                                fontSize: 14, // Smaller text
-                                                color:
-                                                    isDarkMode
-                                                        ? Colors.grey[400]
-                                                        : Colors.grey[600],
-                                              ),
-                                              overflow:
-                                                  TextOverflow
-                                                      .ellipsis, // Prevent text overflow
-                                            ),
-                                          ),
                                         ),
-                              ),
-                            ],
-                          ),
+                                      ),
+                                      // Buttons row at the bottom when expanded
+                                      Padding(
+                                        padding: const EdgeInsets.only(
+                                          top: 4,
+                                          bottom: 4,
+                                        ), // Space buttons from text field
+                                        child: Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            // Paste button
+                                            TextButton.icon(
+                                              onPressed: _handlePaste,
+                                              icon: const Icon(
+                                                Icons.content_paste,
+                                                size: 16,
+                                              ),
+                                              label: const Text('Paste'),
+                                              style: TextButton.styleFrom(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 12,
+                                                      vertical: 6,
+                                                    ),
+                                                minimumSize: Size.zero,
+                                                tapTargetSize:
+                                                    MaterialTapTargetSize
+                                                        .shrinkWrap,
+                                              ),
+                                            ),
+                                            // Submit button
+                                            ElevatedButton(
+                                              onPressed:
+                                                  _isSubmitting
+                                                      ? null
+                                                      : _handleSubmit,
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor:
+                                                    Theme.of(
+                                                      context,
+                                                    ).colorScheme.primary,
+                                                foregroundColor: Colors.white,
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 16,
+                                                      vertical: 6,
+                                                    ),
+                                                minimumSize: Size.zero,
+                                              ),
+                                              child:
+                                                  _isSubmitting
+                                                      ? const SizedBox(
+                                                        width: 16,
+                                                        height: 16,
+                                                        child:
+                                                            CircularProgressIndicator(
+                                                              strokeWidth: 2,
+                                                              color:
+                                                                  Colors.white,
+                                                            ),
+                                                      )
+                                                      : Text(buttonText),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  )
+                                  // Collapsed State: Simple Placeholder Text
+                                  : Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: Text(
+                                      placeholderText,
+                                      style: TextStyle(
+                                        fontSize: 14, // Smaller text
+                                        color:
+                                            isDarkMode
+                                                ? Colors.grey[400]
+                                                : Colors.grey[600],
+                                      ),
+                                      overflow:
+                                          TextOverflow
+                                              .ellipsis, // Prevent text overflow
+                                      maxLines: 1, // Ensure single line
+                                    ),
+                                  ),
                         ),
                       ),
-
-                      // Empty SizedBox to take up any remaining space when collapsed
-                      if (!_isExpanded) const Spacer(),
-
-                      // Buttons row - only visible when expanded
-                      if (_isExpanded)
-                        Expanded(
-                          child: Container(
-                            alignment: Alignment.bottomCenter,
-                            padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                // Paste button
-                                TextButton.icon(
-                                  onPressed: _handlePaste,
-                                  icon: const Icon(Icons.content_paste, size: 16),
-                                  label: const Text('Paste'),
-                                  style: TextButton.styleFrom(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 12,
-                                      vertical: 6, // Slightly smaller padding
-                                    ),
-                                    minimumSize: Size.zero,
-                                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                  ),
-                                ),
-
-                                // Submit button
-                                ElevatedButton(
-                                  onPressed: _isSubmitting ? null : _handleSubmit,
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor:
-                                        Theme.of(context).colorScheme.primary,
-                                    foregroundColor: Colors.white,
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 16,
-                                      vertical: 6, // Slightly smaller padding
-                                    ),
-                                    minimumSize: Size.zero,
-                                  ),
-                                  child:
-                                      _isSubmitting
-                                          ? const SizedBox(
-                                            width: 16,
-                                            height: 16,
-                                            child: CircularProgressIndicator(
-                                              strokeWidth: 2,
-                                              color: Colors.white,
-                                            ),
-                                          )
-                                          : Text(buttonText),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
                     ],
                   ),
                 ],
