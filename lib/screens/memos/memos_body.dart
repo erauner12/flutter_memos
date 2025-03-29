@@ -108,15 +108,54 @@ class _MemosBodyState extends ConsumerState<MemosBody>
               memos.where((memo) => !hiddenIds.contains(memo.id)).toList();
 
           if (visibleMemos.isEmpty) {
-            return const MemosEmptyState();
+            // Wrap MemosEmptyState with RefreshIndicator as well,
+            // so user can refresh even when the list is empty.
+            return RefreshIndicator(
+              onRefresh: () async {
+                if (kDebugMode) {
+                  print('[MemosBody] Refresh triggered (empty state)');
+                }
+                // Invalidate the memosProvider to force refresh
+                ref.invalidate(memosProvider);
+                // Wait for the memosProvider future to complete to signal
+                // the RefreshIndicator that the refresh is done.
+                await ref.read(memosProvider.future);
+              },
+              child: LayoutBuilder(
+                // Use LayoutBuilder to ensure ListView constraints
+                builder: (context, constraints) {
+                  return SingleChildScrollView(
+                    // Make it scrollable for refresh
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        minHeight: constraints.maxHeight,
+                      ),
+                      child: const MemosEmptyState(),
+                    ),
+                  );
+                },
+              ),
+            );
           }
 
+          // Wrap the ListView.builder with RefreshIndicator
           return RefreshIndicator(
             onRefresh: () async {
+              if (kDebugMode) {
+                print('[MemosBody] Refresh triggered');
+              }
               // Invalidate the memosProvider to force refresh
               ref.invalidate(memosProvider);
+              // Wait for the memosProvider future to complete to signal
+              // the RefreshIndicator that the refresh is done.
+              // This ensures the indicator animation stops correctly.
+              await ref.read(memosProvider.future);
             },
             child: ListView.builder(
+              // Ensure the ListView is always scrollable to allow pull-to-refresh
+              // even if the content fits on the screen.
+              physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.all(16.0),
               itemCount: visibleMemos.length,
               itemBuilder: (context, index) {
@@ -127,6 +166,8 @@ class _MemosBodyState extends ConsumerState<MemosBody>
           );
         },
         loading: () {
+          // Do not wrap loading state in RefreshIndicator,
+          // as it doesn't make sense to refresh while already loading.
           return const Center(
             child: Padding(
               padding: EdgeInsets.all(20.0),
@@ -135,14 +176,38 @@ class _MemosBodyState extends ConsumerState<MemosBody>
           );
         },
         error: (error, stackTrace) {
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.all(20.0),
-              child: Text(
-                'Error loading memos: ${error.toString().substring(0, math.min(error.toString().length, 100))}',
-                style: const TextStyle(color: Colors.red),
-                textAlign: TextAlign.center,
-              ),
+          // Optionally wrap error state in RefreshIndicator to allow retrying.
+          return RefreshIndicator(
+            onRefresh: () async {
+              if (kDebugMode) {
+                print('[MemosBody] Refresh triggered (error state)');
+              }
+              ref.invalidate(memosProvider);
+              await ref.read(memosProvider.future);
+            },
+            child: LayoutBuilder(
+              // Use LayoutBuilder for constraints
+              builder: (context, constraints) {
+                return SingleChildScrollView(
+                  // Make it scrollable for refresh
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minHeight: constraints.maxHeight,
+                    ),
+                    child: Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(20.0),
+                        child: Text(
+                          'Error loading memos: ${error.toString().substring(0, math.min(error.toString().length, 100))}\nPull down to retry.',
+                          style: const TextStyle(color: Colors.red),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              }
             ),
           );
         },
