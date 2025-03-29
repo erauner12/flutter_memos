@@ -13,17 +13,23 @@ void main() {
       final captureUtilityFinder = find.byType(CaptureUtility);
       expect(captureUtilityFinder, findsOneWidget);
 
-      // Tap placeholder if collapsed
-      final placeholderFinder = find.text('Capture something ...');
-      if (placeholderFinder.evaluate().isNotEmpty) {
-        await tester.tap(placeholderFinder);
-        await tester.pumpAndSettle();
-      }
+      // Tap the CaptureUtility widget itself to expand it, instead of the text
+      await tester.tap(captureUtilityFinder);
+      // Wait for the expansion animation to complete
+      await tester.pumpAndSettle(const Duration(milliseconds: 500));
 
-      // Enter text
+      // Enter text - Now the TextField should be present
       final textFieldFinder = find.byType(TextField);
-      expect(textFieldFinder, findsAtLeastNWidgets(1));
-      await tester.enterText(textFieldFinder.first, content);
+      // Use findsOneWidget as there should only be one TextField in the expanded utility
+      expect(
+        textFieldFinder,
+        findsOneWidget,
+        reason: 'TextField not found after expanding CaptureUtility',
+      );
+      await tester.enterText(
+        textFieldFinder,
+        content,
+      ); // Use the found finder directly
       await tester.pumpAndSettle();
 
       // Tap Add Memo
