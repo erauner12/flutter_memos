@@ -32,26 +32,44 @@ class MemosEmptyState extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final timeFilterOption = ref.watch(timeFilterProvider);
     final statusFilterOption = ref.watch(statusFilterProvider);
+    final isDarkMode =
+        Theme.of(context).brightness == Brightness.dark; // Check dark mode
 
+    // The main Column for the empty state content
     return Column(
+      // mainAxisAlignment: MainAxisAlignment.center, // Optional: Uncomment to center everything vertically
       children: [
         // Indicator for active filters with no results
         if (timeFilterOption != 'all' || statusFilterOption != 'all')
           Container(
+            // Keep existing filter info container setup
             margin: const EdgeInsets.all(16),
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Colors.amber.shade100,
+              color:
+                  isDarkMode
+                      ? Colors.amber.shade900.withOpacity(0.3)
+                      : Colors.amber.shade100, // Dark mode color
               borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                // Add border for better visibility in dark mode
+                color:
+                    isDarkMode ? Colors.amber.shade800 : Colors.amber.shade300,
+                width: 1,
+              ),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Keep existing filter info content (Row, Text, Buttons etc.)
                 Row(
                   children: [
                     Icon(
                       Icons.filter_alt,
-                      color: Colors.amber.shade800,
+                      color:
+                          isDarkMode
+                              ? Colors.amber.shade300
+                              : Colors.amber.shade800, // Dark mode icon color
                       size: 20,
                     ),
                     const SizedBox(width: 8),
@@ -60,7 +78,12 @@ class MemosEmptyState extends ConsumerWidget {
                         'No memos found with the current filters',
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
-                          color: Colors.amber.shade900,
+                          color:
+                              isDarkMode
+                                  ? Colors.amber.shade200
+                                  : Colors
+                                      .amber
+                                      .shade900, // Dark mode text color
                         ),
                       ),
                     ),
@@ -74,7 +97,12 @@ class MemosEmptyState extends ConsumerWidget {
                       children: [
                         Text(
                           '• Status filter: $statusFilterOption',
-                          style: TextStyle(color: Colors.amber.shade900),
+                          style: TextStyle(
+                            color:
+                                isDarkMode
+                                    ? Colors.amber.shade200
+                                    : Colors.amber.shade900,
+                          ), // Dark mode text color
                         ),
                         const Spacer(),
                         TextButton(
@@ -86,6 +114,12 @@ class MemosEmptyState extends ConsumerWidget {
                             ),
                             minimumSize: const Size(0, 24),
                             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            foregroundColor:
+                                isDarkMode
+                                    ? Colors.amber.shade100
+                                    : Theme.of(context)
+                                        .colorScheme
+                                        .primary, // Dark mode button color
                           ),
                           child: const Text('Clear'),
                         ),
@@ -99,7 +133,12 @@ class MemosEmptyState extends ConsumerWidget {
                       children: [
                         Text(
                           '• Time filter: $timeFilterOption',
-                          style: TextStyle(color: Colors.amber.shade900),
+                          style: TextStyle(
+                            color:
+                                isDarkMode
+                                    ? Colors.amber.shade200
+                                    : Colors.amber.shade900,
+                          ), // Dark mode text color
                         ),
                         const Spacer(),
                         TextButton(
@@ -111,6 +150,12 @@ class MemosEmptyState extends ConsumerWidget {
                             ),
                             minimumSize: const Size(0, 24),
                             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            foregroundColor:
+                                isDarkMode
+                                    ? Colors.amber.shade100
+                                    : Theme.of(context)
+                                        .colorScheme
+                                        .primary, // Dark mode button color
                           ),
                           child: const Text('Clear'),
                         ),
@@ -126,26 +171,47 @@ class MemosEmptyState extends ConsumerWidget {
                     },
                     icon: const Icon(Icons.clear_all, size: 16),
                     label: const Text('Clear All Filters'),
+                    style: TextButton.styleFrom(
+                      // Ensure consistent styling
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      minimumSize: const Size(0, 30),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      foregroundColor:
+                          isDarkMode
+                              ? Colors.amber.shade100
+                              : Theme.of(
+                                context,
+                              ).colorScheme.primary, // Dark mode button color
+                    ),
                   ),
                 ),
               ],
             ),
           ),
 
-        // Use Flexible instead of Expanded for better adaptability in this context
-        const Flexible(
-          child: Center(
+        // REMOVED the Expanded widget that previously wrapped this Center.
+        // The Center widget now renders directly below the filter info container.
+        Center(
+          child: Padding(
+            padding: const EdgeInsets.all(16.0), // Keep padding for spacing
             child: Text(
               'No memos found.',
               style: TextStyle(
                 fontSize: 16,
                 fontStyle: FontStyle.italic,
-                color: Colors.grey,
+                color:
+                    Colors
+                        .grey[600], // Slightly darker grey, works okay in both modes
               ),
               textAlign: TextAlign.center,
             ),
           ),
         ),
+        // Optional: If you need the text pushed further down, uncomment Spacer
+        // Spacer(),
       ],
     );
   }
