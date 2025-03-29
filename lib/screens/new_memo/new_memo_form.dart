@@ -158,17 +158,17 @@ class _NewMemoFormState extends ConsumerState<NewMemoForm>
     return Focus(
       focusNode: _formFocusNode,
       onKeyEvent: (node, event) {
-        // Explicitly check for Command+Enter first
+        // Explicitly check for Command+Enter first using event properties
         if (event is KeyDownEvent &&
             event.logicalKey == LogicalKeyboardKey.enter &&
-            HardwareKeyboard.instance.isLogicalKeyPressed(
-              LogicalKeyboardKey.meta,
-            )) {
+            HardwareKeyboard.instance.isMetaPressed) {
+          // Use HardwareKeyboard.instance.isMetaPressed
           if (!_loading) {
             // Prevent double submission
             if (kDebugMode) {
+              // Ensure this debug print exists
               print(
-                '[NewMemoForm] Command+Enter detected, calling _handleCreateMemo',
+                '[NewMemoForm] Command+Enter detected (using HardwareKeyboard.instance.isMetaPressed), calling _handleCreateMemo',
               );
             }
             _handleCreateMemo();
@@ -183,7 +183,6 @@ class _NewMemoFormState extends ConsumerState<NewMemoForm>
         }
 
         // Handle other keys (like Escape) using the mixin
-        // REMOVED onSubmit parameter from this call
         final result = handleKeyEvent(
           event,
           ref,

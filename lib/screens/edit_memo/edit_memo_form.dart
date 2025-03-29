@@ -154,17 +154,17 @@ class _EditMemoFormState extends ConsumerState<EditMemoForm>
     return Focus(
       focusNode: _formFocusNode,
       onKeyEvent: (node, event) {
-        // Explicitly check for Command+Enter first
+        // Explicitly check for Command+Enter first using event properties
         if (event is KeyDownEvent &&
             event.logicalKey == LogicalKeyboardKey.enter &&
-            HardwareKeyboard.instance.isLogicalKeyPressed(
-              LogicalKeyboardKey.meta,
-            )) {
+            event.isMetaPressed) {
+          // Use event.isMetaPressed
           if (!_saving) {
             // Prevent double submission
             if (kDebugMode) {
+              // Ensure this debug print exists
               print(
-                '[EditMemoForm] Command+Enter detected, calling _handleSave',
+                '[EditMemoForm] Command+Enter detected (using event.isMetaPressed), calling _handleSave',
               );
             }
             _handleSave();
@@ -179,7 +179,6 @@ class _EditMemoFormState extends ConsumerState<EditMemoForm>
         }
 
         // Handle other keys (like Escape) using the mixin
-        // REMOVED onSubmit parameter from this call
         final result = handleKeyEvent(
           event,
           ref,
