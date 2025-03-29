@@ -1,3 +1,5 @@
+import 'dart:ui' show lerpDouble; // Import lerpDouble
+
 import 'package:flutter/material.dart';
 import 'package:flutter/physics.dart';
 import 'package:flutter/services.dart';
@@ -78,14 +80,18 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
   }
 
   // Helper method to start physics-based animation
-  void _animateTo(double targetValue) {
+  void _animateTo(double targetValue, {double? velocity}) {
+    // Add optional velocity parameter
     _animationController.stop();
+
+    // Use the provided velocity if available, otherwise use the controller's current velocity
+    final simulationVelocity = velocity ?? _animationController.velocity;
 
     final simulation = SpringSimulation(
       _springDescription,
       _animationController.value,
       targetValue,
-      _animationController.velocity,
+      simulationVelocity, // Pass the determined velocity here
     );
 
     _animationController.animateWith(simulation).whenCompleteOrCancel(() {
@@ -136,19 +142,25 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
     _isDragging = false;
 
     final dragVelocity = details.primaryVelocity ?? 0.0;
-    _animationController.velocity =
+    // Calculate velocity relative to the controller's 0.0-1.0 scale
+    final simulationVelocity =
         -dragVelocity / (_expandedHeight - _collapsedHeight);
 
     final currentFraction = _animationController.value;
     double targetValue;
 
-    if (_animationController.velocity.abs() > 0.5) {
-      targetValue = _animationController.velocity < 0 ? 1.0 : 0.0;
+    // Use absolute velocity for threshold check
+    if (simulationVelocity.abs() > 0.5) {
+      targetValue =
+          simulationVelocity < 0
+              ? 1.0
+              : 0.0; // Negative velocity -> expand (target 1.0)
     } else {
       targetValue = currentFraction > 0.5 ? 1.0 : 0.0;
     }
 
-    _animateTo(targetValue);
+    // Pass the calculated velocity to _animateTo
+    _animateTo(targetValue, velocity: simulationVelocity);
   }
 
   void _handleDragStart(DragStartDetails details) {
@@ -244,14 +256,17 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
     }
   }
 
-  void _handleKeyEvent(RawKeyEvent event) {
-    if (event is RawKeyDownEvent) {
+  void _handleKeyEvent(KeyEvent event) {
+    // Use KeyEvent
+    if (event is KeyDownEvent) {
+      // Use KeyDownEvent
       if (event.logicalKey == LogicalKeyboardKey.escape) {
         if (_isExpanded) {
           _collapse();
         }
       } else if (event.logicalKey == LogicalKeyboardKey.enter &&
-          event.isMetaPressed) {
+          HardwareKeyboard.instance.isMetaPressed) {
+        // Use HardwareKeyboard.instance.isMetaPressed
         if (_isExpanded && !_isSubmitting) {
           _handleSubmit();
         }
@@ -338,7 +353,7 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
                         decoration: BoxDecoration(
                           color: Theme.of(
                             context,
-                          ).dividerColor.withOpacity(0.6),
+                          ).dividerColor.withAlpha((255 * 0.6).round()),
                           borderRadius: BorderRadius.circular(2),
                         ),
                       ),
@@ -353,9 +368,9 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
                                   ? Column(
                                     children: [
                                       Expanded(
-                                        child: RawKeyboardListener(
+                                        child: KeyboardListener(
                                           focusNode: FocusNode(),
-                                          onKey: _handleKeyEvent,
+                                          onKeyEvent: _handleKeyEvent,
                                           child: TextField(
                                             controller: _textController,
                                             focusNode: _focusNode,
@@ -377,8 +392,9 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
                                             textCapitalization:
                                                 TextCapitalization.sentences,
                                             onSubmitted: (_) {
-                                              if (!_isSubmitting)
+                                              if (!_isSubmitting) {
                                                 _handleSubmit();
+                                              }
                                             },
                                           ),
                                         ),
