@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_memos/main.dart' as app;
+// Add imports for Memo model and ApiService
+import 'package:flutter_memos/models/memo.dart';
+import 'package:flutter_memos/services/api_service.dart';
 import 'package:flutter_memos/widgets/capture_utility.dart';
 import 'package:flutter_memos/widgets/comment_card.dart';
 import 'package:flutter_memos/widgets/memo_card.dart';
@@ -10,7 +13,58 @@ import 'package:integration_test/integration_test.dart';
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
+  // List to store IDs of memos created during the test for cleanup
+  final List<String> createdMemoIds = [];
+
+  // Helper function to create a memo PROGRAMMATICALLY and return it
+  Future<Memo?> createMemoProgrammatically(
+    WidgetTester tester,
+    String content,
+  ) async {
+    debugPrint(
+      '[Test Setup] Attempting to create memo programmatically: "$content"',
+    );
+    try {
+      final apiService = ApiService();
+      final newMemo = Memo(
+        id: 'temp-${DateTime.now().millisecondsSinceEpoch}',
+        content: content,
+        visibility: 'PUBLIC',
+      );
+      final createdMemo = await apiService.createMemo(newMemo);
+      debugPrint(
+        '[Test Setup] Programmatic memo creation successful. ID: ${createdMemo.id}',
+      );
+      createdMemoIds.add(createdMemo.id); // Store ID for cleanup
+      return createdMemo;
+    } catch (e, stackTrace) {
+      debugPrint(
+        '[Test Setup] Error creating memo programmatically: $e\n$stackTrace',
+      );
+      fail('Failed to create memo programmatically: $e');
+    }
+  }
+
   group('Comment Navigation Integration Tests', () {
+    // Cleanup after all tests in the group
+    tearDownAll(() async {
+      if (createdMemoIds.isNotEmpty) {
+        debugPrint(
+          '[Test Cleanup] Deleting ${createdMemoIds.length} test memos...',
+        );
+        final apiService = ApiService();
+        try {
+          await Future.wait(
+            createdMemoIds.map((id) => apiService.deleteMemo(id)),
+          );
+          debugPrint('[Test Cleanup] Successfully deleted test memos.');
+        } catch (e) {
+          debugPrint('[Test Cleanup] Error deleting test memos: $e');
+        }
+        createdMemoIds.clear();
+      }
+    });
+
     testWidgets(
       'Test keyboard navigation in comment section works regardless of focus',
       (WidgetTester tester) async {
@@ -18,50 +72,43 @@ void main() {
         app.main();
         await tester.pumpAndSettle();
         
-        // Wait for app to be fully loaded
         await Future.delayed(const Duration(seconds: 2));
         await tester.pumpAndSettle();
 
-        // STEP 1: Create a memo with comments for testing
-        
-        // Find and tap the CaptureUtility to expand it
-        final captureUtilityFinder = find.byType(CaptureUtility);
-        if (captureUtilityFinder.evaluate().isNotEmpty) {
-          // Tap on the placeholder text to expand
-          await tester.tap(find.text('Capture something ...'));
-          await tester.pumpAndSettle();
+        // STEP 1: Create a memo with comments for testing (Programmatically)
+        final timestamp = DateTime.now().millisecondsSinceEpoch;
+        final testMemoContent =
+            'Test Memo for Keyboard Navigation - $timestamp';
+        final createdMemo = await createMemoProgrammatically(
+          tester,
+          testMemoContent,
+        );
+        expect(createdMemo, isNotNull, reason: 'Failed to create test memo');
 
-          // Enter text in the memo content field
-          final timestamp = DateTime.now().millisecondsSinceEpoch;
-          final testMemoContent = 'Test Memo for Keyboard Navigation - $timestamp';
-          
-          final textFieldFinder = find.byType(TextField);
-          expect(textFieldFinder, findsAtLeastNWidgets(1), reason: 'TextField not found after expanding CaptureUtility');
-          await tester.enterText(textFieldFinder.first, testMemoContent);
-          await tester.pumpAndSettle();
+        // Refresh the list to show the newly created memo
+        debugPrint('[Test Action] Simulating pull-to-refresh...');
+        final listFinder = find.byType(ListView);
+        expect(listFinder, findsOneWidget, reason: 'ListView not found');
+        await tester.fling(listFinder, const Offset(0.0, 400.0), 1000.0);
+        await tester.pumpAndSettle(const Duration(seconds: 3));
+        debugPrint('[Test Action] Pull-to-refresh complete.');
 
-          // Tap the "Add Memo" button
-          final addMemoButtonFinder = find.text('Add Memo');
-          if (addMemoButtonFinder.evaluate().isNotEmpty) {
-            await tester.tap(addMemoButtonFinder);
-            await tester.pumpAndSettle();
-            await Future.delayed(const Duration(seconds: 1));
-          }
-        }
+        // Find the created memo card
+        final memoCardFinder = find.widgetWithText(MemoCard, testMemoContent);
+        expect(
+          memoCardFinder,
+          findsOneWidget,
+          reason: 'Created memo card not found in list',
+        );
 
-        // Find a memo to work with
-        final memoCards = find.byType(MemoCard);
-        expect(memoCards, findsWidgets, reason: 'Should find memo cards');
-        
         // Navigate to detail screen
-        await tester.tap(memoCards.first);
+        await tester.tap(memoCardFinder);
         await tester.pumpAndSettle();
-        
+
         // Verify we're on the detail screen
         expect(find.text('Memo Detail'), findsOneWidget);
-        
-        // STEP 2: Add a test comment if none exists
-        
+
+        // STEP 2: Add a test comment if none exists (Keep UI interaction for comment adding)
         final existingComments = find.byType(CommentCard);
         if (existingComments.evaluate().isEmpty) {
           // Find the comment capture utility

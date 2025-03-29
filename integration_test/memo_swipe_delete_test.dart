@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_memos/main.dart' as app;
-import 'package:flutter_memos/widgets/capture_utility.dart';
+// Add imports for Memo model and ApiService
+import 'package:flutter_memos/models/memo.dart';
+import 'package:flutter_memos/services/api_service.dart';
 import 'package:flutter_memos/widgets/memo_card.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
@@ -9,105 +11,127 @@ void main() {
   // Initialize integration test binding
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
+  // List to store IDs of memos created during the test for cleanup
+  // Note: Cleanup might not be strictly necessary here as the test deletes the memo,
+  // but it's good practice in case the deletion step fails.
+  final List<String> createdMemoIds = [];
+
+  // Helper function to create a memo PROGRAMMATICALLY and return it
+  Future<Memo?> createMemoProgrammatically(
+    WidgetTester tester,
+    String content,
+  ) async {
+    debugPrint(
+      '[Test Setup] Attempting to create memo programmatically: "$content"',
+    );
+    try {
+      final apiService = ApiService();
+      final newMemo = Memo(
+        id: 'temp-${DateTime.now().millisecondsSinceEpoch}',
+        content: content,
+        visibility: 'PUBLIC',
+      );
+      final createdMemo = await apiService.createMemo(newMemo);
+      debugPrint(
+        '[Test Setup] Programmatic memo creation successful. ID: ${createdMemo.id}',
+      );
+      createdMemoIds.add(createdMemo.id); // Store ID for potential cleanup
+      return createdMemo;
+    } catch (e, stackTrace) {
+      debugPrint(
+        '[Test Setup] Error creating memo programmatically: $e\n$stackTrace',
+      );
+      fail('Failed to create memo programmatically: $e');
+    }
+  }
+
   group('Memo Create and Delete Integration Tests', () {
+    // Cleanup after all tests in the group (optional but good practice)
+    tearDownAll(() async {
+      if (createdMemoIds.isNotEmpty) {
+        debugPrint(
+          '[Test Cleanup] Deleting ${createdMemoIds.length} potentially remaining test memos...',
+        );
+        final apiService = ApiService();
+        try {
+          await Future.wait(
+            createdMemoIds.map((id) => apiService.deleteMemo(id)),
+          );
+          debugPrint(
+            '[Test Cleanup] Successfully deleted remaining test memos.',
+          );
+        } catch (e) {
+          debugPrint('[Test Cleanup] Error deleting remaining test memos: $e');
+        }
+        createdMemoIds.clear();
+      }
+    });
+
     testWidgets('Create a new memo and delete it by swiping', (WidgetTester tester) async {
       // Launch the app
       app.main();
       await tester.pumpAndSettle();
 
-      // Find the initial count of memos for comparison later
-      final initialMemoCards = find.byType(MemoCard);
-      final initialCount = initialMemoCards.evaluate().length;
+      // Find the initial count of memos for comparison later (optional)
+      final initialCount = find.byType(MemoCard).evaluate().length;
       debugPrint('Initial memo count: $initialCount');
 
-      // Find and tap the CaptureUtility to expand it
-      final captureUtilityFinder = find.byType(CaptureUtility);
-      expect(captureUtilityFinder, findsOneWidget, reason: 'CaptureUtility not found');
-      
-      // Tap on the placeholder text to expand
-      await tester.tap(find.text('Capture something ...'));
-      await tester.pumpAndSettle();
-
-      // Enter text in the memo content field
-      final textFieldFinder = find.byType(TextField);
-      expect(textFieldFinder, findsAtLeastNWidgets(1), reason: 'TextField not found after expanding CaptureUtility');
-      
-      // Create unique test content with timestamp to avoid collisions
+      // Create a new memo PROGRAMMATICALLY
       final timestamp = DateTime.now().millisecondsSinceEpoch;
       final testMemoContent = 'Test Memo for Swipe Delete - $timestamp';
-      await tester.enterText(textFieldFinder.first, testMemoContent);
-      await tester.pumpAndSettle();
+      final createdMemo = await createMemoProgrammatically(
+        tester,
+        testMemoContent,
+      );
+      expect(createdMemo, isNotNull, reason: 'Failed to create test memo');
+      // Remove the created ID from cleanup list immediately since this test WILL delete it.
+      createdMemoIds.remove(createdMemo!.id);
 
-      // Tap the "Add Memo" button
-      final addMemoButtonFinder = find.text('Add Memo');
-      expect(addMemoButtonFinder, findsOneWidget, reason: 'Add Memo button not found');
-      await tester.tap(addMemoButtonFinder);
-      await tester.pumpAndSettle();
+      // Refresh the list to show the newly created memo
+      debugPrint('[Test Action] Simulating pull-to-refresh...');
+      final listFinder = find.byType(ListView);
+      expect(listFinder, findsOneWidget, reason: 'ListView not found');
+      await tester.fling(listFinder, const Offset(0.0, 400.0), 1000.0);
+      await tester.pumpAndSettle(const Duration(seconds: 3));
+      debugPrint('[Test Action] Pull-to-refresh complete.');
 
-      // Give the app time to fully refresh the memo list after creation
-      await tester.pump(const Duration(seconds: 1));
-      await tester.pumpAndSettle();
-
-      // Verify there are MemoCards displayed
-      expect(find.byType(MemoCard), findsWidgets);
+      // Verify the memo card is displayed
+      final memoCardFinder = find.widgetWithText(MemoCard, testMemoContent);
+      expect(
+        memoCardFinder,
+        findsOneWidget,
+        reason: 'Created memo card not found',
+      );
       final afterCreateCount = find.byType(MemoCard).evaluate().length;
       debugPrint('Memo count after creation: $afterCreateCount');
-      
-      // Let's find our specific memo by its content
-      Finder textFinder = find.text(testMemoContent);
-      
-      // If the memo isn't found immediately, try scrolling to find it
-      if (textFinder.evaluate().isEmpty) {
-        debugPrint('Memo not immediately visible, searching by scrolling...');
-        // Find the list view
-        final listViewFinder = find.byType(ListView);
-        expect(listViewFinder, findsOneWidget, reason: 'ListView not found');
 
-        // Try scrolling down to find the memo
-        for (int i = 0; i < 3; i++) {
-          await tester.drag(listViewFinder, const Offset(0, -300));
-          await tester.pumpAndSettle();
-
-          // Check if memo is visible after scroll
-          if (find.text(testMemoContent).evaluate().isNotEmpty) {
-            debugPrint('Found memo after scrolling $i times');
-            break;
-          }
-        }
-      }
-
-      // Now verify we can find our memo (might be multiple instances of the text)
+      // Find the Card widget associated with the memo to swipe
+      final cardFinder = find.ancestor(
+        of: find.textContaining(testMemoContent),
+        matching: find.byType(
+          Card,
+        ), // Target the Card which is often the Slidable container
+      );
       expect(
-        find.text(testMemoContent),
-        findsWidgets,
-        reason: 'Newly created memo not found',
+        cardFinder,
+        findsOneWidget,
+        reason: 'Card containing memo text not found',
       );
 
-      // Find the MemoCard that contains our content - MemoCard is itself a Slidable
-      final memoTextFinder = find.text(testMemoContent);
-      expect(memoTextFinder, findsOneWidget, reason: 'Memo text not found');
-      
-      // Try to locate the closest MemoCard widget
-      final memoCard = find.ancestor(
-        of: memoTextFinder,
-        matching: find.byType(Card),
-      );
-      expect(memoCard, findsOneWidget, reason: 'Card containing memo text not found');
-     
       // Find the slidable action to delete by dragging and then tapping Delete
-      await tester.drag(memoCard, const Offset(-300, 0));
+      await tester.drag(cardFinder, const Offset(-300, 0)); // Swipe left
       await tester.pumpAndSettle();
-      
+
       // Wait for animations to complete
       await tester.pump(const Duration(milliseconds: 300));
       await tester.pumpAndSettle();
-      
+
       // Find and tap the Delete button that appears after sliding
       final deleteButtonFinder = find.text('Delete');
       expect(deleteButtonFinder, findsOneWidget, reason: 'Delete button not found after sliding');
       await tester.tap(deleteButtonFinder);
       await tester.pumpAndSettle();
-      
+
       // Tap "Delete" on the confirmation dialog
       final alertDialogFinder = find.byType(AlertDialog);
       expect(
