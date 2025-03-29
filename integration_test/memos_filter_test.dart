@@ -8,36 +8,41 @@ import 'package:integration_test/integration_test.dart';
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   group('Memos Filter Integration Tests', () {
-    // Helper function to create a memo PROGRAMMATICALLY
-    Future<void> createMemo(WidgetTester tester, String content) async {
+    // List to store IDs of memos created during the test for cleanup
+    final List<String> createdMemoIds = [];
+
+    // Helper function to create a memo PROGRAMMATICALLY and return it
+    Future<Memo?> createMemo(WidgetTester tester, String content) async {
       debugPrint('Attempting to create memo programmatically: "$content"');
       try {
         // Instantiate the ApiService directly
         final apiService = ApiService();
 
         // Create a Memo object
-        // NOTE: Adjust visibility, parent, etc. if needed based on your API requirements
         final newMemo = Memo(
-          id: 'temp-${DateTime.now().millisecondsSinceEpoch}', // Temporary ID, API will assign real one
+          id: 'temp-${DateTime.now().millisecondsSinceEpoch}', // Temporary ID
           content: content,
           visibility: 'PUBLIC', // Or appropriate default
-          // parent: 'users/1', // Often required by the API
         );
 
-        // Call the API service to create the memo
-        // Pass only the memo object as the createMemo method expects just one argument
-        await apiService.createMemo(newMemo);
+        // Call the API service to create the memo and get the result
+        final createdMemo = await apiService.createMemo(newMemo);
 
-        debugPrint('Programmatic memo creation successful for: "$content"');
+        debugPrint(
+          'Programmatic memo creation successful for: "$content" with ID: ${createdMemo.id}',
+        );
 
-        // IMPORTANT: Pump and settle AFTER the API call to allow the memo list
-        // provider (memosProvider) to refresh and the UI to update.
-        await tester.pumpAndSettle(const Duration(seconds: 2)); // Allow ample time for refresh
+        // Store the ID for cleanup
+        createdMemoIds.add(createdMemo.id);
+
+        return createdMemo;
 
       } catch (e, stackTrace) {
         debugPrint('Error creating memo programmatically: $e\n$stackTrace');
         // Fail the test explicitly if setup fails
         fail('Failed to create memo programmatically: $e');
+        // Return null or rethrow, depending on desired error handling
+        return null;
       }
     }
 
@@ -68,41 +73,121 @@ void main() {
       await tester.pump(const Duration(seconds: 2)); // Wait for initial load
 
       // --- Test Setup ---
-      // Use more distinct content for programmatic creation
-      const taggedMemoContent = 'Tagged Filter Test Memo #testtag';
-      const untaggedMemoContent = 'Untagged Filter Test Memo';
+      // Generate unique content using timestamp
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final taggedMemoContent = 'Tagged Filter Test Memo #testtag $timestamp';
+      final untaggedMemoContent = 'Untagged Filter Test Memo $timestamp';
 
-      // Create memos PROGRAMMATICALLY
+      // Create memos PROGRAMMATICALLY and store them (optional, IDs are stored in createMemo)
       await createMemo(tester, taggedMemoContent);
       await createMemo(tester, untaggedMemoContent);
 
-      // Finders for the memos (use more specific text now)
-      final taggedMemoFinder = find.textContaining('Tagged Filter Test Memo #testtag');
-      final untaggedMemoFinder = find.textContaining('Untagged Filter Test Memo');
+      // --- Explicit Refresh ---
+      // Find the ListView associated with the RefreshIndicator
+      final listFinder = find.byType(ListView);
+      expect(
+        listFinder,
+        findsOneWidget,
+        reason: 'ListView should be present to refresh',
+      );
 
-      // --- Start Filter Testing ---
+      // Simulate the pull-to-refresh gesture
+      debugPrint(
+        '[Test Action] Simulating pull-to-refresh to load created memos...',
+      );
+      await tester.fling(listFinder, const Offset(0.0, 400.0), 1000.0);
+      // Wait for the refresh indicator and data loading
+      await tester.pumpAndSettle(
+        const Duration(seconds: 3),
+      ); // Allow time for API call + UI update
+      debugPrint('[Test Action] Pull-to-refresh simulation complete.');
+      // --- End Explicit Refresh ---
+
+
+// Finders for the memos: Use byWidgetPredicate for precise targeting
+      Finder findCardWithText(String text) {
+        return find.byWidgetPredicate(
+          (Widget widget) =>
+              widget is Card && // Check if the widget is a Card
+              find // Check if this Card has a descendant Text/RichText with the specific content
+                  .descendant(
+                    of: find.byWidget(
+                      widget,
+                    ), // Search within this specific Card widget
+                    matching: find.textContaining(text, findRichText: true),
+                  )
+                  .evaluate() // Check if the descendant finder finds anything
+                  .isNotEmpty,
+          description:
+              'Card containing text "$text"', // Description for debugging
+        );
+}
+
+final taggedMemoCardFinder = findCardWithText(taggedMemoContent);
+      final untaggedMemoCardFinder = findCardWithText(untaggedMemoContent);
+
+
+// --- Start Filter Testing ---
       // Explicitly set to 'All Status' first for a clean start.
       await selectFilterOption(tester, 'Filter by Status', 'All Status');
-      expect(taggedMemoFinder, findsOneWidget, reason: 'Tagged memo should be visible with "All Status" filter');
-      expect(untaggedMemoFinder, findsOneWidget, reason: 'Untagged memo should be visible with "All Status" filter');
+      // Assert based on the Card finder now
+      expect(
+        taggedMemoCardFinder,
+        findsOneWidget,
+        reason: 'Tagged memo card should be visible with "All Status" filter',
+      );
+      expect(
+        untaggedMemoCardFinder,
+        findsOneWidget,
+        reason: 'Untagged memo card should be visible with "All Status" filter',
+      );
 
 
       // --- Test Untagged Filter ---
       await selectFilterOption(tester, 'Filter by Status', 'Untagged');
-      expect(taggedMemoFinder, findsNothing, reason: 'Tagged memo should NOT be visible with "Untagged" filter');
-      expect(untaggedMemoFinder, findsOneWidget, reason: 'Untagged memo should be visible with "Untagged" filter');
+      // Assert based on the Card finder now
+      expect(
+        taggedMemoCardFinder,
+        findsNothing,
+        reason: 'Tagged memo card should NOT be visible with "Untagged" filter',
+      );
+      expect(
+        untaggedMemoCardFinder,
+        findsOneWidget,
+        reason: 'Untagged memo card should be visible with "Untagged" filter',
+      );
 
 
       // --- Test Tagged Filter ---
       await selectFilterOption(tester, 'Filter by Status', 'Tagged');
-      expect(taggedMemoFinder, findsOneWidget, reason: 'Tagged memo should be visible with "Tagged" filter');
-      expect(untaggedMemoFinder, findsNothing, reason: 'Untagged memo should NOT be visible with "Tagged" filter');
+      // Assert based on the Card finder now
+      expect(
+        taggedMemoCardFinder,
+        findsOneWidget,
+        reason: 'Tagged memo card should be visible with "Tagged" filter',
+      );
+      expect(
+        untaggedMemoCardFinder,
+        findsNothing,
+        reason: 'Untagged memo card should NOT be visible with "Tagged" filter',
+      );
 
 
       // --- Test All Status Filter ---
       await selectFilterOption(tester, 'Filter by Status', 'All Status');
-      expect(taggedMemoFinder, findsOneWidget, reason: 'Tagged memo should be visible again with "All Status" filter');
-      expect(untaggedMemoFinder, findsOneWidget, reason: 'Untagged memo should be visible again with "All Status" filter');
+      // Assert based on the Card finder now
+      expect(
+        taggedMemoCardFinder,
+        findsOneWidget,
+        reason:
+            'Tagged memo card should be visible again with "All Status" filter',
+      );
+      expect(
+        untaggedMemoCardFinder,
+        findsOneWidget,
+        reason:
+            'Untagged memo card should be visible again with "All Status" filter',
+      );
 
       // --- Test Time Filter (Basic Interaction) ---
       await selectFilterOption(tester, 'Filter by Time Range', 'Today');
@@ -111,6 +196,29 @@ void main() {
       await selectFilterOption(tester, 'Filter by Time Range', 'All Time');
       debugPrint('Resetting Time filter to All Time.');
 
+    });
+
+    // Cleanup after all tests in the group
+    tearDownAll(() async {
+      if (createdMemoIds.isNotEmpty) {
+        debugPrint(
+          '[Test Cleanup] Deleting ${createdMemoIds.length} test memos...',
+        );
+        final apiService = ApiService();
+        try {
+          // Delete memos in parallel
+          await Future.wait(
+            createdMemoIds.map((id) => apiService.deleteMemo(id)),
+          );
+          debugPrint('[Test Cleanup] Successfully deleted test memos.');
+        } catch (e) {
+          debugPrint('[Test Cleanup] Error deleting test memos: $e');
+          // Don't fail the test for cleanup errors, but log them.
+        }
+        createdMemoIds.clear(); // Clear the list after attempting deletion
+      } else {
+        debugPrint('[Test Cleanup] No test memos to delete.');
+      }
     });
   });
 }

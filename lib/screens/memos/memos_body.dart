@@ -121,20 +121,16 @@ class _MemosBodyState extends ConsumerState<MemosBody>
                 // the RefreshIndicator that the refresh is done.
                 await ref.read(memosProvider.future);
               },
-              child: LayoutBuilder(
-                // Use LayoutBuilder to ensure ListView constraints
+              child: LayoutBuilder( // Use LayoutBuilder to ensure ListView constraints
                 builder: (context, constraints) {
-                  return SingleChildScrollView(
-                    // Make it scrollable for refresh
+                  return SingleChildScrollView( // Make it scrollable for refresh
                     physics: const AlwaysScrollableScrollPhysics(),
                     child: ConstrainedBox(
-                      constraints: BoxConstraints(
-                        minHeight: constraints.maxHeight,
-                      ),
+                      constraints: BoxConstraints(minHeight: constraints.maxHeight),
                       child: const MemosEmptyState(),
                     ),
                   );
-                },
+                }
               ),
             );
           }
@@ -185,16 +181,12 @@ class _MemosBodyState extends ConsumerState<MemosBody>
               ref.invalidate(memosProvider);
               await ref.read(memosProvider.future);
             },
-            child: LayoutBuilder(
-              // Use LayoutBuilder for constraints
+            child: LayoutBuilder( // Use LayoutBuilder for constraints
               builder: (context, constraints) {
-                return SingleChildScrollView(
-                  // Make it scrollable for refresh
+                return SingleChildScrollView( // Make it scrollable for refresh
                   physics: const AlwaysScrollableScrollPhysics(),
                   child: ConstrainedBox(
-                    constraints: BoxConstraints(
-                      minHeight: constraints.maxHeight,
-                    ),
+                    constraints: BoxConstraints(minHeight: constraints.maxHeight),
                     child: Center(
                       child: Padding(
                         padding: const EdgeInsets.all(20.0),
@@ -206,30 +198,31 @@ class _MemosBodyState extends ConsumerState<MemosBody>
                       ),
                     ),
                   ),
-                );
-              }
-            ),
-          );
-        },
-      ),
-    );
-  }
-  
+                ); // End of SingleChildScrollView
+              }, // End of LayoutBuilder builder
+            ), // End of LayoutBuilder
+          ); // End of RefreshIndicator
+        }, // End of error case
+      ), // End of memosAsync.when
+    ); // End of Focus
+  } // End of build method
+
+// Helper methods for keyboard navigation remain unchanged below
   // Helper methods for keyboard navigation
   void selectNextMemo() {
     // Get the current list of visible memos
     final memosAsync = ref.read(visibleMemosProvider);
     if (memosAsync is! AsyncData<List<Memo>>) return;
-    
+
     final memos = memosAsync.value;
     if (memos.isEmpty) return;
-    
+
     // Get the current selection
     final currentIndex = ref.read(selectedMemoIndexProvider);
-    
+
     // Calculate next index using helper from mixin
     final nextIndex = getNextIndex(currentIndex, memos.length);
-    
+
     // Only update if the index actually changed, to avoid unnecessary rebuilds
     if (nextIndex != currentIndex) {
       // Update the selection
@@ -241,16 +234,16 @@ class _MemosBodyState extends ConsumerState<MemosBody>
     // Get the current list of visible memos
     final memosAsync = ref.read(visibleMemosProvider);
     if (memosAsync is! AsyncData<List<Memo>>) return;
-    
+
     final memos = memosAsync.value;
     if (memos.isEmpty) return;
-    
+
     // Get the current selection
     final currentIndex = ref.read(selectedMemoIndexProvider);
-    
+
     // Calculate previous index using helper from mixin
     final prevIndex = getPreviousIndex(currentIndex, memos.length);
-    
+
     // Only update if the index actually changed, to avoid unnecessary rebuilds
     if (prevIndex != currentIndex) {
       // Update the selection
@@ -262,10 +255,10 @@ class _MemosBodyState extends ConsumerState<MemosBody>
     // Get the current list of visible memos
     final memosAsync = ref.read(visibleMemosProvider);
     if (memosAsync is! AsyncData<List<Memo>>) return;
-    
+
     final memos = memosAsync.value;
     final selectedIndex = ref.read(selectedMemoIndexProvider);
-    
+
     // If we have a valid selection, navigate to that memo
     if (selectedIndex >= 0 && selectedIndex < memos.length) {
       final selectedMemo = memos[selectedIndex];
@@ -276,20 +269,26 @@ class _MemosBodyState extends ConsumerState<MemosBody>
       );
     }
   }
-  
+
   // Ensure there's always a selection when memos are available
+  // This method seems redundant given the logic in didChangeDependencies,
+  // but keeping it as it was present before the bad diff.
+  // Consider removing if didChangeDependencies handles it sufficiently.
   void ensureInitialSelection() {
     final memosAsync = ref.read(visibleMemosProvider);
     if (memosAsync is! AsyncData<List<Memo>>) return;
-    
+
     final memos = memosAsync.value;
     if (memos.isEmpty) return;
-    
+
     final currentIndex = ref.read(selectedMemoIndexProvider);
     if (currentIndex < 0 && memos.isNotEmpty) {
       // Initialize selection to the first memo if nothing is selected
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        ref.read(selectedMemoIndexProvider.notifier).state = 0;
+        // Check mounted again inside the callback
+        if (mounted) {
+           ref.read(selectedMemoIndexProvider.notifier).state = 0;
+        }
       });
     }
   }
