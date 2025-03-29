@@ -562,9 +562,21 @@ class ApiService {
       pinned: apiMemo.pinned ?? false,
       state: _parseApiState(apiMemo.state),
       visibility: apiMemo.visibility?.value ?? 'PUBLIC',
-      // Safely handle potentially null lists
-      resourceNames: apiMemo.resources.map((r) => r.name ?? '').toList() ?? [],
-      relationList: apiMemo.relations ?? [],
+      // Correctly map resources to resourceNames (list of strings)
+      resourceNames:
+          apiMemo.resources
+              .map((r) => r.name ?? '')
+              .where((name) => name.isNotEmpty)
+              .toList(),
+      // Correctly map relations to relationList (list of dynamic or specific type if defined)
+      // Assuming MemoRelation.fromApiRelation exists and works for conversion if needed,
+      // otherwise, map to a simpler structure or keep as dynamic.
+      // For now, let's keep it simple if the app model expects List<dynamic>.
+      // If MemoRelation is the app model, use: apiMemo.relations.map(MemoRelation.fromApiRelation).toList()
+      relationList:
+          apiMemo.relations
+              .map((r) => r.toJson())
+              .toList(), // Example: Convert to JSON map if needed by Memo model
       parent: apiMemo.parent,
       creator: apiMemo.creator,
       createTime: apiMemo.createTime?.toIso8601String(),

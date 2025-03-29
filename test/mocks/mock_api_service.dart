@@ -21,7 +21,12 @@ class MockApiService implements ApiService {
   int createMemoCallCount = 0;
   int updateMemoCallCount = 0;
   int deleteMemoCallCount = 0;
-  
+
+  // Instance fields for controlling listMemos responses
+  List<Memo>? _initialListResponse;
+  List<Memo>? _subsequentListResponse;
+  int _listCallCounter = 0; // Instance counter for listMemos calls
+
   @override
   void configureService({required String baseUrl, required String authToken}) {
     // No-op in mock implementation
@@ -88,10 +93,57 @@ class MockApiService implements ApiService {
     lastListMemosTags = tags;
     lastListMemosVisibility = visibility;
     lastListMemosContentSearch = contentSearch;
-    
-    // Return the mock data
-    return Future.value(_mockMemos);
+
+    // Logic to return controlled responses based on call count
+    _listCallCounter++;
+    print('[Mock listMemos] Instance call number: $_listCallCounter');
+
+    if (_listCallCounter == 1 && _initialListResponse != null) {
+      print('[Mock listMemos] Returning initial instance response.');
+      return Future.value(List.from(_initialListResponse!)); // Return copy
+    } else if (_listCallCounter > 1 && _subsequentListResponse != null) {
+      print('[Mock listMemos] Returning subsequent instance response.');
+      return Future.value(List.from(_subsequentListResponse!)); // Return copy
+    } else if (_initialListResponse != null) {
+      print('[Mock listMemos] Returning initial instance response (default).');
+      return Future.value(
+        List.from(_initialListResponse!),
+      ); // Fallback to initial
+    } else {
+      print('[Mock listMemos] Returning default mockMemos (fallback).');
+      // Fallback to the general _mockMemos if specific ones aren't set
+      return Future.value(List.from(_mockMemos));
+    }
   }
+
+  // Methods to control listMemos responses for testing
+  void setMockListMemosResponse(List<Memo> memos) {
+    _initialListResponse = List.from(memos); // Store a copy
+    _listCallCounter = 0; // Reset counter when setting initial response
+    print(
+      '[Mock Setup] Set initial listMemos response with ${memos.length} memos for this instance.',
+    );
+  }
+
+  void setMockListMemosResponseForSubsequentCalls(List<Memo> memos) {
+    _subsequentListResponse = List.from(memos); // Store a copy
+    print(
+      '[Mock Setup] Set subsequent listMemos response with ${memos.length} memos for this instance.',
+    );
+  }
+
+  // Helper to log the setup for updateMemo mock response
+  // The actual response logic is handled within the base MockApiService.updateMemo
+  void setMockUpdateMemoResponse(String id, Memo responseMemo) {
+    print(
+      '[Mock Setup] Mock response for updateMemo ID: $id is configured in base mock.',
+    );
+    // No actual logic needed here for the manual mock setup used in the test.
+    // The base MockApiService.updateMemo will be called by the provider.
+    // We might enhance this later if needed to return specific data per ID.
+    _mockMemoById[id] = responseMemo; // Store it so getMemo works if called
+  }
+
 
   @override
   Future<Memo> getMemo(String id) async {
