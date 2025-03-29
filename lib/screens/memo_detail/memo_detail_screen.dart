@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_memos/providers/memo_providers.dart' as memo_providers;
 import 'package:flutter_memos/providers/ui_providers.dart';
 import 'package:flutter_memos/utils/keyboard_navigation.dart';
 import 'package:flutter_memos/widgets/capture_utility.dart';
@@ -81,9 +82,23 @@ class _MemoDetailScreenState extends ConsumerState<MemoDetailScreen>
                   '/edit-memo',
                   arguments: {'memoId': widget.memoId},
                 ).then((_) {
-                  // Refresh data when returning from edit screen
+                    // Refresh all data when returning from edit screen
+                    // Invalidate the providers to force refresh
                   ref.invalidate(memoDetailProvider(widget.memoId));
                   ref.invalidate(memoCommentsProvider(widget.memoId));
+                  
+                    // Refresh memos list
+                    ref.invalidate(memo_providers.memosProvider);
+
+                    // Ensure memo is not hidden
+                    ref
+                        .read(memo_providers.hiddenMemoIdsProvider.notifier)
+                        .update(
+                          (state) =>
+                              state.contains(widget.memoId)
+                                  ? (state..remove(widget.memoId))
+                                  : state,
+                        );
                 });
               },
             ),
@@ -108,7 +123,6 @@ class _MemoDetailScreenState extends ConsumerState<MemoDetailScreen>
     );
   }
 
-  // Helper methods for keyboard navigation
   // Helper methods for keyboard navigation
   void _selectNextComment() {
     // Get the current list of comments

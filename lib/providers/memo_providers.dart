@@ -51,6 +51,12 @@ final memosProvider = FutureProvider<List<Memo>>((ref) async {
     filter = filter == null ? tagFilter : FilterBuilder.and([filter, tagFilter]);
   }
   
+  if (kDebugMode) {
+    print(
+      '[memosProvider] Fetching memos with filter: $filter, state: $state, sort: $sortField',
+    );
+  }
+  
   // Fetch memos with the constructed filter
   final memos = await apiService.listMemos(
     parent: 'users/1', // Specify the current user
@@ -59,6 +65,15 @@ final memosProvider = FutureProvider<List<Memo>>((ref) async {
     sort: sortField,
     direction: 'DESC', // Always newest first
   );
+  
+  if (kDebugMode) {
+    print('[memosProvider] Received ${memos.length} memos from API');
+    if (memos.isNotEmpty) {
+      print(
+        '[memosProvider] First memo ID: ${memos.first.id}, updateTime: ${memos.first.updateTime}',
+      );
+    }
+  }
   
   // Only read this once when needed, don't watch it to avoid unnecessary rebuilds
   final statusFilter = ref.read(statusFilterProvider);
