@@ -158,16 +158,42 @@ class _NewMemoFormState extends ConsumerState<NewMemoForm>
     return Focus(
       focusNode: _formFocusNode,
       onKeyEvent: (node, event) {
-        // Explicitly check for Command+Enter first using event properties
+        if (kDebugMode) {
+          print(
+            '[NewMemoForm] Received key event: ${event.logicalKey.keyLabel}',
+          );
+          if (event.logicalKey == LogicalKeyboardKey.enter) {
+            final metaPressed =
+                HardwareKeyboard.instance.isLogicalKeyPressed(
+                  LogicalKeyboardKey.meta,
+                ) ||
+                HardwareKeyboard.instance.isLogicalKeyPressed(
+                  LogicalKeyboardKey.metaLeft,
+                ) ||
+                HardwareKeyboard.instance.isLogicalKeyPressed(
+                  LogicalKeyboardKey.metaRight,
+                );
+            print(
+              '[NewMemoForm] Enter key pressed. Meta key pressed: $metaPressed',
+            );
+          }
+        }
+
+        // First, explicitly check for Command+Enter
         if (event is KeyDownEvent &&
             event.logicalKey == LogicalKeyboardKey.enter &&
-            HardwareKeyboard.instance.isLogicalKeyPressed(
-              LogicalKeyboardKey.meta,
-            )) {
+            (HardwareKeyboard.instance.isLogicalKeyPressed(
+                  LogicalKeyboardKey.meta,
+                ) ||
+                HardwareKeyboard.instance.isLogicalKeyPressed(
+                  LogicalKeyboardKey.metaLeft,
+                ) ||
+                HardwareKeyboard.instance.isLogicalKeyPressed(
+                  LogicalKeyboardKey.metaRight,
+                ))) {
           if (!_loading) {
             // Prevent double submission
             if (kDebugMode) {
-              // Ensure this debug print exists
               print(
                 '[NewMemoForm] Command+Enter detected, calling _handleCreateMemo',
               );
@@ -196,7 +222,6 @@ class _NewMemoFormState extends ConsumerState<NewMemoForm>
               Navigator.of(context).pop();
             }
           },
-          // Other navigation keys (Up/Down/Back/Forward) are ignored if text input focused
         );
 
         // Return handled if the mixin handled it, otherwise ignore

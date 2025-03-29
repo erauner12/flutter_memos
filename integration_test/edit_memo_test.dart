@@ -20,7 +20,11 @@ void main() {
         await tester.pumpAndSettle(const Duration(seconds: 3)); // Allow time for initial load
 
         // Ensure we are on the MemosScreen
-        expect(find.byType(MemosScreen), findsOneWidget);
+      expect(
+        find.byType(MemosScreen),
+        findsOneWidget,
+        reason: 'Should be on the memos screen',
+      );
 
         // Find the first memo card
         final memoCards = find.byType(MemoCard);
@@ -32,24 +36,41 @@ void main() {
         await tester.pumpAndSettle(const Duration(seconds: 1));
 
         // Ensure we are on the MemoDetailScreen
-        expect(find.byType(MemoDetailScreen), findsOneWidget);
+      expect(
+        find.byType(MemoDetailScreen),
+        findsOneWidget,
+        reason: 'Should be on the memo detail screen',
+      );
 
         // Find and tap the Edit button in the AppBar
         final editButton = find.widgetWithIcon(IconButton, Icons.edit);
-        expect(editButton, findsOneWidget);
+      expect(
+        editButton,
+        findsOneWidget,
+        reason: 'Edit button should be visible',
+      );
         await tester.tap(editButton);
         await tester.pumpAndSettle(const Duration(seconds: 1));
 
         // Ensure we are on the EditMemoScreen
-        expect(find.byType(EditMemoScreen), findsOneWidget);
+      expect(
+        find.byType(EditMemoScreen),
+        findsOneWidget,
+        reason: 'Should be on the edit memo screen',
+      );
 
         // Find the TextField for the memo content
         final textFieldFinder = find.byType(TextField);
-        expect(textFieldFinder, findsOneWidget);
+      expect(
+        textFieldFinder,
+        findsOneWidget,
+        reason: 'TextField should be visible',
+      );
 
         // Get the current text
         final textFieldWidget = tester.widget<TextField>(textFieldFinder);
         final initialText = textFieldWidget.controller?.text ?? '';
+      debugPrint('Initial text: "$initialText"');
 
         // Append text to the TextField
         final String textToAppend = ' - Edited via test';
@@ -57,34 +78,49 @@ void main() {
         await tester.pumpAndSettle();
 
         // Verify the text was appended
+      final updatedText =
+          tester.widget<TextField>(textFieldFinder).controller?.text;
+      debugPrint('Updated text: "$updatedText"');
         expect(
-          tester.widget<TextField>(textFieldFinder).controller?.text,
+        updatedText,
           initialText + textToAppend,
+        reason: 'TextField should contain the appended text'
         );
 
+      // Debug existing widget types before sending Command+Enter
+      debugPrint('Widget tree before Command+Enter:');
+      tester.allWidgets
+          .where(
+            (w) =>
+                w is Scaffold || w is EditMemoScreen || w is MemoDetailScreen,
+          )
+          .forEach((w) => debugPrint('  Found widget: ${w.runtimeType}'));
+
         // Simulate pressing Command + Enter
+      debugPrint('Sending Command+Enter key sequence...');
         await tester.sendKeyDownEvent(LogicalKeyboardKey.meta);
         await tester.sendKeyEvent(LogicalKeyboardKey.enter);
         await tester.sendKeyUpEvent(LogicalKeyboardKey.meta);
-        await tester.pumpAndSettle(const Duration(seconds: 2)); // Allow time for save and navigation
+        
+      // Wait longer to ensure the save completes and navigation happens
+      debugPrint('Waiting for save to complete and navigation to occur...');
+      await tester.pumpAndSettle(const Duration(seconds: 3));
+
+      // Debug widget types after sending Command+Enter
+      debugPrint('Widget tree after Command+Enter:');
+      tester.allWidgets
+          .where(
+            (w) =>
+                w is Scaffold || w is EditMemoScreen || w is MemoDetailScreen,
+          )
+          .forEach((w) => debugPrint('  Found widget: ${w.runtimeType}'));
 
       // Verify we navigated back to the MemoDetailScreen
         expect(
-        find.byType(MemoDetailScreen), // Changed from MemosScreen
+        find.byType(MemoDetailScreen),
           findsOneWidget,
         reason: 'Should navigate back to MemoDetailScreen after saving',
-        );
-
-      // (Optional but recommended) Verify the content on the detail screen
-      // You might need to find the MemoContent widget and check its text.
-      // final memoContentFinder = find.byType(MemoContent);
-      // expect(memoContentFinder, findsOneWidget);
-      // expect(find.textContaining(textToAppend, findRichText: true), findsOneWidget);
-
-      // (Optional) Navigate back to MemosScreen if needed for further checks
-      // await tester.pageBack();
-      // await tester.pumpAndSettle();
-      // expect(find.byType(MemosScreen), findsOneWidget);
+      );
       },
     );
   });
