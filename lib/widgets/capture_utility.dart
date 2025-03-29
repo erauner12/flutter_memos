@@ -304,22 +304,27 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
     }
   }
 
-  void _handleKeyEvent(KeyEvent event) {
+  KeyEventResult _handleKeyEvent(KeyEvent event) {
     // Use KeyEvent
     if (event is KeyDownEvent) {
       // Use KeyDownEvent
       if (event.logicalKey == LogicalKeyboardKey.escape) {
         if (_isExpanded) {
           _collapse();
+          return KeyEventResult.handled; // Handled Escape
         }
       } else if (event.logicalKey == LogicalKeyboardKey.enter &&
-          HardwareKeyboard.instance.isMetaPressed) {
-        // Use HardwareKeyboard.instance.isMetaPressed
+          (HardwareKeyboard.instance.isMetaPressed ||
+              HardwareKeyboard.instance.isControlPressed)) {
+        // Check for Cmd or Ctrl
+        // Use HardwareKeyboard.instance.isMetaPressed or isControlPressed for cross-platform compatibility
         if (_isExpanded && !_isSubmitting) {
           _handleSubmit();
+          return KeyEventResult.handled; // Handled Cmd/Ctrl+Enter
         }
       }
     }
+    return KeyEventResult.ignored; // Ignore other keys
   }
 
   @override
@@ -432,12 +437,13 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
                                   ? Column(
                                     children: [
                                       Expanded(
-                                        child: KeyboardListener(
-                                          focusNode: FocusNode(),
-                                          onKeyEvent: _handleKeyEvent,
+                                        child: Focus(
+                                          focusNode: _focusNode,
+                                          onKeyEvent: (node, event) {
+                                            return _handleKeyEvent(event);
+                                          },
                                           child: TextField(
                                             controller: _textController,
-                                            focusNode: _focusNode,
                                             decoration: InputDecoration(
                                               hintText: hintText,
                                               border: InputBorder.none,
@@ -455,11 +461,8 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
                                                     : 2,
                                             textCapitalization:
                                                 TextCapitalization.sentences,
-                                            onSubmitted: (_) {
-                                              if (!_isSubmitting) {
-                                                _handleSubmit();
-                                              }
-                                            },
+                                            keyboardType:
+                                                TextInputType.multiline,
                                           ),
                                         ),
                                       ),
