@@ -79,7 +79,10 @@ void main() {
     await tester.enterText(find.byType(TextField), 'Updated Content');
     
     // Tap the save button
-    await tester.tap(find.text('Save'));
+    await tester.tap(find.text('Save Changes'));
     await tester.pumpAndSettle();
+
+    // Add verification that navigation occurred if needed
+    // expect(find.byType(EditMemoScreen), findsNothing); // Or check for the previous screen
   });
 }

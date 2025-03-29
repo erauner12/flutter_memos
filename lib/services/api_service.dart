@@ -336,7 +336,11 @@ class ApiService {
   /// Update an existing memo
   Future<Memo> updateMemo(String id, Memo memo) async {
     try {
-      final updateMemo = TheMemoToUpdateTheNameFieldIsRequired(
+      // Fetch the original memo to get its createTime, as the update response might corrupt it
+      final originalMemo = await getMemo(id);
+      final originalCreateTime = originalMemo.createTime;
+
+      final updatePayload = TheMemoToUpdateTheNameFieldIsRequired(
         content: memo.content,
         pinned: memo.pinned,
         state: _getMemoState(memo.state),
@@ -345,14 +349,34 @@ class ApiService {
       
       final response = await _memoApi.memoServiceUpdateMemo(
         _formatResourceName(id, 'memos'),
-        updateMemo,
+        updatePayload,
       );
       
       if (response == null) {
         throw Exception('Failed to update memo: No response from server');
       }
       
-      return _convertApiMemoToAppMemo(response);
+      // Convert the API response to our app model
+      Memo updatedAppMemo = _convertApiMemoToAppMemo(response);
+
+      // Check if the server returned an incorrect epoch createTime
+      final responseCreateTimeStr = response.createTime?.toIso8601String();
+      if (responseCreateTimeStr != null &&
+          (responseCreateTimeStr.startsWith('1970-01-01') ||
+              responseCreateTimeStr.startsWith('0001-01-01')) &&
+          originalCreateTime != null) {
+        if (verboseLogging) {
+          print(
+            '[API] Server returned incorrect createTime (${updatedAppMemo.createTime}), restoring original: $originalCreateTime',
+          );
+        }
+        // Restore the original createTime
+        updatedAppMemo = updatedAppMemo.copyWith(
+          createTime: originalCreateTime,
+        );
+      }
+
+      return updatedAppMemo;
     } catch (e) {
       print('[API] Error updating memo: $e');
       throw Exception('Failed to update memo: $e');
@@ -539,8 +563,9 @@ class ApiService {
       pinned: apiMemo.pinned ?? false,
       state: _parseApiState(apiMemo.state),
       visibility: apiMemo.visibility?.value ?? 'PUBLIC',
-      resourceNames: apiMemo.resources.map((r) => r.name ?? '').toList(),
-      relationList: apiMemo.relations,
+      // Safely handle potentially null lists
+      resourceNames: apiMemo.resources.map((r) => r.name ?? '').toList() ?? [],
+      relationList: apiMemo.relations ?? [],
       parent: apiMemo.parent,
       creator: apiMemo.creator,
       createTime: apiMemo.createTime?.toIso8601String(),

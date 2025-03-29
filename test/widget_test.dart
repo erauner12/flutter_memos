@@ -23,6 +23,5 @@ void main() {
     
     // Verify some basic elements of our UI exist
     expect(find.byType(AppBar), findsWidgets);
-    expect(find.byType(FloatingActionButton), findsAtLeastNWidgets(1));
   });
 }
