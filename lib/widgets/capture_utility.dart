@@ -40,9 +40,9 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
   bool _isDragging = false;
 
   // Define min/max heights for the utility
-  final double _collapsedHeight = 56.0; // Height when collapsed
+  final double _collapsedHeight = 60.0; // Increased from 56.0 to avoid overflow
   final double _expandedHeight = 200.0; // Maximum expanded height
-  double _currentHeight = 56.0; // Current height (starts collapsed)
+  double _currentHeight = 60.0; // Current height (starts collapsed)
 
   @override
   void initState() {
@@ -93,25 +93,17 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
     _focusNode.unfocus();
   }
 
-  // Toggle expanded state
-  void _toggleExpanded() {
-    if (_isExpanded) {
-      _collapse();
-    } else {
-      _expand();
-    }
-  }
-
   // Handle vertical drag to expand/collapse
   void _handleDragUpdate(DragUpdateDetails details) {
     setState(() {
       _isDragging = true;
-      // Calculate new height based on drag (negative dy means up)
-      _currentHeight -= details.delta.dy;
-
+      
+      // Calculate new height based on drag (negative dy means up, positive means down)
+      final newHeight = _currentHeight - details.delta.dy;
+      
       // Constrain height within min/max bounds
-      _currentHeight = _currentHeight.clamp(_collapsedHeight, _expandedHeight);
-
+      _currentHeight = newHeight.clamp(_collapsedHeight, _expandedHeight);
+      
       // Update animation controller value based on current height
       _animationController.value =
           (_currentHeight - _collapsedHeight) /
@@ -122,8 +114,21 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
   void _handleDragEnd(DragEndDetails details) {
     setState(() {
       _isDragging = false;
-      // Determine whether to snap to expanded or collapsed state based on position
-      if (_animationController.value > 0.3) {
+      
+      // Calculate velocity direction - positive velocity means downward swipe
+      final isDownwardSwipe =
+          details.primaryVelocity != null && details.primaryVelocity! > 0;
+      final isUpwardSwipe =
+          details.primaryVelocity != null && details.primaryVelocity! < 0;
+
+      // If strong velocity in either direction, use that to determine state
+      if (isDownwardSwipe && details.primaryVelocity!.abs() > 200) {
+        _collapse();
+      } else if (isUpwardSwipe && details.primaryVelocity!.abs() > 200) {
+        _expand();
+      }
+      // Otherwise use position threshold to determine state (more forgiving at 0.3)
+      else if (_animationController.value > 0.3) {
         _expand();
       } else {
         _collapse();
@@ -371,17 +376,19 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
                                     },
                                   ),
                                 )
-                                : Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 12.0,
-                                  ),
-                                  child: Text(
-                                    placeholderText,
-                                    style: TextStyle(
-                                      color:
-                                          isDarkMode
-                                              ? Colors.grey[400]
-                                              : Colors.grey[600],
+                                : SizedBox(
+                                  height:
+                                      32, // Fixed height to prevent overflow in collapsed state
+                                  child: Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: Text(
+                                      placeholderText,
+                                      style: TextStyle(
+                                        color:
+                                            isDarkMode
+                                                ? Colors.grey[400]
+                                                : Colors.grey[600],
+                                      ),
                                     ),
                                   ),
                                 ),
