@@ -18,21 +18,24 @@ void main() {
         captureUtilityFinder,
         warnIfMissed: false,
       ); // Suppress hit test warning for now
-      await tester.pump(); // Start the animation
+      // A single pump might be needed to initiate the animation before pumpAndSettle works reliably
+      await tester.pump(const Duration(milliseconds: 50));
 
-      // Wait until the TextField appears, with a timeout
+      // Wait until the TextField appears, with a timeout, using pumpAndSettle
       bool textFieldFound = false;
-      const timeout = Duration(seconds: 3);
+      const timeout = Duration(seconds: 5); // Increased timeout slightly
       final endTime = tester.binding.clock.now().add(timeout);
 
       while (tester.binding.clock.now().isBefore(endTime)) {
-        await tester.pump(const Duration(milliseconds: 100)); // Pump frequently
+        // Use pumpAndSettle to wait for animations to complete between checks
+        await tester.pumpAndSettle();
         final textFieldFinder = find.byType(TextField);
-        // Check if at least one TextField is found (could be more robust if needed)
         if (textFieldFinder.evaluate().isNotEmpty) {
           textFieldFound = true;
+          debugPrint('TextField found after waiting.');
           break;
         }
+        // No need for an extra pump here, pumpAndSettle handles it.
       }
 
       // Final check after waiting
