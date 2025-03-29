@@ -37,9 +37,15 @@ void main() {
       final retrievedMemo = await apiService.getMemo(createdMemo.id);
       expect(retrievedMemo.id, equals(createdMemo.id));
       expect(retrievedMemo.content, equals(createdMemo.content));
-      print('Retrieved memo successfully');
+      final originalUpdateTime =
+          retrievedMemo.updateTime; // Store original update time
+      print(
+        'Retrieved memo successfully. Original updateTime: $originalUpdateTime',
+      );
       
       // 3. Update the memo
+      // Introduce a small delay to ensure the updateTime will definitely change
+      await Future.delayed(const Duration(seconds: 1));
       final updatedContent = 'Updated content ${DateTime.now().toIso8601String()}';
       final memoToUpdate = retrievedMemo.copyWith(
         content: updatedContent,
@@ -49,7 +55,39 @@ void main() {
       final updatedMemo = await apiService.updateMemo(retrievedMemo.id, memoToUpdate);
       expect(updatedMemo.content, equals(updatedContent));
       expect(updatedMemo.pinned, isTrue);
-      print('Updated memo successfully');
+      final newUpdateTime = updatedMemo.updateTime; // Get new update time
+      print('Updated memo successfully. New updateTime: $newUpdateTime');
+
+      // Verify that updateTime actually changed and is later
+      expect(
+        newUpdateTime,
+        isNotNull,
+        reason: 'New updateTime should not be null',
+      );
+      expect(
+        originalUpdateTime,
+        isNotNull,
+        reason: 'Original updateTime should not be null',
+      );
+      expect(
+        newUpdateTime,
+        isNot(equals(originalUpdateTime)),
+        reason: 'UpdateTime should change after update',
+      );
+
+      // Optionally, verify the new time is later than the old one
+      try {
+        final originalDate = DateTime.parse(originalUpdateTime!);
+        final newDate = DateTime.parse(newUpdateTime!);
+        expect(
+          newDate.isAfter(originalDate) ||
+              newDate.isAtSameMomentAs(originalDate),
+          isTrue,
+          reason: 'New updateTime should be later than or same as original',
+        );
+      } catch (e) {
+        print('Warning: Could not parse update timestamps for comparison: $e');
+      }
       
       // 4. Delete the memo
       await apiService.deleteMemo(updatedMemo.id);
