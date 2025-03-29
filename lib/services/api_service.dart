@@ -336,9 +336,8 @@ class ApiService {
   /// Update an existing memo
   Future<Memo> updateMemo(String id, Memo memo) async {
     try {
-      // Fetch the original memo to get its createTime, as the update response might corrupt it
-      final originalMemo = await getMemo(id);
-      final originalCreateTime = originalMemo.createTime;
+      // Use the createTime from the memo object passed in, which should be the original.
+      final originalCreateTime = memo.createTime;
 
       final updatePayload = TheMemoToUpdateTheNameFieldIsRequired(
         content: memo.content,
