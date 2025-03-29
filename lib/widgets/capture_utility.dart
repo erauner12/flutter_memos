@@ -81,25 +81,37 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
 
   // Helper method to start physics-based animation
   void _animateTo(double targetValue, {double? velocity}) {
-    // Add optional velocity parameter
     _animationController.stop();
 
-    // Use the provided velocity if available, otherwise use the controller's current velocity
     final simulationVelocity = velocity ?? _animationController.velocity;
+
+    debugPrint(
+      '[CaptureUtility] AnimateTo: target=$targetValue, startValue=${_animationController.value.toStringAsFixed(3)}, velocity=${simulationVelocity.toStringAsFixed(3)}',
+    );
 
     final simulation = SpringSimulation(
       _springDescription,
       _animationController.value,
       targetValue,
-      simulationVelocity, // Pass the determined velocity here
+      simulationVelocity,
     );
 
     _animationController.animateWith(simulation).whenCompleteOrCancel(() {
+      debugPrint(
+        '[CaptureUtility] AnimateTo Complete/Cancel: target=$targetValue, finalValue=${_animationController.value.toStringAsFixed(3)}, _isDragging=$_isDragging',
+      );
+      // Ensure final state consistency only if not dragging and component is still mounted
       if (!_isDragging && mounted) {
         setState(() {
           _currentHeight =
               targetValue == 1.0 ? _expandedHeight : _collapsedHeight;
-          _animationController.value = targetValue;
+          // Ensure controller value matches target precisely at the end
+          if ((_animationController.value - targetValue).abs() > 0.01) {
+            debugPrint(
+              '[CaptureUtility] AnimateTo Complete: Correcting final controller value to $targetValue',
+            );
+            _animationController.value = targetValue;
+          }
         });
       }
     });
@@ -131,62 +143,76 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
     setState(() {
       final newHeight = _currentHeight - details.delta.dy;
       _currentHeight = newHeight.clamp(_collapsedHeight, _expandedHeight);
+      // Update controller value proportionally during drag
       _animationController.value =
           (_currentHeight - _collapsedHeight) /
           (_expandedHeight - _collapsedHeight);
+      // Add logging
+      debugPrint(
+        '[CaptureUtility] Drag Update: _currentHeight=$_currentHeight, _animationController.value=${_animationController.value.toStringAsFixed(3)}',
+      );
     });
   }
 
   void _handleDragEnd(DragEndDetails details) {
-    if (!_isDragging) return;
-    _isDragging = false;
+    if (!_isDragging) return; // Should not happen, but safety first
 
     final dragVelocity = details.primaryVelocity ?? 0.0;
-    // Calculate velocity relative to the controller's 0.0-1.0 scale
     final simulationVelocity =
         -dragVelocity / (_expandedHeight - _collapsedHeight);
-
-    // Use the controller's value which was updated during drag
     final currentFraction = _animationController.value;
-    double targetValue;
 
-    // Determine target based on velocity primarily, then position
-    // Thresholds might need tuning based on testing feel
-    const velocityThreshold = 0.5; // Normalized velocity threshold
-    const positionThreshold = 0.5; // Fraction threshold
+    debugPrint(
+      '[CaptureUtility] Drag End: dragVelocity=$dragVelocity, simulationVelocity=${simulationVelocity.toStringAsFixed(3)}, currentFraction=${currentFraction.toStringAsFixed(3)}',
+    );
+
+    _isDragging = false; // Set dragging to false *after* calculations
+
+    double targetValue;
+    // Slightly lower velocity threshold for manual interaction sensitivity
+    const velocityThreshold = 0.4; // Lowered from 0.5
+    const positionThreshold = 0.5;
 
     if (simulationVelocity.abs() > velocityThreshold) {
-      // If swipe velocity is significant, use it to determine direction
-      targetValue =
-          simulationVelocity < 0
-              ? 1.0
-              : 0.0; // Negative velocity (up) -> expand (1.0)
+      targetValue = simulationVelocity < 0 ? 1.0 : 0.0;
+      debugPrint(
+        '[CaptureUtility] Drag End: Target decided by velocity -> $targetValue',
+      );
     } else {
-      // If velocity is low, decide based on final position
       targetValue = currentFraction > positionThreshold ? 1.0 : 0.0;
+      debugPrint(
+        '[CaptureUtility] Drag End: Target decided by position -> $targetValue',
+      );
     }
 
-    // If the widget is already very close to the target, don't animate unnecessarily
-    // This prevents tiny animations if the drag ends near a boundary without much velocity
+    // Check if close to target and velocity is low to snap directly
     if ((targetValue - currentFraction).abs() < 0.05 &&
         simulationVelocity.abs() < velocityThreshold / 2) {
-      // Snap to the target value without animation if close and velocity is low
+      debugPrint('[CaptureUtility] Drag End: Snapping to target $targetValue');
+      // Ensure state is updated correctly when snapping
       setState(() {
         _currentHeight =
             targetValue == 1.0 ? _expandedHeight : _collapsedHeight;
+        // Manually set controller value to ensure consistency
         _animationController.value = targetValue;
       });
     } else {
-      // Otherwise, animate to the target state using physics
+      debugPrint(
+        '[CaptureUtility] Drag End: Animating to target $targetValue with velocity ${simulationVelocity.toStringAsFixed(3)}',
+      );
       _animateTo(targetValue, velocity: simulationVelocity);
     }
   }
 
   void _handleDragStart(DragStartDetails details) {
+    // Ensure controller stops *before* setting dragging state
+    _animationController.stop();
     setState(() {
       _isDragging = true;
-      _animationController.stop();
     });
+    debugPrint(
+      '[CaptureUtility] Drag Start: _isDragging=true, Stopping animation.',
+    );
   }
 
   Future<void> _handlePaste() async {
