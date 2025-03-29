@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_memos/models/memo.dart';
 import 'package:flutter_memos/utils/keyboard_navigation.dart'; // Import the mixin
@@ -157,23 +158,49 @@ class _NewMemoFormState extends ConsumerState<NewMemoForm>
     return Focus(
       focusNode: _formFocusNode,
       onKeyEvent: (node, event) {
+        // Explicitly check for Command+Enter first
+        if (event is KeyDownEvent &&
+            event.logicalKey == LogicalKeyboardKey.enter &&
+            HardwareKeyboard.instance.isLogicalKeyPressed(
+              LogicalKeyboardKey.meta,
+            )) {
+          if (!_loading) {
+            // Prevent double submission
+            if (kDebugMode) {
+              print(
+                '[NewMemoForm] Command+Enter detected, calling _handleCreateMemo',
+              );
+            }
+            _handleCreateMemo();
+          } else {
+            if (kDebugMode) {
+              print(
+                '[NewMemoForm] Command+Enter detected, but already loading',
+              );
+            }
+          }
+          return KeyEventResult.handled;
+        }
+
+        // Handle other keys (like Escape) using the mixin
+        // REMOVED onSubmit parameter from this call
         final result = handleKeyEvent(
           event,
           ref,
-          onSubmit: _handleCreateMemo,
           onEscape: () {
             if (_contentFocusNode.hasFocus) {
               _contentFocusNode.unfocus();
               _formFocusNode.requestFocus();
             } else {
+              // If form has focus (not text field), pop screen on Escape
               Navigator.of(context).pop();
             }
           },
+          // Other navigation keys (Up/Down/Back/Forward) are ignored if text input focused
         );
-        if (result == KeyEventResult.handled) {
-          return KeyEventResult.handled;
-        }
-        return KeyEventResult.ignored;
+
+        // Return handled if the mixin handled it, otherwise ignore
+        return result;
       },
       child: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -339,7 +366,6 @@ class _NewMemoFormState extends ConsumerState<NewMemoForm>
                   maxLines: 10,
                   minLines: 5,
                   autofocus: true,
-                  onSubmitted: (_) {},
                 ),
             if (_error != null)
               Padding(
