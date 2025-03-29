@@ -13,23 +13,39 @@ void main() {
       final captureUtilityFinder = find.byType(CaptureUtility);
       expect(captureUtilityFinder, findsOneWidget);
 
-      // Tap the CaptureUtility widget itself to expand it, instead of the text
-      await tester.tap(captureUtilityFinder);
-      // Wait for the expansion animation to complete
-      await tester.pumpAndSettle(const Duration(milliseconds: 500));
+      // Tap the CaptureUtility widget itself to expand it
+      await tester.tap(
+        captureUtilityFinder,
+        warnIfMissed: false,
+      ); // Suppress hit test warning for now
+      await tester.pump(); // Start the animation
 
-      // Enter text - Now the TextField should be present
+      // Wait until the TextField appears, with a timeout
+      bool textFieldFound = false;
+      const timeout = Duration(seconds: 3);
+      final endTime = tester.binding.clock.now().add(timeout);
+
+      while (tester.binding.clock.now().isBefore(endTime)) {
+        await tester.pump(const Duration(milliseconds: 100)); // Pump frequently
+        final textFieldFinder = find.byType(TextField);
+        // Check if at least one TextField is found (could be more robust if needed)
+        if (textFieldFinder.evaluate().isNotEmpty) {
+          textFieldFound = true;
+          break;
+        }
+      }
+
+      // Final check after waiting
       final textFieldFinder = find.byType(TextField);
-      // Use findsOneWidget as there should only be one TextField in the expanded utility
       expect(
         textFieldFinder,
-        findsOneWidget,
-        reason: 'TextField not found after expanding CaptureUtility',
+        findsOneWidget, // Expect exactly one TextField in the expanded utility
+        reason:
+            'TextField did not appear within $timeout after expanding CaptureUtility. Found ${textFieldFinder.evaluate().length} instead.',
       );
-      await tester.enterText(
-        textFieldFinder,
-        content,
-      ); // Use the found finder directly
+
+      // Enter text
+      await tester.enterText(textFieldFinder, content);
       await tester.pumpAndSettle();
 
       // Tap Add Memo
