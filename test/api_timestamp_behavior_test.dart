@@ -295,7 +295,93 @@ void main() {
       // If the test reaches here, the server bug might be fixed or masked.
       print(
         'Test 3 UNEXPECTEDLY PASSED: The server might have returned the correct createTime.',
+      ); // Add missing parenthesis here
+      // Remove the duplicated print statement below
+    });
+
+    test('Test 4: Attempt to send createTime/updateTime in update payload', () async {
+      if (!RUN_TIMESTAMP_API_TESTS) {
+        print('Skipping timestamp API test 4');
+        return;
+      }
+
+      print('\n--- Test 4: Attempt Sending Timestamps in Payload ---');
+
+      // 1. Create a memo
+      final initialContent = 'Timestamp Test 4 - Initial Content ${DateTime.now()}';
+      final createPayload = Apiv1Memo(content: initialContent, visibility: V1Visibility.PUBLIC);
+      final createdMemoResponse = await memoApi.memoServiceCreateMemo(createPayload);
+      expect(createdMemoResponse, isNotNull, reason: 'Failed to create memo');
+      testMemoId = createdMemoResponse!.name?.split('/').last;
+      final originalCreateTime = createdMemoResponse.createTime;
+      final originalUpdateTime = createdMemoResponse.updateTime;
+
+      print('Created Memo ID: $testMemoId');
+      print('Original createTime: ${originalCreateTime?.toIso8601String()}');
+      print('Original updateTime: ${originalUpdateTime?.toIso8601String()}');
+      expect(originalCreateTime, isNotNull);
+      expect(originalUpdateTime, isNotNull);
+      expect(originalCreateTime!.year, isNot(equals(1970)));
+
+      await Future.delayed(const Duration(seconds: 1));
+      final timeBeforeUpdate = DateTime.now().toUtc(); // Record time just before update
+
+      // 2. Update the memo, explicitly sending original timestamps
+      final updatedContent = 'Timestamp Test 4 - Updated Content ${DateTime.now()}';
+      final updatePayload = TheMemoToUpdateTheNameFieldIsRequired(
+        content: updatedContent,
+        // *** Explicitly include timestamps in the payload ***
+        createTime: originalCreateTime,
+        updateTime: originalUpdateTime, // Sending the *original* updateTime
       );
+
+      print('--- Sending Update Payload With Timestamps ---');
+      print('Payload createTime: ${updatePayload.createTime?.toIso8601String()}');
+      print('Payload updateTime: ${updatePayload.updateTime?.toIso8601String()}');
+
+      final updatedMemoResponse = await memoApi.memoServiceUpdateMemo(
+        'memos/$testMemoId',
+        updatePayload,
+      );
+      expect(updatedMemoResponse, isNotNull, reason: 'Failed to update memo');
+
+      final responseCreateTime = updatedMemoResponse!.createTime;
+      final responseUpdateTime = updatedMemoResponse.updateTime;
+
+      print('--- Server Response After Update (With Sent Timestamps) ---');
+      print('Response createTime: ${responseCreateTime?.toIso8601String()}');
+      print('Response updateTime: ${responseUpdateTime?.toIso8601String()}');
+
+      // 3. Assertions - Based on expected server behavior (ignoring sent timestamps)
+      expect(responseCreateTime, isNotNull);
+      expect(responseUpdateTime, isNotNull);
+
+      // *** Assertion: Expect server STILL returns epoch createTime, ignoring what we sent ***
+      expect(
+        responseCreateTime!.year,
+        anyOf(equals(1970), equals(1)),
+        reason: 'Server response createTime SHOULD STILL be epoch, even if we sent the original.',
+      );
+      expect(
+        responseCreateTime.toIso8601String(),
+        isNot(equals(originalCreateTime.toIso8601String())),
+        reason: 'Server response createTime SHOULD NOT match original, despite sending it.',
+      );
+
+      // *** Assertion: Expect server correctly sets NEW updateTime, ignoring what we sent ***
+      expect(
+        responseUpdateTime!.toIso8601String(),
+        isNot(equals(originalUpdateTime!.toIso8601String())),
+        reason: 'Server response updateTime SHOULD have changed from original, despite sending original.',
+      );
+      // Check if the new update time is later than *before* the update call
+      expect(
+        responseUpdateTime.isAfter(timeBeforeUpdate) || responseUpdateTime.isAtSameMomentAs(timeBeforeUpdate),
+        isTrue,
+        reason: 'Server response updateTime should be later than or equal to the time just before the update call.',
+      );
+
+      print('Test 4 PASSED: Confirmed server likely ignores createTime/updateTime sent in PATCH payload and still returns epoch createTime.');
     });
   });
 }
