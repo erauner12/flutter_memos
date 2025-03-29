@@ -55,12 +55,28 @@ class Memo {
   }
 
   Map<String, dynamic> toJson() {
-    return {
+    final Map<String, dynamic> json = {
       'content': content,
       'pinned': pinned,
       'state': state.toString().split('.').last.toUpperCase(),
       'visibility': visibility,
     };
+    
+    // Preserve timestamp fields when they exist
+    // This prevents timestamps from being reset when updating a memo
+    if (createTime != null) {
+      json['createTime'] = createTime;
+    }
+
+    if (updateTime != null) {
+      json['updateTime'] = updateTime;
+    }
+
+    if (displayTime != null) {
+      json['displayTime'] = displayTime;
+    }
+
+    return json;
   }
 
   static MemoState _parseState(dynamic stateValue) {

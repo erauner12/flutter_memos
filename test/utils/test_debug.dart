@@ -3,7 +3,8 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// Global control flag for debug logs in markdown tests
-bool markdownDebugEnabled = true;  // Changed from false to true to enable debugging by default
+bool markdownDebugEnabled =
+    false; // Changed from false to true to enable debugging by default
 
 /// Print debug info only when markdown debugging is enabled
 void debugMarkdown(String message) {
@@ -15,7 +16,7 @@ void debugMarkdown(String message) {
 /// Temporarily enable markdown debugging for a specific test
 void withMarkdownDebug(Function() testFunction) {
   final oldValue = markdownDebugEnabled;
-  markdownDebugEnabled = true;
+  markdownDebugEnabled = false;
   try {
     testFunction();
   } finally {

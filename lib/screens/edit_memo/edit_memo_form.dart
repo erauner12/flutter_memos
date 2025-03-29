@@ -116,17 +116,23 @@ class _EditMemoFormState extends ConsumerState<EditMemoForm>
         '[EditMemoForm] Content length: ${_contentController.text.trim().length} characters',
       );
       print('[EditMemoForm] Settings: pinned=$_pinned, archived=$_archived');
+      print(
+        '[EditMemoForm] Original timestamps: createTime=${widget.memo.createTime}, updateTime=${widget.memo.updateTime}',
+      );
     }
 
     try {
+      // Create a copy of the memo, preserving original timestamps and only updating fields we want to change
       final updatedMemo = widget.memo.copyWith(
         content: _contentController.text.trim(),
         pinned: _pinned,
         state: _archived ? MemoState.archived : MemoState.normal,
+        // Don't explicitly set createTime or updateTime - let the API handle updateTime
       );
 
       // Use the provider to save the memo
       await ref.read(saveMemoProvider(widget.memoId))(updatedMemo);
+      
       if (kDebugMode) {
         print('[EditMemoForm] Memo saved successfully: ${widget.memoId}');
       }

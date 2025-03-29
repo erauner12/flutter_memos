@@ -3,6 +3,7 @@ import 'package:flutter_memos/models/memo.dart';
 import 'package:flutter_memos/providers/api_providers.dart';
 import 'package:flutter_memos/providers/filter_providers.dart';
 import 'package:flutter_memos/utils/filter_builder.dart';
+import 'package:flutter_memos/utils/memo_utils.dart'; // Added import
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// Enum for memo sort mode
@@ -65,13 +66,42 @@ final memosProvider = FutureProvider<List<Memo>>((ref) async {
     sort: sortField,
     direction: 'DESC', // Always newest first
   );
-  
+
   if (kDebugMode) {
     print('[memosProvider] Received ${memos.length} memos from API');
     if (memos.isNotEmpty) {
       print(
-        '[memosProvider] First memo ID: ${memos.first.id}, updateTime: ${memos.first.updateTime}',
+        '[memosProvider] First memo ID: ${memos.first.id}, updateTime: ${memos.first.updateTime}, createTime: ${memos.first.createTime}',
       );
+    }
+
+    // Apply memo sorting with detailed logging
+    print('[SORT] Client-side sorting by $sortField (newest first)');
+
+    // Sort memos if there are any
+    if (memos.isNotEmpty) {
+      // Store original first memo for comparison
+      final origFirstId = memos.isNotEmpty ? memos.first.id : null;
+
+      // Sort the memos by the specified field
+      MemoUtils.sortMemos(memos, sortField);
+
+      // Check if sorting changed the order
+      final sortedFirstId = memos.isNotEmpty ? memos.first.id : null;
+      if (origFirstId != sortedFirstId) {
+        print(
+          '[API-DEBUG] Client-side sorting by "$sortField" changed the order',
+        );
+        if (memos.isNotEmpty) {
+          print(
+            '[API-DEBUG] First memo after sorting: ${memos.first.id}, $sortField: ${sortField == 'updateTime' ? memos.first.updateTime : memos.first.createTime}',
+          );
+        }
+      } else {
+        print(
+          '[API-DEBUG] Client-side sorting by "$sortField" preserved the order',
+        );
+      }
     }
   }
   

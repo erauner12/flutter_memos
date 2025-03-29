@@ -31,7 +31,7 @@ void main() {
   group('Markdown Link Styling in Preview Mode', () {
     testWidgets('Links in preview are styled correctly', (WidgetTester tester) async {
       // Enable debugging
-      markdownDebugEnabled = true;
+      markdownDebugEnabled = false;
 
       // Build a form with a link in the content - use a more distinctive link text
       final memo = Memo(
@@ -127,7 +127,7 @@ void main() {
 
     testWidgets('Links with special characters render correctly', (WidgetTester tester) async {
       // Enable debug logs
-      markdownDebugEnabled = true;
+      markdownDebugEnabled = false;
       
       // Use more distinctive content with clear markers
       final memo = Memo(

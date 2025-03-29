@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_memos/models/memo.dart';
 import 'package:flutter_memos/providers/api_providers.dart';
 import 'package:flutter_memos/providers/memo_detail_provider.dart';
@@ -18,8 +19,21 @@ final saveMemoProvider = Provider.family<Future<void> Function(Memo), String>((
   return (Memo updatedMemo) async {
     final apiService = ref.read(apiServiceProvider);
     
+    if (kDebugMode) {
+      print('[saveMemoProvider] Updating memo: $id');
+      print(
+        '[saveMemoProvider] Before update: createTime=${updatedMemo.createTime}, updateTime=${updatedMemo.updateTime}',
+      );
+    }
+    
     // Update memo in the backend
     final savedMemo = await apiService.updateMemo(id, updatedMemo);
+
+    if (kDebugMode) {
+      print(
+        '[saveMemoProvider] After update: createTime=${savedMemo.createTime}, updateTime=${savedMemo.updateTime}',
+      );
+    }
 
     // Update memo detail cache if it exists
     if (ref.exists(memoDetailCacheProvider)) {
