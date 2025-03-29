@@ -23,8 +23,10 @@ void main() {
 
       // Swipe up to expand - use stronger upward gesture
       await tester.drag(captureUtilityFinder, const Offset(0, -150));
-      // Make sure we wait long enough for the animation
-      await tester.pumpAndSettle(const Duration(milliseconds: 800));
+      // Make sure we wait long enough for the physics animation to settle
+      await tester.pumpAndSettle(
+        const Duration(milliseconds: 1000),
+      ); // Increased duration
 
       // Verify it expanded
       final expandedHeight = tester.getSize(captureUtilityFinder).height;
@@ -38,16 +40,18 @@ void main() {
 
       // Swipe down to collapse - use stronger downward gesture
       await tester.drag(captureUtilityFinder, const Offset(0, 150));
-      // Make sure we wait long enough for the animation
-      await tester.pumpAndSettle(const Duration(milliseconds: 800));
+      // Make sure we wait long enough for the physics animation to settle
+      await tester.pumpAndSettle(
+        const Duration(milliseconds: 1000),
+      ); // Increased duration
 
       // Verify it collapsed
       final collapsedHeight = tester.getSize(captureUtilityFinder).height;
       debugPrint('Collapsed height after swipe down: $collapsedHeight');
       
-      // Allow for a small margin of error in the height comparison
+      // Allow for a slightly larger margin of error due to physics settling
       expect(
-        (collapsedHeight - initialHeight).abs() < 10,
+        (collapsedHeight - initialHeight).abs() < 15, // Increased tolerance
         isTrue,
         reason:
             'CaptureUtility height should return to approximately the initial height'
@@ -73,7 +77,9 @@ void main() {
 
       // Tap to expand
       await tester.tap(captureUtilityFinder);
-      await tester.pumpAndSettle(const Duration(milliseconds: 500));
+      await tester.pumpAndSettle(
+        const Duration(milliseconds: 600),
+      ); // Slightly increased duration for tap animation
 
       // Verify it expanded
       final expandedHeight = tester.getSize(captureUtilityFinder).height;
@@ -91,15 +97,18 @@ void main() {
 
       // Swipe down to collapse - use stronger downward gesture
       await tester.drag(captureUtilityFinder, const Offset(0, 150));
-      await tester.pumpAndSettle(const Duration(milliseconds: 800));
+      // Make sure we wait long enough for the physics animation to settle
+      await tester.pumpAndSettle(
+        const Duration(milliseconds: 1000),
+      ); // Increased duration
 
       // Verify it collapsed
       final collapsedHeight = tester.getSize(captureUtilityFinder).height;
       debugPrint('Collapsed height after swipe: $collapsedHeight');
       
-      // Allow for a small margin of error in the height comparison
+      // Allow for a slightly larger margin of error due to physics settling
       expect(
-        (collapsedHeight - initialHeight).abs() < 10,
+        (collapsedHeight - initialHeight).abs() < 15, // Increased tolerance
         isTrue,
         reason:
             'CaptureUtility height should return to approximately the initial height'

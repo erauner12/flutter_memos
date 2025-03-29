@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/physics.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/models/memo.dart';
@@ -34,39 +35,67 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
 
   // Animation controller for smooth transitions
   late AnimationController _animationController;
-  late Animation<double> _heightAnimation;
 
   // Track if user is currently dragging
   bool _isDragging = false;
 
   // Define min/max heights for the utility
-  final double _collapsedHeight = 70.0; // Increased to accommodate minimum content
-  final double _expandedHeight = 200.0; // Maximum expanded height
-  double _currentHeight = 70.0; // Current height (starts collapsed)
+  final double _collapsedHeight = 70.0;
+  final double _expandedHeight = 200.0;
+  double _currentHeight = 70.0;
+
+  // Define spring properties (adjust values for desired feel)
+  static const SpringDescription _springDescription = SpringDescription(
+    mass: 1.0,
+    stiffness: 100.0,
+    damping: 15.0,
+  );
 
   @override
   void initState() {
     super.initState();
+    _currentHeight = _collapsedHeight;
 
-    // Initialize animation controller
     _animationController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 250),
+      duration: const Duration(milliseconds: 400),
+      lowerBound: 0.0,
+      upperBound: 1.0,
     );
 
-    // Set up height animation
-    _heightAnimation = Tween<double>(
-      begin: _collapsedHeight,
-      end: _expandedHeight,
-    ).animate(
-      CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
-    );
-
-    // Listen to animation changes
     _animationController.addListener(() {
-      setState(() {
-        _currentHeight = _heightAnimation.value;
-      });
+      if (!_isDragging && _animationController.isAnimating) {
+        setState(() {
+          _currentHeight =
+              lerpDouble(
+                _collapsedHeight,
+                _expandedHeight,
+                _animationController.value,
+              )!;
+        });
+      }
+    });
+  }
+
+  // Helper method to start physics-based animation
+  void _animateTo(double targetValue) {
+    _animationController.stop();
+
+    final simulation = SpringSimulation(
+      _springDescription,
+      _animationController.value,
+      targetValue,
+      _animationController.velocity,
+    );
+
+    _animationController.animateWith(simulation).whenCompleteOrCancel(() {
+      if (!_isDragging && mounted) {
+        setState(() {
+          _currentHeight =
+              targetValue == 1.0 ? _expandedHeight : _collapsedHeight;
+          _animationController.value = targetValue;
+        });
+      }
     });
   }
 
@@ -78,37 +107,24 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
     super.dispose();
   }
 
-  // Property to check if expanded (for state management)
   bool get _isExpanded => _animationController.value > 0.5;
 
-  // Expand the capture utility
   void _expand() {
-    _animationController.forward();
+    _animateTo(1.0);
     _focusNode.requestFocus();
   }
 
-  // Collapse the capture utility
   void _collapse() {
-    _animationController.reverse();
+    _animateTo(0.0);
     _focusNode.unfocus();
-    // Immediately set the height to collapsed state to avoid overflow during transition
-    setState(() {
-      _currentHeight = _collapsedHeight;
-    });
   }
 
-  // Handle vertical drag to expand/collapse
   void _handleDragUpdate(DragUpdateDetails details) {
+    if (!_isDragging) return;
+
     setState(() {
-      _isDragging = true;
-
-      // Calculate new height based on drag (negative dy means up, positive means down)
       final newHeight = _currentHeight - details.delta.dy;
-
-      // Constrain height within min/max bounds
       _currentHeight = newHeight.clamp(_collapsedHeight, _expandedHeight);
-
-      // Update animation controller value based on current height
       _animationController.value =
           (_currentHeight - _collapsedHeight) /
           (_expandedHeight - _collapsedHeight);
@@ -116,41 +132,29 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
   }
 
   void _handleDragEnd(DragEndDetails details) {
-    setState(() {
-      _isDragging = false;
+    if (!_isDragging) return;
+    _isDragging = false;
 
-      // Calculate velocity direction - positive velocity means downward swipe
-      final isDownwardSwipe =
-          details.primaryVelocity != null && details.primaryVelocity! > 0;
-      final isUpwardSwipe =
-          details.primaryVelocity != null && details.primaryVelocity! < 0;
+    final dragVelocity = details.primaryVelocity ?? 0.0;
+    _animationController.velocity =
+        -dragVelocity / (_expandedHeight - _collapsedHeight);
 
-      // Use stronger velocity thresholds to ensure drags are detected properly
-      if (isDownwardSwipe && details.primaryVelocity!.abs() > 100) {
-        // Force collapse on downward swipe with velocity
-        _animationController.animateTo(0.0);
-        // Reset height immediately to avoid transition overflow
-        _currentHeight = _collapsedHeight;
-        _collapse();
-      } else if (isUpwardSwipe && details.primaryVelocity!.abs() > 100) {
-        // Force expand on upward swipe with velocity
-        _animationController.animateTo(1.0);
-        _expand();
-      }
-      // Otherwise use position threshold to determine state
-      else if (_animationController.value > 0.3) {
-        _expand();
-      } else {
-        // Reset height immediately to avoid transition overflow
-        _currentHeight = _collapsedHeight;
-        _collapse();
-      }
-    });
+    final currentFraction = _animationController.value;
+    double targetValue;
+
+    if (_animationController.velocity.abs() > 0.5) {
+      targetValue = _animationController.velocity < 0 ? 1.0 : 0.0;
+    } else {
+      targetValue = currentFraction > 0.5 ? 1.0 : 0.0;
+    }
+
+    _animateTo(targetValue);
   }
 
   void _handleDragStart(DragStartDetails details) {
     setState(() {
       _isDragging = true;
+      _animationController.stop();
     });
   }
 
@@ -162,7 +166,6 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
       setState(() {
         _textController.text = clipboardData.text!;
       });
-      // Ensure we're expanded when pasting content
       if (!_isExpanded) {
         _expand();
       }
@@ -190,7 +193,6 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
         _isSubmitting = false;
       });
 
-      // Collapse after successful submission
       _collapse();
     } catch (e) {
       setState(() {
@@ -210,11 +212,8 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
 
   Future<void> _createMemo(String content) async {
     final newMemo = Memo(id: 'temp', content: content, visibility: 'PUBLIC');
-
-    // Use the existing createMemo provider
     await ref.read(createMemoProvider)(newMemo);
 
-    // Show success message
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -229,14 +228,12 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
     final newComment = Comment(
       id: 'temp-${DateTime.now().millisecondsSinceEpoch}',
       content: content,
-      creatorId: '1', // Default user ID
+      creatorId: '1',
       createTime: DateTime.now().millisecondsSinceEpoch,
     );
 
-    // Use the addComment provider from memo detail
     await ref.read(addCommentProvider(memoId))(newComment);
 
-    // Show success message
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -250,13 +247,11 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
   void _handleKeyEvent(RawKeyEvent event) {
     if (event is RawKeyDownEvent) {
       if (event.logicalKey == LogicalKeyboardKey.escape) {
-        // If expanded, collapse on escape
         if (_isExpanded) {
           _collapse();
         }
       } else if (event.logicalKey == LogicalKeyboardKey.enter &&
           event.isMetaPressed) {
-        // Submit on Command+Enter
         if (_isExpanded && !_isSubmitting) {
           _handleSubmit();
         }
@@ -271,7 +266,6 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
     final keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
     final edgeInsets = MediaQuery.of(context).padding;
 
-    // Determine text based on mode
     final hintText =
         widget.hintText ??
         (widget.mode == CaptureMode.createMemo
@@ -287,19 +281,21 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
             ? 'Capture something ...'
             : 'Add a comment...';
 
-    // Responsive width based on screen size, accounting for safe areas
     double containerWidth;
     if (size.width > 800) {
-      containerWidth = 400; // Desktop-style narrower box
+      containerWidth = 400;
     } else {
-      // Calculate available width accounting for horizontal safe areas
       final availableWidth =
           size.width -
           edgeInsets.left -
           edgeInsets.right -
-          32; // 16px padding on each side
+          32;
       containerWidth = availableWidth > 0 ? availableWidth : size.width * 0.85;
     }
+
+    final frameHeight = _currentHeight.clamp(_collapsedHeight, _expandedHeight);
+    final bool showExpandedContent =
+        _isExpanded || _animationController.value > 0.1;
 
     return SafeArea(
       bottom: true,
@@ -315,88 +311,64 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
               _expand();
             }
           },
-          child: AnimatedContainer(
-            duration:
-                _isDragging
-                    ? Duration
-                        .zero // No animation during active drag
-                    : const Duration(milliseconds: 250),
-            curve: Curves.easeInOut,
+          child: Container(
             width: containerWidth,
-            height: _currentHeight,
+            height: frameHeight,
             decoration: BoxDecoration(
-              color: isDarkMode ? const Color(0xFF2C2C2C) : Colors.white,
+              color: Colors.transparent,
               borderRadius: BorderRadius.circular(12),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
               border: Border.all(
                 color: isDarkMode ? Colors.grey[800]! : Colors.grey[300]!,
-                width: 1,
+                width: 0.5,
               ),
             ),
             child: ClipRRect(
-              // Ensures content stays within rounded corners
               borderRadius: BorderRadius.circular(12),
               child: Stack(
-                // Use Stack for potential layering if needed later
-                clipBehavior: Clip.hardEdge, // Clip overflow from children
+                clipBehavior: Clip.hardEdge,
                 children: [
-                  // Main content column
                   Column(
-                    // Use max size to fill the AnimatedContainer height
                     mainAxisSize: MainAxisSize.max,
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      // Drag indicator pill - minimal height, always visible
                       Container(
                         width: 40,
-                        height: 3, // Reduced height
-                        margin: const EdgeInsets.only(top: 6, bottom: 4), // Reduced margins
+                        height: 3,
+                        margin: const EdgeInsets.only(top: 6, bottom: 4),
                         decoration: BoxDecoration(
-                          color: isDarkMode ? Colors.grey[700] : Colors.grey[300],
+                          color: Theme.of(
+                            context,
+                          ).dividerColor.withOpacity(0.6),
                           borderRadius: BorderRadius.circular(2),
                         ),
                       ),
-
-                      // Content Area: Use Expanded to fill remaining vertical space
                       Expanded(
                         child: Padding(
-                          // Apply consistent padding within the main content area
                           padding: const EdgeInsets.symmetric(
                             horizontal: 12,
-                            vertical: 2,
+                            vertical: 0,
                           ),
                           child:
-                              _isExpanded
-                                  // Expanded State: TextField + Buttons Column
+                              showExpandedContent
                                   ? Column(
                                     children: [
                                       Expanded(
-                                        // TextField takes available space in the nested Column
                                         child: RawKeyboardListener(
-                                          focusNode:
-                                              FocusNode(), // Use a local focus node for listener
+                                          focusNode: FocusNode(),
                                           onKey: _handleKeyEvent,
                                           child: TextField(
                                             controller: _textController,
-                                            focusNode:
-                                                _focusNode, // Use the state's focus node for input
+                                            focusNode: _focusNode,
                                             decoration: InputDecoration(
                                               hintText: hintText,
                                               border: InputBorder.none,
-                                              isDense:
-                                                  true, // More compact layout
+                                              isDense: true,
                                               contentPadding:
-                                                  EdgeInsets
-                                                      .zero, // Remove extra padding
+                                                  const EdgeInsets.symmetric(
+                                                    vertical: 4.0,
+                                                  ),
                                             ),
-                                            maxLines:
-                                                null, // Allow multiple lines
+                                            maxLines: null,
                                             minLines:
                                                 widget.mode ==
                                                         CaptureMode.createMemo
@@ -411,17 +383,15 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
                                           ),
                                         ),
                                       ),
-                                      // Buttons row at the bottom when expanded
                                       Padding(
                                         padding: const EdgeInsets.only(
-                                          top: 4,
+                                          top: 0,
                                           bottom: 4,
-                                        ), // Space buttons from text field
+                                        ),
                                         child: Row(
                                           mainAxisAlignment:
                                               MainAxisAlignment.spaceBetween,
                                           children: [
-                                            // Paste button
                                             TextButton.icon(
                                               onPressed: _handlePaste,
                                               icon: const Icon(
@@ -441,7 +411,6 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
                                                         .shrinkWrap,
                                               ),
                                             ),
-                                            // Submit button
                                             ElevatedButton(
                                               onPressed:
                                                   _isSubmitting
@@ -479,22 +448,19 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
                                       ),
                                     ],
                                   )
-                                  // Collapsed State: Simple Placeholder Text
                                   : Align(
                                     alignment: Alignment.centerLeft,
                                     child: Text(
                                       placeholderText,
                                       style: TextStyle(
-                                        fontSize: 14, // Smaller text
+                                        fontSize: 14,
                                         color:
                                             isDarkMode
                                                 ? Colors.grey[400]
                                                 : Colors.grey[600],
                                       ),
-                                      overflow:
-                                          TextOverflow
-                                              .ellipsis, // Prevent text overflow
-                                      maxLines: 1, // Ensure single line
+                                      overflow: TextOverflow.ellipsis,
+                                      maxLines: 1,
                                     ),
                                   ),
                         ),
