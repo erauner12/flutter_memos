@@ -22,10 +22,25 @@ void main() {
     tearDown(() async {
       // Clean up the memo created in each test
       if (testMemoId != null && RUN_TIMESTAMP_API_TESTS) {
+        final memoName = 'memos/$testMemoId';
         try {
-          await memoApi.memoServiceDeleteMemo('memos/$testMemoId');
-          print('[Cleanup] Deleted test memo: $testMemoId');
+          // Use WithHttpInfo to handle potentially empty success responses
+          final response = await memoApi.memoServiceDeleteMemoWithHttpInfo(
+            memoName,
+          );
+          if (response.statusCode >= 200 && response.statusCode < 300) {
+            print(
+              '[Cleanup] Successfully deleted test memo: $testMemoId (Status: ${response.statusCode})',
+            );
+          } else {
+            // Throw an exception if the status code indicates failure
+            throw ApiException(
+              response.statusCode,
+              'Failed to delete memo during cleanup: ${response.body}',
+            );
+          }
         } catch (e) {
+          // Catch potential exceptions during the API call or from the check above
           print('[Cleanup] Error deleting test memo $testMemoId: $e');
         }
         testMemoId = null; // Reset for the next test
