@@ -209,5 +209,93 @@ void main() {
 
       print('Test 2 PASSED: Client-side fix simulation successfully corrected the createTime.');
     });
+
+    test('Test 3: Demonstrate failure without client-side createTime fix', () async {
+      if (!RUN_TIMESTAMP_API_TESTS) {
+        print('Skipping timestamp API test 3');
+        return;
+      }
+
+      print('\n--- Test 3: Demonstrate Failure Without Fix ---');
+
+      // 1. Create a memo
+      final initialContent =
+          'Timestamp Test 3 - Initial Content ${DateTime.now()}';
+      final createPayload = Apiv1Memo(
+        content: initialContent,
+        visibility: V1Visibility.PUBLIC,
+      );
+      final createdMemoResponse = await memoApi.memoServiceCreateMemo(
+        createPayload,
+      );
+      expect(createdMemoResponse, isNotNull, reason: 'Failed to create memo');
+      testMemoId =
+          createdMemoResponse!.name?.split('/').last; // Store ID for cleanup
+      final originalCreateTime = createdMemoResponse.createTime; // Correct time
+
+      print('Created Memo ID: $testMemoId');
+      print('Original createTime: ${originalCreateTime?.toIso8601String()}');
+      expect(originalCreateTime, isNotNull);
+      // Ensure original createTime is not epoch
+      expect(
+        originalCreateTime!.year,
+        isNot(equals(1970)),
+        reason: 'Original createTime should not be epoch',
+      );
+      expect(
+        originalCreateTime.year,
+        isNot(equals(1)),
+        reason: 'Original createTime should not be year 1',
+      );
+
+      // Introduce a delay to ensure updateTime changes
+      await Future.delayed(const Duration(seconds: 1));
+
+      // 2. Update the memo
+      final updatedContent =
+          'Timestamp Test 3 - Updated Content ${DateTime.now()}';
+      final updatePayload = TheMemoToUpdateTheNameFieldIsRequired(
+        content: updatedContent,
+      );
+      final updatedMemoResponse = await memoApi.memoServiceUpdateMemo(
+        'memos/$testMemoId',
+        updatePayload,
+      );
+      expect(updatedMemoResponse, isNotNull, reason: 'Failed to update memo');
+
+      final responseCreateTime =
+          updatedMemoResponse!.createTime; // Incorrect time from server
+      final responseUpdateTime =
+          updatedMemoResponse.updateTime; // Correctly updated time
+
+      print('--- Server Response After Update ---');
+      print('Response createTime: ${responseCreateTime?.toIso8601String()}');
+      print('Response updateTime: ${responseUpdateTime?.toIso8601String()}');
+
+      // 3. Assertions - This is where the failure is expected
+      expect(
+        responseCreateTime,
+        isNotNull,
+        reason: 'Response createTime should not be null',
+      );
+
+      print(
+        'Comparing original createTime (${originalCreateTime.toIso8601String()}) with response createTime (${responseCreateTime!.toIso8601String()})',
+      );
+
+      // *** THIS ASSERTION IS EXPECTED TO FAIL ***
+      // It directly compares the original correct time with the incorrect epoch time returned by the server.
+      expect(
+        responseCreateTime.toIso8601String(),
+        equals(originalCreateTime.toIso8601String()),
+        reason:
+            'EXPECTED FAILURE: Server response createTime (${responseCreateTime.toIso8601String()}) should match the original (${originalCreateTime.toIso8601String()}), but server returns epoch.',
+      );
+
+      // If the test reaches here, the server bug might be fixed or masked.
+      print(
+        'Test 3 UNEXPECTEDLY PASSED: The server might have returned the correct createTime.',
+      );
+    });
   });
 }
