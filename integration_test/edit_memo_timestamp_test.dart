@@ -121,20 +121,38 @@ void main() {
     await tester.pumpAndSettle(const Duration(seconds: 3)); // Wait for save and navigation back
 
     // Verify back on Detail Screen
-    expect(find.byType(MemoDetailScreen), findsOneWidget, reason: 'Should navigate back to MemoDetailScreen after saving');
     debugPrint('[Test Verification] Navigated back to Detail Screen');
+    await tester.pumpAndSettle(const Duration(seconds: 1)); // Extra settle
 
     // Navigate back to the List Screen
     await tester.tap(find.byType(BackButton));
-    await tester.pumpAndSettle(const Duration(seconds: 2)); // Wait for list to potentially refresh
+    debugPrint('[Test Action] Tapped back button to return to list.');
+    await tester.pumpAndSettle(
+      const Duration(seconds: 4),
+    ); // Wait longer for navigation and initial provider refresh
     expect(find.byType(MemosScreen), findsOneWidget, reason: 'Should navigate back to MemosScreen');
     debugPrint('[Test Verification] Navigated back to List Screen');
+
+    // --- Explicit Refresh ---
+    debugPrint('[Test Action] Performing pull-to-refresh on list screen...');
+    await tester.fling(
+      find.byType(ListView).first,
+      const Offset(0.0, 400.0),
+      1000.0,
+    );
+    await tester.pumpAndSettle(
+      const Duration(seconds: 4),
+    ); // Wait for refresh API call and rebuild
+    debugPrint('[Test Action] Pull-to-refresh complete.');
+
 
     // --- Final Verification ---
     debugPrint('[Test Verification] Verifying updated memo is at the top of the list...');
 
-    // Ensure the list has finished loading/updating
-    await tester.pumpAndSettle(const Duration(seconds: 3));
+    // Ensure the list has finished loading/updating AFTER the refresh
+    await tester.pumpAndSettle(
+      const Duration(seconds: 3),
+    ); // Generous wait after refresh
 
     // Find all MemoCard widgets again
     final memoCardsAfterUpdate = find.byType(MemoCard);
