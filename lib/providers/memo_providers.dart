@@ -189,6 +189,41 @@ final deleteMemoProvider = Provider.family<Future<void> Function(), String>((ref
   };
 });
 
+/// Provider for bumping a memo (updating its timestamp)
+final bumpMemoProvider = Provider.family<Future<void> Function(), String>((
+  ref,
+  id,
+) {
+  return () async {
+    if (kDebugMode) {
+      print('[bumpMemoProvider] Bumping memo: $id');
+    }
+    final apiService = ref.read(apiServiceProvider);
+
+    try {
+      // Get the current memo data to ensure content isn't lost
+      final currentMemo = await apiService.getMemo(id);
+
+      // Call updateMemo - it sends client time as updateTime implicitly
+      await apiService.updateMemo(id, currentMemo);
+
+      if (kDebugMode) {
+        print('[bumpMemoProvider] Successfully bumped memo: $id');
+      }
+
+      // Refresh the memos list to reflect the new order
+      ref.invalidate(memosProvider);
+    } catch (e, stackTrace) {
+      if (kDebugMode) {
+        print('[bumpMemoProvider] Error bumping memo $id: $e');
+        print(stackTrace);
+      }
+      // Rethrow to allow UI to show error feedback
+      rethrow;
+    }
+  };
+}, name: 'bumpMemo');
+
 /// OPTIMIZATION: Provider for updating a memo with optimistic updates
 final updateMemoProvider = Provider.family<Future<Memo> Function(Memo), String>(
   (ref, id) {
