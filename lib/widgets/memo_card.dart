@@ -20,6 +20,7 @@ class MemoCard extends StatefulWidget {
   final VoidCallback? onHide;
   final VoidCallback? onTogglePin;
   final bool isSelected; // Add isSelected property for keyboard navigation
+  final VoidCallback? onBump; // Add onBump callback
 
   const MemoCard({
     super.key,
@@ -36,6 +37,7 @@ class MemoCard extends StatefulWidget {
     this.onHide,
     this.onTogglePin,
     this.isSelected = false, // Default to not selected
+    this.onBump, // Add onBump to constructor
   });
 
   @override
@@ -156,6 +158,11 @@ class _MemoCardState extends State<MemoCard> {
                     duration: Duration(seconds: 2),
                   ),
                 );
+              },
+              onBump: () {
+                // Add onBump handler
+                Navigator.pop(context);
+                widget.onBump?.call();
               },
             );
           },

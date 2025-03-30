@@ -10,12 +10,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 class MemoListItem extends ConsumerWidget {
   final Memo memo;
   final int index; // Add index for selection tracking
-  
-  const MemoListItem({
-    super.key,
-    required this.memo,
-    required this.index,
-  });
+
+  const MemoListItem({super.key, required this.memo, required this.index});
 
   void _toggleHideMemo(BuildContext context, WidgetRef ref) {
     final hiddenMemoIds = ref.read(hiddenMemoIdsProvider);
@@ -29,7 +25,7 @@ class MemoListItem extends ConsumerWidget {
       ref
           .read(hiddenMemoIdsProvider.notifier)
           .update((state) => state..add(memo.id));
-      
+
       // Show a confirmation that the memo was hidden
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -62,7 +58,7 @@ class MemoListItem extends ConsumerWidget {
     if (isSelected && kDebugMode) {
       print('[MemoListItem] Memo at index $index is selected');
     }
-    
+
     return Dismissible(
       key: ValueKey('dismissible-${memo.id}'),
       background: Container(
@@ -90,10 +86,7 @@ class MemoListItem extends ConsumerWidget {
         padding: const EdgeInsets.symmetric(horizontal: 20.0),
         child: const Text(
           'Delete',
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-          ),
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
       ),
       onDismissed: (direction) {
@@ -102,7 +95,7 @@ class MemoListItem extends ConsumerWidget {
           ref
               .read(hiddenMemoIdsProvider.notifier)
               .update((state) => state..add(memo.id));
-          
+
           // Then trigger the API delete operation
           WidgetsBinding.instance.addPostFrameCallback((_) {
             // Create a local reference to the providers we need to call
@@ -254,16 +247,39 @@ class MemoListItem extends ConsumerWidget {
             },
             onHide: () => _toggleHideMemo(context, ref),
             onTogglePin: () => ref.read(togglePinMemoProvider(memo.id))(),
+            onBump: () async {
+              // Add onBump callback implementation
+              try {
+                await ref.read(bumpMemoProvider(memo.id))();
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Memo bumped!'),
+                      duration: Duration(seconds: 1),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        'Failed to bump memo: ${e.toString().substring(0, 50)}...',
+                      ),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              }
+            },
           ),
           // Archive button positioned at top-right corner
           Positioned(
             top: 4,
             right: 4,
             child: IconButton(
-              icon: const Icon(
-                Icons.archive_outlined,
-                size: 20,
-              ),
+              icon: const Icon(Icons.archive_outlined, size: 20),
               tooltip: 'Archive',
               constraints: const BoxConstraints(),
               padding: const EdgeInsets.all(8),
@@ -272,9 +288,7 @@ class MemoListItem extends ConsumerWidget {
                 // Use the archive memo provider
                 // Store context to use after async operation
                 final currentContext = context;
-                ref.read(archiveMemoProvider(memo.id))().then((
-                  _,
-                ) {
+                ref.read(archiveMemoProvider(memo.id))().then((_) {
                   // Use the stored context instead of checking mounted
                   ScaffoldMessenger.of(currentContext).showSnackBar(
                     const SnackBar(

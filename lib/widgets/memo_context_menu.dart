@@ -4,7 +4,8 @@ import 'package:flutter/material.dart';
 class MemoContextMenu extends StatelessWidget {
   final String memoId;
   final bool isPinned;
-  final Offset position; // not used here, but can be used for context menus near tap
+  final Offset
+  position; // not used here, but can be used for context menus near tap
   final VoidCallback? onView;
   final VoidCallback? onEdit;
   final VoidCallback? onArchive;
@@ -13,6 +14,7 @@ class MemoContextMenu extends StatelessWidget {
   final VoidCallback? onPin;
   final VoidCallback? onCopy;
   final VoidCallback? onClose;
+  final VoidCallback? onBump; // Add onBump callback
   final BuildContext parentContext;
   final ScrollController? scrollController;
 
@@ -31,6 +33,7 @@ class MemoContextMenu extends StatelessWidget {
     this.onPin,
     this.onCopy,
     this.onClose,
+    this.onBump, // Add onBump to constructor
   });
 
   @override
@@ -122,7 +125,13 @@ class MemoContextMenu extends StatelessWidget {
                       isDarkMode: isDarkMode,
                     ),
                     _buildMenuItem(
-                      key: const Key('archive_menu_item'),  // Key for testing
+                      icon: Icons.arrow_upward, // Add Bump item
+                      label: 'Bump',
+                      onTap: onBump,
+                      isDarkMode: isDarkMode,
+                    ),
+                    _buildMenuItem(
+                      key: const Key('archive_menu_item'), // Key for testing
                       icon: Icons.archive_outlined,
                       label: 'Archive',
                       onTap: onArchive,
