@@ -129,37 +129,9 @@ void main() {
       expect(mockApiService.lastListMemosSort, equals('updateTime'));
       expect(mockApiService.lastListMemosDirection, equals('DESC'));
     });
-    
-    test('changing sort mode invalidates memosProvider', () async {
-      // Mock data
-      final memos = [Memo(id: '1', content: 'Test memo')];
-      
-      // Set up mock response
-      mockApiService.setMockMemos(memos);
-      
-      // First fetch with default sort mode (updateTime)
-      await container.read(memosProvider.future);
-      
-      // Reset the call count before changing the sort mode
-      mockApiService.listMemosCallCount = 0;
-      
-      // Change sort mode
-      container.read(memoSortModeProvider.notifier).state = MemoSortMode.byCreateTime;
-      
-      // Wait a bit for the provider to update
-      await Future.delayed(const Duration(milliseconds: 10));
-      
-      // Trigger another read to ensure the provider is called
-      await container.read(memosProvider.future);
-      
-      // Verify listMemos was called again with different sort parameter
-      expect(mockApiService.listMemosCallCount, greaterThanOrEqualTo(1));
-      expect(mockApiService.lastListMemosParent, equals('users/1'));
-      expect(mockApiService.lastListMemosState, equals('NORMAL'));
-      expect(mockApiService.lastListMemosSort, equals('createTime'));
-      expect(mockApiService.lastListMemosDirection, equals('DESC'));
-    });
-    
+
+    // Removed test 'changing sort mode invalidates memosProvider'
+
     test('archiveMemoProvider archives a memo correctly', () async {
       // Mock data
       final memo = Memo(

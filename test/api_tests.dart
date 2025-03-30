@@ -42,89 +42,55 @@ void main() {
       final firstQueryServerOrder = List<String>.from(
         ApiService.lastServerOrder,
       );
-      
-      // Then fetch memos sorted by create time
-      final memosByCreateTime = await apiService.listMemos(
-        parent: 'users/1', // Specify the user ID
-        sort: 'createTime',
-        direction: 'DESC',
-      );
-      
-      // Store the server order from the second query
-      final secondQueryServerOrder = List<String>.from(
-        ApiService.lastServerOrder,
-      );
 
-      // Log the first few memos from each query after client-side sorting
+      // Removed fetching by createTime as it's unreliable and not used
+
+      // Log the first few memos from the query after client-side sorting
       print(
         '\n--- First 3 memos sorted by updateTime (after client-side sorting) ---',
       );
       for (int i = 0; i < min(3, memosByUpdateTime.length); i++) {
         print('[${i + 1}] ID: ${memosByUpdateTime[i].id}');
         print('    updateTime: ${memosByUpdateTime[i].updateTime}');
-        print('    createTime: ${memosByUpdateTime[i].createTime}');
-      }
-      
-      print(
-        '\n--- First 3 memos sorted by createTime (after client-side sorting) ---',
-      );
-      for (int i = 0; i < min(3, memosByCreateTime.length); i++) {
-        print('[${i + 1}] ID: ${memosByCreateTime[i].id}');
-        print('    updateTime: ${memosByCreateTime[i].updateTime}');
-        print('    createTime: ${memosByCreateTime[i].createTime}');
-      }
-      
-      // Check if the ORIGINAL SERVER ORDERS are different (before client-side sorting)
-      bool serverOrdersAreDifferent = false;
-      for (
-        int i = 0;
-        i < min(firstQueryServerOrder.length, secondQueryServerOrder.length);
-        i++
-      ) {
-        if (firstQueryServerOrder[i] != secondQueryServerOrder[i]) {
-          serverOrdersAreDifferent = true;
-          break;
-        }
+        // print('    createTime: ${memosByUpdateTime[i].createTime}'); // Removed createTime log
       }
 
-      // Check if the FINAL ORDERS (after client-side sorting) are different
-      bool finalOrdersAreDifferent = false;
-      for (int i = 0; i < min(memosByUpdateTime.length, memosByCreateTime.length); i++) {
-        if (memosByUpdateTime[i].id != memosByCreateTime[i].id) {
-          finalOrdersAreDifferent = true;
+      // Removed logging/checks related to createTime sort and server order comparison
+      // as we now only rely on client-side updateTime sorting.
+
+      print('\n--- Client-Side Sorting Verification ---');
+      // Verify the client-side sorting by updateTime worked (redundant with sorting_test but good here too)
+      bool clientSortedCorrectly = true;
+      for (int i = 0; i < memosByUpdateTime.length - 1; i++) {
+        final current =
+            memosByUpdateTime[i].updateTime != null
+                ? DateTime.parse(memosByUpdateTime[i].updateTime!)
+                : DateTime.fromMillisecondsSinceEpoch(0);
+        final next =
+            memosByUpdateTime[i + 1].updateTime != null
+                ? DateTime.parse(memosByUpdateTime[i + 1].updateTime!)
+                : DateTime.fromMillisecondsSinceEpoch(0);
+        if (!(current.isAfter(next) || current.isAtSameMomentAs(next))) {
+          clientSortedCorrectly = false;
+          print(
+            'Client sorting error at index $i: ${memosByUpdateTime[i].id} vs ${memosByUpdateTime[i + 1].id}',
+          );
           break;
         }
       }
-      
-      // Print results of both checks
-      print('\n--- Server Side Sorting Check ---');
-      if (serverOrdersAreDifferent) {
-        print(
-          '✅ SERVER is respecting sort parameters - returned different orders',
-        );
+      if (clientSortedCorrectly) {
+        print('✅ Client-side sorting by updateTime appears correct.');
       } else {
-        print(
-          '❌ SERVER is NOT respecting sort parameters - returned same order for both queries',
-        );
+        print('❌ Client-side sorting by updateTime FAILED.');
       }
-      
-      print('\n--- Client Side Sorting Check ---');
-      if (finalOrdersAreDifferent) {
-        print('✅ CLIENT sorting is working - final orders are different');
-      } else {
-        print(
-          '❌ CLIENT sorting is not differentiating - final orders are the same',
-        );
-      }
-      
-      // If server sorting is broken but client sorting works, that's acceptable
-      if (!serverOrdersAreDifferent && finalOrdersAreDifferent) {
-        print(
-          '\n🔧 WORKAROUND SUCCESSFUL: Client-side sorting is fixing the server sorting issue',
-        );
-      }
+      expect(
+        clientSortedCorrectly,
+        isTrue,
+        reason: 'Client should sort correctly by updateTime',
+      );
+
     });
-    
+
     test('Verify client-side sorting behavior', () async {
       // Skip this test unless RUN_API_TESTS is true
       if (!RUN_API_TESTS) {
@@ -245,18 +211,20 @@ void main() {
 
       print('\n[TEST] Using snake_case sort fields (enabled)');
 
+      // Test with updateTime as it's the only one we use now
       final memosWithSnakeCase = await apiService.listMemos(
         parent: 'users/1',
-        sort: 'createTime',
+        sort: 'updateTime', // Changed to updateTime
         direction: 'DESC',
       );
 
       final snakeCaseOrder = List<String>.from(ApiService.lastServerOrder);
 
-      // Then try with snake_case conversion DISABLED
+      // Then try with snake_case conversion DISABLED (if applicable to your generator/client)
+      // Assuming the client handles this automatically or it's not relevant now
       final memosWithCamelCase = await apiService.listMemos(
         parent: 'users/1',
-        sort: 'createTime',
+        sort: 'updateTime', // Changed to updateTime
         direction: 'DESC',
       );
 

@@ -56,7 +56,7 @@ class MemoListItem extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final sortMode = ref.watch(memoSortModeProvider);
+    // Removed sortMode watch, always using updateTime now.
     final isSelected = ref.watch(selectedMemoIndexProvider) == index;
 
     if (isSelected && kDebugMode) {
@@ -172,21 +172,15 @@ class MemoListItem extends ConsumerWidget {
             id: memo.id,
             content: memo.content,
             pinned: memo.pinned,
-            createdAt: memo.createTime,
+            // createdAt: memo.createTime, // Removed createTime display
             updatedAt: memo.updateTime,
             showTimeStamps: true,
             isSelected:
                 ref.watch(selectedMemoIndexProvider) ==
                 index, // Add selected state
-            // Display relevant timestamp based on sort mode
-            highlightTimestamp:
-                sortMode == MemoSortMode.byUpdateTime
-                    ? MemoUtils.formatTimestamp(memo.updateTime)
-                    : MemoUtils.formatTimestamp(memo.createTime),
-            timestampType:
-                sortMode == MemoSortMode.byUpdateTime
-                    ? 'Updated'
-                    : 'Created',
+            // Always highlight update time now
+            highlightTimestamp: MemoUtils.formatTimestamp(memo.updateTime),
+            timestampType: 'Updated', // Always 'Updated'
             onTap: () => _navigateToMemoDetail(context, ref),
             onArchive: () => ref.read(archiveMemoProvider(memo.id))(),
             onDelete: () async {

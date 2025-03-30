@@ -9,7 +9,6 @@ import 'package:flutter_slidable/flutter_slidable.dart';
 class MemoCard extends StatefulWidget {
   final String content;
   final bool pinned;
-  final String? createdAt;
   final String? updatedAt;
   final bool showTimeStamps;
   final String? highlightTimestamp;
@@ -26,7 +25,6 @@ class MemoCard extends StatefulWidget {
     super.key,
     required this.content,
     this.pinned = false,
-    this.createdAt,
     this.updatedAt,
     this.showTimeStamps = false,
     this.highlightTimestamp,
@@ -434,63 +432,35 @@ class _MemoCardState extends State<MemoCard> {
 
                 // Show detailed timestamps with improved styling
                 if (widget.showTimeStamps &&
-                    (widget.createdAt != null || widget.updatedAt != null))
+                    widget.updatedAt != null)
                   Padding(
                     padding: const EdgeInsets.only(top: 8.0),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        if (widget.createdAt != null)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 4.0),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  Icons.create,
-                                  size: 14,
-                                  color:
-                                      isDarkMode
-                                          ? const Color(0xFF9E9E9E)
-                                          : Colors.grey[600],
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  'Created: ${_formatDateTime(widget.createdAt!)}',
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    color:
-                                        isDarkMode
-                                            ? const Color(0xFF9E9E9E)
-                                            : Colors.grey[600],
-                                  ),
-                                ),
-                              ],
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.update,
+                              size: 14,
+                              color:
+                                  isDarkMode
+                                      ? const Color(0xFF9E9E9E)
+                                      : Colors.grey[600],
                             ),
-                          ),
-                        if (widget.updatedAt != null)
-                          Row(
-                            children: [
-                              Icon(
-                                Icons.update,
-                                size: 14,
+                            const SizedBox(width: 4),
+                            Text(
+                              'Updated: ${_formatDateTime(widget.updatedAt!)}',
+                              style: TextStyle(
+                                fontSize: 13,
                                 color:
                                     isDarkMode
                                         ? const Color(0xFF9E9E9E)
                                         : Colors.grey[600],
                               ),
-                              const SizedBox(width: 4),
-                              Text(
-                                'Updated: ${_formatDateTime(widget.updatedAt!)}',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  color:
-                                      isDarkMode
-                                          ? const Color(0xFF9E9E9E)
-                                          : Colors.grey[600],
-                                ),
-                              ),
-                            ],
-                          ),
+                            ),
+                          ],
+                        ),
                       ],
                     ),
                   ),

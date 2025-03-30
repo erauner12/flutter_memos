@@ -337,7 +337,7 @@ class _FilterDemoScreenState extends ConsumerState<FilterDemoScreen> {
               id: memo.id,
               content: memo.content,
               pinned: memo.pinned,
-              createdAt: memo.createTime,
+              // createdAt: memo.createTime,
               updatedAt: memo.updateTime,
               showTimeStamps: true,
               onTap: () {

@@ -70,36 +70,12 @@ void main() {
     );
     debugPrint('[Test Setup] ProviderContainer access removed.');
 
-    // Ensure sorting by Updated Time via UI
-    debugPrint('[Test Action] Ensuring sort mode is byUpdateTime via UI...');
-    final sortByCreatedFinder = find.text('Sort by: Created');
-    final sortByUpdatedFinder = find.text('Sort by: Updated');
+    // Removed check for sort button UI, as sorting is now fixed to updateTime.
+    debugPrint('[Test Info] Assuming sort mode is byUpdateTime (hardcoded).');
 
-    // Check if the "Sort by: Created" button exists
-    if (sortByCreatedFinder.evaluate().isNotEmpty) {
-      debugPrint(
-        '[Test Action] Found "Sort by: Created", tapping to switch...',
-      );
-      await tester.tap(sortByCreatedFinder);
-      await tester.pumpAndSettle(const Duration(seconds: 1));
-      expect(
-        sortByUpdatedFinder,
-        findsOneWidget,
-        reason: 'Should switch to Sort by: Updated',
-      );
-      debugPrint('[Test Action] Switched sort mode.');
-    } else {
-      expect(
-        sortByUpdatedFinder,
-        findsOneWidget,
-        reason: 'Should already be sorting by Updated',
-      );
-      debugPrint('[Test State] Sort mode is already byUpdateTime.');
-    }
 
     // Refresh list to ensure the new memo is visible
     debugPrint('[Test Action] Refreshing memo list...');
-    await tester.fling(find.byType(ListView), const Offset(0.0, 400.0), 1000.0);
     await tester.pumpAndSettle(const Duration(seconds: 3)); // Wait for refresh
 
     // Find the newly created memo card

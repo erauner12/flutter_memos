@@ -6,11 +6,9 @@ import 'package:flutter_memos/utils/filter_builder.dart';
 import 'package:flutter_memos/utils/memo_utils.dart'; // Added import
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-/// Enum for memo sort mode
-enum MemoSortMode { byUpdateTime, byCreateTime }
-
-/// Provider for the current sort mode
-final memoSortModeProvider = StateProvider<MemoSortMode>((ref) => MemoSortMode.byUpdateTime);
+// Removed MemoSortMode enum and memoSortModeProvider
+// We now exclusively sort by updateTime due to server inconsistencies 
+// with createTime after updates.
 
 /// Provider for the list of hidden memo IDs
 final hiddenMemoIdsProvider = StateProvider<Set<String>>((ref) => {});
@@ -30,14 +28,15 @@ final memosProvider = FutureProvider<List<Memo>>((ref) async {
   // Use select() to only listen for changes to the filter string,
   // not the entire filter object
   final combinedFilter = ref.watch(combinedFilterProvider);
-  
-  // Watch only the enum value, not the entire provider state
-  final sortMode = ref.watch(memoSortModeProvider);
   final filterKey = ref.watch(filterKeyProvider);
-  
-  // Determine sort field based on current sort mode
-  final String sortField = sortMode == MemoSortMode.byUpdateTime ? 'updateTime' : 'createTime';
-  
+
+  // --- Sorting Change ---
+  // Always sort by updateTime. createTime from the server list response
+  // can be unreliable (epoch) after updates. Client-side sorting ensures
+  // the list reflects the latest updateTime correctly.
+  const String sortField = 'updateTime';
+  // --- End Sorting Change ---
+
   String? filter = combinedFilter.isNotEmpty ? combinedFilter : null;
   String state = '';
   
@@ -76,6 +75,7 @@ final memosProvider = FutureProvider<List<Memo>>((ref) async {
     }
 
     // Apply memo sorting with detailed logging
+    // Always sorting by updateTime now.
     print('[SORT] Client-side sorting by $sortField (newest first)');
 
     // Sort memos if there are any

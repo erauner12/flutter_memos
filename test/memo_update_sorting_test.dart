@@ -69,8 +69,8 @@ void main() {
       container = ProviderContainer(
         overrides: [
           apiServiceProvider.overrideWithValue(mockApiService),
-          // Ensure default sort mode is byUpdateTime for this test
-          memoSortModeProvider.overrideWith((ref) => MemoSortMode.byUpdateTime),
+          // Removed override for memoSortModeProvider as it no longer exists.
+          // The memosProvider now hardcodes sorting by updateTime.
         ],
       );
 
@@ -105,7 +105,12 @@ void main() {
       final initialState = await container.read(memosProvider.future);
       print('[Test Flow] Initial state count: ${initialState.length}');
       expect(initialState.length, 2);
-      expect(initialState.first.id, otherMemoId); // Should be sorted by updateTime initially
+        // Corrected Assertion: Expect the memo with the newer updateTime to be first initially
+        expect(
+          initialState.first.id,
+          memoToUpdateId,
+          reason: 'Memo with most recent updateTime should be first initially',
+        );
 
       // 2. Simulate the update action using the saveMemoProvider
       // This provider internally calls apiService.updateMemo

@@ -136,7 +136,7 @@ class RiverpodDemoScreen extends ConsumerWidget {
                               id: memo.id,
                               content: memo.content,
                               pinned: memo.pinned,
-                              createdAt: memo.createTime,
+                              // createdAt: memo.createTime,
                               updatedAt: memo.updateTime,
                               showTimeStamps: true,
                             );

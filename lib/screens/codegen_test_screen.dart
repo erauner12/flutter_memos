@@ -335,7 +335,7 @@ You can migrate to code generation later when the tooling issues are resolved.
                         id: memo.id,
                         content: memo.content,
                         pinned: memo.pinned,
-                        createdAt: memo.createTime,
+                        // createdAt: memo.createTime,
                         updatedAt: memo.updateTime,
                         showTimeStamps: true,
                       );
