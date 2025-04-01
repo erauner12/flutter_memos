@@ -492,6 +492,155 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
     );
   }
 
+  // New method for building the expanded content
+  Widget _buildExpandedContent(String hintText, String buttonText) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
+    return Column(
+      children: [
+        // Text field that grows until maxLines, then scrolls
+        Expanded(
+          child: KeyboardListener(
+            focusNode:
+                FocusNode(), // Using a separate focus node for the listener
+            onKeyEvent: _handleKeyEvent,
+            child: TextField(
+              controller: _textController,
+              focusNode: _focusNode,
+              style: const TextStyle(fontSize: 16, height: 1.5),
+              decoration: InputDecoration(
+                hintText: hintText,
+                hintStyle: TextStyle(
+                  color:
+                      isDarkMode
+                          ? Colors.grey[500]?.withOpacity(0.6)
+                          : Colors.grey[400]?.withOpacity(0.8),
+                  fontSize: 16,
+                ),
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                contentPadding: const EdgeInsets.symmetric(vertical: 8.0),
+                isDense: true,
+              ),
+              cursorColor: Theme.of(context).colorScheme.primary,
+              cursorWidth: 2,
+              maxLines: 6, // Cap at 6 lines, then scroll
+              minLines: 1, // Start with 1 line
+              textCapitalization: TextCapitalization.sentences,
+              keyboardType: TextInputType.multiline,
+              onTap: () {
+                if (!_isExpanded) {
+                  _expand();
+                }
+              },
+            ),
+          ),
+        ),
+
+        // Actions row
+        Padding(
+          padding: const EdgeInsets.only(top: 4, bottom: 8),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              // Now the overflow menu comes first (left)
+              _buildOverflowMenuButton(),
+
+              // Submit button as an icon on the right
+              Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: _isSubmitting ? null : _handleSubmit,
+                  borderRadius: BorderRadius.circular(24),
+                  child: Ink(
+                    decoration: BoxDecoration(
+                      color:
+                          _isSubmitting
+                              ? Theme.of(
+                                context,
+                              ).colorScheme.primary.withOpacity(0.7)
+                              : Theme.of(context).colorScheme.primary,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(12.0),
+                      child:
+                          _isSubmitting
+                              ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                              : const Icon(
+                                Icons.send_rounded,
+                                color: Colors.white,
+                                size: 20,
+                              ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // New method for building collapsed content
+  Widget _buildCollapsedContent(String placeholderText) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        // Text/placeholder area
+        Expanded(
+          child: GestureDetector(
+            onTap: () {
+              _expand();
+            },
+            child: Text(
+              placeholderText,
+              style: TextStyle(
+                fontSize: 16,
+                color:
+                    isDarkMode
+                        ? Colors.grey[500]?.withOpacity(
+                          0.7,
+                        ) // More subtle in dark mode
+                        : Colors.grey[400]?.withOpacity(
+                          0.8,
+                        ), // More subtle in light mode
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ),
+
+        // Expand indicator button - more subtle
+        IconButton(
+          icon: Icon(
+            Icons.add,
+            size: 20,
+            color: isDarkMode ? Colors.grey[400] : Colors.grey[500],
+          ),
+          tooltip: 'Add',
+          padding: const EdgeInsets.all(4),
+          constraints: const BoxConstraints(),
+          splashRadius: 20,
+          onPressed: () {
+            _expand();
+          },
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
@@ -527,6 +676,12 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
     final bool showExpandedContent =
         _isExpanded || _animationController.value > 0.1;
 
+    // Background color based on theme with slight translucency
+    final backgroundColor =
+        isDarkMode
+            ? const Color(0xFF1E1E1E) // Dark gray for dark mode
+            : const Color(0xFFF8F8F8); // Off-white for light mode
+
     return SafeArea(
       bottom: true,
       minimum: const EdgeInsets.symmetric(horizontal: 16.0),
@@ -547,15 +702,14 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
             width: containerWidth,
             height: frameHeight,
             decoration: BoxDecoration(
-              // Modern styling with cleaner look - using solid colors for better contrast
-              color: isDarkMode ? Colors.grey[850] : Colors.white,
-              // Increased corner radius for modern look
+              color: backgroundColor,
               borderRadius: BorderRadius.circular(20),
-              // Subtle shadow for depth
+              // Very subtle shadow for depth
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(isDarkMode ? 0.2 : 0.1),
-                  blurRadius: 8,
+                  color: Colors.black.withOpacity(isDarkMode ? 0.25 : 0.08),
+                  blurRadius: 10,
+                  spreadRadius: 0,
                   offset: const Offset(0, 2),
                 ),
               ],
@@ -568,19 +722,17 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
                   mainAxisSize: MainAxisSize.max,
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    // Drag indicator
+                    // Drag indicator - more subtle
                     Container(
-                      width: 36,
+                      width: 32,
                       height: 4,
-                      margin: const EdgeInsets.only(top: 6, bottom: 4),
+                      margin: const EdgeInsets.only(top: 8, bottom: 4),
                       decoration: BoxDecoration(
-                        color: Theme.of(
-                          context,
-                        ).dividerColor.withAlpha((255 * 0.5).round()),
+                        color: Theme.of(context).dividerColor.withOpacity(0.4),
                         borderRadius: BorderRadius.circular(2),
                       ),
                     ),
-
+                    
                     // Main content area
                     Expanded(
                       child: Padding(
@@ -601,120 +753,6 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
           ),
         ),
       ),
-    );
-  }
-
-  // New method for building the expanded content
-  Widget _buildExpandedContent(String hintText, String buttonText) {
-    return Column(
-      children: [
-        // Text field that grows until maxLines, then scrolls
-        Expanded(
-          child: KeyboardListener(
-            focusNode:
-                FocusNode(), // Using a separate focus node for the listener
-            onKeyEvent: _handleKeyEvent,
-            child: TextField(
-              controller: _textController,
-              focusNode: _focusNode,
-              decoration: InputDecoration(
-                hintText: hintText,
-                border: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(vertical: 8.0),
-              ),
-              maxLines: 6, // Cap at 6 lines, then scroll
-              minLines: 1, // Start with 1 line
-              textCapitalization: TextCapitalization.sentences,
-              keyboardType: TextInputType.multiline,
-              onTap: () {
-                if (!_isExpanded) {
-                  _expand();
-                }
-              },
-            ),
-          ),
-        ),
-        
-        // Actions row
-        Padding(
-          padding: const EdgeInsets.only(top: 4, bottom: 8),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              // Now the overflow menu comes first (left)
-              _buildOverflowMenuButton(),
-              const SizedBox(width: 8),
-              // Submit button on the right
-              ElevatedButton(
-                onPressed: _isSubmitting ? null : _handleSubmit,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Theme.of(context).colorScheme.primary,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 10,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-                child:
-                    _isSubmitting
-                        ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                        : Text(buttonText),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  // New method for building collapsed content
-  Widget _buildCollapsedContent(String placeholderText) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        // Text/placeholder area
-        Expanded(
-          child: GestureDetector(
-            onTap: () {
-              _expand();
-            },
-            child: Text(
-              placeholderText,
-              style: TextStyle(
-                fontSize: 16,
-                color:
-                    Theme.of(context).brightness == Brightness.dark
-                        ? Colors
-                            .grey[350] // Slightly brighter for better visibility
-                        : Colors.grey[600],
-              ),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        ),
-        
-        // Expand indicator button
-        IconButton(
-          icon: const Icon(Icons.expand_less, size: 20),
-          tooltip: 'Expand',
-          padding: const EdgeInsets.all(4),
-          constraints: const BoxConstraints(),
-          splashRadius: 20,
-          onPressed: () {
-            _expand();
-          },
-        ),
-      ],
     );
   }
 }
