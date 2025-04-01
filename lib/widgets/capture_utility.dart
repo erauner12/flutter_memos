@@ -227,12 +227,39 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
     }
   }
 
-  void _handleOverwriteAll([String newContent = '']) {
-    setState(() {
-      _textController.text = newContent;
-    });
-    if (newContent.isNotEmpty && !_isExpanded) {
-      _expand();
+  Future<void> _handleOverwriteAll() async {
+    // Get content from clipboard directly
+    ClipboardData? clipboardData = await Clipboard.getData(
+      Clipboard.kTextPlain,
+    );
+
+    if (clipboardData != null && clipboardData.text != null) {
+      setState(() {
+        _textController.text = clipboardData.text!;
+      });
+
+      if (!_isExpanded) {
+        _expand();
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Content replaced with clipboard'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } else {
+      // Notify if clipboard is empty
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Clipboard is empty'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
     }
   }
 
@@ -340,103 +367,94 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
   Widget _buildOverflowMenuButton() {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
-    return PopupMenuButton<int>(
-      icon: Icon(
-        Icons.more_vert,
-        size: 20,
-        color: isDarkMode ? Colors.grey[400] : Colors.grey[700],
+    return SizedBox(
+      width: 40, // Fixed width for consistent sizing
+      height: 40, // Fixed height for consistent sizing
+      child: PopupMenuButton<int>(
+        icon: Icon(
+          Icons.more_vert,
+          size: 20,
+          color: isDarkMode ? Colors.grey[400] : Colors.grey[700],
+        ),
+        padding: EdgeInsets.zero, // Remove padding to prevent overflow
+        tooltip: 'More options',
+        elevation: 4,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        position: PopupMenuPosition.under,
+        onSelected: (item) {
+          switch (item) {
+            case 0:
+              _handlePaste();
+              break;
+            case 1:
+              _handleCopyAll();
+              break;
+            case 2:
+              // Directly overwrite with clipboard
+              _showOverwriteDialog();
+              break;
+            case 3:
+              // Show dialog to confirm remove all
+              _showRemoveAllDialog();
+              break;
+          }
+        },
+        itemBuilder:
+            (context) => [
+              const PopupMenuItem(
+                value: 0,
+                child: Row(
+                  children: [
+                    Icon(Icons.content_paste, size: 18),
+                    SizedBox(width: 10),
+                    Text('Paste'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 1,
+                child: Row(
+                  children: [
+                    Icon(Icons.content_copy, size: 18),
+                    SizedBox(width: 10),
+                    Text('Copy All'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 2,
+                child: Row(
+                  children: [
+                    Icon(Icons.edit, size: 18),
+                    SizedBox(width: 10),
+                    Text('Overwrite All'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 3,
+                child: Row(
+                  children: [
+                    Icon(Icons.delete, size: 18),
+                    SizedBox(width: 10),
+                    Text('Remove All'),
+                  ],
+                ),
+              ),
+            ],
       ),
-      tooltip: 'More options',
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      position: PopupMenuPosition.under,
-      onSelected: (item) {
-        switch (item) {
-          case 0:
-            _handlePaste();
-            break;
-          case 1:
-            _handleCopyAll();
-            break;
-          case 2:
-            // Show dialog to confirm overwrite
-            _showOverwriteDialog();
-            break;
-          case 3:
-            // Show dialog to confirm remove all
-            _showRemoveAllDialog();
-            break;
-        }
-      },
-      itemBuilder:
-          (context) => [
-            const PopupMenuItem(
-              value: 0,
-              child: Row(
-                children: [
-                  Icon(Icons.content_paste, size: 18),
-                  SizedBox(width: 10),
-                  Text('Paste'),
-                ],
-              ),
-            ),
-            const PopupMenuItem(
-              value: 1,
-              child: Row(
-                children: [
-                  Icon(Icons.content_copy, size: 18),
-                  SizedBox(width: 10),
-                  Text('Copy All'),
-                ],
-              ),
-            ),
-            const PopupMenuItem(
-              value: 2,
-              child: Row(
-                children: [
-                  Icon(Icons.edit, size: 18),
-                  SizedBox(width: 10),
-                  Text('Overwrite All'),
-                ],
-              ),
-            ),
-            const PopupMenuItem(
-              value: 3,
-              child: Row(
-                children: [
-                  Icon(Icons.delete, size: 18),
-                  SizedBox(width: 10),
-                  Text('Remove All'),
-                ],
-              ),
-            ),
-          ],
     );
   }
 
   void _showOverwriteDialog() {
+    // Show confirmation dialog
     showDialog(
       context: context,
       builder:
           (context) => AlertDialog(
             title: const Text('Overwrite Content'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text('This will replace all current content. Continue?'),
-                const SizedBox(height: 12),
-                TextField(
-                  maxLines: 3,
-                  decoration: const InputDecoration(
-                    hintText: 'Enter new content here',
-                    border: OutlineInputBorder(),
-                  ),
-                  onSubmitted: (value) {
-                    _handleOverwriteAll(value);
-                    Navigator.pop(context);
-                  },
-                ),
-              ],
+            content: const Text(
+              'Replace all current content with clipboard content?',
             ),
             actions: [
               TextButton(
@@ -445,12 +463,10 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
               ),
               TextButton(
                 onPressed: () {
-                  // Simple implementation to clear first, then close dialog
-                  // (User needs to add new content after)
-                  _handleRemoveAll();
                   Navigator.pop(context);
+                  _handleOverwriteAll();
                 },
-                child: const Text('Clear & Continue'),
+                child: const Text('Replace'),
               ),
             ],
           ),
@@ -497,6 +513,8 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
     return Column(
+      mainAxisSize: MainAxisSize.min, // Prevent overflow issues
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // Text field that grows until maxLines, then scrolls
         Expanded(
@@ -507,20 +525,21 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
             child: TextField(
               controller: _textController,
               focusNode: _focusNode,
-              style: const TextStyle(fontSize: 16, height: 1.5),
+              style: const TextStyle(fontSize: 16, height: 1.3),
               decoration: InputDecoration(
                 hintText: hintText,
                 hintStyle: TextStyle(
                   color:
                       isDarkMode
-                          ? Colors.grey[500]?.withOpacity(0.6)
-                          : Colors.grey[400]?.withOpacity(0.8),
+                          ? Colors.grey[500]?.withOpacity(0.5)
+                          : Colors.grey[400]?.withOpacity(0.7),
                   fontSize: 16,
                 ),
                 border: InputBorder.none,
                 enabledBorder: InputBorder.none,
                 focusedBorder: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(vertical: 8.0),
+                contentPadding:
+                    EdgeInsets.zero, // Remove padding to prevent overflow
                 isDense: true,
               ),
               cursorColor: Theme.of(context).colorScheme.primary,
@@ -537,16 +556,16 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
             ),
           ),
         ),
-
-        // Actions row
-        Padding(
-          padding: const EdgeInsets.only(top: 4, bottom: 8),
+        
+        // Actions row - simplified for better layout
+        SizedBox(
+          height: 44, // Fixed height to prevent layout shifts
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              // Now the overflow menu comes first (left)
+              // Overflow menu on the left
               _buildOverflowMenuButton(),
-
+              
               // Submit button as an icon on the right
               Material(
                 color: Colors.transparent,
@@ -563,13 +582,18 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
                               : Theme.of(context).colorScheme.primary,
                       shape: BoxShape.circle,
                     ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(12.0),
+                    child: Container(
+                      padding: const EdgeInsets.all(
+                        10.0,
+                      ), // Slightly smaller to prevent overflow
+                      width: 40, // Fixed width
+                      height: 40, // Fixed height
+                      alignment: Alignment.center,
                       child:
                           _isSubmitting
                               ? const SizedBox(
-                                width: 20,
-                                height: 20,
+                                width: 18,
+                                height: 18,
                                 child: CircularProgressIndicator(
                                   strokeWidth: 2,
                                   color: Colors.white,
@@ -703,7 +727,7 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
             height: frameHeight,
             decoration: BoxDecoration(
               color: backgroundColor,
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(28), // More rounded corners
               // Very subtle shadow for depth
               boxShadow: [
                 BoxShadow(
@@ -715,7 +739,7 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
               ],
             ),
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(28), // Match container radius
               child: Material(
                 color: Colors.transparent,
                 child: Column(
@@ -733,12 +757,12 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
                       ),
                     ),
                     
-                    // Main content area
+                    // Main content area with more space
                     Expanded(
                       child: Padding(
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 6,
+                          horizontal: 24, // More horizontal space
+                          vertical: 8, // More vertical space
                         ),
                         child:
                             showExpandedContent
