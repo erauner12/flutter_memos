@@ -42,27 +42,40 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
   // Track if user is currently dragging
   bool _isDragging = false;
 
-  // Define min/max heights for the utility
-  late final double
-  _collapsedHeight; // Will be set in initState based on screen size
-  late final double
-  _expandedHeight; // Will be set in initState based on screen size
-  late double _currentHeight; // Will be set in initState
+  // Define min/max heights for the utility - removed 'late' to prevent initialization errors
+  double _collapsedHeight = 60.0; // Default value
+  double _expandedHeight = 240.0; // Default value
+  double _currentHeight = 60.0; // Default value
 
   // Helper to calculate dynamic heights based on screen size
   void _updateHeights(BuildContext context) {
     final size = MediaQuery.of(context).size;
 
     // More proportional heights for different screen sizes
+    double newCollapsedHeight;
+    double newExpandedHeight;
+    
     if (size.width > 1400) {
-      _collapsedHeight = 70.0; // Slightly taller for very large screens
-      _expandedHeight = 280.0; // Taller expanded view for large screens
+      newCollapsedHeight = 70.0; // Slightly taller for very large screens
+      newExpandedHeight = 280.0; // Taller expanded view for large screens
     } else {
-      _collapsedHeight = 60.0; // Standard height for normal screens
-      _expandedHeight = 240.0; // Standard expanded height
+      newCollapsedHeight = 60.0; // Standard height for normal screens
+      newExpandedHeight = 240.0; // Standard expanded height
     }
 
-    _currentHeight = _collapsedHeight;
+    // Only update state if values have changed
+    if (newCollapsedHeight != _collapsedHeight ||
+        newExpandedHeight != _expandedHeight) {
+      setState(() {
+        _collapsedHeight = newCollapsedHeight;
+        _expandedHeight = newExpandedHeight;
+
+        // If we're collapsed, update current height
+        if (!_isExpanded) {
+          _currentHeight = _collapsedHeight;
+        }
+      });
+    }
   }
 
   // Define spring properties (adjust values for desired feel)
@@ -75,11 +88,6 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
   @override
   void initState() {
     super.initState();
-
-    // Set default values - will be properly updated in didChangeDependencies
-    _collapsedHeight = 60.0;
-    _expandedHeight = 240.0;
-    _currentHeight = _collapsedHeight;
 
     _animationController = AnimationController(
       vsync: this,
