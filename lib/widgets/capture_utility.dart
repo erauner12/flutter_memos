@@ -1,7 +1,8 @@
+import 'dart:math' as math;
 import 'dart:ui' show lerpDouble; // Import lerpDouble
 
 import 'package:flutter/material.dart';
-import 'package:flutter/physics.dart';
+import 'package:flutter/physics.dart'; // Import for SpringSimulation
 import 'package:flutter/services.dart';
 import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/models/memo.dart';
@@ -42,9 +43,27 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
   bool _isDragging = false;
 
   // Define min/max heights for the utility
-  final double _collapsedHeight = 60.0; // Slightly smaller for a cleaner look
-  final double _expandedHeight = 240.0; // Increased for more text space
-  double _currentHeight = 60.0;
+  late final double
+  _collapsedHeight; // Will be set in initState based on screen size
+  late final double
+  _expandedHeight; // Will be set in initState based on screen size
+  late double _currentHeight; // Will be set in initState
+
+  // Helper to calculate dynamic heights based on screen size
+  void _updateHeights(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+
+    // More proportional heights for different screen sizes
+    if (size.width > 1400) {
+      _collapsedHeight = 70.0; // Slightly taller for very large screens
+      _expandedHeight = 280.0; // Taller expanded view for large screens
+    } else {
+      _collapsedHeight = 60.0; // Standard height for normal screens
+      _expandedHeight = 240.0; // Standard expanded height
+    }
+
+    _currentHeight = _collapsedHeight;
+  }
 
   // Define spring properties (adjust values for desired feel)
   static const SpringDescription _springDescription = SpringDescription(
@@ -56,6 +75,10 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
   @override
   void initState() {
     super.initState();
+
+    // Set default values - will be properly updated in didChangeDependencies
+    _collapsedHeight = 60.0;
+    _expandedHeight = 240.0;
     _currentHeight = _collapsedHeight;
 
     _animationController = AnimationController(
@@ -77,6 +100,13 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
         });
       }
     });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Update heights based on screen size
+    _updateHeights(context);
   }
 
   // Helper method to start physics-based animation
@@ -540,8 +570,10 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
                 hintStyle: TextStyle(
                   color:
                       isDarkMode
-                          ? Colors.grey[400]?.withOpacity(0.8)
-                          : Colors.grey[500]?.withOpacity(0.85),
+                          ? Colors.grey[400]?.withAlpha(204) // 0.8 * 255 = 204
+                          : Colors.grey[500]?.withAlpha(
+                            217,
+                          ), // 0.85 * 255 = 217
                   fontSize: 16,
                 ),
                 border: InputBorder.none,
@@ -566,7 +598,7 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
             ),
           ),
         ),
-        
+
         // Actions row - simplified for better layout
         SizedBox(
           height: 44, // Fixed height to prevent layout shifts
@@ -575,7 +607,7 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
             children: [
               // Overflow menu on the left
               _buildOverflowMenuButton(),
-              
+
               // Submit button as an icon on the right
               Material(
                 color: Colors.transparent,
@@ -588,7 +620,9 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
                           _isSubmitting
                               ? Theme.of(
                                 context,
-                              ).colorScheme.primary.withOpacity(0.7)
+                              ).colorScheme.primary.withAlpha(
+                                179,
+                              ) // 0.7 * 255 = 179
                               : Theme.of(context).colorScheme.primary,
                       shape: BoxShape.circle,
                     ),
@@ -628,7 +662,7 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
   // New method for building collapsed content with centered elements
   Widget _buildCollapsedContent(String placeholderText) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    
+
     // Center text and add + button
     return Center(
       child: Row(
@@ -642,16 +676,12 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
               fontSize: 16,
               color:
                   isDarkMode
-                      ? Colors.grey[400]?.withOpacity(
-                        0.8,
-                      ) // More visible in dark mode
-                      : Colors.grey[500]?.withOpacity(
-                        0.85,
-                      ), // More visible in light mode
+                      ? Colors.grey[400]?.withAlpha(204) // 0.8 * 255 = 204
+                      : Colors.grey[500]?.withAlpha(217), // 0.85 * 255 = 217
             ),
             overflow: TextOverflow.ellipsis,
           ),
-          
+
           // Small space between text and icon
           const SizedBox(width: 8),
 
@@ -688,14 +718,29 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
             ? 'Capture something...'
             : 'Add a comment...';
 
+    // More responsive width calculation based on screen size
     double containerWidth;
-    if (size.width > 800) {
-      containerWidth = 450; // Slightly wider for better aesthetics
-    } else {
+
+    // For very large screens (full-screen mode)
+    if (size.width > 1400) {
+      // Use 60% of screen width but cap at 1000px
+      containerWidth = math.min(size.width * 0.6, 1000);
+    }
+    // For medium-large screens
+    else if (size.width > 800) {
+      // Use 70% of screen width but minimum 500px
+      containerWidth = math.max(size.width * 0.7, 500);
+    }
+    // For smaller screens
+    else {
+      // Use available width with small margins
       final availableWidth =
           size.width - edgeInsets.left - edgeInsets.right - 32;
       containerWidth = availableWidth > 0 ? availableWidth : size.width * 0.85;
     }
+
+    // Ensure width is never less than 320px
+    containerWidth = math.max(containerWidth, 320);
 
     final frameHeight = _currentHeight.clamp(_collapsedHeight, _expandedHeight);
     final bool showExpandedContent =
@@ -739,7 +784,9 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(isDarkMode ? 0.3 : 0.1),
+                  color: Colors.black.withAlpha(
+                    isDarkMode ? 77 : 26,
+                  ), // 0.3*255=77, 0.1*255=26
                   blurRadius: 15,
                   spreadRadius: 0,
                   offset: const Offset(0, 3),
@@ -748,8 +795,8 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
                 BoxShadow(
                   color:
                       isDarkMode
-                          ? Colors.white.withOpacity(0.02)
-                          : Colors.black.withOpacity(0.02),
+                          ? Colors.white.withAlpha(5) // 0.02 * 255 = 5.1
+                          : Colors.black.withAlpha(5), // 0.02 * 255 = 5.1
                   blurRadius: 1,
                   spreadRadius: 0,
                   offset: const Offset(0, 1),
@@ -770,17 +817,25 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
                       height: 4,
                       margin: const EdgeInsets.only(top: 8, bottom: 4),
                       decoration: BoxDecoration(
-                        color: Theme.of(context).dividerColor.withOpacity(0.4),
+                        color: Theme.of(
+                          context,
+                        ).dividerColor.withAlpha(102), // 0.4 * 255 = 102
                         borderRadius: BorderRadius.circular(2),
                       ),
                     ),
-                    
+
                     // Main content area with more space
                     Expanded(
                       child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 24, // More horizontal space
-                          vertical: 8, // More vertical space
+                        padding: EdgeInsets.symmetric(
+                          horizontal:
+                              MediaQuery.of(context).size.width > 1200
+                                  ? 36
+                                  : 24, // More padding on large screens
+                          vertical:
+                              MediaQuery.of(context).size.width > 1200
+                                  ? 12
+                                  : 8, // More padding on large screens
                         ),
                         child:
                             showExpandedContent
