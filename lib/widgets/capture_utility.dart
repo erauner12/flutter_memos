@@ -537,30 +537,24 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
           onVerticalDragStart: _handleDragStart,
           onVerticalDragUpdate: _handleDragUpdate,
           onVerticalDragEnd: _handleDragEnd,
-          // Changed to focus on the text field instead of expanding directly
+          // Changed to expand directly on tap
           onTap: () {
-            _focusNode.requestFocus();
+            if (!_isExpanded) {
+              _expand();
+            }
           },
           child: Container(
             width: containerWidth,
             height: frameHeight,
             decoration: BoxDecoration(
-              // Modern styling with cleaner look
-              color:
-                  isDarkMode
-                      ? Colors.grey[850]?.withValues(
-                        alpha: 242,
-                      ) // 0.95 * 255 = 242
-                      : Colors.white.withValues(alpha: 250), // 0.98 * 255 = 250
+              // Modern styling with cleaner look - using solid colors for better contrast
+              color: isDarkMode ? Colors.grey[850] : Colors.white,
               // Increased corner radius for modern look
               borderRadius: BorderRadius.circular(20),
-              // Removed border for cleaner appearance
               // Subtle shadow for depth
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(
-                    alpha: isDarkMode ? 38 : 20,
-                  ), // 0.15 * 255 = 38, 0.08 * 255 = 20
+                  color: Colors.black.withOpacity(isDarkMode ? 0.2 : 0.1),
                   blurRadius: 8,
                   offset: const Offset(0, 2),
                 ),
@@ -570,49 +564,37 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
               borderRadius: BorderRadius.circular(20),
               child: Material(
                 color: Colors.transparent,
-                child: Focus(
-                  focusNode: _focusNode,
-                  onFocusChange: (hasFocus) {
-                    // Auto-expand when focused
-                    if (hasFocus && !_isExpanded) {
-                      _expand();
-                    }
-                  },
-                  onKeyEvent: (node, event) {
-                    return _handleKeyEvent(event);
-                  },
-                  child: Column(
-                    mainAxisSize: MainAxisSize.max,
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      // Drag indicator
-                      Container(
-                        width: 36,
-                        height: 4,
-                        margin: const EdgeInsets.only(top: 6, bottom: 4),
-                        decoration: BoxDecoration(
-                          color: Theme.of(
-                            context,
-                          ).dividerColor.withAlpha((255 * 0.5).round()),
-                          borderRadius: BorderRadius.circular(2),
-                        ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.max,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    // Drag indicator
+                    Container(
+                      width: 36,
+                      height: 4,
+                      margin: const EdgeInsets.only(top: 6, bottom: 4),
+                      decoration: BoxDecoration(
+                        color: Theme.of(
+                          context,
+                        ).dividerColor.withAlpha((255 * 0.5).round()),
+                        borderRadius: BorderRadius.circular(2),
                       ),
+                    ),
 
-                      // Main content area
-                      Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 6,
-                          ),
-                          child:
-                              showExpandedContent
-                                  ? _buildExpandedContent(hintText, buttonText)
-                                  : _buildCollapsedContent(placeholderText),
+                    // Main content area
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 6,
                         ),
+                        child:
+                            showExpandedContent
+                                ? _buildExpandedContent(hintText, buttonText)
+                                : _buildCollapsedContent(placeholderText),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -628,21 +610,31 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
       children: [
         // Text field that grows until maxLines, then scrolls
         Expanded(
-          child: TextField(
-            controller: _textController,
-            focusNode: _focusNode,
-            decoration: InputDecoration(
-              hintText: hintText,
-              border: InputBorder.none,
-              contentPadding: const EdgeInsets.symmetric(vertical: 8.0),
+          child: KeyboardListener(
+            focusNode:
+                FocusNode(), // Using a separate focus node for the listener
+            onKeyEvent: _handleKeyEvent,
+            child: TextField(
+              controller: _textController,
+              focusNode: _focusNode,
+              decoration: InputDecoration(
+                hintText: hintText,
+                border: InputBorder.none,
+                contentPadding: const EdgeInsets.symmetric(vertical: 8.0),
+              ),
+              maxLines: 6, // Cap at 6 lines, then scroll
+              minLines: 1, // Start with 1 line
+              textCapitalization: TextCapitalization.sentences,
+              keyboardType: TextInputType.multiline,
+              onTap: () {
+                if (!_isExpanded) {
+                  _expand();
+                }
+              },
             ),
-            maxLines: 6, // Cap at 6 lines, then scroll
-            minLines: 1, // Start with 1 line
-            textCapitalization: TextCapitalization.sentences,
-            keyboardType: TextInputType.multiline,
           ),
         ),
-
+        
         // Actions row
         Padding(
           padding: const EdgeInsets.only(top: 4, bottom: 8),
@@ -694,7 +686,7 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
         Expanded(
           child: GestureDetector(
             onTap: () {
-              _focusNode.requestFocus();
+              _expand();
             },
             child: Text(
               placeholderText,
@@ -702,14 +694,15 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
                 fontSize: 16,
                 color:
                     Theme.of(context).brightness == Brightness.dark
-                        ? Colors.grey[400]
+                        ? Colors
+                            .grey[350] // Slightly brighter for better visibility
                         : Colors.grey[600],
               ),
               overflow: TextOverflow.ellipsis,
             ),
           ),
         ),
-
+        
         // Expand indicator button
         IconButton(
           icon: const Icon(Icons.expand_less, size: 20),
