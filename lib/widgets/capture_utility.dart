@@ -525,21 +525,31 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
             child: TextField(
               controller: _textController,
               focusNode: _focusNode,
-              style: const TextStyle(fontSize: 16, height: 1.3),
+              style: TextStyle(
+                fontSize: 16,
+                height: 1.4, // Slightly more line height
+                color:
+                    isDarkMode
+                        ? Colors.grey[200] // Brighter text in dark mode
+                        : Colors.grey[800], // Darker text in light mode
+                fontFamily:
+                    'Menlo, Monaco, Consolas, "Courier New", monospace', // Terminal-like font
+              ),
               decoration: InputDecoration(
                 hintText: hintText,
                 hintStyle: TextStyle(
                   color:
                       isDarkMode
-                          ? Colors.grey[500]?.withOpacity(0.5)
-                          : Colors.grey[400]?.withOpacity(0.7),
+                          ? Colors.grey[400]?.withOpacity(0.8)
+                          : Colors.grey[500]?.withOpacity(0.85),
                   fontSize: 16,
                 ),
                 border: InputBorder.none,
                 enabledBorder: InputBorder.none,
                 focusedBorder: InputBorder.none,
-                contentPadding:
-                    EdgeInsets.zero, // Remove padding to prevent overflow
+                contentPadding: const EdgeInsets.symmetric(
+                  vertical: 8.0,
+                ), // Add vertical padding
                 isDense: true,
               ),
               cursorColor: Theme.of(context).colorScheme.primary,
@@ -615,53 +625,44 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
     );
   }
 
-  // New method for building collapsed content
+  // New method for building collapsed content with centered elements
   Widget _buildCollapsedContent(String placeholderText) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        // Text/placeholder area
-        Expanded(
-          child: GestureDetector(
-            onTap: () {
-              _expand();
-            },
-            child: Text(
-              placeholderText,
-              style: TextStyle(
-                fontSize: 16,
-                color:
-                    isDarkMode
-                        ? Colors.grey[500]?.withOpacity(
-                          0.7,
-                        ) // More subtle in dark mode
-                        : Colors.grey[400]?.withOpacity(
-                          0.8,
-                        ), // More subtle in light mode
-              ),
-              overflow: TextOverflow.ellipsis,
+    
+    // Center text and add + button
+    return Center(
+      child: Row(
+        mainAxisSize: MainAxisSize.min, // This makes the row wrap its content
+        mainAxisAlignment: MainAxisAlignment.center, // Center horizontally
+        children: [
+          // Text/placeholder area
+          Text(
+            placeholderText,
+            style: TextStyle(
+              fontSize: 16,
+              color:
+                  isDarkMode
+                      ? Colors.grey[400]?.withOpacity(
+                        0.8,
+                      ) // More visible in dark mode
+                      : Colors.grey[500]?.withOpacity(
+                        0.85,
+                      ), // More visible in light mode
             ),
+            overflow: TextOverflow.ellipsis,
           ),
-        ),
+          
+          // Small space between text and icon
+          const SizedBox(width: 8),
 
-        // Expand indicator button - more subtle
-        IconButton(
-          icon: Icon(
-            Icons.add,
-            size: 20,
+          // Add icon
+          Icon(
+            Icons.add_circle_outline,
+            size: 16,
             color: isDarkMode ? Colors.grey[400] : Colors.grey[500],
           ),
-          tooltip: 'Add',
-          padding: const EdgeInsets.all(4),
-          constraints: const BoxConstraints(),
-          splashRadius: 20,
-          onPressed: () {
-            _expand();
-          },
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -702,9 +703,9 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
 
     // Background color based on theme with slight translucency
     final backgroundColor =
-        isDarkMode
-            ? const Color(0xFF1E1E1E) // Dark gray for dark mode
-            : const Color(0xFFF8F8F8); // Off-white for light mode
+        isDarkMode 
+            ? const Color(0xFF232323) // Darker for better contrast in dark mode
+            : const Color(0xFFF0F0F0); // Slightly off-white in light mode
 
     return SafeArea(
       bottom: true,
@@ -726,20 +727,37 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
             width: containerWidth,
             height: frameHeight,
             decoration: BoxDecoration(
+              // More terminal-like styling
               color: backgroundColor,
-              borderRadius: BorderRadius.circular(28), // More rounded corners
-              // Very subtle shadow for depth
+              borderRadius: BorderRadius.circular(
+                36,
+              ), // Even more rounded corners
+              // Terminal-like border and shadow
+              border: Border.all(
+                color: isDarkMode ? Colors.grey[800]! : Colors.grey[300]!,
+                width: 0.5, // Very thin border
+              ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(isDarkMode ? 0.25 : 0.08),
-                  blurRadius: 10,
+                  color: Colors.black.withOpacity(isDarkMode ? 0.3 : 0.1),
+                  blurRadius: 15,
                   spreadRadius: 0,
-                  offset: const Offset(0, 2),
+                  offset: const Offset(0, 3),
+                ),
+                // Inner shadow effect for terminal feel
+                BoxShadow(
+                  color:
+                      isDarkMode
+                          ? Colors.white.withOpacity(0.02)
+                          : Colors.black.withOpacity(0.02),
+                  blurRadius: 1,
+                  spreadRadius: 0,
+                  offset: const Offset(0, 1),
                 ),
               ],
             ),
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(28), // Match container radius
+              borderRadius: BorderRadius.circular(36), // Match container radius
               child: Material(
                 color: Colors.transparent,
                 child: Column(
