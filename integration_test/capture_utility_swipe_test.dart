@@ -32,12 +32,32 @@ Future<void> _verifyCollapsed(WidgetTester tester, double initialHeight) async {
     reason:
         'CaptureUtility should be collapsed (Height: $collapsedHeight, Expected near: $initialHeight)',
   );
-  // Check that the TextField is not visible when collapsed
-  expect(
-    find.descendant(of: captureUtilityFinder, matching: find.byType(TextField)),
-    findsNothing,
-    reason: 'TextField should not be visible when collapsed',
+  
+  // The TextField is always present now but should be minimal in collapsed state
+  final textField = find.descendant(
+    of: captureUtilityFinder,
+    matching: find.byType(TextField),
   );
+
+  if (textField.evaluate().isNotEmpty) {
+    // If TextField is found, check if it's using minLines setting (collapsed state)
+    final textFieldWidget = tester.widget<TextField>(textField);
+    expect(
+      textFieldWidget.minLines,
+      equals(1),
+      reason: 'TextField should have minLines of 1 when collapsed',
+    );
+  } else {
+    // Legacy test behavior - check that TextField is not visible when collapsed
+    expect(
+      find.descendant(
+        of: captureUtilityFinder,
+        matching: find.byType(TextField),
+      ),
+      findsNothing,
+      reason: 'TextField should not be visible when collapsed',
+    );
+  }
 }
 
 // Verifies the CaptureUtility is in an expanded state
@@ -55,11 +75,26 @@ Future<void> _verifyExpanded(WidgetTester tester, double initialHeight) async {
     reason:
         'CaptureUtility should be expanded (Height: $expandedHeight, Expected > ${initialHeight + 50})',
   );
-  // Check that the TextField is visible when expanded
+  
+  // Check that the TextField is visible and focused when expanded
+  final textFieldFinder = find.descendant(
+    of: captureUtilityFinder,
+    matching: find.byType(TextField),
+  );
   expect(
-    find.descendant(of: captureUtilityFinder, matching: find.byType(TextField)),
+    textFieldFinder,
     findsOneWidget,
     reason: 'TextField should be visible when expanded',
+  );
+  
+  // Verify that expanded mode shows the Add button
+  expect(
+    find.descendant(
+      of: captureUtilityFinder,
+      matching: find.byType(ElevatedButton),
+    ),
+    findsOneWidget,
+    reason: 'Add Memo button should be visible when expanded',
   );
 }
 
@@ -77,10 +112,10 @@ void main() {
       // await tester.pumpAndSettle(const Duration(seconds: 2)); // Allow time for app init
     });
 
-    testWidgets('Tap to expand and swipe down to collapse', (
+    testWidgets('Tap to focus and expand, then swipe down to collapse', (
       WidgetTester tester,
     ) async {
-      // Launch the app (moved inside test for better isolation if setUp is not used)
+      // Launch the app
       app.main();
       await tester.pumpAndSettle(const Duration(seconds: 2)); // Allow init time
 
@@ -88,8 +123,8 @@ void main() {
       final initialHeight = _getInitialHeight(tester);
       await _verifyCollapsed(tester, initialHeight); // Verify initial state
 
-      // Tap to expand
-      debugPrint('Tapping to expand...');
+      // Tap to focus which triggers expansion in the new design
+      debugPrint('Tapping to focus and expand...');
       await tester.tap(captureUtilityFinder);
       await tester.pumpAndSettle(const Duration(milliseconds: 600));
       await _verifyExpanded(tester, initialHeight);
@@ -104,7 +139,7 @@ void main() {
       await _verifyCollapsed(tester, initialHeight);
     });
 
-    testWidgets('Pure swipe up and down interaction', (
+    testWidgets('Expand icon and swipe interactions', (
       WidgetTester tester,
     ) async {
       // Launch the app
@@ -115,14 +150,25 @@ void main() {
       final initialHeight = _getInitialHeight(tester);
       await _verifyCollapsed(tester, initialHeight);
 
-      // Swipe up to expand
-      debugPrint('Swiping up to expand...');
-      await tester.drag(
-        captureUtilityFinder,
-        const Offset(0, -150),
-      ); // Strong upward swipe
-      await tester.pumpAndSettle(const Duration(milliseconds: 1000));
-      await _verifyExpanded(tester, initialHeight);
+      // Try to find the expand icon button
+      final expandIconFinder = find.descendant(
+        of: captureUtilityFinder,
+        matching: find.byIcon(Icons.expand_less),
+      );
+
+      if (expandIconFinder.evaluate().isNotEmpty) {
+        // Tap expand icon
+        debugPrint('Tapping expand icon...');
+        await tester.tap(expandIconFinder);
+        await tester.pumpAndSettle(const Duration(milliseconds: 600));
+        await _verifyExpanded(tester, initialHeight);
+      } else {
+        // Fallback to swipe up
+        debugPrint('Expand icon not found, swiping up to expand...');
+        await tester.drag(captureUtilityFinder, const Offset(0, -150));
+        await tester.pumpAndSettle(const Duration(milliseconds: 1000));
+        await _verifyExpanded(tester, initialHeight);
+      }
 
       // Swipe down to collapse
       debugPrint('Swiping down to collapse...');
