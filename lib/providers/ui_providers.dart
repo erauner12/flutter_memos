@@ -40,3 +40,14 @@ final selectedCommentIndexProvider = StateProvider<int>((ref) {
   });
   return -1;
 }, name: 'selectedCommentIndexProvider');
+
+/// Provider to temporarily store the ID of a comment to highlight after deep linking.
+/// This should be reset to null after the highlight is rendered once.
+final highlightedCommentIdProvider = StateProvider<String?>((ref) {
+  ref.listenSelf((previous, next) {
+    if (kDebugMode) {
+      print('[highlightedCommentIdProvider] Changed from $previous to $next');
+    }
+  });
+  return null; // Initially no comment is highlighted
+}, name: 'highlightedCommentIdProvider');

@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/providers/comment_providers.dart';
+import 'package:flutter_memos/providers/ui_providers.dart';
 import 'package:flutter_memos/utils/url_helper.dart';
 import 'package:flutter_memos/widgets/comment_context_menu.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -68,6 +69,20 @@ class _CommentCardState extends ConsumerState<CommentCard> {
               }
             });
           },
+          onCopyLink: () {
+            Navigator.of(bottomSheetContext).pop();
+            final url =
+                'flutter-memos://comment/${widget.memoId}/${widget.comment.id}';
+            Clipboard.setData(ClipboardData(text: url)).then((_) {
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Comment link copied to clipboard'),
+                  ),
+                );
+              }
+            });
+          },
           onConvertToMemo: () async {
             Navigator.of(bottomSheetContext).pop();
             _onConvertToMemo(context);
@@ -112,8 +127,7 @@ class _CommentCardState extends ConsumerState<CommentCard> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(
-          SnackBar(content: Text('Error toggling pin: $e')));
+        ).showSnackBar(SnackBar(content: Text('Error toggling pin: $e')));
       }
     }
   }
@@ -176,15 +190,13 @@ class _CommentCardState extends ConsumerState<CommentCard> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(
-          const SnackBar(content: Text('Comment archived')));
+        ).showSnackBar(const SnackBar(content: Text('Comment archived')));
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(
-          SnackBar(content: Text('Error archiving comment: $e')));
+        ).showSnackBar(SnackBar(content: Text('Error archiving comment: $e')));
       }
     }
   }
@@ -203,8 +215,7 @@ class _CommentCardState extends ConsumerState<CommentCard> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(
-          SnackBar(content: Text('Error converting to memo: $e')));
+        ).showSnackBar(SnackBar(content: Text('Error converting to memo: $e')));
       }
     }
   }
@@ -214,8 +225,7 @@ class _CommentCardState extends ConsumerState<CommentCard> {
     ref.read(toggleHideCommentProvider(fullId))();
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(const SnackBar(content: Text('Comment hidden from view')),
-    );
+    ).showSnackBar(const SnackBar(content: Text('Comment hidden from view')));
   }
 
   @override
@@ -231,6 +241,33 @@ class _CommentCardState extends ConsumerState<CommentCard> {
     );
     final dateFormat = DateFormat('MMM d, yyyy h:mm a');
     final formattedDate = dateFormat.format(dateTime);
+
+    // Check if this comment should be highlighted (from deep link)
+    final highlightedId = ref.watch(highlightedCommentIdProvider);
+    final bool isHighlighted = highlightedId == widget.comment.id;
+
+    // Reset highlight state after rendering if this is the highlighted comment
+    if (isHighlighted) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        // Check if still mounted and the ID still matches before resetting
+        if (mounted &&
+            ref.read(highlightedCommentIdProvider) == widget.comment.id) {
+          if (kDebugMode) {
+            print(
+              '[CommentCard] Resetting highlight for comment ${widget.comment.id}',
+            );
+          }
+          ref.read(highlightedCommentIdProvider.notifier).state = null;
+
+          // Scroll to ensure the highlighted comment is visible
+          Scrollable.ensureVisible(
+            context,
+            duration: const Duration(milliseconds: 300),
+            alignment: 0.5, // Center the comment in the viewport
+          );
+        }
+      });
+    }
 
     if (_isDeleting) {
       return const SizedBox.shrink();
@@ -265,7 +302,7 @@ class _CommentCardState extends ConsumerState<CommentCard> {
             ),
           ],
         ),
-        
+
         // Right side (end) actions
         endActionPane: ActionPane(
           motion: const BehindMotion(),
@@ -292,13 +329,19 @@ class _CommentCardState extends ConsumerState<CommentCard> {
           key:
               widget.isSelected
                   ? Key('selected-comment-card-${widget.comment.id}')
-                  : null,
-          elevation: widget.isSelected ? 3 : 1,
+                  : (isHighlighted
+                      ? Key('highlighted-comment-card-${widget.comment.id}')
+                      : null),
+          elevation: widget.isSelected ? 3 : (isHighlighted ? 4 : 1),
           margin: EdgeInsets.zero,
           color:
               widget.isSelected
                   ? (isDarkMode ? const Color(0xFF3A3A3A) : Colors.blue.shade50)
-                  : (isDarkMode ? const Color(0xFF222222) : Colors.white),
+                  : (isHighlighted
+                      ? (isDarkMode
+                          ? Colors.teal.shade900
+                          : Colors.teal.shade50)
+                      : (isDarkMode ? const Color(0xFF222222) : Colors.white)),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(8),
             side:
@@ -310,7 +353,9 @@ class _CommentCardState extends ConsumerState<CommentCard> {
                               : Theme.of(context).colorScheme.primary,
                       width: widget.isSelected ? 3 : 2,
                     )
-                    : BorderSide.none,
+                    : (isHighlighted
+                        ? const BorderSide(color: Colors.teal, width: 2)
+                        : BorderSide.none),
           ),
           child: InkWell(
             onLongPress: () => _showContextMenu(context),

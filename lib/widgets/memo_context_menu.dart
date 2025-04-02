@@ -13,6 +13,7 @@ class MemoContextMenu extends StatelessWidget {
   final VoidCallback? onHide;
   final VoidCallback? onPin;
   final VoidCallback? onCopy;
+  final VoidCallback? onCopyLink; // Add this parameter
   final VoidCallback? onClose;
   final VoidCallback? onBump; // Add onBump callback
   final BuildContext parentContext;
@@ -32,6 +33,7 @@ class MemoContextMenu extends StatelessWidget {
     this.onHide,
     this.onPin,
     this.onCopy,
+    this.onCopyLink, // Include in constructor
     this.onClose,
     this.onBump, // Add onBump to constructor
   });
@@ -147,6 +149,12 @@ class MemoContextMenu extends StatelessWidget {
                       icon: Icons.content_copy,
                       label: 'Copy Text',
                       onTap: onCopy,
+                      isDarkMode: isDarkMode,
+                    ),
+                    _buildMenuItem(
+                      icon: Icons.link,
+                      label: 'Copy Link',
+                      onTap: onCopyLink,
                       isDarkMode: isDarkMode,
                     ),
 

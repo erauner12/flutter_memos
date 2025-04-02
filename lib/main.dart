@@ -1,9 +1,11 @@
+import 'dart:async'; // Import for StreamSubscription
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_memos/providers/server_config_provider.dart';
 import 'package:flutter_memos/providers/theme_provider.dart';
-import 'package:flutter_memos/providers/ui_providers.dart'; // Add import for captureUtilityToggleProvider
+import 'package:flutter_memos/providers/ui_providers.dart'; // Import for UI providers including highlightedCommentIdProvider
 import 'package:flutter_memos/screens/chat_screen.dart';
 import 'package:flutter_memos/screens/codegen_test_screen.dart';
 import 'package:flutter_memos/screens/edit_memo/edit_memo_screen.dart';
@@ -17,6 +19,7 @@ import 'package:flutter_memos/screens/settings_screen.dart';
 import 'package:flutter_memos/utils/keyboard_shortcuts.dart'; // Import keyboard shortcuts
 import 'package:flutter_memos/utils/provider_logger.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:uni_links/uni_links.dart'; // Import uni_links for deep linking
 
 void main() {
   runApp(
@@ -34,6 +37,9 @@ class MyApp extends ConsumerStatefulWidget {
 class _MyAppState extends ConsumerState<MyApp> {
   bool _initialThemeLoaded = false;
   bool _initialConfigLoaded = false;
+  StreamSubscription? _sub; // For deep link subscription
+  final GlobalKey<NavigatorState> _navigatorKey =
+      GlobalKey<NavigatorState>(); // For navigation from deep links
 
   @override
   void initState() {
@@ -43,7 +49,14 @@ class _MyAppState extends ConsumerState<MyApp> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadInitialTheme();
       _loadServerConfig();
+      _initUniLinks(); // Initialize deep link handling
     });
+  }
+  
+  @override
+  void dispose() {
+    _sub?.cancel(); // Cancel the deep link subscription
+    super.dispose();
   }
   
   void _loadInitialTheme() {
@@ -86,7 +99,79 @@ class _MyAppState extends ConsumerState<MyApp> {
       });
     }
   }
+  
+  // Initialize deep link handling
+  Future<void> _initUniLinks() async {
+    // Handle links the app is opened with
+    try {
+      final initialUri = await getInitialUri();
+      _handleDeepLink(initialUri);
+    } on PlatformException {
+      // Handle exception (e.g., platform not supported)
+      if (kDebugMode) print('[DeepLink] Failed to get initial URI.');
+    } on FormatException {
+      if (kDebugMode) print('[DeepLink] Malformed initial URI.');
+    }
 
+    // Handle links received while the app is running
+    _sub = uriLinkStream.listen(
+      (Uri? uri) {
+        _handleDeepLink(uri);
+      },
+      onError: (err) {
+        if (kDebugMode) print('[DeepLink] Error listening to URI stream: $err');
+      },
+    );
+  }
+
+  // Handle the deep link URI
+  void _handleDeepLink(Uri? uri) {
+    if (uri == null || uri.scheme != 'flutter-memos') {
+      if (kDebugMode && uri != null)
+        print('[DeepLink] Ignoring URI: ${uri.toString()}');
+      return;
+    }
+
+    if (kDebugMode) print('[DeepLink] Handling URI: ${uri.toString()}');
+
+    final pathSegments =
+        uri.pathSegments; // e.g., ['memo', 'memoId'] or ['comment', 'memoId', 'commentId']
+
+    if (pathSegments.isEmpty) {
+      if (kDebugMode) print('[DeepLink] Invalid path: No segments.');
+      return;
+    }
+
+    final type = pathSegments[0];
+    String? memoId;
+    String? commentIdToHighlight;
+
+    if (type == 'memo' && pathSegments.length >= 2) {
+      memoId = pathSegments[1];
+    } else if (type == 'comment' && pathSegments.length >= 3) {
+      memoId = pathSegments[1];
+      commentIdToHighlight = pathSegments[2];
+    } else {
+      if (kDebugMode)
+        print('[DeepLink] Invalid path structure: ${pathSegments.join('/')}');
+      return;
+    }
+
+    if (kDebugMode)
+      print(
+        '[DeepLink] Navigating to memo: $memoId, highlight comment: $commentIdToHighlight',
+      );
+
+    // Use the navigator key to access the navigator from anywhere
+    _navigatorKey.currentState?.pushNamed(
+      '/deep-link-target',
+      arguments: {
+        'memoId': memoId,
+        'commentIdToHighlight': commentIdToHighlight,
+      },
+    );
+  }
+  
   @override
   Widget build(BuildContext context) {
     // Watch the theme mode provider
@@ -163,6 +248,8 @@ class _MyAppState extends ConsumerState<MyApp> {
             // Don't toggle theme on general taps
           },
           child: MaterialApp(
+            navigatorKey:
+                _navigatorKey, // Add navigator key for deep link navigation
             title: 'Flutter Memos',
             debugShowCheckedModeBanner: false,
             // Light theme configuration
@@ -263,7 +350,7 @@ class _MyAppState extends ConsumerState<MyApp> {
                 final entityId =
                     args['entityId']
                         as String; // Will be memoId or "memoId/commentId"
-            
+
                 return MaterialPageRoute(
                   builder:
                       (context) => EditMemoScreen(
@@ -271,6 +358,29 @@ class _MyAppState extends ConsumerState<MyApp> {
                         entityType: entityType,
                       ),
                 );
+              } else if (settings.name == '/deep-link-target') {
+                // Handle deep link target route
+                final args = settings.arguments as Map<String, dynamic>? ?? {};
+                final memoId = args['memoId'] as String?;
+                final commentIdToHighlight =
+                    args['commentIdToHighlight'] as String?;
+
+                if (memoId != null) {
+                  // Return a route with the provider override to set the highlighted comment
+                  return MaterialPageRoute(
+                    builder:
+                        (context) => ProviderScope(
+                          overrides: [
+                            // Set the highlighted comment ID provider value
+                            highlightedCommentIdProvider.overrideWith(
+                              (ref) => commentIdToHighlight,
+                            ),
+                          ],
+                          child: MemoDetailScreen(memoId: memoId),
+                        ),
+                  );
+                }
+                return null;
               }
               return null;
             },

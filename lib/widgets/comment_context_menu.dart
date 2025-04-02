@@ -1,31 +1,32 @@
 import 'package:flutter/material.dart';
 
+/// A custom context menu for comment actions
 class CommentContextMenu extends StatelessWidget {
   final String commentId;
   final bool isPinned;
+  final VoidCallback? onEdit;
   final VoidCallback? onArchive;
   final VoidCallback? onDelete;
   final VoidCallback? onHide;
   final VoidCallback? onTogglePin;
   final VoidCallback? onCopy;
+  final VoidCallback? onCopyLink; // Add callback for copying link
   final VoidCallback? onConvertToMemo;
-  final VoidCallback? onEdit;
   final VoidCallback? onClose;
-  final ScrollController? scrollController;
 
   const CommentContextMenu({
     super.key,
     required this.commentId,
     required this.isPinned,
+    this.onEdit,
     this.onArchive,
     this.onDelete,
     this.onHide,
     this.onTogglePin,
     this.onCopy,
+    this.onCopyLink, // Include in constructor
     this.onConvertToMemo,
-    this.onEdit,
     this.onClose,
-    this.scrollController,
   });
 
   @override
@@ -34,6 +35,7 @@ class CommentContextMenu extends StatelessWidget {
     final screenHeight = MediaQuery.of(context).size.height;
 
     // Calculate a maximum height for the menu content
+    // This ensures it won't overflow on smaller screens
     final maxContentHeight = screenHeight * 0.7;
 
     return Container(
@@ -76,7 +78,7 @@ class CommentContextMenu extends StatelessWidget {
                   const Spacer(),
                   IconButton(
                     icon: const Icon(Icons.close),
-                    onPressed: onClose ?? () => Navigator.of(context).pop(),
+                    onPressed: onClose,
                     color: isDarkMode ? Colors.white70 : Colors.black54,
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(
@@ -92,17 +94,10 @@ class CommentContextMenu extends StatelessWidget {
             Flexible(
               child: SingleChildScrollView(
                 key: const Key('comment_context_menu_scroll'),
-                controller: scrollController,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     // Menu items in the scrollable area
-                    _buildMenuItem(
-                      icon: isPinned ? Icons.push_pin : Icons.push_pin_outlined,
-                      label: isPinned ? 'Unpin' : 'Pin',
-                      onTap: onTogglePin,
-                      isDarkMode: isDarkMode,
-                    ),
                     _buildMenuItem(
                       icon: Icons.edit,
                       label: 'Edit',
@@ -110,7 +105,19 @@ class CommentContextMenu extends StatelessWidget {
                       isDarkMode: isDarkMode,
                     ),
                     _buildMenuItem(
-                      key: const Key('archive_comment_menu_item'),
+                      icon: isPinned ? Icons.push_pin : Icons.push_pin_outlined,
+                      label: isPinned ? 'Unpin' : 'Pin',
+                      onTap: onTogglePin,
+                      isDarkMode: isDarkMode,
+                    ),
+                    _buildMenuItem(
+                      icon: Icons.note_add,
+                      label: 'Convert to Memo',
+                      onTap: onConvertToMemo,
+                      isDarkMode: isDarkMode,
+                    ),
+                    _buildMenuItem(
+                      key: const Key('archive_menu_item'), // Key for testing
                       icon: Icons.archive_outlined,
                       label: 'Archive',
                       onTap: onArchive,
@@ -129,10 +136,9 @@ class CommentContextMenu extends StatelessWidget {
                       isDarkMode: isDarkMode,
                     ),
                     _buildMenuItem(
-                      key: const Key('convert_to_memo_menu_item'),
-                      icon: Icons.note_add,
-                      label: 'Convert to Memo',
-                      onTap: onConvertToMemo,
+                      icon: Icons.link,
+                      label: 'Copy Link',
+                      onTap: onCopyLink,
                       isDarkMode: isDarkMode,
                     ),
 

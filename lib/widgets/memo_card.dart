@@ -162,6 +162,18 @@ class _MemoCardState extends State<MemoCard> {
                   ),
                 );
               },
+              onCopyLink: () async {
+                Navigator.pop(context);
+                final url = 'flutter-memos://memo/${widget.id}';
+                await Clipboard.setData(ClipboardData(text: url));
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Memo link copied to clipboard'),
+                    duration: Duration(seconds: 2),
+                  ),
+                );
+              },
               onBump: () {
                 // Add onBump handler
                 Navigator.pop(context);
