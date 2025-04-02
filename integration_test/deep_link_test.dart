@@ -47,11 +47,13 @@ void main() {
       await tester.tap(
         copyLinkFinder,
         warnIfMissed: false,
-      ); // Use warnIfMissed: false for now
-      await tester.pumpAndSettle(
-        const Duration(seconds: 2),
-      ); // Increased settle time
-      
+      );
+      // Refined pump sequence:
+      await tester.pump(); // Process tap, start pop
+      await tester.pump(); // Finish pop, start clipboard/snackbar
+      await tester.pump(const Duration(milliseconds: 500)); // Allow snackbar animation to start
+      await tester.pumpAndSettle(); // Settle everything
+
       // Verify snackbar appears
       expect(
         find.text('Memo link copied to clipboard'),
