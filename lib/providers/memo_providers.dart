@@ -164,8 +164,8 @@ class MemosNotifier extends StateNotifier<MemosState> {
         pageToken: pageToken,
       );
 
-      // Sort client-side by updateTime (important!)
-      MemoUtils.sortMemos(response.memos, 'updateTime');
+      // Sort client-side by updateTime and pinned status
+      MemoUtils.sortByPinnedThenUpdateTime(response.memos);
 
       var newMemos = response.memos;
       final nextPageToken = response.nextPageToken;
@@ -289,11 +289,6 @@ class MemosNotifier extends StateNotifier<MemosState> {
     await fetchInitialPage();
   }
 
-  // Helper to check if we already have a memo with this ID to prevent duplicates
-  bool _containsMemoWithId(String id) {
-    return state.memos.any((memo) => memo.id == id);
-  }
-
   // Optional: Method to update a single memo in the list optimistically
   void updateMemoOptimistically(Memo updatedMemo) {
     state = state.copyWith(
@@ -342,12 +337,21 @@ final visibleMemosListProvider = Provider<List<Memo>>((ref) {
   final memosState = ref.watch(memosNotifierProvider);
   // Watch the set of hidden memo IDs
   final hiddenMemoIds = ref.watch(hiddenMemoIdsProvider);
+  // Watch the hide pinned setting
+  final hidePinned = ref.watch(hidePinnedProvider);
 
   // Filter the memos currently held in the state
   final visibleMemos =
       memosState.memos.where((memo) {
-        return !hiddenMemoIds.contains(memo.id);
+        // Hide memos that are in the hidden IDs set
+        if (hiddenMemoIds.contains(memo.id)) return false;
+        // Hide pinned memos if hidePinned is true
+        if (hidePinned && memo.pinned) return false;
+        return true;
       }).toList();
+
+  // Sort with pinned first (unless all pinned are hidden)
+  MemoUtils.sortByPinnedThenUpdateTime(visibleMemos);
 
   if (kDebugMode) {
     // Avoid excessive logging, maybe log only when count changes

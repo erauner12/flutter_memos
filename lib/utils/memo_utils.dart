@@ -31,10 +31,34 @@ class MemoUtils {
     });
   }
 
-  /// Sort memos by specified field (only updateTime is used now)
+  /// Helper method to safely parse date strings
+  static DateTime safeParseDateTime(String? isoTime) {
+    if (isoTime == null) return DateTime.fromMillisecondsSinceEpoch(0);
+    try {
+      return DateTime.parse(isoTime);
+    } catch (_) {
+      return DateTime.fromMillisecondsSinceEpoch(0);
+    }
+  }
+
+  /// Sort memos by pinned status first, then by update time
+  static void sortByPinnedThenUpdateTime(List<Memo> memos) {
+    memos.sort((a, b) {
+      // 1) Pinned items first
+      if (a.pinned && !b.pinned) return -1;
+      if (!a.pinned && b.pinned) return 1;
+
+      // 2) Then compare updateTime descending
+      final aTime = safeParseDateTime(a.updateTime);
+      final bTime = safeParseDateTime(b.updateTime);
+      return bTime.compareTo(aTime); // Newest first
+    });
+  }
+
+  /// Sort memos by specified field (updateTime or pinned-first)
   static void sortMemos(List<Memo> memos, String sortField) {
-    // We always sort by updateTime now, but keeping parameter for API compatibility
-    sortByUpdateTime(memos);
+    // Use the new pinned-first sorting by default
+    sortByPinnedThenUpdateTime(memos);
   }
 
   /// Get a human readable date string from a timestamp

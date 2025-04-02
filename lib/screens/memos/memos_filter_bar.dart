@@ -84,6 +84,7 @@ class MemosFilterBar extends ConsumerWidget {
     final timeFilterOptionKey = ref.watch(timeFilterProvider);
     final statusFilterOptionKey = ref.watch(statusFilterProvider);
     final hiddenMemoIds = ref.watch(hiddenMemoIdsProvider);
+    final hidePinned = ref.watch(hidePinnedProvider);
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
     // Helper to find the label for the current key
@@ -137,7 +138,7 @@ class MemosFilterBar extends ConsumerWidget {
                                 size: 18,
                                 color: Theme.of(
                                   context,
-                                ).iconTheme.color?.withOpacity(0.7),
+                                ).iconTheme.color?.withAlpha(179),
                               ),
                             if (option.icon != null) const SizedBox(width: 8),
                             Text(option.label),
@@ -207,7 +208,7 @@ class MemosFilterBar extends ConsumerWidget {
                                 size: 18,
                                 color: Theme.of(
                                   context,
-                                ).iconTheme.color?.withOpacity(0.7),
+                                ).iconTheme.color?.withAlpha(179),
                               ),
                             if (option.icon != null) const SizedBox(width: 8),
                             Text(option.label),
@@ -258,6 +259,80 @@ class MemosFilterBar extends ConsumerWidget {
             ],
           ),
 
+          // Add toggle for pinned items
+          Padding(
+            padding: const EdgeInsets.only(top: 8.0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                GestureDetector(
+                  onTap: () {
+                    // Toggle the hidePinned state
+                    ref.read(hidePinnedProvider.notifier).state = !hidePinned;
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color:
+                          hidePinned
+                              ? (isDarkMode
+                                  ? Colors.purple.shade900
+                                  : Colors.purple.shade100)
+                              : (isDarkMode
+                                  ? Colors.grey.shade800
+                                  : Colors.grey.shade200),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color:
+                            hidePinned
+                                ? (isDarkMode
+                                    ? Colors.purple.shade700
+                                    : Colors.purple.shade300)
+                                : (isDarkMode
+                                    ? Colors.grey.shade700
+                                    : Colors.grey.shade300),
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          hidePinned ? Icons.push_pin_outlined : Icons.push_pin,
+                          size: 16,
+                          color:
+                              hidePinned
+                                  ? (isDarkMode
+                                      ? Colors.purple.shade200
+                                      : Colors.purple.shade800)
+                                  : Theme.of(context).iconTheme.color,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          hidePinned ? 'Show Pinned' : 'Hide Pinned',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color:
+                                hidePinned
+                                    ? (isDarkMode
+                                        ? Colors.purple.shade200
+                                        : Colors.purple.shade800)
+                                    : Theme.of(
+                                      context,
+                                    ).textTheme.bodyMedium?.color,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
           // Show hidden memos section
           if (hiddenMemoIds.isNotEmpty)
             Padding(
@@ -270,7 +345,7 @@ class MemosFilterBar extends ConsumerWidget {
                 decoration: BoxDecoration(
                   color:
                       isDarkMode
-                          ? const Color(0xFF1A237E).withOpacity(0.3)
+                          ? const Color(0xFF1A237E).withAlpha(77)
                           : Colors.blue.shade50,
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(

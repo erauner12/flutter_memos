@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/providers/comment_providers.dart'
     as comment_providers;
+import 'package:flutter_memos/providers/filter_providers.dart';
 import 'package:flutter_memos/providers/ui_providers.dart';
+import 'package:flutter_memos/utils/comment_utils.dart';
+import 'package:flutter_memos/utils/comment_utils.dart';
 import 'package:flutter_memos/widgets/comment_card.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -16,6 +19,8 @@ class MemoComments extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final commentsAsync = ref.watch(memoCommentsProvider(memoId));
+    // Watch hidePinned to filter out pinned comments if needed
+    final hidePinned = ref.watch(hidePinnedProvider);
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16.0),
@@ -35,7 +40,15 @@ class MemoComments extends ConsumerWidget {
                 // Optional comment counter
                 commentsAsync.maybeWhen(
                   data: (comments) {
-                    if (comments.isNotEmpty) {
+                    // Filter out pinned comments if hidePinned is true
+                    final visibleComments =
+                        hidePinned
+                            ? comments
+                                .where((comment) => !comment.pinned)
+                                .toList()
+                            : comments;
+
+                    if (visibleComments.isNotEmpty) {
                       return Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 8,
@@ -48,7 +61,7 @@ class MemoComments extends ConsumerWidget {
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(
-                          '${comments.length}',
+                          '${visibleComments.length}',
                           style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w500,
@@ -68,7 +81,16 @@ class MemoComments extends ConsumerWidget {
           // Comments list or placeholder
           commentsAsync.when(
             data: (comments) {
-              if (comments.isEmpty) {
+              // Filter out pinned comments if hidePinned is true
+              final filteredComments =
+                  hidePinned
+                      ? comments.where((comment) => !comment.pinned).toList()
+                      : comments;
+
+              // Sort comments with pinned first
+              CommentUtils.sortByPinnedThenCreateTime(filteredComments);
+
+              if (filteredComments.isEmpty) {
                 final isDarkMode =
                     Theme.of(context).brightness == Brightness.dark;
                 return Padding(
@@ -99,7 +121,9 @@ class MemoComments extends ConsumerWidget {
                         ),
                         const SizedBox(width: 10),
                         Text(
-                          'No comments yet.',
+                          hidePinned && comments.isNotEmpty
+                              ? 'No unpinned comments yet.'
+                              : 'No comments yet.',
                           style: TextStyle(
                             fontSize: 15,
                             fontStyle: FontStyle.italic,
@@ -115,11 +139,10 @@ class MemoComments extends ConsumerWidget {
                 );
               }
 
-              final reversedComments = comments.reversed.toList();
-              
+              // Use the filtered and sorted comments
               return Column(
                 children:
-                    reversedComments.asMap().entries.map((entry) {
+                    filteredComments.asMap().entries.map((entry) {
                       final index = entry.key;
                       final comment = entry.value;
                       return _buildCommentCard(comment, context, ref, index);
