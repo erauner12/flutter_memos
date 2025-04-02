@@ -1,11 +1,13 @@
 import 'dart:math' as math;
 import 'dart:ui' show lerpDouble; // Import lerpDouble
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/physics.dart'; // Import for SpringSimulation
 import 'package:flutter/services.dart';
 import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/models/memo.dart';
+import 'package:flutter_memos/providers/ui_providers.dart'; // Import UI providers
 import 'package:flutter_memos/screens/memo_detail/memo_detail_providers.dart';
 import 'package:flutter_memos/screens/new_memo/new_memo_providers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -115,6 +117,18 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
     super.didChangeDependencies();
     // Update heights based on screen size
     _updateHeights(context);
+    
+    // Listen for toggle requests via the provider
+    ref.listen<int>(captureUtilityToggleProvider, (previous, current) {
+      if (previous != current && mounted) {
+        if (kDebugMode) {
+          print(
+            '[CaptureUtility] Received toggle signal. Current state expanded: $_isExpanded',
+          );
+        }
+        _toggleExpansionState();
+      }
+    });
   }
 
   // Helper method to start physics-based animation
@@ -163,6 +177,15 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
   void _collapse() {
     _animateTo(0.0);
     _focusNode.unfocus();
+  }
+
+  // Helper method to toggle expansion state
+  void _toggleExpansionState() {
+    if (_isExpanded) {
+      _collapse();
+    } else {
+      _expand();
+    }
   }
 
   void _handleDragUpdate(DragUpdateDetails details) {

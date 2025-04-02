@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_memos/providers/server_config_provider.dart';
 import 'package:flutter_memos/providers/theme_provider.dart';
+import 'package:flutter_memos/providers/ui_providers.dart'; // Add import for captureUtilityToggleProvider
 import 'package:flutter_memos/screens/chat_screen.dart';
 import 'package:flutter_memos/screens/codegen_test_screen.dart';
 import 'package:flutter_memos/screens/edit_memo/edit_memo_screen.dart';
@@ -13,7 +14,7 @@ import 'package:flutter_memos/screens/memos/memos_screen.dart';
 import 'package:flutter_memos/screens/new_memo/new_memo_screen.dart';
 import 'package:flutter_memos/screens/riverpod_demo_screen.dart';
 import 'package:flutter_memos/screens/settings_screen.dart';
-import 'package:flutter_memos/utils/keyboard_shortcuts.dart'; // Add keyboard shortcuts import
+import 'package:flutter_memos/utils/keyboard_shortcuts.dart'; // Import keyboard shortcuts
 import 'package:flutter_memos/utils/provider_logger.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -141,6 +142,19 @@ class _MyAppState extends ConsumerState<MyApp> {
               return null;
             },
           ),
+          
+          // Add action for toggling CaptureUtility
+          ToggleCaptureUtilityIntent:
+              CallbackAction<ToggleCaptureUtilityIntent>(
+                onInvoke: (intent) {
+                  // Trigger the toggle via the provider
+                  ref.read(captureUtilityToggleProvider.notifier).toggle();
+                  if (kDebugMode) {
+                    print('[MyApp Actions] Handled ToggleCaptureUtilityIntent');
+                  }
+                  return null;
+                },
+              ),
         },
         child: GestureDetector(
           onTap: () {

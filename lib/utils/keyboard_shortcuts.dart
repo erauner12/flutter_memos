@@ -10,6 +10,7 @@ class NavigateBackIntent extends Intent {}
 class NavigateForwardIntent extends Intent {}
 class SelectPreviousMemoIntent extends Intent {}
 class SelectNextMemoIntent extends Intent {}
+class ToggleCaptureUtilityIntent extends Intent {}
 
 /// Creates a map of keyboard shortcuts to intents
 Map<ShortcutActivator, Intent> buildGlobalShortcuts() {
@@ -26,5 +27,9 @@ Map<ShortcutActivator, Intent> buildGlobalShortcuts() {
     // Support Shift+Up/Down for navigation
     const SingleActivator(LogicalKeyboardKey.arrowUp, shift: true): SelectPreviousMemoIntent(),
     const SingleActivator(LogicalKeyboardKey.arrowDown, shift: true): SelectNextMemoIntent(),
+    
+    // Command/Ctrl + Shift + M => Toggle Capture Utility
+    const SingleActivator(LogicalKeyboardKey.keyM, meta: true, shift: true):
+        ToggleCaptureUtilityIntent(),
   };
 }
