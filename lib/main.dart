@@ -1,5 +1,6 @@
 import 'dart:async'; // Import for StreamSubscription
 
+import 'package:app_links/app_links.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -19,7 +20,6 @@ import 'package:flutter_memos/screens/settings_screen.dart';
 import 'package:flutter_memos/utils/keyboard_shortcuts.dart'; // Import keyboard shortcuts
 import 'package:flutter_memos/utils/provider_logger.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:uni_links/uni_links.dart'; // Import uni_links for deep linking
 
 void main() {
   runApp(
@@ -37,7 +37,9 @@ class MyApp extends ConsumerStatefulWidget {
 class _MyAppState extends ConsumerState<MyApp> {
   bool _initialThemeLoaded = false;
   bool _initialConfigLoaded = false;
-  StreamSubscription? _sub; // For deep link subscription
+  late final AppLinks _appLinks;
+  StreamSubscription<Uri>?
+  _linkSubscription; // Subscription for app_links stream
   final GlobalKey<NavigatorState> _navigatorKey =
       GlobalKey<NavigatorState>(); // For navigation from deep links
 
@@ -49,13 +51,17 @@ class _MyAppState extends ConsumerState<MyApp> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadInitialTheme();
       _loadServerConfig();
-      _initUniLinks(); // Initialize deep link handling
+      // Replace uni_links initialization
+      // _initUniLinks();
+      // Initialize app_links handling
+      _initAppLinks();
     });
   }
   
   @override
   void dispose() {
-    _sub?.cancel(); // Cancel the deep link subscription
+    // Cancel the app_links subscription
+    _linkSubscription?.cancel();
     super.dispose();
   }
   
@@ -100,31 +106,41 @@ class _MyAppState extends ConsumerState<MyApp> {
     }
   }
   
-  // Initialize deep link handling
-  Future<void> _initUniLinks() async {
+
+
+  // Initialize deep link handling using app_links
+  Future<void> _initAppLinks() async {
+    _appLinks = AppLinks(); // Initialize AppLinks
+  
     // Handle links the app is opened with
     try {
-      final initialUri = await getInitialUri();
-      _handleDeepLink(initialUri);
-    } on PlatformException {
-      // Handle exception (e.g., platform not supported)
-      if (kDebugMode) print('[DeepLink] Failed to get initial URI.');
-    } on FormatException {
-      if (kDebugMode) print('[DeepLink] Malformed initial URI.');
+      final initialUri = await _appLinks.getInitialAppLink();
+      if (initialUri != null) {
+        if (kDebugMode) print('[AppLinks] Initial link found: $initialUri');
+        _handleDeepLink(initialUri);
+      } else {
+        if (kDebugMode) print('[AppLinks] No initial link.');
+      }
+    } catch (e) {
+      // Handle potential errors during initialization
+      if (kDebugMode) print('[AppLinks] Error getting initial link: $e');
     }
-
+  
     // Handle links received while the app is running
-    _sub = uriLinkStream.listen(
-      (Uri? uri) {
+    _linkSubscription = _appLinks.uriLinkStream.listen(
+      (uri) {
+        if (kDebugMode) print('[AppLinks] Link received while running: $uri');
         _handleDeepLink(uri);
       },
       onError: (err) {
-        if (kDebugMode) print('[DeepLink] Error listening to URI stream: $err');
+        // Handle potential errors in the stream
+        if (kDebugMode)
+          print('[AppLinks] Error listening to link stream: $err');
       },
     );
   }
-
-  // Handle the deep link URI
+  
+  // Handle the deep link URI (This method remains unchanged)
   void _handleDeepLink(Uri? uri) {
     if (uri == null || uri.scheme != 'flutter-memos') {
       if (kDebugMode && uri != null)
