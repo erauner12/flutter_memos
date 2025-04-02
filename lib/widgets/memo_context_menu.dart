@@ -156,6 +156,7 @@ class MemoContextMenu extends StatelessWidget {
                       label: 'Copy Link',
                       onTap: onCopyLink,
                       isDarkMode: isDarkMode,
+                      key: const Key('copy_link_menu_item'), // Add key here
                     ),
 
                     Divider(

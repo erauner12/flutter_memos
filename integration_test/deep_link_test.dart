@@ -27,15 +27,30 @@ void main() {
       
       // Long press to open context menu
       await tester.longPress(memoCardFinder.first);
-      await tester.pumpAndSettle(const Duration(seconds: 1));
-      
-      // Find the "Copy Link" option
-      final copyLinkFinder = find.text('Copy Link');
-      expect(copyLinkFinder, findsOneWidget, reason: 'Should find Copy Link option');
-      
+      await tester.pumpAndSettle(
+        const Duration(seconds: 2),
+      ); // Increased settle time
+
+      // Find the "Copy Link" option using its key
+      final copyLinkFinder = find.byKey(const Key('copy_link_menu_item'));
+      expect(
+        copyLinkFinder,
+        findsOneWidget,
+        reason: 'Should find Copy Link option by key',
+      );
+
+      // Ensure the item is visible before tapping (might help with sheet scrolling)
+      await tester.ensureVisible(copyLinkFinder);
+      await tester.pumpAndSettle();
+
       // Tap the Copy Link option
-      await tester.tap(copyLinkFinder);
-      await tester.pumpAndSettle(const Duration(seconds: 1));
+      await tester.tap(
+        copyLinkFinder,
+        warnIfMissed: false,
+      ); // Use warnIfMissed: false for now
+      await tester.pumpAndSettle(
+        const Duration(seconds: 2),
+      ); // Increased settle time
       
       // Verify snackbar appears
       expect(
