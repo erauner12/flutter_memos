@@ -8,6 +8,6 @@ final createMemoProvider = Provider<Future<void> Function(Memo)>((ref) {
   return (Memo memo) async {
     final apiService = ref.read(apiServiceProvider);
     await apiService.createMemo(memo);
-    ref.invalidate(memosProvider); // Refresh the memos list
+    ref.invalidate(memosNotifierProvider); // Refresh the memos list
   };
 });

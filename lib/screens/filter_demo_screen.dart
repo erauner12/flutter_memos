@@ -49,11 +49,12 @@ final filteredMemosProvider = FutureProvider<List<Memo>>((ref) async {
   }
 
   // Fetch memos with the constructed filter
-  return apiService.listMemos(
+  final response = await apiService.listMemos(
     parent: 'users/1',
     filter: filter,
     timeExpression: timeframe,
   );
+  return response.memos;
 });
 
 class FilterDemoScreen extends ConsumerStatefulWidget {

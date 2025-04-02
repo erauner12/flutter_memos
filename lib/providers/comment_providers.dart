@@ -177,8 +177,9 @@ final convertCommentToMemoProvider = Provider.family<
         }
       }
       
-      // Refresh memos list
-      ref.invalidate(memosProvider);
+      // Refresh memos list using the new notifier
+      // ref.invalidate(memosProvider); // Old way
+      await ref.read(memosNotifierProvider.notifier).refresh(); // New way
       
       if (kDebugMode) {
         print(

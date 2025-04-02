@@ -33,15 +33,12 @@ class EntityProviderParams {
 }
 
 
-// Provider for the current entity (Memo or Comment) being edited
+// Provider to fetch the entity (memo or comment) to be edited
 final editEntityProvider = FutureProvider.family<dynamic, EntityProviderParams>(
-  (
-  ref,
-    params, // Use EntityProviderParams
-) async {
-  final apiService = ref.watch(apiServiceProvider);
-    final id = params.id; // Access id from params
-    final type = params.type; // Access type from params
+  (ref, params) async {
+    final apiService = ref.read(apiServiceProvider);
+    final id = params.id;
+    final type = params.type;
 
   if (kDebugMode) {
     print('[editEntityProvider] Fetching $type with ID: $id');
@@ -73,29 +70,34 @@ final saveEntityProvider = Provider.family<
     if (type == 'comment') {
       final comment = updatedEntity as Comment;
       final parts = id.split('/');
-      if (parts.length < 2)
+      if (parts.length < 2) {
         throw ArgumentError('Invalid comment ID format for saving: $id');
+      }
       final parentMemoId = parts[0];
 
       // 1. Update the comment
       await apiService.updateMemoComment(id, comment);
-      if (kDebugMode)
+      if (kDebugMode) {
         print('[saveEntityProvider] Comment $id updated successfully.');
+      }
 
       // 2. Bump the parent memo (try-catch to avoid failing the whole save)
       try {
-        if (kDebugMode)
+        if (kDebugMode) {
           print('[saveEntityProvider] Bumping parent memo: $parentMemoId');
+        }
         await ref.read(memo_providers.bumpMemoProvider(parentMemoId))();
-        if (kDebugMode)
+        if (kDebugMode) {
           print(
             '[saveEntityProvider] Parent memo $parentMemoId bumped successfully.',
           );
+        }
       } catch (e, s) {
-        if (kDebugMode)
+        if (kDebugMode) {
           print(
             '[saveEntityProvider] Failed to bump parent memo $parentMemoId: $e\n$s',
           );
+        }
         // Optionally report error via error handler provider
         // ref.read(errorHandlerProvider)('Failed to bump parent memo after comment update', source: 'saveEntityProvider', error: e, stackTrace: s);
       }
@@ -104,17 +106,18 @@ final saveEntityProvider = Provider.family<
       ref.invalidate(
         memoCommentsProvider(parentMemoId),
       ); // Refresh comments for the parent memo
-      ref.invalidate(
-        memo_providers.memosProvider,
-      ); // Refresh main memo list because parent was bumped
+      await ref
+          .read(memo_providers.memosNotifierProvider.notifier)
+          .refresh(); // Refresh main memo list because parent was bumped
     } else {
       // type == 'memo'
       final memo = updatedEntity as Memo;
 
       // Update memo in the backend
       final savedMemo = await apiService.updateMemo(id, memo);
-      if (kDebugMode)
+      if (kDebugMode) {
         print('[saveEntityProvider] Memo $id updated successfully.');
+      }
 
       // Update memo detail cache if it exists
       if (ref.exists(memo_providers.memoDetailCacheProvider)) {
@@ -123,8 +126,10 @@ final saveEntityProvider = Provider.family<
             .update((state) => {...state, id: savedMemo});
       }
 
-      // Invalidate all related providers to ensure UI is consistent
-      ref.invalidate(memo_providers.memosProvider); // Refresh the memos list
+      // Refresh all related providers to ensure UI is consistent
+      await ref
+          .read(memo_providers.memosNotifierProvider.notifier)
+          .refresh(); // Refresh the memos list
       ref.invalidate(memoDetailProvider(id)); // Refresh memo detail
 
       // Clear any hidden memo IDs for this memo to ensure it's visible

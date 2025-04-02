@@ -36,7 +36,7 @@ class MemoListItem extends ConsumerWidget {
     }
 
     // Force UI refresh to update visibility
-    ref.invalidate(memosProvider);
+    ref.read(memosNotifierProvider.notifier).refresh();
   }
 
   void _navigateToMemoDetail(BuildContext context, WidgetRef ref) {
@@ -46,7 +46,7 @@ class MemoListItem extends ConsumerWidget {
       arguments: {'memoId': memo.id},
     ).then((_) {
       // Refresh memos after returning from detail screen
-      ref.invalidate(memosProvider);
+      ref.read(memosNotifierProvider.notifier).refresh();
     });
   }
 
@@ -109,8 +109,7 @@ class MemoListItem extends ConsumerWidget {
                   // Use a post-frame callback for UI updates to avoid build phase issues
                   WidgetsBinding.instance.addPostFrameCallback((_) {
                     // These operations are safe even if the widget is no longer mounted
-                    // because they just update provider state
-                    ref.invalidate(memosProvider);
+                    ref.read(memosNotifierProvider.notifier).refresh();
                     ref
                         .read(hiddenMemoIdsProvider.notifier)
                         .update((state) => state..remove(memoId));
@@ -119,7 +118,7 @@ class MemoListItem extends ConsumerWidget {
                 .catchError((e) {
                   // If delete fails, handle errors and clean up
                   WidgetsBinding.instance.addPostFrameCallback((_) {
-                    ref.invalidate(memosProvider);
+                    ref.read(memosNotifierProvider.notifier).refresh();
                     ref
                         .read(hiddenMemoIdsProvider.notifier)
                         .update((state) => state..remove(memoId));

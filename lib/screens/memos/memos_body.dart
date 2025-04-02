@@ -3,7 +3,6 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_memos/models/memo.dart';
 import 'package:flutter_memos/providers/memo_providers.dart';
 import 'package:flutter_memos/providers/ui_providers.dart';
 import 'package:flutter_memos/utils/keyboard_navigation.dart';
@@ -13,6 +12,7 @@ import 'memo_list_item.dart';
 import 'memos_empty_state.dart';
 
 class MemosBody extends ConsumerStatefulWidget {
+  // Changed to ConsumerStatefulWidget
   const MemosBody({super.key});
 
   @override
@@ -24,49 +24,95 @@ class _MemosBodyState extends ConsumerState<MemosBody>
 
   // Focus node to manage focus state
   final FocusNode _focusNode = FocusNode(debugLabel: 'MemosBodyFocus');
-  
+  final ScrollController _scrollController =
+      ScrollController(); // Add ScrollController
+
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_onScroll); // Add listener for pagination
     // Request focus after the first frame is rendered
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _focusNode.requestFocus();
+      if (mounted) {
+        // Check if mounted before accessing context/focus
+        FocusScope.of(context).requestFocus(_focusNode);
+        // Initial selection logic might need adjustment based on the new state
+        _ensureInitialSelection();
+      }
     });
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-
-    // Select the first memo when data is available
-    final memosAsync = ref.watch(visibleMemosProvider);
-    if (memosAsync is AsyncData<List<Memo>> &&
-        memosAsync.value.isNotEmpty &&
-        ref.read(selectedMemoIndexProvider) < 0) {
-      
-      // Use another post-frame callback to ensure UI is ready
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          ref.read(selectedMemoIndexProvider.notifier).state = 0;
-          if (kDebugMode) {
-            print('[MemosBody] Selected first memo at index 0');
-          }
-        }
-      });
-    }
+    // This might still be useful, but ensure it uses the new provider structure
+    // Consider moving selection logic entirely to initState or build if simpler
+    // _ensureInitialSelection(); // Re-evaluate if needed here
   }
-  
+
   @override
   void dispose() {
+    _scrollController.removeListener(_onScroll); // Remove listener
+    _scrollController.dispose();
     _focusNode.dispose();
     super.dispose();
   }
 
+  // Listener for scroll events to trigger loading more memos
+  void _onScroll() {
+    // Check if near bottom and can load more
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 300) {
+      // Threshold
+      // Read the notifier *without* watching to avoid rebuilds on state change here
+      final notifier = ref.read(memosNotifierProvider.notifier);
+      // Call fetchMoreMemos - the notifier handles the logic internally
+      // (checks isLoadingMore, hasReachedEnd, etc.)
+      notifier.fetchMoreMemos();
+    }
+  }
+
+  // Helper to ensure a selection exists when the list is first loaded or refreshed
+  void _ensureInitialSelection() {
+    // Use the new provider for visible memos
+    final visibleMemos = ref.read(visibleMemosListProvider);
+    final currentSelection = ref.read(selectedMemoIndexProvider);
+
+    if (visibleMemos.isNotEmpty && currentSelection < 0) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          ref.read(selectedMemoIndexProvider.notifier).state = 0;
+          if (kDebugMode) {
+            print(
+              '[MemosBody] Selected first memo at index 0 after initial load/refresh.',
+            );
+          }
+        }
+      });
+    } else if (visibleMemos.isEmpty && currentSelection != -1) {
+      // Reset selection if list becomes empty
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          ref.read(selectedMemoIndexProvider.notifier).state = -1;
+        }
+      });
+    }
+  }
+
+
   @override
   Widget build(BuildContext context) {
     // Watch the providers for data changes
-    final memosAsync = ref.watch(visibleMemosProvider);
-    
+    // final memosAsync = ref.watch(visibleMemosProvider); // Old way
+    final memosState = ref.watch(memosNotifierProvider); // Watch the full state
+    final visibleMemos = ref.watch(
+      visibleMemosListProvider,
+    ); // Watch the filtered list
+
+    // Ensure selection is updated when the list changes
+    // Calling this in build ensures it runs whenever the visible list updates
+    _ensureInitialSelection();
+
     return Focus(
       focusNode: _focusNode,
       autofocus: true, // Allow focusing without requiring user clicks
@@ -85,41 +131,82 @@ class _MemosBodyState extends ConsumerState<MemosBody>
             _focusNode.requestFocus();
           },
         );
-        
+
         // For integration testing, we need to manually trigger a selection
         // after key events to ensure it works
         if (result == KeyEventResult.handled &&
             (event.logicalKey == LogicalKeyboardKey.keyJ ||
-             event.logicalKey == LogicalKeyboardKey.keyK)) {
+                event.logicalKey == LogicalKeyboardKey.keyK ||
+                event.logicalKey ==
+                    LogicalKeyboardKey.arrowUp || // Also handle arrow keys
+                event.logicalKey == LogicalKeyboardKey.arrowDown)) {
           if (kDebugMode) {
             print('[MemosBody] Key event handled: ${event.logicalKey.keyLabel}');
           }
         }
-        
+
         return result;
       },
-      child: memosAsync.when(
-        data: (memos) {
-          // Get hidden memo IDs
-          final hiddenIds = ref.watch(hiddenMemoIdsProvider);
+      // --- Build UI based on MemosState ---
+      child: Builder(
+        // Use Builder to handle different states cleanly
+        builder: (context) {
+          // 1. Initial Loading State
+          if (memosState.isLoading && memosState.memos.isEmpty) {
+            return const Center(
+              child: Padding(
+                padding: EdgeInsets.all(20.0),
+                child: CircularProgressIndicator(),
+              ),
+            );
+          }
 
-          // Filter out hidden memos
-          final visibleMemos =
-              memos.where((memo) => !hiddenIds.contains(memo.id)).toList();
+          // 2. Error State (only show if not loading more)
+          if (memosState.error != null && !memosState.isLoadingMore) {
+            return RefreshIndicator(
+              onRefresh: () async {
+                if (kDebugMode) {
+                  print('[MemosBody] Refresh triggered (error state)');
+                }
+                // Use the notifier's refresh method
+                await ref.read(memosNotifierProvider.notifier).refresh();
+              },
+              child: LayoutBuilder(
+                // Use LayoutBuilder for constraints
+                builder: (context, constraints) {
+                  return SingleChildScrollView(
+                    // Make it scrollable for refresh
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        minHeight: constraints.maxHeight,
+                      ),
+                      child: Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(20.0),
+                          child: Text(
+                            'Error loading memos: ${memosState.error.toString().substring(0, math.min(memosState.error.toString().length, 100))}\nPull down to retry.',
+                            style: const TextStyle(color: Colors.red),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ); // End of SingleChildScrollView
+                }, // End of LayoutBuilder builder
+              ), // End of LayoutBuilder
+            ); // End of RefreshIndicator
+          }
 
-          if (visibleMemos.isEmpty) {
-            // Wrap MemosEmptyState with RefreshIndicator as well,
-            // so user can refresh even when the list is empty.
+          // 3. Empty State (after initial load, no errors, no memos)
+          if (!memosState.isLoading && visibleMemos.isEmpty) {
             return RefreshIndicator(
               onRefresh: () async {
                 if (kDebugMode) {
                   print('[MemosBody] Refresh triggered (empty state)');
                 }
-                // Invalidate the memosProvider to force refresh
-                ref.invalidate(memosProvider);
-                // Wait for the memosProvider future to complete to signal
-                // the RefreshIndicator that the refresh is done.
-                await ref.read(memosProvider.future);
+                // Use the notifier's refresh method
+                await ref.read(memosNotifierProvider.notifier).refresh();
               },
               child: LayoutBuilder( // Use LayoutBuilder to ensure ListView constraints
                 builder: (context, constraints) {
@@ -127,7 +214,8 @@ class _MemosBodyState extends ConsumerState<MemosBody>
                     physics: const AlwaysScrollableScrollPhysics(),
                     child: ConstrainedBox(
                       constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                      child: const MemosEmptyState(),
+                      child:
+                          const MemosEmptyState(), // Show the empty state widget
                     ),
                   );
                 }
@@ -135,86 +223,59 @@ class _MemosBodyState extends ConsumerState<MemosBody>
             );
           }
 
-          // Wrap the ListView.builder with RefreshIndicator
+          // 4. Data State (Memos available)
           return RefreshIndicator(
             onRefresh: () async {
               if (kDebugMode) {
                 print('[MemosBody] Refresh triggered');
               }
-              // Invalidate the memosProvider to force refresh
-              ref.invalidate(memosProvider);
-              // Wait for the memosProvider future to complete to signal
-              // the RefreshIndicator that the refresh is done.
-              // This ensures the indicator animation stops correctly.
-              await ref.read(memosProvider.future);
+              // Use the notifier's refresh method
+              await ref.read(memosNotifierProvider.notifier).refresh();
             },
             child: ListView.builder(
+              controller: _scrollController, // Assign the scroll controller
               // Ensure the ListView is always scrollable to allow pull-to-refresh
               // even if the content fits on the screen.
               physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.all(16.0),
-              itemCount: visibleMemos.length,
+              // Add 1 to item count if loading more for the indicator
+              itemCount:
+                  visibleMemos.length + (memosState.isLoadingMore ? 1 : 0),
               itemBuilder: (context, index) {
-                final memo = visibleMemos[index];
-                return MemoListItem(memo: memo, index: index);
+                // Check if it's the loading indicator item at the end
+                if (index == visibleMemos.length && memosState.isLoadingMore) {
+                  return const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 16.0),
+                    child: Center(child: CircularProgressIndicator()),
+                  );
+                }
+
+                // Otherwise, it's a memo item (check bounds just in case)
+                if (index < visibleMemos.length) {
+                  final memo = visibleMemos[index];
+                  // Pass the index within the visibleMemos list
+                  return MemoListItem(memo: memo, index: index);
+                }
+
+                // Should not happen, but return an empty box as fallback
+                return const SizedBox.shrink();
               },
             ),
           );
         },
-        loading: () {
-          // Do not wrap loading state in RefreshIndicator,
-          // as it doesn't make sense to refresh while already loading.
-          return const Center(
-            child: Padding(
-              padding: EdgeInsets.all(20.0),
-              child: CircularProgressIndicator(),
-            ),
-          );
-        },
-        error: (error, stackTrace) {
-          // Optionally wrap error state in RefreshIndicator to allow retrying.
-          return RefreshIndicator(
-            onRefresh: () async {
-              if (kDebugMode) {
-                print('[MemosBody] Refresh triggered (error state)');
-              }
-              ref.invalidate(memosProvider);
-              await ref.read(memosProvider.future);
-            },
-            child: LayoutBuilder( // Use LayoutBuilder for constraints
-              builder: (context, constraints) {
-                return SingleChildScrollView( // Make it scrollable for refresh
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                    child: Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(20.0),
-                        child: Text(
-                          'Error loading memos: ${error.toString().substring(0, math.min(error.toString().length, 100))}\nPull down to retry.',
-                          style: const TextStyle(color: Colors.red),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                    ),
-                  ),
-                ); // End of SingleChildScrollView
-              }, // End of LayoutBuilder builder
-            ), // End of LayoutBuilder
-          ); // End of RefreshIndicator
-        }, // End of error case
-      ), // End of memosAsync.when
+      ), // End of Builder
     ); // End of Focus
   } // End of build method
 
 // Helper methods for keyboard navigation remain unchanged below
   // Helper methods for keyboard navigation
   void selectNextMemo() {
-    // Get the current list of visible memos
-    final memosAsync = ref.read(visibleMemosProvider);
-    if (memosAsync is! AsyncData<List<Memo>>) return;
+    // Get the current list of visible memos using the new provider
+    // final memosAsync = ref.read(visibleMemosProvider); // Old way
+    // if (memosAsync is! AsyncData<List<Memo>>) return; // Old check
+    // final memos = memosAsync.value; // Old way
+    final memos = ref.read(visibleMemosListProvider); // New way
 
-    final memos = memosAsync.value;
     if (memos.isEmpty) return;
 
     // Get the current selection
@@ -227,15 +288,19 @@ class _MemosBodyState extends ConsumerState<MemosBody>
     if (nextIndex != currentIndex) {
       // Update the selection
       ref.read(selectedMemoIndexProvider.notifier).state = nextIndex;
+      if (kDebugMode) {
+        print('[MemosBody] Selected next memo at index $nextIndex');
+      }
     }
   }
 
   void selectPreviousMemo() {
-    // Get the current list of visible memos
-    final memosAsync = ref.read(visibleMemosProvider);
-    if (memosAsync is! AsyncData<List<Memo>>) return;
+    // Get the current list of visible memos using the new provider
+    // final memosAsync = ref.read(visibleMemosProvider); // Old way
+    // if (memosAsync is! AsyncData<List<Memo>>) return; // Old check
+    // final memos = memosAsync.value; // Old way
+    final memos = ref.read(visibleMemosListProvider); // New way
 
-    final memos = memosAsync.value;
     if (memos.isEmpty) return;
 
     // Get the current selection
@@ -248,48 +313,37 @@ class _MemosBodyState extends ConsumerState<MemosBody>
     if (prevIndex != currentIndex) {
       // Update the selection
       ref.read(selectedMemoIndexProvider.notifier).state = prevIndex;
+      if (kDebugMode) {
+        print('[MemosBody] Selected previous memo at index $prevIndex');
+      }
     }
   }
 
   void openSelectedMemo(BuildContext context) {
-    // Get the current list of visible memos
-    final memosAsync = ref.read(visibleMemosProvider);
-    if (memosAsync is! AsyncData<List<Memo>>) return;
-
-    final memos = memosAsync.value;
+    // Get the current list of visible memos using the new provider
+    // final memosAsync = ref.read(visibleMemosProvider); // Old way
+    // if (memosAsync is! AsyncData<List<Memo>>) return; // Old check
+    // final memos = memosAsync.value; // Old way
+    final memos = ref.read(visibleMemosListProvider); // New way
     final selectedIndex = ref.read(selectedMemoIndexProvider);
 
     // If we have a valid selection, navigate to that memo
     if (selectedIndex >= 0 && selectedIndex < memos.length) {
       final selectedMemo = memos[selectedIndex];
+      if (kDebugMode) {
+        print(
+          '[MemosBody] Opening memo detail for index $selectedIndex, ID: ${selectedMemo.id}',
+        );
+      }
       Navigator.pushNamed(
         context,
         '/memo-detail',
         arguments: {'memoId': selectedMemo.id},
       );
-    }
-  }
-
-  // Ensure there's always a selection when memos are available
-  // This method seems redundant given the logic in didChangeDependencies,
-  // but keeping it as it was present before the bad diff.
-  // Consider removing if didChangeDependencies handles it sufficiently.
-  void ensureInitialSelection() {
-    final memosAsync = ref.read(visibleMemosProvider);
-    if (memosAsync is! AsyncData<List<Memo>>) return;
-
-    final memos = memosAsync.value;
-    if (memos.isEmpty) return;
-
-    final currentIndex = ref.read(selectedMemoIndexProvider);
-    if (currentIndex < 0 && memos.isNotEmpty) {
-      // Initialize selection to the first memo if nothing is selected
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        // Check mounted again inside the callback
-        if (mounted) {
-           ref.read(selectedMemoIndexProvider.notifier).state = 0;
-        }
-      });
+    } else if (kDebugMode) {
+      print(
+        '[MemosBody] Cannot open memo detail: Invalid index $selectedIndex for list length ${memos.length}',
+      );
     }
   }
 }

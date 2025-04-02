@@ -32,7 +32,7 @@ class EditMemoScreen extends ConsumerWidget {
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) {
           // Always refresh the main memos list (parent memo might have been bumped)
-          ref.invalidate(memo_providers.memosProvider);
+          ref.read(memo_providers.memosNotifierProvider.notifier).refresh();
 
           if (entityType == 'comment') {
             // If a comment was edited, refresh the comments list for the parent memo

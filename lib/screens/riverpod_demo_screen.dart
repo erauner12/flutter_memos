@@ -17,7 +17,7 @@ class RiverpodDemoScreen extends ConsumerWidget {
     final timeFilter = ref.watch(timeFilterProvider);
     
     // Watch the memos provider
-    final memosAsync = ref.watch(memosProvider);
+    final memosAsync = ref.watch(memosNotifierProvider);
     
     return Scaffold(
       appBar: AppBar(
@@ -120,8 +120,24 @@ class RiverpodDemoScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: 8),
                   Expanded(
-                    child: memosAsync.when(
-                      data: (memos) {
+                    child: Builder(
+                      builder: (context) {
+                        // Show loading spinner for initial load
+                        if (memosAsync.isLoading && memosAsync.memos.isEmpty) {
+                          return const Center(
+                            child: CircularProgressIndicator(),
+                          );
+                        }
+
+                        // Show error message if there's an error and no memos to display
+                        if (memosAsync.error != null &&
+                            memosAsync.memos.isEmpty) {
+                          return Center(
+                            child: Text('Error: ${memosAsync.error}'),
+                          );
+                        }
+
+                        final memos = memosAsync.memos;
                         if (memos.isEmpty) {
                           return const Center(
                             child: Text('No memos found'),
@@ -143,12 +159,6 @@ class RiverpodDemoScreen extends ConsumerWidget {
                           },
                         );
                       },
-                      loading: () => const Center(
-                        child: CircularProgressIndicator(),
-                      ),
-                      error: (error, stackTrace) => Center(
-                        child: Text('Error: $error'),
-                      ),
                     ),
                   ),
                 ],

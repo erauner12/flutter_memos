@@ -6,33 +6,57 @@ import 'package:flutter_memos/utils/env.dart';
 import 'package:flutter_memos/utils/filter_builder.dart';
 import 'package:flutter_memos/utils/memo_utils.dart';
 
+// Define a response class to hold memos and the next page token
+class PaginatedMemoResponse {
+  final List<Memo> memos;
+  final String? nextPageToken;
+
+  PaginatedMemoResponse({required this.memos, this.nextPageToken});
+
+  // Add methods to make this class work with existing code
+  int get length => memos.length;
+
+  List<Memo> where(bool Function(Memo) test) {
+    return memos.where(test).toList();
+  }
+  
+  // Utility method to check if there are more pages
+  bool get hasMorePages => nextPageToken != null && nextPageToken!.isNotEmpty;
+
+  // Utility method to check if empty
+  bool get isEmpty => memos.isEmpty;
+  
+  // Optional: Factory constructor from JSON if needed
+  // factory PaginatedMemoResponse.fromJson(Map<String, dynamic> json) { ... }
+}
+
 class ApiService {
   static final ApiService _instance = ApiService._internal();
   factory ApiService() => _instance;
-  
+
   late MemoServiceApi _memoApi;
   late ApiClient _apiClient;
-  
+
   // New fields for server configuration
   String _baseUrl = '';
   String _authToken = '';
 
   // Configuration flags
   static const bool CLIENT_SIDE_SORTING_ENABLED = true; // Always use client-side sorting
-  static bool verboseLogging = true;  // Enable detailed logging
+  static bool verboseLogging = true; // Enable detailed logging
   static bool useFilterExpressions = true; // Enable CEL filter expressions
 
   // For testing purposes
   static List<String>? _lastServerOrder;
   static List<String> get lastServerOrder => _lastServerOrder ?? [];
-  
+
   // Document the sorting limitation and filter support
   static const String SORTING_LIMITATION = """
     NOTE: The Memos server doesn't fully support dynamic sort fields.
     The backend code uses specific boolean flags (OrderByUpdatedTs, OrderByTimeAsc)
     rather than a generic sort parameter. Client-side sorting is used as a reliable
     alternative.
-    
+
     However, the server does support powerful filtering using CEL expressions.
     This can be used to filter memos by tags, visibility, content, and timestamps.
   """;
@@ -111,7 +135,7 @@ class ApiService {
       );
 
       _memoApi = MemoServiceApi(_apiClient);
-      
+
       if (verboseLogging) {
         print('[API] Successfully initialized client with base URL: $baseUrl');
       }
@@ -123,13 +147,16 @@ class ApiService {
 
   // MEMO OPERATIONS
 
-  /// List memos with filtering and sorting
-  Future<List<Memo>> listMemos({
-    String? parent,
+  /// List memos with filtering, sorting, and pagination
+  Future<PaginatedMemoResponse> listMemos({
+    String parent = 'users/1', // Default parent
     String? filter,
-    String state = '',
+    String? state,
     String sort = 'updateTime',
     String direction = 'DESC',
+    int? pageSize, // New parameter for pagination size
+    String? pageToken, // New parameter for pagination token
+    // Keep existing filter parameters
     List<String>? tags,
     dynamic visibility,
     String? contentSearch,
@@ -141,29 +168,31 @@ class ApiService {
     bool useUpdateTimeForExpression = false,
   }) async {
     if (verboseLogging) {
-      print('[API] Listing memos with sort=$sort, direction=$direction');
+      print(
+        '[API] Listing memos with sort=$sort, direction=$direction, pageSize=$pageSize, pageToken=$pageToken',
+      );
     }
-    
+
     // If filter expressions are enabled, build a CEL filter
     String? celFilter = filter;
     if (useFilterExpressions) {
       final filterList = <String>[];
-      
+
       // Add tags filter
       if (tags != null && tags.isNotEmpty) {
         filterList.add(FilterBuilder.byTags(tags));
       }
-      
+
       // Add visibility filter
       if (visibility != null) {
         filterList.add(FilterBuilder.byVisibility(visibility));
       }
-      
+
       // Add content search
       if (contentSearch != null && contentSearch.isNotEmpty) {
         filterList.add(FilterBuilder.byContent(contentSearch));
       }
-      
+
       // Add time filters
       if (createdAfter != null && createdBefore != null) {
         filterList.add(
@@ -181,7 +210,7 @@ class ApiService {
           );
         }
       }
-      
+
       if (updatedAfter != null && updatedBefore != null) {
         filterList.add(
           FilterBuilder.byUpdateTimeRange(updatedAfter, updatedBefore),
@@ -198,7 +227,7 @@ class ApiService {
           );
         }
       }
-      
+
       // Add time expression
       if (timeExpression != null && timeExpression.isNotEmpty) {
         final expressionFilter = FilterBuilder.byTimeExpression(
@@ -209,63 +238,102 @@ class ApiService {
           filterList.add(expressionFilter);
         }
       }
-      
+
       // Combine filters with AND
       if (filterList.isNotEmpty) {
         final combinedFilter = FilterBuilder.and(filterList);
-        
+
         // If the user provided a filter, combine it with our generated filter
         if (filter != null && filter.isNotEmpty) {
           celFilter = FilterBuilder.and([filter, combinedFilter]);
         } else {
           celFilter = combinedFilter;
         }
-        
+
         if (verboseLogging) {
           print('[API] Using CEL filter: $celFilter');
         }
       }
     }
-    
+
     try {
       final V1ListMemosResponse? response;
-      
+
       // Use the appropriate endpoint based on whether parent is specified
-      if (parent != null && parent.isNotEmpty) {
+      // Pass pageSize and pageToken to the API call
+      if (parent.isNotEmpty) {
+        if (verboseLogging) {
+          print(
+            '[API] Calling API with pageSize: $pageSize, pageToken: $pageToken',
+          );
+        }
         response = await _memoApi.memoServiceListMemos2(
           parent,
-          state: state.isNotEmpty ? state : null,
+          state: state?.isNotEmpty ?? false ? state : null,
           sort: sort,
           direction: direction,
           filter: celFilter,
+          pageSize: pageSize,
+          pageToken: pageToken,
         );
       } else {
-        response = await _memoApi.memoServiceListMemos(
-          parent: parent,
-          state: state.isNotEmpty ? state : null,
-          sort: sort, 
+        if (verboseLogging) {
+          print(
+            '[API] Calling API with pageSize: $pageSize, pageToken: $pageToken',
+          );
+        }
+        response = await _memoApi.memoServiceListMemos2(
+          parent,
+          state: state?.isNotEmpty ?? false ? state : null,
+          sort: sort,
           direction: direction,
           filter: celFilter,
+          pageSize: pageSize,
+          pageToken: pageToken,
         );
       }
-      
+
       if (response == null) {
-        return [];
+        if (verboseLogging) {
+          print(
+            '[API-DEBUG] API returned null response. Returning empty list.',
+          );
+        }
+        return PaginatedMemoResponse(memos: [], nextPageToken: null);
       }
 
       final memos = response.memos.map(_convertApiMemoToAppMemo).toList();
-      
+      final nextPageToken = response.nextPageToken; // Extract next page token
+
       _lastServerOrder = memos.map((memo) => memo.id).toList();
-      
+
       if (verboseLogging) {
-        print('[API-DEBUG] Server returned ${memos.length} memos');
+        print(
+          '[API-DEBUG] Server returned ${memos.length} memos. Next page token: ${nextPageToken ?? "null"}',
+        );
+        if (pageToken != null) {
+          print(
+            '[API-DEBUG] This was a paginated request with token: $pageToken',
+          );
+        }
         if (memos.isNotEmpty) {
           print(
             '[API-DEBUG] First memo: ${memos[0].id}, updateTime: ${memos[0].updateTime}, createTime: ${memos[0].createTime}',
           );
+          if (memos.length > 1) {
+            print(
+              '[API-DEBUG] Last memo: ${memos.last.id}, updateTime: ${memos.last.updateTime}, createTime: ${memos.last.createTime}',
+            );
+          }
+        }
+        if (nextPageToken != null) {
+          print('[API-DEBUG] Next page token will be: $nextPageToken');
+        } else {
+          print('[API-DEBUG] No next page token. This is the last page.');
         }
       }
 
+      // Client-side sorting remains important, especially if API sorting is limited
       if (CLIENT_SIDE_SORTING_ENABLED) {
         final preSortOrder = memos.map((memo) => memo.id).toList();
         MemoUtils.sortMemos(memos, sort);
@@ -278,7 +346,7 @@ class ApiService {
           );
           if (orderingChanged && memos.isNotEmpty) {
             print(
-              '[API-DEBUG] First memo after sorting: ${memos[0].id}, $sort: ${sort == 'updateTime' ? memos[0].updateTime : memos[0].createTime}',
+              '[API-DEBUG] First memo after sorting: ${memos[0].id}, $sort: ${sort == "updateTime" ? memos[0].updateTime : memos[0].createTime}',
             );
           }
         }
@@ -290,10 +358,12 @@ class ApiService {
           '[API-DEBUG] First memo AFTER client-side sort by "$sort": ID=${memos.first.id}, updateTime=${memos.first.updateTime}, createTime=${memos.first.createTime}',
         );
       }
-      
-      return memos;
+
+      // Return the paginated response object
+      return PaginatedMemoResponse(memos: memos, nextPageToken: nextPageToken);
     } catch (e) {
       print('[API] Error listing memos: $e');
+      // Consider wrapping the error or rethrowing a more specific exception
       throw Exception('Failed to load memos: $e');
     }
   }
@@ -304,11 +374,11 @@ class ApiService {
       final apiMemo = await _memoApi.memoServiceGetMemo(
         _formatResourceName(id, 'memos'),
       );
-      
+
       if (apiMemo == null) {
         throw Exception('Memo not found');
       }
-      
+
       return _convertApiMemoToAppMemo(apiMemo);
     } catch (e) {
       print('[API] Error getting memo: $e');
@@ -326,13 +396,13 @@ class ApiService {
         visibility: _getApiVisibility(memo.visibility),
         creator: memo.creator ?? 'users/1',
       );
-      
+
       final response = await _memoApi.memoServiceCreateMemo(apiMemo);
-      
+
       if (response == null) {
         throw Exception('Failed to create memo: No response from server');
       }
-      
+
       return _convertApiMemoToAppMemo(response);
     } catch (e) {
       print('[API] Error creating memo: $e');
@@ -362,16 +432,16 @@ class ApiService {
         updateTime: clientNow,
         // createTime: null, // Explicitly not sending createTime
       );
-      
+
       final response = await _memoApi.memoServiceUpdateMemo(
         _formatResourceName(id, 'memos'),
         updatePayload,
       );
-      
+
       if (response == null) {
         throw Exception('Failed to update memo: No response from server');
       }
-      
+
       // Convert the API response to our app model
       Memo updatedAppMemo = _convertApiMemoToAppMemo(response);
 
@@ -404,9 +474,9 @@ class ApiService {
     try {
       final formattedId = _formatResourceName(id, 'memos');
       print('[API] Deleting memo: $formattedId');
-      
+
       final response = await _memoApi.memoServiceDeleteMemoWithHttpInfo(formattedId);
-      
+
       if (response.statusCode == 204 || response.statusCode == 200) {
         print('[API] Successfully deleted memo: $id');
         return;
@@ -428,11 +498,11 @@ class ApiService {
       final response = await _memoApi.memoServiceListMemoComments(
         _formatResourceName(memoId, 'memos'),
       );
-      
+
       if (response == null) {
         return [];
       }
-      
+
       return _parseCommentsFromApiResponse(response);
     } catch (e) {
       print('[API] Error listing comments: $e');
@@ -452,16 +522,16 @@ class ApiService {
         pinned: comment.pinned,
         state: _getApiStateFromCommentState(comment.state),
       );
-      
+
       final response = await _memoApi.memoServiceCreateMemoComment(
         _formatResourceName(memoId, 'memos'),
         apiMemo,
       );
-      
+
       if (response == null) {
         throw Exception('Failed to create comment: No response from server');
       }
-      
+
       return _convertApiMemoToComment(response);
     } catch (e) {
       print('[API] Error creating comment: $e');
@@ -478,17 +548,17 @@ class ApiService {
       }
 
       // Process combined IDs in format "memoId/commentId" if needed
-      final String childId = commentId.contains('/') ?
-          commentId.split('/').last : commentId;
-          
+      final String childId =
+          commentId.contains('/') ? commentId.split('/').last : commentId;
+
       final response = await _memoApi.memoServiceGetMemo(
         _formatResourceName(childId, 'memos'),
       );
-      
+
       if (response == null) {
         throw Exception('Comment not found');
       }
-      
+
       return _convertApiMemoToComment(response);
     } catch (e) {
       print('[API] Error getting comment: $e');
@@ -505,24 +575,24 @@ class ApiService {
       }
 
       // Process combined IDs in format "memoId/commentId" if needed
-      final String childId = commentId.contains('/') ?
-          commentId.split('/').last : commentId;
-      
+      final String childId =
+          commentId.contains('/') ? commentId.split('/').last : commentId;
+
       final updateMemo = TheMemoToUpdateTheNameFieldIsRequired(
         content: comment.content,
         pinned: comment.pinned,
         state: _getApiStateFromCommentState(comment.state),
       );
-      
+
       final response = await _memoApi.memoServiceUpdateMemo(
         _formatResourceName(childId, 'memos'),
         updateMemo,
       );
-      
+
       if (response == null) {
         throw Exception('Failed to update comment: No response from server');
       }
-      
+
       return _convertApiMemoToComment(response);
     } catch (e) {
       print('[API] Error updating comment: $e');
@@ -535,16 +605,16 @@ class ApiService {
   Future<void> deleteMemoComment(String memoId, String commentId) async {
     try {
       // Process combined IDs in format "memoId/commentId" if needed
-      final String childId = commentId.contains('/') ?
-          commentId.split('/').last : commentId;
-          
+      final String childId =
+          commentId.contains('/') ? commentId.split('/').last : commentId;
+
       if (verboseLogging) {
         print('[API] Deleting comment: $childId (from memo: $memoId)');
       }
-      
+
       final formattedId = _formatResourceName(childId, 'memos');
       final response = await _memoApi.memoServiceDeleteMemoWithHttpInfo(formattedId);
-      
+
       if (response.statusCode == 204 || response.statusCode == 200) {
         if (verboseLogging) {
           print('[API] Successfully deleted comment: $childId');
@@ -565,13 +635,13 @@ class ApiService {
   String _formatResourceName(String id, String resourceType) {
     return id.startsWith('$resourceType/') ? id : '$resourceType/$id';
   }
-  
+
   String _extractIdFromName(String name) {
     if (name.isEmpty) return '';
     final parts = name.split('/');
     return parts.length > 1 ? parts[1] : name;
   }
-  
+
   Memo _convertApiMemoToAppMemo(Apiv1Memo apiMemo) {
     return Memo(
       id: _extractIdFromName(apiMemo.name ?? ''),
@@ -579,31 +649,20 @@ class ApiService {
       pinned: apiMemo.pinned ?? false,
       state: _parseApiState(apiMemo.state),
       visibility: apiMemo.visibility?.value ?? 'PUBLIC',
-      // Correctly map resources to resourceNames (list of strings)
       resourceNames:
           apiMemo.resources
               .map((r) => r.name ?? '')
               .where((name) => name.isNotEmpty)
               .toList(),
-      // Correctly map relations to relationList (list of dynamic or specific type if defined)
-      // Assuming MemoRelation.fromApiRelation exists and works for conversion if needed,
-      // otherwise, map to a simpler structure or keep as dynamic.
-      // For now, let's keep it simple if the app model expects List<dynamic>.
-      // If MemoRelation is the app model, use: apiMemo.relations.map(MemoRelation.fromApiRelation).toList()
-      relationList:
-          apiMemo.relations
-              .map((r) => r.toJson())
-              .toList(), // Example: Convert to JSON map if needed by Memo model
+      relationList: apiMemo.relations.map((r) => r.toJson()).toList(),
       parent: apiMemo.parent,
       creator: apiMemo.creator,
-      // Use helper to safely convert DateTime? to String?
       createTime: _safeIsoString(apiMemo.createTime),
       updateTime: _safeIsoString(apiMemo.updateTime),
       displayTime: _safeIsoString(apiMemo.displayTime),
     );
   }
 
-  // Helper to safely convert DateTime? to ISO8601 String?
   String? _safeIsoString(DateTime? dt) {
     if (dt == null) return null;
     try {
@@ -613,7 +672,7 @@ class ApiService {
       return null;
     }
   }
-  
+
   MemoState _parseApiState(V1State? state) {
     if (state == null) return MemoState.normal;
     switch (state) {
@@ -625,7 +684,6 @@ class ApiService {
     }
   }
 
-  /// Convert MemoState to V1State
   V1State _getMemoState(MemoState state) {
     switch (state) {
       case MemoState.archived:
@@ -636,9 +694,6 @@ class ApiService {
     }
   }
 
-  // HELPER METHODS FOR API STATE AND VISIBILITY
-
-  /// Convert a string visibility to V1Visibility enum
   V1Visibility _getApiVisibility(String visibility) {
     switch (visibility.toUpperCase()) {
       case 'PRIVATE':
@@ -651,9 +706,6 @@ class ApiService {
     }
   }
 
-  // COMMENT STATE CONVERSION HELPERS
-
-  /// Convert API state to Comment state
   CommentState _parseCommentStateFromApi(V1State? state) {
     if (state == null) return CommentState.normal;
     switch (state) {
@@ -666,33 +718,29 @@ class ApiService {
     }
   }
 
-  /// Convert Comment state to API state
   V1State _getApiStateFromCommentState(CommentState state) {
     switch (state) {
       case CommentState.archived:
         return V1State.ARCHIVED;
       case CommentState.deleted:
-        // The Memos API doesn't have a separate DELETED, so treat it as archived
         return V1State.ARCHIVED;
       case CommentState.normal:
         return V1State.NORMAL;
     }
   }
 
-  /// Convert an API memo object to a Comment object
   Comment _convertApiMemoToComment(Apiv1Memo apiMemo) {
     final commentId = _extractIdFromName(apiMemo.name ?? '');
-    
+
     return Comment(
       id: commentId,
       content: apiMemo.content ?? '',
       createTime:
-          apiMemo.createTime?.millisecondsSinceEpoch 
-        ?? DateTime.now().millisecondsSinceEpoch,
+          apiMemo.createTime?.millisecondsSinceEpoch ??
+          DateTime.now().millisecondsSinceEpoch,
       updateTime: apiMemo.updateTime?.millisecondsSinceEpoch,
-      creatorId: apiMemo.creator != null
-        ? _extractIdFromName(apiMemo.creator!)
-        : null,
+      creatorId:
+          apiMemo.creator != null ? _extractIdFromName(apiMemo.creator!) : null,
       pinned: apiMemo.pinned ?? false,
       state: _parseCommentStateFromApi(apiMemo.state),
     );
@@ -701,7 +749,6 @@ class ApiService {
   List<Comment> _parseCommentsFromApiResponse(
     V1ListMemoCommentsResponse response,
   ) {
-    // Use the existing convertApiMemoToComment method for consistency
     return response.memos.map(_convertApiMemoToComment).toList();
   }
 
@@ -712,66 +759,58 @@ class ApiService {
     }
     return true;
   }
-  
-  /// Create or update relations for a memo
+
   Future<void> setMemoRelations(String memoId, List<MemoRelation> relations) async {
     try {
       final formattedId = _formatResourceName(memoId, 'memos');
-      
+
       if (verboseLogging) {
         print('[API] Setting relations for memo: $formattedId');
       }
-      
-      // Don't proceed if there are no relations
+
       if (relations.isEmpty) {
         if (verboseLogging) {
           print('[API] No relations to set for memo: $memoId');
         }
         return;
       }
-      
-      // Convert our model relations to API relations
-      // We need to handle null safety explicitly with a non-nullable list
+
       final List<V1MemoRelation> apiRelations = [];
       for (final relation in relations) {
         final apiRelation = relation.toApiRelation();
-        
-        // Update the memo reference to use the target memo ID
+
         if (apiRelation.memo != null) {
           apiRelation.memo!.name = formattedId;
         }
-        
+
         apiRelations.add(apiRelation);
       }
-      
+
       if (verboseLogging) {
         print('[API] Prepared ${apiRelations.length} relations for memo: $memoId');
       }
-      
-      // Create the proper request body with the relations
+
       final requestBody = MemoServiceSetMemoRelationsBody(
         relations: apiRelations,
       );
-      
-      // Use the API's method to set relations with the proper request body
+
       await _memoApi.memoServiceSetMemoRelations(formattedId, requestBody);
-      
+
       if (verboseLogging) {
         print('[API] Successfully set relations for memo: $memoId');
       }
     } catch (e) {
       print('[API] Error setting memo relations: $e');
-      
-      // In case of API error, we'll handle conversion failure gracefully
-      // This allows the comment-to-memo conversion to succeed even if relation fails
+
       if (e.toString().contains('deserialization') ||
           e.toString().contains('500')) {
         print('[API] This appears to be an API compatibility issue.');
-        print('[API] The memo was created successfully, but relation setting failed.');
-        // We don't rethrow here to allow the operation to "succeed" despite relation failure
+        print(
+          '[API] The memo was created successfully, but relation setting failed.',
+        );
         return;
       }
-      
+
       throw Exception('Failed to set memo relations: $e');
     }
   }
@@ -790,21 +829,18 @@ class ApiService {
         return [];
       }
 
-      // Use the fromApiRelation factory to handle the conversion properly
       return response.relations
           .map((relation) => MemoRelation.fromApiRelation(relation))
           .toList();
-    } catch (e) {      
+    } catch (e) {
       print('[API] Error listing memo relations: $e');
       throw Exception('Failed to list memo relations: $e');
     }
-  }      
+  }
 
-  /// Parse relation type from string - converts API type to string constant
   String parseRelationType(dynamic type) {
     if (type == null) return MemoRelation.typeComment;
-    
-    // Handle different type possibilities
+
     String typeStr = type.toString();
 
     switch (typeStr.toUpperCase()) {

@@ -91,7 +91,9 @@ class _MemoDetailScreenState extends ConsumerState<MemoDetailScreen>
                   ref.invalidate(memoCommentsProvider(widget.memoId));
                   
                     // Refresh memos list
-                    ref.invalidate(memo_providers.memosProvider);
+                    ref
+                        .read(memo_providers.memosNotifierProvider.notifier)
+                        .refresh();
 
                     // Ensure memo is not hidden
                     ref

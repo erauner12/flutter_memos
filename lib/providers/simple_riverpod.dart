@@ -76,23 +76,36 @@ final memoFilterProvider = StateProvider<String>((ref) => 'all');
 /// Memos provider that simulates what you'd do with codegen
 final advancedMemosProvider = FutureProvider<List<Memo>>((ref) async {
   // Watch dependencies
-  final apiService = ref.watch(apiServiceProvider);
+  final apiService = ref.watch(
+    apiServiceProvider,
+  ); // Keep watching if needed elsewhere
   final filter = ref.watch(memoFilterProvider);
-  
-  // Get memos from API
-  final memos = await apiService.listMemos();
-  
-  // Apply filter
-  if (filter == 'all') {
-    return memos;
-  } else if (filter == 'pinned') {
+
+  // Get memos from API by calling fetchMemos with ref
+  final memos = await fetchMemos(ref, filter); // Pass ref here
+
+  return memos;
+});
+
+/// Update return types and handling of PaginatedMemoResponse
+Future<List<Memo>> fetchMemos(Ref ref, String filter) async {
+  // Changed from WidgetRef to Ref
+  final apiService = ref.read(apiServiceProvider); // Use provider
+  final response = await apiService.listMemos(); // Call method on instance
+
+  // Extract the memos list from the response
+  final memos = response.memos;
+
+  if (filter == 'pinned') {
     return memos.where((memo) => memo.pinned).toList();
   } else if (filter == 'normal') {
     return memos.where((memo) => memo.state == MemoState.normal).toList();
   } else if (filter == 'archived') {
-    return memos.where((memo) => memo.state == MemoState.archived).toList();
+    return memos
+        .where((memo) => memo.state == MemoState.archived)
+        .toList();
   }
-  
-  // Default: return all memos
+
+  // Default case - return all memos
   return memos;
-});
+}

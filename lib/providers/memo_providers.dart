@@ -2,9 +2,88 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_memos/models/memo.dart';
 import 'package:flutter_memos/providers/api_providers.dart';
 import 'package:flutter_memos/providers/filter_providers.dart';
+import 'package:flutter_memos/services/api_service.dart'; // Import ApiService
 import 'package:flutter_memos/utils/filter_builder.dart';
-import 'package:flutter_memos/utils/memo_utils.dart'; // Added import
+import 'package:flutter_memos/utils/memo_utils.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+// State class to hold pagination data
+@immutable // Optional but good practice
+class MemosState {
+  final List<Memo> memos;
+  final String? nextPageToken;
+  final bool isLoading; // Initial loading state
+  final bool isLoadingMore; // Loading subsequent pages
+  final Object? error;
+  final bool hasReachedEnd; // True if no more pages
+  final int totalLoaded; // Keep track of how many memos we've loaded
+
+  const MemosState({
+    this.memos = const [],
+    this.nextPageToken,
+    this.isLoading = false,
+    this.isLoadingMore = false,
+    this.error,
+    this.hasReachedEnd = false,
+    this.totalLoaded = 0,
+  });
+
+  // copyWith method for easier state updates
+  MemosState copyWith({
+    List<Memo>? memos,
+    String? nextPageToken,
+    bool? isLoading,
+    bool? isLoadingMore,
+    Object? error, // Allow passing null to clear error
+    bool? hasReachedEnd,
+    int? totalLoaded,
+    bool clearNextPageToken = false, // Helper to explicitly nullify token
+    bool clearError = false, // Helper to explicitly nullify error
+  }) {
+    return MemosState(
+      memos: memos ?? this.memos,
+      nextPageToken:
+          clearNextPageToken ? null : (nextPageToken ?? this.nextPageToken),
+      isLoading: isLoading ?? this.isLoading,
+      isLoadingMore: isLoadingMore ?? this.isLoadingMore,
+      error: clearError ? null : (error ?? this.error),
+      hasReachedEnd: hasReachedEnd ?? this.hasReachedEnd,
+      totalLoaded: totalLoaded ?? this.totalLoaded,
+    );
+  }
+
+  // Convenience method to check if we can load more
+  bool get canLoadMore =>
+      !isLoading && !isLoadingMore && !hasReachedEnd && nextPageToken != null;
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+
+    return other is MemosState &&
+        listEquals(other.memos, memos) &&
+        other.nextPageToken == nextPageToken &&
+        other.isLoading == isLoading &&
+        other.isLoadingMore == isLoadingMore &&
+        other.error == error &&
+        other.hasReachedEnd == hasReachedEnd &&
+        other.totalLoaded == totalLoaded;
+  }
+
+  @override
+  int get hashCode {
+    return Object.hash(
+      Object.hashAll(memos), // Use Object.hashAll for list
+      nextPageToken,
+      isLoading,
+      isLoadingMore,
+      error,
+      hasReachedEnd,
+      totalLoaded,
+    );
+  }
+}
+
 
 // Removed MemoSortMode enum and memoSortModeProvider
 // We now exclusively sort by updateTime due to server inconsistencies 
@@ -13,142 +92,293 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 /// Provider for the list of hidden memo IDs
 final hiddenMemoIdsProvider = StateProvider<Set<String>>((ref) => {});
 
-/// Provider that fetches memos and applies filters and sorting
-///
-/// This provider caches its results to avoid unnecessary API calls
-/// when other parts of the state change. It only refreshes when
-/// filter-related providers change.
-final memosProvider = FutureProvider<List<Memo>>((ref) async {
-  // Keep the provider alive to maintain the cache
-  ref.keepAlive();
+// --- Start Pagination Notifier ---
 
-  // Watch dependencies
-  final apiService = ref.watch(apiServiceProvider);
-  
-  // Use select() to only listen for changes to the filter string,
-  // not the entire filter object
-  final combinedFilter = ref.watch(combinedFilterProvider);
-  final filterKey = ref.watch(filterKeyProvider);
+class MemosNotifier extends StateNotifier<MemosState> {
+  final Ref _ref;
+  final ApiService _apiService;
+  static const int _pageSize = 20; // Or make configurable
 
-  // --- Sorting Change ---
-  // Always sort by updateTime. createTime from the server list response
-  // can be unreliable (epoch) after updates. Client-side sorting ensures
-  // the list reflects the latest updateTime correctly.
-  const String sortField = 'updateTime';
-  // --- End Sorting Change ---
-
-  String? filter = combinedFilter.isNotEmpty ? combinedFilter : null;
-  String state = '';
-  
-  // Apply filter logic for category/visibility
-  if (filterKey == 'inbox') {
-    state = 'NORMAL';
-  } else if (filterKey == 'archive') {
-    state = 'ARCHIVED';
-  } else if (filterKey != 'all') {
-    // If filter is null, set it to the tag filter, otherwise append to existing filter
-    final tagFilter = 'tags=="$filterKey"';
-    filter = filter == null ? tagFilter : FilterBuilder.and([filter, tagFilter]);
+  MemosNotifier(this._ref)
+    : _apiService = _ref.read(apiServiceProvider),
+      super(const MemosState(isLoading: true)) {
+    _initialize();
   }
-  
-  if (kDebugMode) {
-    print(
-      '[memosProvider] Fetching memos with filter: $filter, state: $state, sort: $sortField',
-    );
-  }
-  
-  // Fetch memos with the constructed filter
-  final memos = await apiService.listMemos(
-    parent: 'users/1', // Specify the current user
-    filter: filter,
-    state: state,
-    sort: sortField,
-    direction: 'DESC', // Always newest first
-  );
 
-  if (kDebugMode) {
-    print('[memosProvider] Received ${memos.length} memos from API');
-    if (memos.isNotEmpty) {
+  void _initialize() {
+    // Listen to filter changes and trigger refresh
+    // Use select to avoid unnecessary refreshes if only part of the filter changes,
+    // but the combined result remains the same (less likely but possible).
+    _ref.listen(combinedFilterProvider, (_, __) => refresh());
+    _ref.listen(filterKeyProvider, (_, __) => refresh());
+    // Add listeners for any other providers that should trigger a full refresh
+    _ref.listen(statusFilterProvider, (_, __) => refresh());
+    _ref.listen(timeFilterProvider, (_, __) => refresh());
+
+    // Fetch initial data
+    fetchInitialPage();
+  }
+
+  Future<void> _fetchPage({String? pageToken}) async {
+    // Read current filters INSIDE the fetch method to get latest values
+    final combinedFilter = _ref.read(combinedFilterProvider);
+    final filterKey = _ref.read(filterKeyProvider);
+    // Determine state based on filterKey ('inbox' -> NORMAL, 'archive' -> ARCHIVED)
+    String stateFilter = '';
+    if (filterKey == 'inbox') {
+      stateFilter = 'NORMAL';
+    } else if (filterKey == 'archive') {
+      stateFilter = 'ARCHIVED';
+    }
+    // Apply filter logic for category/visibility based on filterKey
+    String? finalFilter = combinedFilter.isNotEmpty ? combinedFilter : null;
+    if (filterKey != 'all' && filterKey != 'inbox' && filterKey != 'archive') {
+      // If filter is null, set it to the tag filter, otherwise append to existing filter
+      final tagFilter = 'tags=="$filterKey"';
+      finalFilter =
+          finalFilter == null
+              ? tagFilter
+              : FilterBuilder.and([finalFilter, tagFilter]);
+    }
+
+    // Read status filter for potential client-side filtering (e.g., untagged)
+    final statusFilter = _ref.read(statusFilterProvider);
+
+    if (kDebugMode) {
       print(
-        '[memosProvider] First memo ID: ${memos.first.id}, updateTime: ${memos.first.updateTime}, createTime: ${memos.first.createTime}',
+        '[MemosNotifier] Fetching page with filter: $finalFilter, state: $stateFilter, pageToken: ${pageToken ?? "null"}',
+      );
+      print(
+        '[MemosNotifier] Current state: ${state.memos.length} memos, isLoading=${state.isLoading}, isLoadingMore=${state.isLoadingMore}, hasReachedEnd=${state.hasReachedEnd}',
       );
     }
 
-    // Apply memo sorting with detailed logging
-    // Always sorting by updateTime now.
-    print('[SORT] Client-side sorting by $sortField (newest first)');
+    try {
+      final response = await _apiService.listMemos(
+        parent: 'users/1',
+        filter: finalFilter,
+        state: stateFilter.isNotEmpty ? stateFilter : null,
+        sort: 'updateTime', // Keep consistent sorting
+        direction: 'DESC',
+        pageSize: _pageSize,
+        pageToken: pageToken,
+      );
 
-    // Sort memos if there are any
-    if (memos.isNotEmpty) {
-      // Store original first memo for comparison
-      final origFirstId = memos.isNotEmpty ? memos.first.id : null;
+      // Sort client-side by updateTime (important!)
+      MemoUtils.sortMemos(response.memos, 'updateTime');
 
-      // Sort the memos by the specified field
-      MemoUtils.sortMemos(memos, sortField);
+      var newMemos = response.memos;
+      final nextPageToken = response.nextPageToken;
 
-      // Check if sorting changed the order
-      final sortedFirstId = memos.isNotEmpty ? memos.first.id : null;
-      if (origFirstId != sortedFirstId) {
-        print(
-          '[API-DEBUG] Client-side sorting by "$sortField" changed the order',
-        );
-        if (memos.isNotEmpty) {
+      // Apply client-side filtering if needed (e.g., for 'untagged')
+      if (statusFilter == 'untagged' && newMemos.isNotEmpty) {
+        newMemos =
+            newMemos.where((memo) {
+              final hasTags =
+                  memo.content.contains('#') ||
+                  (memo.resourceNames != null &&
+                      memo.resourceNames!.isNotEmpty);
+              return !hasTags;
+            }).toList();
+        if (kDebugMode) {
           print(
-            '[API-DEBUG] First memo after sorting: ${memos.first.id}, $sortField: ${sortField == 'updateTime' ? memos.first.updateTime : memos.first.createTime}',
+            '[MemosNotifier] Applied client-side untagged filter, ${newMemos.length} memos remain.',
           );
         }
-      } else {
-        print(
-          '[API-DEBUG] Client-side sorting by "$sortField" preserved the order',
-        );
       }
+
+      // Determine if we've reached the end
+      final hasReachedEnd =
+          nextPageToken == null || nextPageToken.isEmpty || newMemos.isEmpty;
+
+      // Update total loaded count
+      final newTotalLoaded =
+          (pageToken == null)
+              ? newMemos.length
+              : state.totalLoaded + newMemos.length;
+
+      if (kDebugMode) {
+        print('[MemosNotifier] Fetched ${newMemos.length} new memos');
+        print('[MemosNotifier] nextPageToken: ${nextPageToken ?? "null"}');
+        print('[MemosNotifier] hasReachedEnd: $hasReachedEnd');
+        print('[MemosNotifier] totalLoaded: $newTotalLoaded');
+      }
+
+      // De-duplicate memos if we somehow received duplicate IDs
+      final List<Memo> resultMemos;
+      if (pageToken == null) {
+        // Initial page - just use new memos
+        resultMemos = newMemos;
+      } else {
+        // For subsequent pages, prevent duplicates by using a Map with memo.id as key
+        final Map<String, Memo> mergedMemos = {};
+        // Add existing memos first
+        for (final memo in state.memos) {
+          mergedMemos[memo.id] = memo;
+        }
+        // Add new memos, potentially overwriting duplicates with newer versions
+        for (final memo in newMemos) {
+          mergedMemos[memo.id] = memo;
+        }
+        // Convert back to list and sort
+        resultMemos = mergedMemos.values.toList();
+        MemoUtils.sortMemos(resultMemos, 'updateTime');
+      }
+
+      state = state.copyWith(
+        memos: resultMemos,
+        nextPageToken: nextPageToken,
+        isLoading: false,
+        isLoadingMore: false,
+        clearError: true, // Clear previous error on success
+        hasReachedEnd: hasReachedEnd,
+        totalLoaded: newTotalLoaded,
+      );
+    } catch (e, st) {
+      if (kDebugMode) {
+        print('[MemosNotifier] Error fetching page: $e\n$st');
+      }
+      state = state.copyWith(isLoading: false, isLoadingMore: false, error: e);
     }
   }
-  
-  // Only read this once when needed, don't watch it to avoid unnecessary rebuilds
-  final statusFilter = ref.read(statusFilterProvider);
-  if (statusFilter == 'untagged' && memos.isNotEmpty) {
-    // Double-check client-side to ensure we only show truly untagged memos
-    return memos.where((memo) {
-      // Check if the memo has no tags
-      final hasTags = memo.content.contains('#') ||
-          (memo.resourceNames != null && memo.resourceNames!.isNotEmpty);
-      return !hasTags;
-    }).toList();
+
+  Future<void> fetchInitialPage() async {
+    // Reset state for a fresh load
+    state = state.copyWith(
+      isLoading: true,
+      memos: [],
+      clearError: true,
+      clearNextPageToken: true,
+      hasReachedEnd: false,
+      totalLoaded: 0,
+    );
+    await _fetchPage(pageToken: null);
   }
-  
-  return memos;
-});
+
+  Future<void> fetchMoreMemos() async {
+    // Check if we can load more using the convenience method
+    if (!state.canLoadMore) {
+      if (kDebugMode) {
+        print('[MemosNotifier] Cannot load more memos:');
+        print('  - isLoading: ${state.isLoading}');
+        print('  - isLoadingMore: ${state.isLoadingMore}');
+        print('  - hasReachedEnd: ${state.hasReachedEnd}');
+        print('  - nextPageToken: ${state.nextPageToken}');
+      }
+      return;
+    }
+    
+    if (kDebugMode) {
+      print(
+        '[MemosNotifier] Fetching more memos with token: ${state.nextPageToken}',
+      );
+    }
+    
+    // Set loading more flag and clear any errors
+    state = state.copyWith(isLoadingMore: true, clearError: true);
+    
+    // Fetch the next page using the stored token
+    await _fetchPage(pageToken: state.nextPageToken);
+  }
+
+  Future<void> refresh() async {
+    // Called by pull-to-refresh or filter changes
+    if (kDebugMode) {
+      print('[MemosNotifier] Refresh triggered.');
+    }
+    await fetchInitialPage();
+  }
+
+  // Helper to check if we already have a memo with this ID to prevent duplicates
+  bool _containsMemoWithId(String id) {
+    return state.memos.any((memo) => memo.id == id);
+  }
+
+  // Optional: Method to update a single memo in the list optimistically
+  void updateMemoOptimistically(Memo updatedMemo) {
+    state = state.copyWith(
+      memos:
+          state.memos.map((memo) {
+            return memo.id == updatedMemo.id ? updatedMemo : memo;
+          }).toList(),
+    );
+  }
+
+  // Optional: Method to remove a memo from the list optimistically
+  void removeMemoOptimistically(String memoId) {
+    state = state.copyWith(
+      memos: state.memos.where((memo) => memo.id != memoId).toList(),
+    );
+  }
+}
+
+// --- End Pagination Notifier ---
+
+/// Provider that fetches memos and applies filters and sorting
+// final memosProvider = FutureProvider<List<Memo>>((ref) async {
+//   // Deprecated: Replaced by pagination with MemosNotifier
+// }); // End of deprecated memosProvider
 
 /// Provider that returns only visible memos (not hidden)
-final visibleMemosProvider = Provider<AsyncValue<List<Memo>>>((ref) {
-  final memosAsync = ref.watch(memosProvider);
+// final visibleMemosProvider = Provider<AsyncValue<List<Memo>>>((ref) {
+//   // Deprecated: Replaced by visibleMemosListProvider
+// }); // End of deprecated visibleMemosProvider
+
+// --- New Pagination Providers ---
+
+/// StateNotifierProvider for managing the paginated memo list state.
+final memosNotifierProvider = StateNotifierProvider<MemosNotifier, MemosState>((
+  ref,
+) {
+  // The notifier is initialized and automatically fetches the first page.
+  // It also listens to filter changes internally.
+  return MemosNotifier(ref);
+}, name: 'memosNotifierProvider');
+
+/// Provider that selects the list of *visible* memos from the current MemosState.
+/// This replaces the old `visibleMemosProvider`.
+final visibleMemosListProvider = Provider<List<Memo>>((ref) {
+  // Watch the state from the notifier
+  final memosState = ref.watch(memosNotifierProvider);
+  // Watch the set of hidden memo IDs
   final hiddenMemoIds = ref.watch(hiddenMemoIdsProvider);
-  
-  return memosAsync.whenData((memos) {
-    return memos.where((memo) => !hiddenMemoIds.contains(memo.id)).toList();
-  });
-});
+
+  // Filter the memos currently held in the state
+  final visibleMemos =
+      memosState.memos.where((memo) {
+        return !hiddenMemoIds.contains(memo.id);
+      }).toList();
+
+  if (kDebugMode) {
+    // Avoid excessive logging, maybe log only when count changes
+    // print('[visibleMemosListProvider] Providing ${visibleMemos.length} visible memos.');
+  }
+
+  return visibleMemos;
+}, name: 'visibleMemosListProvider');
+
+// --- End New Pagination Providers ---
 
 /// Provider for archiving a memo
 final archiveMemoProvider = Provider.family<Future<void> Function(), String>((ref, id) {
   return () async {
     final apiService = ref.read(apiServiceProvider);
-    
+
     // Get the memo
     final memo = await apiService.getMemo(id);
-    
+
     // Update the memo to archived state
     final updatedMemo = memo.copyWith(
       pinned: false,
       state: MemoState.archived,
     );
-    
+
     // Save the updated memo
     await apiService.updateMemo(id, updatedMemo);
-    
-    // Refresh the memos list
-    ref.invalidate(memosProvider);
+
+    // Refresh the memos list using the new notifier
+    // ref.invalidate(memosProvider); // Old way
+    await ref.read(memosNotifierProvider.notifier).refresh(); // New way
   };
 });
 
@@ -158,20 +388,21 @@ final deleteMemoProvider = Provider.family<Future<void> Function(), String>((ref
     if (kDebugMode) {
       print('[deleteMemoProvider] Deleting memo: $id');
     }
-    
+
     final apiService = ref.read(apiServiceProvider);
-    
+
     try {
       // Delete the memo
       await apiService.deleteMemo(id);
-      
+
       if (kDebugMode) {
         print('[deleteMemoProvider] Successfully deleted memo: $id');
       }
-      
-      // Refresh the memos list
-      ref.invalidate(memosProvider);
-      
+
+      // Refresh the memos list using the new notifier
+      // ref.invalidate(memosProvider); // Old way
+      await ref.read(memosNotifierProvider.notifier).refresh(); // New way
+
       // Also clear from hidden IDs cache if it's there
       ref
           .read(hiddenMemoIdsProvider.notifier)
@@ -212,7 +443,8 @@ final bumpMemoProvider = Provider.family<Future<void> Function(), String>((
       }
 
       // Refresh the memos list to reflect the new order
-      ref.invalidate(memosProvider);
+      // ref.invalidate(memosProvider); // Old way
+      await ref.read(memosNotifierProvider.notifier).refresh(); // New way
     } catch (e, stackTrace) {
       if (kDebugMode) {
         print('[bumpMemoProvider] Error bumping memo $id: $e');
@@ -235,13 +467,18 @@ final updateMemoProvider = Provider.family<Future<Memo> Function(Memo), String>(
       final apiService = ref.read(apiServiceProvider);
 
       try {
+      // Optional: Optimistic UI update
+      // ref.read(memosNotifierProvider.notifier).updateMemoOptimistically(updatedMemo);
+
         // Update memo through API
         final result = await apiService.updateMemo(id, updatedMemo);
 
         // Refresh memo list to get updated data
-        ref.invalidate(memosProvider);
+      // ref.invalidate(memosProvider); // Old way
+      await ref.read(memosNotifierProvider.notifier).refresh(); // New way
 
         // Also update any cache entries if we've implemented caching
+      // Note: memoDetailCacheProvider might need adjustment if it relies on memosProvider
         if (ref.exists(memoDetailCacheProvider)) {
           ref
               .read(memoDetailCacheProvider.notifier)
@@ -254,8 +491,8 @@ final updateMemoProvider = Provider.family<Future<Memo> Function(Memo), String>(
           print('[updateMemoProvider] Error updating memo: $e');
           print(stackTrace);
         }
-
-        // Let AsyncValue handle the error
+      // Optional: Revert optimistic update on error
+      // ref.read(memosNotifierProvider.notifier).refresh(); // Or fetch original memo
         rethrow;
       }
     };
@@ -281,11 +518,15 @@ final togglePinMemoProvider = Provider.family<Future<Memo> Function(), String>((
       // Toggle the pinned state
       final updatedMemo = memo.copyWith(pinned: !memo.pinned);
 
+      // Optional: Optimistic UI update
+      // ref.read(memosNotifierProvider.notifier).updateMemoOptimistically(updatedMemo);
+
       // Update through API
       final result = await apiService.updateMemo(id, updatedMemo);
 
       // Refresh memos list
-      ref.invalidate(memosProvider);
+      // ref.invalidate(memosProvider); // Old way
+      await ref.read(memosNotifierProvider.notifier).refresh(); // New way
 
       return result;
     } catch (e, stackTrace) {
@@ -293,8 +534,8 @@ final togglePinMemoProvider = Provider.family<Future<Memo> Function(), String>((
         print('[togglePinMemoProvider] Error toggling pin state: $e');
         print(stackTrace);
       }
-
-      // Let AsyncValue handle the error
+      // Optional: Revert optimistic update on error
+      // ref.read(memosNotifierProvider.notifier).refresh();
       rethrow;
     }
   };
@@ -390,8 +631,9 @@ final batchMemoOperationsProvider = Provider<
           break;
       }
 
-      // Refresh memos list
-      ref.invalidate(memosProvider);
+      // Refresh memos list using the new notifier
+      // ref.invalidate(memosProvider); // Old way
+      await ref.read(memosNotifierProvider.notifier).refresh(); // New way
     } catch (e, stackTrace) {
       if (kDebugMode) {
         print('[batchMemoOperationsProvider] Error during batch operation: $e');
