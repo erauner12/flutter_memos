@@ -2,7 +2,13 @@ import 'package:flutter_test/flutter_test.dart';
 
 // Helper function to extract the deep link parsing logic for testing
 Map<String, String?>? parseDeepLink(Uri? uri) {
-  if (uri == null || uri.scheme != 'flutter-memos') {
+  if (uri == null) {
+    return null;
+  }
+
+  // Check scheme - ensure we're comparing correctly
+  final validScheme = 'flutter-memos';
+  if (uri.scheme.toLowerCase() != validScheme.toLowerCase()) {
     return null;
   }
 
