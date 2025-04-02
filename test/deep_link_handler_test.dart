@@ -12,21 +12,20 @@ Map<String, String?>? parseDeepLink(Uri? uri) {
     return null;
   }
 
+  final host = uri.host; // Use host instead of pathSegments[0]
   final pathSegments = uri.pathSegments;
 
-  if (pathSegments.isEmpty) {
-    return null;
-  }
-
-  final type = pathSegments[0];
+  // Variables to extract
   String? memoId;
   String? commentIdToHighlight;
 
-  if (type == 'memo' && pathSegments.length >= 2) {
-    memoId = pathSegments[1];
-  } else if (type == 'comment' && pathSegments.length >= 3) {
-    memoId = pathSegments[1];
-    commentIdToHighlight = pathSegments[2];
+  if (host == 'memo' && pathSegments.isNotEmpty) {
+    // For memo links: flutter-memos://memo/memoId
+    memoId = pathSegments[0];
+  } else if (host == 'comment' && pathSegments.length >= 2) {
+    // For comment links: flutter-memos://comment/memoId/commentId
+    memoId = pathSegments[0];
+    commentIdToHighlight = pathSegments[1];
   } else {
     return null;
   }

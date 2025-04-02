@@ -164,7 +164,7 @@ class _MemoCardState extends State<MemoCard> {
               },
               onCopyLink: () async {
                 Navigator.pop(context);
-                final url = 'flutter-memos://memo/${widget.id}';
+                final url = 'flutter-memos://memo/${widget.id}'; // Use correct URL format with host
                 await Clipboard.setData(ClipboardData(text: url));
                 if (!mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(

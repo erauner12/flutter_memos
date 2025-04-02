@@ -72,7 +72,7 @@ class _CommentCardState extends ConsumerState<CommentCard> {
           onCopyLink: () {
             Navigator.of(bottomSheetContext).pop();
             final url =
-                'flutter-memos://comment/${widget.memoId}/${widget.comment.id}';
+                'flutter-memos://comment/${widget.memoId}/${widget.comment.id}'; // Use correct URL format with host
             Clipboard.setData(ClipboardData(text: url)).then((_) {
               if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(

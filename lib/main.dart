@@ -134,26 +134,28 @@ class _MyAppState extends ConsumerState<MyApp> {
 
     if (kDebugMode) print('[DeepLink] Handling URI: ${uri.toString()}');
 
-    final pathSegments =
-        uri.pathSegments; // e.g., ['memo', 'memoId'] or ['comment', 'memoId', 'commentId']
+    final host = uri.host; // Get the host: 'memo' or 'comment'
+    final pathSegments = uri.pathSegments;
 
-    if (pathSegments.isEmpty) {
-      if (kDebugMode) print('[DeepLink] Invalid path: No segments.');
-      return;
-    }
+    if (kDebugMode)
+      print('[DeepLink] Host: $host, Path segments: $pathSegments');
 
-    final type = pathSegments[0];
+    // Variables to extract
     String? memoId;
     String? commentIdToHighlight;
 
-    if (type == 'memo' && pathSegments.length >= 2) {
-      memoId = pathSegments[1];
-    } else if (type == 'comment' && pathSegments.length >= 3) {
-      memoId = pathSegments[1];
-      commentIdToHighlight = pathSegments[2];
+    if (host == 'memo' && pathSegments.isNotEmpty) {
+      // For memo links: flutter-memos://memo/memoId
+      memoId = pathSegments[0];
+    } else if (host == 'comment' && pathSegments.length >= 2) {
+      // For comment links: flutter-memos://comment/memoId/commentId
+      memoId = pathSegments[0];
+      commentIdToHighlight = pathSegments[1];
     } else {
       if (kDebugMode)
-        print('[DeepLink] Invalid path structure: ${pathSegments.join('/')}');
+        print(
+          '[DeepLink] Invalid URI structure: $host/${pathSegments.join('/')}',
+        );
       return;
     }
 

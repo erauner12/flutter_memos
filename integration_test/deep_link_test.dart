@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_memos/main.dart' as app;
-import 'package:flutter_memos/models/memo.dart';
 import 'package:flutter_memos/screens/memo_detail/memo_detail_screen.dart';
 import 'package:flutter_memos/widgets/memo_card.dart';
 import 'package:flutter_test/flutter_test.dart';
