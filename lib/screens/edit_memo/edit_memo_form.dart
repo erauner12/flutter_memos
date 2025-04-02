@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:flutter_memos/models/comment.dart'; // Import Comment model
 import 'package:flutter_memos/models/memo.dart';
 import 'package:flutter_memos/utils/keyboard_navigation.dart'; // Import the mixin
 import 'package:flutter_memos/utils/url_helper.dart';
@@ -10,13 +11,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'edit_memo_providers.dart';
 
 class EditMemoForm extends ConsumerStatefulWidget {
-  final Memo memo;
-  final String memoId;
+  final dynamic entity; // Can be Memo or Comment
+  final String entityId; // memoId or "memoId/commentId"
+  final String entityType; // 'memo' or 'comment'
 
   const EditMemoForm({
     super.key,
-    required this.memo,
-    required this.memoId,
+    required this.entity,
+    required this.entityId,
+    required this.entityType,
   });
 
   @override
@@ -38,21 +41,35 @@ class _EditMemoFormState extends ConsumerState<EditMemoForm>
   @override
   void initState() {
     super.initState();
-    // Initialize form with memo data
-    _contentController.text = widget.memo.content;
-    _pinned = widget.memo.pinned;
-    _archived = widget.memo.state == MemoState.archived;
+    // Initialize form with entity data based on type
+    if (widget.entityType == 'comment') {
+      final comment = widget.entity as Comment;
+      _contentController.text = comment.content;
+      _pinned = comment.pinned;
+      _archived = comment.state == CommentState.archived;
+      if (kDebugMode) {
+        print('[EditMemoForm] Initialized for Comment ID: ${widget.entityId}');
+      }
+    } else {
+      // 'memo'
+      final memo = widget.entity as Memo;
+      _contentController.text = memo.content;
+      _pinned = memo.pinned;
+      _archived = memo.state == MemoState.archived;
+      if (kDebugMode) {
+        print('[EditMemoForm] Initialized for Memo ID: ${widget.entityId}');
+      }
+    }
 
     if (kDebugMode) {
-      print('[EditMemoForm] Initialized with memo ID: ${widget.memoId}');
       print(
-        '[EditMemoForm] Content length: ${widget.memo.content.length} chars',
+        '[EditMemoForm] Content length: ${_contentController.text.length} chars',
       );
-      if (widget.memo.content.length < 200) {
-        print('[EditMemoForm] Content: "${widget.memo.content}"');
+      if (_contentController.text.length < 200) {
+        print('[EditMemoForm] Content: "${_contentController.text}"');
       } else {
         print(
-          '[EditMemoForm] Content preview: "${widget.memo.content.substring(0, 197)}..."',
+          '[EditMemoForm] Content preview: "${_contentController.text.substring(0, 197)}..."',
         );
       }
     }
@@ -111,39 +128,63 @@ class _EditMemoFormState extends ConsumerState<EditMemoForm>
     });
 
     if (kDebugMode) {
-      print('[EditMemoForm] Saving memo ${widget.memoId} via _handleSave');
+      print(
+        '[EditMemoForm] Saving ${widget.entityType} ${widget.entityId} via _handleSave',
+      );
       print(
         '[EditMemoForm] Content length: ${_contentController.text.trim().length} characters',
       );
       print('[EditMemoForm] Settings: pinned=$_pinned, archived=$_archived');
-      print(
-        '[EditMemoForm] Original timestamps: createTime=${widget.memo.createTime}, updateTime=${widget.memo.updateTime}',
-      );
     }
 
     try {
-      // Create a copy of the memo, preserving original timestamps and only updating fields we want to change
-      final updatedMemo = widget.memo.copyWith(
-        content: _contentController.text.trim(),
-        pinned: _pinned,
-        state: _archived ? MemoState.archived : MemoState.normal,
-        // Don't explicitly set createTime or updateTime - let the API handle updateTime
-      );
+      // Create the correct entity type (Memo or Comment) to save
+      dynamic entityToSave;
+      if (widget.entityType == 'comment') {
+        final originalComment = widget.entity as Comment;
+        entityToSave = originalComment.copyWith(
+          content: _contentController.text.trim(),
+          pinned: _pinned,
+          state: _archived ? CommentState.archived : CommentState.normal,
+          // updateTime will be handled by the API/provider logic if needed
+        );
+        if (kDebugMode) {
+          print('[EditMemoForm] Saving Comment: ${entityToSave.toJson()}');
+        }
+      } else {
+        // 'memo'
+        final originalMemo = widget.entity as Memo;
+        entityToSave = originalMemo.copyWith(
+          content: _contentController.text.trim(),
+          pinned: _pinned,
+          state: _archived ? MemoState.archived : MemoState.normal,
+          // Don't explicitly set createTime or updateTime - let the API/provider handle updateTime
+        );
+        if (kDebugMode) {
+          print('[EditMemoForm] Saving Memo: ${entityToSave.toJson()}');
+        }
+      }
 
-      // Use the provider to save the memo
-      await ref.read(saveMemoProvider(widget.memoId))(updatedMemo);
-      
+      // Use the generalized provider to save the entity
+      await ref.read(
+        saveEntityProvider(
+          EntityProviderParams(id: widget.entityId, type: widget.entityType),
+        ),
+      )(entityToSave);
+
       if (kDebugMode) {
-        print('[EditMemoForm] Memo saved successfully: ${widget.memoId}');
+        print(
+          '[EditMemoForm] ${widget.entityType} saved successfully: ${widget.entityId}',
+        );
       }
       if (mounted) Navigator.pop(context);
-    } catch (e) {
+    } catch (e, s) {
       if (kDebugMode) {
-        print('[EditMemoForm] Error saving memo: $e');
+        print('[EditMemoForm] Error saving ${widget.entityType}: $e\n$s');
       }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: ${e.toString()}')),
+          SnackBar(content: Text('Error saving: ${e.toString()}')),
         );
       }
     } finally {
@@ -399,6 +440,9 @@ class _EditMemoFormState extends ConsumerState<EditMemoForm>
 
             const SizedBox(height: 20),
 
+            // Conditionally show switches based on entity type if needed
+            // Currently, they are shown for both. Hide if comment pinning/archiving is not desired.
+            // if (widget.entityType == 'memo') ... [
             Card(
               margin: EdgeInsets.zero,
               child: ListTile(
@@ -432,6 +476,7 @@ class _EditMemoFormState extends ConsumerState<EditMemoForm>
                 ),
               ),
             ),
+            // ] // End conditional block if hiding switches for comments
 
             const SizedBox(height: 24),
 

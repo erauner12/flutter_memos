@@ -9,6 +9,7 @@ class CommentContextMenu extends StatelessWidget {
   final VoidCallback? onTogglePin;
   final VoidCallback? onCopy;
   final VoidCallback? onConvertToMemo;
+  final VoidCallback? onEdit;
   final VoidCallback? onClose;
   final ScrollController? scrollController;
 
@@ -22,6 +23,7 @@ class CommentContextMenu extends StatelessWidget {
     this.onTogglePin,
     this.onCopy,
     this.onConvertToMemo,
+    this.onEdit,
     this.onClose,
     this.scrollController,
   });
@@ -104,11 +106,7 @@ class CommentContextMenu extends StatelessWidget {
                     _buildMenuItem(
                       icon: Icons.edit,
                       label: 'Edit',
-                      onTap: () {
-                        Navigator.of(context).pop();
-                        // Navigate to edit screen
-                        // This would need to be implemented
-                      },
+                      onTap: onEdit,
                       isDarkMode: isDarkMode,
                     ),
                     _buildMenuItem(

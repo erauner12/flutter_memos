@@ -79,8 +79,11 @@ class _MemoDetailScreenState extends ConsumerState<MemoDetailScreen>
               onPressed: () {
                 Navigator.pushNamed(
                   context,
-                  '/edit-memo',
-                  arguments: {'memoId': widget.memoId},
+                    '/edit-entity', // Use the generic route
+                    arguments: {
+                      'entityType': 'memo',
+                      'entityId': widget.memoId,
+                    }, // Specify type and ID
                 ).then((_) {
                     // Refresh all data when returning from edit screen
                     // Invalidate the providers to force refresh

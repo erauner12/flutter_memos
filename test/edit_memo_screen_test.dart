@@ -42,7 +42,10 @@ void main() {
           apiServiceProvider.overrideWithValue(mockApiService),
         ],
         child: const MaterialApp(
-          home: EditMemoScreen(memoId: 'test-memo-id'),
+          home: EditMemoScreen(
+            entityId: 'test-memo-id', // Use entityId
+            entityType: 'memo', // Specify type
+          ),
         ),
       ),
     );
@@ -67,7 +70,10 @@ void main() {
           apiServiceProvider.overrideWithValue(mockApiService),
         ],
         child: const MaterialApp(
-          home: EditMemoScreen(memoId: 'test-memo-id'),
+          home: EditMemoScreen(
+            entityId: 'test-memo-id', // Use entityId
+            entityType: 'memo', // Specify type
+          ),
         ),
       ),
     );

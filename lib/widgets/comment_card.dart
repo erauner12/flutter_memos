@@ -72,6 +72,21 @@ class _CommentCardState extends ConsumerState<CommentCard> {
             Navigator.of(bottomSheetContext).pop();
             _onConvertToMemo(context);
           },
+          onEdit: () {
+            // Add onEdit handler
+            Navigator.of(bottomSheetContext).pop(); // Close bottom sheet first
+            if (context.mounted) {
+              // Check if context is still valid
+              Navigator.pushNamed(
+                context,
+                '/edit-entity', // Use the new generic route name
+                arguments: {
+                  'entityType': 'comment',
+                  'entityId': fullId, // Pass "memoId/commentId"
+                },
+              );
+            }
+          },
           onClose: () {
             Navigator.of(bottomSheetContext).pop();
           },

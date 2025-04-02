@@ -52,12 +52,18 @@ void main() {
         await tester.tap(editButton);
         await tester.pumpAndSettle(const Duration(seconds: 1));
 
-        // Ensure we are on the EditMemoScreen
+      // Ensure we are on the EditMemoScreen (check title for 'Edit Memo')
       expect(
         find.byType(EditMemoScreen),
         findsOneWidget,
-        reason: 'Should be on the edit memo screen',
+        reason: 'Should be on the edit screen',
       );
+      expect(
+        find.widgetWithText(AppBar, 'Edit Memo'),
+        findsOneWidget,
+        reason: 'Title should be "Edit Memo"',
+      );
+
 
         // Find the TextField for the memo content
         final textFieldFinder = find.byType(TextField);

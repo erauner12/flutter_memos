@@ -255,12 +255,21 @@ class _MyAppState extends ConsumerState<MyApp> {
                       (context) =>
                           MemoDetailScreen(memoId: args['memoId'] as String),
                 );
-              } else if (settings.name == '/edit-memo') {
+              } else if (settings.name == '/edit-entity') {
+                // Renamed route
                 final args = settings.arguments as Map<String, dynamic>;
+                final entityType =
+                    args['entityType'] as String? ?? 'memo'; // Default to memo
+                final entityId =
+                    args['entityId']
+                        as String; // Will be memoId or "memoId/commentId"
+            
                 return MaterialPageRoute(
                   builder:
-                      (context) =>
-                          EditMemoScreen(memoId: args['memoId'] as String),
+                      (context) => EditMemoScreen(
+                        entityId: entityId,
+                        entityType: entityType,
+                      ),
                 );
               }
               return null;

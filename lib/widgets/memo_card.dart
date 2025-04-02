@@ -128,8 +128,11 @@ class _MemoCardState extends State<MemoCard> {
                 if (!mounted) return;
                 Navigator.pushNamed(
                   context,
-                  '/edit-memo',
-                  arguments: {'memoId': widget.id},
+                  '/edit-entity', // Use the generic route
+                  arguments: {
+                    'entityType': 'memo',
+                    'entityId': widget.id,
+                  }, // Specify type and ID
                 );
               },
               onArchive: () {
@@ -174,8 +177,11 @@ class _MemoCardState extends State<MemoCard> {
   void _onEdit(BuildContext context) {
     Navigator.pushNamed(
       context,
-      '/edit-memo',
-      arguments: {'memoId': widget.id},
+      '/edit-entity', // Use the generic route
+      arguments: {
+        'entityType': 'memo',
+        'entityId': widget.id,
+      }, // Specify type and ID
     );
   }
 
