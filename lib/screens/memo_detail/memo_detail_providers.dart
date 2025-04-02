@@ -18,12 +18,4 @@ final memoCommentsProvider = FutureProvider.family<List<Comment>, String>((
   return apiService.listMemoComments(memoId);
 });
 
-// Provider for adding a comment
-final addCommentProvider =
-    Provider.family<Future<void> Function(Comment), String>((ref, memoId) {
-      return (Comment comment) async {
-        final apiService = ref.read(apiServiceProvider);
-        await apiService.createMemoComment(memoId, comment);
-        ref.invalidate(memoCommentsProvider(memoId)); // Refresh comments
-      };
-    });
+// addCommentProvider has been removed as it's now replaced by createCommentProvider in comment_providers.dart

@@ -238,9 +238,7 @@ class _MemoCardState extends State<MemoCard> {
       }
     }
 
-    // Create a key if this card is selected to make it easier to find in tests
-    final Key? cardKey =
-        widget.isSelected ? Key('selected-memo-card-${widget.id}') : null;
+    // Removed conditional key in favor of a consistent key
 
     return Slidable(
       key: ValueKey('slidable-${widget.id}'),
@@ -292,7 +290,9 @@ class _MemoCardState extends State<MemoCard> {
       ),
 
       child: Card(
-        key: cardKey,
+        key: ValueKey(
+          'memo-card-${widget.id}',
+        ), // Always use a consistent key based on ID
         elevation: isDarkMode ? 0 : 1,
         margin: const EdgeInsets.only(bottom: 12),
         color:

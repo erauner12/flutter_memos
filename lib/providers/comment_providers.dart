@@ -222,3 +222,50 @@ final toggleHideCommentProvider = Provider.family<void Function(), String>((ref,
     }
   };
 });
+
+/// Provider for creating a comment for a memo
+final createCommentProvider = Provider.family<
+  Future<Comment> Function(Comment),
+  String
+>((ref, memoId) {
+  return (Comment comment) async {
+    final apiService = ref.read(apiServiceProvider);
+    try {
+      // Create the comment
+      final createdComment = await apiService.createMemoComment(
+        memoId,
+        comment,
+      );
+
+      // Bump the parent memo after successful comment creation
+      try {
+        if (kDebugMode) {
+          print(
+            '[createCommentProvider] Bumping parent memo $memoId after comment creation.',
+          );
+        }
+        await ref.read(bumpMemoProvider(memoId))();
+      } catch (e) {
+        // Log error but don't fail the comment creation
+        if (kDebugMode) {
+          print(
+            '[createCommentProvider] Error bumping parent memo $memoId: $e',
+          );
+        }
+        // Skip the error handler call that uses undefined entities
+      }
+
+      // Invalidate comments list for the specific memo
+      ref.invalidate(memoCommentsProvider(memoId));
+
+      return createdComment;
+    } catch (e) {
+      if (kDebugMode) {
+        print(
+          '[createCommentProvider] Error creating comment for memo $memoId: $e',
+        );
+      }
+      rethrow;
+    }
+  };
+});

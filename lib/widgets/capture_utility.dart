@@ -7,8 +7,9 @@ import 'package:flutter/physics.dart'; // Import for SpringSimulation
 import 'package:flutter/services.dart';
 import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/models/memo.dart';
+import 'package:flutter_memos/providers/comment_providers.dart'
+    as comment_providers; // Add import for comment_providers
 import 'package:flutter_memos/providers/ui_providers.dart'; // Import UI providers
-import 'package:flutter_memos/screens/memo_detail/memo_detail_providers.dart';
 import 'package:flutter_memos/screens/new_memo/new_memo_providers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -380,7 +381,7 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
       createTime: DateTime.now().millisecondsSinceEpoch,
     );
 
-    await ref.read(addCommentProvider(memoId))(newComment);
+    await ref.read(comment_providers.createCommentProvider(memoId))(newComment);
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(

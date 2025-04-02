@@ -3,7 +3,8 @@ import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/models/memo.dart';
 import 'package:flutter_memos/models/memo_relation.dart';
 import 'package:flutter_memos/providers/api_providers.dart';
-import 'package:flutter_memos/providers/comment_providers.dart';
+import 'package:flutter_memos/providers/comment_providers.dart'
+    as comment_providers;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -46,7 +47,7 @@ void main() {
       final fullId = '${memo.id}/${comment.id}';
 
       // Call the archive provider
-      await container.read(archiveCommentProvider(fullId))();
+      await container.read(comment_providers.archiveCommentProvider(fullId))();
 
       // Verify the comment was archived
       // We would need to retrieve the comment again to check its state
@@ -77,7 +78,7 @@ void main() {
       final fullId = '${memo.id}/${comment.id}';
 
       // Call the delete provider
-      await container.read(deleteCommentProvider(fullId))();
+      await container.read(comment_providers.deleteCommentProvider(fullId))();
 
       // Verify comment was deleted
       final commentsAfter = await mockApiService.listMemoComments(memo.id);
@@ -105,14 +106,18 @@ void main() {
       final fullId = '${memo.id}/${comment.id}';
 
       // Toggle pin state to true
-      await container.read(togglePinCommentProvider(fullId))();
+      await container.read(
+        comment_providers.togglePinCommentProvider(fullId),
+      )();
 
       // Verify pin state changed
       final pinnedComment = await mockApiService.getMemoComment(fullId);
       expect(pinnedComment.pinned, isTrue);
 
       // Toggle pin state back to false
-      await container.read(togglePinCommentProvider(fullId))();
+      await container.read(
+        comment_providers.togglePinCommentProvider(fullId),
+      )();
 
       // Verify pin state changed back
       final unpinnedComment = await mockApiService.getMemoComment(fullId);
@@ -124,21 +129,31 @@ void main() {
       final commentId = 'memo1/comment1';
 
       // Initial state should be empty
-      final initialState = container.read(hiddenCommentIdsProvider);
+      final initialState = container.read(
+        comment_providers.hiddenCommentIdsProvider,
+      );
       expect(initialState.isEmpty, isTrue);
 
       // Directly modify the state to add the comment ID
-      container.read(hiddenCommentIdsProvider.notifier).state = {commentId};
+      container
+          .read(comment_providers.hiddenCommentIdsProvider.notifier)
+          .state = {commentId};
 
       // Verify the state was updated
-      final updatedState = container.read(hiddenCommentIdsProvider);
+      final updatedState = container.read(
+        comment_providers.hiddenCommentIdsProvider,
+      );
       expect(updatedState.contains(commentId), isTrue);
 
       // Directly modify the state to remove the comment ID
-      container.read(hiddenCommentIdsProvider.notifier).state = {};
+      container
+          .read(comment_providers.hiddenCommentIdsProvider.notifier)
+          .state = {};
 
       // Verify the state was updated
-      final finalState = container.read(hiddenCommentIdsProvider);
+      final finalState = container.read(
+        comment_providers.hiddenCommentIdsProvider,
+      );
       expect(finalState.contains(commentId), isFalse);
     });
 
@@ -164,7 +179,7 @@ void main() {
 
         // Get the function from the provider and then call it
         final convertFunction = container.read(
-          convertCommentToMemoProvider(fullId),
+          comment_providers.convertCommentToMemoProvider(fullId),
         );
         final createdMemo = await convertFunction();
 
@@ -222,7 +237,7 @@ void main() {
 
           // Get the function from the provider and then call it
           final convertFunction = container.read(
-            convertCommentToMemoProvider(fullId),
+            comment_providers.convertCommentToMemoProvider(fullId),
           );
           final createdMemo = await convertFunction();
 
@@ -237,6 +252,51 @@ void main() {
           mockApiService.shouldFailRelations = false;
           fail('Should not have thrown: $e');
         }
+      },
+    );
+
+    test(
+      'createCommentProvider bumps parent memo after creating comment',
+      () async {
+        // Set up test memo
+        final memo = await mockApiService.createMemo(
+          Memo(id: 'test-memo-bump', content: 'Test memo for bump'),
+        );
+
+        // Create a new comment to add
+        final newComment = Comment(
+          id: 'test-comment-bump',
+          content: 'Comment that should trigger memo bump',
+          createTime: DateTime.now().millisecondsSinceEpoch,
+        );
+
+        // Reset call counters before test
+        mockApiService.getMemoCallCount = 0;
+        mockApiService.updateMemoCallCount = 0;
+        mockApiService.createMemoCommentCallCount = 0;
+
+        // Call the createCommentProvider
+        await container.read(comment_providers.createCommentProvider(memo.id))(
+          newComment,
+        );
+
+        // Verify comment was created
+        expect(mockApiService.createMemoCommentCallCount, equals(1));
+
+        // Verify parent memo was bumped (getMemo followed by updateMemo)
+        expect(mockApiService.getMemoCallCount, equals(1));
+        expect(
+          mockApiService.lastGetMemoId,
+          equals(memo.id),
+          reason: 'Should get the parent memo',
+        );
+
+        expect(mockApiService.updateMemoCallCount, equals(1));
+        expect(
+          mockApiService.lastUpdateMemoId,
+          equals(memo.id),
+          reason: 'Should update the parent memo',
+        );
       },
     );
   });

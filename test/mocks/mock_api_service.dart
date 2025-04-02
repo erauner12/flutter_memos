@@ -21,6 +21,13 @@ class MockApiService implements ApiService {
   int createMemoCallCount = 0;
   int updateMemoCallCount = 0;
   int deleteMemoCallCount = 0;
+  int createMemoCommentCallCount = 0;
+
+  // Track parameters for verification
+  String? lastGetMemoId;
+  String? lastUpdateMemoId;
+  String? lastCreateMemoCommentMemoId;
+  Comment? lastCreateMemoCommentComment;
 
   // Instance fields for controlling listMemos responses
   List<Memo>? _initialListResponse;
@@ -62,6 +69,21 @@ class MockApiService implements ApiService {
   
   void setMockComments(String memoId, List<Comment> comments) {
     _mockComments[memoId] = List.from(comments);
+  }
+  
+  // Reset tracking counters for tests
+  void resetCallCounts() {
+    listMemosCallCount = 0;
+    getMemoCallCount = 0;
+    createMemoCallCount = 0;
+    updateMemoCallCount = 0;
+    deleteMemoCallCount = 0;
+    createMemoCommentCallCount = 0;
+
+    lastGetMemoId = null;
+    lastUpdateMemoId = null;
+    lastCreateMemoCommentMemoId = null;
+    lastCreateMemoCommentComment = null;
   }
 
   // Mock implementations
@@ -144,10 +166,10 @@ class MockApiService implements ApiService {
     _mockMemoById[id] = responseMemo; // Store it so getMemo works if called
   }
 
-
   @override
   Future<Memo> getMemo(String id) async {
     getMemoCallCount++;
+    lastGetMemoId = id;
     final memo = _mockMemoById[id];
     if (memo == null) {
       throw Exception('Memo not found');
@@ -176,6 +198,7 @@ class MockApiService implements ApiService {
   @override
   Future<Memo> updateMemo(String id, Memo memo) async {
     updateMemoCallCount++;
+    lastUpdateMemoId = id;
     // Simulate updating a memo
     final updatedMemo = Memo(
       id: id,
@@ -218,6 +241,10 @@ class MockApiService implements ApiService {
 
   @override
   Future<Comment> createMemoComment(String memoId, Comment comment) async {
+    createMemoCommentCallCount++;
+    lastCreateMemoCommentMemoId = memoId;
+    lastCreateMemoCommentComment = comment;
+    
     // Simulate creating a comment
     final createdComment = Comment(
       id: 'comment-${DateTime.now().millisecondsSinceEpoch}',
@@ -340,31 +367,74 @@ class MockApiService implements ApiService {
 
   @override
   Future<void> deleteMemoComment(String memoId, String commentId) async {
+    // This implementation handles both the two-parameter version
+    return deleteMemoComment_internal('$memoId/$commentId');
+  }
+
+  // Internal implementation for deleteMemoComment to avoid duplicate signatures
+  Future<void> deleteMemoComment_internal(String commentId) async {
     // Handle combined IDs in format "memoId/commentId"
-    String parentId = memoId;
+    String memoId = '';
     String childId = commentId;
 
     if (commentId.contains('/')) {
       final parts = commentId.split('/');
+      memoId = parts[0];
       childId = parts[1];
+    } else {
+      // If only childId is provided, we need to find which memo contains it
+      for (final entry in _mockComments.entries) {
+        final comments = entry.value;
+        final comment = comments.firstWhere(
+          (c) => c.id == childId,
+          orElse: () => Comment(id: '', content: '', createTime: 0),
+        );
+
+        if (comment.id.isNotEmpty) {
+          memoId = entry.key;
+          break;
+        }
+      }
     }
 
-    final commentsList = _mockComments[parentId];
+    if (memoId.isEmpty) {
+      throw Exception('Comment not found: $commentId');
+    }
+
+    final commentsList = _mockComments[memoId];
     if (commentsList == null) {
-      throw Exception('No comments found for memo: $parentId');
+      throw Exception('No comments found for memo: $memoId');
     }
 
     final initialLength = commentsList.length;
-    _mockComments[parentId] =
+    _mockComments[memoId] =
         commentsList.where((c) => c.id != childId).toList();
 
-    if (_mockComments[parentId]!.length == initialLength) {
+    if (_mockComments[memoId]!.length == initialLength) {
       throw Exception('Comment not found: $childId');
     }
 
     return Future.value();
   }
-  
+
+  @override
+  Future<MemoRelation> setMemoRelation(MemoRelation relation) async {
+    // Simulate API failures if the flag is set
+    if (shouldFailRelations) {
+      throw Exception('Simulated API error: Could not find a suitable class for deserialization');
+    }
+    
+    // Ensure we have a list to add to
+    final memoId = relation.relatedMemoId; // Use relatedMemoId as the key
+    if (_mockMemoRelations[memoId] == null) {
+      _mockMemoRelations[memoId] = [];
+    }
+    
+    _mockMemoRelations[memoId]!.add(relation);
+    
+    return Future.value(relation);
+  }
+
   @override
   Future<void> setMemoRelations(
     String memoId,
@@ -372,12 +442,14 @@ class MockApiService implements ApiService {
   ) async {
     // Simulate API failures if the flag is set
     if (shouldFailRelations) {
-      throw Exception('Simulated API error: Could not find a suitable class for deserialization');
+      throw Exception(
+        'Simulated API error: Could not find a suitable class for deserialization',
+      );
     }
-    
+
     // Ensure we store it with a consistent ID format
     final formattedId = memoId.contains('/') ? memoId.split('/').last : memoId;
-    
+
     // Create a deep copy to avoid shared references
     _mockMemoRelations[formattedId] =
         relations
@@ -388,17 +460,19 @@ class MockApiService implements ApiService {
               ),
             )
             .toList();
-    
+
     return Future.value();
   }
 
   @override
   Future<List<MemoRelation>> listMemoRelations(String memoId) async {
-    // Ensure we retrieve with a consistent ID format
-    final formattedId = memoId.contains('/') ? memoId.split('/').last : memoId;
+    // Simulate API failures if the flag is set
+    if (shouldFailRelations) {
+      throw Exception('Simulated API error: Failed to list relations');
+    }
     
     // Return a deep copy to prevent mutations affecting stored data
-    final relations = _mockMemoRelations[formattedId];
+    final relations = _mockMemoRelations[memoId];
     if (relations == null) {
       return [];
     }

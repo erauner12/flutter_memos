@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_memos/models/comment.dart';
+import 'package:flutter_memos/providers/comment_providers.dart'
+    as comment_providers; // Add this import
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
-import 'memo_detail_providers.dart';
 
 class CommentForm extends ConsumerStatefulWidget {
   final String memoId;
@@ -94,8 +94,10 @@ class _CommentFormState extends ConsumerState<CommentForm> {
         createTime: DateTime.now().millisecondsSinceEpoch,
       );
       
-      // Use the provider to add a comment
-      await ref.read(addCommentProvider(widget.memoId))(newComment);
+      // Use the new createCommentProvider to add a comment (which will also bump the parent memo)
+      await ref.read(comment_providers.createCommentProvider(widget.memoId))(
+        newComment,
+      );
       
       if (mounted) {
         _controller.clear();
