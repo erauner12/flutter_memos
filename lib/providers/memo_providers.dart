@@ -92,6 +92,11 @@ class MemosState {
 /// Provider for the list of hidden memo IDs
 final hiddenMemoIdsProvider = StateProvider<Set<String>>((ref) => {});
 
+final hidePinnedProvider = StateProvider<bool>(
+  (ref) => false,
+  name: 'hidePinnedProvider',
+);
+
 // --- Start Pagination Notifier ---
 
 class MemosNotifier extends StateNotifier<MemosState> {

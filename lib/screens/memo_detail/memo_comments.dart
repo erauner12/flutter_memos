@@ -5,7 +5,6 @@ import 'package:flutter_memos/providers/comment_providers.dart'
 import 'package:flutter_memos/providers/filter_providers.dart';
 import 'package:flutter_memos/providers/ui_providers.dart';
 import 'package:flutter_memos/utils/comment_utils.dart';
-import 'package:flutter_memos/utils/comment_utils.dart';
 import 'package:flutter_memos/widgets/comment_card.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 

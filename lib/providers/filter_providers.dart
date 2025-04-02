@@ -51,6 +51,9 @@ const List<FilterOption> timeFilterOptions = [
   FilterOption(key: 'all', label: 'All Time', icon: Icons.calendar_month),
 ];
 
+/// Provider for toggling visibility of pinned items.
+/// When true, pinned items will be hidden from view
+final hidePinnedProvider = StateProvider<bool>((ref) => false);
 
 /// Provider for the time-based filter option ('today', 'this_week', etc.)
 ///
