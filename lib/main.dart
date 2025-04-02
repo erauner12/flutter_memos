@@ -258,6 +258,20 @@ class _MyAppState extends ConsumerState<MyApp> {
                   return null;
                 },
               ),
+          
+          // Add action for creating a new memo
+          NewMemoIntent: CallbackAction<NewMemoIntent>(
+            onInvoke: (intent) {
+              // Navigate to new memo screen
+              _navigatorKey.currentState?.pushNamed('/new-memo');
+              if (kDebugMode) {
+                print(
+                  '[MyApp Actions] Handled NewMemoIntent - opening new memo screen',
+                );
+              }
+              return null;
+            },
+          ),
         },
         child: GestureDetector(
           onTap: () {
