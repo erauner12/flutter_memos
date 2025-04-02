@@ -75,46 +75,61 @@ void main() {
       // Launch app
       app.main();
       await tester.pumpAndSettle(const Duration(seconds: 3));
-      
-      // Find a memo card and tap to open it
+
+      // Find a memo card and get its ID and content
       final memoCardFinder = find.byType(MemoCard);
       expect(memoCardFinder, findsWidgets);
-      
+      final firstMemoCardWidget = tester.widget<MemoCard>(memoCardFinder.first);
+      final actualMemoId = firstMemoCardWidget.id; // Get the actual ID
+      final actualMemoContent =
+          firstMemoCardWidget.content; // Get content for later verification
+
+      // Tap the card to navigate initially (optional, but good for setup)
       await tester.tap(memoCardFinder.first);
       await tester.pumpAndSettle(const Duration(seconds: 1));
-      
-      // We should now be on MemoDetailScreen
+
+      // We should now be on MemoDetailScreen (for the tapped memo)
       expect(find.byType(MemoDetailScreen), findsOneWidget);
-      
-      // Get the current memo ID (this is tricky in integration test)
-      // For this simulation, we'll use navigator to push our own deep link route
-      
-      // Simulate the effect of a deep link by directly accessing route
-      // This is a simplification since we can't easily trigger external URI handling
-      
+
       // Find the navigator
       final navigatorState = tester.state<NavigatorState>(find.byType(Navigator));
-      
-      // Get current route name to return to later
+
+      // Get current route name to return to later if needed
       final currentRoute = ModalRoute.of(navigatorState.context)?.settings.name;
-      
-      // Simulate deep link navigation
+
+      // Simulate deep link navigation using the *actual* memo ID
       navigatorState.pushNamed(
         '/deep-link-target',
         arguments: {
-          'memoId': 'test-memo-id', // Example ID
-          'commentIdToHighlight': 'test-comment-id', // Example ID
+          'memoId': actualMemoId, // Use the real ID from the card
+          'commentIdToHighlight':
+              'test-comment-id', // Example comment ID (highlighting might still fail if this ID is invalid for the memo)
         },
       );
-      
-      await tester.pumpAndSettle(const Duration(seconds: 1));
-      
-      // Verify we're on MemoDetailScreen
-      expect(find.byType(MemoDetailScreen), findsOneWidget);
-      
-      // Return to previous page to avoid test issues
-      if (currentRoute != null) {
-        navigatorState.pushReplacementNamed(currentRoute);
+
+      await tester.pumpAndSettle(
+        const Duration(seconds: 2),
+      ); // Allow time for potential data loading
+
+      // Verify we're still on a MemoDetailScreen (now loaded via deep link simulation)
+      expect(
+        find.byType(MemoDetailScreen),
+        findsOneWidget,
+        reason: "Should be on MemoDetailScreen after simulated deep link",
+      );
+
+      // Add assertion: Check if the content of the correct memo is displayed
+      // This finder might need adjustment based on how MemoContent displays text
+      expect(
+        find.textContaining(actualMemoContent.substring(0, 10)),
+        findsWidgets,
+        reason: "Should display content of the correct memo",
+      );
+
+
+      // Return to previous page to avoid test issues (optional cleanup)
+      if (currentRoute != null && navigatorState.canPop()) {
+        navigatorState.pop(); // Pop the deep link screen
         await tester.pumpAndSettle();
       }
     });
