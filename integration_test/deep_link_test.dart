@@ -1,25 +1,87 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_memos/main.dart' as app;
+import 'package:flutter_memos/models/comment.dart'; // Add Comment model import
+import 'package:flutter_memos/models/memo.dart'; // Add Memo model import
 import 'package:flutter_memos/screens/memo_detail/memo_detail_screen.dart';
+import 'package:flutter_memos/services/api_service.dart'; // Add ApiService import
 import 'package:flutter_memos/widgets/memo_card.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  final ApiService apiService =
+      ApiService(); // Instance for programmatic access
+  final List<String> createdMemoIds = []; // Track IDs for cleanup
   
   setUp(() {
     // Reset clipboard between tests
     Clipboard.setData(const ClipboardData(text: ''));
   });
-  
-  group('Deep Link Integration Tests', () {
-    testWidgets('Can copy a memo link from context menu',
-        (WidgetTester tester) async {
+
+// Helper function to create a memo programmatically
+  Future<Memo> createTestMemo(String content) async {
+    debugPrint('[Test Helper] Creating memo: "$content"');
+    final newMemo = Memo(
+      id: 'temp-${DateTime.now().millisecondsSinceEpoch}',
+      content: content,
+      visibility: 'PUBLIC',
+    );
+    final createdMemo = await apiService.createMemo(newMemo);
+    createdMemoIds.add(createdMemo.id); // Track for cleanup
+    debugPrint('[Test Helper] Memo created with ID: ${createdMemo.id}');
+    return createdMemo;
+  }
+
+  // Helper function to create a comment programmatically
+  Future<Comment> createTestComment(String memoId, String content) async {
+    debugPrint('[Test Helper] Creating comment for memo $memoId: "$content"');
+    final newComment = Comment(
+      id: 'temp-${DateTime.now().millisecondsSinceEpoch}',
+      content: content,
+      createTime: DateTime.now().millisecondsSinceEpoch,
+    );
+    // Use the service directly, assuming it handles parent memo bumping if necessary
+    // or adjust if a specific provider call is needed for testing side effects.
+    final createdComment = await apiService.createMemoComment(
+      memoId,
+      newComment,
+    );
+    debugPrint(
+      '[Test Helper] Comment created with ID: ${createdComment.id} for memo $memoId',
+    );
+    // Comments don't need separate cleanup tracking if parent memo deletion cascades
+    return createdComment;
+  }
+
+group('Deep Link Integration Tests', () {
+    // Cleanup after all tests
+    tearDownAll(() async {
+      if (createdMemoIds.isNotEmpty) {
+        debugPrint(
+          '[Test Cleanup] Deleting ${createdMemoIds.length} test memos...',
+        );
+        try {
+          await Future.wait(
+            createdMemoIds.map((id) => apiService.deleteMemo(id)),
+          );
+          debugPrint('[Test Cleanup] Successfully deleted test memos.');
+        } catch (e) {
+          debugPrint('[Test Cleanup] Error deleting test memos: $e');
+        }
+        createdMemoIds.clear();
+      }
+    });
+
+    testWidgets('Can copy a memo link from context menu', (
+      WidgetTester tester,
+    ) async {
       // Launch the app
       app.main();
-      await tester.pumpAndSettle(const Duration(seconds: 3)); // Allow time for initial load
+      await tester.pumpAndSettle(
+        const Duration(seconds: 3),
+      ); // Allow time for initial load
       
       // Find a memo card
       final memoCardFinder = find.byType(MemoCard);
@@ -44,21 +106,20 @@ void main() {
       await tester.pumpAndSettle();
 
       // Tap the Copy Link option
-      await tester.tap(
-        copyLinkFinder,
-        warnIfMissed: false,
-      );
+      await tester.tap(copyLinkFinder, warnIfMissed: false);
       // Refined pump sequence:
       await tester.pump(); // Process tap, start pop
       await tester.pump(); // Finish pop, start clipboard/snackbar
-      await tester.pump(const Duration(milliseconds: 500)); // Allow snackbar animation to start
+      await tester.pump(
+        const Duration(milliseconds: 500),
+      ); // Allow snackbar animation to start
       await tester.pumpAndSettle(); // Settle everything
 
       // Verify snackbar appears
       expect(
         find.text('Memo link copied to clipboard'),
         findsOneWidget,
-        reason: 'Should show confirmation snackbar'
+        reason: 'Should show confirmation snackbar',
       );
       
       // Get clipboard data
@@ -66,7 +127,7 @@ void main() {
       expect(
         clipboardData?.text,
         matches(RegExp(r'flutter-memos://memo/.*')),
-        reason: 'Clipboard should contain a valid memo link'
+        reason: 'Clipboard should contain a valid memo link',
       );
     });
     
@@ -76,60 +137,153 @@ void main() {
       app.main();
       await tester.pumpAndSettle(const Duration(seconds: 3));
 
-      // Find a memo card and get its ID and content
-      final memoCardFinder = find.byType(MemoCard);
-      expect(memoCardFinder, findsWidgets);
-      final firstMemoCardWidget = tester.widget<MemoCard>(memoCardFinder.first);
-      final actualMemoId = firstMemoCardWidget.id; // Get the actual ID
-      final actualMemoContent =
-          firstMemoCardWidget.content; // Get content for later verification
+      // --- Test Setup ---
+      // 1. Create Memo Programmatically
+      final testMemoContent =
+          'Memo for Deep Link Comment Test ${DateTime.now().millisecondsSinceEpoch}';
+      final memo = await createTestMemo(testMemoContent);
 
-      // Tap the card to navigate initially (optional, but good for setup)
-      await tester.tap(memoCardFinder.first);
-      await tester.pumpAndSettle(const Duration(seconds: 1));
+      // 2. Create Comment Programmatically
+      final testCommentContent =
+          'Comment to Highlight ${DateTime.now().millisecondsSinceEpoch}';
+      final comment = await createTestComment(memo.id, testCommentContent);
 
-      // We should now be on MemoDetailScreen (for the tapped memo)
-      expect(find.byType(MemoDetailScreen), findsOneWidget);
+      // Refresh UI to ensure data might be visible if needed, though not strictly necessary for deep link simulation
+      // await tester.fling(find.byType(ListView), const Offset(0.0, 400.0), 1000.0);
+      // await tester.pumpAndSettle(const Duration(seconds: 2));
+      // --- End Test Setup ---
 
       // Find the navigator
-      final navigatorState = tester.state<NavigatorState>(find.byType(Navigator));
-
-      // Get current route name to return to later if needed
-      final currentRoute = ModalRoute.of(navigatorState.context)?.settings.name;
-
-      // Simulate deep link navigation using the *actual* memo ID
-      navigatorState.pushNamed(
-        '/deep-link-target',
-        arguments: {
-          'memoId': actualMemoId, // Use the real ID from the card
-          'commentIdToHighlight':
-              'test-comment-id', // Example comment ID (highlighting might still fail if this ID is invalid for the memo)
-        },
+      final navigatorState = tester.state<NavigatorState>(
+        find.byType(Navigator),
       );
 
-      await tester.pumpAndSettle(
-        const Duration(seconds: 2),
-      ); // Allow time for potential data loading
+      // Simulate deep link navigation using the *actual* created IDs
+      final deepLinkUrl = 'flutter-memos://comment/${memo.id}/${comment.id}';
+      debugPrint('[Test Action] Simulating deep link: $deepLinkUrl');
+      navigatorState.pushNamed(
+        '/deep-link-target',
+        arguments: {'memoId': memo.id, 'commentIdToHighlight': comment.id},
+      );
 
-      // Verify we're still on a MemoDetailScreen (now loaded via deep link simulation)
+      // Allow time for navigation and potential data loading on the detail screen
+      await tester.pumpAndSettle(const Duration(seconds: 3));
+
+      // --- Verification ---
+      // 1. Verify we're on MemoDetailScreen
       expect(
         find.byType(MemoDetailScreen),
         findsOneWidget,
         reason: "Should be on MemoDetailScreen after simulated deep link",
       );
 
-      // Add assertion: Check if the content of the correct memo is displayed
-      // This finder might need adjustment based on how MemoContent displays text
+      // 2. Verify the correct memo's content is displayed (check for a substring)
       expect(
-        find.textContaining(actualMemoContent.substring(0, 10)),
+        find.textContaining(
+          testMemoContent.substring(0, 10),
+          findRichText: true,
+        ),
+        findsWidgets, // Might find multiple instances in Markdown
+        reason: "Should display content of the correct memo",
+      );
+
+      // 3. Verify the specific comment is present
+      expect(
+        find.text(testCommentContent, findRichText: true),
+        findsOneWidget,
+        reason: "Target comment content should be visible",
+      );
+
+      // 4. Verify the comment card is highlighted (by checking its key)
+      // Ensure the CommentCard widget builds its key correctly based on highlight state
+      final highlightedCommentCardFinder = find.byKey(
+        Key('highlighted-comment-card-${comment.id}'),
+        skipOffstage: false, // Check even if potentially offscreen initially
+      );
+      // Scroll until found or timeout
+      await tester.scrollUntilVisible(
+        highlightedCommentCardFinder,
+        500.0, // Max scroll distance
+        maxScrolls: 10,
+      );
+      expect(
+        highlightedCommentCardFinder,
+        findsOneWidget,
+        reason: "Target comment card should have the highlight key",
+      );
+
+      // Optional: Pop screen to clean up navigation stack
+      if (navigatorState.canPop()) {
+        navigatorState.pop();
+        await tester.pumpAndSettle();
+      }
+    });
+
+    testWidgets('Simulated deep link opens correct memo (no comment highlight)', (
+      WidgetTester tester,
+    ) async {
+      // Launch app
+      app.main();
+      await tester.pumpAndSettle(const Duration(seconds: 3));
+
+      // --- Test Setup ---
+      // 1. Create Memo Programmatically
+      final testMemoContent =
+          'Memo for Deep Link Memo Test ${DateTime.now().millisecondsSinceEpoch}';
+      final memo = await createTestMemo(testMemoContent);
+      // --- End Test Setup ---
+
+      // Find the navigator
+      final navigatorState = tester.state<NavigatorState>(
+        find.byType(Navigator),
+      );
+
+      // Simulate deep link navigation using the *actual* created memo ID
+      final deepLinkUrl = 'flutter-memos://memo/${memo.id}';
+      debugPrint('[Test Action] Simulating deep link: $deepLinkUrl');
+      navigatorState.pushNamed(
+        '/deep-link-target',
+        arguments: {
+          'memoId': memo.id,
+          'commentIdToHighlight': null, // Explicitly null
+        },
+      );
+
+      // Allow time for navigation and potential data loading
+      await tester.pumpAndSettle(const Duration(seconds: 2));
+
+      // --- Verification ---
+      // 1. Verify we're on MemoDetailScreen
+      expect(
+        find.byType(MemoDetailScreen),
+        findsOneWidget,
+        reason: "Should be on MemoDetailScreen after simulated deep link",
+      );
+
+      // 2. Verify the correct memo's content is displayed
+      expect(
+        find.textContaining(
+          testMemoContent.substring(0, 10),
+          findRichText: true,
+        ),
         findsWidgets,
         reason: "Should display content of the correct memo",
       );
 
+      // 3. Verify NO comment card has the highlight key
+      final highlightedCommentCardFinder = find.byKey(
+        const Key('highlighted-comment-card-'), // Use a prefix that won't match
+        skipOffstage: false,
+      );
+      expect(
+        highlightedCommentCardFinder,
+        findsNothing,
+        reason: "No comment card should have the highlight key",
+      );
 
-      // Return to previous page to avoid test issues (optional cleanup)
-      if (currentRoute != null && navigatorState.canPop()) {
-        navigatorState.pop(); // Pop the deep link screen
+      // Optional: Pop screen
+      if (navigatorState.canPop()) {
+        navigatorState.pop();
         await tester.pumpAndSettle();
       }
     });

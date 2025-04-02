@@ -29,6 +29,8 @@ help:
 	@echo "  test-integration-ipad-landscape - Run integration tests on iPad (landscape)"
 	@echo "  test-integration-web         - Run integration tests on web"
 	@echo "  test-integration-all         - Run all integration tests on macOS"
+	@echo "  test-deep-link-memo        - Launch simulator and open a memo deep link via xcrun"
+	@echo "  test-deep-link-comment     - Launch simulator and open a comment deep link via xcrun"
 	@echo ""
 	@echo "macOS Installation workflow:"
 	@echo "  1. make build-dmg     (builds the app and creates DMG)"
@@ -351,6 +353,49 @@ test-integration-all:
 	for test_file in integration_test/*_test.dart; do \
 		flutter drive --driver=test_driver/integration_test_driver.dart --target=$$test_file -d "macos"; \
 	done
+
+#
+# Deep Link Testing via Simulator
+#
+
+# Helper target to boot simulator and install app (used by deep link tests)
+# Usage: make _setup-sim-for-deeplink SIM_UDID=<udid>
+.PHONY: _setup-sim-for-deeplink
+_setup-sim-for-deeplink:
+	@echo "Opening iOS Simulator with UDID $(SIM_UDID)..."
+	open -a Simulator --args -CurrentDeviceUDID $(SIM_UDID)
+	@echo "Waiting for simulator to boot..."
+	xcrun simctl bootstatus $(SIM_UDID) -b
+	@echo "Installing app (debug build)..."
+	flutter build ios --debug --simulator # Ensure debug build for simulator
+	xcrun simctl install $(SIM_UDID) build/ios/iphonesimulator/Runner.app
+	@echo "Simulator setup complete for UDID $(SIM_UDID)."
+
+# Test opening a memo deep link
+# Note: Uses a placeholder ID. Assumes app is built and simulator exists.
+test-deep-link-memo: kill-simulator
+	@echo "Setting up simulator for Memo Deep Link test..."
+	@UDID=$$(xcrun simctl create "iPhone 16 Pro DL" "com.apple.CoreSimulator.SimDeviceType.iPhone-16-Pro" "com.apple.CoreSimulator.SimRuntime.iOS-18-3"); \
+	echo "Simulator created with UDID: $$UDID"; \
+	make _setup-sim-for-deeplink SIM_UDID=$$UDID; \
+	echo "Opening memo deep link (flutter-memos://memo/placeholder-memo-id)..."; \
+	xcrun simctl openurl $$UDID "flutter-memos://memo/placeholder-memo-id"; \
+	echo "Deep link sent. Check simulator. Pausing for manual inspection..."; \
+	sleep 15; \
+	make kill-simulator SIM_UDID=$$UDID # Clean up specific simulator
+
+# Test opening a comment deep link
+# Note: Uses placeholder IDs. Assumes app is built and simulator exists.
+test-deep-link-comment: kill-simulator
+	@echo "Setting up simulator for Comment Deep Link test..."
+	@UDID=$$(xcrun simctl create "iPhone 16 Pro DL" "com.apple.CoreSimulator.SimDeviceType.iPhone-16-Pro" "com.apple.CoreSimulator.SimRuntime.iOS-18-3"); \
+	echo "Simulator created with UDID: $$UDID"; \
+	make _setup-sim-for-deeplink SIM_UDID=$$UDID; \
+	echo "Opening comment deep link (flutter-memos://comment/placeholder-memo-id/placeholder-comment-id)..."; \
+	xcrun simctl openurl $$UDID "flutter-memos://comment/placeholder-memo-id/placeholder-comment-id"; \
+	echo "Deep link sent. Check simulator. Pausing for manual inspection..."; \
+	sleep 15; \
+	make kill-simulator SIM_UDID=$$UDID # Clean up specific simulator
 
 # Allow arbitrary arguments to be passed to targets like install-dmg-path
 %:
