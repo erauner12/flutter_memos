@@ -118,17 +118,7 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
     // Update heights based on screen size
     _updateHeights(context);
     
-    // Listen for toggle requests via the provider
-    ref.listen<int>(captureUtilityToggleProvider, (previous, current) {
-      if (previous != current && mounted) {
-        if (kDebugMode) {
-          print(
-            '[CaptureUtility] Received toggle signal. Current state expanded: $_isExpanded',
-          );
-        }
-        _toggleExpansionState();
-      }
-    });
+    // Remove the ref.listen code from here - it's not allowed in this lifecycle method
   }
 
   // Helper method to start physics-based animation
@@ -733,7 +723,19 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
     final size = MediaQuery.of(context).size;
     final keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
     final edgeInsets = MediaQuery.of(context).padding;
-
+    
+    // Listen for toggle events - this is the correct place to use ref.listen
+    ref.listen<int>(captureUtilityToggleProvider, (previous, current) {
+      if (previous != current && mounted) {
+        if (kDebugMode) {
+          print(
+            '[CaptureUtility] Received toggle signal. Current state expanded: $_isExpanded',
+          );
+        }
+        _toggleExpansionState();
+      }
+    });
+    
     final hintText =
         widget.hintText ??
         (widget.mode == CaptureMode.createMemo
