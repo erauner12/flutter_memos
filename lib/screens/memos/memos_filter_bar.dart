@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_memos/providers/filter_providers.dart';
+import 'package:flutter_memos/providers/filter_providers.dart' as filter;
 import 'package:flutter_memos/providers/memo_providers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -46,6 +46,85 @@ class MemosFilterBar extends ConsumerWidget {
   void _showAllMemos(WidgetRef ref) {
     ref.read(hiddenMemoIdsProvider.notifier).state = {};
   }
+  
+  void _showFilterSyntaxHelp(BuildContext context) {
+    showDialog(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: const Text('CEL Filter Syntax'),
+            content: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'Supported Factors:',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text('• tag: Use with "in" operator'),
+                  const Text('• visibility: Can use ==, !=, in'),
+                  const Text('• content: Use with contains, ==, !='),
+                  const Text(
+                    '• create_time: Compare with ==, !=, <, >, <=, >=',
+                  ),
+                  const Text(
+                    '• update_time: Compare with ==, !=, <, >, <=, >=',
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Examples:',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'tag in ["work", "important"]',
+                    style: TextStyle(
+                      fontFamily: 'monospace',
+                      fontSize: 13,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'visibility == "PUBLIC" && content.contains("meeting")',
+                    style: TextStyle(
+                      fontFamily: 'monospace',
+                      fontSize: 13,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'create_time > "2023-01-01T00:00:00Z"',
+                    style: TextStyle(
+                      fontFamily: 'monospace',
+                      fontSize: 13,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Logical Operators:',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text('• && - AND: Both conditions must be true'),
+                  const Text('• || - OR: Either condition can be true'),
+                  const Text('• ! - NOT: Negates a condition'),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Close'),
+              ),
+            ],
+          ),
+    );
+  }
 
   void _applyTimeFilter(
     String filterOption,
@@ -53,14 +132,14 @@ class MemosFilterBar extends ConsumerWidget {
     BuildContext context,
   ) {
     // Update provider state instead of local state
-    ref.read(timeFilterProvider.notifier).state = filterOption;
+    ref.read(filter.timeFilterProvider.notifier).state = filterOption;
 
     // Clear any hidden memo IDs when changing filters
     ref.read(hiddenMemoIdsProvider.notifier).state = {};
 
     // Save filter preferences
-    final statusFilter = ref.read(statusFilterProvider);
-    ref.read(filterPreferencesProvider)(filterOption, statusFilter);
+    final statusFilter = ref.read(filter.statusFilterProvider);
+    ref.read(filter.filterPreferencesProvider)(filterOption, statusFilter);
   }
 
   void _applyStatusFilter(
@@ -69,22 +148,24 @@ class MemosFilterBar extends ConsumerWidget {
     BuildContext context,
   ) {
     // Update provider state instead of local state
-    ref.read(statusFilterProvider.notifier).state = filterOption;
+    ref.read(filter.statusFilterProvider.notifier).state = filterOption;
 
     // Clear any hidden memo IDs when changing filters
     ref.read(hiddenMemoIdsProvider.notifier).state = {};
 
     // Save filter preferences
-    final timeFilter = ref.read(timeFilterProvider);
-    ref.read(filterPreferencesProvider)(timeFilter, filterOption);
+    final timeFilter = ref.read(filter.timeFilterProvider);
+    ref.read(filter.filterPreferencesProvider)(timeFilter, filterOption);
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final timeFilterOptionKey = ref.watch(timeFilterProvider);
-    final statusFilterOptionKey = ref.watch(statusFilterProvider);
+    final timeFilterOptionKey = ref.watch(filter.timeFilterProvider);
+    final statusFilterOptionKey = ref.watch(filter.statusFilterProvider);
     final hiddenMemoIds = ref.watch(hiddenMemoIdsProvider);
-    final hidePinned = ref.watch(hidePinnedProvider);
+    final hidePinned = ref.watch(filter.hidePinnedProvider);
+    final showAdvancedFilter = ref.watch(filter.showAdvancedFilterProvider);
+    final rawCelFilter = ref.watch(filter.rawCelFilterProvider);
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
     // Helper to find the label for the current key
@@ -268,7 +349,8 @@ class MemosFilterBar extends ConsumerWidget {
                 GestureDetector(
                   onTap: () {
                     // Toggle the hidePinned state
-                    ref.read(hidePinnedProvider.notifier).state = !hidePinned;
+                    ref.read(filter.hidePinnedProvider.notifier).state =
+                        !hidePinned;
                   },
                   child: Container(
                     padding: const EdgeInsets.symmetric(
@@ -395,6 +477,186 @@ class MemosFilterBar extends ConsumerWidget {
                     ),
                   ],
                 ),
+              ),
+            ),
+          
+          // Advanced filter section
+          Padding(
+            padding: const EdgeInsets.only(top: 12.0),
+            child: Row(
+              children: [
+                GestureDetector(
+                  onTap: () {
+                    // Toggle advanced filter visibility
+                    ref.read(filter.showAdvancedFilterProvider.notifier).state =
+                        !showAdvancedFilter;
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color:
+                          showAdvancedFilter
+                              ? (isDarkMode
+                                  ? Colors.amber.shade900
+                                  : Colors.amber.shade100)
+                              : (isDarkMode
+                                  ? Colors.grey.shade800
+                                  : Colors.grey.shade200),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color:
+                            showAdvancedFilter
+                                ? (isDarkMode
+                                    ? Colors.amber.shade700
+                                    : Colors.amber.shade300)
+                                : (isDarkMode
+                                    ? Colors.grey.shade700
+                                    : Colors.grey.shade300),
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          showAdvancedFilter ? Icons.code : Icons.code_outlined,
+                          size: 16,
+                          color:
+                              showAdvancedFilter
+                                  ? (isDarkMode
+                                      ? Colors.amber.shade200
+                                      : Colors.amber.shade800)
+                                  : Theme.of(context).iconTheme.color,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          showAdvancedFilter
+                              ? 'Hide Advanced Filter'
+                              : 'Advanced Filter',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color:
+                                showAdvancedFilter
+                                    ? (isDarkMode
+                                        ? Colors.amber.shade200
+                                        : Colors.amber.shade800)
+                                    : Theme.of(
+                                      context,
+                                    ).textTheme.bodyMedium?.color,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.info_outline, size: 18),
+                  tooltip: 'Filter Syntax Help',
+                  onPressed: () => _showFilterSyntaxHelp(context),
+                ),
+              ],
+            ),
+          ),
+
+          // Show advanced filter input if enabled
+          if (showAdvancedFilter)
+            Padding(
+              padding: const EdgeInsets.only(top: 12.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'CEL Filter Expression',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color:
+                          isDarkMode
+                              ? Colors.amber.shade200
+                              : Colors.amber.shade800,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  TextFormField(
+                    initialValue: rawCelFilter,
+                    decoration: InputDecoration(
+                      hintText:
+                          'E.g., tag in ["work"] && visibility == "PUBLIC"',
+                      hintStyle: TextStyle(
+                        fontSize: 13,
+                        color:
+                            isDarkMode
+                                ? Colors.grey.shade400
+                                : Colors.grey.shade600,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 12,
+                      ),
+                      isDense: true,
+                    ),
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontFamily: 'monospace',
+                      color:
+                          isDarkMode
+                              ? Colors.amber.shade100
+                              : Colors.amber.shade900,
+                    ),
+                    onChanged: (value) {
+                      ref.read(filter.rawCelFilterProvider.notifier).state =
+                          value;
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Text(
+                        'When using advanced filter, UI filters are ignored',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontStyle: FontStyle.italic,
+                          color:
+                              isDarkMode
+                                  ? Colors.grey.shade400
+                                  : Colors.grey.shade600,
+                        ),
+                      ),
+                      const Spacer(),
+                      TextButton.icon(
+                        icon: const Icon(Icons.search, size: 16),
+                        label: const Text('Apply Filter'),
+                        onPressed: () {
+                          // Clear focus
+                          FocusScope.of(context).unfocus();
+                          // Apply the filter by triggering refresh
+                          ref.read(memosNotifierProvider.notifier).refresh();
+                        },
+                        style: TextButton.styleFrom(
+                          backgroundColor:
+                              isDarkMode
+                                  ? Colors.amber.shade900
+                                  : Colors.amber.shade100,
+                          foregroundColor:
+                              isDarkMode
+                                  ? Colors.amber.shade100
+                                  : Colors.amber.shade900,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ),
         ],

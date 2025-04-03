@@ -128,6 +128,70 @@ class FilterBuilder {
     
     return '!($filter)';
   }
+  
+  /// Validates if a CEL filter expression has basic correct syntax
+  /// This is a basic validation - not a full CEL parser
+  ///
+  /// Returns a string with error message if invalid, empty string if valid
+  static String validateCelExpression(String expression) {
+    if (expression.isEmpty) {
+      return '';
+    }
+
+    // Check for balanced parentheses
+    int openParens = 0;
+    for (int i = 0; i < expression.length; i++) {
+      if (expression[i] == '(') openParens++;
+      if (expression[i] == ')') openParens--;
+      if (openParens < 0) {
+        return 'Unbalanced parentheses at position $i';
+      }
+    }
+    if (openParens != 0) {
+      return 'Unbalanced parentheses: missing ${openParens > 0 ? "closing" : "opening"} parentheses';
+    }
+
+    // Check for balanced quotes
+    bool inQuote = false;
+    for (int i = 0; i < expression.length; i++) {
+      if (expression[i] == '"' && (i == 0 || expression[i - 1] != '\\')) {
+        inQuote = !inQuote;
+      }
+    }
+    if (inQuote) {
+      return 'Unbalanced quotes: missing closing quote';
+    }
+
+    // Check for balanced square brackets
+    int openBrackets = 0;
+    for (int i = 0; i < expression.length; i++) {
+      if (expression[i] == '[') openBrackets++;
+      if (expression[i] == ']') openBrackets--;
+      if (openBrackets < 0) {
+        return 'Unbalanced brackets at position $i';
+      }
+    }
+    if (openBrackets != 0) {
+      return 'Unbalanced brackets: missing ${openBrackets > 0 ? "closing" : "opening"} bracket';
+    }
+
+    // All good!
+    return '';
+  }
+
+  /// Creates a filter for searching content with text (case-insensitive)
+  /// This is useful for implementing a simple search box
+  ///
+  /// Example: content.toLowerCase().contains("search term")
+  static String bySearchText(String searchText) {
+    if (searchText.isEmpty) return '';
+
+    // Escape quotes in the search text
+    final escaped = searchText.replaceAll('"', '\\"');
+
+    // Create a case-insensitive search
+    return 'content.toLowerCase().contains("${escaped.toLowerCase()}")';
+  }
 
   /// Builds a sort filter to order by creation time
   /// 

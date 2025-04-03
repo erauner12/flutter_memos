@@ -51,6 +51,20 @@ const List<FilterOption> timeFilterOptions = [
   FilterOption(key: 'all', label: 'All Time', icon: Icons.calendar_month),
 ];
 
+/// Provider for advanced CEL filter expressions entered directly by the user
+/// This allows users to enter complex filter expressions that can't be
+/// easily expressed through the UI controls
+final rawCelFilterProvider = StateProvider<String>(
+  (ref) => '',
+  name: 'rawCelFilter',
+);
+
+/// Flag to indicate if the advanced filter UI is visible
+final showAdvancedFilterProvider = StateProvider<bool>(
+  (ref) => false,
+  name: 'showAdvancedFilter',
+);
+
 /// Provider for toggling visibility of pinned items.
 /// When true, pinned items will be hidden from view
 final hidePinnedProvider = StateProvider<bool>((ref) => false);
@@ -90,6 +104,18 @@ final lastUsedFilterKeyProvider = StateProvider<String?>(
 ///
 /// OPTIMIZATION: Added memoization, better commenting, and debugging
 final combinedFilterProvider = Provider<String>((ref) {
+  // First check if an advanced raw CEL filter is present
+  final rawCelFilter = ref.watch(rawCelFilterProvider.select((value) => value));
+
+  // If a raw CEL filter is provided, it takes precedence over UI-based filters
+  if (rawCelFilter.isNotEmpty) {
+    if (kDebugMode) {
+      print('[combinedFilterProvider] Using raw CEL filter: $rawCelFilter');
+    }
+    return rawCelFilter;
+  }
+
+  // Otherwise continue with UI-based filters
   // OPTIMIZATION: Use select() to only watch the specific values needed
   final timeFilter = ref.watch(timeFilterProvider.select((value) => value));
   final statusFilter = ref.watch(statusFilterProvider.select((value) => value));

@@ -135,11 +135,22 @@ class MemosNotifier extends StateNotifier<MemosState> {
     } else if (filterKey == 'archive') {
       stateFilter = 'ARCHIVED';
     }
+    
+    // Check if a raw CEL filter is being used
+    final rawCelFilter = _ref.read(rawCelFilterProvider);
+    bool usingRawFilter = rawCelFilter.isNotEmpty;
+    
     // Apply filter logic for category/visibility based on filterKey
+    // Only if not using raw filter (raw filter takes precedence)
     String? finalFilter = combinedFilter.isNotEmpty ? combinedFilter : null;
-    if (filterKey != 'all' && filterKey != 'inbox' && filterKey != 'archive') {
+    
+    // If using a normal filterKey tag and not using raw filter, add tag condition
+    if (!usingRawFilter &&
+        filterKey != 'all' &&
+        filterKey != 'inbox' &&
+        filterKey != 'archive') {
       // If filter is null, set it to the tag filter, otherwise append to existing filter
-      final tagFilter = 'tags=="$filterKey"';
+      final tagFilter = 'tag in ["$filterKey"]';
       finalFilter =
           finalFilter == null
               ? tagFilter
@@ -153,6 +164,9 @@ class MemosNotifier extends StateNotifier<MemosState> {
       print(
         '[MemosNotifier] Fetching page with filter: $finalFilter, state: $stateFilter, pageToken: ${pageToken ?? "null"}',
       );
+      if (usingRawFilter) {
+        print('[MemosNotifier] Using raw CEL filter: $rawCelFilter');
+      }
       print(
         '[MemosNotifier] Current state: ${state.memos.length} memos, isLoading=${state.isLoading}, isLoadingMore=${state.isLoadingMore}, hasReachedEnd=${state.hasReachedEnd}',
       );
