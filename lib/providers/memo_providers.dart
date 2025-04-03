@@ -380,6 +380,45 @@ final visibleMemosListProvider = Provider<List<Memo>>((ref) {
   return visibleMemos;
 }, name: 'visibleMemosListProvider');
 
+/// Provider that applies local search/filtering to the visible memos
+/// This delivers fast, responsive filtering as the user types
+final filteredMemosProvider = Provider<List<Memo>>((ref) {
+  // Get the base list of visible memos
+  final visibleMemos = ref.watch(visibleMemosListProvider);
+
+  // Get the current search query
+  final searchQuery = ref.watch(searchQueryProvider).trim().toLowerCase();
+
+  // If there's no search query, return all visible memos
+  if (searchQuery.isEmpty) {
+    return visibleMemos;
+  }
+
+  // Apply the search filter
+  final filteredMemos =
+      visibleMemos.where((memo) {
+        // Search in memo content (case-insensitive)
+        return memo.content.toLowerCase().contains(searchQuery);
+      }).toList();
+
+  if (kDebugMode) {
+    print(
+      '[filteredMemosProvider] Filtered from ${visibleMemos.length} to ${filteredMemos.length} memos with query: "$searchQuery"',
+    );
+  }
+
+  return filteredMemos;
+}, name: 'filteredMemosProvider');
+
+/// Provider to determine if we need to show "no results" for search
+final hasSearchResultsProvider = Provider<bool>((ref) {
+  final searchQuery = ref.watch(searchQueryProvider);
+  final filteredMemos = ref.watch(filteredMemosProvider);
+
+  // Only show no results message if there's a search query and no results
+  return searchQuery.isEmpty || filteredMemos.isNotEmpty;
+}, name: 'hasSearchResultsProvider');
+
 // --- End New Pagination Providers ---
 
 /// Provider for archiving a memo

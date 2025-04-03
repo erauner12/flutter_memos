@@ -100,6 +100,25 @@ final lastUsedFilterKeyProvider = StateProvider<String?>(
   name: 'lastUsedFilterKey',
 );
 
+/// Provider for the current search query used for local filtering
+/// This is used for quick, client-side filtering as the user types
+final searchQueryProvider = StateProvider<String>(
+  (ref) => '',
+  name: 'searchQuery',
+);
+
+/// Flag to determine if search is performed locally (true) or via server (false)
+final localSearchEnabledProvider = StateProvider<bool>(
+  (ref) => true, // Default to local search for faster response
+  name: 'localSearchEnabled',
+);
+
+/// Debounce period for sending searches to the server (in milliseconds)
+final searchDebounceProvider = StateProvider<int>(
+  (ref) => 300, // 300ms is a typical debounce time
+  name: 'searchDebounce',
+);
+
 /// Provider that combines all filter options into a single filter string
 ///
 /// OPTIMIZATION: Added memoization, better commenting, and debugging

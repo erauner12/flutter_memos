@@ -91,6 +91,14 @@ class _MemosScreenState extends ConsumerState<MemosScreen> {
             },
           ),
         ],
+        // Add search bar in the app bar bottom
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(56.0),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16.0, 0.0, 16.0, 8.0),
+            child: _buildSearchBar(),
+          ),
+        ),
       ),
       body: Column(
         children: [
@@ -139,7 +147,52 @@ class _MemosScreenState extends ConsumerState<MemosScreen> {
     );
   }
 
+  // Build the search bar widget
+  Widget _buildSearchBar() {
+    final searchQuery = ref.watch(searchQueryProvider);
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
+    return TextField(
+      decoration: InputDecoration(
+        hintText: 'Search memos...',
+        prefixIcon: const Icon(Icons.search),
+        suffixIcon:
+            searchQuery.isNotEmpty
+                ? IconButton(
+                  icon: const Icon(Icons.clear),
+                  onPressed: () {
+                    ref.read(searchQueryProvider.notifier).state = '';
+                  },
+                )
+                : null,
+        filled: true,
+        fillColor: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade200,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16.0),
+          borderSide: BorderSide.none,
+        ),
+      ),
+      onChanged: (value) {
+        // Update the search query provider as user types
+        ref.read(searchQueryProvider.notifier).state = value;
+
+        // If value is non-empty and we have local search disabled, we might want
+        // to trigger a server search after debouncing
+        final isLocalSearch = ref.read(localSearchEnabledProvider);
+        if (!isLocalSearch && value.isNotEmpty) {
+          // In a real app, you'd add debouncing logic here
+          // For now, we'll refresh immediately when local search is disabled
+          ref.read(memosNotifierProvider.notifier).refresh();
+        }
+      },
+    );
+  }
+
   Widget _buildMemosList(MemosState memosState, List<Memo> visibleMemos) {
+    // Use filteredMemos instead of visibleMemos directly
+    final filteredMemos = ref.watch(filteredMemosProvider);
+    final searchQuery = ref.watch(searchQueryProvider);
+    
     // Show loading spinner for initial load
     if (memosState.isLoading && visibleMemos.isEmpty) {
       return const Center(child: CircularProgressIndicator());
@@ -166,8 +219,32 @@ class _MemosScreenState extends ConsumerState<MemosScreen> {
       );
     }
 
-    // Show empty state message if no memos and not loading
-    if (visibleMemos.isEmpty && !memosState.isLoading) {
+    // Show empty state for search with no results
+    if (filteredMemos.isEmpty && searchQuery.isNotEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.search_off, size: 48, color: Colors.grey),
+            const SizedBox(height: 16),
+            Text(
+              'No results found for "$searchQuery"',
+              style: const TextStyle(fontSize: 16, color: Colors.grey),
+            ),
+            const SizedBox(height: 8),
+            ElevatedButton(
+              onPressed: () {
+                ref.read(searchQueryProvider.notifier).state = '';
+              },
+              child: const Text('Clear Search'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Show general empty state message if no memos and not loading
+    if (visibleMemos.isEmpty && !memosState.isLoading && searchQuery.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -192,18 +269,18 @@ class _MemosScreenState extends ConsumerState<MemosScreen> {
         controller: _scrollController,
         padding: const EdgeInsets.all(16),
         // Add +1 item if we're loading more (for the loading indicator)
-        itemCount: visibleMemos.length + (memosState.isLoadingMore ? 1 : 0),
+        itemCount: filteredMemos.length + (memosState.isLoadingMore ? 1 : 0),
         itemBuilder: (context, index) {
           // Show loading indicator as the last item when loading more
-          if (index == visibleMemos.length) {
+          if (index == filteredMemos.length) {
             return const Padding(
               padding: EdgeInsets.symmetric(vertical: 16.0),
               child: Center(child: CircularProgressIndicator()),
             );
           }
           
-          // Regular memo list item
-          final memo = visibleMemos[index];
+          // Regular memo list item - now using filtered memos
+          final memo = filteredMemos[index];
           return MemoListItem(memo: memo, index: index);
         },
       ),

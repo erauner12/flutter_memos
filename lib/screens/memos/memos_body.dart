@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_memos/providers/filter_providers.dart';
 import 'package:flutter_memos/providers/memo_providers.dart';
 import 'package:flutter_memos/providers/ui_providers.dart';
 import 'package:flutter_memos/utils/keyboard_navigation.dart';
@@ -74,11 +75,11 @@ class _MemosBodyState extends ConsumerState<MemosBody>
 
   // Helper to ensure a selection exists when the list is first loaded or refreshed
   void _ensureInitialSelection() {
-    // Use the new provider for visible memos
-    final visibleMemos = ref.read(visibleMemosListProvider);
+    // Use filteredMemos instead of visibleMemos
+    final filteredMemos = ref.read(filteredMemosProvider);
     final currentSelection = ref.read(selectedMemoIndexProvider);
 
-    if (visibleMemos.isNotEmpty && currentSelection < 0) {
+    if (filteredMemos.isNotEmpty && currentSelection < 0) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
           ref.read(selectedMemoIndexProvider.notifier).state = 0;
@@ -89,7 +90,7 @@ class _MemosBodyState extends ConsumerState<MemosBody>
           }
         }
       });
-    } else if (visibleMemos.isEmpty && currentSelection != -1) {
+    } else if (filteredMemos.isEmpty && currentSelection != -1) {
       // Reset selection if list becomes empty
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
@@ -105,12 +106,12 @@ class _MemosBodyState extends ConsumerState<MemosBody>
     // Watch the providers for data changes
     // final memosAsync = ref.watch(visibleMemosProvider); // Old way
     final memosState = ref.watch(memosNotifierProvider); // Watch the full state
-    final visibleMemos = ref.watch(
-      visibleMemosListProvider,
-    ); // Watch the filtered list
-
+    // Use filteredMemosProvider instead of visibleMemosListProvider
+    final filteredMemos = ref.watch(filteredMemosProvider);
+    final searchQuery = ref.watch(searchQueryProvider);
+    
     // Ensure selection is updated when the list changes
-    // Calling this in build ensures it runs whenever the visible list updates
+    // Calling this in build ensures it runs whenever the filtered list updates
     _ensureInitialSelection();
 
     return Focus(
@@ -199,7 +200,10 @@ class _MemosBodyState extends ConsumerState<MemosBody>
           }
 
           // 3. Empty State (after initial load, no errors, no memos)
-          if (!memosState.isLoading && visibleMemos.isEmpty) {
+          if (!memosState.isLoading && filteredMemos.isEmpty) {
+            // Check if empty due to search with no results
+            final searchQuery = ref.watch(searchQueryProvider);
+            
             return RefreshIndicator(
               onRefresh: () async {
                 if (kDebugMode) {
@@ -215,7 +219,37 @@ class _MemosBodyState extends ConsumerState<MemosBody>
                     child: ConstrainedBox(
                       constraints: BoxConstraints(minHeight: constraints.maxHeight),
                       child:
-                          const MemosEmptyState(), // Show the empty state widget
+                          searchQuery.isNotEmpty
+                              ? Center(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    const Icon(
+                                      Icons.search_off,
+                                      size: 48,
+                                      color: Colors.grey,
+                                    ),
+                                    const SizedBox(height: 16),
+                                    Text(
+                                      'No results found for "$searchQuery"',
+                                      style: const TextStyle(
+                                        fontSize: 16,
+                                        color: Colors.grey,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    ElevatedButton(
+                                      onPressed: () {
+                                        ref
+                                            .read(searchQueryProvider.notifier)
+                                            .state = '';
+                                      },
+                                      child: const Text('Clear Search'),
+                                    ),
+                                  ],
+                                ),
+                              )
+                              : const MemosEmptyState(), // Show the empty state widget
                     ),
                   );
                 }
@@ -240,10 +274,10 @@ class _MemosBodyState extends ConsumerState<MemosBody>
               padding: const EdgeInsets.all(16.0),
               // Add 1 to item count if loading more for the indicator
               itemCount:
-                  visibleMemos.length + (memosState.isLoadingMore ? 1 : 0),
+                  filteredMemos.length + (memosState.isLoadingMore ? 1 : 0),
               itemBuilder: (context, index) {
                 // Check if it's the loading indicator item at the end
-                if (index == visibleMemos.length && memosState.isLoadingMore) {
+                if (index == filteredMemos.length && memosState.isLoadingMore) {
                   return const Padding(
                     padding: EdgeInsets.symmetric(vertical: 16.0),
                     child: Center(child: CircularProgressIndicator()),
@@ -251,9 +285,9 @@ class _MemosBodyState extends ConsumerState<MemosBody>
                 }
 
                 // Otherwise, it's a memo item (check bounds just in case)
-                if (index < visibleMemos.length) {
-                  final memo = visibleMemos[index];
-                  // Pass the index within the visibleMemos list
+                if (index < filteredMemos.length) {
+                  final memo = filteredMemos[index];
+                  // Pass the index within the filteredMemos list
                   return MemoListItem(memo: memo, index: index);
                 }
 
@@ -270,11 +304,8 @@ class _MemosBodyState extends ConsumerState<MemosBody>
 // Helper methods for keyboard navigation remain unchanged below
   // Helper methods for keyboard navigation
   void selectNextMemo() {
-    // Get the current list of visible memos using the new provider
-    // final memosAsync = ref.read(visibleMemosProvider); // Old way
-    // if (memosAsync is! AsyncData<List<Memo>>) return; // Old check
-    // final memos = memosAsync.value; // Old way
-    final memos = ref.read(visibleMemosListProvider); // New way
+    // Get the current list of filtered memos
+    final memos = ref.read(filteredMemosProvider);
 
     if (memos.isEmpty) return;
 
@@ -295,11 +326,8 @@ class _MemosBodyState extends ConsumerState<MemosBody>
   }
 
   void selectPreviousMemo() {
-    // Get the current list of visible memos using the new provider
-    // final memosAsync = ref.read(visibleMemosProvider); // Old way
-    // if (memosAsync is! AsyncData<List<Memo>>) return; // Old check
-    // final memos = memosAsync.value; // Old way
-    final memos = ref.read(visibleMemosListProvider); // New way
+    // Get the current list of filtered memos
+    final memos = ref.read(filteredMemosProvider);
 
     if (memos.isEmpty) return;
 
@@ -320,11 +348,8 @@ class _MemosBodyState extends ConsumerState<MemosBody>
   }
 
   void openSelectedMemo(BuildContext context) {
-    // Get the current list of visible memos using the new provider
-    // final memosAsync = ref.read(visibleMemosProvider); // Old way
-    // if (memosAsync is! AsyncData<List<Memo>>) return; // Old check
-    // final memos = memosAsync.value; // Old way
-    final memos = ref.read(visibleMemosListProvider); // New way
+    // Get the current list of filtered memos
+    final memos = ref.read(filteredMemosProvider);
     final selectedIndex = ref.read(selectedMemoIndexProvider);
 
     // If we have a valid selection, navigate to that memo
