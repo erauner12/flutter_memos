@@ -141,7 +141,7 @@ class _AdvancedFilterPanelState extends ConsumerState<AdvancedFilterPanel> {
     }
     
     // Use the filter builder's validation
-    final error = FilterBuilder.validateCelExpression(filter);
+    final error = FilterBuilder.validateCelExpressionDetailed(filter);
     setState(() {
       _syntaxError = error;
       _isValid = error.isEmpty;
