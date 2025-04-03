@@ -185,12 +185,124 @@ class FilterBuilder {
   /// Example: content.toLowerCase().contains("search term")
   static String bySearchText(String searchText) {
     if (searchText.isEmpty) return '';
-
+    
     // Escape quotes in the search text
     final escaped = searchText.replaceAll('"', '\\"');
-
+    
     // Create a case-insensitive search
     return 'content.toLowerCase().contains("${escaped.toLowerCase()}")';
+  }
+  
+  /// Creates a month filter for the specified year and month
+  ///
+  /// Example: (create_time >= "2023-09-01T00:00:00Z" && create_time <= "2023-09-30T23:59:59Z")
+  static String byMonth(int year, int month) {
+    final startDate = DateTime(year, month, 1);
+
+    // Calculate the last day of the month by getting the first day of the next month
+    // and subtracting one day
+    final lastDayOfMonth =
+        month < 12 ? DateTime(year, month + 1, 0) : DateTime(year + 1, 1, 0);
+
+    return byCreateTimeRange(startDate, lastDayOfMonth);
+  }
+
+  /// Validates a CEL filter expression more thoroughly, checking for common syntax errors
+  /// Returns an empty string if valid, or an error message if invalid
+  static String validateCelExpressionDetailed(String expression) {
+    if (expression.isEmpty) {
+      return '';
+    }
+
+    // Check for balanced parentheses
+    int openParens = 0;
+    int lastOpenParenPos = -1;
+    int lastCloseParenPos = -1;
+
+    for (int i = 0; i < expression.length; i++) {
+      if (expression[i] == '(') {
+        openParens++;
+        lastOpenParenPos = i;
+      }
+      if (expression[i] == ')') {
+        openParens--;
+        lastCloseParenPos = i;
+
+        if (openParens < 0) {
+          return 'Unbalanced parentheses: extra closing parenthesis at position $i';
+        }
+      }
+    }
+
+    if (openParens > 0) {
+      return 'Unbalanced parentheses: missing $openParens closing parenthesis';
+    }
+
+    // Check for balanced quotes
+    bool inQuote = false;
+    int quoteStartPos = -1;
+
+    for (int i = 0; i < expression.length; i++) {
+      if (expression[i] == '"' && (i == 0 || expression[i - 1] != '\\')) {
+        if (!inQuote) {
+          quoteStartPos = i;
+          inQuote = true;
+        } else {
+          inQuote = false;
+        }
+      }
+    }
+
+    if (inQuote) {
+      return 'Unbalanced quotes: missing closing quote for quote starting at position $quoteStartPos';
+    }
+
+    // Check for balanced square brackets
+    int openBrackets = 0;
+    int lastOpenBracketPos = -1;
+
+    for (int i = 0; i < expression.length; i++) {
+      if (expression[i] == '[') {
+        openBrackets++;
+        lastOpenBracketPos = i;
+      }
+      if (expression[i] == ']') {
+        openBrackets--;
+
+        if (openBrackets < 0) {
+          return 'Unbalanced brackets: extra closing bracket at position $i';
+        }
+      }
+    }
+
+    if (openBrackets > 0) {
+      return 'Unbalanced brackets: missing $openBrackets closing bracket';
+    }
+
+    // Check for empty expressions within parentheses
+    if (expression.contains('()')) {
+      return 'Empty parentheses are not allowed';
+    }
+
+    // Check for common operators
+    if (expression.contains('=') && !expression.contains('==')) {
+      return 'Use "==" for equality comparison, not "="';
+    }
+
+    // Check if time format seems correct for create_time and update_time
+    if (expression.contains('create_time') ||
+        expression.contains('update_time')) {
+      // Very basic check for "YYYY-MM-DDThh:mm:ss" format inside quotes
+      final timeRegex = RegExp(
+        r'"[\d]{4}-[\d]{2}-[\d]{2}T[\d]{2}:[\d]{2}:[\d]{2}',
+      );
+      if (!timeRegex.hasMatch(expression)) {
+        return 'Time format should be "YYYY-MM-DDThh:mm:ss" (e.g., "2023-01-01T00:00:00Z")';
+      }
+    }
+
+    // All checks passed
+    return '';
   }
 
   /// Builds a sort filter to order by creation time

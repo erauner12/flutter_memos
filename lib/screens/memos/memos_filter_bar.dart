@@ -40,13 +40,47 @@ const List<FilterOption> timeFilterOptions = [
   FilterOption(key: 'important', label: 'Important', icon: Icons.star_outline),
 ];
 
+// Create a simple placeholder for AdvancedFilterPanel widget
+class AdvancedFilterPanel extends StatelessWidget {
+  final VoidCallback onClose;
+
+  const AdvancedFilterPanel({super.key, required this.onClose});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Theme.of(context).canvasColor,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              const Text(
+                'Advanced Filter',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const Spacer(),
+              IconButton(icon: const Icon(Icons.close), onPressed: onClose),
+            ],
+          ),
+          // Placeholder content
+          const Center(child: Text('Advanced filter options will appear here')),
+        ],
+      ),
+    );
+  }
+}
+
 class MemosFilterBar extends ConsumerWidget {
   const MemosFilterBar({super.key});
 
   void _showAllMemos(WidgetRef ref) {
     ref.read(hiddenMemoIdsProvider.notifier).state = {};
   }
-  
+
   void _showFilterSyntaxHelp(BuildContext context) {
     showDialog(
       context: context,
@@ -123,6 +157,32 @@ class MemosFilterBar extends ConsumerWidget {
               ),
             ],
           ),
+    );
+  }
+
+  void _showAdvancedFilterPanel(BuildContext context) {
+    // Show the advanced filter panel as a modal bottom sheet
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true, // Takes up full screen height
+      backgroundColor: Colors.transparent, // Transparent background
+      builder: (context) {
+        // Get screen dimensions
+        final screenWidth = MediaQuery.of(context).size.width;
+
+        // Determine initial sheet size based on screen dimensions
+        final initialChildSize =
+            screenWidth > 600 ? 0.7 : 0.8; // More space on larger screens
+
+        return DraggableScrollableSheet(
+          initialChildSize: initialChildSize,
+          minChildSize: 0.5, // At least half the screen
+          maxChildSize: 0.95, // Almost full screen
+          builder: (_, scrollController) {
+            return AdvancedFilterPanel(onClose: () => Navigator.pop(context));
+          },
+        );
+      },
     );
   }
 
@@ -479,7 +539,7 @@ class MemosFilterBar extends ConsumerWidget {
                 ),
               ),
             ),
-          
+
           // Advanced filter section
           Padding(
             padding: const EdgeInsets.only(top: 12.0),
@@ -487,7 +547,7 @@ class MemosFilterBar extends ConsumerWidget {
               children: [
                 GestureDetector(
                   onTap: () {
-                    // Toggle advanced filter visibility
+                    // Toggle basic advanced filter visibility
                     ref.read(filter.showAdvancedFilterProvider.notifier).state =
                         !showAdvancedFilter;
                   },
@@ -522,7 +582,9 @@ class MemosFilterBar extends ConsumerWidget {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(
-                          showAdvancedFilter ? Icons.code : Icons.code_outlined,
+                          showAdvancedFilter
+                              ? Icons.filter_list
+                              : Icons.filter_list_outlined,
                           size: 16,
                           color:
                               showAdvancedFilter
@@ -534,8 +596,8 @@ class MemosFilterBar extends ConsumerWidget {
                         const SizedBox(width: 8),
                         Text(
                           showAdvancedFilter
-                              ? 'Hide Advanced Filter'
-                              : 'Advanced Filter',
+                              ? 'Hide Basic Filters'
+                              : 'Show Filters',
                           style: TextStyle(
                             fontSize: 14,
                             color:
@@ -553,6 +615,27 @@ class MemosFilterBar extends ConsumerWidget {
                   ),
                 ),
                 const Spacer(),
+                ElevatedButton.icon(
+                  onPressed: () => _showAdvancedFilterPanel(context),
+                  icon: const Icon(Icons.tune, size: 16),
+                  label: const Text('Advanced Filter'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor:
+                        isDarkMode
+                            ? Colors.blue.shade800
+                            : Colors.blue.shade100,
+                    foregroundColor:
+                        isDarkMode
+                            ? Colors.blue.shade200
+                            : Colors.blue.shade800,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
                 IconButton(
                   icon: const Icon(Icons.info_outline, size: 18),
                   tooltip: 'Filter Syntax Help',
