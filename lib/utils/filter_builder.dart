@@ -213,21 +213,17 @@ class FilterBuilder {
     if (expression.isEmpty) {
       return '';
     }
-
+    
     // Check for balanced parentheses
     int openParens = 0;
-    int lastOpenParenPos = -1;
-    int lastCloseParenPos = -1;
-
+    
     for (int i = 0; i < expression.length; i++) {
       if (expression[i] == '(') {
         openParens++;
-        lastOpenParenPos = i;
       }
       if (expression[i] == ')') {
         openParens--;
-        lastCloseParenPos = i;
-
+        
         if (openParens < 0) {
           return 'Unbalanced parentheses: extra closing parenthesis at position $i';
         }
@@ -259,12 +255,10 @@ class FilterBuilder {
 
     // Check for balanced square brackets
     int openBrackets = 0;
-    int lastOpenBracketPos = -1;
-
+    
     for (int i = 0; i < expression.length; i++) {
       if (expression[i] == '[') {
         openBrackets++;
-        lastOpenBracketPos = i;
       }
       if (expression[i] == ']') {
         openBrackets--;

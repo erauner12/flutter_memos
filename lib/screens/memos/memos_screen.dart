@@ -76,6 +76,13 @@ class _MemosScreenState extends ConsumerState<MemosScreen> {
       appBar: AppBar(
         title: Text('Memos (${currentFilter.toUpperCase()})'),
         actions: [
+          // Advanced filter button
+          IconButton(
+            icon: const Icon(Icons.tune),
+            tooltip: 'Advanced Filters',
+            onPressed: () => _showAdvancedFilterPanel(context),
+          ),
+          
           // Filter dropdown
           _buildFilterButton(),
 
@@ -102,16 +109,116 @@ class _MemosScreenState extends ConsumerState<MemosScreen> {
       ),
       body: Column(
         children: [
-          // Filter chips can go here
-          // _buildFilterChips(),
-
+          // Filter chips can go here (if needed in the future)
+          
           // Main list of memos
           Expanded(child: _buildMemosList(memosState, visibleMemos)),
+        ],
+      ),
+      floatingActionButton: Column(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          // Advanced filter button
+          FloatingActionButton.small(
+            heroTag: 'advancedFilterFAB',
+            onPressed: () => _showAdvancedFilterPanel(context),
+            tooltip: 'Advanced Filters',
+            child: const Icon(Icons.filter_alt),
+          ),
+          const SizedBox(height: 16),
+          // Add new memo button
+          FloatingActionButton(
+            heroTag: 'newMemoFAB',
+            onPressed: () {
+              Navigator.pushNamed(context, '/new-memo').then((_) {
+                ref.read(memosNotifierProvider.notifier).refresh();
+              });
+            },
+            tooltip: 'New Memo',
+            child: const Icon(Icons.add),
+          ),
         ],
       ),
     );
   }
 
+  void _showAdvancedFilterPanel(BuildContext context) {
+    // Show the advanced filter panel as a modal bottom sheet
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true, // Takes up full screen height
+      backgroundColor: Colors.transparent, // Transparent background
+      builder: (context) {
+        // Determine initial sheet size based on screen dimensions
+        final screenWidth = MediaQuery.of(context).size.width;
+        final initialChildSize = screenWidth > 600 ? 0.7 : 0.8; // More space on larger screens
+        
+        return DraggableScrollableSheet(
+          initialChildSize: initialChildSize,
+          minChildSize: 0.5, // At least half the screen
+          maxChildSize: 0.95, // Almost full screen
+          builder: (_, scrollController) {
+            return _buildAdvancedFilterPanel(scrollController);
+          },
+        );
+      },
+    );
+  }
+
+  // Define the AdvancedFilterPanel
+  Widget _buildAdvancedFilterPanel(ScrollController scrollController) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Theme.of(context).scaffoldBackgroundColor,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      child: Column(
+        children: [
+          // Handle bar
+          Container(
+            margin: const EdgeInsets.symmetric(vertical: 8),
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: Colors.grey.withOpacity(0.3),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+
+          // Header
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Row(
+              children: [
+                const Text(
+                  'Advanced Filters',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ],
+            ),
+          ),
+
+          // Filter content - to be implemented
+          Expanded(
+            child: ListView(
+              controller: scrollController,
+              padding: const EdgeInsets.all(16.0),
+              children: const [
+                Text('Filter options will be implemented here'),
+                // TODO: Implement actual filter options
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+  
   Widget _buildFilterButton() {
     final currentFilter = ref.watch(filterKeyProvider);
 
