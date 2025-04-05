@@ -117,14 +117,21 @@ class _NewMemoFormState extends ConsumerState<NewMemoForm>
         visibility: 'PUBLIC',
       );
 
-      await ref.read(createMemoProvider)(newMemo);
+      final createdMemo = await ref.read(createMemoProvider)(newMemo);
 
       if (kDebugMode) {
-        print('[NewMemoForm] Memo created successfully');
+        print(
+          '[NewMemoForm] Memo created successfully with ID: ${createdMemo.id}',
+        );
       }
 
       if (mounted) {
-        Navigator.of(context).pop();
+        // Navigate to the memo detail screen instead of popping
+        Navigator.pushNamed(
+          context,
+          '/memo-detail',
+          arguments: {'memoId': createdMemo.id},
+        );
       }
     } catch (e) {
       if (kDebugMode) {
