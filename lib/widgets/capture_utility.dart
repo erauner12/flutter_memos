@@ -393,9 +393,25 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
   Future<void> _pickFile() async {
     try {
       final result = await FilePicker.platform.pickFiles(
-        type: FileType.any);
+        type: FileType.any, // Or FileType.image, etc.
+        withData: true, // Explicitly request bytes
+      );
+      // Add detailed logging here
+      if (kDebugMode) {
+        print(
+          '[CaptureUtility._pickFile] FilePicker result: ${result?.files.firstOrNull}',
+        );
+      }
+
       if (result != null && result.files.isNotEmpty) {
         final file = result.files.first;
+        // Add detailed logging for the picked file
+        if (kDebugMode) {
+          print(
+            '[CaptureUtility._pickFile] Picked file: name=${file.name}, size=${file.size}, ext=${file.extension}, path=${file.path}, bytes_length=${file.bytes?.length}',
+          );
+        }
+
         const maxSizeInBytes = 10 * 1024 * 1024;
         if (file.size > maxSizeInBytes) {
           if (mounted) {
@@ -409,20 +425,38 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
           return;
         }
 
+        // Log guessed content type
+        final guessedContentType =
+            file.extension != null
+                ? _guessContentTypeFromExtension(file.extension!)
+                : 'application/octet-stream';
+        if (kDebugMode) {
+          print(
+            '[CaptureUtility._pickFile] Guessed content type: $guessedContentType',
+          );
+          print('[CaptureUtility._pickFile] Attempting to set state...');
+        }
+
         setState(() {
           _selectedFileData = file.bytes;
           _selectedFilename = file.name;
-          _selectedContentType =
-              file.extension != null
-                  ? _guessContentTypeFromExtension(file.extension!)
-                  : 'application/octet-stream';
+          _selectedContentType = guessedContentType;
+          // Log state values after setting them
+          if (kDebugMode) {
+            print(
+              '[CaptureUtility._pickFile] State set: filename=$_selectedFilename, contentType=$_selectedContentType, data_length=${_selectedFileData?.length}',
+            );
+          }
         });
         if (!_isExpanded) {
           _expand();
         }
       }
-    } catch (e) {
-      debugPrint('Error picking file: $e');
+    } catch (e, stackTrace) {
+      // Enhance logging in catch block
+      if (kDebugMode) {
+        print('[CaptureUtility._pickFile] Error picking file: $e\n$stackTrace');
+      }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -468,6 +502,12 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
 
   Future<void> _handleSubmit() async {
     final content = _textController.text.trim();
+    // Add logging here
+    if (kDebugMode) {
+      print(
+        '[CaptureUtility._handleSubmit] Submitting: content_empty=${content.isEmpty}, filename=$_selectedFilename, contentType=$_selectedContentType, data_length=${_selectedFileData?.length}',
+      );
+    }
     if (content.isEmpty && _selectedFileData == null) return;
 
     setState(() {
@@ -534,6 +574,13 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
     String? filename,
     String? contentType,
   }) async {
+    // Add logging here
+    if (kDebugMode) {
+      print(
+        '[CaptureUtility._addComment] Adding comment: memoId=$memoId, content_empty=${content.isEmpty}, filename=$filename, contentType=$contentType, data_length=${fileBytes?.length}',
+      );
+    }
+
     final newComment = Comment(
       id: 'temp-${DateTime.now().millisecondsSinceEpoch}',
       content: content,

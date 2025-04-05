@@ -458,7 +458,7 @@ class _CommentCardState extends ConsumerState<CommentCard> {
                                       filename,
                                     );
                                     final imageUrl =
-                                        '$baseUrl/file/$resourceName/$encodedFilename';
+                                        '$baseUrl/o/r/$resourceName/$encodedFilename';
 
                                     if (kDebugMode) {
                                       print(

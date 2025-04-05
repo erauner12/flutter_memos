@@ -226,6 +226,7 @@ final toggleHideCommentProvider = Provider.family<void Function(), String>((ref,
 });
 
 /// Provider for creating a comment for a memo, potentially with an attachment
+/// Provider for creating a comment for a memo, potentially with an attachment
 final createCommentProvider = Provider.family<
   Future<Comment> Function(
     Comment comment, {
@@ -241,6 +242,15 @@ final createCommentProvider = Provider.family<
     String? filename,
     String? contentType,
   }) async {
+    // Add logging here
+    if (kDebugMode) {
+      print('[createCommentProvider] Called for memoId: $memoId');
+      print('[createCommentProvider] Comment content: "${comment.content}"');
+      print(
+        '[createCommentProvider] File details: filename=$filename, contentType=$contentType, data_length=${fileBytes?.length}',
+      );
+    }
+
     final apiService = ref.read(apiServiceProvider);
     List<V1Resource>? uploadedResources;
 
@@ -249,7 +259,7 @@ final createCommentProvider = Provider.family<
       if (fileBytes != null && filename != null && contentType != null) {
         if (kDebugMode) {
           print(
-            '[createCommentProvider] Uploading attachment: $filename ($contentType)',
+            '[createCommentProvider] Uploading attachment: $filename ($contentType, ${fileBytes.length} bytes)',
           );
         }
         final uploadedResource = await apiService.uploadResource(
@@ -258,6 +268,11 @@ final createCommentProvider = Provider.family<
           contentType,
         );
         uploadedResources = [uploadedResource];
+        if (kDebugMode) {
+          print(
+            '[createCommentProvider] Attachment uploaded: ${uploadedResource.name}',
+          );
+        }
       }
 
       // 2. Create the comment, passing uploaded resources
@@ -271,6 +286,9 @@ final createCommentProvider = Provider.family<
         comment,
         resources: uploadedResources, // Pass resources here
       );
+      if (kDebugMode) {
+        print('[createCommentProvider] Comment created: ${createdComment.id}');
+      }
 
       // 3. Bump the parent memo after successful comment creation
       try {
@@ -294,10 +312,11 @@ final createCommentProvider = Provider.family<
       ref.invalidate(memoCommentsProvider(memoId));
 
       return createdComment;
-    } catch (e) {
+    } catch (e, stackTrace) {
+      // Add stackTrace
       if (kDebugMode) {
         print(
-          '[createCommentProvider] Error creating comment for memo $memoId: $e',
+          '[createCommentProvider] Error creating comment for memo $memoId: $e\n$stackTrace', // Log stacktrace
         );
       }
       rethrow; // Rethrow the error to be handled by the caller UI
