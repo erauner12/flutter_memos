@@ -1,3 +1,6 @@
+import 'dart:convert'; // For base64Encode
+import 'dart:typed_data'; // For Uint8List
+
 import 'package:flutter_memos/api/lib/api.dart';
 import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/models/memo.dart';
@@ -35,11 +38,15 @@ class ApiService {
   factory ApiService() => _instance;
 
   late MemoServiceApi _memoApi;
+  late ResourceServiceApi _resourceApi; // Add ResourceServiceApi instance
   late ApiClient _apiClient;
 
   // New fields for server configuration
   String _baseUrl = '';
   String _authToken = '';
+
+  // Getter for the base URL
+  String get apiBaseUrl => _baseUrl;
 
   // Configuration flags
   static const bool CLIENT_SIDE_SORTING_ENABLED = true; // Always use client-side sorting
@@ -135,6 +142,7 @@ class ApiService {
       );
 
       _memoApi = MemoServiceApi(_apiClient);
+      _resourceApi = ResourceServiceApi(_apiClient); // Initialize Resource API
 
       if (verboseLogging) {
         print('[API] Successfully initialized client with base URL: $baseUrl');
@@ -490,6 +498,55 @@ class ApiService {
     }
   }
 
+  // RESOURCE OPERATIONS
+
+  /// Upload a resource (e.g., image)
+  Future<V1Resource> uploadResource(
+    Uint8List fileBytes,
+    String filename,
+    String contentType,
+  ) async {
+    try {
+      // Base64 encode the file content
+      final String base64Content = base64Encode(fileBytes);
+
+      // Create the resource payload
+      final resourcePayload = V1Resource(
+        filename: filename,
+        type: contentType,
+        content: base64Content, // Send base64 encoded content
+        // size: fileBytes.length.toString(), // Size might be calculated server-side
+      );
+
+      if (verboseLogging) {
+        print(
+          '[API] Uploading resource: $filename ($contentType, ${fileBytes.length} bytes)',
+        );
+      }
+
+      // Call the API to create the resource
+      final V1Resource? createdResource = await _resourceApi
+          .resourceServiceCreateResource(resourcePayload);
+
+      if (createdResource == null || createdResource.name == null) {
+        throw Exception(
+          'Failed to upload resource: Server returned null or invalid resource',
+        );
+      }
+
+      if (verboseLogging) {
+        print(
+          '[API] Resource uploaded successfully: ${createdResource.name} ($filename)',
+        );
+      }
+
+      return createdResource;
+    } catch (e) {
+      print('[API] Error uploading resource: $e');
+      throw Exception('Failed to upload resource: $e');
+    }
+  }
+
   // COMMENT OPERATIONS
 
   /// List comments for a memo
@@ -511,30 +568,55 @@ class ApiService {
   }
 
   /// Create a comment on a memo
-  Future<Comment> createMemoComment(String memoId, Comment comment) async {
+  Future<Comment> createMemoComment(
+    String memoId,
+    Comment comment, {
+    List<V1Resource>? resources, // Add optional resources parameter
+  }) async {
     try {
       final apiMemo = Apiv1Memo(
         content: comment.content,
         creator:
             comment.creatorId != null
                 ? 'users/${comment.creatorId}'
-                : 'users/1',
+                : 'users/1', // Default creator if null
         pinned: comment.pinned,
         state: _getApiStateFromCommentState(comment.state),
+        resources: resources ?? [], // Include resources in the payload
+        // Ensure visibility is set if needed, though comments might inherit
+        // visibility: _getApiVisibility('PUBLIC'), // Example: Default to PUBLIC if needed
       );
-
+  
+      if (verboseLogging) {
+        print(
+          '[API] Creating comment for memo $memoId with ${resources?.length ?? 0} resources.',
+        );
+        // Log payload for debugging
+        // print('[API] Comment Payload: ${apiMemo.toJson()}');
+      }
+  
       final response = await _memoApi.memoServiceCreateMemoComment(
         _formatResourceName(memoId, 'memos'),
         apiMemo,
       );
-
+  
       if (response == null) {
         throw Exception('Failed to create comment: No response from server');
       }
-
+  
+      if (verboseLogging) {
+        print(
+          '[API] Comment created successfully: ${_extractIdFromName(response.name ?? "")}',
+        );
+      }
+  
       return _convertApiMemoToComment(response);
     } catch (e) {
       print('[API] Error creating comment: $e');
+      // Log specific API errors if possible
+      if (e is ApiException) {
+        print('[API] ApiException details: ${e.message}');
+      }
       throw Exception('Failed to create comment: $e');
     }
   }
@@ -731,18 +813,26 @@ class ApiService {
 
   Comment _convertApiMemoToComment(Apiv1Memo apiMemo) {
     final commentId = _extractIdFromName(apiMemo.name ?? '');
-
+  
+    // Ensure createTime is handled correctly (convert DateTime? to int)
+    final createTimeMillis =
+        apiMemo.createTime?.millisecondsSinceEpoch ??
+        DateTime.now().millisecondsSinceEpoch;
+    final updateTimeMillis = apiMemo.updateTime?.millisecondsSinceEpoch;
+  
     return Comment(
       id: commentId,
       content: apiMemo.content ?? '',
-      createTime:
-          apiMemo.createTime?.millisecondsSinceEpoch ??
-          DateTime.now().millisecondsSinceEpoch,
-      updateTime: apiMemo.updateTime?.millisecondsSinceEpoch,
+      createTime: createTimeMillis, // Use converted milliseconds
+      updateTime: updateTimeMillis, // Use converted milliseconds
       creatorId:
           apiMemo.creator != null ? _extractIdFromName(apiMemo.creator!) : null,
       pinned: apiMemo.pinned ?? false,
       state: _parseCommentStateFromApi(apiMemo.state),
+      resources:
+          apiMemo.resources.isNotEmpty
+              ? apiMemo.resources
+              : null, // Map resources
     );
   }
 

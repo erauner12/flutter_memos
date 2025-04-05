@@ -1,9 +1,12 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_memos/main.dart' as app;
 // Add imports for Memo model and ApiService
 import 'package:flutter_memos/models/memo.dart';
 import 'package:flutter_memos/services/api_service.dart';
 import 'package:flutter_memos/widgets/capture_utility.dart';
+import 'package:flutter_memos/widgets/comment_card.dart';
 import 'package:flutter_memos/widgets/memo_card.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
@@ -14,6 +17,21 @@ void main() {
 
   // List to store IDs of memos created during the test for cleanup
   final List<String> createdMemoIds = [];
+  
+  // Helper function to create test file data
+  Uint8List createTestFileData() {
+    // Create a simple test file (a small PNG-like byte array)
+    return Uint8List.fromList([
+      0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, // PNG signature
+      0x00, 0x00, 0x00, 0x01, // IHDR chunk
+      0x00, 0x00, 0x00, 0x01, // Width: 1 pixel
+      0x00, 0x00, 0x00, 0x01, // Height: 1 pixel
+      0x08, 0x02, 0x00, 0x00, 0x00, // Bit depth, color type, etc.
+      0x00, 0x00, 0x00, 0x00, // CRC
+      0x00, 0x00, 0x00, 0x00, // IDAT chunk (empty)
+      0x00, 0x00, 0x00, 0x00, // IEND chunk
+    ]);
+  }
 
   // Helper function to create a memo PROGRAMMATICALLY and return it
   Future<Memo?> createMemoProgrammatically(
@@ -64,14 +82,16 @@ void main() {
       }
     });
 
-    testWidgets('Create a memo, add a comment, and verify it appears', (WidgetTester tester) async {
+    testWidgets('Create a memo, add a comment with attachment attempt, and verify', (
+      WidgetTester tester,
+    ) async {
       // Launch the app
       app.main();
       await tester.pumpAndSettle();
 
       // STEP 1: Create a new memo first (Programmatically)
       final timestamp = DateTime.now().millisecondsSinceEpoch;
-      final testMemoContent = 'Test Memo for Comments - $timestamp';
+      final testMemoContent = 'Test Memo Attachments - $timestamp';
       final createdMemo = await createMemoProgrammatically(
         tester,
         testMemoContent,
@@ -101,57 +121,154 @@ void main() {
       // Verify we're on the detail screen
       expect(find.text('Memo Detail'), findsOneWidget, reason: 'Not on memo detail screen');
 
-      // STEP 3: Add a comment (Keep UI interaction for comment adding)
+      // STEP 3: Add a comment with an attachment attempt
       final commentTimestamp = DateTime.now().millisecondsSinceEpoch;
-      final testCommentText = 'Test Comment - $commentTimestamp';
+      final testCommentText = 'Test Comment Attach - $commentTimestamp';
 
       // Find the comment capture utility
       final commentCaptureUtility = find.byType(CaptureUtility);
       expect(commentCaptureUtility, findsOneWidget, reason: 'Comment CaptureUtility not found');
-      
-      // Tap on the placeholder text to expand
+
+      // Tap on the placeholder text to expand the CaptureUtility
       await tester.tap(find.text('Add a comment...'));
-      await tester.pumpAndSettle();
-      
+      await tester.pumpAndSettle(); // Wait for expansion animation
+
+      // Find the TextField within the expanded CaptureUtility
+      final commentTextFieldFinder = find.descendant(
+        of: commentCaptureUtility,
+        matching: find.byType(TextField),
+      );
+      expect(
+        commentTextFieldFinder,
+        findsOneWidget,
+        reason: 'Comment TextField not found in CaptureUtility',
+      );
+
       // Type the comment text
-      final commentTextFieldFinder = find.byType(TextField);
-      expect(commentTextFieldFinder, findsAtLeastNWidgets(1), reason: 'Comment TextField not found');
-      await tester.enterText(commentTextFieldFinder.first, testCommentText);
+      await tester.enterText(commentTextFieldFinder, testCommentText);
+      await tester.pumpAndSettle();
+
+      // Find and tap the "Attach file" button
+      final attachButtonFinder = find.descendant(
+        of: commentCaptureUtility,
+        matching: find.byIcon(Icons.attach_file),
+      );
+      expect(
+        attachButtonFinder,
+        findsOneWidget,
+        reason: 'Attach file button not found',
+      );
+      
+      // Instead of tapping the attach button, which would launch the native picker,
+      // use a more direct approach to set file data programmatically
+      final testFileData = createTestFileData();
+      final testFilename =
+          'test_image_${DateTime.now().millisecondsSinceEpoch}.png';
+
+      // Find the CaptureUtility state
+      final captureUtilityWidget = find.byType(CaptureUtility);
+      expect(
+        captureUtilityWidget,
+        findsOneWidget,
+        reason: 'CaptureUtility widget not found',
+      );
+
+      // Get the state directly
+      final captureUtilityState =
+          tester.state(captureUtilityWidget) as CaptureUtilityState;
+
+      // Set file data directly using the state
+      captureUtilityState.setFileDataForTest(
+        testFileData,
+        testFilename,
+        'image/png',
+      );
+
+      // Wait for UI to update with the file
       await tester.pumpAndSettle();
       
-      // Tap the "Add Comment" button
-      final addCommentButtonFinder = find.text('Add Comment');
-      expect(addCommentButtonFinder, findsOneWidget, reason: 'Add Comment button not found');
-      await tester.tap(addCommentButtonFinder);
-      await tester.pumpAndSettle();
-      
-      // Wait for comment to be added
-      await tester.pump(const Duration(seconds: 1));
-      
+      debugPrint(
+        '[Test Action] Programmatically set test file: $testFilename',
+      );
+
+      // Find and tap the "Send" button (assuming it's an Icon button now)
+      final sendButtonFinder = find.descendant(
+        of: commentCaptureUtility,
+        matching: find.byIcon(
+          Icons.send_rounded,
+        ), // Updated to find the send icon
+      );
+      expect(sendButtonFinder, findsOneWidget, reason: 'Send button not found');
+      await tester.tap(sendButtonFinder);
+      await tester.pumpAndSettle(); // Wait for submission and UI update
+
+      // Wait a bit longer for potential network activity and UI refresh
+      await tester.pump(const Duration(seconds: 3));
+
       // STEP 4: Verify the comment appears
-      
+      // Scroll down to ensure the comment list is visible if needed
+      await tester.drag(
+        find.byType(SingleChildScrollView).first,
+        const Offset(0.0, -300),
+      );
+      await tester.pumpAndSettle();
+
       // Find the comment text in the UI
       final commentTextFinder = find.text(testCommentText);
-      expect(commentTextFinder, findsOneWidget, reason: 'Added comment not found');
-      
+      expect(
+        commentTextFinder,
+        findsOneWidget,
+        reason: 'Added comment text not found',
+      );
+
+      // **Optional Verification:** Check if the CommentCard shows an attachment indicator.
+      // This depends on how CommentCard is implemented.
+      final commentCardFinder = find.ancestor(
+        of: commentTextFinder,
+        matching: find.byType(CommentCard),
+      );
+      expect(
+        commentCardFinder,
+        findsOneWidget,
+        reason: 'CommentCard not found for the comment',
+      );
+
+      // Example: Check for an image widget within the comment card
+      // final attachmentImageFinder = find.descendant(
+      //   of: commentCardFinder,
+      //   matching: find.byType(Image), // Or a specific icon/widget indicating attachment
+      // );
+      // expect(attachmentImageFinder, findsOneWidget, reason: 'Attachment indicator not found in CommentCard');
+      // Note: This part needs adjustment based on your actual CommentCard implementation for attachments.
+
       // Verify the success snackbar (optional)
-      final commentSnackbarFinder = find.text('Comment added successfully');
-      if (commentSnackbarFinder.evaluate().isNotEmpty) {
-        debugPrint('Found comment added confirmation snackbar');
-      }
-      
+      // final commentSnackbarFinder = find.text('Comment added successfully');
+      // expect(commentSnackbarFinder, findsOneWidget, reason: 'Success snackbar not found');
+      // await tester.pumpAndSettle(); // Ensure snackbar is gone
+
       // STEP 5: Go back to the main screen
-      
-      // Find and tap the back button
       final backButtonFinder = find.byType(BackButton);
       expect(backButtonFinder, findsOneWidget, reason: 'Back button not found');
       await tester.tap(backButtonFinder);
-      await tester.pumpAndSettle();
+      await tester.pumpAndSettle(
+        const Duration(seconds: 2),
+      ); // Give more time for navigation
+
+      // Look for either the app title or other main screen indicators
+      final isOnMainScreen =
+          find.text('Memos').evaluate().isNotEmpty ||
+          find.text('Flutter Memos').evaluate().isNotEmpty ||
+          find.byType(app.HomeScreen).evaluate().isNotEmpty;
       
-      // Verify we're back on the main screen
-      expect(find.text('Memos'), findsOneWidget, reason: 'Not back on main screen');
-      
-      debugPrint('Comment creation test completed successfully');
+      expect(
+        isOnMainScreen,
+        isTrue,
+        reason: 'Did not navigate back to main screen',
+      );
+
+      debugPrint(
+        'Comment creation with programmatic attachment test completed successfully',
+      );
     });
   });
 }

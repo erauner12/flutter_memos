@@ -626,7 +626,7 @@ class _AdvancedFilterPanelState extends ConsumerState<AdvancedFilterPanel> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          TextField(
+                          SyntaxHighlightTextField(
                             controller: _rawFilterController,
                             decoration: const InputDecoration(
                               hintText: 'Enter a CEL filter expression...',
@@ -635,6 +635,7 @@ class _AdvancedFilterPanelState extends ConsumerState<AdvancedFilterPanel> {
                             ),
                             style: TextStyle(
                               fontFamily: 'monospace',
+                              fontSize: 14,
                               color: isDarkMode ? Colors.amber.shade200 : Colors.amber.shade800,
                             ),
                             maxLines: 4,
@@ -764,6 +765,194 @@ class _AdvancedFilterPanelState extends ConsumerState<AdvancedFilterPanel> {
       ),
     );
   }
+}
+
+/// A custom text field that provides syntax highlighting for CEL expressions
+class SyntaxHighlightTextField extends StatefulWidget {
+  final TextEditingController controller;
+  final InputDecoration decoration;
+  final Function(String)? onChanged;
+  final int? maxLines;
+  final TextStyle? style;
+
+  const SyntaxHighlightTextField({
+    super.key,
+    required this.controller,
+    this.decoration = const InputDecoration(),
+    this.onChanged,
+    this.maxLines,
+    this.style,
+  });
+
+  @override
+  State<SyntaxHighlightTextField> createState() =>
+      _SyntaxHighlightTextFieldState();
+}
+
+class _SyntaxHighlightTextFieldState extends State<SyntaxHighlightTextField> {
+  @override
+  void initState() {
+    super.initState();
+    widget.controller.addListener(_handleTextChanged);
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_handleTextChanged);
+    super.dispose();
+  }
+
+  void _handleTextChanged() {
+    setState(() {
+      // This will trigger a rebuild with the new highlighted content
+    });
+  }
+
+  List<TextSpan> _buildHighlightedSpans(String text, bool isDarkMode) {
+    // Define colors for different syntax elements
+    final operatorColor =
+        isDarkMode ? Colors.amber.shade300 : Colors.amber.shade700;
+    final keywordColor =
+        isDarkMode ? Colors.blue.shade300 : Colors.blue.shade700;
+    final stringColor =
+        isDarkMode ? Colors.green.shade300 : Colors.green.shade700;
+    final normalColor =
+        isDarkMode ? Colors.amber.shade200 : Colors.amber.shade800;
+    final functionColor =
+        isDarkMode ? Colors.purple.shade300 : Colors.purple.shade700;
+
+    // Define regexes for different token types
+    final operatorRegex = RegExp(r'&&|\|\||!|==|!=|<=|>=|<|>|in');
+    final keywordRegex = RegExp(
+      r'\btag\b|\bvisibility\b|\bcreate_time\b|\bupdate_time\b|\bstate\b|\bcontent\b',
+    );
+    final stringRegex = RegExp(r'"[^"]*"');
+    final functionRegex = RegExp(r'contains\(|size\(');
+
+    // Process the text to find tokens
+    List<TextSpan> spans = [];
+    int currentPosition = 0;
+
+    // Helper to add a normal text span
+    void addNormalText(int start, int end) {
+      if (start < end) {
+        spans.add(
+          TextSpan(
+            text: text.substring(start, end),
+            style: TextStyle(color: normalColor),
+          ),
+        );
+      }
+    }
+
+    // Find all matches from all regexes
+    List<_Token> tokens = [];
+
+    // Find operator matches
+    operatorRegex.allMatches(text).forEach((match) {
+      tokens.add(_Token(match.start, match.end, operatorColor));
+    });
+
+    // Find keyword matches
+    keywordRegex.allMatches(text).forEach((match) {
+      tokens.add(_Token(match.start, match.end, keywordColor));
+    });
+
+    // Find string matches
+    stringRegex.allMatches(text).forEach((match) {
+      tokens.add(_Token(match.start, match.end, stringColor));
+    });
+
+    // Find function matches
+    functionRegex.allMatches(text).forEach((match) {
+      tokens.add(_Token(match.start, match.end, functionColor));
+    });
+
+    // Sort tokens by start position
+    tokens.sort((a, b) => a.start - b.start);
+
+    // Process tokens in order
+    for (var token in tokens) {
+      // Add normal text before this token
+      if (token.start > currentPosition) {
+        addNormalText(currentPosition, token.start);
+      }
+
+      // Add the highlighted token
+      spans.add(
+        TextSpan(
+          text: text.substring(token.start, token.end),
+          style: TextStyle(color: token.color),
+        ),
+      );
+
+      currentPosition = token.end;
+    }
+
+    // Add any remaining text
+    if (currentPosition < text.length) {
+      addNormalText(currentPosition, text.length);
+    }
+
+    return spans;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
+    // Get highlighted spans for the current text
+    final spans = _buildHighlightedSpans(widget.controller.text, isDarkMode);
+
+    // Create a stack with RichText for highlighting and TextField for editing
+    return Stack(
+      children: [
+        // This container shows the highlighted text
+        Container(
+          padding: const EdgeInsets.all(8.0),
+          decoration: BoxDecoration(
+            color: isDarkMode ? Colors.grey.shade900 : Colors.grey.shade100,
+            borderRadius: BorderRadius.circular(4),
+          ),
+          constraints: BoxConstraints(minHeight: (widget.maxLines ?? 1) * 24.0),
+          child: RichText(
+            text: TextSpan(
+              children: spans,
+              style:
+                  widget.style ??
+                  const TextStyle(fontFamily: 'monospace', fontSize: 14),
+            ),
+          ),
+        ),
+
+        // Transparent TextField for editing
+        TextField(
+          controller: widget.controller,
+          decoration: widget.decoration.copyWith(
+            fillColor: Colors.transparent,
+            filled: true,
+            border: InputBorder.none,
+          ),
+          style: const TextStyle(
+            color: Colors.transparent,
+            fontFamily: 'monospace',
+            fontSize: 14,
+          ),
+          maxLines: widget.maxLines,
+          onChanged: widget.onChanged,
+        ),
+      ],
+    );
+  }
+}
+
+// Helper class to store token info
+class _Token {
+  final int start;
+  final int end;
+  final Color color;
+
+  _Token(this.start, this.end, this.color);
 }
 
 // Extension method to capitalize first letter

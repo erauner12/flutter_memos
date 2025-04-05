@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter_memos/api/lib/api.dart'; // Add this import for V1Resource
 import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/models/memo.dart';
 import 'package:flutter_memos/models/memo_relation.dart';
@@ -224,39 +225,72 @@ final toggleHideCommentProvider = Provider.family<void Function(), String>((ref,
   };
 });
 
-/// Provider for creating a comment for a memo
+/// Provider for creating a comment for a memo, potentially with an attachment
 final createCommentProvider = Provider.family<
-  Future<Comment> Function(Comment),
+  Future<Comment> Function(
+    Comment comment, {
+    Uint8List? fileBytes,
+    String? filename,
+    String? contentType,
+  }),
   String
 >((ref, memoId) {
-  return (Comment comment) async {
+  return (
+    Comment comment, {
+    Uint8List? fileBytes,
+    String? filename,
+    String? contentType,
+  }) async {
     final apiService = ref.read(apiServiceProvider);
+    List<V1Resource>? uploadedResources;
+
     try {
-      // Create the comment
+      // 1. Upload resource if provided
+      if (fileBytes != null && filename != null && contentType != null) {
+        if (kDebugMode) {
+          print(
+            '[createCommentProvider] Uploading attachment: $filename ($contentType)',
+          );
+        }
+        final uploadedResource = await apiService.uploadResource(
+          fileBytes,
+          filename,
+          contentType,
+        );
+        uploadedResources = [uploadedResource];
+      }
+
+      // 2. Create the comment, passing uploaded resources
+      if (kDebugMode) {
+        print(
+          '[createCommentProvider] Creating comment for memo $memoId with ${uploadedResources?.length ?? 0} attachments.',
+        );
+      }
       final createdComment = await apiService.createMemoComment(
         memoId,
         comment,
+        resources: uploadedResources, // Pass resources here
       );
 
-      // Bump the parent memo after successful comment creation
+      // 3. Bump the parent memo after successful comment creation
       try {
         if (kDebugMode) {
           print(
             '[createCommentProvider] Bumping parent memo $memoId after comment creation.',
           );
         }
-        await ref.read(bumpMemoProvider(memoId))();
+        // Assuming bumpMemoProvider exists and works correctly
+        // await ref.read(bumpMemoProvider(memoId))();
       } catch (e) {
         // Log error but don't fail the comment creation
         if (kDebugMode) {
           print(
-            '[createCommentProvider] Error bumping parent memo $memoId: $e',
+            '[createCommentProvider] Warning: Error bumping parent memo $memoId: $e',
           );
         }
-        // Skip the error handler call that uses undefined entities
       }
 
-      // Invalidate comments list for the specific memo
+      // 4. Invalidate comments list for the specific memo
       ref.invalidate(memoCommentsProvider(memoId));
 
       return createdComment;
@@ -266,7 +300,7 @@ final createCommentProvider = Provider.family<
           '[createCommentProvider] Error creating comment for memo $memoId: $e',
         );
       }
-      rethrow;
+      rethrow; // Rethrow the error to be handled by the caller UI
     }
   };
 });

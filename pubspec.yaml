@@ -9,7 +9,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  flutter_slidable: ^3.0.1
+  flutter_slidable: ^4.0.0
   cupertino_icons: ^1.0.8
   http: ^1.1.0
   intl: ^0.20.2
@@ -23,7 +23,9 @@ dependencies:
   retrofit: ^4.0.3
   built_value: ^8.6.1
   openapi_generator_annotations: ^6.1.0
-  app_links: ^3.4.5
+  app_links: ^6.4.0
+  collection: ^1.18.0  # Added for deep equality comparison
+  file_picker: ^10.0.0 # Add file_picker
   markdown:
     git:
       url: https://github.com/dart-lang/tools.git
@@ -57,7 +59,7 @@ dev_dependencies:
   built_value_generator: ^8.6.1
   mockito: ^5.4.4
   custom_lint: ^0.7.0
-  riverpod_lint: ^2.3.7
+  riverpod_lint: ^2.6.3
   # NOTE: these usually mess with when you try to migrate to generated code
   # NOTE: Keep the following commented out until you migrate to generated code:
   # riverpod_generator: ^2.1.5

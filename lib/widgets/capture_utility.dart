@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'dart:ui' show lerpDouble; // Import lerpDouble
 
+import 'package:file_picker/file_picker.dart'; // Import file_picker
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/physics.dart'; // Import for SpringSimulation
@@ -15,11 +16,18 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 enum CaptureMode { createMemo, addComment }
 
+// Add this typedef to expose the private state class type
+typedef CaptureUtilityState = _CaptureUtilityState;
+
 class CaptureUtility extends ConsumerStatefulWidget {
+  // Add a static key for finding this widget in tests
+  static final captureUtilityKey = GlobalKey<_CaptureUtilityState>();
+  
   final CaptureMode mode;
   final String? memoId;
   final String? hintText;
   final String? buttonText;
+  final bool isTestMode;
 
   const CaptureUtility({
     super.key,
@@ -27,7 +35,24 @@ class CaptureUtility extends ConsumerStatefulWidget {
     this.memoId,
     this.hintText,
     this.buttonText,
+    this.isTestMode = false,
   });
+  
+  /// Test helper method to programmatically set file data
+  static void setTestFileData(
+    Uint8List fileData,
+    String filename,
+    String contentType,
+  ) {
+    final state = captureUtilityKey.currentState;
+    if (state != null) {
+      state.setFileDataForTest(fileData, filename, contentType);
+    } else {
+      debugPrint(
+        '[CaptureUtility] Error: Cannot set test data - widget not found',
+      );
+    }
+  }
 
   @override
   ConsumerState<CaptureUtility> createState() => _CaptureUtilityState();
@@ -35,9 +60,35 @@ class CaptureUtility extends ConsumerStatefulWidget {
 
 class _CaptureUtilityState extends ConsumerState<CaptureUtility>
     with SingleTickerProviderStateMixin {
+  
+  /// Test helper method to set file data programmatically
+  // Making this method public to allow direct access from tests
+  void setFileDataForTest(
+    Uint8List fileData,
+    String filename,
+    String contentType,
+  ) {
+    if (kDebugMode) {
+      print(
+        '[CaptureUtility] Setting test file data: $filename ($contentType)',
+      );
+    }
+    setState(() {
+      _selectedFileData = fileData;
+      _selectedFilename = filename;
+      _selectedContentType = contentType;
+
+      if (!_isExpanded) {
+        _expand();
+      }
+    });
+  }
   final TextEditingController _textController = TextEditingController();
   final FocusNode _focusNode = FocusNode();
   bool _isSubmitting = false;
+  Uint8List? _selectedFileData;
+  String? _selectedFilename;
+  String? _selectedContentType;
 
   // Animation controller for smooth transitions
   late AnimationController _animationController;
@@ -57,7 +108,7 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
     // More proportional heights for different screen sizes
     double newCollapsedHeight;
     double newExpandedHeight;
-    
+
     if (size.width > 1400) {
       newCollapsedHeight = 70.0; // Slightly taller for very large screens
       newExpandedHeight = 280.0; // Taller expanded view for large screens
@@ -118,8 +169,6 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
     super.didChangeDependencies();
     // Update heights based on screen size
     _updateHeights(context);
-    
-    // Remove the ref.listen code from here - it's not allowed in this lifecycle method
   }
 
   // Helper method to start physics-based animation
@@ -203,27 +252,20 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
     _isDragging = false; // Set dragging to false *after* calculations
 
     double targetValue;
-    // Slightly lower velocity threshold for manual interaction sensitivity
     const velocityThreshold = 0.4; // Lowered from 0.5
     const positionThreshold = 0.5;
 
     if (simulationVelocity.abs() > velocityThreshold) {
-      // Corrected logic:
-      // Positive simulationVelocity (upward swipe) -> target 1.0 (expand)
-      // Negative simulationVelocity (downward swipe) -> target 0.0 (collapse)
       targetValue = simulationVelocity > 0 ? 1.0 : 0.0;
     } else {
       targetValue = currentFraction > positionThreshold ? 1.0 : 0.0;
     }
 
-    // Check if close to target and velocity is low to snap directly
     if ((targetValue - currentFraction).abs() < 0.05 &&
         simulationVelocity.abs() < velocityThreshold / 2) {
-      // Ensure state is updated correctly when snapping
       setState(() {
         _currentHeight =
             targetValue == 1.0 ? _expandedHeight : _collapsedHeight;
-        // Manually set controller value to ensure consistency
         _animationController.value = targetValue;
       });
     } else {
@@ -232,7 +274,6 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
   }
 
   void _handleDragStart(DragStartDetails details) {
-    // Ensure controller stops *before* setting dragging state
     _animationController.stop();
     setState(() {
       _isDragging = true;
@@ -240,15 +281,48 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
   }
 
   Future<void> _handlePaste() async {
-    ClipboardData? clipboardData = await Clipboard.getData(
-      Clipboard.kTextPlain,
-    );
-    if (clipboardData != null && clipboardData.text != null) {
-      setState(() {
-        _textController.text = clipboardData.text!;
-      });
+    // Check for text first (append to existing text)
+    final clipboardTextData = await Clipboard.getData(Clipboard.kTextPlain);
+    if (clipboardTextData?.text != null &&
+        clipboardTextData!.text!.isNotEmpty) {
+      final currentText = _textController.text;
+      final cursorPosition = _textController.selection.baseOffset;
+      final newText =
+          cursorPosition >= 0
+              ? currentText.replaceRange(
+                cursorPosition,
+                _textController.selection.extentOffset,
+                clipboardTextData.text!,
+              )
+              : currentText + clipboardTextData.text!; // Append if no selection
+      _textController.value = TextEditingValue(
+        text: newText,
+        selection: TextSelection.collapsed(
+          offset:
+              (cursorPosition >= 0 ? cursorPosition : currentText.length) +
+              clipboardTextData.text!.length,
+        ),
+      );
       if (!_isExpanded) {
         _expand();
+      }
+    }
+    
+    // Note: For image pasting, Flutter's standard Clipboard API doesn't
+    // support binary data. To add image clipboard support, you would need
+    // to implement a platform-specific solution using plugins or channels.
+    
+    // If we already have a file selected, notify the user
+    if (_selectedFileData != null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Remove existing attachment before pasting new content',
+            ),
+            duration: Duration(seconds: 2),
+          ),
+        );
       }
     }
   }
@@ -256,7 +330,6 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
   Future<void> _handleCopyAll() async {
     final content = _textController.text;
     if (content.isEmpty) {
-      // Show a snackbar indicating there's nothing to copy
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -280,11 +353,8 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
   }
 
   Future<void> _handleOverwriteAll() async {
-    // Get content from clipboard directly
-    ClipboardData? clipboardData = await Clipboard.getData(
-      Clipboard.kTextPlain,
-    );
-
+    final clipboardData = await Clipboard.getData(Clipboard.kTextPlain);
+    
     if (clipboardData != null && clipboardData.text != null) {
       setState(() {
         _textController.text = clipboardData.text!;
@@ -303,7 +373,6 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
         );
       }
     } else {
-      // Notify if clipboard is empty
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -321,9 +390,85 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
     });
   }
 
+  Future<void> _pickFile() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.any);
+      if (result != null && result.files.isNotEmpty) {
+        final file = result.files.first;
+        const maxSizeInBytes = 10 * 1024 * 1024;
+        if (file.size > maxSizeInBytes) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('File is too large (max 10MB)'),
+                backgroundColor: Colors.orange,
+              ),
+            );
+          }
+          return;
+        }
+
+        setState(() {
+          _selectedFileData = file.bytes;
+          _selectedFilename = file.name;
+          _selectedContentType =
+              file.extension != null
+                  ? _guessContentTypeFromExtension(file.extension!)
+                  : 'application/octet-stream';
+        });
+        if (!_isExpanded) {
+          _expand();
+        }
+      }
+    } catch (e) {
+      debugPrint('Error picking file: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error picking file: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  String _guessContentTypeFromExtension(String extension) {
+    switch (extension.toLowerCase()) {
+      case 'png':
+        return 'image/png';
+      case 'jpg':
+      case 'jpeg':
+        return 'image/jpeg';
+      case 'gif':
+        return 'image/gif';
+      case 'webp':
+        return 'image/webp';
+      case 'bmp':
+        return 'image/bmp';
+      case 'txt':
+        return 'text/plain';
+      case 'pdf':
+        return 'application/pdf';
+      case 'md':
+        return 'text/markdown';
+      default:
+        return 'application/octet-stream';
+    }
+  }
+
+  void _removeAttachment() {
+    setState(() {
+      _selectedFileData = null;
+      _selectedFilename = null;
+      _selectedContentType = null;
+    });
+  }
+
   Future<void> _handleSubmit() async {
     final content = _textController.text.trim();
-    if (content.isEmpty) return;
+    if (content.isEmpty && _selectedFileData == null) return;
 
     setState(() {
       _isSubmitting = true;
@@ -331,14 +476,23 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
 
     try {
       if (widget.mode == CaptureMode.createMemo) {
+        // TODO: Add file attachment support for creating memos if needed
         await _createMemo(content);
       } else if (widget.mode == CaptureMode.addComment &&
           widget.memoId != null) {
-        await _addComment(content, widget.memoId!);
+        // Pass the selected file data to _addComment
+        await _addComment(
+          content,
+          widget.memoId!,
+          fileBytes: _selectedFileData, // Pass file bytes
+          filename: _selectedFilename, // Pass filename
+          contentType: _selectedContentType, // Pass content type
+        );
       }
 
       setState(() {
         _textController.clear();
+        _removeAttachment();
         _isSubmitting = false;
       });
 
@@ -373,7 +527,13 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
     }
   }
 
-  Future<void> _addComment(String content, String memoId) async {
+  Future<void> _addComment(
+    String content,
+    String memoId, {
+    Uint8List? fileBytes,
+    String? filename,
+    String? contentType,
+  }) async {
     final newComment = Comment(
       id: 'temp-${DateTime.now().millisecondsSinceEpoch}',
       content: content,
@@ -381,7 +541,12 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
       createTime: DateTime.now().millisecondsSinceEpoch,
     );
 
-    await ref.read(comment_providers.createCommentProvider(memoId))(newComment);
+    await ref.read(comment_providers.createCommentProvider(memoId))(
+      newComment,
+      fileBytes: fileBytes,
+      filename: filename,
+      contentType: contentType,
+    );
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -394,41 +559,37 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
   }
 
   KeyEventResult _handleKeyEvent(KeyEvent event) {
-    // Use KeyEvent
     if (event is KeyDownEvent) {
-      // Use KeyDownEvent
       if (event.logicalKey == LogicalKeyboardKey.escape) {
         if (_isExpanded) {
           _collapse();
-          return KeyEventResult.handled; // Handled Escape
+          return KeyEventResult.handled;
         }
       } else if (event.logicalKey == LogicalKeyboardKey.enter &&
           (HardwareKeyboard.instance.isMetaPressed ||
               HardwareKeyboard.instance.isControlPressed)) {
-        // Check for Cmd or Ctrl
-        // Use HardwareKeyboard.instance.isMetaPressed or isControlPressed for cross-platform compatibility
         if (_isExpanded && !_isSubmitting) {
           _handleSubmit();
-          return KeyEventResult.handled; // Handled Cmd/Ctrl+Enter
+          return KeyEventResult.handled;
         }
       }
     }
-    return KeyEventResult.ignored; // Ignore other keys
+    return KeyEventResult.ignored;
   }
 
   Widget _buildOverflowMenuButton() {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
     return SizedBox(
-      width: 40, // Fixed width for consistent sizing
-      height: 40, // Fixed height for consistent sizing
+      width: 40,
+      height: 40,
       child: PopupMenuButton<int>(
         icon: Icon(
           Icons.more_vert,
           size: 20,
           color: isDarkMode ? Colors.grey[400] : Colors.grey[700],
         ),
-        padding: EdgeInsets.zero, // Remove padding to prevent overflow
+        padding: EdgeInsets.zero,
         tooltip: 'More options',
         elevation: 4,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -442,11 +603,9 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
               _handleCopyAll();
               break;
             case 2:
-              // Directly overwrite with clipboard
               _showOverwriteDialog();
               break;
             case 3:
-              // Show dialog to confirm remove all
               _showRemoveAllDialog();
               break;
           }
@@ -499,7 +658,6 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
   }
 
   void _showOverwriteDialog() {
-    // Show confirmation dialog
     showDialog(
       context: context,
       builder:
@@ -527,7 +685,6 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
 
   void _showRemoveAllDialog() {
     if (_textController.text.isEmpty) {
-      // If already empty, just show a message
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Text field is already empty'),
@@ -560,56 +717,44 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
     );
   }
 
-  // New method for building the expanded content
   Widget _buildExpandedContent(String hintText, String buttonText) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
     return Column(
-      mainAxisSize: MainAxisSize.min, // Prevent overflow issues
+      mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Text field that grows until maxLines, then scrolls
         Expanded(
           child: KeyboardListener(
-            focusNode:
-                FocusNode(), // Using a separate focus node for the listener
+            focusNode: FocusNode(),
             onKeyEvent: _handleKeyEvent,
             child: TextField(
               controller: _textController,
               focusNode: _focusNode,
               style: TextStyle(
                 fontSize: 16,
-                height: 1.4, // Slightly more line height
-                color:
-                    isDarkMode
-                        ? Colors.grey[200] // Brighter text in dark mode
-                        : Colors.grey[800], // Darker text in light mode
-                fontFamily:
-                    'Menlo, Monaco, Consolas, "Courier New", monospace', // Terminal-like font
+                height: 1.4,
+                color: isDarkMode ? Colors.grey[200] : Colors.grey[800],
+                fontFamily: 'Menlo, Monaco, Consolas, "Courier New", monospace',
               ),
               decoration: InputDecoration(
                 hintText: hintText,
                 hintStyle: TextStyle(
-                  color:
-                      isDarkMode
-                          ? Colors.grey[400]?.withAlpha(204) // 0.8 * 255 = 204
-                          : Colors.grey[500]?.withAlpha(
-                            217,
-                          ), // 0.85 * 255 = 217
+                  color: isDarkMode
+                      ? Colors.grey[400]?.withAlpha(204)
+                      : Colors.grey[500]?.withAlpha(217),
                   fontSize: 16,
                 ),
                 border: InputBorder.none,
                 enabledBorder: InputBorder.none,
                 focusedBorder: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(
-                  vertical: 8.0,
-                ), // Add vertical padding
+                contentPadding: const EdgeInsets.symmetric(vertical: 8.0),
                 isDense: true,
               ),
               cursorColor: Theme.of(context).colorScheme.primary,
               cursorWidth: 2,
-              maxLines: 6, // Cap at 6 lines, then scroll
-              minLines: 1, // Start with 1 line
+              maxLines: 6,
+              minLines: 1,
               textCapitalization: TextCapitalization.sentences,
               keyboardType: TextInputType.multiline,
               onTap: () {
@@ -620,17 +765,95 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
             ),
           ),
         ),
-
-        // Actions row - simplified for better layout
+        if (_selectedFileData != null) ...[
+          Padding(
+            padding: const EdgeInsets.only(
+              top: 8.0,
+              bottom: 4.0,
+              left: 4.0,
+              right: 4.0,
+            ),
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 8.0,
+                vertical: 4.0,
+              ),
+              decoration: BoxDecoration(
+                color: isDarkMode ? Colors.grey[700]?.withAlpha(100) : Colors.grey[200],
+                borderRadius: BorderRadius.circular(8.0),
+              ),
+              child: Row(
+                children: [
+                  if (_selectedContentType?.startsWith('image/') == true)
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(4.0),
+                      child: Image.memory(
+                        _selectedFileData!,
+                        width: 30,
+                        height: 30,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) =>
+                            const Icon(Icons.broken_image, size: 30),
+                      ),
+                    )
+                  else
+                    Icon(
+                      Icons.insert_drive_file_outlined,
+                      size: 24,
+                      color: isDarkMode ? Colors.grey[400] : Colors.grey[700],
+                    ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _selectedFilename ?? 'Attached File',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: isDarkMode ? Colors.grey[300] : Colors.grey[800],
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  IconButton(
+                    icon: Icon(
+                      Icons.close,
+                      size: 18,
+                      color: isDarkMode ? Colors.grey[400] : Colors.grey[600],
+                    ),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    tooltip: 'Remove attachment',
+                    onPressed: _removeAttachment,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
         SizedBox(
-          height: 44, // Fixed height to prevent layout shifts
+          height: 44,
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              // Overflow menu on the left
-              _buildOverflowMenuButton(),
-
-              // Submit button as an icon on the right
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _buildOverflowMenuButton(),
+                  SizedBox(
+                    width: 40,
+                    height: 40,
+                    child: IconButton(
+                      icon: Icon(
+                        Icons.attach_file,
+                        size: 20,
+                        color: isDarkMode ? Colors.grey[400] : Colors.grey[700],
+                      ),
+                      tooltip: 'Attach file',
+                      padding: EdgeInsets.zero,
+                      onPressed: _pickFile,
+                    ),
+                  ),
+                ],
+              ),
               Material(
                 color: Colors.transparent,
                 child: InkWell(
@@ -638,38 +861,30 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
                   borderRadius: BorderRadius.circular(24),
                   child: Ink(
                     decoration: BoxDecoration(
-                      color:
-                          _isSubmitting
-                              ? Theme.of(
-                                context,
-                              ).colorScheme.primary.withAlpha(
-                                179,
-                              ) // 0.7 * 255 = 179
-                              : Theme.of(context).colorScheme.primary,
+                      color: _isSubmitting
+                          ? Theme.of(context).colorScheme.primary.withAlpha(179)
+                          : Theme.of(context).colorScheme.primary,
                       shape: BoxShape.circle,
                     ),
                     child: Container(
-                      padding: const EdgeInsets.all(
-                        10.0,
-                      ), // Slightly smaller to prevent overflow
-                      width: 40, // Fixed width
-                      height: 40, // Fixed height
+                      padding: const EdgeInsets.all(10.0),
+                      width: 40,
+                      height: 40,
                       alignment: Alignment.center,
-                      child:
-                          _isSubmitting
-                              ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
-                              )
-                              : const Icon(
-                                Icons.send_rounded,
+                      child: _isSubmitting
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
                                 color: Colors.white,
-                                size: 20,
                               ),
+                            )
+                          : const Icon(
+                              Icons.send_rounded,
+                              color: Colors.white,
+                              size: 20,
+                            ),
                     ),
                   ),
                 ),
@@ -681,33 +896,26 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
     );
   }
 
-  // New method for building collapsed content with centered elements
   Widget _buildCollapsedContent(String placeholderText) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
-    // Center text and add + button
     return Center(
       child: Row(
-        mainAxisSize: MainAxisSize.min, // This makes the row wrap its content
-        mainAxisAlignment: MainAxisAlignment.center, // Center horizontally
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          // Text/placeholder area
           Text(
             placeholderText,
             style: TextStyle(
               fontSize: 16,
               color:
                   isDarkMode
-                      ? Colors.grey[400]?.withAlpha(204) // 0.8 * 255 = 204
-                      : Colors.grey[500]?.withAlpha(217), // 0.85 * 255 = 217
+                      ? Colors.grey[400]?.withAlpha(204)
+                      : Colors.grey[500]?.withAlpha(217),
             ),
             overflow: TextOverflow.ellipsis,
           ),
-
-          // Small space between text and icon
           const SizedBox(width: 8),
-
-          // Add icon
           Icon(
             Icons.add_circle_outline,
             size: 16,
@@ -724,8 +932,7 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
     final size = MediaQuery.of(context).size;
     final keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
     final edgeInsets = MediaQuery.of(context).padding;
-    
-    // Listen for toggle events - this is the correct place to use ref.listen
+
     ref.listen<int>(captureUtilityToggleProvider, (previous, current) {
       if (previous != current && mounted) {
         if (kDebugMode) {
@@ -736,7 +943,7 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
         _toggleExpansionState();
       }
     });
-    
+
     final hintText =
         widget.hintText ??
         (widget.mode == CaptureMode.createMemo
@@ -752,39 +959,26 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
             ? 'Capture something...'
             : 'Add a comment...';
 
-    // More responsive width calculation based on screen size
     double containerWidth;
 
-    // For very large screens (full-screen mode)
     if (size.width > 1400) {
-      // Use 60% of screen width but cap at 1000px
       containerWidth = math.min(size.width * 0.6, 1000);
-    }
-    // For medium-large screens
-    else if (size.width > 800) {
-      // Use 70% of screen width but minimum 500px
+    } else if (size.width > 800) {
       containerWidth = math.max(size.width * 0.7, 500);
-    }
-    // For smaller screens
-    else {
-      // Use available width with small margins
+    } else {
       final availableWidth =
           size.width - edgeInsets.left - edgeInsets.right - 32;
       containerWidth = availableWidth > 0 ? availableWidth : size.width * 0.85;
     }
 
-    // Ensure width is never less than 320px
     containerWidth = math.max(containerWidth, 320);
 
     final frameHeight = _currentHeight.clamp(_collapsedHeight, _expandedHeight);
     final bool showExpandedContent =
         _isExpanded || _animationController.value > 0.1;
 
-    // Background color based on theme with slight translucency
     final backgroundColor =
-        isDarkMode 
-            ? const Color(0xFF232323) // Darker for better contrast in dark mode
-            : const Color(0xFFF0F0F0); // Slightly off-white in light mode
+        isDarkMode ? const Color(0xFF232323) : const Color(0xFFF0F0F0);
 
     return SafeArea(
       bottom: true,
@@ -792,11 +986,9 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
       child: Padding(
         padding: EdgeInsets.only(bottom: keyboardHeight > 0 ? 0 : 8),
         child: GestureDetector(
-          // Keep swipe gestures as an alternative interaction method
           onVerticalDragStart: _handleDragStart,
           onVerticalDragUpdate: _handleDragUpdate,
           onVerticalDragEnd: _handleDragEnd,
-          // Changed to expand directly on tap
           onTap: () {
             if (!_isExpanded) {
               _expand();
@@ -806,31 +998,26 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
             width: containerWidth,
             height: frameHeight,
             decoration: BoxDecoration(
-              // More terminal-like styling
               color: backgroundColor,
-              borderRadius: BorderRadius.circular(
-                36,
-              ), // Even more rounded corners
-              // Terminal-like border and shadow
+              borderRadius: BorderRadius.circular(36),
               border: Border.all(
                 color: isDarkMode ? Colors.grey[800]! : Colors.grey[300]!,
-                width: 0.5, // Very thin border
+                width: 0.5,
               ),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withAlpha(
                     isDarkMode ? 77 : 26,
-                  ), // 0.3*255=77, 0.1*255=26
+                  ),
                   blurRadius: 15,
                   spreadRadius: 0,
                   offset: const Offset(0, 3),
                 ),
-                // Inner shadow effect for terminal feel
                 BoxShadow(
                   color:
                       isDarkMode
-                          ? Colors.white.withAlpha(5) // 0.02 * 255 = 5.1
-                          : Colors.black.withAlpha(5), // 0.02 * 255 = 5.1
+                          ? Colors.white.withAlpha(5)
+                          : Colors.black.withAlpha(5),
                   blurRadius: 1,
                   spreadRadius: 0,
                   offset: const Offset(0, 1),
@@ -838,38 +1025,31 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
               ],
             ),
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(36), // Match container radius
+              borderRadius: BorderRadius.circular(36),
               child: Material(
                 color: Colors.transparent,
                 child: Column(
                   mainAxisSize: MainAxisSize.max,
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    // Drag indicator - more subtle
                     Container(
                       width: 32,
                       height: 4,
                       margin: const EdgeInsets.only(top: 8, bottom: 4),
                       decoration: BoxDecoration(
-                        color: Theme.of(
-                          context,
-                        ).dividerColor.withAlpha(102), // 0.4 * 255 = 102
+                        color: Theme.of(context).dividerColor.withAlpha(102),
                         borderRadius: BorderRadius.circular(2),
                       ),
                     ),
-
-                    // Main content area with more space
                     Expanded(
                       child: Padding(
                         padding: EdgeInsets.symmetric(
                           horizontal:
                               MediaQuery.of(context).size.width > 1200
                                   ? 36
-                                  : 24, // More padding on large screens
+                                  : 24,
                           vertical:
-                              MediaQuery.of(context).size.width > 1200
-                                  ? 12
-                                  : 8, // More padding on large screens
+                              MediaQuery.of(context).size.width > 1200 ? 12 : 8,
                         ),
                         child:
                             showExpandedContent

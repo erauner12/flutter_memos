@@ -114,7 +114,7 @@ class _MyAppState extends ConsumerState<MyApp> {
   
     // Handle links the app is opened with
     try {
-      final initialUri = await _appLinks.getInitialAppLink();
+      final initialUri = await _appLinks.getInitialLink();
       if (initialUri != null) {
         if (kDebugMode) print('[AppLinks] Initial link found: $initialUri');
         _handleDeepLink(initialUri);

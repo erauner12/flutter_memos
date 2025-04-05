@@ -3,8 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_memos/models/comment.dart';
+import 'package:flutter_memos/providers/api_providers.dart'; // Import apiServiceProvider
 import 'package:flutter_memos/providers/comment_providers.dart';
 import 'package:flutter_memos/providers/ui_providers.dart';
+import 'package:flutter_memos/screens/memo_detail/memo_detail_providers.dart'; // Import memoCommentsProvider
 import 'package:flutter_memos/utils/url_helper.dart';
 import 'package:flutter_memos/widgets/comment_context_menu.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -43,64 +45,73 @@ class _CommentCardState extends ConsumerState<CommentCard> {
           isPinned: widget.comment.pinned,
           onArchive: () async {
             Navigator.of(bottomSheetContext).pop();
-            _onArchive(context);
+            // Use the context passed to _showContextMenu, guarded by mounted check
+            if (!mounted) return;
+            _onArchive(context); // Pass context
           },
           onDelete: () async {
             Navigator.of(bottomSheetContext).pop();
-            _onDelete(context);
+            // Use the context passed to _showContextMenu, guarded by mounted check
+            if (!mounted) return;
+            _onDelete(context); // Pass context
           },
           onHide: () {
             Navigator.of(bottomSheetContext).pop();
-            _onHide(context);
+            // Use the context passed to _showContextMenu, guarded by mounted check
+            if (!mounted) return;
+            _onHide(context); // Pass context
           },
           onTogglePin: () async {
             Navigator.of(bottomSheetContext).pop();
-            _onTogglePin(context);
+            // Use the context passed to _showContextMenu, guarded by mounted check
+            if (!mounted) return;
+            _onTogglePin(context); // Pass context
           },
           onCopy: () {
             Navigator.of(bottomSheetContext).pop();
-            Clipboard.setData(
-              ClipboardData(text: widget.comment.content),
-            ).then((_) {
-              if (mounted) {
+            Clipboard.setData(ClipboardData(text: widget.comment.content)).then(
+              (_) {
+                if (!mounted) return; // Add mounted check
                 ScaffoldMessenger.of(context).showSnackBar(
+                  // Use context directly
                   const SnackBar(content: Text('Comment copied to clipboard')),
                 );
-              }
-            });
+              },
+            );
           },
           onCopyLink: () {
             Navigator.of(bottomSheetContext).pop();
             final url =
                 'flutter-memos://comment/${widget.memoId}/${widget.comment.id}'; // Use correct URL format with host
             Clipboard.setData(ClipboardData(text: url)).then((_) {
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Comment link copied to clipboard'),
-                  ),
-                );
-              }
+              if (!mounted) return; // Add mounted check
+              ScaffoldMessenger.of(context).showSnackBar(
+                // Use context directly
+                const SnackBar(
+                  content: Text('Comment link copied to clipboard'),
+                ),
+              );
             });
           },
           onConvertToMemo: () async {
             Navigator.of(bottomSheetContext).pop();
-            _onConvertToMemo(context);
+            // Use the context passed to _showContextMenu, guarded by mounted check
+            if (!mounted) return;
+            _onConvertToMemo(context); // Pass context
           },
           onEdit: () {
-            // Add onEdit handler
             Navigator.of(bottomSheetContext).pop(); // Close bottom sheet first
-            if (context.mounted) {
-              // Check if context is still valid
-              Navigator.pushNamed(
-                context,
-                '/edit-entity', // Use the new generic route name
-                arguments: {
-                  'entityType': 'comment',
-                  'entityId': fullId, // Pass "memoId/commentId"
-                },
-              );
-            }
+            // Use the context passed to _showContextMenu, guarded by mounted check
+            if (!mounted) return;
+            Navigator.pushNamed(
+              // Use context directly
+              context,
+              '/edit-entity', // Use the new generic route name
+              arguments: {
+                'entityType': 'comment',
+                'entityId': fullId, // Pass "memoId/commentId"
+              },
+            );
           },
           onClose: () {
             Navigator.of(bottomSheetContext).pop();
@@ -114,27 +125,37 @@ class _CommentCardState extends ConsumerState<CommentCard> {
     final fullId = '${widget.memoId}/${widget.comment.id}';
     try {
       await ref.read(togglePinCommentProvider(fullId))();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              widget.comment.pinned ? 'Comment unpinned' : 'Comment pinned',
-            ),
+      if (!mounted) return; // Add mounted check
+
+      // Correctly read the provider state after the await
+      final commentsData = ref.read(memoCommentsProvider(widget.memoId)).asData;
+      final currentCommentState = commentsData?.value.firstWhere(
+        (c) => c.id == widget.comment.id,
+        orElse: () => widget.comment, // Fallback to original state if not found
+      );
+      final isNowPinned = currentCommentState?.pinned ?? widget.comment.pinned;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        // Use passed context
+        SnackBar(
+          content: Text(
+            isNowPinned ? 'Comment pinned' : 'Comment unpinned',
           ),
-        );
-      }
+        ),
+      );
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error toggling pin: $e')));
-      }
+      if (!mounted) return; // Add mounted check
+      ScaffoldMessenger.of(context).showSnackBar(
+        // Use passed context
+        SnackBar(content: Text('Error toggling pin: $e')),
+      );
     }
   }
 
   Future<void> _onDelete(BuildContext context) async {
+    // Use the context passed to the method
     final confirmed = await showDialog<bool>(
-      context: context,
+      context: context, // Use passed context
       builder:
           (ctx) => AlertDialog(
             title: const Text('Delete Comment'),
@@ -154,6 +175,7 @@ class _CommentCardState extends ConsumerState<CommentCard> {
           ),
     );
 
+    // Check mounted *after* the dialog await
     if (confirmed != true || !mounted) return;
 
     setState(() {
@@ -165,39 +187,41 @@ class _CommentCardState extends ConsumerState<CommentCard> {
     try {
       await ref.read(deleteCommentProvider(fullId))();
 
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Comment deleted')));
-      }
+      // Check mounted *after* the delete await
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        // Use passed context
+        const SnackBar(content: Text('Comment deleted')),
+      );
+      // No need to set _isDeleting = false, widget will be removed by provider invalidation
     } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isDeleting = false;
-        });
-
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error deleting comment: $e')));
-      }
+      // Check mounted *after* the delete await (in catch block)
+      if (!mounted) return;
+      // If deletion failed, reset state and show error
+      setState(() {
+        _isDeleting = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        // Use passed context
+        SnackBar(content: Text('Error deleting comment: $e')),
+      );
     }
-  }
-
+}
   void _onArchive(BuildContext context) async {
     final fullId = '${widget.memoId}/${widget.comment.id}';
     try {
       await ref.read(archiveCommentProvider(fullId))();
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Comment archived')));
-      }
+      if (!mounted) return; // Add mounted check
+      ScaffoldMessenger.of(context).showSnackBar(
+        // Use passed context
+        const SnackBar(content: Text('Comment archived')),
+      );
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error archiving comment: $e')));
-      }
+      if (!mounted) return; // Add mounted check
+      ScaffoldMessenger.of(context).showSnackBar(
+        // Use passed context
+        SnackBar(content: Text('Error archiving comment: $e')),
+      );
     }
   }
 
@@ -205,27 +229,29 @@ class _CommentCardState extends ConsumerState<CommentCard> {
     final fullId = '${widget.memoId}/${widget.comment.id}';
     try {
       final convertFunction = ref.read(convertCommentToMemoProvider(fullId));
-      final memo = await convertFunction();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Comment converted to memo')),
-        );
-      }
+      await convertFunction();
+      if (!mounted) return; // Add mounted check
+      ScaffoldMessenger.of(context).showSnackBar(
+        // Use passed context
+        const SnackBar(content: Text('Comment converted to memo')),
+      );
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error converting to memo: $e')));
-      }
+      if (!mounted) return; // Add mounted check
+      ScaffoldMessenger.of(context).showSnackBar(
+        // Use passed context
+        SnackBar(content: Text('Error converting to memo: $e')),
+      );
     }
   }
 
   void _onHide(BuildContext context) {
     final fullId = '${widget.memoId}/${widget.comment.id}';
     ref.read(toggleHideCommentProvider(fullId))();
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Comment hidden from view')));
+    // No await call here, so no mounted check needed before ScaffoldMessenger
+    ScaffoldMessenger.of(context).showSnackBar(
+      // Use passed context
+      const SnackBar(content: Text('Comment hidden from view')),
+    );
   }
 
   @override
@@ -272,6 +298,10 @@ class _CommentCardState extends ConsumerState<CommentCard> {
     if (_isDeleting) {
       return const SizedBox.shrink();
     }
+
+    // Get ApiService to construct image URLs
+    final apiService = ref.watch(apiServiceProvider);
+    final baseUrl = apiService.apiBaseUrl; // Get base URL
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12.0),
@@ -348,10 +378,10 @@ class _CommentCardState extends ConsumerState<CommentCard> {
                 widget.isSelected
                     ? BorderSide(
                       color:
-                          widget.isSelected
-                              ? Colors.red
-                              : Theme.of(context).colorScheme.primary,
-                      width: widget.isSelected ? 3 : 2,
+                          Theme.of(context)
+                              .colorScheme
+                              .primary, // Use primary color for selection border
+                      width: 2, // Consistent width
                     )
                     : (isHighlighted
                         ? const BorderSide(color: Colors.teal, width: 2)
@@ -364,33 +394,163 @@ class _CommentCardState extends ConsumerState<CommentCard> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  MarkdownBody(
-                    data: widget.comment.content,
-                    selectable: true,
-                    styleSheet: MarkdownStyleSheet(
-                      p: TextStyle(
-                        fontSize: 16,
-                        color: textColor,
-                        fontWeight:
-                            widget.comment.pinned
-                                ? FontWeight.w500
-                                : FontWeight.normal,
+                  // Display Markdown Content
+                  if (widget.comment.content.isNotEmpty)
+                    MarkdownBody(
+                      data: widget.comment.content,
+                      selectable: true,
+                      styleSheet: MarkdownStyleSheet(
+                        p: TextStyle(
+                          fontSize: 16,
+                          color: textColor,
+                          fontWeight:
+                              widget.comment.pinned
+                                  ? FontWeight.w500
+                                  : FontWeight.normal,
+                        ),
+                        // textScaleFactor: 1.0, // Deprecated
+                        textScaler: const TextScaler.linear(
+                          1.0,
+                        ), // Use textScaler instead
                       ),
-                      textScaleFactor: 1.0,
+                      shrinkWrap: true,
+                      onTapLink: (text, href, title) {
+                        if (kDebugMode) {
+                          print(
+                            '[CommentCard] Link tapped in comment ${widget.comment.id}: "$text" -> "$href"',
+                          );
+                        }
+                        if (href != null) {
+                          UrlHelper.launchUrl(href);
+                        }
+                      },
                     ),
-                    shrinkWrap: true,
-                    onTapLink: (text, href, title) {
-                      if (kDebugMode) {
-                        print(
-                          '[CommentCard] Link tapped in comment ${widget.comment.id}: "$text" -> "$href"',
-                        );
-                      }
-                      if (href != null) {
-                        UrlHelper.launchUrl(href);
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 4),
+
+                  // Display Attached Resources (Images) - Accessing widget.comment.resources
+                  // Ensure widget.comment.resources is accessed correctly
+                  if (widget.comment.resources != null &&
+                      widget.comment.resources!.isNotEmpty)
+                    Padding(
+                      padding: EdgeInsets.only(
+                        top: widget.comment.content.isNotEmpty ? 8.0 : 0.0,
+                      ), // Add padding if text exists
+                      child: Wrap(
+                        // Use Wrap for multiple images
+                        spacing: 8.0,
+                        runSpacing: 8.0,
+                        children:
+                            widget
+                                .comment
+                                .resources! // Access resources here
+                                .where(
+                                  (r) => r.type?.startsWith('image/') ?? false,
+                                )
+                                .map((resource) {
+                                  // Construct the image URL
+                                  final resourceName =
+                                      resource.name?.split('/').last;
+                                  final filename = resource.filename;
+                                  if (baseUrl.isNotEmpty &&
+                                      resourceName != null &&
+                                      filename != null) {
+                                    // Ensure filename is URL encoded
+                                    final encodedFilename = Uri.encodeComponent(
+                                      filename,
+                                    );
+                                    final imageUrl =
+                                        '$baseUrl/file/$resourceName/$encodedFilename';
+
+                                    if (kDebugMode) {
+                                      print(
+                                        '[CommentCard] Displaying image: $imageUrl',
+                                      );
+                                    }
+
+                                    // Display the image with constraints
+                                    return ConstrainedBox(
+                                      constraints: const BoxConstraints(
+                                        maxWidth: 200, // Limit image width
+                                        maxHeight: 200, // Limit image height
+                                      ),
+                                      child: ClipRRect(
+                                        borderRadius: BorderRadius.circular(
+                                          8.0,
+                                        ),
+                                        child: Image.network(
+                                          imageUrl,
+                                          fit: BoxFit.cover,
+                                          loadingBuilder: (
+                                            context,
+                                            child,
+                                            loadingProgress,
+                                          ) {
+                                            if (loadingProgress == null) {
+                                              return child;
+                                            }
+                                            return Container(
+                                              // Placeholder while loading
+                                              width: 50,
+                                              height: 50,
+                                              alignment: Alignment.center,
+                                              color: Colors.grey[300],
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                                value:
+                                                    loadingProgress
+                                                                .expectedTotalBytes !=
+                                                            null
+                                                        ? loadingProgress
+                                                                .cumulativeBytesLoaded /
+                                                            loadingProgress
+                                                                .expectedTotalBytes!
+                                                    : null,
+                                              ),
+                                            );
+                                          },
+                                          errorBuilder: (
+                                            context,
+                                            error,
+                                            stackTrace,
+                                          ) {
+                                            if (kDebugMode) {
+                                              print(
+                                                '[CommentCard] Error loading image $imageUrl: $error',
+                                              );
+                                            }
+                                            return Container(
+                                              // Placeholder on error
+                                              width: 50,
+                                              height: 50,
+                                              color: Colors.grey[300],
+                                              child: const Icon(
+                                                Icons.broken_image,
+                                                color: Colors.grey,
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      ),
+                                    );
+                                  } else {
+                                    if (kDebugMode) {
+                                      print(
+                                        '[CommentCard] Could not construct image URL for resource: ${resource.name}',
+                                      );
+                                    }
+                                    return const SizedBox.shrink(); // Don't display if URL can't be built
+                                  }
+                                })
+                                .toList(),
+                      ),
+                    ),
+
+                  // Separator if both content and resources exist
+                  if (widget.comment.content.isNotEmpty &&
+                      widget.comment.resources != null &&
+                      widget.comment.resources!.isNotEmpty)
+                    const SizedBox(height: 8),
+
+                  // Date and Pin status row
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
