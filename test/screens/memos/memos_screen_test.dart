@@ -272,6 +272,11 @@ void main() {
 
     // Act: Tap the Cancel button (AppBar leading)
     await tester.tap(find.widgetWithIcon(AppBar, Icons.close));
+    
+    // Add an extra pump cycle to ensure state updates propagate
+    await tester.pump();
+    
+    // Then complete the animation
     await tester.pumpAndSettle();
 
     // Assert: Exited multi-select mode

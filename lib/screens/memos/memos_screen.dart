@@ -77,6 +77,7 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
           if (kDebugMode) {
             print('[MemosScreen] Exit multi-select via Cancel button');
           }
+          // Make sure we're explicitly calling the toggle provider
           ref.read(ui_providers.toggleMemoMultiSelectModeProvider)();
         },
       ),

@@ -246,7 +246,7 @@ class MemoListItemState extends ConsumerState<MemoListItem> {
     // Watch for selected memo ID instead of index
     final selectedMemoId = ref.watch(ui_providers.selectedMemoIdProvider);
     final isSelected = selectedMemoId == widget.memo.id;
-
+  
     // Watch for multi-select mode
     final isMultiSelectMode = ref.watch(
       ui_providers.memoMultiSelectModeProvider,
@@ -255,13 +255,13 @@ class MemoListItemState extends ConsumerState<MemoListItem> {
       ui_providers.selectedMemoIdsForMultiSelectProvider,
     );
     final isMultiSelected = selectedIds.contains(widget.memo.id);
-
+  
     if (isSelected && kDebugMode) {
       print(
         '[MemoListItem] Memo ID ${widget.memo.id} at index ${widget.index} is selected',
       );
     }
-
+  
     // Create the main card content
     Widget cardContent = MemoCard(
       id: widget.memo.id,
@@ -305,7 +305,7 @@ class MemoListItemState extends ConsumerState<MemoListItem> {
         }
       },
     );
-
+  
     // In multi-select mode, return a completely different widget structure without Slidable/Dismissible
     if (isMultiSelectMode) {
       // Add extra visual indicator for multi-selected items
@@ -321,7 +321,7 @@ class MemoListItemState extends ConsumerState<MemoListItem> {
           child: cardContent,
         );
       }
-
+  
       // Return a Row directly with Checkbox instead of wrapping with Dismissible/Slidable
       return Padding(
         padding: const EdgeInsets.only(bottom: 12.0),
@@ -340,7 +340,7 @@ class MemoListItemState extends ConsumerState<MemoListItem> {
         ),
       );
     }
-
+  
     // In normal mode, wrap with Dismissible and Slidable
     return Dismissible(
       key: ValueKey('dismissible-${widget.memo.id}'),
@@ -378,7 +378,7 @@ class MemoListItemState extends ConsumerState<MemoListItem> {
           ref
               .read(hiddenMemoIdsProvider.notifier)
               .update((state) => state..add(widget.memo.id));
-
+  
           // Then trigger the API delete operation
           WidgetsBinding.instance.addPostFrameCallback((_) {
             ref.read(deleteMemoProvider(widget.memo.id))().then((_) {
