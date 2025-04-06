@@ -59,7 +59,27 @@ void main() {
       expect(copyLinkFinder, findsOneWidget, reason: 'Copy Link menu item should be visible');
       
       await tester.tap(copyLinkFinder);
+      
+        // Add a small delay to allow the async Clipboard.setData operation to complete
+        await tester.pump(const Duration(milliseconds: 50));
       await tester.pumpAndSettle(); // Wait for any animations to complete
+      
+        // Filter the log for Clipboard.setData calls
+        final clipboardCalls =
+            log.where((call) => call.method == 'Clipboard.setData').toList();
+
+        // Verify Clipboard.setData was called exactly once with the correct URL
+        expect(
+          clipboardCalls,
+          hasLength(1),
+          reason: 'Clipboard.setData should have been called exactly once',
+        );
+        expect(clipboardCalls.first.method, 'Clipboard.setData');
+        expect(
+          clipboardCalls.first.arguments['text'],
+          testUrl,
+          reason: 'Clipboard.setData should be called with the correct URL',
+        );
 
       // Verify the callback was triggered
       expect(copyLinkTapped, isTrue, reason: 'onCopyLink callback should have been called');

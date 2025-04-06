@@ -183,23 +183,9 @@ void main() {
         // This verifies our comment API methods can handle both formats
       });
       
-      test('Delete memo handles empty responses correctly', () {
-        // This is a unit test that verifies our logic for handling delete responses
-        // It doesn't make actual API calls
-        
-        // Note: No need to actually create an instance for this test
-        // It's just documenting expected behavior
-        
-        // Test that our handling of empty responses doesn't throw exceptions
-        // This is just testing the logic, not making real API calls
-        expect(() async {
-          // We can't actually test this without mocking the API client
-          // but the implementation should now handle 204 responses correctly
-          
-          // Note: This is a placeholder to document the expected behavior
-          // A full test would require mocking the HTTP response
-        }, isA<Function>());
-      });
+      // The 'Delete memo handles empty responses correctly' test was removed
+      // as it was redundant. The behavior is now verified in provider tests
+      // using the mocked ApiService.
     });
   });
 }

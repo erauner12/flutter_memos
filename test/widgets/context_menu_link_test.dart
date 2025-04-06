@@ -64,15 +64,19 @@ void main() {
       // Verify onCopy callback was triggered
       expect(copyTapped, isTrue);
 
-      // Verify Clipboard.setData was called with the correct URL
+      // Filter the log for Clipboard.setData calls
+      final clipboardCalls =
+          log.where((call) => call.method == 'Clipboard.setData').toList();
+
+      // Verify Clipboard.setData was called exactly once
       expect(
-        log,
+        clipboardCalls,
         hasLength(1),
-        reason: 'Clipboard.setData should have been called once',
+        reason: 'Clipboard.setData should have been called exactly once',
       );
-      expect(log.first.method, 'Clipboard.setData');
+      expect(clipboardCalls.first.method, 'Clipboard.setData');
       expect(
-        log.first.arguments['text'],
+        clipboardCalls.first.arguments['text'],
         testUrl,
         reason: 'Clipboard.setData should be called with the correct URL',
       );
