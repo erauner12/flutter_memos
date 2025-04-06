@@ -291,7 +291,7 @@ void main() {
       'togglePinMemoProvider toggles pin state (optimistic + API)',
       () async {
         final memoIdToToggle = '3';
-
+    
         // Initial state check
         expect(
           container
@@ -301,18 +301,42 @@ void main() {
               .pinned,
           isFalse,
         );
+    
+        // Create a stateful mock behavior for getMemo
+        final Map<String, Memo> mockMemoDatabase = {};
+        mockMemoDatabase[memoIdToToggle] = memos.firstWhere(
+          (m) => m.id == memoIdToToggle,
+        );
 
+        // Setup getMemo to return from our database
+        when(mockApiService.getMemo(memoIdToToggle)).thenAnswer((
+          invocation,
+        ) async {
+          return mockMemoDatabase[memoIdToToggle]!;
+        });
+
+        // Setup updateMemo to update our database
+        when(
+          mockApiService.updateMemo(argThat(equals(memoIdToToggle)), any),
+        ).thenAnswer((invocation) async {
+          final memo = invocation.positionalArguments[1] as Memo;
+          // Update our mock database to reflect the change
+          mockMemoDatabase[memoIdToToggle] = memo;
+          return memo;
+        });
+    
         // Call the toggle provider (to pin)
         await container.read(togglePinMemoProvider(memoIdToToggle))();
-
+    
         // Verify optimistic update (pinned and moved to top)
         final memosAfterPin = container.read(memosNotifierProvider).memos;
         expect(memosAfterPin.first.id, equals(memoIdToToggle));
         expect(memosAfterPin.first.pinned, isTrue);
-
+    
         // Verify first API calls using Mockito verification
         verify(mockApiService.getMemo(memoIdToToggle)).called(1);
-
+    
+        // Verify the first updateMemo call (pin operation)
         final pinVerification = verify(
           mockApiService.updateMemo(
             argThat(equals(memoIdToToggle)),
@@ -320,28 +344,31 @@ void main() {
           ),
         );
         pinVerification.called(1);
-
+    
         final capturedPinMemo = pinVerification.captured.single as Memo;
         expect(capturedPinMemo.pinned, isTrue);
+    
+        // Reset mock verification for clean tracking of the second call
+        reset(mockApiService);
 
-        // Store updated memos in map to make getMemo stateful
-        final memoMap = <String, Memo>{};
-        for (var memo in container.read(memosNotifierProvider).memos) {
-          memoMap[memo.id] = memo;
-        }
-
-        // Re-stub getMemo to return the current state from our map
-        when(mockApiService.getMemo(any)).thenAnswer((invocation) async {
-          final id = invocation.positionalArguments[0] as String;
-          if (memoMap.containsKey(id)) {
-            return memoMap[id]!;
-          }
-          throw Exception('Mock getMemo: Memo not found: $id');
+        // Setup the mock again after reset
+        when(mockApiService.getMemo(memoIdToToggle)).thenAnswer((
+          invocation,
+        ) async {
+          return mockMemoDatabase[memoIdToToggle]!;
         });
 
+        when(
+          mockApiService.updateMemo(argThat(equals(memoIdToToggle)), any),
+        ).thenAnswer((invocation) async {
+          final memo = invocation.positionalArguments[1] as Memo;
+          mockMemoDatabase[memoIdToToggle] = memo;
+          return memo;
+        });
+    
         // Call again (to unpin)
         await container.read(togglePinMemoProvider(memoIdToToggle))();
-
+    
         // Verify optimistic update (unpinned and sorted back)
         final memosAfterUnpin = container.read(memosNotifierProvider).memos;
         expect(
@@ -350,22 +377,22 @@ void main() {
         );
         // Check if sorting is correct (memo '1' should be first now)
         expect(memosAfterUnpin.first.id, equals('1'));
-
-        // Verify total API calls
-        verify(
-          mockApiService.getMemo(memoIdToToggle),
-        ).called(2); // Called twice now
-
+    
+        // Verify second API calls
+        verify(mockApiService.getMemo(memoIdToToggle)).called(1);
+        
         final unpinVerification = verify(
           mockApiService.updateMemo(
             argThat(equals(memoIdToToggle)),
             captureAny,
           ),
         );
-        unpinVerification.called(2); // Called twice total
-
+        unpinVerification.called(
+          1,
+        ); // Should be called once for this verification
+    
         // Check the second call's captured argument
-        final capturedUnpinMemo = unpinVerification.captured[1] as Memo;
+        final capturedUnpinMemo = unpinVerification.captured.single as Memo;
         expect(capturedUnpinMemo.pinned, isFalse);
       },
     );

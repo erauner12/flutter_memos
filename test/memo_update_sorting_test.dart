@@ -177,7 +177,7 @@ void main() {
         return memosFromServerAfterUpdate.firstWhere(
           (m) => m.id == memoToUpdateId,
           orElse:
-              () => throw Exception('Test setup error: Updated memo not found'),
+              () => throw Exception('Test setup error: Updated memo not found')
         );
       });
       
