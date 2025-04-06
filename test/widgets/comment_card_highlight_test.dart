@@ -88,15 +88,14 @@ void main() {
         width: 2,
       ); // Adjusted dark theme border
     } else {
-      expectedHighlightColor =
-          Colors.teal.shade50; // Revert to expecting teal shade
+      expectedHighlightColor = Colors.teal.shade50; // Expect teal shade
       expectedHighlightBorder = const BorderSide(color: Colors.teal, width: 2);
     }
 
     // Use a more flexible approach for color comparison due to potential opacity and platform differences
     expect(
       card.color?.value,
-      closeTo(expectedHighlightColor.value, 100), // Increase tolerance
+      closeTo(expectedHighlightColor.value, 100), // Keep tolerance
       reason:
           'Highlighted background color mismatch (Theme: ${theme.brightness})',
     );
