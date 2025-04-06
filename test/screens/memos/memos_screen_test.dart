@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_memos/models/memo.dart';
-import 'package:flutter_memos/providers/filter_providers.dart'; // Add this import
+import 'package:flutter_memos/providers/filter_providers.dart';
 import 'package:flutter_memos/providers/memo_providers.dart';
 import 'package:flutter_memos/providers/ui_providers.dart' as ui_providers;
 import 'package:flutter_memos/screens/memos/memo_list_item.dart';
@@ -45,33 +45,14 @@ class MockMemosNotifier extends MemosNotifier {
   Future<void> fetchMoreMemos() async {
     // No-op for mock
   }
-
-  // Add other overrides if necessary
 }
 
-// Helper to wrap widget for testing
-Widget buildTestableWidget(Widget child, List<Memo> initialMemos) {
-  final initialState = const MemosState().copyWith(
-    memos: initialMemos,
-    isLoading: false,
-    hasReachedEnd: true,
-    totalLoaded: initialMemos.length,
-  );
-
-  return ProviderScope(
-    overrides: [
-      // Override the actual notifier with our mock builder
-      memosNotifierProvider.overrideWith(
-        (ref) =>
-            MockMemosNotifier(ref, initialState), // Pass ref and initial state
-      ),
-      // Ensure UI providers start in a known state
-      ui_providers.memoMultiSelectModeProvider.overrideWith((ref) => false),
-      ui_providers.selectedMemoIdsForMultiSelectProvider.overrideWith((ref) => {}),
-      ui_providers.selectedMemoIdProvider.overrideWith((ref) => null),
-      // Explicitly set the filter key for consistent AppBar title
-      filterKeyProvider.overrideWith((ref) => 'all'),
-    ],
+// Modify buildTestableWidget to accept the container
+Widget buildTestableWidget(Widget child, ProviderContainer container) {
+  // Keep ProviderScope so the widget can lookup providers
+  // Link it to the container created in the test setup
+  return UncontrolledProviderScope(
+    container: container,
     child: MaterialApp(
       home: child,
       // Define routes needed for navigation actions within MemoListItem (like edit)
@@ -84,26 +65,54 @@ Widget buildTestableWidget(Widget child, List<Memo> initialMemos) {
   );
 }
 
-
 void main() {
   final dummyMemos = createDummyMemos(3); // Create 3 dummy memos for testing
+  late ProviderContainer container; // Declare container
+
+  // Use setUp to create the container before each test
+  setUp(() {
+    final initialState = const MemosState().copyWith(
+      memos: dummyMemos,
+      isLoading: false,
+      hasReachedEnd: true,
+      totalLoaded: dummyMemos.length,
+    );
+
+    container = ProviderContainer(
+      overrides: [
+        // Override the actual notifier with our mock builder
+        memosNotifierProvider.overrideWith(
+          (ref) => MockMemosNotifier(ref, initialState),
+        ),
+        // Ensure UI providers start in a known state
+        ui_providers.memoMultiSelectModeProvider.overrideWith((ref) => false),
+        ui_providers.selectedMemoIdsForMultiSelectProvider.overrideWith((ref) => {}),
+        ui_providers.selectedMemoIdProvider.overrideWith((ref) => null),
+        // Explicitly set the filter key for consistent AppBar title
+        filterKeyProvider.overrideWith((ref) => 'all'),
+      ],
+    );
+  });
+
+  // Use tearDown to dispose the container after each test
+  tearDown(() {
+    container.dispose();
+  });
 
   testWidgets('MemosScreen displays standard AppBar and no checkboxes initially', (WidgetTester tester) async {
     // Arrange
-    await tester.pumpWidget(buildTestableWidget(const MemosScreen(), dummyMemos));
+    await tester.pumpWidget(buildTestableWidget(const MemosScreen(), container));
     await tester.pumpAndSettle(); // Wait for initial build
 
     // Act & Assert
-      // Verify AppBar exists first
-      expect(find.byType(AppBar), findsOneWidget);
-      // Verify standard title using descendant
-      expect(
-        find.descendant(
-          of: find.byType(AppBar),
-          matching: find.text('Memos (ALL)'),
-        ),
-        findsOneWidget,
-      );
+    expect(find.byType(AppBar), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(AppBar),
+        matching: find.text('Memos (ALL)'),
+      ),
+      findsOneWidget,
+    );
 
     // Verify "Select Memos" button exists
     expect(find.byTooltip('Select Memos'), findsOneWidget);
@@ -125,7 +134,7 @@ void main() {
 
   testWidgets('MemosScreen enters multi-select mode on button tap', (WidgetTester tester) async {
     // Arrange
-    await tester.pumpWidget(buildTestableWidget(const MemosScreen(), dummyMemos));
+    await tester.pumpWidget(buildTestableWidget(const MemosScreen(), container));
     await tester.pumpAndSettle();
 
     // Act: Tap the "Select Memos" button
@@ -133,10 +142,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // Assert
-    // Re-acquire container after pumpAndSettle
-    final scopeElement = tester.element(find.byType(ProviderScope));
-    final container = ProviderScope.containerOf(scopeElement);
-    // Verify provider state
+    // Use the container created in setUp
     expect(container.read(ui_providers.memoMultiSelectModeProvider), isTrue);
 
     // Verify AppBar changes
@@ -159,9 +165,9 @@ void main() {
 
   testWidgets('MemosScreen selects/deselects memo via Checkbox tap', (WidgetTester tester) async {
     // Arrange
-    await tester.pumpWidget(buildTestableWidget(const MemosScreen(), dummyMemos));
-await tester.pumpAndSettle();
-// Enter multi-select mode
+    await tester.pumpWidget(buildTestableWidget(const MemosScreen(), container));
+    await tester.pumpAndSettle();
+    // Enter multi-select mode
     await tester.tap(find.byTooltip('Select Memos'));
     await tester.pumpAndSettle();
 
@@ -177,52 +183,38 @@ await tester.pumpAndSettle();
     await tester.pumpAndSettle();
 
     // Assert: Selection state updated
-    // Re-acquire container after pumpAndSettle
-    final scopeElementSelect = tester.element(find.byType(ProviderScope));
-    final containerSelect = ProviderScope.containerOf(scopeElementSelect);
+    // Use the container created in setUp
     expect(
-      containerSelect.read(ui_providers.selectedMemoIdsForMultiSelectProvider),
+      container.read(ui_providers.selectedMemoIdsForMultiSelectProvider),
       contains(dummyMemos[0].id),
     );
     expect(
-      containerSelect
-          .read(ui_providers.selectedMemoIdsForMultiSelectProvider)
-          .length,
+      container.read(ui_providers.selectedMemoIdsForMultiSelectProvider).length,
       1,
     );
     expect(find.text('1 Selected'), findsOneWidget);
-    // TODO: Assert action buttons are enabled (need to check onPressed != null)
 
     // Act: Tap the first checkbox again to deselect
     await tester.tap(firstCheckboxFinder);
     await tester.pumpAndSettle();
 
     // Assert: Selection state updated
-    // Re-acquire container after pumpAndSettle
-    final scopeElementDeselect = tester.element(find.byType(ProviderScope));
-    final containerDeselect = ProviderScope.containerOf(scopeElementDeselect);
+    // Use the container created in setUp
     expect(
-      containerDeselect.read(
-        ui_providers.selectedMemoIdsForMultiSelectProvider,
-      ),
+      container.read(ui_providers.selectedMemoIdsForMultiSelectProvider),
       isNot(contains(dummyMemos[0].id)),
     );
     expect(
-      containerDeselect.read(
-        ui_providers.selectedMemoIdsForMultiSelectProvider,
-      ),
+      container.read(ui_providers.selectedMemoIdsForMultiSelectProvider),
       isEmpty,
     );
     expect(find.text('0 Selected'), findsOneWidget);
-    // TODO: Assert action buttons are disabled (need to check onPressed == null)
   });
 
   testWidgets('MemosScreen selects/deselects memo via item tap in multi-select mode', (WidgetTester tester) async {
     // Arrange
-    await tester.pumpWidget(buildTestableWidget(const MemosScreen(), dummyMemos));
+    await tester.pumpWidget(buildTestableWidget(const MemosScreen(), container));
     await tester.pumpAndSettle();
-      // Note: We don't need to get the container here since we're getting it again after actions
-      // The container from this point would be stale after pumpAndSettle()
 
     // Enter multi-select mode
     await tester.tap(find.byTooltip('Select Memos'));
@@ -236,21 +228,15 @@ await tester.pumpAndSettle();
     await tester.pumpAndSettle();
 
     // Assert: Selection state updated
-      // Re-acquire container after pumpAndSettle
-      final scopeElementSelect = tester.element(find.byType(ProviderScope));
-      final containerSelect = ProviderScope.containerOf(scopeElementSelect);
-      expect(
-        containerSelect.read(
-          ui_providers.selectedMemoIdsForMultiSelectProvider,
-        ),
-        contains(dummyMemos[0].id),
-      );
-      expect(
-        containerSelect
-            .read(ui_providers.selectedMemoIdsForMultiSelectProvider)
-            .length,
-        1,
-      );
+    // Use the container created in setUp
+    expect(
+      container.read(ui_providers.selectedMemoIdsForMultiSelectProvider),
+      contains(dummyMemos[0].id),
+    );
+    expect(
+      container.read(ui_providers.selectedMemoIdsForMultiSelectProvider).length,
+      1,
+    );
     expect(find.text('1 Selected'), findsOneWidget);
 
     // Act: Tap the first item again to deselect
@@ -258,34 +244,22 @@ await tester.pumpAndSettle();
     await tester.pumpAndSettle();
 
     // Assert: Selection state updated
-      // Re-acquire container after pumpAndSettle
-      final scopeElementDeselect = tester.element(find.byType(ProviderScope));
-      final containerDeselect = ProviderScope.containerOf(scopeElementDeselect);
-      expect(
-        containerDeselect.read(
-          ui_providers.selectedMemoIdsForMultiSelectProvider,
-        ),
-        isNot(contains(dummyMemos[0].id)),
-      );
-      expect(
-        containerDeselect.read(
-          ui_providers.selectedMemoIdsForMultiSelectProvider,
-        ),
-        isEmpty,
-      );
+    // Use the container created in setUp
+    expect(
+      container.read(ui_providers.selectedMemoIdsForMultiSelectProvider),
+      isNot(contains(dummyMemos[0].id)),
+    );
+    expect(
+      container.read(ui_providers.selectedMemoIdsForMultiSelectProvider),
+      isEmpty,
+    );
     expect(find.text('0 Selected'), findsOneWidget);
   });
 
-   testWidgets('MemosScreen exits multi-select mode via Cancel button', (WidgetTester tester) async {
+  testWidgets('MemosScreen exits multi-select mode via Cancel button', (WidgetTester tester) async {
     // Arrange
-await tester.pumpWidget(
-      buildTestableWidget(const MemosScreen(), dummyMemos),
-    );
+    await tester.pumpWidget(buildTestableWidget(const MemosScreen(), container));
     await tester.pumpAndSettle();
-    
-    // Get the provider container
-    final scopeElement = tester.element(find.byType(ProviderScope));
-    final container = ProviderScope.containerOf(scopeElement);
     
     // Enter multi-select mode and select an item
     await tester.tap(find.byTooltip('Select Memos'));
@@ -301,15 +275,10 @@ await tester.pumpWidget(
     await tester.pumpAndSettle();
 
     // Assert: Exited multi-select mode
-    // Re-acquire container after pumpAndSettle
-    final scopeElementExit = tester.element(find.byType(ProviderScope));
-    final containerExit = ProviderScope.containerOf(scopeElementExit);
+    // Use the container created in setUp
+    expect(container.read(ui_providers.memoMultiSelectModeProvider), isFalse);
     expect(
-      containerExit.read(ui_providers.memoMultiSelectModeProvider),
-      isFalse,
-    );
-    expect(
-      containerExit.read(ui_providers.selectedMemoIdsForMultiSelectProvider),
+      container.read(ui_providers.selectedMemoIdsForMultiSelectProvider),
       isEmpty,
     );
 
@@ -320,7 +289,7 @@ await tester.pumpWidget(
         matching: find.text('Memos (ALL)'),
       ),
       findsOneWidget,
-    ); // Check title again
+    );
     expect(find.byTooltip('Select Memos'), findsOneWidget);
     expect(find.widgetWithIcon(AppBar, Icons.close), findsNothing);
     expect(find.textContaining('Selected'), findsNothing);

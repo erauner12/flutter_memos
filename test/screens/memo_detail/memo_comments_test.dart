@@ -22,21 +22,12 @@ List<Comment> createDummyComments(int count) {
   });
 }
 
-// Helper to wrap widget for testing
-Widget buildTestableWidget(Widget child, String memoId, List<Comment> initialComments) {
-  return ProviderScope(
-    overrides: [
-      // Override the comments provider for the specific memoId
-      memoCommentsProvider.overrideWithProvider(
-        (argument) => FutureProvider((ref) async => initialComments),
-      ),
-      // Ensure UI providers start in a known state
-      ui_providers.commentMultiSelectModeProvider.overrideWith((ref) => false),
-      ui_providers.selectedCommentIdsForMultiSelectProvider.overrideWith((ref) => {}),
-      ui_providers.selectedCommentIndexProvider.overrideWith((ref) => -1),
-      comment_providers.hiddenCommentIdsProvider.overrideWith((ref) => {}), // Needed by MemoComments
-      hidePinnedProvider.overrideWith((ref) => false), // Needed by MemoComments
-    ],
+// Modify buildTestableWidget to accept the container
+Widget buildTestableWidget(Widget child, ProviderContainer container) {
+  // Keep ProviderScope so the widget can lookup providers
+  // Link it to the container created in the test setup
+  return UncontrolledProviderScope(
+    container: container,
     child: MaterialApp(
       home: Scaffold(body: child), // Wrap in Scaffold for context
       // Define routes needed for navigation actions within CommentCard (like edit)
@@ -47,62 +38,107 @@ Widget buildTestableWidget(Widget child, String memoId, List<Comment> initialCom
   );
 }
 
-
 void main() {
   const testMemoId = 'test-memo-1';
   final dummyComments = createDummyComments(3); // Create 3 dummy comments
+  late ProviderContainer container; // Declare container
+
+  // Use setUp to create the container before each test
+  setUp(() {
+    container = ProviderContainer(
+      overrides: [
+        // Override the comments provider for the specific memoId
+        memoCommentsProvider(testMemoId).overrideWith(
+          (ref) => Future.value(dummyComments), // Provide initial data directly
+        ),
+        // Ensure UI providers start in a known state
+        ui_providers.commentMultiSelectModeProvider.overrideWith(
+          (ref) => false,
+        ),
+        ui_providers.selectedCommentIdsForMultiSelectProvider.overrideWith(
+          (ref) => {},
+        ),
+        ui_providers.selectedCommentIndexProvider.overrideWith((ref) => -1),
+        comment_providers.hiddenCommentIdsProvider.overrideWith((ref) => {}),
+        hidePinnedProvider.overrideWith((ref) => false),
+      ],
+    );
+  });
+
+  // Use tearDown to dispose the container after each test
+  tearDown(() {
+    container.dispose();
+  });
 
   testWidgets('MemoComments displays no checkboxes initially', (WidgetTester tester) async {
     // Arrange
-    await tester.pumpWidget(buildTestableWidget(const MemoComments(memoId: testMemoId), testMemoId, dummyComments));
+    // Pass the container to the helper
+    await tester.pumpWidget(
+      buildTestableWidget(const MemoComments(memoId: testMemoId), container),
+    );
     await tester.pumpAndSettle(); // Wait for FutureProvider
 
     // Act & Assert
     // Verify no Checkboxes are present within CommentCards
-    expect(find.descendant(of: find.byType(CommentCard), matching: find.byType(Checkbox)), findsNothing);
+    expect(
+      find.descendant(
+        of: find.byType(CommentCard),
+        matching: find.byType(Checkbox),
+      ),
+      findsNothing,
+    );
 
     // Verify Slidable is present
-    expect(find.descendant(of: find.byType(CommentCard), matching: find.byType(Slidable)), findsWidgets);
+    expect(
+      find.descendant(
+        of: find.byType(CommentCard),
+        matching: find.byType(Slidable),
+      ),
+      findsWidgets,
+    );
   });
 
   testWidgets('MemoComments enters multi-select mode and shows checkboxes', (WidgetTester tester) async {
     // Arrange
-    await tester.pumpWidget(buildTestableWidget(const MemoComments(memoId: testMemoId), testMemoId, dummyComments));
+    await tester.pumpWidget(
+      buildTestableWidget(const MemoComments(memoId: testMemoId), container),
+    );
     await tester.pumpAndSettle();
-    // Correctly get the ProviderContainer
-    final scopeElement = tester.element(find.byType(ProviderScope));
-    final container = ProviderScope.containerOf(scopeElement);
 
     // Act: Simulate entering multi-select mode by directly setting the provider
-    // In a real screen test, you'd tap a button, but here we test MemoComments directly.
     container.read(ui_providers.commentMultiSelectModeProvider.notifier).state = true;
     await tester.pumpAndSettle(); // Rebuild with multi-select mode active
 
     // Assert
-    // Re-acquire container after pumpAndSettle
-    final scopeElementAfter = tester.element(find.byType(ProviderScope));
-    final containerAfter = ProviderScope.containerOf(scopeElementAfter);
-    // Verify provider state
-    expect(
-      containerAfter.read(ui_providers.commentMultiSelectModeProvider),
-      isTrue,
-    );
+    // Use the container created in setUp
+    expect(container.read(ui_providers.commentMultiSelectModeProvider), isTrue);
 
     // Verify Checkboxes appear for each item
-    expect(find.descendant(of: find.byType(CommentCard), matching: find.byType(Checkbox)), findsNWidgets(dummyComments.length));
+    expect(
+      find.descendant(
+        of: find.byType(CommentCard),
+        matching: find.byType(Checkbox),
+      ),
+      findsNWidgets(dummyComments.length),
+    );
 
     // Verify Slidable is gone
-    expect(find.descendant(of: find.byType(CommentCard), matching: find.byType(Slidable)), findsNothing);
+    expect(
+      find.descendant(
+        of: find.byType(CommentCard),
+        matching: find.byType(Slidable),
+      ),
+      findsNothing,
+    );
   });
 
   testWidgets('MemoComments selects/deselects comment via Checkbox tap', (WidgetTester tester) async {
     // Arrange
-    await tester.pumpWidget(buildTestableWidget(const MemoComments(memoId: testMemoId), testMemoId, dummyComments));
+    await tester.pumpWidget(
+      buildTestableWidget(const MemoComments(memoId: testMemoId), container),
+    );
     await tester.pumpAndSettle();
-    // Correctly get the ProviderContainer
-    final scopeElement = tester.element(find.byType(ProviderScope));
-    final container = ProviderScope.containerOf(scopeElement);
-
+    
     // Enter multi-select mode
     container.read(ui_providers.commentMultiSelectModeProvider.notifier).state = true;
     await tester.pumpAndSettle();
@@ -121,17 +157,13 @@ void main() {
     await tester.pumpAndSettle();
 
     // Assert: Selection state updated
-    // Re-acquire container after pumpAndSettle
-    final scopeElementSelect = tester.element(find.byType(ProviderScope));
-    final containerSelect = ProviderScope.containerOf(scopeElementSelect);
+    // Use the container created in setUp
     expect(
-      containerSelect.read(
-        ui_providers.selectedCommentIdsForMultiSelectProvider,
-      ),
+      container.read(ui_providers.selectedCommentIdsForMultiSelectProvider),
       contains(expectedCommentId),
     );
     expect(
-      containerSelect
+      container
           .read(ui_providers.selectedCommentIdsForMultiSelectProvider)
           .length,
       1,
@@ -142,30 +174,23 @@ void main() {
     await tester.pumpAndSettle();
 
     // Assert: Selection state updated
-    // Re-acquire container after pumpAndSettle
-    final scopeElementDeselect = tester.element(find.byType(ProviderScope));
-    final containerDeselect = ProviderScope.containerOf(scopeElementDeselect);
+    // Use the container created in setUp
     expect(
-      containerDeselect.read(
-        ui_providers.selectedCommentIdsForMultiSelectProvider,
-      ),
+      container.read(ui_providers.selectedCommentIdsForMultiSelectProvider),
       isNot(contains(expectedCommentId)),
     );
     expect(
-      containerDeselect.read(
-        ui_providers.selectedCommentIdsForMultiSelectProvider,
-      ),
+      container.read(ui_providers.selectedCommentIdsForMultiSelectProvider),
       isEmpty,
     );
   });
 
   testWidgets('MemoComments selects/deselects comment via item tap in multi-select mode', (WidgetTester tester) async {
     // Arrange
-    await tester.pumpWidget(buildTestableWidget(const MemoComments(memoId: testMemoId), testMemoId, dummyComments));
-    await tester.pumpAndSettle();
-      // Correctly get the ProviderContainer
-      final scopeElement = tester.element(find.byType(ProviderScope));
-      final container = ProviderScope.containerOf(scopeElement);
+      await tester.pumpWidget(
+        buildTestableWidget(const MemoComments(memoId: testMemoId), container),
+      );
+      await tester.pumpAndSettle();
 
     // Enter multi-select mode
     container.read(ui_providers.commentMultiSelectModeProvider.notifier).state = true;
@@ -180,17 +205,13 @@ void main() {
     await tester.pumpAndSettle();
 
     // Assert: Selection state updated
-      // Re-acquire container after pumpAndSettle
-      final scopeElementSelect = tester.element(find.byType(ProviderScope));
-      final containerSelect = ProviderScope.containerOf(scopeElementSelect);
+      // Use the container created in setUp
       expect(
-        containerSelect.read(
-          ui_providers.selectedCommentIdsForMultiSelectProvider,
-        ),
+        container.read(ui_providers.selectedCommentIdsForMultiSelectProvider),
         contains(expectedCommentId),
       );
       expect(
-        containerSelect
+        container
             .read(ui_providers.selectedCommentIdsForMultiSelectProvider)
             .length,
         1,
@@ -201,30 +222,25 @@ void main() {
     await tester.pumpAndSettle();
 
     // Assert: Selection state updated
-      // Re-acquire container after pumpAndSettle
-      final scopeElementDeselect = tester.element(find.byType(ProviderScope));
-      final containerDeselect = ProviderScope.containerOf(scopeElementDeselect);
+      // Use the container created in setUp
       expect(
-        containerDeselect.read(
-          ui_providers.selectedCommentIdsForMultiSelectProvider,
-        ),
+        container.read(ui_providers.selectedCommentIdsForMultiSelectProvider),
         isNot(contains(expectedCommentId)),
       );
       expect(
-        containerDeselect.read(
-          ui_providers.selectedCommentIdsForMultiSelectProvider,
-        ),
+        container.read(ui_providers.selectedCommentIdsForMultiSelectProvider),
         isEmpty,
       );
   });
 
-   testWidgets('MemoComments exits multi-select mode and hides checkboxes', (WidgetTester tester) async {
+  testWidgets('MemoComments exits multi-select mode and hides checkboxes', (
+    WidgetTester tester,
+  ) async {
     // Arrange
-    await tester.pumpWidget(buildTestableWidget(const MemoComments(memoId: testMemoId), testMemoId, dummyComments));
+    await tester.pumpWidget(
+      buildTestableWidget(const MemoComments(memoId: testMemoId), container),
+    );
     await tester.pumpAndSettle();
-    // Correctly get the ProviderContainer
-    final scopeElement = tester.element(find.byType(ProviderScope));
-    final container = ProviderScope.containerOf(scopeElement);
 
     // Enter multi-select mode and select an item
     container.read(ui_providers.commentMultiSelectModeProvider.notifier).state = true;
@@ -241,22 +257,32 @@ void main() {
     await tester.pumpAndSettle();
 
     // Assert: Exited multi-select mode
-    // Re-acquire container after pumpAndSettle
-    final scopeElementExit = tester.element(find.byType(ProviderScope));
-    final containerExit = ProviderScope.containerOf(scopeElementExit);
+    // Use the container created in setUp
     expect(
-      containerExit.read(ui_providers.commentMultiSelectModeProvider),
+      container.read(ui_providers.commentMultiSelectModeProvider),
       isFalse,
     );
     expect(
-      containerExit.read(ui_providers.selectedCommentIdsForMultiSelectProvider),
+      container.read(ui_providers.selectedCommentIdsForMultiSelectProvider),
       isEmpty,
     );
 
     // Verify Checkboxes are gone
-    expect(find.descendant(of: find.byType(CommentCard), matching: find.byType(Checkbox)), findsNothing);
+    expect(
+      find.descendant(
+        of: find.byType(CommentCard),
+        matching: find.byType(Checkbox),
+      ),
+      findsNothing,
+    );
 
     // Verify Slidable is back
-    expect(find.descendant(of: find.byType(CommentCard), matching: find.byType(Slidable)), findsWidgets);
+    expect(
+      find.descendant(
+        of: find.byType(CommentCard),
+        matching: find.byType(Slidable),
+      ),
+      findsWidgets,
+    );
   });
 }
