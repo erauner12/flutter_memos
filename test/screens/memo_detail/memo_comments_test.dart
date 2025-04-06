@@ -79,8 +79,14 @@ void main() {
     await tester.pumpAndSettle(); // Rebuild with multi-select mode active
 
     // Assert
+    // Re-acquire container after pumpAndSettle
+    final scopeElementAfter = tester.element(find.byType(ProviderScope));
+    final containerAfter = ProviderScope.containerOf(scopeElementAfter);
     // Verify provider state
-    expect(container.read(ui_providers.commentMultiSelectModeProvider), isTrue);
+    expect(
+      containerAfter.read(ui_providers.commentMultiSelectModeProvider),
+      isTrue,
+    );
 
     // Verify Checkboxes appear for each item
     expect(find.descendant(of: find.byType(CommentCard), matching: find.byType(Checkbox)), findsNWidgets(dummyComments.length));
@@ -115,16 +121,42 @@ void main() {
     await tester.pumpAndSettle();
 
     // Assert: Selection state updated
-    expect(container.read(ui_providers.selectedCommentIdsForMultiSelectProvider), contains(expectedCommentId));
-    expect(container.read(ui_providers.selectedCommentIdsForMultiSelectProvider).length, 1);
+    // Re-acquire container after pumpAndSettle
+    final scopeElementSelect = tester.element(find.byType(ProviderScope));
+    final containerSelect = ProviderScope.containerOf(scopeElementSelect);
+    expect(
+      containerSelect.read(
+        ui_providers.selectedCommentIdsForMultiSelectProvider,
+      ),
+      contains(expectedCommentId),
+    );
+    expect(
+      containerSelect
+          .read(ui_providers.selectedCommentIdsForMultiSelectProvider)
+          .length,
+      1,
+    );
 
     // Act: Tap the first checkbox again to deselect
     await tester.tap(firstCheckboxFinder);
     await tester.pumpAndSettle();
 
     // Assert: Selection state updated
-    expect(container.read(ui_providers.selectedCommentIdsForMultiSelectProvider), isNot(contains(expectedCommentId)));
-    expect(container.read(ui_providers.selectedCommentIdsForMultiSelectProvider), isEmpty);
+    // Re-acquire container after pumpAndSettle
+    final scopeElementDeselect = tester.element(find.byType(ProviderScope));
+    final containerDeselect = ProviderScope.containerOf(scopeElementDeselect);
+    expect(
+      containerDeselect.read(
+        ui_providers.selectedCommentIdsForMultiSelectProvider,
+      ),
+      isNot(contains(expectedCommentId)),
+    );
+    expect(
+      containerDeselect.read(
+        ui_providers.selectedCommentIdsForMultiSelectProvider,
+      ),
+      isEmpty,
+    );
   });
 
   testWidgets('MemoComments selects/deselects comment via item tap in multi-select mode', (WidgetTester tester) async {
@@ -148,16 +180,42 @@ void main() {
     await tester.pumpAndSettle();
 
     // Assert: Selection state updated
-    expect(container.read(ui_providers.selectedCommentIdsForMultiSelectProvider), contains(expectedCommentId));
-    expect(container.read(ui_providers.selectedCommentIdsForMultiSelectProvider).length, 1);
+      // Re-acquire container after pumpAndSettle
+      final scopeElementSelect = tester.element(find.byType(ProviderScope));
+      final containerSelect = ProviderScope.containerOf(scopeElementSelect);
+      expect(
+        containerSelect.read(
+          ui_providers.selectedCommentIdsForMultiSelectProvider,
+        ),
+        contains(expectedCommentId),
+      );
+      expect(
+        containerSelect
+            .read(ui_providers.selectedCommentIdsForMultiSelectProvider)
+            .length,
+        1,
+      );
 
     // Act: Tap the first item again to deselect
     await tester.tap(firstItemFinder);
     await tester.pumpAndSettle();
 
     // Assert: Selection state updated
-    expect(container.read(ui_providers.selectedCommentIdsForMultiSelectProvider), isNot(contains(expectedCommentId)));
-    expect(container.read(ui_providers.selectedCommentIdsForMultiSelectProvider), isEmpty);
+      // Re-acquire container after pumpAndSettle
+      final scopeElementDeselect = tester.element(find.byType(ProviderScope));
+      final containerDeselect = ProviderScope.containerOf(scopeElementDeselect);
+      expect(
+        containerDeselect.read(
+          ui_providers.selectedCommentIdsForMultiSelectProvider,
+        ),
+        isNot(contains(expectedCommentId)),
+      );
+      expect(
+        containerDeselect.read(
+          ui_providers.selectedCommentIdsForMultiSelectProvider,
+        ),
+        isEmpty,
+      );
   });
 
    testWidgets('MemoComments exits multi-select mode and hides checkboxes', (WidgetTester tester) async {
@@ -183,8 +241,17 @@ void main() {
     await tester.pumpAndSettle();
 
     // Assert: Exited multi-select mode
-    expect(container.read(ui_providers.commentMultiSelectModeProvider), isFalse);
-    expect(container.read(ui_providers.selectedCommentIdsForMultiSelectProvider), isEmpty);
+    // Re-acquire container after pumpAndSettle
+    final scopeElementExit = tester.element(find.byType(ProviderScope));
+    final containerExit = ProviderScope.containerOf(scopeElementExit);
+    expect(
+      containerExit.read(ui_providers.commentMultiSelectModeProvider),
+      isFalse,
+    );
+    expect(
+      containerExit.read(ui_providers.selectedCommentIdsForMultiSelectProvider),
+      isEmpty,
+    );
 
     // Verify Checkboxes are gone
     expect(find.descendant(of: find.byType(CommentCard), matching: find.byType(Checkbox)), findsNothing);
