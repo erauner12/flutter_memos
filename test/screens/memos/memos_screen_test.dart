@@ -24,30 +24,46 @@ List<Memo> createDummyMemos(int count) {
   });
 }
 
-// Mock Notifier to control state
-class MockMemosNotifier extends StateNotifier<MemosState> {
-  MockMemosNotifier(super.state);
+// Mock Notifier extending the actual Notifier
+class MockMemosNotifier extends MemosNotifier {
+  // Constructor needs to call super, passing the ref and setting the skip flag
+  MockMemosNotifier(super.ref, MemosState initialState)
+    : super(skipInitialFetchForTesting: true) {
+    // Manually set the state after initialization
+    state = initialState;
+  }
 
-  // Provide dummy implementations or leave empty if not needed for these tests
-  Future<void> refresh() async {}
-  Future<void> fetchMoreMemos() async {}
+  // Override methods that might be called during the test if needed,
+  // otherwise, they inherit the base implementation (which might try to fetch)
+  @override
+  Future<void> refresh() async {
+    // No-op for mock
+  }
+
+  @override
+  Future<void> fetchMoreMemos() async {
+    // No-op for mock
+  }
+
+  // Add other overrides if necessary
 }
 
 // Helper to wrap widget for testing
 Widget buildTestableWidget(Widget child, List<Memo> initialMemos) {
-  final mockNotifier = MockMemosNotifier(
-    const MemosState().copyWith(
-      memos: initialMemos,
-      isLoading: false,
-      hasReachedEnd: true,
-      totalLoaded: initialMemos.length,
-    ),
+  final initialState = const MemosState().copyWith(
+    memos: initialMemos,
+    isLoading: false,
+    hasReachedEnd: true,
+    totalLoaded: initialMemos.length,
   );
 
   return ProviderScope(
     overrides: [
-      // Override the actual notifier with our mock
-      memosNotifierProvider.overrideWith((ref) => mockNotifier),
+      // Override the actual notifier with our mock builder
+      memosNotifierProvider.overrideWith(
+        (ref) =>
+            MockMemosNotifier(ref, initialState), // Pass ref and initial state
+      ),
       // Ensure UI providers start in a known state
       ui_providers.memoMultiSelectModeProvider.overrideWith((ref) => false),
       ui_providers.selectedMemoIdsForMultiSelectProvider.overrideWith((ref) => {}),
@@ -100,7 +116,9 @@ void main() {
     // Arrange
     await tester.pumpWidget(buildTestableWidget(const MemosScreen(), dummyMemos));
     await tester.pumpAndSettle();
-    final container = tester.element<ProviderScope>(find.byType(ProviderScope));
+    // Correctly get the ProviderContainer
+    final scopeElement = tester.element(find.byType(ProviderScope));
+    final container = ProviderScope.containerOf(scopeElement);
 
     // Act: Tap the "Select Memos" button
     await tester.tap(find.byTooltip('Select Memos'));
@@ -132,7 +150,9 @@ void main() {
     // Arrange
     await tester.pumpWidget(buildTestableWidget(const MemosScreen(), dummyMemos));
     await tester.pumpAndSettle();
-    final container = tester.element<ProviderScope>(find.byType(ProviderScope));
+    // Correctly get the ProviderContainer
+    final scopeElement = tester.element(find.byType(ProviderScope));
+    final container = ProviderScope.containerOf(scopeElement);
 
     // Enter multi-select mode
     await tester.tap(find.byTooltip('Select Memos'));
@@ -170,7 +190,9 @@ void main() {
     // Arrange
     await tester.pumpWidget(buildTestableWidget(const MemosScreen(), dummyMemos));
     await tester.pumpAndSettle();
-    final container = tester.element<ProviderScope>(find.byType(ProviderScope));
+      // Correctly get the ProviderContainer
+      final scopeElement = tester.element(find.byType(ProviderScope));
+      final container = ProviderScope.containerOf(scopeElement);
 
     // Enter multi-select mode
     await tester.tap(find.byTooltip('Select Memos'));
@@ -202,7 +224,9 @@ void main() {
     // Arrange
     await tester.pumpWidget(buildTestableWidget(const MemosScreen(), dummyMemos));
     await tester.pumpAndSettle();
-    final container = tester.element<ProviderScope>(find.byType(ProviderScope));
+    // Correctly get the ProviderContainer
+    final scopeElement = tester.element(find.byType(ProviderScope));
+    final container = ProviderScope.containerOf(scopeElement);
 
     // Enter multi-select mode and select an item
     await tester.tap(find.byTooltip('Select Memos'));

@@ -69,7 +69,9 @@ void main() {
     // Arrange
     await tester.pumpWidget(buildTestableWidget(const MemoComments(memoId: testMemoId), testMemoId, dummyComments));
     await tester.pumpAndSettle();
-    final container = tester.element<ProviderScope>(find.byType(ProviderScope));
+    // Correctly get the ProviderContainer
+    final scopeElement = tester.element(find.byType(ProviderScope));
+    final container = ProviderScope.containerOf(scopeElement);
 
     // Act: Simulate entering multi-select mode by directly setting the provider
     // In a real screen test, you'd tap a button, but here we test MemoComments directly.
@@ -91,7 +93,9 @@ void main() {
     // Arrange
     await tester.pumpWidget(buildTestableWidget(const MemoComments(memoId: testMemoId), testMemoId, dummyComments));
     await tester.pumpAndSettle();
-    final container = tester.element<ProviderScope>(find.byType(ProviderScope));
+    // Correctly get the ProviderContainer
+    final scopeElement = tester.element(find.byType(ProviderScope));
+    final container = ProviderScope.containerOf(scopeElement);
 
     // Enter multi-select mode
     container.read(ui_providers.commentMultiSelectModeProvider.notifier).state = true;
@@ -127,7 +131,9 @@ void main() {
     // Arrange
     await tester.pumpWidget(buildTestableWidget(const MemoComments(memoId: testMemoId), testMemoId, dummyComments));
     await tester.pumpAndSettle();
-    final container = tester.element<ProviderScope>(find.byType(ProviderScope));
+      // Correctly get the ProviderContainer
+      final scopeElement = tester.element(find.byType(ProviderScope));
+      final container = ProviderScope.containerOf(scopeElement);
 
     // Enter multi-select mode
     container.read(ui_providers.commentMultiSelectModeProvider.notifier).state = true;
@@ -158,7 +164,9 @@ void main() {
     // Arrange
     await tester.pumpWidget(buildTestableWidget(const MemoComments(memoId: testMemoId), testMemoId, dummyComments));
     await tester.pumpAndSettle();
-    final container = tester.element<ProviderScope>(find.byType(ProviderScope));
+    // Correctly get the ProviderContainer
+    final scopeElement = tester.element(find.byType(ProviderScope));
+    final container = ProviderScope.containerOf(scopeElement);
 
     // Enter multi-select mode and select an item
     container.read(ui_providers.commentMultiSelectModeProvider.notifier).state = true;
