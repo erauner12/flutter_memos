@@ -46,6 +46,7 @@ class MemoCard extends StatefulWidget {
 
 class _MemoCardState extends State<MemoCard> {
   Offset _tapPosition = Offset.zero;
+  bool _isPressed = false; // Add state variable for transient press
 
   // Helper method to format date strings for display
   String _formatDateTime(String dateTimeString) {
@@ -232,6 +233,49 @@ class _MemoCardState extends State<MemoCard> {
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
+    // Define styles for different states
+    final selectedStyle = (
+      color: isDarkMode ? const Color(0xFF3A3A3A) : Colors.blue.shade50,
+      border: BorderSide(
+        color: kDebugMode ? Colors.red : Theme.of(context).colorScheme.primary,
+        width: kDebugMode ? 3 : 2,
+      ),
+    );
+    // Define a distinct style for the transient pressed state
+    final pressedStyle = (
+      color:
+          isDarkMode
+              ? Colors.grey.shade700.withOpacity(0.6)
+              : Colors.grey.shade300, // Subtler highlight
+      border: BorderSide(
+        // Thinner border for press
+        color: Theme.of(context).colorScheme.outline.withOpacity(0.5),
+        width: 1,
+      ),
+    );
+    final defaultStyle = (
+      color: isDarkMode ? const Color(0xFF262626) : null, // Default card color
+      border:
+          isDarkMode
+              ? BorderSide(color: Colors.grey[850]!, width: 0.5)
+              : BorderSide.none,
+    );
+
+    // Determine current style based on isSelected and _isPressed
+    Color? cardBackgroundColor;
+    BorderSide cardBorderStyle;
+
+    if (widget.isSelected) {
+      cardBackgroundColor = selectedStyle.color;
+      cardBorderStyle = selectedStyle.border;
+    } else if (_isPressed) {
+      cardBackgroundColor = pressedStyle.color;
+      cardBorderStyle = pressedStyle.border;
+    } else {
+      cardBackgroundColor = defaultStyle.color;
+      cardBorderStyle = defaultStyle.border;
+    }
+
     // Debug logging for memo card rendering
     if (kDebugMode && widget.isSelected) {
       print('[MemoCard] Building selected memo card: ${widget.id}');
@@ -313,10 +357,7 @@ child: Card(
         ), // Always use a consistent key based on ID
         elevation: isDarkMode ? 0 : 1,
         margin: const EdgeInsets.only(bottom: 12),
-        color:
-            widget.isSelected
-                ? (isDarkMode ? const Color(0xFF3A3A3A) : Colors.blue.shade50)
-                : (isDarkMode ? const Color(0xFF262626) : null),
+        color: cardBackgroundColor,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(10),
           side:
@@ -338,6 +379,18 @@ child: Card(
           onLongPress: _showContextMenu,
           onDoubleTap: kIsWeb ? _showContextMenu : null,
           onTapDown: _storePosition,
+          // Add onHighlightChanged callback
+          onHighlightChanged: (bool highlighting) {
+            if (mounted) {
+              // Ensure widget is still in the tree
+              setState(() {
+                _isPressed = highlighting;
+              });
+            }
+          },
+          // Make InkWell's own highlight/splash transparent
+          highlightColor: Colors.transparent,
+          splashColor: Colors.transparent,
           borderRadius: BorderRadius.circular(10),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(
