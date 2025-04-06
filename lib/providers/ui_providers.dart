@@ -34,3 +34,60 @@ void toggleCaptureUtility(WidgetRef ref) {
   ref.read(captureUtilityToggleProvider.notifier).state =
       !ref.read(captureUtilityToggleProvider);
 }
+
+/// Provider for memo multi-select mode
+final memoMultiSelectModeProvider = StateProvider<bool>(
+  (ref) => false,
+  name: 'memoMultiSelectMode',
+);
+
+/// Provider for storing selected memo IDs during multi-select
+final selectedMemoIdsForMultiSelectProvider = StateProvider<Set<String>>(
+  (ref) => {},
+  name: 'selectedMemoIdsForMultiSelect',
+);
+
+/// Provider for comment multi-select mode
+final commentMultiSelectModeProvider = StateProvider<bool>(
+  (ref) => false,
+  name: 'commentMultiSelectMode',
+);
+
+/// Provider for storing selected comment IDs during multi-select
+/// Format: 'memoId/commentId'
+final selectedCommentIdsForMultiSelectProvider = StateProvider<Set<String>>(
+  (ref) => {},
+  name: 'selectedCommentIdsForMultiSelect',
+);
+
+/// Provider for toggling memo multi-select mode
+final toggleMemoMultiSelectModeProvider = Provider<void Function()>((ref) {
+  return () {
+    final currentMode = ref.read(memoMultiSelectModeProvider);
+    final newMode = !currentMode;
+
+    // Update the mode
+    ref.read(memoMultiSelectModeProvider.notifier).state = newMode;
+
+    // If turning off multi-select mode, clear selections
+    if (!newMode) {
+      ref.read(selectedMemoIdsForMultiSelectProvider.notifier).state = {};
+    }
+  };
+}, name: 'toggleMemoMultiSelectMode');
+
+/// Provider for toggling comment multi-select mode
+final toggleCommentMultiSelectModeProvider = Provider<void Function()>((ref) {
+  return () {
+    final currentMode = ref.read(commentMultiSelectModeProvider);
+    final newMode = !currentMode;
+
+    // Update the mode
+    ref.read(commentMultiSelectModeProvider.notifier).state = newMode;
+
+    // If turning off multi-select mode, clear selections
+    if (!newMode) {
+      ref.read(selectedCommentIdsForMultiSelectProvider.notifier).state = {};
+    }
+  };
+}, name: 'toggleCommentMultiSelectMode');
