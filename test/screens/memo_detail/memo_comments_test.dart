@@ -1,5 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_memos/models/comment.dart';
+import 'package:flutter_memos/providers/api_providers.dart';
+import 'package:flutter_memos/services/api_service.dart';
+import 'package:mockito/annotations.dart';
+import 'package:mockito/mockito.dart';
+
+import 'memo_comments_test.mocks.dart';
+
+// Generate mock for ApiService
+@GenerateMocks([ApiService])
 import 'package:flutter_memos/providers/comment_providers.dart' as comment_providers; // For hidden IDs
 import 'package:flutter_memos/providers/filter_providers.dart'; // For hidePinnedProvider
 import 'package:flutter_memos/providers/ui_providers.dart' as ui_providers;
@@ -69,8 +78,40 @@ void main() {
   tearDown(() {
     container.dispose();
   });
+void main() {
+  late MockApiService mockApiService;
+  late List<Comment> testComments;
+  const String testMemoId = 'test-memo-id';
 
-  testWidgets('MemoComments displays no checkboxes initially', (WidgetTester tester) async {
+  setUp(() {
+    // Initialize the mock API service
+    mockApiService = MockApiService();
+    
+    // Create test comments
+    testComments = [
+      Comment(
+        id: 'comment-1',
+        content: 'This is comment 1',
+        createTime: DateTime.now().millisecondsSinceEpoch,
+      ),
+      Comment(
+        id: 'comment-2',
+        content: 'This is comment 2',
+        createTime: DateTime.now().millisecondsSinceEpoch - 60000,
+      ),
+    ];
+    
+    // Stub listMemoComments
+    when(mockApiService.listMemoComments(any)).thenAnswer((invocation) async {
+      final memoId = invocation.positionalArguments[0] as String;
+      if (memoId == testMemoId) {
+        return testComments;
+      }
+      return [];
+    });
+  });
+
+  testWidgets('MemoComments displays list of comments', (WidgetTester tester) async {
     // Arrange
     // Pass the container to the helper
     await tester.pumpWidget(
@@ -234,14 +275,19 @@ void main() {
   });
 
   testWidgets('MemoComments exits multi-select mode and hides checkboxes', (
-    WidgetTester tester,
-  ) async {
-    // Arrange
-    await tester.pumpWidget(
-      buildTestableWidget(const MemoComments(memoId: testMemoId), container),
-    );
-    await tester.pumpAndSettle();
-
+  // Build our app and trigger a frame
+ await tester.pumpWidget(
+   ProviderScope(
+     overrides: [
+       apiServiceProvider.overrideWithValue(mockApiService),
+     ],
+     child: const MaterialApp(
+       home: Scaffold(
+         body: MemoComments(memoId: testMemoId),
+       ),
+     ),
+   ),
+ );
     // Enter multi-select mode and select an item
     container.read(ui_providers.commentMultiSelectModeProvider.notifier).state = true;
     await tester.pumpAndSettle();
@@ -284,5 +330,5 @@ void main() {
       ),
       findsWidgets,
     );
-  });
+  })
 }

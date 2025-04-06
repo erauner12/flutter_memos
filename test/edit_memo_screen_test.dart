@@ -5,7 +5,12 @@ import 'package:flutter_memos/screens/edit_memo/edit_memo_screen.dart';
 import 'package:flutter_memos/services/api_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
+
+// Generate mock for ApiService
+@GenerateMocks([ApiService])
+import 'edit_memo_screen_test.mocks.dart';
 
 // Mock for ApiService
 class MockApiService extends Mock implements ApiService {
@@ -51,23 +56,49 @@ class MockApiService extends Mock implements ApiService {
     bool useUpdateTimeForExpression = false,
   }) async {
     // Return an empty list for refresh calls in this test context
-    print(
-      '[MockApiService - EditMemoScreenTest] listMemos called (returning empty)',
-    );
     return PaginatedMemoResponse(memos: [], nextPageToken: null);
   }
 }
 
 void main() {
   late MockApiService mockApiService;
+  late Memo testMemo;
 
   setUp(() {
+    // Initialize the mock API service
     mockApiService = MockApiService();
+    
+    // Create a test memo
+    testMemo = Memo(
+      id: 'test-edit-memo-id',
+      content: 'Test memo content for editing',
+      pinned: false,
+      createTime: DateTime.now().subtract(const Duration(days: 1)).toIso8601String(),
+      updateTime: DateTime.now().toIso8601String(),
+    );
+    // Stub getMemo
+    when(mockApiService.getMemo(argThat(isA<String>()))).thenAnswer((invocation) async {
+      final id = invocation.positionalArguments[0] as String;
+      if (id == testMemo.id) {
+        return testMemo;
+      }
+      throw Exception('Memo not found: $id');
+    });
+    
+    // Stub updateMemo
+    when(mockApiService.updateMemo(argThat(isA<String>()), argThat(isA<Memo>()))).thenAnswer((invocation) async {
+      final id = invocation.positionalArguments[0] as String;
+      final memo = invocation.positionalArguments[1] as Memo;
+      
+      // Return updated memo
+      return memo.copyWith(
+        id: id,
+        updateTime: DateTime.now().toIso8601String(),
+      );
+    });
   });
 
-  // Function removed as it was unused
-
-  testWidgets('EditMemoScreen loads memo data correctly', (WidgetTester tester) async {
+  testWidgets('EditMemoScreen loads and displays memo content', (WidgetTester tester) async {
     // Build our app and trigger a frame.
     await tester.pumpWidget(
       ProviderScope(
@@ -103,7 +134,8 @@ void main() {
         ],
         child: const MaterialApp(
           home: EditMemoScreen(
-            entityId: 'test-memo-id', entityType: 'memo',
+            entityId: 'test-edit-memo-id',
+            entityType: 'memo',
           ),
         ),
       ),

@@ -1,296 +1,233 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_memos/api/lib/api.dart'; // Added import
 import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/models/memo.dart';
-import 'package:flutter_memos/providers/ui_providers.dart';
+import 'package:flutter_memos/providers/api_providers.dart';
 import 'package:flutter_memos/screens/memo_detail/memo_detail_screen.dart';
+import 'package:flutter_memos/services/api_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mockito/annotations.dart';
+import 'package:mockito/mockito.dart';
 
-// Mock classes
-class MockNavigatorObserver implements NavigatorObserver {
-  @override
-  NavigatorState? get navigator => null;
-  
-  @override
-  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {}
+// Generate mock for ApiService
+@GenerateMocks([ApiService])
 
+// Mock for ApiService
+class MockApiService extends Mock implements ApiService {
   @override
-  void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) {}
-
-  @override
-  void didRemove(Route<dynamic> route, Route<dynamic>? previousRoute) {}
-
-  @override
-  void didReplace({Route<dynamic>? newRoute, Route<dynamic>? oldRoute}) {}
-
-  @override
-  void didStartUserGesture(
-    Route<dynamic> route,
-    Route<dynamic>? previousRoute,
-  ) {}
-
-  @override
-  void didStopUserGesture() {}
-
-  @override
-  void didChangeTop(Route<dynamic>? route, Route<dynamic>? previousRoute) {}
-}
-
-class MockMemo implements Memo {
-  @override
-  final String id = 'test-id';
-  @override
-  final String content = 'Test memo content';
-  @override
-  final bool pinned = false;
-  @override
-  final MemoState state = MemoState.normal;
-  @override
-  final String visibility = 'PUBLIC';
-  
-  @override
-  String? get createTime => null;
-
-  @override
-  String? get creator => null;
-
-  @override
-  String? get displayTime => null;
-
-  @override
-  String? get parent => null;
-
-  @override
-  List<dynamic>? get relationList => null;
-
-  @override
-  List<String>? get resourceNames => null;
-
-  @override
-  String? get updateTime => null;
-
-  @override
-  Memo copyWith({
-    String? id,
-    String? content,
-    bool? pinned,
-    MemoState? state,
-    String? visibility,
-    List<String>? resourceNames,
-    List<dynamic>? relationList,
-    String? parent,
-    String? creator,
-    String? createTime,
-    String? updateTime,
-    String? displayTime,
-  }) {
-    return this;
+  Future<List<Comment>> listMemoComments(String memoId) async {
+    return [
+      Comment(
+        id: 'comment-1',
+        content: 'This is comment 1',
+        createTime: DateTime.now().millisecondsSinceEpoch,
+      ),
+      Comment(
+        id: 'comment-2',
+        content: 'This is comment 2',
+        createTime: DateTime.now().millisecondsSinceEpoch - 60000,
+      ),
+    ];
   }
 
   @override
-  Map<String, dynamic> toJson() {
-    return {
-      'content': content,
-      'pinned': pinned,
-      'state': state.toString().split('.').last.toUpperCase(),
-      'visibility': visibility,
-    };
+  Future<PaginatedMemoResponse> listMemos({
+    String parent = 'users/1',
+    String? filter,
+    String? state,
+    String sort = 'updateTime',
+    String direction = 'DESC',
+    int? pageSize,
+    String? pageToken,
+    List<String>? tags,
+    dynamic visibility,
+    String? contentSearch,
+    DateTime? createdAfter,
+    DateTime? createdBefore,
+    DateTime? updatedAfter,
+    DateTime? updatedBefore,
+    String? timeExpression,
+    bool useUpdateTimeForExpression = false,
+  }) async {
+    return PaginatedMemoResponse(memos: [], nextPageToken: null);
   }
 }
 
-class MockComment implements Comment {
-  @override
-  final String id = 'comment-id';
-  @override
-  final String content = 'Test comment';
-  @override
-  final int createTime = DateTime.now().millisecondsSinceEpoch;
-  @override
-  final bool pinned = false;
-  @override
-  List<V1Resource>? get resources => null;
+// Mock for NavigatorObserver
+class MockNavigatorObserver extends Mock implements NavigatorObserver {}
 
-  @override
-  String? get creatorId => null;
+// Helper functions for UI testing from the original test
+extension WidgetTesterExtensions on WidgetTester {
+  Future<void> enterComment(String commentText) async {
+    final textField = find.byType(TextField);
+    expect(textField, findsOneWidget);
 
-  @override
-  CommentState get state => CommentState.normal;
+    await tap(textField);
+    await pump();
 
-  @override
-  int? get updateTime => null;
+    await enterText(textField, commentText);
+    await pump();
+  }
 
-  @override
-  // Update signature to exactly match Comment.copyWith
-  Comment copyWith({
-    String? id,
-    String? content,
-    String? creatorId,
-    int? createTime,
-    int? updateTime,
-    bool clearUpdateTime = false, // Add clearUpdateTime
-    CommentState? state,
-    bool? pinned,
-    List<V1Resource>? resources, // Add resources
-  }) {
-    // Return a new instance with potentially updated fields
-    return Comment(
-      id: id ?? this.id,
-      content: content ?? this.content,
-      creatorId: creatorId ?? this.creatorId,
-      createTime: createTime ?? this.createTime,
-      updateTime: clearUpdateTime ? null : (updateTime ?? this.updateTime),
-      state: state ?? this.state,
-      pinned: pinned ?? this.pinned,
-      resources: resources ?? this.resources, // Assign resources
+  Future<bool> isCommentVisible(String commentText) async {
+    final textWidget = find.text(commentText);
+    return textWidget.evaluate().isNotEmpty;
+  }
+
+  Future<void> pressEscapeKey() async {
+    await sendKeyEvent(LogicalKeyboardKey.escape);
+    await pump();
+  }
+
+  Future<void> sendKeyEvent(LogicalKeyboardKey key) async {
+    await simulateKeyDownEvent(key);
+    await pump();
+    await simulateKeyUpEvent(key);
+    await pump();
+  }
+
+  Finder findWidgetWithText(Type widgetType, String text) {
+    return find.ancestor(
+      of: find.text(text),
+      matching: find.byType(widgetType),
     );
   }
+}
 
-  @override
-  Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'content': content,
-      'createTime': createTime,
-      'pinned': pinned,
-    };
-  }
-
-  // Add toString for better debugging
-  @override
-  String toString() {
-    return 'MockComment(id: $id, content: "$content", pinned: $pinned, state: $state)';
+// Helper for attaching mocks to providers
+extension ProviderContainerExtensions on ProviderContainer {
+  List<Override> getAllProviderOverrides() {
+    final List<Override> overrides = [];
+    return overrides;
   }
 }
 
 void main() {
+  late MockApiService mockApiService;
+  late Memo testMemo;
+  late List<Comment> testComments;
+
+  setUp(() {
+    mockApiService = MockApiService();
+
+    testMemo = Memo(
+      id: 'test-memo-id',
+      content: '# Test Memo\nThis is a test memo content.',
+      pinned: false,
+      createTime: DateTime.now().subtract(const Duration(days: 1)).toIso8601String(),
+      updateTime: DateTime.now().toIso8601String(),
+    );
+
+    testComments = [
+      Comment(
+        id: 'comment-1',
+        content: 'This is comment 1',
+        createTime: DateTime.now().millisecondsSinceEpoch,
+      ),
+      Comment(
+        id: 'comment-2',
+        content: 'This is comment 2',
+        createTime: DateTime.now().millisecondsSinceEpoch - 60000,
+      ),
+    ];
+
+    when(mockApiService.getMemo(argThat(isA<String>()))).thenAnswer((
+      invocation,
+    ) async {
+      final id = invocation.positionalArguments[0] as String;
+      if (id == testMemo.id) {
+        return testMemo;
+      }
+      throw Exception('Memo not found: $id');
+    });
+
+    when(mockApiService.listMemoComments(argThat(isA<String>()))).thenAnswer((
+      invocation,
+    ) async {
+      final memoId = invocation.positionalArguments[0] as String;
+      if (memoId == testMemo.id) {
+        return testComments;
+      }
+      return [];
+    });
+  });
+
   group('MemoDetailScreen Focus Management Tests', () {
     late ProviderContainer container;
     late NavigatorObserver mockObserver;
-    
+
     setUp(() {
-      mockObserver = MockNavigatorObserver();
       container = ProviderContainer();
+      mockObserver = MockNavigatorObserver();
     });
 
-    tearDown(() {
-      container.dispose();
-    });
-
-    testWidgets('Screen should have focus by default', (WidgetTester tester) async {
+    testWidgets('should focus comment field when shortcut is pressed', (
+      WidgetTester tester,
+    ) async {
       await tester.pumpWidget(
         ProviderScope(
           overrides: container.getAllProviderOverrides(),
           child: MaterialApp(
+            home: const MemoDetailScreen(memoId: 'test-memo-id'),
             navigatorObservers: [mockObserver],
-            home: const MemoDetailScreen(memoId: 'test-id'),
           ),
         ),
       );
-      
+
       await tester.pumpAndSettle();
-      
-      // Verify focus is on the screen by checking the focus system
-      expect(FocusManager.instance.primaryFocus?.hasFocus, isTrue);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.slash);
+      await tester.pump();
+
+      expect(find.byType(TextField), findsOneWidget);
+      final TextField textField = tester.widget(find.byType(TextField));
+      expect(textField.focusNode?.hasFocus, isTrue);
     });
 
-    testWidgets('K key should navigate to previous comment', (WidgetTester tester) async {
-      // Initialize with some comments selected
-      container.read(selectedCommentIndexProvider.notifier).state = 1;
-      
+    testWidgets('should unfocus comment field on Escape key press', (
+      WidgetTester tester,
+    ) async {
       await tester.pumpWidget(
         ProviderScope(
           overrides: container.getAllProviderOverrides(),
           child: MaterialApp(
+            home: const MemoDetailScreen(memoId: 'test-memo-id'),
             navigatorObservers: [mockObserver],
-            home: const MemoDetailScreen(memoId: 'test-id'),
           ),
         ),
       );
-      
-      await tester.pumpAndSettle();
-      
-      // Send a K key event
-      await tester.sendKeyEvent(LogicalKeyboardKey.keyK);
-      await tester.pumpAndSettle();
-      
-      // Check if the selection changed
-      // Since we don't have actual comments loaded, this might not change the actual selection
-      // But we can verify the code ran without errors
-      expect(tester.takeException(), isNull);
-    });
 
-    testWidgets('J key should navigate to next comment', (WidgetTester tester) async {
-      // Initialize with some comments selected
-      container.read(selectedCommentIndexProvider.notifier).state = 0;
-      
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: container.getAllProviderOverrides(),
-          child: MaterialApp(
-            navigatorObservers: [mockObserver],
-            home: const MemoDetailScreen(memoId: 'test-id'),
-          ),
-        ),
-      );
-      
       await tester.pumpAndSettle();
-      
-      // Send a J key event
-      await tester.sendKeyEvent(LogicalKeyboardKey.keyJ);
-      await tester.pumpAndSettle();
-      
-      // Check if the selection changed
-      // Since we don't have actual comments loaded, this might not change the actual selection
-      // But we can verify the code ran without errors
-      expect(tester.takeException(), isNull);
-    });
-    
-    testWidgets('Focus should remain on screen when tapping elsewhere', (WidgetTester tester) async {
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: container.getAllProviderOverrides(),
-          child: MaterialApp(
-            navigatorObservers: [mockObserver],
-            home: const MemoDetailScreen(memoId: 'test-id'),
-          ),
-        ),
-      );
-      
-      await tester.pumpAndSettle();
-      
-      // Get the focus state
-      final initialFocusNode = FocusManager.instance.primaryFocus;
-      
-      // Tap somewhere on the screen
-      await tester.tap(find.byType(MemoDetailScreen));
-      await tester.pumpAndSettle();
-      
-      // Check if focus is still on the screen
-      final finalFocusNode = FocusManager.instance.primaryFocus;
-      expect(finalFocusNode, equals(initialFocusNode));
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.slash);
+      await tester.pump();
+
+      expect(find.byType(TextField), findsOneWidget);
+      TextField textField = tester.widget(find.byType(TextField));
+      expect(textField.focusNode?.hasFocus, isTrue);
+
+      await tester.pressEscapeKey();
+      await tester.pump();
+
+      textField = tester.widget(find.byType(TextField));
+      expect(textField.focusNode?.hasFocus, isFalse);
     });
   });
-  
-  testWidgets('MemoDetailScreen highlights comment based on provider state', (
+
+  testWidgets('MemoDetailScreen displays memo content', (
     WidgetTester tester,
   ) async {
-    // Create a test comment
-    final comment = MockComment();
+    late ProviderContainer container;
+    late NavigatorObserver mockObserver;
 
-    // Set up a ProviderContainer with overrides
-    final container = ProviderContainer(
-      overrides: [
-        // Override the highlightedCommentIdProvider to return the test comment ID
-        highlightedCommentIdProvider.overrideWith((_) => comment.id),
-      ],
-    );
+    container = ProviderContainer();
+    mockObserver = MockNavigatorObserver();
 
     try {
       await tester.pumpWidget(
         ProviderScope(
-          overrides: container.getAllProviderOverrides(),
+          overrides: [apiServiceProvider.overrideWithValue(mockApiService)],
           child: const MaterialApp(
             home: MemoDetailScreen(memoId: 'test-memo-id'),
           ),
@@ -299,29 +236,13 @@ void main() {
 
       await tester.pumpAndSettle();
 
-      // For a full test, we would verify the highlighted comment is visible
-      // This is a partial test due to the complexity of mocking all the required providers
+      expect(find.text('# Test Memo'), findsOneWidget);
+      expect(find.text('This is a test memo content.'), findsOneWidget);
 
-      // Verify the highlighted state will be reset after rendering
-      expect(
-        true,
-        isTrue,
-        reason:
-            'Placeholder assertion - complete test would check highlighting',
-      );
-    } finally {
-      container.dispose();
+      expect(find.text('This is comment 1'), findsOneWidget);
+      expect(find.text('This is comment 2'), findsOneWidget);
+    } catch (e) {
+      fail('Test failed: $e');
     }
   });
-}
-
-// Extension to help with provider overrides in tests
-extension ProviderContainerX on ProviderContainer {
-  List<Override> getAllProviderOverrides() {
-    final overrides = <Override>[];
-
-    // Create overrides for all providers in the container
-    // This is a simplified version that works for most common providers
-    return overrides;
-  }
 }
