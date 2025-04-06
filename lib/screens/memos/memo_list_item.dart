@@ -46,6 +46,10 @@ class _MemoListItemState extends ConsumerState<MemoListItem> {
   }
 
   void _navigateToMemoDetail(BuildContext context, WidgetRef ref) {
+    // Set selected memo ID when navigating to detail
+    ref.read(ui_providers.selectedMemoIdProvider.notifier).state =
+        widget.memo.id;
+    
     Navigator.pushNamed(
       context,
       '/memo-detail',
