@@ -434,12 +434,14 @@ void main() {
           ),
         ); // No longer called on success
   
-        // Assert: Selection was updated to the previous memo (memo_0)
-      final expectedNextIdAfterArchive = initialMemos[initialIndexSelected - 1].id; // memo_0
+        // Assert: Selection was updated DOWNWARD to the next memo (memo_2)
+        final expectedNextIdAfterArchive =
+            initialMemos[initialIndexSelected + 1].id; // memo_2
       expect(
         container.read(ui_providers.selectedMemoIdProvider),
         expectedNextIdAfterArchive,
-        reason: "Selection should move to the previous memo after archiving the selected one",
+          reason:
+              "Selection should move DOWN to the next memo after archiving the selected one",
       );
     });
   });
