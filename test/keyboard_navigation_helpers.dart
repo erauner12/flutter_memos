@@ -22,7 +22,7 @@ Future<void> focusTextFieldAndWait(
   await tester.pumpAndSettle();
   
   // Verify that the text field has focus
-  final focusNode = Focus.of(tester.element(textFieldFinder)).focusNode;
+  final focusNode = Focus.of(tester.element(textFieldFinder));
   expect(focusNode.hasFocus, isTrue, reason: 'Text field should have focus');
 }
 
@@ -35,24 +35,21 @@ Future<void> sendKeyEventAndWait(
   bool isAltPressed = false,
   bool isMetaPressed = false,
 }) async {
-  await tester.sendKeyDownEvent(
-    key,
-    isControlPressed: isControlPressed,
-    isShiftPressed: isShiftPressed,
-    isAltPressed: isAltPressed,
-    isMetaPressed: isMetaPressed,
-  );
+  // Create modifiers set based on parameters
+  final Set<LogicalKeyboardKey> modifiers = {};
+  if (isControlPressed) modifiers.add(LogicalKeyboardKey.control);
+  if (isShiftPressed) modifiers.add(LogicalKeyboardKey.shift);
+  if (isAltPressed) modifiers.add(LogicalKeyboardKey.alt);
+  if (isMetaPressed) modifiers.add(LogicalKeyboardKey.meta);
+
+  // Send key down event with modifiers
+  await tester.sendKeyDownEvent(key, character: null, modifiers: modifiers);
   
   // Wait for key down event to be processed
   await tester.pump(const Duration(milliseconds: 50));
   
-  await tester.sendKeyUpEvent(
-    key,
-    isControlPressed: isControlPressed,
-    isShiftPressed: isShiftPressed,
-    isAltPressed: isAltPressed,
-    isMetaPressed: isMetaPressed,
-  );
+  // Send key up event with same modifiers
+  await tester.sendKeyUpEvent(key, character: null, modifiers: modifiers);
   
   // Wait for key up event to be processed
   await tester.pump(const Duration(milliseconds: 50));
