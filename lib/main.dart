@@ -251,7 +251,7 @@ class _MyAppState extends ConsumerState<MyApp> {
               CallbackAction<ToggleCaptureUtilityIntent>(
                 onInvoke: (intent) {
                   // Trigger the toggle via the provider
-                  ref.read(captureUtilityToggleProvider.notifier).toggle();
+                  toggleCaptureUtility(ref);
                   if (kDebugMode) {
                     print('[MyApp Actions] Handled ToggleCaptureUtilityIntent');
                   }

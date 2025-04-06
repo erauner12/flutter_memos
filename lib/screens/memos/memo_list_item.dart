@@ -1,30 +1,36 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_memos/models/memo.dart';
 import 'package:flutter_memos/providers/memo_providers.dart';
-import 'package:flutter_memos/providers/ui_providers.dart';
+import 'package:flutter_memos/providers/ui_providers.dart' as ui_providers;
 import 'package:flutter_memos/utils/memo_utils.dart';
 import 'package:flutter_memos/widgets/memo_card.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class MemoListItem extends ConsumerWidget {
+class MemoListItem extends ConsumerStatefulWidget {
   final Memo memo;
   final int index; // Add index for selection tracking
 
   const MemoListItem({super.key, required this.memo, required this.index});
 
+  @override
+  _MemoListItemState createState() => _MemoListItemState();
+}
+
+class _MemoListItemState extends ConsumerState<MemoListItem> {
   void _toggleHideMemo(BuildContext context, WidgetRef ref) {
     final hiddenMemoIds = ref.read(hiddenMemoIdsProvider);
-    if (hiddenMemoIds.contains(memo.id)) {
+    if (hiddenMemoIds.contains(widget.memo.id)) {
       // Unhide memo
       ref
           .read(hiddenMemoIdsProvider.notifier)
-          .update((state) => state..remove(memo.id));
+          .update((state) => state..remove(widget.memo.id));
     } else {
       // Hide memo
       ref
           .read(hiddenMemoIdsProvider.notifier)
-          .update((state) => state..add(memo.id));
+          .update((state) => state..add(widget.memo.id));
 
       // Show a confirmation that the memo was hidden
       ScaffoldMessenger.of(context).showSnackBar(
@@ -43,24 +49,38 @@ class MemoListItem extends ConsumerWidget {
     Navigator.pushNamed(
       context,
       '/memo-detail',
-      arguments: {'memoId': memo.id},
-    ).then((_) {
-      // Refresh memos after returning from detail screen
-      ref.read(memosNotifierProvider.notifier).refresh();
-    });
+      arguments: {'memoId': widget.memo.id},
+    );
+    // Removed .then((_) { ref.read(memosNotifierProvider.notifier).refresh(); });
+    // This was causing the scroll position to reset when returning
+  }
+
+  Future<void> _onCopy() async {
+    await Clipboard.setData(ClipboardData(text: widget.memo.content));
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Memo content copied to clipboard'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    // Removed sortMode watch, always using updateTime now.
-    final isSelected = ref.watch(selectedMemoIndexProvider) == index;
+  Widget build(BuildContext context) {
+    // Watch for selected memo ID instead of index
+    final selectedMemoId = ref.watch(ui_providers.selectedMemoIdProvider);
+    final isSelected = selectedMemoId == widget.memo.id;
 
     if (isSelected && kDebugMode) {
-      print('[MemoListItem] Memo at index $index is selected');
+      print(
+        '[MemoListItem] Memo ID ${widget.memo.id} at index ${widget.index} is selected',
+      );
     }
 
     return Dismissible(
-      key: ValueKey('dismissible-${memo.id}'),
+      key: ValueKey('dismissible-${widget.memo.id}'),
       background: Container(
         color: Colors.orange,
         alignment: Alignment.centerLeft,
@@ -94,36 +114,21 @@ class MemoListItem extends ConsumerWidget {
           // First, immediately add the memo to hidden IDs to remove it from UI
           ref
               .read(hiddenMemoIdsProvider.notifier)
-              .update((state) => state..add(memo.id));
+              .update((state) => state..add(widget.memo.id));
 
           // Then trigger the API delete operation
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            // Create a local reference to the providers we need to call
-            // outside the async callback
-            final deleteMemo = ref.read(deleteMemoProvider(memo.id));
-            final String memoId = memo.id; // Capture memo ID
-
-            // Execute delete operation
-            deleteMemo()
+            ref.read(deleteMemoProvider(widget.memo.id))()
                 .then((_) {
-                  // Use a post-frame callback for UI updates to avoid build phase issues
-                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                    // These operations are safe even if the widget is no longer mounted
-                    ref.read(memosNotifierProvider.notifier).refresh();
-                    ref
-                        .read(hiddenMemoIdsProvider.notifier)
-                        .update((state) => state..remove(memoId));
-                  });
-                })
-                .catchError((e) {
-                  // If delete fails, handle errors and clean up
-                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                    ref.read(memosNotifierProvider.notifier).refresh();
-                    ref
-                        .read(hiddenMemoIdsProvider.notifier)
-                        .update((state) => state..remove(memoId));
-                  });
-                });
+              // Use a post-frame callback for UI updates to avoid build phase issues
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                // These operations are safe even if the widget is no longer mounted
+                ref.read(memosNotifierProvider.notifier).refresh();
+                ref
+                    .read(hiddenMemoIdsProvider.notifier)
+                    .update((state) => state..remove(widget.memo.id));
+              });
+            });
           });
         }
       },
@@ -161,20 +166,20 @@ class MemoListItem extends ConsumerWidget {
       child: Stack(
         children: [
           MemoCard(
-            id: memo.id,
-            content: memo.content,
-            pinned: memo.pinned,
-            // createdAt: memo.createTime, // Removed createTime display
-            updatedAt: memo.updateTime,
+            id: widget.memo.id,
+            content: widget.memo.content,
+            pinned: widget.memo.pinned,
+            // createdAt: widget.memo.createTime, // Removed createTime display
+            updatedAt: widget.memo.updateTime,
             showTimeStamps: true,
-            isSelected:
-                ref.watch(selectedMemoIndexProvider) ==
-                index, // Add selected state
+            isSelected: isSelected, // Use ID-based selection
             // Always highlight update time now
-            highlightTimestamp: MemoUtils.formatTimestamp(memo.updateTime),
+            highlightTimestamp: MemoUtils.formatTimestamp(
+              widget.memo.updateTime,
+            ),
             timestampType: 'Updated', // Always 'Updated'
             onTap: () => _navigateToMemoDetail(context, ref),
-            onArchive: () => ref.read(archiveMemoProvider(memo.id))(),
+            onArchive: () => ref.read(archiveMemoProvider(widget.memo.id))(),
             onDelete: () async {
               // Show confirmation dialog first
               final confirm = await showDialog<bool>(
@@ -203,17 +208,17 @@ class MemoListItem extends ConsumerWidget {
                 try {
                   if (kDebugMode) {
                     print(
-                      '[MemoListItem] Calling deleteMemoProvider for memo ID: ${memo.id}',
+                      '[MemoListItem] Calling deleteMemoProvider for memo ID: ${widget.memo.id}',
                     );
                   }
 
                   // First, immediately add the memo to hidden IDs to remove it from UI
                   ref
                       .read(hiddenMemoIdsProvider.notifier)
-                      .update((state) => state..add(memo.id));
+                      .update((state) => state..add(widget.memo.id));
 
                   // Then perform the actual delete operation
-                  await ref.read(deleteMemoProvider(memo.id))();
+                  await ref.read(deleteMemoProvider(widget.memo.id))();
 
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
@@ -227,7 +232,7 @@ class MemoListItem extends ConsumerWidget {
                   // If deletion fails, show error and remove from hidden IDs
                   ref
                       .read(hiddenMemoIdsProvider.notifier)
-                      .update((state) => state..remove(memo.id));
+                      .update((state) => state..remove(widget.memo.id));
 
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
@@ -245,11 +250,12 @@ class MemoListItem extends ConsumerWidget {
               }
             },
             onHide: () => _toggleHideMemo(context, ref),
-            onTogglePin: () => ref.read(togglePinMemoProvider(memo.id))(),
+            onTogglePin:
+                () => ref.read(togglePinMemoProvider(widget.memo.id))(),
             onBump: () async {
               // Add onBump callback implementation
               try {
-                await ref.read(bumpMemoProvider(memo.id))();
+                await ref.read(bumpMemoProvider(widget.memo.id))();
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
@@ -282,13 +288,10 @@ class MemoListItem extends ConsumerWidget {
               tooltip: 'Archive',
               constraints: const BoxConstraints(),
               padding: const EdgeInsets.all(8),
-              color: Colors.grey[600],
+              color: Colors.grey,
               onPressed: () {
-                // Use the archive memo provider
-                // Store context to use after async operation
                 final currentContext = context;
-                ref.read(archiveMemoProvider(memo.id))().then((_) {
-                  // Use the stored context instead of checking mounted
+                ref.read(archiveMemoProvider(widget.memo.id))().then((_) {
                   ScaffoldMessenger.of(currentContext).showSnackBar(
                     const SnackBar(
                       content: Text('Memo archived successfully'),

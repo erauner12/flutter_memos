@@ -88,9 +88,8 @@ mixin KeyboardNavigationMixin<T extends ConsumerStatefulWidget>
       return KeyEventResult.ignored;
     }
     
-    // Navigate up (previous item) - Shift+Up
-    if (event.logicalKey == LogicalKeyboardKey.arrowUp &&
-        HardwareKeyboard.instance.isLogicalKeyPressed(LogicalKeyboardKey.shift)) {
+    // Navigate up (previous item) with BOTH Shift+Up OR plain Up arrow
+    if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
       if (onUp != null) {
         if (kDebugMode) {
           print('[KeyboardNavigation] Processing UP navigation');
@@ -100,9 +99,8 @@ mixin KeyboardNavigationMixin<T extends ConsumerStatefulWidget>
       }
     }
     
-    // Navigate down (next item) - Shift+Down
-    else if (event.logicalKey == LogicalKeyboardKey.arrowDown &&
-            HardwareKeyboard.instance.isLogicalKeyPressed(LogicalKeyboardKey.shift)) {
+    // Navigate down (next item) with BOTH Shift+Down OR plain Down arrow
+    else if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
       if (onDown != null) {
         if (kDebugMode) {
           print('[KeyboardNavigation] Processing DOWN navigation');
@@ -114,8 +112,12 @@ mixin KeyboardNavigationMixin<T extends ConsumerStatefulWidget>
     
     // Navigate back - Command+Left (macOS) or Alt+Left (Windows/Linux)
     else if (event.logicalKey == LogicalKeyboardKey.arrowLeft &&
-          (HardwareKeyboard.instance.isLogicalKeyPressed(LogicalKeyboardKey.meta) ||
-           HardwareKeyboard.instance.isLogicalKeyPressed(LogicalKeyboardKey.alt))) {
+        (HardwareKeyboard.instance.isLogicalKeyPressed(
+              LogicalKeyboardKey.meta,
+            ) ||
+            HardwareKeyboard.instance.isLogicalKeyPressed(
+              LogicalKeyboardKey.alt,
+            ))) {
       if (onBack != null) {
         onBack();
         return KeyEventResult.handled;
@@ -124,8 +126,12 @@ mixin KeyboardNavigationMixin<T extends ConsumerStatefulWidget>
     
     // Navigate forward - Command+Right (macOS) or Alt+Right (Windows/Linux)
     else if (event.logicalKey == LogicalKeyboardKey.arrowRight &&
-          (HardwareKeyboard.instance.isLogicalKeyPressed(LogicalKeyboardKey.meta) ||
-           HardwareKeyboard.instance.isLogicalKeyPressed(LogicalKeyboardKey.alt))) {
+        (HardwareKeyboard.instance.isLogicalKeyPressed(
+              LogicalKeyboardKey.meta,
+            ) ||
+            HardwareKeyboard.instance.isLogicalKeyPressed(
+              LogicalKeyboardKey.alt,
+            ))) {
       if (onForward != null) {
         onForward();
         return KeyEventResult.handled;

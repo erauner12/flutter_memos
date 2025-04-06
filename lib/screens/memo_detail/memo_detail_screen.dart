@@ -85,15 +85,9 @@ class _MemoDetailScreenState extends ConsumerState<MemoDetailScreen>
                       'entityId': widget.memoId,
                     }, // Specify type and ID
                 ).then((_) {
-                    // Refresh all data when returning from edit screen
-                    // Invalidate the providers to force refresh
+                    // Refresh only the detail data, not the entire memos list
                   ref.invalidate(memoDetailProvider(widget.memoId));
                   ref.invalidate(memoCommentsProvider(widget.memoId));
-                  
-                    // Refresh memos list
-                    ref
-                        .read(memo_providers.memosNotifierProvider.notifier)
-                        .refresh();
 
                     // Ensure memo is not hidden
                     ref

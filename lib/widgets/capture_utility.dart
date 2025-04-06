@@ -10,10 +10,11 @@ import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/models/memo.dart';
 import 'package:flutter_memos/providers/comment_providers.dart'
     as comment_providers; // Add import for comment_providers
-import 'package:flutter_memos/providers/ui_providers.dart'; // Import UI providers
-import 'package:flutter_memos/screens/new_memo/new_memo_providers.dart';
+import 'package:flutter_memos/providers/memo_providers.dart' as memo_providers;
+import 'package:flutter_memos/providers/ui_providers.dart'
+    as ui_providers; // Ensure this import exists
+import 'package:flutter_memos/services/api_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
 enum CaptureMode { createMemo, addComment }
 
 // Add this typedef to expose the private state class type
@@ -555,7 +556,8 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
 
   Future<void> _createMemo(String content) async {
     final newMemo = Memo(id: 'temp', content: content, visibility: 'PUBLIC');
-    await ref.read(createMemoProvider)(newMemo);
+    // Add the prefix here
+    await ref.read(memo_providers.createMemoProvider)(newMemo);
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -980,7 +982,11 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
     final keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
     final edgeInsets = MediaQuery.of(context).padding;
 
-    ref.listen<int>(captureUtilityToggleProvider, (previous, current) {
+    // Ensure the prefix and provider name are correct
+    ref.listen<bool>(ui_providers.captureUtilityToggleProvider, (
+      previous,
+      current,
+    ) {
       if (previous != current && mounted) {
         if (kDebugMode) {
           print(

@@ -1,53 +1,36 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-/// Notifier that provides a toggle signal for CaptureUtility
-class CaptureUtilityToggleNotifier extends StateNotifier<int> {
-  CaptureUtilityToggleNotifier() : super(0);
+/// Provider for selected memo ID (replacing index-based selection)
+final selectedMemoIdProvider = StateProvider<String?>(
+  (ref) => null,
+  name: 'selectedMemoIdProvider',
+);
 
-  void toggle() {
-    state = state + 1; // Increment to signal a toggle request
-    if (kDebugMode) {
-      print(
-        '[CaptureUtilityToggleNotifier] Toggle requested. New signal value: $state',
-      );
-    }
-  }
+/// Legacy provider for selected memo index (kept for backward compatibility)
+/// This will be removed in a future update
+@Deprecated('Use selectedMemoIdProvider instead for more robust selection')
+final selectedMemoIndexProvider = StateProvider<int>(
+  (ref) => -1,
+  name: 'selectedMemoIndexProvider',
+);
+
+/// Provider for selected comment index
+final selectedCommentIndexProvider = StateProvider<int>(
+  (ref) => -1,
+  name: 'selectedCommentIndexProvider',
+);
+
+/// Provider for the ID of a comment to highlight (e.g., from a deep link)
+final highlightedCommentIdProvider = StateProvider<String?>(
+  (ref) => null,
+  name: 'highlightedCommentIdProvider',
+);
+
+/// Toggle provider for the capture utility expansion state
+final captureUtilityToggleProvider = StateProvider<bool>((ref) => false);
+
+/// A method to toggle the capture utility state
+void toggleCaptureUtility(WidgetRef ref) {
+  ref.read(captureUtilityToggleProvider.notifier).state =
+      !ref.read(captureUtilityToggleProvider);
 }
-
-/// Provider for toggling CaptureUtility expansion state
-final captureUtilityToggleProvider =
-    StateNotifierProvider<CaptureUtilityToggleNotifier, int>((ref) {
-      return CaptureUtilityToggleNotifier();
-    }, name: 'captureUtilityToggleProvider');
-
-/// Tracks the currently selected memo index for keyboard navigation
-final selectedMemoIndexProvider = StateProvider<int>((ref) {
-  ref.listenSelf((previous, next) {
-    if (kDebugMode) {
-      print('[selectedMemoIndexProvider] Changed from $previous to $next');
-    }
-  });
-  return -1;
-});
-
-/// Tracks the currently selected comment index for keyboard navigation in memo detail screen
-final selectedCommentIndexProvider = StateProvider<int>((ref) {
-  ref.listenSelf((previous, next) {
-    if (kDebugMode) {
-      print('[selectedCommentIndexProvider] Changed from $previous to $next');
-    }
-  });
-  return -1;
-}, name: 'selectedCommentIndexProvider');
-
-/// Provider to temporarily store the ID of a comment to highlight after deep linking.
-/// This should be reset to null after the highlight is rendered once.
-final highlightedCommentIdProvider = StateProvider<String?>((ref) {
-  ref.listenSelf((previous, next) {
-    if (kDebugMode) {
-      print('[highlightedCommentIdProvider] Changed from $previous to $next');
-    }
-  });
-  return null; // Initially no comment is highlighted
-}, name: 'highlightedCommentIdProvider');

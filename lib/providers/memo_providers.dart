@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_memos/models/memo.dart';
 import 'package:flutter_memos/providers/api_providers.dart';
 import 'package:flutter_memos/providers/filter_providers.dart';
+import 'package:flutter_memos/providers/ui_providers.dart' as ui_providers;
 import 'package:flutter_memos/services/api_service.dart'; // Import ApiService
 import 'package:flutter_memos/utils/filter_builder.dart';
 import 'package:flutter_memos/utils/memo_utils.dart';
@@ -84,7 +85,6 @@ class MemosState {
   }
 }
 
-
 // Removed MemoSortMode enum and memoSortModeProvider
 // We now exclusively sort by updateTime due to server inconsistencies 
 // with createTime after updates.
@@ -97,20 +97,32 @@ final hidePinnedProvider = StateProvider<bool>(
   name: 'hidePinnedProvider',
 );
 
+
+
 // --- Start Pagination Notifier ---
 
 class MemosNotifier extends StateNotifier<MemosState> {
   final Ref _ref;
   final ApiService _apiService;
   static const int _pageSize = 20; // Or make configurable
+  final bool _skipInitialFetchForTesting; // Flag for testing
 
-  MemosNotifier(this._ref)
+  MemosNotifier(this._ref, {bool skipInitialFetchForTesting = false})
     : _apiService = _ref.read(apiServiceProvider),
+      _skipInitialFetchForTesting = skipInitialFetchForTesting,
       super(const MemosState(isLoading: true)) {
     _initialize();
   }
 
   void _initialize() {
+    // Skip initialization for tests to prevent overwriting manually set state
+    if (_skipInitialFetchForTesting) {
+      if (kDebugMode) {
+        print('[MemosNotifier] Skipping initialization for testing');
+      }
+      return;
+    }
+    
     // Listen to filter changes and trigger refresh
     // Use select to avoid unnecessary refreshes if only part of the filter changes,
     // but the combined result remains the same (less likely but possible).
@@ -308,21 +320,96 @@ class MemosNotifier extends StateNotifier<MemosState> {
     await fetchInitialPage();
   }
 
-  // Optional: Method to update a single memo in the list optimistically
+  // Update a single memo in the list optimistically
   void updateMemoOptimistically(Memo updatedMemo) {
+    final updatedMemos = state.memos.map((memo) {
+      return memo.id == updatedMemo.id ? updatedMemo : memo;
+    }).toList();
+    
+    // Re-sort to maintain correct order
+    MemoUtils.sortByPinnedThenUpdateTime(updatedMemos);
+    
     state = state.copyWith(
-      memos:
-          state.memos.map((memo) {
-            return memo.id == updatedMemo.id ? updatedMemo : memo;
-          }).toList(),
+      memos: updatedMemos,
     );
   }
 
-  // Optional: Method to remove a memo from the list optimistically
+  // Remove a memo from the list optimistically - Notifier only manages its own list state.
   void removeMemoOptimistically(String memoId) {
+    final initialLength = state.memos.length;
+    final updatedMemos =
+        state.memos.where((memo) => memo.id != memoId).toList();
+
+    if (kDebugMode) {
+      if (updatedMemos.length < initialLength) {
+        print(
+          '[MemosNotifier] removeMemoOptimistically: Removed memo $memoId from internal list.',
+        );
+      } else {
+        print(
+          '[MemosNotifier] removeMemoOptimistically: Memo $memoId not found in internal list.',
+        );
+      }
+    }
+
+    // Only update state if the memo was actually found and removed
+    if (updatedMemos.length < initialLength) {
+      state = state.copyWith(memos: updatedMemos);
+    }
+    
+    // Update selection if needed (handled by UI components watching the provider)
+  }
+
+
+  // Archive a memo optimistically
+  void archiveMemoOptimistically(String memoId) {
     state = state.copyWith(
-      memos: state.memos.where((memo) => memo.id != memoId).toList(),
+      memos: state.memos.map((memo) {
+        if (memo.id == memoId) {
+          return memo.copyWith(state: MemoState.archived, pinned: false);
+        }
+        return memo;
+      }).toList(),
     );
+  }
+
+  // Toggle pin state optimistically
+  void togglePinOptimistically(String memoId) {
+    final updatedMemos = state.memos.map((memo) {
+      if (memo.id == memoId) {
+        return memo.copyWith(pinned: !memo.pinned);
+      }
+      return memo;
+    }).toList();
+    
+    // Re-sort to ensure pinned items appear at top
+    MemoUtils.sortByPinnedThenUpdateTime(updatedMemos);
+    
+    state = state.copyWith(memos: updatedMemos);
+  }
+
+  // Bump a memo's timestamp optimistically
+  void bumpMemoOptimistically(String memoId) {
+    final memoIndex = state.memos.indexWhere((memo) => memo.id == memoId);
+    
+    if (memoIndex != -1) {
+      final memoToBump = state.memos[memoIndex];
+      
+      // Create updated memo with current time
+      final updatedMemo = memoToBump.copyWith(
+        updateTime: DateTime.now().toIso8601String(),
+      );
+      
+      // Create a new list with the updated memo
+      final updatedMemos = List<Memo>.from(state.memos);
+      updatedMemos[memoIndex] = updatedMemo;
+      
+      // Re-sort the list to ensure correct order
+      MemoUtils.sortByPinnedThenUpdateTime(updatedMemos);
+      
+      // Update the state
+      state = state.copyWith(memos: updatedMemos);
+    }
   }
 }
 
@@ -358,14 +445,34 @@ final visibleMemosListProvider = Provider<List<Memo>>((ref) {
   final hiddenMemoIds = ref.watch(hiddenMemoIdsProvider);
   // Watch the hide pinned setting
   final hidePinned = ref.watch(hidePinnedProvider);
+  // Watch the current filter key to filter by state
+  final filterKey = ref.watch(filterKeyProvider);
 
   // Filter the memos currently held in the state
   final visibleMemos =
       memosState.memos.where((memo) {
+        // --- Basic Visibility Filters ---
         // Hide memos that are in the hidden IDs set
         if (hiddenMemoIds.contains(memo.id)) return false;
         // Hide pinned memos if hidePinned is true
         if (hidePinned && memo.pinned) return false;
+
+        // --- State Filtering based on filterKey ---
+        switch (filterKey) {
+          case 'inbox':
+          case 'all': // 'all' typically means non-archived
+            // Hide archived memos in inbox/all view
+            if (memo.state == MemoState.archived) return false;
+            break;
+          case 'archive':
+            // Only show archived memos in archive view
+            if (memo.state != MemoState.archived) return false;
+            break;
+          // Add cases for other filter keys (like tags) if needed,
+          // although tag filtering might primarily rely on server fetch/notifier state.
+        }
+
+        // If none of the above filters excluded the memo, include it.
         return true;
       }).toList();
 
@@ -426,56 +533,138 @@ final archiveMemoProvider = Provider.family<Future<void> Function(), String>((re
   return () async {
     final apiService = ref.read(apiServiceProvider);
 
-    // Get the memo
-    final memo = await apiService.getMemo(id);
+    // --- Selection Update Logic ---
+    final currentSelectedId = ref.read(ui_providers.selectedMemoIdProvider);
+    final isArchivingSelected = currentSelectedId == id;
+    String? nextSelectedId =
+        currentSelectedId; // Keep current selection by default
 
-    // Update the memo to archived state
-    final updatedMemo = memo.copyWith(
-      pinned: false,
-      state: MemoState.archived,
-    );
+    if (isArchivingSelected) {
+      final memosBeforeArchive = ref.read(filteredMemosProvider);
+      final archivedIndex = memosBeforeArchive.indexWhere((m) => m.id == id);
 
-    // Save the updated memo
-    await apiService.updateMemo(id, updatedMemo);
+      if (archivedIndex != -1) {
+        if (memosBeforeArchive.length > 1) {
+          if (archivedIndex > 0) {
+            // Select the item *before* the archived one
+            nextSelectedId = memosBeforeArchive[archivedIndex - 1].id;
+          } else {
+            // Archived the first item, select the next one (which was at index 1)
+            nextSelectedId = memosBeforeArchive[1].id;
+          }
+        } else {
+          // List will be empty
+          nextSelectedId = null;
+        }
+      }
+    }
+    // --- End Selection Update Logic ---
 
-    // Refresh the memos list using the new notifier
-    // ref.invalidate(memosProvider); // Old way
-    await ref.read(memosNotifierProvider.notifier).refresh(); // New way
+    // Apply optimistic update first
+    ref.read(memosNotifierProvider.notifier).archiveMemoOptimistically(id);
+    // Update selection *after* optimistic update
+    ref.read(ui_providers.selectedMemoIdProvider.notifier).state =
+        nextSelectedId;
+
+    try {
+      // Get the memo
+      final memo = await apiService.getMemo(id);
+
+      // Update the memo to archived state
+      final updatedMemo = memo.copyWith(
+        pinned: false,
+        state: MemoState.archived,
+      );
+
+      // Save the updated memo
+      await apiService.updateMemo(id, updatedMemo);
+      
+      // Refresh is removed on success. Optimistic update handles UI change.
+      // Refresh only happens on error now.
+      // await ref.read(memosNotifierProvider.notifier).refresh();
+    } catch (e) {
+      if (kDebugMode) {
+        print('[archiveMemoProvider] Error archiving memo: $e');
+      }
+      
+      // Refresh on error to ensure data consistency
+      await ref.read(memosNotifierProvider.notifier).refresh();
+      
+      rethrow;
+    }
   };
 });
 
-/// Provider for deleting a memo
-final deleteMemoProvider = Provider.family<Future<void> Function(), String>((ref, id) {
+/// Provider for deleting a memo. Takes a record ({String id, int currentSelectedIndex}) as parameter.
+/// Provider for deleting a memo. Just takes the ID as parameter.
+final deleteMemoProvider = Provider.family<Future<void> Function(), String>((
+  ref,
+  id,
+) {
   return () async {
     if (kDebugMode) {
-      print('[deleteMemoProvider] Deleting memo: $id');
+      print(
+          '[deleteMemoProvider] Deleting memo: $id');
     }
 
     final apiService = ref.read(apiServiceProvider);
 
+    // --- Selection Update Logic ---
+    final currentSelectedId = ref.read(ui_providers.selectedMemoIdProvider);
+    final isDeletingSelected = currentSelectedId == id;
+    String? nextSelectedId =
+        currentSelectedId; // Keep current selection by default
+
+    if (isDeletingSelected) {
+      final memosBeforeDelete = ref.read(filteredMemosProvider);
+      final deletedIndex = memosBeforeDelete.indexWhere((m) => m.id == id);
+
+      if (deletedIndex != -1) {
+        if (memosBeforeDelete.length > 1) {
+          if (deletedIndex > 0) {
+            // Select the item *before* the deleted one
+            nextSelectedId = memosBeforeDelete[deletedIndex - 1].id;
+          } else {
+            // Deleted the first item, select the next one (which was at index 1)
+            nextSelectedId = memosBeforeDelete[1].id;
+          }
+        } else {
+          // List will be empty
+          nextSelectedId = null;
+        }
+      }
+    }
+    // --- End Selection Update Logic ---
+
+    // Apply optimistic update to the memo list
+    ref.read(memosNotifierProvider.notifier).removeMemoOptimistically(id);
+
+    // Update selection *after* optimistic update
+    ref.read(ui_providers.selectedMemoIdProvider.notifier).state =
+        nextSelectedId;
+
     try {
-      // Delete the memo
+      // Delete the memo via API
       await apiService.deleteMemo(id);
 
       if (kDebugMode) {
         print('[deleteMemoProvider] Successfully deleted memo: $id');
       }
 
-      // Refresh the memos list using the new notifier
-      // ref.invalidate(memosProvider); // Old way
-      await ref.read(memosNotifierProvider.notifier).refresh(); // New way
-
       // Also clear from hidden IDs cache if it's there
       ref
           .read(hiddenMemoIdsProvider.notifier)
           .update((state) => state.contains(id) ? (state..remove(id)) : state);
 
-      return;
     } catch (e, stackTrace) {
       if (kDebugMode) {
         print('[deleteMemoProvider] Error deleting memo $id: $e');
         print(stackTrace);
       }
+
+      // Refresh on error to ensure data consistency
+      await ref.read(memosNotifierProvider.notifier).refresh();
+
       // Rethrow to allow proper error handling upstream
       rethrow;
     }
@@ -493,6 +682,13 @@ final bumpMemoProvider = Provider.family<Future<void> Function(), String>((
     }
     final apiService = ref.read(apiServiceProvider);
 
+    // Apply optimistic update first
+    ref.read(memosNotifierProvider.notifier).bumpMemoOptimistically(id);
+
+    // Note: No selection adjustment needed here because:
+    // 1. The memo isn't removed from the list (just re-sorted)
+    // 2. The ID-based selection will still track the memo even if position changes
+
     try {
       // Get the current memo data to ensure content isn't lost
       final currentMemo = await apiService.getMemo(id);
@@ -503,16 +699,15 @@ final bumpMemoProvider = Provider.family<Future<void> Function(), String>((
       if (kDebugMode) {
         print('[bumpMemoProvider] Successfully bumped memo: $id');
       }
-
-      // Refresh the memos list to reflect the new order
-      // ref.invalidate(memosProvider); // Old way
-      await ref.read(memosNotifierProvider.notifier).refresh(); // New way
     } catch (e, stackTrace) {
       if (kDebugMode) {
         print('[bumpMemoProvider] Error bumping memo $id: $e');
         print(stackTrace);
       }
-      // Rethrow to allow UI to show error feedback
+      
+      // Refresh on error to ensure data consistency
+      await ref.read(memosNotifierProvider.notifier).refresh();
+      
       rethrow;
     }
   };
@@ -528,40 +723,37 @@ final updateMemoProvider = Provider.family<Future<Memo> Function(Memo), String>(
 
       final apiService = ref.read(apiServiceProvider);
 
-      try {
       // Optional: Optimistic UI update
       // ref.read(memosNotifierProvider.notifier).updateMemoOptimistically(updatedMemo);
 
+    try {
         // Update memo through API
         final result = await apiService.updateMemo(id, updatedMemo);
 
-        // Refresh memo list to get updated data
-      // ref.invalidate(memosProvider); // Old way
-      await ref.read(memosNotifierProvider.notifier).refresh(); // New way
+      // Refresh is removed on success. Optimistic/cache updates handle UI change.
+      // await ref.read(memosNotifierProvider.notifier).refresh(); // New way
 
-        // Also update any cache entries if we've implemented caching
-      // Note: memoDetailCacheProvider might need adjustment if it relies on memosProvider
+      // Also update any cache entries if we've implemented caching
         if (ref.exists(memoDetailCacheProvider)) {
           ref
               .read(memoDetailCacheProvider.notifier)
               .update((state) => {...state, id: result});
         }
 
-        return result;
-      } catch (e, stackTrace) {
-        if (kDebugMode) {
-          print('[updateMemoProvider] Error updating memo: $e');
-          print(stackTrace);
-        }
-      // Optional: Revert optimistic update on error
-      // ref.read(memosNotifierProvider.notifier).refresh(); // Or fetch original memo
-        rethrow;
+      return result;
+    } catch (e, stackTrace) {
+      if (kDebugMode) {
+        print('[updateMemoProvider] Error updating memo: $e');
+        print(stackTrace);
       }
-    };
-  },
-);
+      // Optional: Revert optimistic update on error
+      // ref.read(memosNotifierProvider.notifier).refresh();
+      rethrow;
+    }
+  };
+});
 
-/// OPTIMIZATION: Provider for pinning/unpinning memos with optimistic updates
+/// Provider for pinning/unpinning memos with optimistic updates
 final togglePinMemoProvider = Provider.family<Future<Memo> Function(), String>((
   ref,
   id,
@@ -573,6 +765,14 @@ final togglePinMemoProvider = Provider.family<Future<Memo> Function(), String>((
 
     final apiService = ref.read(apiServiceProvider);
 
+    // Apply optimistic update first
+    ref.read(memosNotifierProvider.notifier).togglePinOptimistically(id);
+
+    // Note: No selection adjustment needed here because:
+    // 1. The memo isn't removed from the list (just re-sorted)
+    // 2. The ID-based selection will still track the memo even if position changes
+    // 3. If hidePinned is enabled, _ensureInitialSelection in MemosBody will handle clearing selection
+
     try {
       // Get the memo
       final memo = await apiService.getMemo(id);
@@ -580,24 +780,19 @@ final togglePinMemoProvider = Provider.family<Future<Memo> Function(), String>((
       // Toggle the pinned state
       final updatedMemo = memo.copyWith(pinned: !memo.pinned);
 
-      // Optional: Optimistic UI update
-      // ref.read(memosNotifierProvider.notifier).updateMemoOptimistically(updatedMemo);
-
       // Update through API
       final result = await apiService.updateMemo(id, updatedMemo);
-
-      // Refresh memos list
-      // ref.invalidate(memosProvider); // Old way
-      await ref.read(memosNotifierProvider.notifier).refresh(); // New way
 
       return result;
     } catch (e, stackTrace) {
       if (kDebugMode) {
-        print('[togglePinMemoProvider] Error toggling pin state: $e');
+        print('[togglePinMemoProvider] Error toggling pin state for memo: $id');
         print(stackTrace);
       }
-      // Optional: Revert optimistic update on error
-      // ref.read(memosNotifierProvider.notifier).refresh();
+      
+      // Refresh on error to ensure data consistency
+      await ref.read(memosNotifierProvider.notifier).refresh();
+      
       rethrow;
     }
   };
@@ -800,3 +995,17 @@ final prefetchMemoDetailsProvider = Provider<
     }
   };
 }, name: 'prefetchMemoDetails');
+
+/// Create memo provider - returns a function to create a new memo
+final createMemoProvider = Provider<Future<void> Function(Memo)>((ref) {
+  final apiService = ref.watch(apiServiceProvider);
+
+  return (Memo memo) async {
+    // Call the API service to create the memo
+    await apiService.createMemo(memo);
+
+    // Refresh the memos list after creating a new memo by invalidating the memosNotifierProvider
+    // This is more effective than invalidateSelf() which would only refresh the function provider
+    ref.invalidate(memosNotifierProvider);
+  };
+});

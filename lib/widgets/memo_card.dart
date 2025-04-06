@@ -307,7 +307,7 @@ class _MemoCardState extends State<MemoCard> {
         ],
       ),
 
-      child: Card(
+child: Card(
         key: ValueKey(
           'memo-card-${widget.id}',
         ), // Always use a consistent key based on ID
@@ -322,13 +322,13 @@ class _MemoCardState extends State<MemoCard> {
           side:
               widget.isSelected
                   ? BorderSide(
-                  // Use a more visible color for testing purposes
+                    // Use a more visible color for testing purposes
                     color:
                         kDebugMode
                             ? Colors.red
                             : Theme.of(context).colorScheme.primary,
-                  width: kDebugMode ? 3 : 2,
-                )
+                    width: kDebugMode ? 3 : 2,
+                  )
                   : (isDarkMode
                       ? BorderSide(color: Colors.grey[850]!, width: 0.5)
                       : BorderSide.none),

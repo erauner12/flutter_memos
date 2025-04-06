@@ -1,9 +1,13 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // Add import for keyboard events
 import 'package:flutter_memos/models/memo.dart';
 import 'package:flutter_memos/providers/filter_providers.dart';
 import 'package:flutter_memos/providers/memo_providers.dart';
+import 'package:flutter_memos/providers/ui_providers.dart'
+    as ui_providers; // Add import
 import 'package:flutter_memos/screens/memos/memo_list_item.dart';
+import 'package:flutter_memos/utils/keyboard_navigation.dart'; // Add import
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class MemosScreen extends ConsumerStatefulWidget {
@@ -13,22 +17,32 @@ class MemosScreen extends ConsumerStatefulWidget {
   ConsumerState<MemosScreen> createState() => _MemosScreenState();
 }
 
-class _MemosScreenState extends ConsumerState<MemosScreen> {
+class _MemosScreenState extends ConsumerState<MemosScreen>
+    with KeyboardNavigationMixin<MemosScreen> {
   final ScrollController _scrollController = ScrollController();
   final GlobalKey<RefreshIndicatorState> _refreshIndicatorKey =
       GlobalKey<RefreshIndicatorState>();
+  final FocusNode _focusNode = FocusNode(); // Add FocusNode
   
   @override
   void initState() {
     super.initState();
     // Add scroll listener to detect when we're near the bottom
     _scrollController.addListener(_onScroll);
+    // Request focus after the first frame to ensure the context is available
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        // Check if the widget is still mounted
+        FocusScope.of(context).requestFocus(_focusNode);
+      }
+    });
   }
 
   @override
   void dispose() {
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
+    _focusNode.dispose(); // Dispose the focus node
     super.dispose();
   }
 
@@ -59,6 +73,118 @@ class _MemosScreenState extends ConsumerState<MemosScreen> {
       print('[MemosScreen] Pull-to-refresh triggered');
     }
     return ref.read(memosNotifierProvider.notifier).refresh();
+  }
+
+  // Add keyboard navigation methods
+  void _selectNextMemo() {
+    final memos = ref.read(filteredMemosProvider);
+    if (kDebugMode) {
+      print(
+        '[MemosScreen _selectNextMemo] Called. Filtered memos count: ${memos.length}',
+      );
+    }
+
+    if (memos.isEmpty) return;
+
+    final currentId = ref.read(ui_providers.selectedMemoIdProvider);
+    int currentIndex = -1;
+    if (currentId != null) {
+      currentIndex = memos.indexWhere((memo) => memo.id == currentId);
+    }
+
+    // Use the mixin's helper function
+    final nextIndex = getNextIndex(currentIndex, memos.length);
+
+    if (nextIndex != -1) {
+      final nextMemoId = memos[nextIndex].id;
+      ref.read(ui_providers.selectedMemoIdProvider.notifier).state = nextMemoId;
+      if (kDebugMode) {
+        print(
+          '[MemosScreen _selectNextMemo] Updated selectedMemoIdProvider to: $nextMemoId',
+        );
+      }
+    }
+  }
+
+void _selectPreviousMemo() {
+    final memos = ref.read(filteredMemosProvider);
+    if (kDebugMode) {
+      print('[MemosScreen _selectPreviousMemo] Called. Filtered memos count: ${memos.length}');
+    }
+  
+    if (memos.isEmpty) return;
+  
+    final currentId = ref.read(ui_providers.selectedMemoIdProvider);
+    int currentIndex = -1;
+    if (currentId != null) {
+      currentIndex = memos.indexWhere((memo) => memo.id == currentId);
+    }
+  
+    // Use the mixin's helper function
+    final prevIndex = getPreviousIndex(currentIndex, memos.length);
+  
+    if (prevIndex != -1) {
+      final prevMemoId = memos[prevIndex].id;
+      ref.read(ui_providers.selectedMemoIdProvider.notifier).state = prevMemoId;
+      if (kDebugMode) {
+        print('[MemosScreen _selectPreviousMemo] Updated selectedMemoIdProvider to: $prevMemoId');
+      }
+    }
+  }
+  
+  void _viewSelectedMemo() {
+    final selectedId = ref.read(ui_providers.selectedMemoIdProvider);
+    if (selectedId != null) {
+      if (kDebugMode) {
+        print('[MemosScreen] Viewing selected memo: ID $selectedId');
+      }
+      // Ensure context is valid before navigating
+      if (mounted) {
+        Navigator.pushNamed(
+          context,
+          '/memo-detail',
+          arguments: {'memoId': selectedId},
+        );
+      }
+    }
+  }
+
+void _clearSelectionOrUnfocus() {
+    final selectedId = ref.read(ui_providers.selectedMemoIdProvider);
+    if (selectedId != null) {
+      if (kDebugMode) {
+        print('[MemosScreen] Clearing selection via Escape');
+      }
+      ref.read(ui_providers.selectedMemoIdProvider.notifier).state = null;
+    } else {
+      // If nothing is selected, unfocus any text fields etc.
+      FocusScope.of(context).unfocus();
+    }
+  }
+
+  KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
+    // Only handle key down events
+    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+
+    if (kDebugMode) {
+      print('[MemosScreen _handleKeyEvent] Received key: ${event.logicalKey.keyLabel}');
+      print('[MemosScreen _handleKeyEvent] FocusNode has focus: ${node.hasFocus}');
+    }
+
+    // Use the mixin's handler
+    final result = handleKeyEvent(
+      event,
+      ref,
+      onUp: _selectPreviousMemo,
+      onDown: _selectNextMemo,
+      onSubmit: _viewSelectedMemo,
+      onEscape: _clearSelectionOrUnfocus,
+    );
+
+    if (kDebugMode) {
+      print('[MemosScreen _handleKeyEvent] Mixin handleKeyEvent result: $result');
+    }
+    return result;
   }
   
   @override
@@ -107,13 +233,19 @@ class _MemosScreenState extends ConsumerState<MemosScreen> {
           ),
         ),
       ),
-      body: Column(
-        children: [
-          // Filter chips can go here (if needed in the future)
-          
-          // Main list of memos
-          Expanded(child: _buildMemosList(memosState, visibleMemos)),
-        ],
+      body: Focus(
+        // Wrap the body
+        focusNode: _focusNode,
+        autofocus: true, // Try to grab focus automatically
+        onKeyEvent: _handleKeyEvent, // Use the handler
+        child: Column(
+          children: [
+            // Filter chips can go here (if needed in the future)
+
+            // Main list of memos
+            Expanded(child: _buildMemosList(memosState, visibleMemos)),
+          ],
+        ),
       ),
       floatingActionButton: Column(
         mainAxisAlignment: MainAxisAlignment.end,

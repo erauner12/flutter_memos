@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_memos/providers/filter_providers.dart';
 import 'package:flutter_memos/providers/memo_providers.dart';
-import 'package:flutter_memos/providers/ui_providers.dart';
+import 'package:flutter_memos/providers/ui_providers.dart' as ui_providers;
 import 'package:flutter_memos/utils/keyboard_navigation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -77,26 +77,47 @@ class _MemosBodyState extends ConsumerState<MemosBody>
   void _ensureInitialSelection() {
     // Use filteredMemos instead of visibleMemos
     final filteredMemos = ref.read(filteredMemosProvider);
-    final currentSelection = ref.read(selectedMemoIndexProvider);
-
-    if (filteredMemos.isNotEmpty && currentSelection < 0) {
+    final currentSelectedId = ref.read(ui_providers.selectedMemoIdProvider);
+    
+    // Check if we have memos but no selection
+    if (filteredMemos.isNotEmpty && currentSelectedId == null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
-          ref.read(selectedMemoIndexProvider.notifier).state = 0;
+          // Select the first memo by ID - no longer need to set index
+          ref.read(ui_providers.selectedMemoIdProvider.notifier).state =
+              filteredMemos[0].id;
+          
           if (kDebugMode) {
             print(
-              '[MemosBody] Selected first memo at index 0 after initial load/refresh.',
+              '[MemosBody] Selected first memo (ID=${filteredMemos[0].id}) after initial load/refresh.',
             );
           }
         }
       });
-    } else if (filteredMemos.isEmpty && currentSelection != -1) {
+    } else if (filteredMemos.isEmpty && currentSelectedId != null) {
       // Reset selection if list becomes empty
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
-          ref.read(selectedMemoIndexProvider.notifier).state = -1;
+          ref.read(ui_providers.selectedMemoIdProvider.notifier).state = null;
         }
       });
+    } else if (currentSelectedId != null) {
+      // Check if the selected ID still exists in the list, if not, clear selection
+      final stillExists = filteredMemos.any(
+        (memo) => memo.id == currentSelectedId,
+      );
+      if (!stillExists) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            ref.read(ui_providers.selectedMemoIdProvider.notifier).state = null;
+            if (kDebugMode) {
+              print(
+                '[MemosBody] Previously selected memo no longer exists, clearing selection',
+              );
+            }
+          }
+        });
+      }
     }
   }
 
@@ -108,7 +129,6 @@ class _MemosBodyState extends ConsumerState<MemosBody>
     final memosState = ref.watch(memosNotifierProvider); // Watch the full state
     // Use filteredMemosProvider instead of visibleMemosListProvider
     final filteredMemos = ref.watch(filteredMemosProvider);
-    final searchQuery = ref.watch(searchQueryProvider);
     
     // Ensure selection is updated when the list changes
     // Calling this in build ensures it runs whenever the filtered list updates
@@ -202,7 +222,7 @@ class _MemosBodyState extends ConsumerState<MemosBody>
           // 3. Empty State (after initial load, no errors, no memos)
           if (!memosState.isLoading && filteredMemos.isEmpty) {
             // Check if empty due to search with no results
-            final searchQuery = ref.watch(searchQueryProvider);
+            final searchText = ref.watch(searchQueryProvider);
             
             return RefreshIndicator(
               onRefresh: () async {
@@ -219,7 +239,7 @@ class _MemosBodyState extends ConsumerState<MemosBody>
                     child: ConstrainedBox(
                       constraints: BoxConstraints(minHeight: constraints.maxHeight),
                       child:
-                          searchQuery.isNotEmpty
+                          searchText.isNotEmpty
                               ? Center(
                                 child: Column(
                                   mainAxisAlignment: MainAxisAlignment.center,
@@ -231,7 +251,7 @@ class _MemosBodyState extends ConsumerState<MemosBody>
                                     ),
                                     const SizedBox(height: 16),
                                     Text(
-                                      'No results found for "$searchQuery"',
+                                      'No results found for "$searchText"',
                                       style: const TextStyle(
                                         fontSize: 16,
                                         color: Colors.grey,
@@ -267,6 +287,7 @@ class _MemosBodyState extends ConsumerState<MemosBody>
               await ref.read(memosNotifierProvider.notifier).refresh();
             },
             child: ListView.builder(
+              key: const PageStorageKey('memosListView'),
               controller: _scrollController, // Assign the scroll controller
               // Ensure the ListView is always scrollable to allow pull-to-refresh
               // even if the content fits on the screen.
@@ -309,18 +330,29 @@ class _MemosBodyState extends ConsumerState<MemosBody>
 
     if (memos.isEmpty) return;
 
-    // Get the current selection
-    final currentIndex = ref.read(selectedMemoIndexProvider);
-
+    // Get the current selected ID
+    final currentId = ref.read(ui_providers.selectedMemoIdProvider);
+    
+    // Find the index of the currently selected memo
+    final currentIndex =
+        currentId != null
+            ? memos.indexWhere((memo) => memo.id == currentId)
+            : -1;
+    
     // Calculate next index using helper from mixin
     final nextIndex = getNextIndex(currentIndex, memos.length);
 
-    // Only update if the index actually changed, to avoid unnecessary rebuilds
-    if (nextIndex != currentIndex) {
-      // Update the selection
-      ref.read(selectedMemoIndexProvider.notifier).state = nextIndex;
+    // Only update if we found a valid index
+    if (nextIndex >= 0 && nextIndex < memos.length) {
+      // Get the memo at the next index and save its ID as selected
+      final nextMemo = memos[nextIndex];
+      ref.read(ui_providers.selectedMemoIdProvider.notifier).state =
+          nextMemo.id;
+      
       if (kDebugMode) {
-        print('[MemosBody] Selected next memo at index $nextIndex');
+        print(
+          '[MemosBody] Selected next memo: ID=${nextMemo.id}, index=$nextIndex',
+        );
       }
     }
   }
@@ -331,18 +363,29 @@ class _MemosBodyState extends ConsumerState<MemosBody>
 
     if (memos.isEmpty) return;
 
-    // Get the current selection
-    final currentIndex = ref.read(selectedMemoIndexProvider);
+    // Get the current selected ID
+    final currentId = ref.read(ui_providers.selectedMemoIdProvider);
+    
+    // Find the index of the currently selected memo
+    final currentIndex =
+        currentId != null
+            ? memos.indexWhere((memo) => memo.id == currentId)
+            : -1;
 
     // Calculate previous index using helper from mixin
     final prevIndex = getPreviousIndex(currentIndex, memos.length);
 
-    // Only update if the index actually changed, to avoid unnecessary rebuilds
-    if (prevIndex != currentIndex) {
-      // Update the selection
-      ref.read(selectedMemoIndexProvider.notifier).state = prevIndex;
+    // Only update if we found a valid index
+    if (prevIndex >= 0 && prevIndex < memos.length) {
+      // Get the memo at the previous index and save its ID as selected
+      final prevMemo = memos[prevIndex];
+      ref.read(ui_providers.selectedMemoIdProvider.notifier).state =
+          prevMemo.id;
+      
       if (kDebugMode) {
-        print('[MemosBody] Selected previous memo at index $prevIndex');
+        print(
+          '[MemosBody] Selected previous memo: ID=${prevMemo.id}, index=$prevIndex',
+        );
       }
     }
   }
@@ -350,24 +393,29 @@ class _MemosBodyState extends ConsumerState<MemosBody>
   void openSelectedMemo(BuildContext context) {
     // Get the current list of filtered memos
     final memos = ref.read(filteredMemosProvider);
-    final selectedIndex = ref.read(selectedMemoIndexProvider);
+  
+    // Get the selected memo ID
+    final selectedId = ref.read(ui_providers.selectedMemoIdProvider);
 
-    // If we have a valid selection, navigate to that memo
-    if (selectedIndex >= 0 && selectedIndex < memos.length) {
-      final selectedMemo = memos[selectedIndex];
-      if (kDebugMode) {
-        print(
-          '[MemosBody] Opening memo detail for index $selectedIndex, ID: ${selectedMemo.id}',
+    // If we have a valid selection, find it and navigate to that memo
+    if (selectedId != null) {
+      final selectedMemo =
+          memos.where((memo) => memo.id == selectedId).firstOrNull;
+    
+      if (selectedMemo != null) {
+        if (kDebugMode) {
+          print(
+            '[MemosBody] Opening memo detail for ID: ${selectedMemo.id}');
+        }
+        Navigator.pushNamed(
+          context,
+          '/memo-detail',
+          arguments: {'memoId': selectedMemo.id},
         );
       }
-      Navigator.pushNamed(
-        context,
-        '/memo-detail',
-        arguments: {'memoId': selectedMemo.id},
-      );
     } else if (kDebugMode) {
       print(
-        '[MemosBody] Cannot open memo detail: Invalid index $selectedIndex for list length ${memos.length}',
+        '[MemosBody] Cannot open memo detail: No memo selected',
       );
     }
   }
