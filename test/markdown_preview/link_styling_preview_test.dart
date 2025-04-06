@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_memos/models/memo.dart';
 import 'package:flutter_memos/screens/edit_memo/edit_memo_form.dart';
+import 'package:flutter_memos/screens/edit_memo/edit_memo_providers.dart'; // Add this import
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -23,7 +24,9 @@ bool findTextInRichText(WidgetTester tester, String textToFind) {
 void dumpRichTextContent(WidgetTester tester) {
   final richTextWidgets = tester.widgetList<RichText>(find.byType(RichText));
   for (final widget in richTextWidgets) {
-    print('RichText content: "${widget.text.toPlainText()}"');
+    debugMarkdown(
+      'RichText content: "${widget.text.toPlainText()}"',
+    ); // Replace print with debugMarkdown
   }
 }
 
@@ -43,13 +46,27 @@ void main() {
 
       await tester.pumpWidget(
         ProviderScope(
+          // Mock the provider that EditMemoForm uses to fetch the entity
+          overrides: [
+            editEntityProvider(
+              EntityProviderParams(id: 'test-id', type: 'memo'),
+            ).overrideWith((ref) => Future.value(memo)),
+          ],
           child: MaterialApp(
-            home: Scaffold(body: EditMemoForm(memo: memo, memoId: 'test-id')),
+            // Remove const
+            home: Scaffold(
+              // Use the new constructor signature
+              body: EditMemoForm(
+                entityId: 'test-id',
+                entityType: 'memo',
+                entity: memo, // Add the entity parameter
+              ),
+            ),
           ),
         ),
       );
 
-      // Wait for everything to render
+      // Wait for everything to render (FutureProvider needs time)
       await tester.pumpAndSettle();
 
       // Make sure the content is fully loaded in the text field
@@ -144,15 +161,27 @@ void main() {
 
       await tester.pumpWidget(
         ProviderScope(
+          // Mock the provider that EditMemoForm uses to fetch the entity
+          overrides: [
+            editEntityProvider(
+              EntityProviderParams(id: 'test-id', type: 'memo'),
+            ).overrideWith((ref) => Future.value(memo)),
+          ],
           child: MaterialApp(
+            // Remove const
             home: Scaffold(
-              body: EditMemoForm(memo: memo, memoId: 'test-id'),
+              // Use the new constructor signature
+              body: EditMemoForm(
+                entityId: 'test-id',
+                entityType: 'memo',
+                entity: memo, // Add the entity parameter
+              ),
             ),
           ),
         ),
       );
 
-      // Wait for initial rendering and verify the TextField has our content
+      // Wait for initial rendering and verify the TextField has our content (FutureProvider needs time)
       await tester.pumpAndSettle();
       final textField = tester.widget<TextField>(find.byType(TextField));
       expect(textField.controller!.text, contains('MARKER_HEADING'));

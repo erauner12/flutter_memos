@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_memos/models/memo.dart';
 import 'package:flutter_memos/screens/edit_memo/edit_memo_form.dart';
+import 'package:flutter_memos/screens/edit_memo/edit_memo_providers.dart'; // Add this import
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+
 import '../utils/test_debug.dart'; // Add this import
 
 void main() {
@@ -21,13 +23,27 @@ void main() {
       // Build the EditMemoForm widget
       await tester.pumpWidget(
         ProviderScope(
+          // Mock the provider that EditMemoForm uses to fetch the entity
+          overrides: [
+            editEntityProvider(
+              EntityProviderParams(id: 'test-id', type: 'memo'),
+            ).overrideWith((ref) => Future.value(memo)),
+          ],
           child: MaterialApp(
             home: Scaffold(
-              body: EditMemoForm(memo: memo, memoId: 'test-id'),
+              // Use the new constructor signature
+              body: EditMemoForm(
+                entityId: 'test-id',
+                entityType: 'memo',
+                entity: memo, // Add the required entity parameter
+              ),
             ),
           ),
         ),
       );
+
+      // Wait for FutureProvider to resolve
+      await tester.pumpAndSettle();
 
       // Initially help should not be shown
       expect(find.text('Markdown Syntax Guide'), findsNothing);
@@ -71,13 +87,27 @@ void main() {
       // Build the EditMemoForm widget
       await tester.pumpWidget(
         ProviderScope(
+          // Mock the provider that EditMemoForm uses to fetch the entity
+          overrides: [
+            editEntityProvider(
+              EntityProviderParams(id: 'test-id', type: 'memo'),
+            ).overrideWith((ref) => Future.value(memo)),
+          ],
           child: MaterialApp(
             home: Scaffold(
-              body: EditMemoForm(memo: memo, memoId: 'test-id'),
+              // Use the new constructor signature
+              body: EditMemoForm(
+                entityId: 'test-id',
+                entityType: 'memo',
+                entity: memo, // Add the required entity parameter
+              ),
             ),
           ),
         ),
       );
+
+      // Wait for FutureProvider to resolve
+      await tester.pumpAndSettle();
 
       // First switch to preview mode
       debugMarkdown('Tapping Preview button');
@@ -123,14 +153,26 @@ void main() {
       // Build the EditMemoForm widget
       await tester.pumpWidget(
         ProviderScope(
+          // Mock the provider that EditMemoForm uses to fetch the entity
+          overrides: [
+            editEntityProvider(
+              EntityProviderParams(id: 'test-id', type: 'memo'),
+            ).overrideWith((ref) => Future.value(memo)),
+          ],
           child: MaterialApp(
             home: Scaffold(
-              body: EditMemoForm(memo: memo, memoId: 'test-id'),
+              // Use the new constructor signature
+              body: EditMemoForm(
+                entityId: 'test-id',
+                entityType: 'memo',
+                entity: memo, // Add the required entity parameter
+              ),
             ),
           ),
         ),
       );
 
+      // Wait for FutureProvider to resolve
       await tester.pumpAndSettle();
 
       // Initially in edit mode - TextField should be visible

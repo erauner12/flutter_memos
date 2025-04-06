@@ -34,6 +34,7 @@ void main() {
 
     // Settle for animations
     await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 50)); // Add small delay
 
     // Find the Card within the CommentCard
     final cardFinder = find.descendant(
@@ -42,9 +43,45 @@ void main() {
     );
     expect(cardFinder, findsOneWidget);
 
-    // Check that the card has a highlighted key
+    // Check that the card has the highlighted style
     final card = tester.widget<Card>(cardFinder);
-    expect(card.key.toString().contains('highlighted-comment-card'), isTrue);
+    final theme = Theme.of(tester.element(cardFinder)); // Get theme context
+
+    // Define expected highlight styles based on theme brightness
+    final Color expectedHighlightColor;
+    final BorderSide expectedHighlightBorder;
+
+    if (theme.brightness == Brightness.dark) {
+      expectedHighlightColor = Colors.teal.shade800.withOpacity(0.5);
+      expectedHighlightBorder = const BorderSide(
+        color: Colors.tealAccent,
+        width: 2,
+      ); // Adjusted dark theme border
+    } else {
+      expectedHighlightColor = Colors.teal.shade50;
+      expectedHighlightBorder = const BorderSide(color: Colors.teal, width: 2);
+    }
+
+    // Use closeTo for color comparison due to potential opacity differences
+    expect(
+      card.color?.value,
+      closeTo(expectedHighlightColor.value, 10), // Allow slight difference
+      reason:
+          'Highlighted background color mismatch (Theme: ${theme.brightness})',
+    );
+    // Compare border properties individually
+    final actualBorder = (card.shape as RoundedRectangleBorder).side;
+    expect(
+      actualBorder.color,
+      expectedHighlightBorder.color,
+      reason: 'Highlighted border color mismatch (Theme: ${theme.brightness})',
+    );
+    expect(
+      actualBorder.width,
+      expectedHighlightBorder.width,
+      reason: 'Highlighted border width mismatch (Theme: ${theme.brightness})',
+    );
+
 
     // Wait for post-frame callback to reset highlight state
     await tester.pump();
@@ -91,8 +128,18 @@ void main() {
     );
     expect(cardFinder, findsOneWidget);
 
-    // Check that the card does NOT have a highlighted key
+    // Check that the card does NOT have highlighted style
     final card = tester.widget<Card>(cardFinder);
-    expect(card.key.toString().contains('highlighted-comment-card'), isFalse);
+    final expectedHighlightBorder = const BorderSide(
+      color: Colors.teal,
+      width: 2,
+    );
+
+    // Assert that the border does NOT match the highlight border
+    expect(
+      (card.shape as RoundedRectangleBorder).side,
+      isNot(equals(expectedHighlightBorder)),
+      reason: 'Card should not have highlight border when not highlighted',
+    );
   });
 }

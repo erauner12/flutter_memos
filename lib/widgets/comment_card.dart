@@ -277,50 +277,61 @@ class _CommentCardState extends ConsumerState<CommentCard> {
     );
     final dateFormat = DateFormat('MMM d, yyyy h:mm a');
     final formattedDate = dateFormat.format(dateTime);
-
-    final highlightedId = ref.watch(highlightedCommentIdProvider);
-    final bool isHighlighted = highlightedId == widget.comment.id;
-
     final isMultiSelectMode = ref.watch(commentMultiSelectModeProvider);
     final selectedIds = ref.watch(selectedCommentIdsForMultiSelectProvider);
     final fullId = '${widget.memoId}/${widget.comment.id}';
     final isMultiSelected = selectedIds.contains(fullId);
 
-    final selectedStyle = (
-      color:
-          isDarkMode
-              ? Colors.grey.shade700.withOpacity(0.6)
-              : Colors.grey.shade300,
-      border: BorderSide(
-        color: Theme.of(context).colorScheme.outline.withOpacity(0.5),
-        width: 1,
-      ),
-    );
+    // Determine if the card should be highlighted
+    final highlightedCommentId = ref.watch(highlightedCommentIdProvider);
+    final bool isHighlighted = highlightedCommentId == widget.comment.id;
 
-    final highlightedStyle = (
-      color: isDarkMode ? Colors.teal.shade900 : Colors.teal.shade50,
-      border: const BorderSide(color: Colors.teal, width: 2),
-    );
-
-    final defaultStyle = (
-      color: isDarkMode ? const Color(0xFF222222) : Colors.white,
-      border: BorderSide.none,
-    );
-
-    Color? cardBackgroundColor;
-    BorderSide cardBorderStyle;
-
-    if (isHighlighted) {
-      cardBackgroundColor = highlightedStyle.color;
-      cardBorderStyle = highlightedStyle.border;
-    } else if (widget.isSelected && !isMultiSelectMode) {
-      cardBackgroundColor = selectedStyle.color;
-      cardBorderStyle = selectedStyle.border;
-    } else {
-      cardBackgroundColor = defaultStyle.color;
-      cardBorderStyle = defaultStyle.border;
+    // Add debug prints
+    if (kDebugMode) {
+      print('[CommentCard build] Comment ID: ${widget.comment.id}');
+      print('[CommentCard build] Highlighted ID from provider: $highlightedCommentId');
+      print('[CommentCard build] isHighlighted: $isHighlighted');
     }
 
+    // Define card style variables
+    Color cardBackgroundColor;
+    BorderSide cardBorderStyle;
+    final theme = Theme.of(context);
+
+    // Determine card style based on selection and highlight state
+    if (isHighlighted) {
+      cardBackgroundColor =
+          theme.brightness == Brightness.dark
+              ? Colors.teal.shade800.withAlpha(128)
+              : Colors.teal.shade50;
+      cardBorderStyle = BorderSide(
+        color:
+            theme.brightness == Brightness.dark
+                ? Colors.tealAccent
+                : Colors.teal,
+        width: 2,
+      );
+    } else if (widget.isSelected && !isMultiSelectMode) {
+      cardBackgroundColor =
+          isDarkMode
+              ? Colors.grey.shade700.withAlpha(153)
+              : Colors.grey.shade300;
+      cardBorderStyle = BorderSide(
+        color: Theme.of(context).colorScheme.outline.withAlpha(128),
+        width: 1,
+      );
+    } else {
+      cardBackgroundColor = isDarkMode ? const Color(0xFF222222) : Colors.white;
+      cardBorderStyle = BorderSide.none;
+    }
+
+    // Add debug prints for final style
+    if (kDebugMode) {
+      print('[CommentCard build] Final cardColor: $cardBackgroundColor');
+      print('[CommentCard build] Final cardBorder: $cardBorderStyle');
+    }
+
+    // Reset highlight state after build if it was highlighted
     if (isHighlighted) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted &&
@@ -347,17 +358,20 @@ class _CommentCardState extends ConsumerState<CommentCard> {
 
     final apiService = ref.watch(apiServiceProvider);
     final baseUrl = apiService.apiBaseUrl;
+    
+    // Define card key
+    final cardKey =
+        isHighlighted
+            ? Key('highlighted-comment-card-${widget.comment.id}')
+            : (widget.isSelected && !isMultiSelectMode
+                ? Key('selected-comment-card-${widget.comment.id}')
+                : null);
 
     Widget commentCardWidget = Card(
-      key:
-          isHighlighted
-              ? Key('highlighted-comment-card-${widget.comment.id}')
-              : (widget.isSelected && !isMultiSelectMode
-                  ? Key('selected-comment-card-${widget.comment.id}')
-                  : null),
+      key: cardKey,
       elevation:
           isHighlighted ? 4 : (widget.isSelected && !isMultiSelectMode ? 2 : 1),
-      margin: EdgeInsets.zero,
+      margin: const EdgeInsets.symmetric(vertical: 6.0, horizontal: 0),
       color: cardBackgroundColor,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(8),

@@ -84,19 +84,22 @@ void main() {
     });
 
     test('selectedMemoIndexProvider starts at -1', () {
-      final index = container.read(selectedMemoIndexProvider);
-      expect(index, equals(-1));
+      // Use the recommended provider instead
+      final index = container.read(selectedMemoIdProvider);
+      // Test initial state (null instead of -1 for the ID provider)
+      expect(index, isNull);
     });
 
     test('selectedMemoIndexProvider can be updated', () {
-      // Start at -1
-      final initialIndex = container.read(selectedMemoIndexProvider);
-      expect(initialIndex, equals(-1));
+      // Use the recommended provider instead
+      final initialId = container.read(selectedMemoIdProvider);
+      expect(initialId, isNull);
 
-      // Set to 3
-      container.read(selectedMemoIndexProvider.notifier).state = 3;
-      final updatedIndex = container.read(selectedMemoIndexProvider);
-      expect(updatedIndex, equals(3));
+      // Set to some test ID
+      const testMemoId = 'test-memo-123';
+      container.read(selectedMemoIdProvider.notifier).state = testMemoId;
+      final updatedId = container.read(selectedMemoIdProvider);
+      expect(updatedId, equals(testMemoId));
     });
   });
   
@@ -313,6 +316,11 @@ void main() {
         character: null,
         synthesized: false,
       );
+      
+      // For debugging, use tester.printToConsole instead of print in tests
+      tester.printToConsole(
+        '[Test Debug] Focus before Shift+Down: ${FocusManager.instance.primaryFocus}',
+      );
       final downResult = state.testHandleKeyEvent(shiftDownEvent);
 
       // Test Shift+Up while text field is focused - should be ignored
@@ -323,21 +331,26 @@ void main() {
         character: null,
         synthesized: false,
       );
+      
+      // For debugging, use tester.printToConsole instead of print in tests
+      tester.printToConsole(
+        '[Test Debug] Focus before Shift+Up: ${FocusManager.instance.primaryFocus}',
+      );
       final upResult = state.testHandleKeyEvent(shiftUpEvent);
 
-      // Verify navigation was not triggered
+      // Verify navigation callbacks were NOT called because focus is on text input
       expect(
         state.nextCalled,
         equals(initialNextCalled),
-        reason: 'nextCalled should not increase',
+        reason: 'nextCalled should not increase when TextField has focus',
       );
       expect(
         state.prevCalled,
         equals(initialPrevCalled),
-        reason: 'prevCalled should not increase',
+        reason: 'prevCalled should not increase when TextField has focus',
       );
 
-      // Verify the key events were ignored
+      // Verify the key events were correctly ignored by the mixin's handler
       expect(
         downResult,
         equals(KeyEventResult.ignored),

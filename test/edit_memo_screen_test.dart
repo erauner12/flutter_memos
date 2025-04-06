@@ -21,7 +21,40 @@ class MockApiService extends Mock implements ApiService {
   
   @override
   Future<Memo> updateMemo(String id, Memo memo) async {
-    return memo.copyWith(id: id);
+    // Simulate the server returning epoch createTime but correct updateTime
+    return memo.copyWith(
+      id: id,
+      createTime: '1970-01-01T00:00:00.000Z', // Simulate server bug
+      updateTime:
+          DateTime.now().toIso8601String(), // Simulate correct update time
+    );
+  }
+
+  // Add stub for listMemos to handle refresh calls
+  @override
+  Future<PaginatedMemoResponse> listMemos({
+    String parent = 'users/1',
+    String? filter,
+    String? state,
+    String sort = 'updateTime',
+    String direction = 'DESC',
+    int? pageSize,
+    String? pageToken,
+    List<String>? tags,
+    dynamic visibility,
+    String? contentSearch,
+    DateTime? createdAfter,
+    DateTime? createdBefore,
+    DateTime? updatedAfter,
+    DateTime? updatedBefore,
+    String? timeExpression,
+    bool useUpdateTimeForExpression = false,
+  }) async {
+    // Return an empty list for refresh calls in this test context
+    print(
+      '[MockApiService - EditMemoScreenTest] listMemos called (returning empty)',
+    );
+    return PaginatedMemoResponse(memos: [], nextPageToken: null);
   }
 }
 
@@ -43,8 +76,7 @@ void main() {
         ],
         child: const MaterialApp(
           home: EditMemoScreen(
-            entityId: 'test-memo-id', // Use entityId
-            entityType: 'memo', // Specify type
+            entityId: 'test-memo-id', entityType: 'memo',
           ),
         ),
       ),
@@ -71,8 +103,7 @@ void main() {
         ],
         child: const MaterialApp(
           home: EditMemoScreen(
-            entityId: 'test-memo-id', // Use entityId
-            entityType: 'memo', // Specify type
+            entityId: 'test-memo-id', entityType: 'memo',
           ),
         ),
       ),

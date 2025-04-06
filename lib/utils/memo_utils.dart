@@ -31,6 +31,35 @@ class MemoUtils {
     });
   }
 
+  /// Sort memos by creation time (newest first)
+  static void sortByCreateTime(List<Memo> memos) {
+    memos.sort((a, b) {
+      // Handle null or invalid create times
+      DateTime aTime;
+      DateTime bTime;
+
+      try {
+        aTime =
+            a.createTime != null
+                ? DateTime.parse(a.createTime!)
+                : DateTime(1970);
+      } catch (_) {
+        aTime = DateTime(1970);
+      }
+
+      try {
+        bTime =
+            b.createTime != null
+                ? DateTime.parse(b.createTime!)
+                : DateTime(1970);
+      } catch (_) {
+        bTime = DateTime(1970);
+      }
+
+      return bTime.compareTo(aTime); // Newest first
+    });
+  }
+
   /// Helper method to safely parse date strings
   static DateTime safeParseDateTime(String? isoTime) {
     if (isoTime == null) return DateTime.fromMillisecondsSinceEpoch(0);

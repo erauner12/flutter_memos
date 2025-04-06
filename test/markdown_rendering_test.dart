@@ -4,6 +4,7 @@ import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/models/memo.dart';
 import 'package:flutter_memos/providers/api_providers.dart';
 import 'package:flutter_memos/screens/edit_memo/edit_memo_form.dart';
+import 'package:flutter_memos/screens/edit_memo/edit_memo_providers.dart';
 import 'package:flutter_memos/screens/memo_detail/memo_content.dart';
 import 'package:flutter_memos/screens/memo_detail/memo_detail_providers.dart';
 import 'package:flutter_memos/widgets/comment_card.dart';
@@ -12,7 +13,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'mocks/mock_api_service.dart';
-import 'utils/test_debug.dart'; // Add this import if missing
+import 'utils/test_debug.dart';
 
 void main() {
   group('Markdown Rendering Tests', () {
@@ -101,7 +102,7 @@ void main() {
       );
       
       // Debug: Print all RichText widgets and their colors
-      print(
+      debugMarkdown(
         '\nChecking ${richTextWidgets.length} RichText widgets for styled text:',
       );
 
@@ -116,15 +117,15 @@ void main() {
 
           // Debug info
           if (style?.color != null) {
-            print('Text: "$text", Color: ${style?.color}');
+            debugMarkdown('Text: "$text", Color: ${style?.color}');
           }
 
           // Check if this span has red color
           if (style?.color != null &&
-              style!.color!.red > 0.5 &&
-              style.color!.green < 0.5 &&
-              style.color!.blue < 0.5) {
-            print('Found red text: "$text"');
+              style!.color!.r > 0.5 &&
+              style.color!.g < 0.5 &&
+              style.color!.b < 0.5) {
+            debugMarkdown('Found red text: "$text"');
             foundStyledText = true;
           }
 
@@ -148,19 +149,19 @@ void main() {
         for (final widget in richTextWidgets) {
           final plainText = widget.text.toPlainText();
           if (plainText.contains('Bold text with custom color')) {
-            print('Found matching text: $plainText');
+            debugMarkdown('Found matching text: $plainText');
             // Use a more lenient check for any reddish color
             void checkTextSpanColor(InlineSpan span) {
               if (span is TextSpan) {
                 final color = span.style?.color;
                 if (color != null) {
-                  print(
-                    'Color components: R=${color.red}, G=${color.green}, B=${color.blue}',
+                  debugMarkdown(
+                    'Color components: R=${color.r}, G=${color.g}, B=${color.b}',
                   );
                   // More lenient check: any shade where red is the dominant component
-                  if (color.red > color.green && color.red > color.blue) {
+                  if (color.r > color.g && color.r > color.b) {
                     foundStyledText = true;
-                    print('Found reddish color: $color');
+                    debugMarkdown('Found reddish color: $color');
                   }
                 }
 
@@ -311,15 +312,27 @@ void main() {
       // Build the EditMemoForm widget
       await tester.pumpWidget(
         ProviderScope(
-          overrides: [apiServiceProvider.overrideWithValue(mockApiService)],
+          overrides: [
+            apiServiceProvider.overrideWithValue(mockApiService),
+            // Mock the provider that EditMemoForm uses to fetch the entity
+            editEntityProvider(
+              EntityProviderParams(id: 'test-id', type: 'memo'),
+            ).overrideWith((ref) => Future.value(memo)),
+          ],
           child: MaterialApp(
             home: Scaffold(
-              body: EditMemoForm(memo: memo, memoId: 'test-id'),
+              // Use the new constructor signature
+              body: EditMemoForm(
+                entityId: 'test-id',
+                entityType: 'memo',
+                entity: memo,
+              ),
             ),
           ),
         ),
       );
 
+      // Wait for the FutureProvider to resolve and the form to build
       await tester.pumpAndSettle();
 
       // Initially in edit mode - TextField should be visible

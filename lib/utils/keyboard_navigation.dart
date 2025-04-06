@@ -1,36 +1,50 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// A mixin for consistent keyboard navigation handling across the app
 mixin KeyboardNavigationMixin<T extends ConsumerStatefulWidget>
     on ConsumerState<T> {
-  /// Check if the current focus is on a text input field
-  bool _isTextInputFocused() {
-    final focusNode = FocusManager.instance.primaryFocus;
+  /// Checks if the currently focused node belongs to a text input widget.
+  bool _isTextInputFocused([FocusNode? primaryFocus]) {
+    final focusNode = primaryFocus ?? FocusManager.instance.primaryFocus;
     if (focusNode == null) return false;
+    
+    // Check the RenderObject type (more reliable in tests)
+    final renderObject = focusNode.context?.findRenderObject();
+    if (kDebugMode)
+      print(
+        '[_isTextInputFocused] Checking node: $focusNode, RenderObject: ${renderObject?.runtimeType}',
+      );
 
-    // Check if the widget type suggests it's a text input
-    final widget = focusNode.context?.widget;
-    if (widget == null) return false;
-
+    // Check if it's an editable text field
+    if (renderObject is RenderEditable) {
+      return true;
+    }
+    
     // Check for EditableText or TextField or TextFormField or any input-related widgets
-    final typeStr = widget.runtimeType.toString().toLowerCase();
-    final isTextInput =
-        typeStr.contains('text') ||
-        typeStr.contains('edit') ||
-        typeStr.contains('field') ||
-        typeStr.contains('input') ||
-        widget is EditableText ||
-        widget is TextField ||
-        widget is TextFormField;
+    if (focusNode.context != null) {
+      final widget = focusNode.context!.widget;
+      final typeStr = widget.runtimeType.toString().toLowerCase();
+      final isTextInput =
+          typeStr.contains('text') ||
+          typeStr.contains('edit') ||
+          typeStr.contains('field') ||
+          typeStr.contains('input') ||
+          widget is EditableText ||
+          widget is TextField ||
+          widget is TextFormField;
 
-    if (isTextInput && kDebugMode) {
-      print('[KeyboardNavigation] Text input focused: $typeStr');
+      if (isTextInput && kDebugMode) {
+        print('[KeyboardNavigation] Text input focused: $typeStr');
+      }
+
+      return isTextInput;
     }
 
-    return isTextInput;
+    return false;
   }
 
   /// Handle a key event with standard navigation shortcuts

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_memos/api/lib/api.dart'; // Added import
 import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/models/memo.dart';
 import 'package:flutter_memos/providers/ui_providers.dart';
@@ -108,7 +109,9 @@ class MockComment implements Comment {
   final int createTime = DateTime.now().millisecondsSinceEpoch;
   @override
   final bool pinned = false;
-  
+  @override
+  List<V1Resource>? get resources => null;
+
   @override
   String? get creatorId => null;
 
@@ -119,13 +122,29 @@ class MockComment implements Comment {
   int? get updateTime => null;
 
   @override
+  // Update signature to exactly match Comment.copyWith
   Comment copyWith({
+    String? id,
     String? content,
+    String? creatorId,
+    int? createTime,
     int? updateTime,
+    bool clearUpdateTime = false, // Add clearUpdateTime
     CommentState? state,
     bool? pinned,
+    List<V1Resource>? resources, // Add resources
   }) {
-    return this;
+    // Return a new instance with potentially updated fields
+    return Comment(
+      id: id ?? this.id,
+      content: content ?? this.content,
+      creatorId: creatorId ?? this.creatorId,
+      createTime: createTime ?? this.createTime,
+      updateTime: clearUpdateTime ? null : (updateTime ?? this.updateTime),
+      state: state ?? this.state,
+      pinned: pinned ?? this.pinned,
+      resources: resources ?? this.resources, // Assign resources
+    );
   }
 
   @override
@@ -136,6 +155,12 @@ class MockComment implements Comment {
       'createTime': createTime,
       'pinned': pinned,
     };
+  }
+
+  // Add toString for better debugging
+  @override
+  String toString() {
+    return 'MockComment(id: $id, content: "$content", pinned: $pinned, state: $state)';
   }
 }
 

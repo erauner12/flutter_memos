@@ -189,7 +189,7 @@ class MemoContextMenu extends StatelessWidget {
 
   Widget _buildMenuItem({
     Key? key,
-    required IconData icon,
+    required IconData icon, 
     required String label,
     required bool isDarkMode,
     VoidCallback? onTap,

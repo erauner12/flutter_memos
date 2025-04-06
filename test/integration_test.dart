@@ -125,21 +125,31 @@ void main() {
         direction: 'DESC',
       );
       
-      // Check that we got results
-      expect(memosByUpdateTime, isNotEmpty);
-      expect(memosByCreateTime, isNotEmpty);
+      // Check that we got results by checking the .memos list
+      expect(
+        memosByUpdateTime.memos, // Correctly accessing .memos
+        isNotEmpty,
+        reason: "List sorted by updateTime should not be empty",
+      );
+      expect(
+        memosByCreateTime.memos, // Correctly accessing .memos
+        isNotEmpty,
+        reason: "List sorted by createTime should not be empty",
+      );
       
       // Print the first few results from each query
       print('\nMemos sorted by updateTime:');
-      for (int i = 0; i < 3 && i < memosByUpdateTime.length; i++) {
-        print('${i+1}. ID: ${memosByUpdateTime[i].id}');
-        print('   UpdateTime: ${memosByUpdateTime[i].updateTime}');
+      for (int i = 0; i < 3 && i < memosByUpdateTime.memos.length; i++) {
+        // Access .memos
+        print('${i + 1}. ID: ${memosByUpdateTime.memos[i].id}');
+        print('   UpdateTime: ${memosByUpdateTime.memos[i].updateTime}');
       }
       
       print('\nMemos sorted by createTime:');
-      for (int i = 0; i < 3 && i < memosByCreateTime.length; i++) {
-        print('${i+1}. ID: ${memosByCreateTime[i].id}');
-        print('   CreateTime: ${memosByCreateTime[i].createTime}');
+      for (int i = 0; i < 3 && i < memosByCreateTime.memos.length; i++) {
+        // Access .memos
+        print('${i + 1}. ID: ${memosByCreateTime.memos[i].id}');
+        print('   CreateTime: ${memosByCreateTime.memos[i].createTime}');
       }
     });
 

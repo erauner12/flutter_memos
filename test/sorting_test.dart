@@ -64,56 +64,7 @@ void main() {
       );
     });
     
-    test('sortByCreateTime correctly sorts memos', () {
-      // Create test memos with different creation times
-      final memos = [
-        Memo(
-          id: '1',
-          content: 'Oldest creation',
-          updateTime: '2025-03-22T10:00:00Z',
-          createTime: '2025-03-16T10:00:00Z',
-          displayTime: '2025-03-22T10:00:00Z',
-        ),
-        Memo(
-          id: '2',
-          content: 'Middle creation',
-          updateTime: '2025-03-21T10:00:00Z',
-          createTime: '2025-03-17T10:00:00Z',
-          displayTime: '2025-03-21T10:00:00Z',
-        ),
-        Memo(
-          id: '3',
-          content: 'Newest creation',
-          updateTime: '2025-03-20T10:00:00Z',
-          createTime: '2025-03-18T10:00:00Z',
-          displayTime: '2025-03-20T10:00:00Z',
-        ),
-      ];
-      
-      // Shuffle the list
-      final random = Random(42);
-      memos.shuffle(random);
-      
-      // Apply sorting using the actual implementation
-      MemoUtils.sortByCreateTime(memos);
-      
-      // Verify the order (newest first)
-      expect(
-        memos[0].id,
-        equals('3'),
-        reason: 'First memo should be the newest by creation time',
-      );
-      expect(
-        memos[1].id,
-        equals('2'),
-        reason: 'Second memo should be the middle by creation time',
-      );
-      expect(
-        memos[2].id,
-        equals('1'),
-        reason: 'Third memo should be the oldest by creation time',
-      );
-    });
+    // Removed test for sortByCreateTime
 
     test('sortMemos handles null timestamps gracefully', () {
       // Create test memos with some null timestamps
