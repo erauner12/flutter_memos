@@ -1,112 +1,137 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:flutter_memos/widgets/memo_card.dart';
-import 'package:flutter_memos/widgets/memo_context_menu.dart';
+import 'package:flutter/services.dart'; // Import for ServicesBinding and SystemChannels
+import 'package:flutter_memos/widgets/context_menu_link.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  // Ensure TestWidgetsFlutterBinding is initialized
   TestWidgetsFlutterBinding.ensureInitialized();
-  
-  setUp(() {
-    // Reset the clipboard between tests
-    Clipboard.setData(const ClipboardData(text: ''));
-  });
 
-  group('Context Menu Link Copy Tests', () {
-    testWidgets('MemoContextMenu "Copy Link" copies correct URL format',
-        (WidgetTester tester) async {
-      final testMemoId = 'test-memo-id';
-      
-      // Mock clipboard
-      String? clipboardText;
-      // Use the modern approach for mocking method calls
-      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-          .setMockMethodCallHandler(SystemChannels.platform, (
-            MethodCall methodCall,
-          ) async {
-            if (methodCall.method == 'Clipboard.setData') {
-              clipboardText = methodCall.arguments['text'] as String?;
-            } else if (methodCall.method == 'Clipboard.getData') {
-              return {'text': clipboardText ?? ''};
-            }
+  group('ContextMenuLink Tests', () {
+    testWidgets('ContextMenuLink displays text and handles long press', (
+      WidgetTester tester,
+    ) async {
+      const testText = 'Test Link Text';
+      const testUrl = 'flutter-memos://memo/test-memo-id';
+      bool linkTapped = false;
+      bool copyTapped = false;
+
+      // Set up mock method call handler for Clipboard
+      List<MethodCall> log = <MethodCall>[];
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (MethodCall methodCall) async {
+          log.add(methodCall);
+          if (methodCall.method == 'Clipboard.setData') {
+            // Simulate success for setData
             return null;
-          });
-      
-      // Build the context menu inside a Scaffold
+          }
+          // Handle other potential platform calls if necessary, otherwise return null
+          return null;
+        },
+      );
+
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
-            body: Builder(
-              builder: (BuildContext context) {
-                // Wrap MemoContextMenu directly in Material
-                return Material(
-                  child: MemoContextMenu(
-                    memoId: testMemoId,
-                    isPinned: false,
-                    position: const Offset(0, 0),
-                    parentContext: context, // Use builder's context
-                    onClose: () {},
-                    onCopyLink: () async { // Update callback
-                      final url = 'flutter-memos://memo/$testMemoId';
-                      // Directly set the local variable for assertion
-                      clipboardText = url;
-                      // Still simulate clipboard interaction if needed
-                      await Clipboard.setData(ClipboardData(text: url));
-                    },
-                  ),
-                );
-              },
+            body: ContextMenuLink(
+              text: testText,
+              url: testUrl,
+              onTap: () => linkTapped = true,
+              onCopy: () => copyTapped = true,
             ),
           ),
         ),
       );
-      
-      // Find the Copy Link menu item by Key
-      final copyLinkFinder = find.byKey(const Key('copy_link_menu_item'));
-      expect(copyLinkFinder, findsOneWidget);
-      
-      // Tap the Copy Link menu item
-      await tester.tap(copyLinkFinder); // Tap the InkWell directly
-      await tester.pump(); // Allow callbacks to execute
-      
-      // Verify the correct URL was copied (using the local variable)
-      expect(clipboardText, equals('flutter-memos://memo/$testMemoId'));
-      
-      // Clean up
-      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-          .setMockMethodCallHandler(SystemChannels.platform, null);
+
+      // Verify initial state
+      expect(find.text(testText), findsOneWidget);
+      expect(linkTapped, isFalse);
+      expect(copyTapped, isFalse);
+
+      // Simulate long press to show context menu
+      await tester.longPress(find.text(testText));
+      await tester.pumpAndSettle(); // Wait for menu animation
+
+      // Verify context menu items appear
+      expect(find.text('Open Link'), findsOneWidget);
+      expect(find.text('Copy Link'), findsOneWidget);
+
+      // Simulate tapping 'Copy Link'
+      await tester.tap(find.text('Copy Link'));
+      await tester.pumpAndSettle(); // Wait for menu to dismiss
+
+      // Verify onCopy callback was triggered
+      expect(copyTapped, isTrue);
+
+      // Verify Clipboard.setData was called with the correct URL
+      expect(
+        log,
+        hasLength(1),
+        reason: 'Clipboard.setData should have been called once',
+      );
+      expect(log.first.method, 'Clipboard.setData');
+      expect(
+        log.first.arguments['text'],
+        testUrl,
+        reason: 'Clipboard.setData should be called with the correct URL',
+      );
+
+      // Reset linkTapped for the next interaction
+      linkTapped = false;
+
+      // Simulate long press again
+      await tester.longPress(find.text(testText));
+      await tester.pumpAndSettle();
+
+      // Simulate tapping 'Open Link'
+      await tester.tap(find.text('Open Link'));
+      await tester.pumpAndSettle();
+
+      // Verify onTap callback was triggered
+      expect(linkTapped, isTrue);
+
+      // Clear the handler after the test
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        null,
+      );
     });
 
-    testWidgets('MemoCard triggers context menu on long press',
-        (WidgetTester tester) async {
-      // Build a MemoCard
+    testWidgets('ContextMenuLink handles simple tap', (
+      WidgetTester tester,
+    ) async {
+      const testText = 'Tap Me';
+      const testUrl = 'flutter-memos://memo/tap-test';
+      bool linkTapped = false;
+
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
-            body: MemoCard(
-              id: 'test-memo-id',
-              content: 'Test memo content',
-              onTap: () {},
+            body: ContextMenuLink(
+              text: testText,
+              url: testUrl,
+              onTap: () => linkTapped = true,
+              onCopy: () {}, // Provide dummy onCopy
             ),
           ),
         ),
       );
-      
-      // Ensure card is built
-      expect(find.byType(MemoCard), findsOneWidget);
-      
-      // Long press should show context menu
-      // Note: This will actually open a modal bottom sheet which might not be directly testable
-      // This test verifies the GestureDetector exists and has an onLongPress handler
-      final gestureFinder = find.descendant(
-        of: find.byType(MemoCard),
-        matching: find.byType(InkWell),
-      );
-      expect(gestureFinder, findsOneWidget);
-      
-      // Verify the InkWell has an onLongPress handler
-      final inkWell = tester.widget<InkWell>(gestureFinder);
-      expect(inkWell.onLongPress, isNotNull);
+
+      // Verify initial state
+      expect(find.text(testText), findsOneWidget);
+      expect(linkTapped, isFalse);
+
+      // Simulate simple tap
+      await tester.tap(find.text(testText));
+      await tester.pumpAndSettle();
+
+      // Verify onTap callback was triggered
+      expect(linkTapped, isTrue);
+
+      // Verify context menu did NOT appear
+      expect(find.text('Open Link'), findsNothing);
+      expect(find.text('Copy Link'), findsNothing);
     });
   });
 }
