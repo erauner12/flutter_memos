@@ -378,6 +378,7 @@ class _NewMemoFormState extends ConsumerState<NewMemoForm>
                           final success = await UrlHelper.launchUrl(
                             href,
                             context: context,
+                            ref: ref,
                           );
                           if (kDebugMode) {
                             print('[NewMemoForm] URL launch result: $success');

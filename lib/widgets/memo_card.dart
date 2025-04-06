@@ -5,6 +5,7 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_memos/utils/url_helper.dart';
 import 'package:flutter_memos/widgets/memo_context_menu.dart' as memo_menu;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 class MemoCard extends ConsumerStatefulWidget {
   final String content;
   final bool pinned;
@@ -38,16 +39,13 @@ class MemoCard extends ConsumerStatefulWidget {
     this.isSelected = false, // Default to not selected
     this.onBump, // Add onBump to constructor
   });
+
   @override
   ConsumerState<MemoCard> createState() => _MemoCardState();
-  @override
-  State<MemoCard> createState() => _MemoCardState();
 }
+
 class _MemoCardState extends ConsumerState<MemoCard> {
-class _MemoCardState extends State<MemoCard> {
   Offset tapPosition = Offset.zero;
-  // Remove _isPressed state variable
-  // bool _isPressed = false;
 
   // Helper method to format date strings for display
   String formatDateTime(String dateTimeString) {
@@ -189,55 +187,12 @@ class _MemoCardState extends State<MemoCard> {
     );
   }
 
-  void onEdit(BuildContext context) {
-    Navigator.pushNamed(
-      context,
-      '/edit-entity', // Use the generic route
-      arguments: {
-        'entityType': 'memo',
-        'entityId': widget.id,
-      }, // Specify type and ID
-    );
-  }
-
-  void onDelete(BuildContext context) async {
-    if (widget.onDelete != null) {
-      // Call onDelete callback directly without showing another dialog
-      // since the dialog will be shown in MemoListItem
-      widget.onDelete!();
-    }
-  }
-
-  void onArchive(BuildContext context) {
-    if (widget.onArchive != null) {
-      widget.onArchive!();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Memo archived successfully'),
-          backgroundColor: Colors.green,
-        ),
-      );
-    }
-  }
-
-  void onTogglePin(BuildContext context) {
-    if (widget.onTogglePin != null) {
-      widget.onTogglePin!();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(widget.pinned ? 'Memo unpinned' : 'Memo pinned'),
-        ),
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
     // Define styles for different states
     // Define the SUBTLE style for PERSISTENT selection
-    // (This was previously named pressedStyle)
     final selectedStyle = (
       color:
           isDarkMode
@@ -248,9 +203,6 @@ class _MemoCardState extends State<MemoCard> {
         width: 1,
       ),
     );
-
-    // REMOVE the original selectedStyle definition (the one with the prominent border)
-    // final selectedStyle = ( ... ); // This block is removed
 
     // Define the default style (remains the same)
     final defaultStyle = (
@@ -272,7 +224,6 @@ class _MemoCardState extends State<MemoCard> {
       cardBackgroundColor = defaultStyle.color;
       cardBorderStyle = defaultStyle.border;
     }
-    // _isPressed state is no longer tracked or used here.
 
     // Debug logging for memo card rendering
     if (kDebugMode && widget.isSelected) {
@@ -314,8 +265,6 @@ class _MemoCardState extends State<MemoCard> {
         onLongPress: showContextMenu,
         onDoubleTap: kIsWeb ? showContextMenu : null,
         onTapDown: storePosition,
-        // Add onHighlightChanged callback
-        // Removed onHighlightChanged callback as it was only setting an unused variable
         borderRadius: BorderRadius.circular(10),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(
@@ -338,7 +287,6 @@ class _MemoCardState extends State<MemoCard> {
                     return const SizedBox.shrink();
                   },
                 ),
-
               MarkdownBody(
                 data: widget.content,
                 selectable: true,
@@ -355,7 +303,6 @@ class _MemoCardState extends State<MemoCard> {
                     color: Theme.of(context).colorScheme.primary,
                     decoration: TextDecoration.underline,
                   ),
-                  textScaleFactor: 1.0,
                 ),
                 shrinkWrap: true,
                 fitContent: true,
@@ -364,14 +311,13 @@ class _MemoCardState extends State<MemoCard> {
                     print(
                       '[MemoCard] Link tapped in memo ${widget.id}: "$text" -> "$href"',
                     );
+                  }
                   if (href != null) {
                     UrlHelper.launchUrl(href, ref: ref, context: context);
-                  }
                   }
                 },
               ),
               const SizedBox(height: 10),
-
               // Pinned indicator with improved styling
               if (widget.pinned)
                 Padding(
@@ -401,7 +347,6 @@ class _MemoCardState extends State<MemoCard> {
                     ],
                   ),
                 ),
-
               // Primary timestamp display with better formatting
               if (widget.highlightTimestamp != null)
                 Padding(
@@ -433,7 +378,6 @@ class _MemoCardState extends State<MemoCard> {
                     ],
                   ),
                 ),
-
               // Show detailed timestamps with improved styling
               if (widget.showTimeStamps && widget.updatedAt != null)
                 Padding(
