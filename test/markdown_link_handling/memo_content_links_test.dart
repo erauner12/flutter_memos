@@ -5,19 +5,20 @@ import 'package:flutter_memos/models/memo.dart';
 import 'package:flutter_memos/providers/api_providers.dart'; // Import api provider
 import 'package:flutter_memos/screens/memo_detail/memo_content.dart';
 import 'package:flutter_memos/screens/memo_detail/memo_detail_providers.dart';
+import 'package:flutter_memos/services/api_service.dart'; // Add this import for ApiService
 import 'package:flutter_memos/services/url_launcher_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mockito/annotations.dart'; // Add this import for @GenerateNiceMocks
 import 'package:mockito/mockito.dart';
 
-// Import the generated mocks for ApiService (use the one from markdown_rendering_test)
-import '../markdown_rendering_test.mocks.dart';
-// Import the generated mocks for UrlLauncherService
-import '../services/url_launcher_service_test.mocks.dart';
 // Import debug utils
 import '../utils/test_debug.dart';
+// Import the generated mocks for THIS file
+import 'memo_content_links_test.mocks.dart';
 
-// No need to generate mocks here, import them instead
+// Generate mocks for services used in this test file
+@GenerateNiceMocks([MockSpec<ApiService>(), MockSpec<UrlLauncherService>()])
 
 void main() {
   group('MemoContent Link Handling Tests', () {
