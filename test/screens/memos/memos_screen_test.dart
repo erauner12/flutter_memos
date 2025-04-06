@@ -1,0 +1,236 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_memos/models/memo.dart';
+import 'package:flutter_memos/providers/memo_providers.dart';
+import 'package:flutter_memos/providers/ui_providers.dart' as ui_providers;
+import 'package:flutter_memos/screens/memos/memo_list_item.dart';
+import 'package:flutter_memos/screens/memos/memos_screen.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_slidable/flutter_slidable.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+// Helper to create a list of dummy memos
+List<Memo> createDummyMemos(int count) {
+  return List.generate(count, (i) {
+    final now = DateTime.now();
+    final updateTime = now.subtract(Duration(minutes: i)).toIso8601String();
+    return Memo(
+      id: 'memo_$i',
+      content: 'Dummy Memo Content $i',
+      pinned: false,
+      state: MemoState.normal,
+      updateTime: updateTime,
+      createTime: updateTime,
+    );
+  });
+}
+
+// Mock Notifier to control state
+class MockMemosNotifier extends StateNotifier<MemosState> {
+  MockMemosNotifier(super.state);
+
+  // Provide dummy implementations or leave empty if not needed for these tests
+  Future<void> refresh() async {}
+  Future<void> fetchMoreMemos() async {}
+}
+
+// Helper to wrap widget for testing
+Widget buildTestableWidget(Widget child, List<Memo> initialMemos) {
+  final mockNotifier = MockMemosNotifier(
+    const MemosState().copyWith(
+      memos: initialMemos,
+      isLoading: false,
+      hasReachedEnd: true,
+      totalLoaded: initialMemos.length,
+    ),
+  );
+
+  return ProviderScope(
+    overrides: [
+      // Override the actual notifier with our mock
+      memosNotifierProvider.overrideWith((ref) => mockNotifier),
+      // Ensure UI providers start in a known state
+      ui_providers.memoMultiSelectModeProvider.overrideWith((ref) => false),
+      ui_providers.selectedMemoIdsForMultiSelectProvider.overrideWith((ref) => {}),
+      ui_providers.selectedMemoIdProvider.overrideWith((ref) => null),
+    ],
+    child: MaterialApp(
+      home: child,
+      // Define routes needed for navigation actions within MemoListItem (like edit)
+      routes: {
+        '/edit-entity': (context) => const Scaffold(body: Text('Edit Screen')),
+        '/memo-detail': (context) => const Scaffold(body: Text('Detail Screen')),
+        '/new-memo': (context) => const Scaffold(body: Text('New Memo Screen')),
+      },
+    ),
+  );
+}
+
+
+void main() {
+  final dummyMemos = createDummyMemos(3); // Create 3 dummy memos for testing
+
+  testWidgets('MemosScreen displays standard AppBar and no checkboxes initially', (WidgetTester tester) async {
+    // Arrange
+    await tester.pumpWidget(buildTestableWidget(const MemosScreen(), dummyMemos));
+    await tester.pumpAndSettle(); // Wait for initial build
+
+    // Act & Assert
+    // Verify standard title (adjust if your title logic is different)
+    expect(find.widgetWithText(AppBar, 'Memos (ALL)'), findsOneWidget);
+
+    // Verify "Select Memos" button exists
+    expect(find.byTooltip('Select Memos'), findsOneWidget);
+    expect(find.byIcon(Icons.select_all), findsOneWidget);
+
+    // Verify multi-select actions are NOT present
+    expect(find.byIcon(Icons.close), findsNothing); // Cancel button
+    expect(find.textContaining('Selected'), findsNothing); // "X Selected" text
+    expect(find.widgetWithIcon(AppBar, Icons.delete), findsNothing); // Delete action
+    expect(find.widgetWithIcon(AppBar, Icons.archive), findsNothing); // Archive action
+
+    // Verify no Checkboxes are present within list items
+    expect(find.descendant(of: find.byType(MemoListItem), matching: find.byType(Checkbox)), findsNothing);
+
+    // Verify Slidable/Dismissible are present
+    expect(find.descendant(of: find.byType(MemoListItem), matching: find.byType(Slidable)), findsWidgets);
+    expect(find.descendant(of: find.byType(MemoListItem), matching: find.byType(Dismissible)), findsWidgets);
+  });
+
+  testWidgets('MemosScreen enters multi-select mode on button tap', (WidgetTester tester) async {
+    // Arrange
+    await tester.pumpWidget(buildTestableWidget(const MemosScreen(), dummyMemos));
+    await tester.pumpAndSettle();
+    final container = tester.element<ProviderScope>(find.byType(ProviderScope));
+
+    // Act: Tap the "Select Memos" button
+    await tester.tap(find.byTooltip('Select Memos'));
+    await tester.pumpAndSettle();
+
+    // Assert
+    // Verify provider state
+    expect(container.read(ui_providers.memoMultiSelectModeProvider), isTrue);
+
+    // Verify AppBar changes
+    expect(find.widgetWithIcon(AppBar, Icons.close), findsOneWidget); // Cancel button
+    expect(find.text('0 Selected'), findsOneWidget); // Initial count
+    expect(find.widgetWithIcon(AppBar, Icons.delete), findsOneWidget); // Delete action
+    expect(find.widgetWithIcon(AppBar, Icons.archive), findsOneWidget); // Archive action
+
+    // Verify standard title and select button are gone from AppBar
+    expect(find.widgetWithText(AppBar, 'Memos (ALL)'), findsNothing);
+    expect(find.byTooltip('Select Memos'), findsNothing);
+
+    // Verify Checkboxes appear for each item
+    expect(find.descendant(of: find.byType(MemoListItem), matching: find.byType(Checkbox)), findsNWidgets(dummyMemos.length));
+
+    // Verify Slidable/Dismissible are gone
+    expect(find.descendant(of: find.byType(MemoListItem), matching: find.byType(Slidable)), findsNothing);
+    expect(find.descendant(of: find.byType(MemoListItem), matching: find.byType(Dismissible)), findsNothing);
+  });
+
+  testWidgets('MemosScreen selects/deselects memo via Checkbox tap', (WidgetTester tester) async {
+    // Arrange
+    await tester.pumpWidget(buildTestableWidget(const MemosScreen(), dummyMemos));
+    await tester.pumpAndSettle();
+    final container = tester.element<ProviderScope>(find.byType(ProviderScope));
+
+    // Enter multi-select mode
+    await tester.tap(find.byTooltip('Select Memos'));
+    await tester.pumpAndSettle();
+
+    // Find the first checkbox
+    final firstCheckboxFinder = find.descendant(
+      of: find.byType(MemoListItem).first,
+      matching: find.byType(Checkbox),
+    );
+    expect(firstCheckboxFinder, findsOneWidget);
+
+    // Act: Tap the first checkbox to select
+    await tester.tap(firstCheckboxFinder);
+    await tester.pumpAndSettle();
+
+    // Assert: Selection state updated
+    expect(container.read(ui_providers.selectedMemoIdsForMultiSelectProvider), contains(dummyMemos[0].id));
+    expect(container.read(ui_providers.selectedMemoIdsForMultiSelectProvider).length, 1);
+    expect(find.text('1 Selected'), findsOneWidget);
+    // TODO: Assert action buttons are enabled (need to check onPressed != null)
+
+    // Act: Tap the first checkbox again to deselect
+    await tester.tap(firstCheckboxFinder);
+    await tester.pumpAndSettle();
+
+    // Assert: Selection state updated
+    expect(container.read(ui_providers.selectedMemoIdsForMultiSelectProvider), isNot(contains(dummyMemos[0].id)));
+    expect(container.read(ui_providers.selectedMemoIdsForMultiSelectProvider), isEmpty);
+    expect(find.text('0 Selected'), findsOneWidget);
+    // TODO: Assert action buttons are disabled (need to check onPressed == null)
+  });
+
+  testWidgets('MemosScreen selects/deselects memo via item tap in multi-select mode', (WidgetTester tester) async {
+    // Arrange
+    await tester.pumpWidget(buildTestableWidget(const MemosScreen(), dummyMemos));
+    await tester.pumpAndSettle();
+    final container = tester.element<ProviderScope>(find.byType(ProviderScope));
+
+    // Enter multi-select mode
+    await tester.tap(find.byTooltip('Select Memos'));
+    await tester.pumpAndSettle();
+
+    // Find the first MemoListItem
+    final firstItemFinder = find.byType(MemoListItem).first;
+
+    // Act: Tap the first item to select
+    await tester.tap(firstItemFinder);
+    await tester.pumpAndSettle();
+
+    // Assert: Selection state updated
+    expect(container.read(ui_providers.selectedMemoIdsForMultiSelectProvider), contains(dummyMemos[0].id));
+    expect(container.read(ui_providers.selectedMemoIdsForMultiSelectProvider).length, 1);
+    expect(find.text('1 Selected'), findsOneWidget);
+
+    // Act: Tap the first item again to deselect
+    await tester.tap(firstItemFinder);
+    await tester.pumpAndSettle();
+
+    // Assert: Selection state updated
+    expect(container.read(ui_providers.selectedMemoIdsForMultiSelectProvider), isNot(contains(dummyMemos[0].id)));
+    expect(container.read(ui_providers.selectedMemoIdsForMultiSelectProvider), isEmpty);
+    expect(find.text('0 Selected'), findsOneWidget);
+  });
+
+   testWidgets('MemosScreen exits multi-select mode via Cancel button', (WidgetTester tester) async {
+    // Arrange
+    await tester.pumpWidget(buildTestableWidget(const MemosScreen(), dummyMemos));
+    await tester.pumpAndSettle();
+    final container = tester.element<ProviderScope>(find.byType(ProviderScope));
+
+    // Enter multi-select mode and select an item
+    await tester.tap(find.byTooltip('Select Memos'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(MemoListItem).first);
+    await tester.pumpAndSettle();
+    expect(container.read(ui_providers.memoMultiSelectModeProvider), isTrue);
+    expect(container.read(ui_providers.selectedMemoIdsForMultiSelectProvider), isNotEmpty);
+
+    // Act: Tap the Cancel button (AppBar leading)
+    await tester.tap(find.widgetWithIcon(AppBar, Icons.close));
+    await tester.pumpAndSettle();
+
+    // Assert: Exited multi-select mode
+    expect(container.read(ui_providers.memoMultiSelectModeProvider), isFalse);
+    expect(container.read(ui_providers.selectedMemoIdsForMultiSelectProvider), isEmpty);
+
+    // Verify AppBar reverts
+    expect(find.widgetWithText(AppBar, 'Memos (ALL)'), findsOneWidget);
+    expect(find.byTooltip('Select Memos'), findsOneWidget);
+    expect(find.widgetWithIcon(AppBar, Icons.close), findsNothing);
+    expect(find.textContaining('Selected'), findsNothing);
+
+    // Verify Checkboxes are gone
+    expect(find.descendant(of: find.byType(MemoListItem), matching: find.byType(Checkbox)), findsNothing);
+
+    // Verify Slidable/Dismissible are back
+    expect(find.descendant(of: find.byType(MemoListItem), matching: find.byType(Slidable)), findsWidgets);
+    expect(find.descendant(of: find.byType(MemoListItem), matching: find.byType(Dismissible)), findsWidgets);
+  });
+}
