@@ -20,8 +20,8 @@ import 'markdown_rendering_test.mocks.dart';
 // Import test utility
 import 'utils/test_debug.dart';
 
-// Annotation to generate mock for ApiService
-@GenerateMocks([ApiService])
+// Annotation to generate nice mock for ApiService
+@GenerateNiceMocks([MockSpec<ApiService>()])
 
 void main() {
   // Declare mockApiService at the top level so it can be accessed by all tests

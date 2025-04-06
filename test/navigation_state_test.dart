@@ -12,8 +12,8 @@ import 'package:mockito/mockito.dart';
 // Import the generated mock file
 import 'navigation_state_test.mocks.dart';
 
-// Generate mocks for ApiService
-@GenerateMocks([ApiService])
+// Generate nice mocks for ApiService
+@GenerateNiceMocks([MockSpec<ApiService>()])
 void main() {
   late MockApiService mockApiService;
   late ProviderContainer container;

@@ -16,8 +16,8 @@ import 'comment_providers_test.mocks.dart';
 
 
 
-// Annotation to generate mock for ApiService
-@GenerateMocks([ApiService])
+// Annotation to generate nice mock for ApiService
+@GenerateNiceMocks([MockSpec<ApiService>()])
 void main() {
   late MockApiService mockApiService; // Use the generated MockApiService
   late ProviderContainer container;

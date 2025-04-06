@@ -7,12 +7,8 @@ import 'package:flutter_memos/services/api_service.dart';
 import 'package:flutter_memos/utils/env.dart'; // To potentially load credentials
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/annotations.dart';
-
-// Import the generated mocks file
-import 'api_service_resource_test.mocks.dart';
-
-// Generate mock for ApiService
-@GenerateMocks([ApiService])
+// Generate nice mock for ApiService
+@GenerateNiceMocks([MockSpec<ApiService>()])
 void main() {
   group('ApiService Resource Integration Tests', () {
     late ApiService apiService;

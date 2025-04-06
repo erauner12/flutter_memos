@@ -12,8 +12,8 @@ import 'package:mockito/mockito.dart'; // Add Mockito import
 // Import the generated mocks file (will be created by build_runner)
 import 'memo_providers_test.mocks.dart';
 
-// Annotation to generate mock for ApiService
-@GenerateMocks([ApiService])
+// Annotation to generate nice mock for ApiService
+@GenerateNiceMocks([MockSpec<ApiService>()])
 // Mock Notifier extending the actual Notifier
 class MockMemosNotifier extends MemosNotifier {
   MockMemosNotifier(super.ref, MemosState initialState)

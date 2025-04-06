@@ -11,8 +11,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
 
-// Generate mock for ApiService
-@GenerateMocks([ApiService])
+// Generate nice mock for ApiService
+@GenerateNiceMocks([MockSpec<ApiService>()])
 // This import will work after running build_runner
 import 'memo_detail_screen_test.mocks.dart';
 

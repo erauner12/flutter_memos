@@ -15,8 +15,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
 
-// Generate mock for ApiService
-@GenerateMocks([ApiService])
+// Generate nice mock for ApiService
+@GenerateNiceMocks([MockSpec<ApiService>()])
+// Import the generated mocks file
 import 'memo_comments_test.mocks.dart';
 
 // Helper to create a list of dummy comments

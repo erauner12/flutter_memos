@@ -73,14 +73,14 @@ class _FakeComment_3 extends _i1.SmartFake implements _i5.Comment {
 ///
 /// See the documentation for Mockito's code generation for more information.
 class MockApiService extends _i1.Mock implements _i2.ApiService {
-  MockApiService() {
-    _i1.throwOnMissingStub(this);
-  }
-
   @override
   String get apiBaseUrl => (super.noSuchMethod(
         Invocation.getter(#apiBaseUrl),
         returnValue: _i6.dummyValue<String>(
+          this,
+          Invocation.getter(#apiBaseUrl),
+        ),
+        returnValueForMissingStub: _i6.dummyValue<String>(
           this,
           Invocation.getter(#apiBaseUrl),
         ),
@@ -171,6 +171,32 @@ class MockApiService extends _i1.Mock implements _i2.ApiService {
             },
           ),
         )),
+        returnValueForMissingStub: _i7.Future<_i2.PaginatedMemoResponse>.value(
+            _FakePaginatedMemoResponse_0(
+          this,
+          Invocation.method(
+            #listMemos,
+            [],
+            {
+              #parent: parent,
+              #filter: filter,
+              #state: state,
+              #sort: sort,
+              #direction: direction,
+              #pageSize: pageSize,
+              #pageToken: pageToken,
+              #tags: tags,
+              #visibility: visibility,
+              #contentSearch: contentSearch,
+              #createdAfter: createdAfter,
+              #createdBefore: createdBefore,
+              #updatedAfter: updatedAfter,
+              #updatedBefore: updatedBefore,
+              #timeExpression: timeExpression,
+              #useUpdateTimeForExpression: useUpdateTimeForExpression,
+            },
+          ),
+        )),
       ) as _i7.Future<_i2.PaginatedMemoResponse>);
 
   @override
@@ -186,6 +212,13 @@ class MockApiService extends _i1.Mock implements _i2.ApiService {
             [id],
           ),
         )),
+        returnValueForMissingStub: _i7.Future<_i3.Memo>.value(_FakeMemo_1(
+          this,
+          Invocation.method(
+            #getMemo,
+            [id],
+          ),
+        )),
       ) as _i7.Future<_i3.Memo>);
 
   @override
@@ -195,6 +228,13 @@ class MockApiService extends _i1.Mock implements _i2.ApiService {
           [memo],
         ),
         returnValue: _i7.Future<_i3.Memo>.value(_FakeMemo_1(
+          this,
+          Invocation.method(
+            #createMemo,
+            [memo],
+          ),
+        )),
+        returnValueForMissingStub: _i7.Future<_i3.Memo>.value(_FakeMemo_1(
           this,
           Invocation.method(
             #createMemo,
@@ -217,6 +257,16 @@ class MockApiService extends _i1.Mock implements _i2.ApiService {
           ],
         ),
         returnValue: _i7.Future<_i3.Memo>.value(_FakeMemo_1(
+          this,
+          Invocation.method(
+            #updateMemo,
+            [
+              id,
+              memo,
+            ],
+          ),
+        )),
+        returnValueForMissingStub: _i7.Future<_i3.Memo>.value(_FakeMemo_1(
           this,
           Invocation.method(
             #updateMemo,
@@ -264,6 +314,18 @@ class MockApiService extends _i1.Mock implements _i2.ApiService {
             ],
           ),
         )),
+        returnValueForMissingStub:
+            _i7.Future<_i4.V1Resource>.value(_FakeV1Resource_2(
+          this,
+          Invocation.method(
+            #uploadResource,
+            [
+              fileBytes,
+              filename,
+              contentType,
+            ],
+          ),
+        )),
       ) as _i7.Future<_i4.V1Resource>);
 
   @override
@@ -274,6 +336,8 @@ class MockApiService extends _i1.Mock implements _i2.ApiService {
           [memoId],
         ),
         returnValue: _i7.Future<List<_i5.Comment>>.value(<_i5.Comment>[]),
+        returnValueForMissingStub:
+            _i7.Future<List<_i5.Comment>>.value(<_i5.Comment>[]),
       ) as _i7.Future<List<_i5.Comment>>);
 
   @override
@@ -302,6 +366,17 @@ class MockApiService extends _i1.Mock implements _i2.ApiService {
             {#resources: resources},
           ),
         )),
+        returnValueForMissingStub: _i7.Future<_i5.Comment>.value(_FakeComment_3(
+          this,
+          Invocation.method(
+            #createMemoComment,
+            [
+              memoId,
+              comment,
+            ],
+            {#resources: resources},
+          ),
+        )),
       ) as _i7.Future<_i5.Comment>);
 
   @override
@@ -312,6 +387,13 @@ class MockApiService extends _i1.Mock implements _i2.ApiService {
           [commentId],
         ),
         returnValue: _i7.Future<_i5.Comment>.value(_FakeComment_3(
+          this,
+          Invocation.method(
+            #getMemoComment,
+            [commentId],
+          ),
+        )),
+        returnValueForMissingStub: _i7.Future<_i5.Comment>.value(_FakeComment_3(
           this,
           Invocation.method(
             #getMemoComment,
@@ -334,6 +416,16 @@ class MockApiService extends _i1.Mock implements _i2.ApiService {
           ],
         ),
         returnValue: _i7.Future<_i5.Comment>.value(_FakeComment_3(
+          this,
+          Invocation.method(
+            #updateMemoComment,
+            [
+              commentId,
+              comment,
+            ],
+          ),
+        )),
+        returnValueForMissingStub: _i7.Future<_i5.Comment>.value(_FakeComment_3(
           this,
           Invocation.method(
             #updateMemoComment,
@@ -388,6 +480,8 @@ class MockApiService extends _i1.Mock implements _i2.ApiService {
         ),
         returnValue:
             _i7.Future<List<_i9.MemoRelation>>.value(<_i9.MemoRelation>[]),
+        returnValueForMissingStub:
+            _i7.Future<List<_i9.MemoRelation>>.value(<_i9.MemoRelation>[]),
       ) as _i7.Future<List<_i9.MemoRelation>>);
 
   @override
@@ -397,6 +491,13 @@ class MockApiService extends _i1.Mock implements _i2.ApiService {
           [type],
         ),
         returnValue: _i6.dummyValue<String>(
+          this,
+          Invocation.method(
+            #parseRelationType,
+            [type],
+          ),
+        ),
+        returnValueForMissingStub: _i6.dummyValue<String>(
           this,
           Invocation.method(
             #parseRelationType,

@@ -15,8 +15,8 @@ import 'package:mockito/mockito.dart';
 
 import 'memos_screen_test.mocks.dart';
 
-// Generate mock for ApiService
-@GenerateMocks([ApiService])
+// Generate nice mock for ApiService
+@GenerateNiceMocks([MockSpec<ApiService>()])
 
 // Helper to create a list of dummy memos
 List<Memo> createDummyMemos(int count) {
