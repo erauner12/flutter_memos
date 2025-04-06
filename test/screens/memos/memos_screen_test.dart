@@ -1,13 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_memos/models/memo.dart';
+import 'package:flutter_memos/providers/api_providers.dart';
 import 'package:flutter_memos/providers/filter_providers.dart';
 import 'package:flutter_memos/providers/memo_providers.dart';
 import 'package:flutter_memos/providers/ui_providers.dart' as ui_providers;
 import 'package:flutter_memos/screens/memos/memo_list_item.dart';
 import 'package:flutter_memos/screens/memos/memos_screen.dart';
+import 'package:flutter_memos/services/api_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mockito/annotations.dart';
+import 'package:mockito/mockito.dart';
+
+import 'memos_screen_test.mocks.dart';
+
+// Generate mock for ApiService
+@GenerateMocks([ApiService])
 
 // Helper to create a list of dummy memos
 List<Memo> createDummyMemos(int count) {
@@ -68,9 +77,40 @@ Widget buildTestableWidget(Widget child, ProviderContainer container) {
 void main() {
   final dummyMemos = createDummyMemos(3); // Create 3 dummy memos for testing
   late ProviderContainer container; // Declare container
+  late MockApiService mockApiService; // Declare the mock API service
 
   // Use setUp to create the container before each test
   setUp(() {
+    // Initialize the mock API service
+    mockApiService = MockApiService();
+
+    // Configure the mock API service to return the dummy memos
+    when(
+      mockApiService.listMemos(
+        parent: anyNamed('parent'),
+        filter: anyNamed('filter'),
+        state: anyNamed('state'),
+        sort: anyNamed('sort'),
+        direction: anyNamed('direction'),
+        pageSize: anyNamed('pageSize'),
+        pageToken: anyNamed('pageToken'),
+        tags: anyNamed('tags'),
+        visibility: anyNamed('visibility'),
+        contentSearch: anyNamed('contentSearch'),
+        createdAfter: anyNamed('createdAfter'),
+        createdBefore: anyNamed('createdBefore'),
+        updatedAfter: anyNamed('updatedAfter'),
+        updatedBefore: anyNamed('updatedBefore'),
+        timeExpression: anyNamed('timeExpression'),
+        useUpdateTimeForExpression: anyNamed('useUpdateTimeForExpression'),
+      ),
+    ).thenAnswer(
+      (_) async => PaginatedMemoResponse(
+        memos: dummyMemos,
+        nextPageToken: null, // No more pages available
+      ),
+    );
+    
     final initialState = const MemosState().copyWith(
       memos: dummyMemos,
       isLoading: false,
@@ -80,6 +120,8 @@ void main() {
 
     container = ProviderContainer(
       overrides: [
+        // Override the API service with our mock
+        apiServiceProvider.overrideWithValue(mockApiService),
         // Override the actual notifier with our mock builder
         memosNotifierProvider.overrideWith(
           (ref) => MockMemosNotifier(ref, initialState),
