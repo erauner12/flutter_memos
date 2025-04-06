@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:flutter/services.dart'; // Needed for Clipboard
 import 'package:flutter_memos/models/memo.dart';
 import 'package:flutter_memos/providers/memo_providers.dart';
 import 'package:flutter_memos/providers/ui_providers.dart' as ui_providers;
@@ -16,10 +16,10 @@ class MemoListItem extends ConsumerStatefulWidget {
   const MemoListItem({super.key, required this.memo, required this.index});
 
   @override
-  _MemoListItemState createState() => _MemoListItemState();
+  MemoListItemState createState() => MemoListItemState();
 }
 
-class _MemoListItemState extends ConsumerState<MemoListItem> {
+class MemoListItemState extends ConsumerState<MemoListItem> {
   void _toggleHideMemo(BuildContext context, WidgetRef ref) {
     final hiddenMemoIds = ref.read(hiddenMemoIdsProvider);
     final memoIdToToggle = widget.memo.id; // Use local variable for clarity
@@ -170,7 +170,7 @@ class _MemoListItemState extends ConsumerState<MemoListItem> {
       },
     );
 
-    if (confirm == true && context.mounted) {
+    if (confirm == true && mounted) {
       try {
         if (kDebugMode) {
           print(
@@ -186,7 +186,7 @@ class _MemoListItemState extends ConsumerState<MemoListItem> {
         // Then perform the actual delete operation
         await ref.read(deleteMemoProvider(widget.memo.id))();
 
-        if (context.mounted) {
+        if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Memo deleted successfully'),
@@ -200,7 +200,7 @@ class _MemoListItemState extends ConsumerState<MemoListItem> {
             .read(hiddenMemoIdsProvider.notifier)
             .update((state) => state..remove(widget.memo.id));
 
-        if (context.mounted) {
+        if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('Error deleting memo: $e'),
@@ -218,22 +218,26 @@ class _MemoListItemState extends ConsumerState<MemoListItem> {
 
   void _onArchive(BuildContext context) {
     ref.read(archiveMemoProvider(widget.memo.id))().then((_) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Memo archived successfully'),
-          backgroundColor: Colors.green,
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Memo archived successfully'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
     });
   }
 
   void _onTogglePin(BuildContext context) {
     ref.read(togglePinMemoProvider(widget.memo.id))().then((_) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(widget.memo.pinned ? 'Memo unpinned' : 'Memo pinned'),
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(widget.memo.pinned ? 'Memo unpinned' : 'Memo pinned'),
+          ),
+        );
+      }
     });
   }
 
@@ -265,13 +269,12 @@ class _MemoListItemState extends ConsumerState<MemoListItem> {
       pinned: widget.memo.pinned,
       updatedAt: widget.memo.updateTime,
       showTimeStamps: true,
-      isSelected: isSelected, // Use ID-based selection
+      isSelected: isSelected && !isMultiSelectMode, // Only show selection style if not in multi-select
       highlightTimestamp: MemoUtils.formatTimestamp(widget.memo.updateTime),
       timestampType: 'Updated', // Always 'Updated'
-      onTap:
-          isMultiSelectMode
-              ? () => _toggleMultiSelection(widget.memo.id)
-              : () => _navigateToMemoDetail(context, ref),
+      onTap: isMultiSelectMode
+          ? () => _toggleMultiSelection(widget.memo.id)
+          : () => _navigateToMemoDetail(context, ref),
       onArchive: () => _onArchive(context),
       onDelete: () => _onDelete(context),
       onHide: () => _toggleHideMemo(context, ref),
@@ -279,7 +282,7 @@ class _MemoListItemState extends ConsumerState<MemoListItem> {
       onBump: () async {
         try {
           await ref.read(bumpMemoProvider(widget.memo.id))();
-          if (context.mounted) {
+          if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
                 content: Text('Memo bumped!'),
@@ -289,7 +292,7 @@ class _MemoListItemState extends ConsumerState<MemoListItem> {
             );
           }
         } catch (e) {
-          if (context.mounted) {
+          if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(
@@ -303,7 +306,7 @@ class _MemoListItemState extends ConsumerState<MemoListItem> {
       },
     );
 
-    // In multi-select mode, add a checkbox and adjust the card
+    // In multi-select mode, return a completely different widget structure without Slidable/Dismissible
     if (isMultiSelectMode) {
       // Add extra visual indicator for multi-selected items
       if (isMultiSelected) {
@@ -320,18 +323,25 @@ class _MemoListItemState extends ConsumerState<MemoListItem> {
       }
 
       // Return a Row directly with Checkbox instead of wrapping with Dismissible/Slidable
-      return Row(
-        children: [
-          Checkbox(
-            value: isMultiSelected,
-            onChanged: (value) => _toggleMultiSelection(widget.memo.id),
-          ),
-          Expanded(child: cardContent),
-        ],
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 12.0),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(top: 12.0, right: 8.0),
+              child: Checkbox(
+                value: isMultiSelected,
+                onChanged: (value) => _toggleMultiSelection(widget.memo.id),
+              ),
+            ),
+            Expanded(child: cardContent),
+          ],
+        ),
       );
     }
 
-    // In normal mode, use Dismissible and Slidable
+    // In normal mode, wrap with Dismissible and Slidable
     return Dismissible(
       key: ValueKey('dismissible-${widget.memo.id}'),
       background: Container(
@@ -432,8 +442,7 @@ class _MemoListItemState extends ConsumerState<MemoListItem> {
               onPressed: (_) => _onTogglePin(context),
               backgroundColor: Colors.orange,
               foregroundColor: Colors.white,
-              icon:
-                  widget.memo.pinned ? Icons.push_pin_outlined : Icons.push_pin,
+              icon: widget.memo.pinned ? Icons.push_pin_outlined : Icons.push_pin,
               label: widget.memo.pinned ? 'Unpin' : 'Pin',
               autoClose: true,
             ),
