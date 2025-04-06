@@ -413,8 +413,10 @@ class _EditMemoFormState extends ConsumerState<EditMemoForm>
                           );
                         }
                         if (href != null) {
+                          // Pass the ref to UrlHelper.launchUrl
                           final success = await UrlHelper.launchUrl(
                             href,
+                            ref: ref, // Pass the ref
                             context: context,
                           );
                           if (kDebugMode) {

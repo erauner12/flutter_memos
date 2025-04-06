@@ -102,41 +102,46 @@ class _MemoContentState extends ConsumerState<MemoContent> {
                     ),
                     textScaleFactor: 1.0,
                   ),
-                  onTapLink: (text, href, title) {
+                  onTapLink: (text, href, title) async {
                     if (kDebugMode) {
                       print(
                         '[MemoContent] Link tapped: text="$text", href="$href", title="$title"',
                       );
                     }
                     if (href != null) {
-                      // First, try to launch the URL
-                      UrlHelper.launchUrl(href, context: context).then((
-                        success,
-                      ) {
-                        if (!success && context.mounted) {
-                          // If launch failed, show a more detailed message with copy option
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('Could not open link: $href'),
-                              action: SnackBarAction(
-                                label: 'Copy URL',
-                                onPressed: () {
-                                  Clipboard.setData(ClipboardData(text: href));
-                                  if (context.mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text(
-                                          'URL copied to clipboard',
-                                        ),
-                                      ),
-                                    );
-                                  }
-                                },
-                              ),
-                            ),
-                          );
-                        }
-                      });
+                      // Pass the ref to UrlHelper.launchUrl
+                      final success = await UrlHelper.launchUrl(
+                        href,
+                        ref: ref, // Pass the ref
+                        context: context,
+                      );
+                      // Keep existing success/failure logging/handling if desired,
+                      // though UrlHelper now also shows a snackbar on failure
+                      if (!success && context.mounted) {
+                        // TODO: Handle failure case
+                        // If launch failed, show a more detailed message with copy option
+                        // This part is now handled by UrlHelper, but kept here for reference
+                        // ScaffoldMessenger.of(context).showSnackBar(
+                        //   SnackBar(
+                        //     content: Text('Could not open link: $href'),
+                        //     action: SnackBarAction(
+                        //       label: 'Copy URL',
+                        //       onPressed: () {
+                        //         Clipboard.setData(ClipboardData(text: href));
+                        //         if (context.mounted) {
+                        //           ScaffoldMessenger.of(context).showSnackBar(
+                        //             const SnackBar(
+                        //               content: Text(
+                        //                 'URL copied to clipboard',
+                        //               ),
+                        //             ),
+                        //           );
+                        //         }
+                        //       },
+                        //     ),
+                        //   ),
+                        // );
+                      }
                     }
                   },
                 ),

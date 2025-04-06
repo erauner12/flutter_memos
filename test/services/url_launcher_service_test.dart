@@ -25,23 +25,26 @@ void main() {
     container.dispose();
   });
 
-  group('UrlLauncherService Tests', () {
-    test('launch returns true when URL can be launched', () async {
+  group('UrlLauncherService Tests (using mock)', () {
+    test('launch returns true when mock is stubbed to succeed', () async {
       // Arrange
       const testUrl = 'https://example.com';
+      // Stub the mock to return true
       when(mockUrlLauncherService.launch(testUrl)).thenAnswer((_) async => true);
 
-      // Act
+      // Act: Read the provider (which returns the mock) and call launch
       final result = await container.read(urlLauncherServiceProvider).launch(testUrl);
 
       // Assert
       expect(result, isTrue);
+      // Verify the mock's launch method was called
       verify(mockUrlLauncherService.launch(testUrl)).called(1);
     });
 
-    test('launch returns false when URL cannot be launched', () async {
+    test('launch returns false when mock is stubbed to fail', () async {
       // Arrange
       const testUrl = 'invalid:url';
+      // Stub the mock to return false
       when(mockUrlLauncherService.launch(testUrl)).thenAnswer((_) async => false);
 
       // Act

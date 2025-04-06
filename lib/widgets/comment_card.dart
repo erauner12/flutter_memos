@@ -411,7 +411,7 @@ class _CommentCardState extends ConsumerState<CommentCard> {
                       );
                     }
                     if (href != null) {
-                      UrlHelper.launchUrl(href);
+                      UrlHelper.launchUrl(href, ref: ref, context: context);
                     }
                   },
                 ),
