@@ -272,6 +272,45 @@ class _CommentCardState extends ConsumerState<CommentCard> {
     final highlightedId = ref.watch(highlightedCommentIdProvider);
     final bool isHighlighted = highlightedId == widget.comment.id;
 
+    // Define the SUBTLE style for PERSISTENT selection (similar to MemoCard)
+    final selectedStyle = (
+      color:
+          isDarkMode
+              ? Colors.grey.shade700.withOpacity(0.6)
+              : Colors.grey.shade300,
+      border: BorderSide(
+        color: Theme.of(context).colorScheme.outline.withOpacity(0.5),
+        width: 1,
+      ),
+    );
+
+    // Define the DISTINCT style for DEEP LINK highlight
+    final highlightedStyle = (
+      color: isDarkMode ? Colors.teal.shade900 : Colors.teal.shade50,
+      border: const BorderSide(color: Colors.teal, width: 2),
+    );
+
+    // Define the default style
+    final defaultStyle = (
+      color: isDarkMode ? const Color(0xFF222222) : Colors.white,
+      border: BorderSide.none,
+    );
+
+    // Determine style based on priority: Highlight > Selected > Default
+    Color? cardBackgroundColor;
+    BorderSide cardBorderStyle;
+
+    if (isHighlighted) {
+      cardBackgroundColor = highlightedStyle.color;
+      cardBorderStyle = highlightedStyle.border;
+    } else if (widget.isSelected) {
+      cardBackgroundColor = selectedStyle.color;
+      cardBorderStyle = selectedStyle.border;
+    } else {
+      cardBackgroundColor = defaultStyle.color;
+      cardBorderStyle = defaultStyle.border;
+    }
+
     // Reset highlight state after rendering if this is the highlighted comment
     if (isHighlighted) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -357,38 +396,21 @@ class _CommentCardState extends ConsumerState<CommentCard> {
         ),
         child: Card(
           key:
-              widget.isSelected
-                  ? Key('selected-comment-card-${widget.comment.id}')
-                  : (isHighlighted
-                      ? Key('highlighted-comment-card-${widget.comment.id}')
+              isHighlighted
+                  ? Key('highlighted-comment-card-${widget.comment.id}')
+                  : (widget.isSelected
+                      ? Key('selected-comment-card-${widget.comment.id}')
                       : null),
-          elevation: widget.isSelected ? 3 : (isHighlighted ? 4 : 1),
+          elevation: isHighlighted ? 4 : (widget.isSelected ? 2 : 1),
           margin: EdgeInsets.zero,
-          color:
-              widget.isSelected
-                  ? (isDarkMode ? const Color(0xFF3A3A3A) : Colors.blue.shade50)
-                  : (isHighlighted
-                      ? (isDarkMode
-                          ? Colors.teal.shade900
-                          : Colors.teal.shade50)
-                      : (isDarkMode ? const Color(0xFF222222) : Colors.white)),
+          color: cardBackgroundColor,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(8),
-            side:
-                widget.isSelected
-                    ? BorderSide(
-                      color:
-                          Theme.of(context)
-                              .colorScheme
-                              .primary, // Use primary color for selection border
-                      width: 2, // Consistent width
-                    )
-                    : (isHighlighted
-                        ? const BorderSide(color: Colors.teal, width: 2)
-                        : BorderSide.none),
+            side: cardBorderStyle,
           ),
           child: InkWell(
             onLongPress: () => _showContextMenu(context),
+            // No highlightColor or splashColor set to allow default InkWell feedback
             child: Padding(
               padding: const EdgeInsets.all(12.0),
               child: Column(
