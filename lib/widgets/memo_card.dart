@@ -46,6 +46,8 @@ class MemoCard extends StatefulWidget {
 
 class _MemoCardState extends State<MemoCard> {
   Offset _tapPosition = Offset.zero;
+  // Remove _isPressed state variable
+  // bool _isPressed = false;
 
   // Helper method to format date strings for display
   String _formatDateTime(String dateTimeString) {
@@ -233,7 +235,8 @@ class _MemoCardState extends State<MemoCard> {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
     // Define styles for different states
-    // Rename pressedStyle to selectedStyle for PERSISTENT selection
+    // Define the SUBTLE style for PERSISTENT selection
+    // (This was previously named pressedStyle)
     final selectedStyle = (
       color:
           isDarkMode
@@ -244,12 +247,11 @@ class _MemoCardState extends State<MemoCard> {
         width: 1,
       ),
     );
-    // REMOVE the original selectedStyle definition (prominent border)
+
+    // REMOVE the original selectedStyle definition (the one with the prominent border)
     // final selectedStyle = ( ... ); // This block is removed
 
-    // Define a distinct style for the transient pressed state - Handled by InkWell default now
-    // final pressedStyle = ( ... ); // This block is removed
-
+    // Define the default style (remains the same)
     final defaultStyle = (
       color: isDarkMode ? const Color(0xFF262626) : null, // Default card color
       border:
@@ -258,16 +260,18 @@ class _MemoCardState extends State<MemoCard> {
               : BorderSide.none,
     );
 
-    // Determine current style based ONLY on isSelected
+    // Determine style based ONLY on widget.isSelected
     Color? cardBackgroundColor;
+    BorderSide cardBorderStyle;
 
     if (widget.isSelected) {
-      // Use the renamed style for selection
       cardBackgroundColor = selectedStyle.color;
+      cardBorderStyle = selectedStyle.border;
     } else {
-      // Use default style otherwise
       cardBackgroundColor = defaultStyle.color;
+      cardBorderStyle = defaultStyle.border;
     }
+    // _isPressed state is no longer tracked or used here.
 
     // Debug logging for memo card rendering
     if (kDebugMode && widget.isSelected) {
@@ -353,19 +357,7 @@ child: Card(
         color: cardBackgroundColor,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(10),
-          side:
-              widget.isSelected
-                  ? BorderSide(
-                    // Use a more visible color for testing purposes
-                    color:
-                        kDebugMode
-                            ? Colors.red
-                            : Theme.of(context).colorScheme.primary,
-                    width: kDebugMode ? 3 : 2,
-                  )
-                  : (isDarkMode
-                      ? BorderSide(color: Colors.grey[850]!, width: 0.5)
-                      : BorderSide.none),
+          side: cardBorderStyle,
         ),
         child: InkWell(
           onTap: widget.onTap,
