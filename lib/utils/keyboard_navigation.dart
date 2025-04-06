@@ -10,41 +10,59 @@ mixin KeyboardNavigationMixin<T extends ConsumerStatefulWidget>
   /// Checks if the currently focused node belongs to a text input widget.
   bool _isTextInputFocused([FocusNode? primaryFocus]) {
     final focusNode = primaryFocus ?? FocusManager.instance.primaryFocus;
-    if (focusNode == null) return false;
-    
-    // Check the RenderObject type (more reliable in tests)
-    final renderObject = focusNode.context?.findRenderObject();
-    if (kDebugMode)
-      print(
-        '[_isTextInputFocused] Checking node: $focusNode, RenderObject: ${renderObject?.runtimeType}',
-      );
+    if (focusNode == null || !focusNode.hasPrimaryFocus || focusNode.context == null) {
+      // If no primary focus or no context, assume not text input
+      if (kDebugMode) print('[_isTextInputFocused] No primary focus or context.');
+      return false;
+    }
 
-    // Check if it's an editable text field
-    if (renderObject is RenderEditable) {
+    final widget = focusNode.context!.widget;
+    final renderObject = focusNode.context!.findRenderObject();
+
+    if (kDebugMode) {
+      print(
+        '[_isTextInputFocused] Checking Node: $focusNode, Widget: ${widget.runtimeType}, RenderObject: ${renderObject?.runtimeType}',
+      );
+    }
+
+    // Most reliable checks first
+    if (widget is EditableText || widget is TextField || widget is TextFormField) {
+      if (kDebugMode) print('[KeyboardNavigation] Focused widget IS an EditableText/TextField/TextFormField.');
       return true;
     }
-    
-    // Check for EditableText or TextField or TextFormField or any input-related widgets
-    if (focusNode.context != null) {
-      final widget = focusNode.context!.widget;
-      final typeStr = widget.runtimeType.toString().toLowerCase();
-      final isTextInput =
-          typeStr.contains('text') ||
-          typeStr.contains('edit') ||
-          typeStr.contains('field') ||
-          typeStr.contains('input') ||
-          widget is EditableText ||
-          widget is TextField ||
-          widget is TextFormField;
-
-      if (isTextInput && kDebugMode) {
-        print('[KeyboardNavigation] Text input focused: $typeStr');
-      }
-
-      return isTextInput;
+    if (renderObject is RenderEditable) {
+       if (kDebugMode) print('[KeyboardNavigation] Focused RenderObject IS RenderEditable.');
+      return true;
     }
 
-    return false;
+    // Check semantics node configuration for clues (might help in some cases)
+    // This might be less reliable across platforms/versions
+    try {
+       final semanticsNode = renderObject?.debugSemantics;
+       if (semanticsNode != null && (semanticsNode.hasFlag(SemanticsFlag.isTextField) || semanticsNode.hasFlag(SemanticsFlag.isObscured))) {
+         if (kDebugMode) print('[KeyboardNavigation] Semantics indicate text field.');
+         return true;
+       }
+    } catch (e) {
+      // Ignore potential errors accessing debugSemantics
+      if (kDebugMode) print('[KeyboardNavigation] Error checking semantics: $e');
+    }
+
+
+    // Fallback string check (less reliable)
+    final typeStr = widget.runtimeType.toString().toLowerCase();
+    final isPotentiallyTextInput = typeStr.contains('text') ||
+        typeStr.contains('edit') ||
+        typeStr.contains('field') ||
+        typeStr.contains('input');
+
+    if (isPotentiallyTextInput && kDebugMode) {
+      print('[KeyboardNavigation] Potential text input by type string: $typeStr. Returning $isPotentiallyTextInput.');
+    } else if (kDebugMode) {
+       print('[_isTextInputFocused] Focused widget/renderObject is not recognized as text input.');
+    }
+
+    return isPotentiallyTextInput; // Return based on string check if other checks failed
   }
 
   /// Handle a key event with standard navigation shortcuts

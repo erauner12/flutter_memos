@@ -61,9 +61,12 @@ void main() {
         ),
       ),
     );
+    await tester.pump(); // Add pump to ensure initial frame is settled
 
     // IMPORTANT: Just pump once to render the frame, but don't use pumpAndSettle()
     // which would execute the post-frame callback that resets the highlight
+    // We already pumped once above, this second pump is for the main check before reset.
+    // Let's ensure the frame is rendered before checking.
     await tester.pump();
 
     // Find the Card within the CommentCard
@@ -146,7 +149,7 @@ void main() {
         (cardAfterCallback.shape as RoundedRectangleBorder).side;
     expect(
       borderAfterCallback.width,
-      0.0,
+      0.0, // Correctly check for 0.0 width after reset
       reason: 'Border should be reset after highlight is cleared',
     );
   });

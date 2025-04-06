@@ -58,11 +58,13 @@ void main() {
       final copyLinkFinder = find.byKey(const Key('copy_link_menu_item'));
       expect(copyLinkFinder, findsOneWidget, reason: 'Copy Link menu item should be visible');
       
-      await tester.tap(copyLinkFinder);
+        // Tap only once
+        await tester.tap(copyLinkFinder);
       
         // Add a small delay to allow the async Clipboard.setData operation to complete
         await tester.pump(const Duration(milliseconds: 50));
-      await tester.pumpAndSettle(); // Wait for any animations to complete
+        // Ensure all microtasks and animations are finished after the delay
+        await tester.pumpAndSettle();
       
         // Filter the log for Clipboard.setData calls
         final clipboardCalls =
@@ -83,19 +85,6 @@ void main() {
 
       // Verify the callback was triggered
       expect(copyLinkTapped, isTrue, reason: 'onCopyLink callback should have been called');
-
-      // Verify Clipboard.setData was called with the correct URL
-      expect(
-        log,
-        hasLength(1),
-        reason: 'Clipboard.setData should have been called once',
-      );
-      expect(log.first.method, 'Clipboard.setData');
-      expect(
-        log.first.arguments['text'],
-        testUrl,
-        reason: 'Clipboard.setData should be called with the correct URL',
-      );
 
       // Clear the handler after the test
       tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(

@@ -5,6 +5,9 @@ import 'package:flutter_memos/utils/keyboard_navigation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+// Import helper
+import '../keyboard_navigation_helpers.dart';
+
 // Simple consumer stateful widget for testing
 class TestKeyboardNavigationWidget extends ConsumerStatefulWidget {
   const TestKeyboardNavigationWidget({super.key});
@@ -290,10 +293,15 @@ void main() {
 
       final state = testKey.currentState!;
       final Duration testTimestamp = const Duration(milliseconds: 10);
+      final textFieldFinder = find.byKey(const Key('testTextField'));
 
-      // First, focus the text field
-      await tester.tap(find.byKey(const Key('testTextField')));
-      await tester.pump();
+      // First, focus the text field using the helper
+      await focusTextFieldAndWait(tester, textFieldFinder);
+      // Add extra debug log
+      final primaryFocus = FocusManager.instance.primaryFocus;
+      tester.printToConsole(
+        '[Test Debug] Focus AFTER focusTextFieldAndWait: $primaryFocus, Widget: ${primaryFocus?.context?.widget.runtimeType}, RenderObject: ${primaryFocus?.context?.findRenderObject()?.runtimeType}',
+      );
 
       // The initial count of navigation calls
       final initialNextCalled = state.nextCalled;
@@ -353,12 +361,12 @@ void main() {
       // Verify the key events were correctly ignored by the mixin's handler
       expect(
         downResult,
-        equals(KeyEventResult.ignored),
+        equals(KeyEventResult.ignored), // Correct expectation
         reason: 'Shift+Down should be ignored',
       );
       expect(
         upResult,
-        equals(KeyEventResult.ignored),
+        equals(KeyEventResult.ignored), // Correct expectation
         reason: 'Shift+Up should be ignored',
       );
       
