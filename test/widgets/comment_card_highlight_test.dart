@@ -61,12 +61,9 @@ void main() {
         ),
       ),
     );
-    await tester.pump(); // Add pump to ensure initial frame is settled
-
-    // IMPORTANT: Just pump once to render the frame, but don't use pumpAndSettle()
-    // which would execute the post-frame callback that resets the highlight
-    // We already pumped once above, this second pump is for the main check before reset.
-    // Let's ensure the frame is rendered before checking.
+    // IMPORTANT: Just pump once after pumpWidget to render the initial frame.
+    // Do not use pumpAndSettle() here, as it would execute the post-frame callback
+    // that resets the highlight *before* we can check it.
     await tester.pump();
 
     // Find the Card within the CommentCard

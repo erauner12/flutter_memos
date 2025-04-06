@@ -31,7 +31,8 @@ void main() {
       );
 
       // Since MemoContextMenu is usually shown in a modal bottom sheet,
-      // we'll create a wrapper to display it directly for testing
+        // we'll create a wrapper to display it directly for testing.
+        // Pump the widget *after* setting the mock handler.
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(

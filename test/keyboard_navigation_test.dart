@@ -6,7 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 // Import helper
-import '../keyboard_navigation_helpers.dart';
+import './keyboard_navigation_helpers.dart';
 
 // Simple consumer stateful widget for testing
 class TestKeyboardNavigationWidget extends ConsumerStatefulWidget {
