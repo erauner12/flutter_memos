@@ -170,6 +170,17 @@ void main() {
         ),
       );
 
+      // Add missing getMemo stub for memoToUpdateId
+      when(mockApiService.getMemo(memoToUpdateId)).thenAnswer((_) async {
+        // Return the memo state as it would be after the update
+        // This mock is used during refresh/invalidation after update
+        return memosFromServerAfterUpdate.firstWhere(
+          (m) => m.id == memoToUpdateId,
+          orElse:
+              () => throw Exception('Test setup error: Updated memo not found'),
+        );
+      });
+      
       // 3. listMemos call *after* update (used by notifier's refresh)
       // This simulates the server list response containing the epoch createTime
       when(
@@ -180,9 +191,7 @@ void main() {
           sort: anyNamed('sort'),
           direction: anyNamed('direction'),
           pageSize: anyNamed('pageSize'),
-          pageToken: anyNamed(
-            'pageToken',
-          ), // subsequent call has non-null page token
+          pageToken: null, // Make this match specifically for refresh
           tags: anyNamed('tags'),
           visibility: anyNamed('visibility'),
           contentSearch: anyNamed('contentSearch'),

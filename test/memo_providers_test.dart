@@ -310,7 +310,7 @@ void main() {
         expect(memosAfterPin.first.id, equals(memoIdToToggle));
         expect(memosAfterPin.first.pinned, isTrue);
 
-        // Verify API calls using Mockito verification
+        // Verify first API calls using Mockito verification
         verify(mockApiService.getMemo(memoIdToToggle)).called(1);
 
         final pinVerification = verify(
@@ -323,6 +323,21 @@ void main() {
 
         final capturedPinMemo = pinVerification.captured.single as Memo;
         expect(capturedPinMemo.pinned, isTrue);
+
+        // Store updated memos in map to make getMemo stateful
+        final memoMap = <String, Memo>{};
+        for (var memo in container.read(memosNotifierProvider).memos) {
+          memoMap[memo.id] = memo;
+        }
+
+        // Re-stub getMemo to return the current state from our map
+        when(mockApiService.getMemo(any)).thenAnswer((invocation) async {
+          final id = invocation.positionalArguments[0] as String;
+          if (memoMap.containsKey(id)) {
+            return memoMap[id]!;
+          }
+          throw Exception('Mock getMemo: Memo not found: $id');
+        });
 
         // Call again (to unpin)
         await container.read(togglePinMemoProvider(memoIdToToggle))();
