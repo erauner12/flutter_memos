@@ -11,8 +11,9 @@ import 'package:mockito/mockito.dart'; // Import mockito
 import '../services/url_launcher_service_test.mocks.dart'; // For MockUrlLauncherService
 
 void main() {
-  testWidgets('CommentCard shows highlight when ID matches provider state',
-      (WidgetTester tester) async {
+  testWidgets('CommentCard shows highlight when ID matches provider state', (
+    WidgetTester tester,
+  ) async {
     // Create a test comment
     final testComment = Comment(
       id: 'test-comment-id',
@@ -49,14 +50,13 @@ void main() {
             useMaterial3: true,
             colorScheme: ColorScheme.dark(
               tertiary: Colors.tealAccent,
-              tertiaryContainer: Colors.teal.shade800.withOpacity(0.5),
+              tertiaryContainer: Colors.teal.shade800.withAlpha(
+                128,
+              ), // Updated from withOpacity(0.5)
             ),
           ),
           home: Scaffold(
-            body: CommentCard(
-              comment: testComment,
-              memoId: 'test-memo-id',
-            ),
+            body: CommentCard(comment: testComment, memoId: 'test-memo-id'),
           ),
         ),
       ),
@@ -79,17 +79,16 @@ void main() {
     final theme = Theme.of(tester.element(cardFinder)); // Get theme context
 
     // Define expected highlight styles based on theme brightness
-    final Color expectedHighlightColor;
     final BorderSide expectedHighlightBorder;
 
     if (theme.brightness == Brightness.dark) {
-      expectedHighlightColor = Colors.teal.shade800.withOpacity(0.5);
+      // We're not using this color value anymore since we rely on border checks
       expectedHighlightBorder = const BorderSide(
         color: Colors.tealAccent,
         width: 2,
       ); // Adjusted dark theme border
     } else {
-      expectedHighlightColor = Colors.teal.shade50; // Expect teal shade
+      // Color reference removed since we rely on border checks now
       expectedHighlightBorder = const BorderSide(color: Colors.teal, width: 2);
     }
 
@@ -149,8 +148,9 @@ void main() {
     );
   });
 
-  testWidgets('CommentCard shows normal styling when not highlighted',
-      (WidgetTester tester) async {
+  testWidgets('CommentCard shows normal styling when not highlighted', (
+    WidgetTester tester,
+  ) async {
     // Create a test comment
     final testComment = Comment(
       id: 'test-comment-id',
@@ -173,10 +173,7 @@ void main() {
         ],
         child: MaterialApp(
           home: Scaffold(
-            body: CommentCard(
-              comment: testComment,
-              memoId: 'test-memo-id',
-            ),
+            body: CommentCard(comment: testComment, memoId: 'test-memo-id'),
           ),
         ),
       ),
