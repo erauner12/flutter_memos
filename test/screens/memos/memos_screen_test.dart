@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_memos/models/memo.dart';
+import 'package:flutter_memos/providers/filter_providers.dart'; // Add this import
 import 'package:flutter_memos/providers/memo_providers.dart';
 import 'package:flutter_memos/providers/ui_providers.dart' as ui_providers;
 import 'package:flutter_memos/screens/memos/memo_list_item.dart';
@@ -159,12 +160,8 @@ void main() {
   testWidgets('MemosScreen selects/deselects memo via Checkbox tap', (WidgetTester tester) async {
     // Arrange
     await tester.pumpWidget(buildTestableWidget(const MemosScreen(), dummyMemos));
-    await tester.pumpAndSettle();
-    // Correctly get the ProviderContainer
-    final scopeElement = tester.element(find.byType(ProviderScope));
-    final container = ProviderScope.containerOf(scopeElement);
-
-    // Enter multi-select mode
+await tester.pumpAndSettle();
+// Enter multi-select mode
     await tester.tap(find.byTooltip('Select Memos'));
     await tester.pumpAndSettle();
 
@@ -224,9 +221,8 @@ void main() {
     // Arrange
     await tester.pumpWidget(buildTestableWidget(const MemosScreen(), dummyMemos));
     await tester.pumpAndSettle();
-      // Correctly get the ProviderContainer
-      final scopeElement = tester.element(find.byType(ProviderScope));
-      final container = ProviderScope.containerOf(scopeElement);
+      // Note: We don't need to get the container here since we're getting it again after actions
+      // The container from this point would be stale after pumpAndSettle()
 
     // Enter multi-select mode
     await tester.tap(find.byTooltip('Select Memos'));
@@ -282,17 +278,21 @@ void main() {
 
    testWidgets('MemosScreen exits multi-select mode via Cancel button', (WidgetTester tester) async {
     // Arrange
-    await tester.pumpWidget(buildTestableWidget(const MemosScreen(), dummyMemos));
+await tester.pumpWidget(
+      buildTestableWidget(const MemosScreen(), dummyMemos),
+    );
     await tester.pumpAndSettle();
-    // Correctly get the ProviderContainer
+    
+    // Get the provider container
     final scopeElement = tester.element(find.byType(ProviderScope));
     final container = ProviderScope.containerOf(scopeElement);
-
+    
     // Enter multi-select mode and select an item
     await tester.tap(find.byTooltip('Select Memos'));
     await tester.pumpAndSettle();
     await tester.tap(find.byType(MemoListItem).first);
     await tester.pumpAndSettle();
+    
     expect(container.read(ui_providers.memoMultiSelectModeProvider), isTrue);
     expect(container.read(ui_providers.selectedMemoIdsForMultiSelectProvider), isNotEmpty);
 
