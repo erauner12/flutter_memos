@@ -8,8 +8,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
 
-// Generate mock for ApiService
-@GenerateMocks([ApiService])
+// Generate nice mocks for ApiService - this makes undefined methods return null instead of throwing
+@GenerateNiceMocks([MockSpec<ApiService>()])
 
 // This import will work after running build_runner
 import 'edit_memo_screen_test.mocks.dart';
