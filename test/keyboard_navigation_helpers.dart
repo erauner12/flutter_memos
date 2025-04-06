@@ -35,24 +35,55 @@ Future<void> sendKeyEventAndWait(
   bool isAltPressed = false,
   bool isMetaPressed = false,
 }) async {
-  // Create modifiers set based on parameters
-  final Set<LogicalKeyboardKey> modifiers = {};
-  if (isControlPressed) modifiers.add(LogicalKeyboardKey.control);
-  if (isShiftPressed) modifiers.add(LogicalKeyboardKey.shift);
-  if (isAltPressed) modifiers.add(LogicalKeyboardKey.alt);
-  if (isMetaPressed) modifiers.add(LogicalKeyboardKey.meta);
+  // Press modifier keys first if needed
+  if (isControlPressed) {
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.control);
+    await tester.pump(const Duration(milliseconds: 20));
+  }
+  
+  if (isShiftPressed) {
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.shift);
+    await tester.pump(const Duration(milliseconds: 20));
+  }
 
-  // Send key down event with modifiers
-  await tester.sendKeyDownEvent(key, character: null, modifiers: modifiers);
-  
-  // Wait for key down event to be processed
+  if (isAltPressed) {
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.alt);
+    await tester.pump(const Duration(milliseconds: 20));
+  }
+
+  if (isMetaPressed) {
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.meta);
+    await tester.pump(const Duration(milliseconds: 20));
+  }
+
+  // Send main key down event
+  await tester.sendKeyDownEvent(key);
+  await tester.pump(const Duration(milliseconds: 50));
+
+  // Send main key up event
+  await tester.sendKeyUpEvent(key);
   await tester.pump(const Duration(milliseconds: 50));
   
-  // Send key up event with same modifiers
-  await tester.sendKeyUpEvent(key, character: null, modifiers: modifiers);
+  // Release modifier keys in reverse order
+  if (isMetaPressed) {
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.meta);
+    await tester.pump(const Duration(milliseconds: 20));
+  }
+
+  if (isAltPressed) {
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.alt);
+    await tester.pump(const Duration(milliseconds: 20));
+  }
+
+  if (isShiftPressed) {
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.shift);
+    await tester.pump(const Duration(milliseconds: 20));
+  }
   
-  // Wait for key up event to be processed
-  await tester.pump(const Duration(milliseconds: 50));
+  if (isControlPressed) {
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.control);
+    await tester.pump(const Duration(milliseconds: 20));
+  }
   
   // Final pump to ensure all event handlers have completed
   await tester.pumpAndSettle();
