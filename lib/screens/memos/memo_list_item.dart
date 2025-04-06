@@ -21,16 +21,53 @@ class MemoListItem extends ConsumerStatefulWidget {
 class _MemoListItemState extends ConsumerState<MemoListItem> {
   void _toggleHideMemo(BuildContext context, WidgetRef ref) {
     final hiddenMemoIds = ref.read(hiddenMemoIdsProvider);
-    if (hiddenMemoIds.contains(widget.memo.id)) {
-      // Unhide memo
+    final memoIdToToggle = widget.memo.id; // Use local variable for clarity
+
+    if (hiddenMemoIds.contains(memoIdToToggle)) {
+      // Unhide memo - Selection doesn't need adjustment here
       ref
           .read(hiddenMemoIdsProvider.notifier)
-          .update((state) => state..remove(widget.memo.id));
+          .update((state) => state..remove(memoIdToToggle));
     } else {
+      // --- Selection Update Logic (when HIDING) ---
+      final currentSelectedId = ref.read(ui_providers.selectedMemoIdProvider);
+      final isHidingSelected = currentSelectedId == memoIdToToggle;
+      String? nextSelectedId =
+          currentSelectedId; // Keep current selection by default
+
+      if (isHidingSelected) {
+        final memosBeforeHide = ref.read(filteredMemosProvider);
+        final hiddenIndex = memosBeforeHide.indexWhere(
+          (m) => m.id == memoIdToToggle,
+        );
+
+        if (hiddenIndex != -1) {
+          if (memosBeforeHide.length > 1) {
+            if (hiddenIndex > 0) {
+              // Select the item *before* the hidden one
+              nextSelectedId = memosBeforeHide[hiddenIndex - 1].id;
+            } else {
+              // Hiding the first item, select the next one (which was at index 1)
+              nextSelectedId = memosBeforeHide[1].id;
+            }
+          } else {
+            // List will be empty
+            nextSelectedId = null;
+          }
+        }
+      }
+      // --- End Selection Update Logic ---
+
       // Hide memo
       ref
           .read(hiddenMemoIdsProvider.notifier)
-          .update((state) => state..add(widget.memo.id));
+          .update((state) => state..add(memoIdToToggle));
+
+      // Update selection *after* hiding the memo
+      if (isHidingSelected) {
+        ref.read(ui_providers.selectedMemoIdProvider.notifier).state =
+            nextSelectedId;
+      }
 
       // Show a confirmation that the memo was hidden
       ScaffoldMessenger.of(context).showSnackBar(
@@ -47,16 +84,15 @@ class _MemoListItemState extends ConsumerState<MemoListItem> {
 
   void _navigateToMemoDetail(BuildContext context, WidgetRef ref) {
     // Set selected memo ID when navigating to detail
+    // This line is crucial - ensure it runs before navigation
     ref.read(ui_providers.selectedMemoIdProvider.notifier).state =
         widget.memo.id;
-    
+  
     Navigator.pushNamed(
       context,
       '/memo-detail',
       arguments: {'memoId': widget.memo.id},
     );
-    // Removed .then((_) { ref.read(memosNotifierProvider.notifier).refresh(); });
-    // This was causing the scroll position to reset when returning
   }
 
   Future<void> _onCopy() async {
