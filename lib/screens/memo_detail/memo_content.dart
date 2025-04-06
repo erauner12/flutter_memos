@@ -84,6 +84,7 @@ class _MemoContentState extends ConsumerState<MemoContent> {
     return commentsAsync.when(
       data: (comments) {
         return Card(
+          key: const Key('memo-content'), // Add key for test findability
           margin: const EdgeInsets.all(16.0),
           child: Padding(
             padding: const EdgeInsets.all(12.0),

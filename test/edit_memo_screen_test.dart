@@ -24,6 +24,9 @@ void main() {
     // Initialize the mock API service
     mockApiService = MockApiService();
     
+    // Add stub for apiBaseUrl property
+    when(mockApiService.apiBaseUrl).thenReturn('http://test-url.com');
+    
     // Create a test memo
     testMemo = Memo(
       id: 'test-edit-memo-id',
@@ -52,6 +55,31 @@ void main() {
         updateTime: DateTime.now().toIso8601String(),
       );
     });
+    
+    // Stub listMemos - this is needed to avoid errors during refresh operations
+    when(
+      mockApiService.listMemos(
+        parent: anyNamed('parent'),
+        filter: anyNamed('filter'),
+        state: anyNamed('state'),
+        sort: anyNamed('sort'),
+        direction: anyNamed('direction'),
+        pageSize: anyNamed('pageSize'),
+        pageToken: anyNamed('pageToken'),
+        tags: anyNamed('tags'),
+        visibility: anyNamed('visibility'),
+        contentSearch: anyNamed('contentSearch'),
+        createdAfter: anyNamed('createdAfter'),
+        createdBefore: anyNamed('createdBefore'),
+        updatedAfter: anyNamed('updatedAfter'),
+        updatedBefore: anyNamed('updatedBefore'),
+        timeExpression: anyNamed('timeExpression'),
+        useUpdateTimeForExpression: anyNamed('useUpdateTimeForExpression'),
+      ),
+    ).thenAnswer(
+      (_) async =>
+          PaginatedMemoResponse(memos: [testMemo], nextPageToken: null),
+    );
   });
 
   testWidgets('EditMemoScreen loads and displays memo content', (WidgetTester tester) async {
