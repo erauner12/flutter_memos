@@ -9,13 +9,13 @@ import 'package:flutter_memos/main.dart';
 import 'package:flutter_memos/models/memo.dart';
 import 'package:flutter_memos/providers/api_providers.dart';
 import 'package:flutter_memos/services/api_service.dart';
-// Generate mock for ApiService
-@GenerateMocks([ApiService])
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
 
+// Generate mock for ApiService
+@GenerateMocks([ApiService])
 import 'widget_test.mocks.dart';
 
 void main() {

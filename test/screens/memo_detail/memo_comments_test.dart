@@ -1,23 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/providers/api_providers.dart';
-import 'package:flutter_memos/services/api_service.dart';
-import 'package:mockito/annotations.dart';
-import 'package:mockito/mockito.dart';
-
-import 'memo_comments_test.mocks.dart';
-
-// Generate mock for ApiService
-@GenerateMocks([ApiService])
-import 'package:flutter_memos/providers/comment_providers.dart' as comment_providers; // For hidden IDs
-import 'package:flutter_memos/providers/filter_providers.dart'; // For hidePinnedProvider
+import 'package:flutter_memos/providers/comment_providers.dart'
+    as comment_providers;
+import 'package:flutter_memos/providers/filter_providers.dart';
 import 'package:flutter_memos/providers/ui_providers.dart' as ui_providers;
 import 'package:flutter_memos/screens/memo_detail/memo_comments.dart';
-import 'package:flutter_memos/screens/memo_detail/memo_detail_providers.dart'; // For memoCommentsProvider
+import 'package:flutter_memos/screens/memo_detail/memo_detail_providers.dart';
+import 'package:flutter_memos/services/api_service.dart';
 import 'package:flutter_memos/widgets/comment_card.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mockito/annotations.dart';
+import 'package:mockito/mockito.dart';
+
+// Generate mock for ApiService
+@GenerateMocks([ApiService])
+import 'memo_comments_test.mocks.dart';
 
 // Helper to create a list of dummy comments
 List<Comment> createDummyComments(int count) {
@@ -51,9 +51,17 @@ void main() {
   const testMemoId = 'test-memo-1';
   final dummyComments = createDummyComments(3); // Create 3 dummy comments
   late ProviderContainer container; // Declare container
+  late MockApiService mockApiService;
 
   // Use setUp to create the container before each test
   setUp(() {
+    mockApiService = MockApiService();
+
+    // Create stub responses for the mock API service
+    when(
+      mockApiService.listMemoComments(any),
+    ).thenAnswer((_) async => dummyComments);
+    
     container = ProviderContainer(
       overrides: [
         // Override the comments provider for the specific memoId
@@ -70,6 +78,7 @@ void main() {
         ui_providers.selectedCommentIndexProvider.overrideWith((ref) => -1),
         comment_providers.hiddenCommentIdsProvider.overrideWith((ref) => {}),
         hidePinnedProvider.overrideWith((ref) => false),
+        apiServiceProvider.overrideWithValue(mockApiService),
       ],
     );
   });
@@ -77,38 +86,6 @@ void main() {
   // Use tearDown to dispose the container after each test
   tearDown(() {
     container.dispose();
-  });
-void main() {
-  late MockApiService mockApiService;
-  late List<Comment> testComments;
-  const String testMemoId = 'test-memo-id';
-
-  setUp(() {
-    // Initialize the mock API service
-    mockApiService = MockApiService();
-    
-    // Create test comments
-    testComments = [
-      Comment(
-        id: 'comment-1',
-        content: 'This is comment 1',
-        createTime: DateTime.now().millisecondsSinceEpoch,
-      ),
-      Comment(
-        id: 'comment-2',
-        content: 'This is comment 2',
-        createTime: DateTime.now().millisecondsSinceEpoch - 60000,
-      ),
-    ];
-    
-    // Stub listMemoComments
-    when(mockApiService.listMemoComments(any)).thenAnswer((invocation) async {
-      final memoId = invocation.positionalArguments[0] as String;
-      if (memoId == testMemoId) {
-        return testComments;
-      }
-      return [];
-    });
   });
 
   testWidgets('MemoComments displays list of comments', (WidgetTester tester) async {
@@ -245,8 +222,7 @@ void main() {
     await tester.tap(firstItemFinder);
     await tester.pumpAndSettle();
 
-    // Assert: Selection state updated
-      // Use the container created in setUp
+      // Assert: Selection state updated
       expect(
         container.read(ui_providers.selectedCommentIdsForMultiSelectProvider),
         contains(expectedCommentId),
@@ -262,8 +238,7 @@ void main() {
     await tester.tap(firstItemFinder);
     await tester.pumpAndSettle();
 
-    // Assert: Selection state updated
-      // Use the container created in setUp
+      // Assert: Selection state updated
       expect(
         container.read(ui_providers.selectedCommentIdsForMultiSelectProvider),
         isNot(contains(expectedCommentId)),
@@ -275,35 +250,32 @@ void main() {
   });
 
   testWidgets('MemoComments exits multi-select mode and hides checkboxes', (
-  // Build our app and trigger a frame
- await tester.pumpWidget(
-   ProviderScope(
-     overrides: [
-       apiServiceProvider.overrideWithValue(mockApiService),
-     ],
-     child: const MaterialApp(
-       home: Scaffold(
-         body: MemoComments(memoId: testMemoId),
-       ),
-     ),
-   ),
- );
+    WidgetTester tester,
+  ) async {
+    // Arrange
+    await tester.pumpWidget(
+      buildTestableWidget(const MemoComments(memoId: testMemoId), container),
+    );
+    await tester.pumpAndSettle();
+    
     // Enter multi-select mode and select an item
     container.read(ui_providers.commentMultiSelectModeProvider.notifier).state = true;
     await tester.pumpAndSettle();
+    
     await tester.tap(find.byType(CommentCard).first);
     await tester.pumpAndSettle();
+    
     expect(container.read(ui_providers.commentMultiSelectModeProvider), isTrue);
     expect(container.read(ui_providers.selectedCommentIdsForMultiSelectProvider), isNotEmpty);
 
     // Act: Simulate exiting multi-select mode
     container.read(ui_providers.commentMultiSelectModeProvider.notifier).state = false;
+    
     // Exiting mode should also clear selections (handled by the toggle provider logic)
     container.read(ui_providers.selectedCommentIdsForMultiSelectProvider.notifier).state = {};
     await tester.pumpAndSettle();
 
     // Assert: Exited multi-select mode
-    // Use the container created in setUp
     expect(
       container.read(ui_providers.commentMultiSelectModeProvider),
       isFalse,
@@ -330,5 +302,5 @@ void main() {
       ),
       findsWidgets,
     );
-  })
+  });
 }

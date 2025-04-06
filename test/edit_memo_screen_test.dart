@@ -10,55 +10,11 @@ import 'package:mockito/mockito.dart';
 
 // Generate mock for ApiService
 @GenerateMocks([ApiService])
-import 'edit_memo_screen_test.mocks.dart';
 
-// Mock for ApiService
-class MockApiService extends Mock implements ApiService {
-  @override
-  Future<Memo> getMemo(String id) async {
-    return Memo(
-      id: id,
-      content: 'Test Memo Content',
-      pinned: true,
-      state: MemoState.normal,
-    );
-  }
-  
-  @override
-  Future<Memo> updateMemo(String id, Memo memo) async {
-    // Simulate the server returning epoch createTime but correct updateTime
-    return memo.copyWith(
-      id: id,
-      createTime: '1970-01-01T00:00:00.000Z', // Simulate server bug
-      updateTime:
-          DateTime.now().toIso8601String(), // Simulate correct update time
-    );
-  }
+// This import will work after running build_runner
+// import 'edit_memo_screen_test.mocks.dart';
 
-  // Add stub for listMemos to handle refresh calls
-  @override
-  Future<PaginatedMemoResponse> listMemos({
-    String parent = 'users/1',
-    String? filter,
-    String? state,
-    String sort = 'updateTime',
-    String direction = 'DESC',
-    int? pageSize,
-    String? pageToken,
-    List<String>? tags,
-    dynamic visibility,
-    String? contentSearch,
-    DateTime? createdAfter,
-    DateTime? createdBefore,
-    DateTime? updatedAfter,
-    DateTime? updatedBefore,
-    String? timeExpression,
-    bool useUpdateTimeForExpression = false,
-  }) async {
-    // Return an empty list for refresh calls in this test context
-    return PaginatedMemoResponse(memos: [], nextPageToken: null);
-  }
-}
+// We'll use the Mockito-generated MockApiService instead of a custom implementation
 
 void main() {
   late MockApiService mockApiService;
@@ -99,6 +55,16 @@ void main() {
   });
 
   testWidgets('EditMemoScreen loads and displays memo content', (WidgetTester tester) async {
+    // Set up mock response
+    when(mockApiService.getMemo('test-memo-id')).thenAnswer((invocation) async {
+      return Memo(
+        id: 'test-memo-id',
+        content: 'Test Memo Content',
+        pinned: true,
+        state: MemoState.normal,
+      );
+    });
+    
     // Build our app and trigger a frame.
     await tester.pumpWidget(
       ProviderScope(
@@ -126,6 +92,26 @@ void main() {
   });
 
   testWidgets('EditMemoScreen handles save properly', (WidgetTester tester) async {
+    // Set up mock responses
+    when(mockApiService.getMemo('test-edit-memo-id')).thenAnswer((
+      invocation,
+    ) async {
+      return testMemo;
+    });
+
+    when(
+      mockApiService.updateMemo(
+        argThat(equals('test-edit-memo-id')),
+        argThat(isA<Memo>()),
+      ),
+    ).thenAnswer((invocation) async {
+      final memo = invocation.positionalArguments[1] as Memo;
+      return memo.copyWith(
+        id: 'test-edit-memo-id',
+        updateTime: DateTime.now().toIso8601String(),
+      );
+    });
+    
     // Build our app and trigger a frame
     await tester.pumpWidget(
       ProviderScope(
@@ -151,7 +137,9 @@ void main() {
     await tester.tap(find.text('Save Changes'));
     await tester.pumpAndSettle();
 
-    // Add verification that navigation occurred if needed
-    // expect(find.byType(EditMemoScreen), findsNothing); // Or check for the previous screen
+    // Verify the updateMemo was called
+    verify(
+      mockApiService.updateMemo(argThat(equals('test-edit-memo-id')), any),
+    ).called(1);
   });
 }
