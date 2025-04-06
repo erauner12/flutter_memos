@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// Provider for selected memo ID (replacing index-based selection)
@@ -63,8 +64,17 @@ final selectedCommentIdsForMultiSelectProvider = StateProvider<Set<String>>(
 /// Provider for toggling memo multi-select mode
 final toggleMemoMultiSelectModeProvider = Provider<void Function()>((ref) {
   return () {
+    // Read the current state
     final currentMode = ref.read(memoMultiSelectModeProvider);
+    
+    // Toggle to the opposite state
     final newMode = !currentMode;
+    
+    if (kDebugMode) {
+      print(
+        '[toggleMemoMultiSelectModeProvider] Toggling from $currentMode to $newMode',
+      );
+    }
 
     // Update the mode
     ref.read(memoMultiSelectModeProvider.notifier).state = newMode;
@@ -79,8 +89,17 @@ final toggleMemoMultiSelectModeProvider = Provider<void Function()>((ref) {
 /// Provider for toggling comment multi-select mode
 final toggleCommentMultiSelectModeProvider = Provider<void Function()>((ref) {
   return () {
+    // Read the current state
     final currentMode = ref.read(commentMultiSelectModeProvider);
+    
+    // Toggle to the opposite state
     final newMode = !currentMode;
+    
+    if (kDebugMode) {
+      print(
+        '[toggleCommentMultiSelectModeProvider] Toggling from $currentMode to $newMode',
+      );
+    }
 
     // Update the mode
     ref.read(commentMultiSelectModeProvider.notifier).state = newMode;

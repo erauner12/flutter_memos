@@ -73,7 +73,12 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
       leading: IconButton(
         icon: const Icon(Icons.close),
         tooltip: 'Cancel Selection',
-        onPressed: () => ref.read(ui_providers.toggleMemoMultiSelectModeProvider)(),
+        onPressed: () {
+          if (kDebugMode) {
+            print('[MemosScreen] Exit multi-select via Cancel button');
+          }
+          ref.read(ui_providers.toggleMemoMultiSelectModeProvider)();
+        },
       ),
       title: Text('$selectedCount Selected'),
       actions: [

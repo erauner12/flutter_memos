@@ -319,7 +319,7 @@ class _MemoListItemState extends ConsumerState<MemoListItem> {
         );
       }
 
-      // Add checkbox to the left of the card
+      // Return a Row directly with Checkbox instead of wrapping with Dismissible/Slidable
       return Row(
         children: [
           Checkbox(
