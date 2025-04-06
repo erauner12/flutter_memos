@@ -251,7 +251,7 @@ class _MemoListItemState extends ConsumerState<MemoListItem> {
       ui_providers.selectedMemoIdsForMultiSelectProvider,
     );
     final isMultiSelected = selectedIds.contains(widget.memo.id);
-    
+
     if (isSelected && kDebugMode) {
       print(
         '[MemoListItem] Memo ID ${widget.memo.id} at index ${widget.index} is selected',
@@ -259,73 +259,53 @@ class _MemoListItemState extends ConsumerState<MemoListItem> {
     }
 
     // Create the main card content
-    Widget cardContent = Stack(
-      children: [
-        MemoCard(
-          id: widget.memo.id,
-          content: widget.memo.content,
-          pinned: widget.memo.pinned,
-          // createdAt: widget.memo.createTime, // Removed createTime display
-          updatedAt: widget.memo.updateTime,
-          showTimeStamps: true,
-          isSelected: isSelected, // Use ID-based selection
-          // Always highlight update time now
-          highlightTimestamp: MemoUtils.formatTimestamp(widget.memo.updateTime),
-          timestampType: 'Updated', // Always 'Updated'
-          onTap:
-              isMultiSelectMode
-                  ? () => _toggleMultiSelection(widget.memo.id)
-                  : () => _navigateToMemoDetail(context, ref),
-          onArchive: () => ref.read(archiveMemoProvider(widget.memo.id))(),
-          onDelete: () => _onDelete(context),
-          onHide: () => _toggleHideMemo(context, ref),
-          onTogglePin: () => ref.read(togglePinMemoProvider(widget.memo.id))(),
-          onBump: () async {
-            // Add onBump callback implementation
-            try {
-              await ref.read(bumpMemoProvider(widget.memo.id))();
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Memo bumped!'),
-                    duration: Duration(seconds: 1),
-                    backgroundColor: Colors.green,
-                  ),
-                );
-              }
-            } catch (e) {
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      'Failed to bump memo: ${e.toString().substring(0, 50)}...',
-                    ),
-                    backgroundColor: Colors.red,
-                  ),
-                );
-              }
-            }
-          },
-        ),
-        // Archive button positioned at top-right corner
-        Positioned(
-          top: 4,
-          right: 4,
-          child: IconButton(
-            icon: const Icon(Icons.archive_outlined, size: 20),
-            tooltip: 'Archive',
-            constraints: const BoxConstraints(),
-            padding: const EdgeInsets.all(8),
-            color: Colors.grey,
-            onPressed: () => _onArchive(context),
-          ),
-        ),
-      ],
+    Widget cardContent = MemoCard(
+      id: widget.memo.id,
+      content: widget.memo.content,
+      pinned: widget.memo.pinned,
+      updatedAt: widget.memo.updateTime,
+      showTimeStamps: true,
+      isSelected: isSelected, // Use ID-based selection
+      highlightTimestamp: MemoUtils.formatTimestamp(widget.memo.updateTime),
+      timestampType: 'Updated', // Always 'Updated'
+      onTap:
+          isMultiSelectMode
+              ? () => _toggleMultiSelection(widget.memo.id)
+              : () => _navigateToMemoDetail(context, ref),
+      onArchive: () => _onArchive(context),
+      onDelete: () => _onDelete(context),
+      onHide: () => _toggleHideMemo(context, ref),
+      onTogglePin: () => _onTogglePin(context),
+      onBump: () async {
+        try {
+          await ref.read(bumpMemoProvider(widget.memo.id))();
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Memo bumped!'),
+                duration: Duration(seconds: 1),
+                backgroundColor: Colors.green,
+              ),
+            );
+          }
+        } catch (e) {
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  'Failed to bump memo: ${e.toString().substring(0, 50)}...',
+                ),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+        }
+      },
     );
 
     // In multi-select mode, add a checkbox and adjust the card
     if (isMultiSelectMode) {
-      // Add extra visual indicator for multi-selected items (optional)
+      // Add extra visual indicator for multi-selected items
       if (isMultiSelected) {
         cardContent = Container(
           decoration: BoxDecoration(
@@ -338,9 +318,9 @@ class _MemoListItemState extends ConsumerState<MemoListItem> {
           child: cardContent,
         );
       }
-      
+
       // Add checkbox to the left of the card
-      cardContent = Row(
+      return Row(
         children: [
           Checkbox(
             value: isMultiSelected,
@@ -349,9 +329,6 @@ class _MemoListItemState extends ConsumerState<MemoListItem> {
           Expanded(child: cardContent),
         ],
       );
-      
-      // In multi-select mode, just return the card with checkbox
-      return cardContent;
     }
 
     // In normal mode, use Dismissible and Slidable
@@ -483,7 +460,24 @@ class _MemoListItemState extends ConsumerState<MemoListItem> {
             ),
           ],
         ),
-        child: cardContent,
+        child: Stack(
+          children: [
+            cardContent,
+            // Archive button positioned at top-right corner
+            Positioned(
+              top: 4,
+              right: 4,
+              child: IconButton(
+                icon: const Icon(Icons.archive_outlined, size: 20),
+                tooltip: 'Archive',
+                constraints: const BoxConstraints(),
+                padding: const EdgeInsets.all(8),
+                color: Colors.grey,
+                onPressed: () => _onArchive(context),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

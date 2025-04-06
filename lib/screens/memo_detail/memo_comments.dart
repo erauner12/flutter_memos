@@ -189,13 +189,18 @@ class MemoComments extends ConsumerWidget {
     // Get the selected comment index
     final selectedIndex = ref.watch(selectedCommentIndexProvider);
 
+    // Check if multi-select mode is active
+    final isMultiSelectMode = ref.watch(commentMultiSelectModeProvider);
+
     // Use CommentCard instead of a basic Card
     return GestureDetector(
       // Ensure tapping comment cards doesn't steal focus from main screen
       onTap: () {
-        final focusScope = FocusScope.of(context);
-        if (!focusScope.hasPrimaryFocus) {
-          focusScope.unfocus();
+        if (!isMultiSelectMode) {
+          final focusScope = FocusScope.of(context);
+          if (!focusScope.hasPrimaryFocus) {
+            focusScope.unfocus();
+          }
         }
       },
       child: CommentCard(
