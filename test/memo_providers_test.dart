@@ -72,6 +72,9 @@ void main() {
 
     setUp(() {
       mockApiService = MockApiService();
+    
+      // Add stub for apiBaseUrl property
+      when(mockApiService.apiBaseUrl).thenReturn('http://test-url.com');
 
       // Set up mock response for listMemos (used by notifier internally if not skipped)
       // Stub listMemos

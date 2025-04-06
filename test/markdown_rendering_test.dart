@@ -24,7 +24,17 @@ import 'utils/test_debug.dart';
 @GenerateMocks([ApiService])
 
 void main() {
+  // Declare mockApiService at the top level so it can be accessed by all tests
+  late MockApiService mockApiService;
+
   group('Markdown Rendering Tests', () {
+    // Setup function that runs before each test
+    setUp(() {
+      mockApiService = MockApiService();
+      // Add stub for apiBaseUrl property
+      when(mockApiService.apiBaseUrl).thenReturn('http://test-url.com');
+    });
+
     testWidgets('Basic markdown elements render correctly in MarkdownBody', (WidgetTester tester) async {
       debugMarkdown('Testing basic markdown elements rendering');
       
@@ -193,10 +203,9 @@ void main() {
       );
     });
 
-    testWidgets('MemoContent renders markdown correctly', (WidgetTester tester) async {
-      // Create a mock API service
-      final mockApiService = MockApiService();
-
+    testWidgets('MemoContent renders markdown correctly', (
+      WidgetTester tester,
+    ) async {
       // Set up memo and comments data
       final memo = Memo(
         id: 'test-id',

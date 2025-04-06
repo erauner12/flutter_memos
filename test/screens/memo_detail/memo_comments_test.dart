@@ -56,6 +56,9 @@ void main() {
   // Use setUp to create the container before each test
   setUp(() {
     mockApiService = MockApiService();
+    
+    // Add stub for apiBaseUrl property
+    when(mockApiService.apiBaseUrl).thenReturn('http://test-url.com');
 
     // Create stub responses for the mock API service
     when(

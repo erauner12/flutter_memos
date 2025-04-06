@@ -83,6 +83,9 @@ void main() {
   setUp(() {
     // Initialize the mock API service
     mockApiService = MockApiService();
+    
+    // Add stub for apiBaseUrl property
+    when(mockApiService.apiBaseUrl).thenReturn('http://test-url.com');
 
     // Configure the mock API service to return the dummy memos
     when(

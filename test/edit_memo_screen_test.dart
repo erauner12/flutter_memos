@@ -12,7 +12,7 @@ import 'package:mockito/mockito.dart';
 @GenerateMocks([ApiService])
 
 // This import will work after running build_runner
-// import 'edit_memo_screen_test.mocks.dart';
+import 'edit_memo_screen_test.mocks.dart';
 
 // We'll use the Mockito-generated MockApiService instead of a custom implementation
 
