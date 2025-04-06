@@ -267,26 +267,35 @@ void main() {
     await tester.tap(find.byType(MemoListItem).first);
     await tester.pumpAndSettle();
     
-    expect(container.read(ui_providers.memoMultiSelectModeProvider), isTrue);
-    expect(container.read(ui_providers.selectedMemoIdsForMultiSelectProvider), isNotEmpty);
-
+    expect(
+      container.read(ui_providers.memoMultiSelectModeProvider),
+      isTrue,
+      reason: "Should be in multi-select mode initially",
+    );
+    expect(
+      container.read(ui_providers.selectedMemoIdsForMultiSelectProvider),
+      isNotEmpty,
+      reason: "An item should be selected",
+    );
+  
     // Act: Tap the Cancel button (AppBar leading)
     await tester.tap(find.widgetWithIcon(AppBar, Icons.close));
-    
-    // Add an extra pump cycle to ensure state updates propagate
-    await tester.pump();
-    
-    // Then complete the animation
+    // Wait for all animations and state changes to complete
     await tester.pumpAndSettle();
-
+  
     // Assert: Exited multi-select mode
     // Use the container created in setUp
-    expect(container.read(ui_providers.memoMultiSelectModeProvider), isFalse);
+    expect(
+      container.read(ui_providers.memoMultiSelectModeProvider),
+      isFalse,
+      reason: "Failed to exit multi-select mode",
+    );
     expect(
       container.read(ui_providers.selectedMemoIdsForMultiSelectProvider),
       isEmpty,
+      reason: "Selection should be cleared on exit"
     );
-
+  
     // Verify AppBar reverts
     expect(
       find.descendant(
@@ -298,10 +307,10 @@ void main() {
     expect(find.byTooltip('Select Memos'), findsOneWidget);
     expect(find.widgetWithIcon(AppBar, Icons.close), findsNothing);
     expect(find.textContaining('Selected'), findsNothing);
-
+  
     // Verify Checkboxes are gone
     expect(find.descendant(of: find.byType(MemoListItem), matching: find.byType(Checkbox)), findsNothing);
-
+  
     // Verify Slidable/Dismissible are back
     expect(find.descendant(of: find.byType(MemoListItem), matching: find.byType(Slidable)), findsWidgets);
     expect(find.descendant(of: find.byType(MemoListItem), matching: find.byType(Dismissible)), findsWidgets);
