@@ -62,8 +62,8 @@ void main() {
       ),
     );
 
-    // IMPORTANT: Just pump once to render the frame, but don't wait for animations
-    // or post-frame callbacks that would reset the highlight state
+    // IMPORTANT: Just pump once to render the frame, but don't use pumpAndSettle()
+    // which would execute the post-frame callback that resets the highlight
     await tester.pump();
 
     // Find the Card within the CommentCard
@@ -120,24 +120,27 @@ void main() {
     // final expectedColor = expectedHighlightBorder.color;
     // expect(actualColor, expectedColor, reason: 'Highlighted border color mismatch (Theme: ${theme.brightness})');
 
-    // Now pump again to let the post-frame callback execute
+    // Now pump again to verify that the post-frame callback resets the highlight
     await tester.pump();
-
+    
     // Verify the post-frame callback has reset the highlight as expected
-    final ref = ProviderContainer(
+    // Create a separate container to check the current provider state
+    final container = ProviderContainer(
       overrides: [
         highlightedCommentIdProvider.overrideWith((_) => 'test-comment-id'),
         urlLauncherServiceProvider.overrideWithValue(mockUrlLauncherService),
       ],
     );
-    final highlightedAfterCallback = ref.read(highlightedCommentIdProvider);
+    final highlightedAfterCallback = container.read(
+      highlightedCommentIdProvider,
+    );
     expect(
       highlightedAfterCallback,
       isNull,
       reason: 'Highlight should be reset after post-frame callback',
     );
-
-    // Get the card again and verify it's no longer highlighted (optional verification)
+    
+    // Get the card again and verify it's no longer highlighted
     final cardAfterCallback = tester.widget<Card>(cardFinder);
     final borderAfterCallback =
         (cardAfterCallback.shape as RoundedRectangleBorder).side;
