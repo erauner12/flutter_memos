@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart'; // Import for kDebugMode
 import 'package:flutter_memos/models/memo.dart';
 import 'package:flutter_memos/providers/api_providers.dart';
 import 'package:flutter_memos/providers/filter_providers.dart' as filters;
@@ -5,27 +6,42 @@ import 'package:flutter_memos/providers/memo_providers.dart';
 import 'package:flutter_memos/services/api_service.dart'; // Import ApiService
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mockito/annotations.dart'; // Add Mockito annotation import
+import 'package:mockito/mockito.dart'; // Add Mockito import
 
-import 'mocks/mock_api_service.dart'; // Use the manual mock
+// Import the generated mocks file (will be created by build_runner)
+import 'memo_providers_test.mocks.dart';
 
+// Annotation to generate mock for ApiService
+@GenerateMocks([ApiService])
 // Mock Notifier extending the actual Notifier
 class MockMemosNotifier extends MemosNotifier {
   MockMemosNotifier(super.ref, MemosState initialState)
     : super(skipInitialFetchForTesting: true) {
+    if (kDebugMode) {
+      print(
+        '[MockMemosNotifier] Initializing with ${initialState.memos.length} memos',
+      );
+    }
     state = initialState;
   }
 
   @override
   Future<void> refresh() async {
+    if (kDebugMode) {
+      print('[MockMemosNotifier] Refresh called - no-op for this test');
+    }
     /* No-op */
   }
 
   @override
   Future<void> fetchMoreMemos() async {
+    if (kDebugMode) {
+      print('[MockMemosNotifier] FetchMoreMemos called - no-op for this test');
+    }
     /* No-op */
   }
 }
-
 
 void main() {
   group('Memo Providers Tests (New Notifier)', () {
@@ -58,14 +74,49 @@ void main() {
       mockApiService = MockApiService();
 
       // Set up mock response for listMemos (used by notifier internally if not skipped)
-      // Wrap the list in PaginatedMemoResponse
-      mockApiService.setMockListMemosResponse(
-        PaginatedMemoResponse(memos: memos, nextPageToken: null),
-      );
-      // Set up mock responses for action providers
-      mockApiService.setMockMemoById('1', memos[0]);
-      mockApiService.setMockMemoById('2', memos[1]);
-      mockApiService.setMockMemoById('3', memos[2]);
+      // Stub listMemos
+      when(
+        mockApiService.listMemos(
+          parent: anyNamed('parent'),
+          filter: anyNamed('filter'),
+          state: anyNamed('state'),
+          sort: anyNamed('sort'),
+          direction: anyNamed('direction'),
+          pageSize: anyNamed('pageSize'),
+          pageToken: anyNamed('pageToken'),
+          tags: anyNamed('tags'),
+          visibility: anyNamed('visibility'),
+          contentSearch: anyNamed('contentSearch'),
+          createdAfter: anyNamed('createdAfter'),
+          createdBefore: anyNamed('createdBefore'),
+          updatedAfter: anyNamed('updatedAfter'),
+          updatedBefore: anyNamed('updatedBefore'),
+          timeExpression: anyNamed('timeExpression'),
+          useUpdateTimeForExpression: anyNamed('useUpdateTimeForExpression'),
+        ),
+      ).thenAnswer((invocation) async {
+        // Return the list in PaginatedMemoResponse
+        return PaginatedMemoResponse(memos: memos, nextPageToken: null);
+      });
+
+      // Stub getMemo
+      when(mockApiService.getMemo(any)).thenAnswer((invocation) async {
+        final id = invocation.positionalArguments[0] as String;
+        return memos.firstWhere(
+          (m) => m.id == id,
+          orElse: () => throw Exception('Memo not found: $id'),
+        );
+      });
+
+      // Stub updateMemo
+      when(mockApiService.updateMemo(any, any)).thenAnswer((invocation) async {
+        final id = invocation.positionalArguments[0] as String;
+        final memo = invocation.positionalArguments[1] as Memo;
+        return memo.copyWith(id: id);
+      });
+
+      // Stub deleteMemo
+      when(mockApiService.deleteMemo(any)).thenAnswer((_) async => {});
 
       // Create container with overrides
       container = ProviderContainer(
@@ -193,25 +244,29 @@ void main() {
       'archiveMemoProvider archives a memo correctly (optimistic + API)',
       () async {
         final memoIdToArchive = '1';
-        mockApiService.resetCallCounts(); // Reset counts before action
-
+    
         // Call the archive provider
         await container.read(archiveMemoProvider(memoIdToArchive))();
- 
+
         // Verify optimistic update (memo removed from visible list if filter is 'inbox')
         container.read(filters.filterKeyProvider.notifier).state =
             'inbox'; // Ensure filter excludes archived
         final visibleMemos = container.read(visibleMemosListProvider);
         expect(visibleMemos.any((m) => m.id == memoIdToArchive), isFalse);
 
-        // Verify API calls
-        expect(mockApiService.getMemoCallCount, equals(1));
-        expect(mockApiService.updateMemoCallCount, equals(1));
-        expect(mockApiService.lastUpdateMemoId, equals(memoIdToArchive));
-        expect(
-          mockApiService.lastUpdateMemoPayload?.state,
-          equals(MemoState.archived),
+        // Verify API calls using Mockito verification
+        verify(mockApiService.getMemo(memoIdToArchive)).called(1);
+
+        final verificationResult = verify(
+          mockApiService.updateMemo(
+            argThat(equals(memoIdToArchive)),
+            captureAny,
+          ),
         );
+        verificationResult.called(1);
+
+        final capturedMemo = verificationResult.captured.single as Memo;
+        expect(capturedMemo.state, equals(MemoState.archived));
       },
     );
 
@@ -219,7 +274,6 @@ void main() {
       'deleteMemoProvider deletes a memo correctly (optimistic + API)',
       () async {
         final memoIdToDelete = '2';
-        mockApiService.resetCallCounts();
 
         // Call the delete provider
         await container.read(deleteMemoProvider(memoIdToDelete))();
@@ -228,15 +282,15 @@ void main() {
         final currentMemos = container.read(memosNotifierProvider).memos;
         expect(currentMemos.any((m) => m.id == memoIdToDelete), isFalse);
 
-        // Verify API call
-        expect(mockApiService.deleteMemoCallCount, equals(1));
-    });
+        // Verify API call using Mockito verification
+        verify(mockApiService.deleteMemo(memoIdToDelete)).called(1);
+      },
+    );
 
     test(
       'togglePinMemoProvider toggles pin state (optimistic + API)',
       () async {
         final memoIdToToggle = '3';
-        mockApiService.resetCallCounts();
 
         // Initial state check
         expect(
@@ -256,10 +310,19 @@ void main() {
         expect(memosAfterPin.first.id, equals(memoIdToToggle));
         expect(memosAfterPin.first.pinned, isTrue);
 
-        // Verify API calls
-        expect(mockApiService.getMemoCallCount, equals(1));
-        expect(mockApiService.updateMemoCallCount, equals(1));
-        expect(mockApiService.lastUpdateMemoPayload?.pinned, isTrue);
+        // Verify API calls using Mockito verification
+        verify(mockApiService.getMemo(memoIdToToggle)).called(1);
+
+        final pinVerification = verify(
+          mockApiService.updateMemo(
+            argThat(equals(memoIdToToggle)),
+            captureAny,
+          ),
+        );
+        pinVerification.called(1);
+
+        final capturedPinMemo = pinVerification.captured.single as Memo;
+        expect(capturedPinMemo.pinned, isTrue);
 
         // Call again (to unpin)
         await container.read(togglePinMemoProvider(memoIdToToggle))();
@@ -273,10 +336,22 @@ void main() {
         // Check if sorting is correct (memo '1' should be first now)
         expect(memosAfterUnpin.first.id, equals('1'));
 
-        // Verify API calls (total counts)
-        expect(mockApiService.getMemoCallCount, equals(2));
-        expect(mockApiService.updateMemoCallCount, equals(2));
-        expect(mockApiService.lastUpdateMemoPayload?.pinned, isFalse);
+        // Verify total API calls
+        verify(
+          mockApiService.getMemo(memoIdToToggle),
+        ).called(2); // Called twice now
+
+        final unpinVerification = verify(
+          mockApiService.updateMemo(
+            argThat(equals(memoIdToToggle)),
+            captureAny,
+          ),
+        );
+        unpinVerification.called(2); // Called twice total
+
+        // Check the second call's captured argument
+        final capturedUnpinMemo = unpinVerification.captured[1] as Memo;
+        expect(capturedUnpinMemo.pinned, isFalse);
       },
     );
 

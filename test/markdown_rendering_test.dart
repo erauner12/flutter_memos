@@ -7,13 +7,21 @@ import 'package:flutter_memos/screens/edit_memo/edit_memo_form.dart';
 import 'package:flutter_memos/screens/edit_memo/edit_memo_providers.dart';
 import 'package:flutter_memos/screens/memo_detail/memo_content.dart';
 import 'package:flutter_memos/screens/memo_detail/memo_detail_providers.dart';
+import 'package:flutter_memos/services/api_service.dart'; // Import the actual service
 import 'package:flutter_memos/widgets/comment_card.dart';
 import 'package:flutter_memos/widgets/memo_card.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mockito/annotations.dart'; // Add Mockito annotation import
+import 'package:mockito/mockito.dart'; // Add Mockito import
 
-import 'mocks/mock_api_service.dart';
+// Import the generated mocks file (will be created by build_runner)
+import 'markdown_rendering_test.mocks.dart';
+// Import test utility
 import 'utils/test_debug.dart';
+
+// Annotation to generate mock for ApiService
+@GenerateMocks([ApiService])
 
 void main() {
   group('Markdown Rendering Tests', () {
@@ -186,7 +194,7 @@ void main() {
     });
 
     testWidgets('MemoContent renders markdown correctly', (WidgetTester tester) async {
-      // Create a mock API service that returns test data
+      // Create a mock API service
       final mockApiService = MockApiService();
 
       // Set up memo and comments data
@@ -205,9 +213,11 @@ void main() {
         ),
       ];
 
-      // Configure the mock
-      mockApiService.setMockMemoById('test-id', memo);
-      mockApiService.setMockComments('test-id', comments);
+      // Configure the mock with Mockito
+      when(mockApiService.getMemo('test-id')).thenAnswer((_) async => memo);
+      when(
+        mockApiService.listMemoComments('test-id'),
+      ).thenAnswer((_) async => comments);
 
       // Build the MemoContent widget with the provider overrides
       await tester.pumpWidget(
@@ -307,7 +317,9 @@ void main() {
 
       // Set up necessary provider overrides
       final mockApiService = MockApiService();
-      mockApiService.setMockMemoById('test-id', memo);
+      
+      // Use Mockito stubbing instead of manual mock method
+      when(mockApiService.getMemo('test-id')).thenAnswer((_) async => memo);
 
       // Build the EditMemoForm widget
       await tester.pumpWidget(

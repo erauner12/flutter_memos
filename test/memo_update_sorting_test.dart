@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart'; // Import for kDebugMode
 import 'package:flutter_memos/models/memo.dart';
 import 'package:flutter_memos/providers/api_providers.dart';
 import 'package:flutter_memos/providers/memo_providers.dart';
@@ -5,9 +6,14 @@ import 'package:flutter_memos/screens/edit_memo/edit_memo_providers.dart';
 import 'package:flutter_memos/services/api_service.dart'; // Import ApiService
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mockito/annotations.dart'; // Add Mockito annotation import
+import 'package:mockito/mockito.dart'; // Add Mockito import
 
-import 'mocks/mock_api_service.dart'; // Use the manual mock
+// Import the generated mocks file (will be created by build_runner)
+import 'memo_update_sorting_test.mocks.dart';
 
+// Annotation to generate mock for ApiService
+@GenerateMocks([ApiService])
 // Mock Notifier extending the actual Notifier
 class MockMemosNotifier extends MemosNotifier {
   // Update to use the non-deprecated Ref type
@@ -15,18 +21,24 @@ class MockMemosNotifier extends MemosNotifier {
 
   MockMemosNotifier(this.ref, MemosState initialState)
     : super(ref, skipInitialFetchForTesting: true) {
+    // Explicitly set the initial state in the constructor
     state = initialState;
   }
 
   @override
   Future<void> refresh() async {
+    if (kDebugMode) {
+      print('[MockMemosNotifier] Refresh called, fetching from mock API');
+    }
+    
     // Simulate refresh by calling the mock API service again
     final apiService = ref.read(apiServiceProvider) as MockApiService;
-    // Use the *subsequent* mock response configured for listMemos
+    // Use the mocked API service response for refresh, explicitly using null pageToken
     final response = await apiService.listMemos(
       pageToken: null,
-    ); // Assuming refresh fetches page 1
-    
+    ); // First page for refresh
+
+    // Update state with the response
     state = state.copyWith(
       memos: response.memos,
       isLoading: false,
@@ -34,10 +46,19 @@ class MockMemosNotifier extends MemosNotifier {
       nextPageToken: response.nextPageToken,
       totalLoaded: response.memos.length,
     );
+    
+    if (kDebugMode) {
+      print(
+        '[MockMemosNotifier] Refresh completed with ${response.memos.length} memos',
+      );
+    }
   }
 
   @override
   Future<void> fetchMoreMemos() async {
+    if (kDebugMode) {
+      print('[MockMemosNotifier] fetchMoreMemos called - no-op for this test');
+    }
     /* No-op for this test */
   }
 }
@@ -58,8 +79,10 @@ void main() {
 
     // Consistent timestamps for testing
     final now = DateTime.now().toUtc();
-    final originalCreateTimeStr = now.subtract(const Duration(hours: 1)).toIso8601String();
-    final originalUpdateTimeStr = now.subtract(const Duration(minutes: 30)).toIso8601String();
+    final originalCreateTimeStr =
+        now.subtract(const Duration(hours: 1)).toIso8601String();
+    final originalUpdateTimeStr =
+        now.subtract(const Duration(minutes: 30)).toIso8601String();
     final serverUpdateTimeStr = now.toIso8601String(); // Time of the update
     const serverEpochCreateTimeStr = '1970-01-01T00:00:00.000Z';
 
@@ -89,11 +112,13 @@ void main() {
     // Note: Server returns epoch createTime, but correct new updateTime for the updated memo.
     // The list order from server might be arbitrary before client-side sort.
     final memosFromServerAfterUpdate = [
-       Memo( // This represents the raw data from the server list call
+      Memo(
+        // This represents the raw data from the server list call
         id: memoToUpdateId,
         content: 'Memo after update',
-        createTime: serverEpochCreateTimeStr, // Incorrect time from server list response
-        updateTime: serverUpdateTimeStr,     // Correct new update time
+        createTime:
+            serverEpochCreateTimeStr, // Incorrect time from server list response
+        updateTime: serverUpdateTimeStr, // Correct new update time
       ),
       Memo(
         id: otherMemoId,
@@ -104,39 +129,77 @@ void main() {
       ),
     ];
 
-
     setUp(() {
       mockApiService = MockApiService();
 
       // --- Mock Setup ---
       // 1. Initial listMemos call response (used if notifier fetches initially)
-      // We override the notifier, so this might not be strictly needed unless refresh is called before update
-      mockApiService.setMockListMemosResponse(
-        PaginatedMemoResponse(memos: initialMemos, nextPageToken: null),
+      when(
+        mockApiService.listMemos(
+          parent: anyNamed('parent'),
+          filter: anyNamed('filter'),
+          state: anyNamed('state'),
+          sort: anyNamed('sort'),
+          direction: anyNamed('direction'),
+          pageSize: anyNamed('pageSize'),
+          pageToken: anyNamed('pageToken'), // initial call has null page token
+          tags: anyNamed('tags'),
+          visibility: anyNamed('visibility'),
+          contentSearch: anyNamed('contentSearch'),
+          createdAfter: anyNamed('createdAfter'),
+          createdBefore: anyNamed('createdBefore'),
+          updatedAfter: anyNamed('updatedAfter'),
+          updatedBefore: anyNamed('updatedBefore'),
+          timeExpression: anyNamed('timeExpression'),
+          useUpdateTimeForExpression: anyNamed('useUpdateTimeForExpression'),
+        ),
+      ).thenAnswer(
+        (_) async =>
+            PaginatedMemoResponse(memos: initialMemos, nextPageToken: null),
       );
 
       // 2. updateMemo call response (used by saveEntityProvider)
-      // Simulate server returning epoch createTime but correct updateTime
-      mockApiService.setMockUpdateMemoResponse(
-        memoToUpdateId,
-        Memo(
+      when(
+        mockApiService.updateMemo(argThat(equals(memoToUpdateId)), any),
+      ).thenAnswer(
+        (_) async => Memo(
           id: memoToUpdateId,
           content: 'Memo after update',
           createTime: serverEpochCreateTimeStr, // Server sends bad createTime
-          updateTime: serverUpdateTimeStr,     // Server sends correct updateTime
+          updateTime: serverUpdateTimeStr, // Server sends correct updateTime
         ),
       );
 
       // 3. listMemos call *after* update (used by notifier's refresh)
       // This simulates the server list response containing the epoch createTime
-      mockApiService.setMockListMemosResponseForSubsequentCalls(
-        PaginatedMemoResponse(
+      when(
+        mockApiService.listMemos(
+          parent: anyNamed('parent'),
+          filter: anyNamed('filter'),
+          state: anyNamed('state'),
+          sort: anyNamed('sort'),
+          direction: anyNamed('direction'),
+          pageSize: anyNamed('pageSize'),
+          pageToken: anyNamed(
+            'pageToken',
+          ), // subsequent call has non-null page token
+          tags: anyNamed('tags'),
+          visibility: anyNamed('visibility'),
+          contentSearch: anyNamed('contentSearch'),
+          createdAfter: anyNamed('createdAfter'),
+          createdBefore: anyNamed('createdBefore'),
+          updatedAfter: anyNamed('updatedAfter'),
+          updatedBefore: anyNamed('updatedBefore'),
+          timeExpression: anyNamed('timeExpression'),
+          useUpdateTimeForExpression: anyNamed('useUpdateTimeForExpression'),
+        ),
+      ).thenAnswer(
+        (_) async => PaginatedMemoResponse(
           memos: memosFromServerAfterUpdate,
           nextPageToken: null,
         ),
       );
       // --- End Mock Setup ---
-
 
       container = ProviderContainer(
         overrides: [
@@ -183,13 +246,13 @@ void main() {
         print(
           '[Test Flow] Triggering saveEntityProvider for ID: $memoToUpdateId...',
         );
-      final memoDataForUpdate = Memo(
-        id: memoToUpdateId,
-        content: 'Memo after update',
-        // Pass the original createTime, as the UI would have it
-        createTime: originalCreateTimeStr,
-        updateTime: originalUpdateTimeStr, // This doesn't matter much here
-      );
+        final memoDataForUpdate = Memo(
+          id: memoToUpdateId,
+          content: 'Memo after update',
+          // Pass the original createTime, as the UI would have it
+          createTime: originalCreateTimeStr,
+          updateTime: originalUpdateTimeStr, // This doesn't matter much here
+        );
         // saveEntityProvider calls apiService.updateMemo and then triggers refresh
         await container.read(
           saveEntityProvider(
@@ -197,6 +260,11 @@ void main() {
           ),
         )(memoDataForUpdate);
         print('[Test Flow] saveEntityProvider call complete.');
+
+        // Verify updateMemo was called with expected arguments
+        verify(
+          mockApiService.updateMemo(argThat(equals(memoToUpdateId)), any),
+        ).called(1);
 
         // The refresh triggered by saveEntityProvider uses the *second* mock response
         // for listMemos (memosFromServerAfterUpdate)
@@ -210,20 +278,20 @@ void main() {
         final finalState = container.read(memosNotifierProvider);
         print('[Test Flow] Final state count: ${finalState.memos.length}');
 
-      // 4. Verify the results
+        // 4. Verify the results
         expect(finalState.memos.length, 2, reason: 'Should still have 2 memos');
 
-      // Verify sorting: The updated memo should now be first due to newer updateTime
-      expect(
+        // Verify sorting: The updated memo should now be first due to newer updateTime
+        expect(
           finalState.memos.first.id,
-        equals(memoToUpdateId),
-        reason: 'Updated memo should be first when sorted by updateTime',
-      );
-      expect(
+          equals(memoToUpdateId),
+          reason: 'Updated memo should be first when sorted by updateTime',
+        );
+        expect(
           finalState.memos.last.id,
-        equals(otherMemoId),
-        reason: 'Other memo should be second',
-      );
+          equals(otherMemoId),
+          reason: 'Other memo should be second',
+        );
 
         // Verify createTime:
         // The list was refreshed using the mock response `memosFromServerAfterUpdate`,
@@ -234,11 +302,15 @@ void main() {
           (m) => m.id == memoToUpdateId,
         );
 
-      print('[Test Verification] Checking createTime of updated memo in final list...');
+        print(
+          '[Test Verification] Checking createTime of updated memo in final list...',
+        );
         print(
           '[Test Verification] Expected createTime from server list fetch: $serverEpochCreateTimeStr',
         );
-      print('[Test Verification] Actual createTime in list: ${updatedMemoInList.createTime}');
+        print(
+          '[Test Verification] Actual createTime in list: ${updatedMemoInList.createTime}',
+        );
 
         expect(
           updatedMemoInList.createTime,
@@ -249,17 +321,18 @@ void main() {
               'createTime from list fetch is expected to be epoch (server bug)',
         );
 
-      // Verify updateTime is correct
-      expect(
-        updatedMemoInList.updateTime,
-        equals(serverUpdateTimeStr),
+        // Verify updateTime is correct
+        expect(
+          updatedMemoInList.updateTime,
+          equals(serverUpdateTimeStr),
           reason:
               'updateTime should be the latest one from the server list fetch',
-      );
+        );
 
         print(
           '[Test Result] Test confirms list is sorted correctly by updateTime, but createTime reflects server list response after refresh.',
         );
-    });
+      },
+    );
   });
 }

@@ -2,4 +2,21 @@
 
 echo "Generating mocks for tests..."
 dart run build_runner build --delete-conflicting-outputs
-echo "Done generating mocks."
+
+if [ $? -ne 0 ]; then
+  echo "⚠️ Error generating mocks - check errors above"
+  exit 1
+fi
+
+echo "Checking for generated mock files..."
+mock_files=$(find test -name "*.mocks.dart")
+if [ -z "$mock_files" ]; then
+  echo "❌ No mock files were generated! Check your @GenerateMocks annotations."
+  exit 1
+fi
+
+for file in $mock_files; do
+  echo "✅ Generated: $file"
+done
+
+echo "✅ Successfully generated all mocks."
