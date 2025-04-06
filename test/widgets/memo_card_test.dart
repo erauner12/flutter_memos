@@ -1,13 +1,27 @@
 import 'package:flutter/gestures.dart'; // Import for kPressTimeout
 import 'package:flutter/material.dart';
 import 'package:flutter_memos/models/memo.dart'; // Import Memo model
+import 'package:flutter_memos/services/url_launcher_service.dart'; // Import url launcher service
 import 'package:flutter_memos/widgets/memo_card.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mockito/mockito.dart'; // Import mockito
+
+// Import mocks
+import '../services/url_launcher_service_test.mocks.dart'; // For MockUrlLauncherService
 
 // Helper to wrap widget for testing with MaterialApp and Scaffold
 Widget buildTestableWidget(Widget child) {
+  // Create mock inside helper or pass it in
+  final mockUrlLauncherService = MockUrlLauncherService();
+  when(mockUrlLauncherService.launch(any)).thenAnswer((_) async => true);
+
   return ProviderScope( // Include ProviderScope if MemoCard uses Riverpod internally
+    overrides: [
+      urlLauncherServiceProvider.overrideWithValue(
+        mockUrlLauncherService,
+      ), // Add override
+    ],
     child: MaterialApp(
       // Define both light and dark themes to test against
       theme: ThemeData(

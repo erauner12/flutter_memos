@@ -2,31 +2,39 @@ import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/models/memo.dart';
+import 'package:flutter_memos/providers/api_providers.dart'; // Import api provider
 import 'package:flutter_memos/screens/memo_detail/memo_content.dart';
 import 'package:flutter_memos/screens/memo_detail/memo_detail_providers.dart';
+import 'package:flutter_memos/services/api_service.dart'; // Import api service
 import 'package:flutter_memos/services/url_launcher_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
 
-import '../utils/test_debug.dart';
-import 'memo_content_links_test.mocks.dart'; // Import the generated mocks
+// Import the generated mocks for ApiService (use the one from markdown_rendering_test)
+import '../markdown_rendering_test.mocks.dart';
+// Import the generated mocks for UrlLauncherService
+import 'memo_content_links_test.mocks.dart';
 
-// Generate nice mocks for UrlLauncherService
+// Generate nice mocks only for UrlLauncherService in this file
 @GenerateNiceMocks([MockSpec<UrlLauncherService>()])
 
 void main() {
   group('MemoContent Link Handling Tests', () {
+    late MockApiService mockApiService;
+    late MockUrlLauncherService mockUrlLauncherService;
+
+    setUp(() {
+      mockApiService = MockApiService();
+      mockUrlLauncherService = MockUrlLauncherService();
+      when(mockApiService.apiBaseUrl).thenReturn('http://test-url.com');
+      when(mockUrlLauncherService.launch(any)).thenAnswer((_) async => true);
+    });
+
     testWidgets('MemoContent handles link taps correctly', (WidgetTester tester) async {
       // Debug logs now enabled by default from test_debug.dart
       debugMarkdown('Starting MemoContent link tap test');
-
-      // Create mock for UrlLauncherService
-      final mockUrlLauncherService = MockUrlLauncherService();
-
-      // Stub the launch method to return success
-      when(mockUrlLauncherService.launch(any)).thenAnswer((_) async => true);
 
       // Create a memo with a link
       final memo = Memo(
@@ -59,6 +67,8 @@ void main() {
             urlLauncherServiceProvider.overrideWithValue(
               mockUrlLauncherService,
             ),
+            // Override the apiServiceProvider
+            apiServiceProvider.overrideWithValue(mockApiService),
           ],
           child: MaterialApp(
             home: Scaffold(body: MemoContent(memo: memo, memoId: 'test-id')),
@@ -123,12 +133,8 @@ void main() {
 
     testWidgets('MemoContent handles different link types (HTTP, HTTPS, memo://, etc)',
         (WidgetTester tester) async {
-        // Create mock for UrlLauncherService
-        final mockUrlLauncherService = MockUrlLauncherService();
+        // Mocks are initialized in setUp
 
-        // Stub the launch method to return success
-        when(mockUrlLauncherService.launch(any)).thenAnswer((_) async => true);
-      
       // Create a memo with different link types
       final memo = Memo(
         id: 'test-id',
@@ -162,6 +168,8 @@ void main() {
               urlLauncherServiceProvider.overrideWithValue(
                 mockUrlLauncherService,
               ),
+              // Override the apiServiceProvider
+              apiServiceProvider.overrideWithValue(mockApiService),
           ],
           child: MaterialApp(
             home: Scaffold(body: MemoContent(memo: memo, memoId: 'test-id')),

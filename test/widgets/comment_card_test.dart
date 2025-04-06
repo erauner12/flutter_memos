@@ -2,14 +2,26 @@ import 'package:flutter/gestures.dart'; // Import for kPressTimeout
 import 'package:flutter/material.dart';
 import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/providers/ui_providers.dart';
+import 'package:flutter_memos/services/url_launcher_service.dart'; // Import url launcher service
 import 'package:flutter_memos/widgets/comment_card.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mockito/mockito.dart'; // Import mockito
+
+// Import mocks
+import '../services/url_launcher_service_test.mocks.dart'; // For MockUrlLauncherService
 
 // Helper to wrap widget for testing with MaterialApp and Scaffold
 Widget buildTestableWidget(Widget child, {String? highlightedCommentId}) {
+  // Create mock inside helper or pass it in
+  final mockUrlLauncherService = MockUrlLauncherService();
+  when(mockUrlLauncherService.launch(any)).thenAnswer((_) async => true);
+
   return ProviderScope(
     overrides: [
+      urlLauncherServiceProvider.overrideWithValue(
+        mockUrlLauncherService,
+      ), // Add override
       // Override highlightedCommentIdProvider if a value is provided
       if (highlightedCommentId != null)
         highlightedCommentIdProvider.overrideWith(

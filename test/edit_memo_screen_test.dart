@@ -3,6 +3,7 @@ import 'package:flutter_memos/models/memo.dart';
 import 'package:flutter_memos/providers/api_providers.dart';
 import 'package:flutter_memos/screens/edit_memo/edit_memo_screen.dart';
 import 'package:flutter_memos/services/api_service.dart';
+import 'package:flutter_memos/services/url_launcher_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/annotations.dart';
@@ -13,16 +14,26 @@ import 'package:mockito/mockito.dart';
 
 // This import will work after running build_runner
 import 'edit_memo_screen_test.mocks.dart';
+// Import the mock for UrlLauncherService
+import 'services/url_launcher_service_test.mocks.dart';
+
 
 // We'll use the Mockito-generated MockApiService instead of a custom implementation
 
 void main() {
   late MockApiService mockApiService;
+  late MockUrlLauncherService
+  mockUrlLauncherService; // Add mock for URL launcher
   late Memo testMemo;
 
   setUp(() {
-    // Initialize the mock API service
+    // Initialize mock services
     mockApiService = MockApiService();
+    mockUrlLauncherService =
+        MockUrlLauncherService(); // Initialize URL launcher mock
+
+    // Stub the launch method to return success by default
+    when(mockUrlLauncherService.launch(any)).thenAnswer((_) async => true);
     
     // Add stub for apiBaseUrl property
     when(mockApiService.apiBaseUrl).thenReturn('http://test-url.com');
@@ -98,6 +109,9 @@ void main() {
       ProviderScope(
         overrides: [
           apiServiceProvider.overrideWithValue(mockApiService),
+          urlLauncherServiceProvider.overrideWithValue(
+            mockUrlLauncherService,
+          ), // Add override
         ],
         child: const MaterialApp(
           home: EditMemoScreen(
@@ -145,6 +159,9 @@ void main() {
       ProviderScope(
         overrides: [
           apiServiceProvider.overrideWithValue(mockApiService),
+          urlLauncherServiceProvider.overrideWithValue(
+            mockUrlLauncherService,
+          ), // Add override
         ],
         child: const MaterialApp(
           home: EditMemoScreen(

@@ -1,11 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_memos/models/memo.dart';
+import 'package:flutter_memos/providers/api_providers.dart'; // Import api provider
 import 'package:flutter_memos/screens/edit_memo/edit_memo_form.dart';
 import 'package:flutter_memos/screens/edit_memo/edit_memo_providers.dart'; // Add this import
+import 'package:flutter_memos/services/url_launcher_service.dart'; // Import url launcher service
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mockito/mockito.dart'; // Import mockito
 
+// Import mocks
+import '../markdown_rendering_test.mocks.dart'; // For MockApiService
+import '../services/url_launcher_service_test.mocks.dart'; // For MockUrlLauncherService
 import '../utils/test_debug.dart';
 
 // Helper function to find text in RichText widgets
@@ -32,6 +38,16 @@ void dumpRichTextContent(WidgetTester tester) {
 
 void main() {
   group('Markdown Link Styling in Preview Mode', () {
+    late MockApiService mockApiService;
+    late MockUrlLauncherService mockUrlLauncherService;
+
+    setUp(() {
+      mockApiService = MockApiService();
+      mockUrlLauncherService = MockUrlLauncherService();
+      when(mockApiService.apiBaseUrl).thenReturn('http://test-url.com');
+      when(mockUrlLauncherService.launch(any)).thenAnswer((_) async => true);
+    });
+
     testWidgets('Links in preview are styled correctly', (WidgetTester tester) async {
       // Enable debugging
       markdownDebugEnabled = false;
@@ -46,20 +62,21 @@ void main() {
 
       await tester.pumpWidget(
         ProviderScope(
-          // Mock the provider that EditMemoForm uses to fetch the entity
           overrides: [
+            apiServiceProvider.overrideWithValue(mockApiService),
+            urlLauncherServiceProvider.overrideWithValue(
+              mockUrlLauncherService,
+            ),
             editEntityProvider(
               EntityProviderParams(id: 'test-id', type: 'memo'),
             ).overrideWith((ref) => Future.value(memo)),
           ],
           child: MaterialApp(
-            // Remove const
             home: Scaffold(
-              // Use the new constructor signature
               body: EditMemoForm(
                 entityId: 'test-id',
                 entityType: 'memo',
-                entity: memo, // Add the entity parameter
+                entity: memo,
               ),
             ),
           ),
@@ -161,20 +178,21 @@ void main() {
 
       await tester.pumpWidget(
         ProviderScope(
-          // Mock the provider that EditMemoForm uses to fetch the entity
           overrides: [
+            apiServiceProvider.overrideWithValue(mockApiService),
+            urlLauncherServiceProvider.overrideWithValue(
+              mockUrlLauncherService,
+            ),
             editEntityProvider(
               EntityProviderParams(id: 'test-id', type: 'memo'),
             ).overrideWith((ref) => Future.value(memo)),
           ],
           child: MaterialApp(
-            // Remove const
             home: Scaffold(
-              // Use the new constructor signature
               body: EditMemoForm(
                 entityId: 'test-id',
                 entityType: 'memo',
-                entity: memo, // Add the entity parameter
+                entity: memo,
               ),
             ),
           ),

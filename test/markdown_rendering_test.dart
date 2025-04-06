@@ -8,6 +8,7 @@ import 'package:flutter_memos/screens/edit_memo/edit_memo_providers.dart';
 import 'package:flutter_memos/screens/memo_detail/memo_content.dart';
 import 'package:flutter_memos/screens/memo_detail/memo_detail_providers.dart';
 import 'package:flutter_memos/services/api_service.dart'; // Import the actual service
+import 'package:flutter_memos/services/url_launcher_service.dart';
 import 'package:flutter_memos/widgets/comment_card.dart';
 import 'package:flutter_memos/widgets/memo_card.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -17,6 +18,8 @@ import 'package:mockito/mockito.dart'; // Add Mockito import
 
 // Import the generated mocks file (will be created by build_runner)
 import 'markdown_rendering_test.mocks.dart';
+// Import the mock for UrlLauncherService
+import 'services/url_launcher_service_test.mocks.dart';
 // Import test utility
 import 'utils/test_debug.dart';
 
@@ -24,15 +27,20 @@ import 'utils/test_debug.dart';
 @GenerateNiceMocks([MockSpec<ApiService>()])
 
 void main() {
-  // Declare mockApiService at the top level so it can be accessed by all tests
+  // Declare mocks at the top level
   late MockApiService mockApiService;
+  late MockUrlLauncherService mockUrlLauncherService;
 
   group('Markdown Rendering Tests', () {
     // Setup function that runs before each test
     setUp(() {
       mockApiService = MockApiService();
+      mockUrlLauncherService = MockUrlLauncherService(); // Initialize URL launcher mock
+
       // Add stub for apiBaseUrl property
       when(mockApiService.apiBaseUrl).thenReturn('http://test-url.com');
+      // Stub the launch method to return success by default
+      when(mockUrlLauncherService.launch(any)).thenAnswer((_) async => true);
     });
 
     testWidgets('Basic markdown elements render correctly in MarkdownBody', (WidgetTester tester) async {
@@ -233,6 +241,7 @@ void main() {
         ProviderScope(
           overrides: [
             apiServiceProvider.overrideWithValue(mockApiService),
+            urlLauncherServiceProvider.overrideWithValue(mockUrlLauncherService), // Add override
             memoCommentsProvider.overrideWith(
               (ref, id) => Future.value(comments),
             ),
@@ -267,6 +276,9 @@ void main() {
       // Build the CommentCard widget
       await tester.pumpWidget(
         ProviderScope(
+          overrides: [
+            urlLauncherServiceProvider.overrideWithValue(mockUrlLauncherService), // Add override
+          ],
           child: MaterialApp(
             home: Scaffold(
               body: CommentCard(
@@ -293,12 +305,17 @@ void main() {
     testWidgets('MemoCard renders markdown correctly', (WidgetTester tester) async {
       // Build the MemoCard widget
       await tester.pumpWidget(
-        const MaterialApp(
-          home: Scaffold(
-            body: MemoCard(
-              id: 'test-id',
-              content: '# Card Heading\n**Bold text**\n- List item',
-              pinned: false,
+        ProviderScope( // Add ProviderScope for override
+          overrides: [
+            urlLauncherServiceProvider.overrideWithValue(mockUrlLauncherService), // Add override
+          ],
+          child: const MaterialApp(
+            home: Scaffold(
+              body: MemoCard(
+                id: 'test-id',
+                content: '# Card Heading\n**Bold text**\n- List item',
+                pinned: false,
+              ),
             ),
           ),
         ),
@@ -335,6 +352,7 @@ void main() {
         ProviderScope(
           overrides: [
             apiServiceProvider.overrideWithValue(mockApiService),
+            urlLauncherServiceProvider.overrideWithValue(mockUrlLauncherService), // Add override
             // Mock the provider that EditMemoForm uses to fetch the entity
             editEntityProvider(
               EntityProviderParams(id: 'test-id', type: 'memo'),

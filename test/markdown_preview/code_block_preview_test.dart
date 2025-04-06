@@ -1,18 +1,34 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_memos/models/memo.dart';
+import 'package:flutter_memos/providers/api_providers.dart'; // Import api provider
 import 'package:flutter_memos/screens/edit_memo/edit_memo_form.dart';
 import 'package:flutter_memos/screens/edit_memo/edit_memo_providers.dart'; // Add this import
+import 'package:flutter_memos/services/url_launcher_service.dart'; // Import url launcher service
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mockito/mockito.dart'; // Import mockito
 
+// Import mocks
+import '../markdown_rendering_test.mocks.dart'; // For MockApiService
+import '../services/url_launcher_service_test.mocks.dart'; // For MockUrlLauncherService
 import '../utils/test_debug.dart'; // Add this import
 
 void main() {
   group('Markdown Code Block Preview Tests', () {
+    late MockApiService mockApiService;
+    late MockUrlLauncherService mockUrlLauncherService;
+
+    setUp(() {
+      mockApiService = MockApiService();
+      mockUrlLauncherService = MockUrlLauncherService();
+      when(mockApiService.apiBaseUrl).thenReturn('http://test-url.com');
+      when(mockUrlLauncherService.launch(any)).thenAnswer((_) async => true);
+    });
+
     testWidgets('Markdown code blocks are rendered with monospace font', (WidgetTester tester) async {
       debugMarkdown('Testing code block rendering with monospace font');
-      
+
       // Create a memo with code content
       final memo = Memo(
         id: 'test-id',
@@ -33,8 +49,11 @@ void main() {
       // Build the EditMemoForm widget
       await tester.pumpWidget(
         ProviderScope(
-          // Mock the provider that EditMemoForm uses to fetch the entity
           overrides: [
+            apiServiceProvider.overrideWithValue(mockApiService),
+            urlLauncherServiceProvider.overrideWithValue(
+              mockUrlLauncherService,
+            ),
             editEntityProvider(
               EntityProviderParams(id: 'test-id', type: 'memo'),
             ).overrideWith((ref) => Future.value(memo)),
@@ -168,8 +187,11 @@ This is a code block with 4-space indentation:
       // Build the EditMemoForm widget
       await tester.pumpWidget(
         ProviderScope(
-          // Mock the provider that EditMemoForm uses to fetch the entity
           overrides: [
+            apiServiceProvider.overrideWithValue(mockApiService),
+            urlLauncherServiceProvider.overrideWithValue(
+              mockUrlLauncherService,
+            ),
             editEntityProvider(
               EntityProviderParams(id: 'test-id', type: 'memo'),
             ).overrideWith((ref) => Future.value(memo)),

@@ -1,19 +1,36 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_memos/screens/new_memo/new_memo_form.dart';
+import 'package:flutter_memos/services/url_launcher_service.dart'; // Import url launcher service
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mockito/mockito.dart'; // Import mockito
+
+// Import mocks
+import '../services/url_launcher_service_test.mocks.dart'; // For MockUrlLauncherService
 import '../utils/test_debug.dart'; // Add this import
 
 void main() {
   group('NewMemoForm Markdown Preview Tests', () {
+    late MockUrlLauncherService mockUrlLauncherService;
+
+    setUp(() {
+      mockUrlLauncherService = MockUrlLauncherService();
+      when(mockUrlLauncherService.launch(any)).thenAnswer((_) async => true);
+    });
+
     testWidgets('Preview mode shows rendered markdown', (WidgetTester tester) async {
       debugMarkdown('Testing preview mode rendering in NewMemoForm');
-      
+
       // Build the actual NewMemoForm
       await tester.pumpWidget(
-        const ProviderScope(
-          child: MaterialApp(home: Scaffold(body: NewMemoForm())),
+        ProviderScope(
+          overrides: [
+            urlLauncherServiceProvider.overrideWithValue(
+              mockUrlLauncherService,
+            ), // Add override
+          ],
+          child: const MaterialApp(home: Scaffold(body: NewMemoForm())),
         ),
       );
 
@@ -53,8 +70,13 @@ void main() {
     testWidgets('Markdown help toggle displays help information', (WidgetTester tester) async {
       // Build the form with a fixed-height container to prevent overflow errors
       await tester.pumpWidget(
-        const ProviderScope(
-          child: MaterialApp(
+        ProviderScope(
+          overrides: [
+            urlLauncherServiceProvider.overrideWithValue(
+              mockUrlLauncherService,
+            ), // Add override
+          ],
+          child: const MaterialApp(
             home: Scaffold(
               body: SizedBox(
                 width: 800,
