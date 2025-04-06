@@ -153,9 +153,10 @@ class MemoContextMenu extends StatelessWidget {
                       isDarkMode: isDarkMode,
                     ),
                     _buildMenuItem(
+                      key: const Key('copy_link_menu_item'), // Add key here
                       icon: Icons.link,
                       label: 'Copy Link',
-                      onTap: () async {
+                      onTap: onCopyLink,
                         final url = 'flutter-memos://memo/$memoId';
                         await Clipboard.setData(ClipboardData(text: url));
                         if (onCopyLink != null) {
