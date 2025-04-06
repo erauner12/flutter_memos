@@ -22,53 +22,59 @@ class _MemoListItemState extends ConsumerState<MemoListItem> {
   void _toggleHideMemo(BuildContext context, WidgetRef ref) {
     final hiddenMemoIds = ref.read(hiddenMemoIdsProvider);
     final memoIdToToggle = widget.memo.id; // Use local variable for clarity
-
+  
     if (hiddenMemoIds.contains(memoIdToToggle)) {
       // Unhide memo - Selection doesn't need adjustment here
       ref
           .read(hiddenMemoIdsProvider.notifier)
           .update((state) => state..remove(memoIdToToggle));
     } else {
-      // --- Selection Update Logic (when HIDING) ---
+      // --- New Selection Update Logic (Downward Preference) ---
       final currentSelectedId = ref.read(ui_providers.selectedMemoIdProvider);
-      final isHidingSelected = currentSelectedId == memoIdToToggle;
-      String? nextSelectedId =
-          currentSelectedId; // Keep current selection by default
-
-      if (isHidingSelected) {
-        final memosBeforeHide = ref.read(filteredMemosProvider);
-        final hiddenIndex = memosBeforeHide.indexWhere(
-          (m) => m.id == memoIdToToggle,
+      final memosBeforeAction = ref.read(
+        filteredMemosProvider,
+      ); // Read list BEFORE action
+      final memoIdToAction =
+          memoIdToToggle; // ID of the memo being removed/hidden
+      String? nextSelectedId = currentSelectedId; // Default to no change
+  
+      // Only adjust selection if the item being actioned is currently selected
+      if (currentSelectedId == memoIdToAction && memosBeforeAction.isNotEmpty) {
+        final actionIndex = memosBeforeAction.indexWhere(
+          (m) => m.id == memoIdToAction,
         );
-
-        if (hiddenIndex != -1) {
-          if (memosBeforeHide.length > 1) {
-            if (hiddenIndex > 0) {
-              // Select the item *before* the hidden one
-              nextSelectedId = memosBeforeHide[hiddenIndex - 1].id;
-            } else {
-              // Hiding the first item, select the next one (which was at index 1)
-              nextSelectedId = memosBeforeHide[1].id;
-            }
-          } else {
-            // List will be empty
+  
+        if (actionIndex != -1) {
+          // Ensure the item was found
+          if (memosBeforeAction.length == 1) {
+            // List will be empty after action
             nextSelectedId = null;
+          } else if (actionIndex < memosBeforeAction.length - 1) {
+            // If NOT the last item, select the item originally *after* it.
+            nextSelectedId = memosBeforeAction[actionIndex + 1].id;
+          } else {
+            // If it IS the last item, select the item originally *before* it (the new last item).
+            nextSelectedId = memosBeforeAction[actionIndex - 1].id;
           }
+          } else {
+          // Memo to action wasn't found in the list? Clear selection.
+          nextSelectedId = null;
         }
       }
-      // --- End Selection Update Logic ---
-
-      // Hide memo
+      // --- End New Selection Update Logic ---
+  
+      // Hide memo (optimistic UI update via provider state change)
       ref
           .read(hiddenMemoIdsProvider.notifier)
           .update((state) => state..add(memoIdToToggle));
-
-      // Update selection *after* hiding the memo
-      if (isHidingSelected) {
+  
+      // Update selection state *after* optimistic update
+      // Check if the selection actually needs changing before updating the state
+      if (nextSelectedId != currentSelectedId) {
         ref.read(ui_providers.selectedMemoIdProvider.notifier).state =
             nextSelectedId;
       }
-
+  
       // Show a confirmation that the memo was hidden
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -77,8 +83,9 @@ class _MemoListItemState extends ConsumerState<MemoListItem> {
         ),
       );
     }
-
-    // Force UI refresh to update visibility
+  
+    // Force UI refresh to update visibility - Keep this for now, might be removable
+    // if visibleMemosListProvider reacts correctly to hiddenMemoIdsProvider changes.
     ref.read(memosNotifierProvider.notifier).refresh();
   }
 

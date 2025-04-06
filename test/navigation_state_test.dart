@@ -239,98 +239,145 @@ void main() {
       verifyNever(mockApiService.listMemos(pageToken: null));
     });
   
-    test('deleteMemoProvider adjusts selection correctly', () async {
-      // --- Test deleting the selected item ---
-      // Arrange: Set initial selection at index 2 using the main container
+    test('deleteMemoProvider adjusts selection correctly (downward preference)', () async {
+      // --- Test deleting the selected item (middle) ---
+      // Arrange: Select index 2 ('memo_2')
       final initialIndexSelected = 2;
       final memoToDeleteSelectedId = initialMemos[initialIndexSelected].id; // memo_2
-  
-      // Set up ID selection
       container.read(ui_providers.selectedMemoIdProvider.notifier).state =
           memoToDeleteSelectedId;
   
-      // Verify initial selection
-      expect(
-        container.read(ui_providers.selectedMemoIdProvider),
-        memoToDeleteSelectedId,
-      );
-  
-      // Act: Execute the delete provider for the selected memo
+      // Act: Delete the selected memo
       await container.read(deleteMemoProvider(memoToDeleteSelectedId))();
   
-      // Assert: Selection ID is updated to the previous memo (memo_1)
-      final expectedNextIdAfterDeleteSelected =
-          initialMemos[initialIndexSelected - 1].id; // memo_1
+      // Assert: Selection should move DOWN to the next item ('memo_3')
+      final expectedNextIdAfterDeleteMiddle =
+          initialMemos[initialIndexSelected + 1].id; // memo_3
       expect(
         container.read(ui_providers.selectedMemoIdProvider),
-        expectedNextIdAfterDeleteSelected,
-        reason: "Selected memo ID should be updated to the previous memo after deleting selected memo",
+        expectedNextIdAfterDeleteMiddle,
+        reason:
+            "Selected memo ID should move DOWN to the next memo after deleting a middle memo",
       );
   
-      // --- Test deleting item *before* selection ---
-      // Arrange: Reset state and set selection at index 2
+      // --- Test deleting the selected item (first) ---
+      // Arrange: Reset state, select index 0 ('memo_0')
       container.read(memosNotifierProvider.notifier).state = const MemosState()
           .copyWith(
             memos: createSortedMemos(5),
             isLoading: false,
             hasReachedEnd: true,
-          ); // Reset memos
-      final initialIndexBefore = 2;
-      final memoSelectedId = initialMemos[initialIndexBefore].id; // memo_2
-      final indexToDeleteBefore = 0;
-      final memoToDeleteBeforeId = initialMemos[indexToDeleteBefore].id; // memo_0
-  
-      // Set up ID selection
+          );
+      final initialIndexFirst = 0;
+      final memoToDeleteFirstId = initialMemos[initialIndexFirst].id; // memo_0
       container.read(ui_providers.selectedMemoIdProvider.notifier).state =
-          memoSelectedId;
+          memoToDeleteFirstId;
   
-      // Verify initial selection
+      // Act: Delete the first memo
+      await container.read(deleteMemoProvider(memoToDeleteFirstId))();
+
+      // Assert: Selection should move DOWN to the next item ('memo_1')
+      final expectedNextIdAfterDeleteFirst =
+          initialMemos[initialIndexFirst + 1].id; // memo_1
       expect(
         container.read(ui_providers.selectedMemoIdProvider),
-        memoSelectedId,
+        expectedNextIdAfterDeleteFirst,
+        reason:
+            "Selected memo ID should move DOWN to the next memo after deleting the first memo",
       );
   
-      // Act: Execute the delete provider for the memo *before* selection
-      await container.read(deleteMemoProvider(memoToDeleteBeforeId))();
+      // --- Test deleting the selected item (last) ---
+      // Arrange: Reset state, select index 4 ('memo_4')
+      container.read(memosNotifierProvider.notifier).state = const MemosState()
+          .copyWith(
+            memos: createSortedMemos(5),
+            isLoading: false,
+            hasReachedEnd: true,
+          );
+      final initialIndexLast = 4;
+      final memoToDeleteLastId = initialMemos[initialIndexLast].id; // memo_4
+      container.read(ui_providers.selectedMemoIdProvider.notifier).state =
+          memoToDeleteLastId;
   
-      // Assert: Selection ID remains unchanged since we deleted a different memo before it
+      // Act: Delete the last memo
+      await container.read(deleteMemoProvider(memoToDeleteLastId))();
+  
+      // Assert: Selection should move UP to the PREVIOUS item ('memo_3') as it's the new last item
+      final expectedNextIdAfterDeleteLast =
+          initialMemos[initialIndexLast - 1].id; // memo_3
       expect(
         container.read(ui_providers.selectedMemoIdProvider),
-        memoSelectedId,
+        expectedNextIdAfterDeleteLast,
+        reason:
+            "Selected memo ID should move UP to the previous memo after deleting the last memo",
+      );
+  
+  
+      // --- Test deleting item *before* selection (selection should not change) ---
+      // Arrange: Reset state, select index 2 ('memo_2'), delete index 0 ('memo_0')
+      container.read(memosNotifierProvider.notifier).state = const MemosState()
+          .copyWith(
+            memos: createSortedMemos(5),
+            isLoading: false,
+            hasReachedEnd: true,
+          );
+      final selectedIdBefore = initialMemos[2].id; // memo_2
+      final memoToDeleteBeforeId = initialMemos[0].id; // memo_0
+      container.read(ui_providers.selectedMemoIdProvider.notifier).state =
+          selectedIdBefore;
+
+      // Act: Delete memo before selection
+      await container.read(deleteMemoProvider(memoToDeleteBeforeId))();
+  
+      // Assert: Selection ID remains unchanged
+      expect(
+        container.read(ui_providers.selectedMemoIdProvider),
+        selectedIdBefore,
         reason: "Selected memo ID should remain unchanged when deleting a different memo before it",
       );
   
-      // --- Test deleting item *after* selection ---
-      // Arrange: Reset state and set selection at index 0
+      // --- Test deleting item *after* selection (selection should not change) ---
+      // Arrange: Reset state, select index 0 ('memo_0'), delete index 3 ('memo_3')
       container.read(memosNotifierProvider.notifier).state = const MemosState()
           .copyWith(
             memos: createSortedMemos(5),
             isLoading: false,
             hasReachedEnd: true,
-          ); // Reset memos
-      final initialIndexAfter = 0;
-      final memoSelectedAfterIdPrefix = initialMemos[initialIndexAfter].id; // memo_0
-      final indexToDeleteAfter = 3;
-      final memoToDeleteAfterId = initialMemos[indexToDeleteAfter].id; // memo_3
-  
-      // Set up ID selection
+          );
+      final selectedIdAfter = initialMemos[0].id; // memo_0
+      final memoToDeleteAfterId = initialMemos[3].id; // memo_3
       container.read(ui_providers.selectedMemoIdProvider.notifier).state =
-          memoSelectedAfterIdPrefix;
+          selectedIdAfter;
   
-      // Verify initial selection
-      expect(
-        container.read(ui_providers.selectedMemoIdProvider),
-        memoSelectedAfterIdPrefix,
-      );
-  
-      // Act: Execute the delete provider for the memo *after* selection
+      // Act: Delete memo after selection
       await container.read(deleteMemoProvider(memoToDeleteAfterId))();
   
-      // Assert: Selection ID remains unchanged when deleting item after it
+      // Assert: Selection ID remains unchanged
       expect(
         container.read(ui_providers.selectedMemoIdProvider),
-        memoSelectedAfterIdPrefix,
-        reason: "Selected memo ID should remain unchanged when deleting a memo after it",
+        selectedIdAfter,
+        reason:
+            "Selected memo ID should remain unchanged when deleting a memo after it",
+      );
+  
+      // --- Test deleting the only item ---
+      // Arrange: Set up with only one memo and select it
+      final singleMemo = createSortedMemos(1);
+      container.read(memosNotifierProvider.notifier).state = const MemosState()
+          .copyWith(memos: singleMemo, isLoading: false, hasReachedEnd: true);
+      final singleMemoId = singleMemo[0].id;
+      container.read(ui_providers.selectedMemoIdProvider.notifier).state =
+          singleMemoId;
+
+      // Act: Delete the only memo
+      await container.read(deleteMemoProvider(singleMemoId))();
+  
+      // Assert: Selection should become null
+      expect(
+        container.read(ui_providers.selectedMemoIdProvider),
+        isNull,
+        reason:
+            "Selection should be null after deleting the only memo in the list",
       );
     });
   

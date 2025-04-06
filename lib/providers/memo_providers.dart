@@ -533,29 +533,35 @@ final archiveMemoProvider = Provider.family<Future<void> Function(), String>((re
   return () async {
     final apiService = ref.read(apiServiceProvider);
 
-    // --- Selection Update Logic ---
+    // --- Selection Update Logic (Downward Preference) ---
     final currentSelectedId = ref.read(ui_providers.selectedMemoIdProvider);
-    final isArchivingSelected = currentSelectedId == id;
-    String? nextSelectedId =
-        currentSelectedId; // Keep current selection by default
+    final memosBeforeAction = ref.read(
+      filteredMemosProvider,
+    ); // Read list BEFORE action
+    final memoIdToAction = id; // ID of the memo being removed/hidden
+    String? nextSelectedId = currentSelectedId; // Default to no change
 
-    if (isArchivingSelected) {
-      final memosBeforeArchive = ref.read(filteredMemosProvider);
-      final archivedIndex = memosBeforeArchive.indexWhere((m) => m.id == id);
+    // Only adjust selection if the item being actioned is currently selected
+    if (currentSelectedId == memoIdToAction && memosBeforeAction.isNotEmpty) {
+      final actionIndex = memosBeforeAction.indexWhere(
+        (m) => m.id == memoIdToAction,
+      );
 
-      if (archivedIndex != -1) {
-        if (memosBeforeArchive.length > 1) {
-          if (archivedIndex > 0) {
-            // Select the item *before* the archived one
-            nextSelectedId = memosBeforeArchive[archivedIndex - 1].id;
-          } else {
-            // Archived the first item, select the next one (which was at index 1)
-            nextSelectedId = memosBeforeArchive[1].id;
-          }
-        } else {
-          // List will be empty
+      if (actionIndex != -1) {
+        // Ensure the item was found
+        if (memosBeforeAction.length == 1) {
+          // List will be empty after action
           nextSelectedId = null;
+        } else if (actionIndex < memosBeforeAction.length - 1) {
+          // If NOT the last item, select the item originally *after* it.
+          nextSelectedId = memosBeforeAction[actionIndex + 1].id;
+        } else {
+          // If it IS the last item, select the item originally *before* it (the new last item).
+          nextSelectedId = memosBeforeAction[actionIndex - 1].id;
         }
+      } else {
+        // Memo to action wasn't found in the list? Clear selection.
+        nextSelectedId = null;
       }
     }
     // --- End Selection Update Logic ---
@@ -595,7 +601,6 @@ final archiveMemoProvider = Provider.family<Future<void> Function(), String>((re
   };
 });
 
-/// Provider for deleting a memo. Takes a record ({String id, int currentSelectedIndex}) as parameter.
 /// Provider for deleting a memo. Just takes the ID as parameter.
 final deleteMemoProvider = Provider.family<Future<void> Function(), String>((
   ref,
@@ -603,35 +608,40 @@ final deleteMemoProvider = Provider.family<Future<void> Function(), String>((
 ) {
   return () async {
     if (kDebugMode) {
-      print(
-          '[deleteMemoProvider] Deleting memo: $id');
+      print('[deleteMemoProvider] Deleting memo: $id');
     }
 
     final apiService = ref.read(apiServiceProvider);
 
-    // --- Selection Update Logic ---
+    // --- Selection Update Logic (Downward Preference) ---
     final currentSelectedId = ref.read(ui_providers.selectedMemoIdProvider);
-    final isDeletingSelected = currentSelectedId == id;
-    String? nextSelectedId =
-        currentSelectedId; // Keep current selection by default
+    final memosBeforeAction = ref.read(
+      filteredMemosProvider,
+    ); // Read list BEFORE action
+    final memoIdToAction = id; // ID of the memo being removed/hidden
+    String? nextSelectedId = currentSelectedId; // Default to no change
 
-    if (isDeletingSelected) {
-      final memosBeforeDelete = ref.read(filteredMemosProvider);
-      final deletedIndex = memosBeforeDelete.indexWhere((m) => m.id == id);
+    // Only adjust selection if the item being actioned is currently selected
+    if (currentSelectedId == memoIdToAction && memosBeforeAction.isNotEmpty) {
+      final actionIndex = memosBeforeAction.indexWhere(
+        (m) => m.id == memoIdToAction,
+      );
 
-      if (deletedIndex != -1) {
-        if (memosBeforeDelete.length > 1) {
-          if (deletedIndex > 0) {
-            // Select the item *before* the deleted one
-            nextSelectedId = memosBeforeDelete[deletedIndex - 1].id;
-          } else {
-            // Deleted the first item, select the next one (which was at index 1)
-            nextSelectedId = memosBeforeDelete[1].id;
-          }
-        } else {
-          // List will be empty
+      if (actionIndex != -1) {
+        // Ensure the item was found
+        if (memosBeforeAction.length == 1) {
+          // List will be empty after action
           nextSelectedId = null;
+        } else if (actionIndex < memosBeforeAction.length - 1) {
+          // If NOT the last item, select the item originally *after* it.
+          nextSelectedId = memosBeforeAction[actionIndex + 1].id;
+        } else {
+          // If it IS the last item, select the item originally *before* it (the new last item).
+          nextSelectedId = memosBeforeAction[actionIndex - 1].id;
         }
+      } else {
+        // Memo to action wasn't found in the list? Clear selection.
+        nextSelectedId = null;
       }
     }
     // --- End Selection Update Logic ---
