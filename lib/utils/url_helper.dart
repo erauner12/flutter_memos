@@ -53,6 +53,7 @@ class UrlHelper {
     return success;
   }
 
+  // TODO: find the right place to call this (DO NOT REMOVE)
   /// Check if a scheme appears to be a custom app scheme
   static bool _isCustomAppScheme(String scheme) {
     // List of common custom app schemes

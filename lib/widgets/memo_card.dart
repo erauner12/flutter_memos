@@ -4,8 +4,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_memos/utils/url_helper.dart';
 import 'package:flutter_memos/widgets/memo_context_menu.dart' as memo_menu;
-
-class MemoCard extends StatefulWidget {
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+class MemoCard extends ConsumerStatefulWidget {
   final String content;
   final bool pinned;
   final String? updatedAt;
@@ -38,18 +38,19 @@ class MemoCard extends StatefulWidget {
     this.isSelected = false, // Default to not selected
     this.onBump, // Add onBump to constructor
   });
-
+  @override
+  ConsumerState<MemoCard> createState() => _MemoCardState();
   @override
   State<MemoCard> createState() => _MemoCardState();
 }
-
+class _MemoCardState extends ConsumerState<MemoCard> {
 class _MemoCardState extends State<MemoCard> {
-  Offset _tapPosition = Offset.zero;
+  Offset tapPosition = Offset.zero;
   // Remove _isPressed state variable
   // bool _isPressed = false;
 
   // Helper method to format date strings for display
-  String _formatDateTime(String dateTimeString) {
+  String formatDateTime(String dateTimeString) {
     try {
       final dateTime = DateTime.parse(dateTimeString);
       final now = DateTime.now();
@@ -83,11 +84,11 @@ class _MemoCardState extends State<MemoCard> {
   }
 
   // Store position for context menu
-  void _storePosition(TapDownDetails details) {
-    _tapPosition = details.globalPosition;
+  void storePosition(TapDownDetails details) {
+    tapPosition = details.globalPosition;
   }
 
-  void _showContextMenu() {
+  void showContextMenu() {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -119,7 +120,7 @@ class _MemoCardState extends State<MemoCard> {
             return memo_menu.MemoContextMenu(
               memoId: widget.id,
               isPinned: widget.pinned,
-              position: _tapPosition,
+              position: tapPosition,
               parentContext: context,
               scrollController: scrollController,
               onClose: () => Navigator.pop(context),
@@ -188,7 +189,7 @@ class _MemoCardState extends State<MemoCard> {
     );
   }
 
-  void _onEdit(BuildContext context) {
+  void onEdit(BuildContext context) {
     Navigator.pushNamed(
       context,
       '/edit-entity', // Use the generic route
@@ -199,7 +200,7 @@ class _MemoCardState extends State<MemoCard> {
     );
   }
 
-  void _onDelete(BuildContext context) async {
+  void onDelete(BuildContext context) async {
     if (widget.onDelete != null) {
       // Call onDelete callback directly without showing another dialog
       // since the dialog will be shown in MemoListItem
@@ -207,7 +208,7 @@ class _MemoCardState extends State<MemoCard> {
     }
   }
 
-  void _onArchive(BuildContext context) {
+  void onArchive(BuildContext context) {
     if (widget.onArchive != null) {
       widget.onArchive!();
       ScaffoldMessenger.of(context).showSnackBar(
@@ -219,7 +220,7 @@ class _MemoCardState extends State<MemoCard> {
     }
   }
 
-  void _onTogglePin(BuildContext context) {
+  void onTogglePin(BuildContext context) {
     if (widget.onTogglePin != null) {
       widget.onTogglePin!();
       ScaffoldMessenger.of(context).showSnackBar(
@@ -310,9 +311,9 @@ class _MemoCardState extends State<MemoCard> {
       ),
       child: InkWell(
         onTap: widget.onTap,
-        onLongPress: _showContextMenu,
-        onDoubleTap: kIsWeb ? _showContextMenu : null,
-        onTapDown: _storePosition,
+        onLongPress: showContextMenu,
+        onDoubleTap: kIsWeb ? showContextMenu : null,
+        onTapDown: storePosition,
         // Add onHighlightChanged callback
         // Removed onHighlightChanged callback as it was only setting an unused variable
         borderRadius: BorderRadius.circular(10),
@@ -363,9 +364,9 @@ class _MemoCardState extends State<MemoCard> {
                     print(
                       '[MemoCard] Link tapped in memo ${widget.id}: "$text" -> "$href"',
                     );
-                  }
                   if (href != null) {
-                    UrlHelper.launchUrl(href, context: context);
+                    UrlHelper.launchUrl(href, ref: ref, context: context);
+                  }
                   }
                 },
               ),
@@ -452,7 +453,7 @@ class _MemoCardState extends State<MemoCard> {
                           ),
                           const SizedBox(width: 4),
                           Text(
-                            'Updated: ${_formatDateTime(widget.updatedAt!)}',
+                            'Updated: ${formatDateTime(widget.updatedAt!)}',
                             style: TextStyle(
                               fontSize: 13,
                               color:
