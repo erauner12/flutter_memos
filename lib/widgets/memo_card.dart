@@ -46,7 +46,6 @@ class MemoCard extends StatefulWidget {
 
 class _MemoCardState extends State<MemoCard> {
   Offset _tapPosition = Offset.zero;
-  bool _isPressed = false; // Add state variable for transient press
 
   // Helper method to format date strings for display
   String _formatDateTime(String dateTimeString) {
@@ -261,16 +260,13 @@ class _MemoCardState extends State<MemoCard> {
 
     // Determine current style based ONLY on isSelected
     Color? cardBackgroundColor;
-    BorderSide cardBorderStyle;
 
     if (widget.isSelected) {
       // Use the renamed style for selection
       cardBackgroundColor = selectedStyle.color;
-      cardBorderStyle = selectedStyle.border;
     } else {
       // Use default style otherwise
       cardBackgroundColor = defaultStyle.color;
-      cardBorderStyle = defaultStyle.border;
     }
 
     // Debug logging for memo card rendering
@@ -377,15 +373,7 @@ child: Card(
           onDoubleTap: kIsWeb ? _showContextMenu : null,
           onTapDown: _storePosition,
           // Add onHighlightChanged callback
-          onHighlightChanged: (bool highlighting) {
-            if (mounted) {
-              // Ensure widget is still in the tree
-              setState(() {
-                _isPressed = highlighting;
-              });
-            }
-          },
-
+          // Removed onHighlightChanged callback as it was only setting an unused variable
           borderRadius: BorderRadius.circular(10),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(
