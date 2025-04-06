@@ -62,9 +62,9 @@ void main() {
       ),
     );
 
-    // Settle for animations
-    await tester.pumpAndSettle();
-    // await tester.pump(const Duration(milliseconds: 50)); // REMOVED: This might allow post-frame callback to reset highlight before assertion
+    // IMPORTANT: Just pump once to render the frame, but don't wait for animations
+    // or post-frame callbacks that would reset the highlight state
+    await tester.pump();
 
     // Find the Card within the CommentCard
     final cardFinder = find.descendant(
@@ -74,6 +74,7 @@ void main() {
     expect(cardFinder, findsOneWidget);
 
     // Check that the card has the highlighted style
+    // This must happen before the post-frame callback resets the highlight state
     final card = tester.widget<Card>(cardFinder);
     final theme = Theme.of(tester.element(cardFinder)); // Get theme context
 
@@ -120,17 +121,32 @@ void main() {
     // final expectedColor = expectedHighlightBorder.color;
     // expect(actualColor, expectedColor, reason: 'Highlighted border color mismatch (Theme: ${theme.brightness})');
 
-
-    // Wait for post-frame callback to reset highlight state
+    // Now pump again to let the post-frame callback execute
     await tester.pump();
 
-    // Verify the provider has been reset to null (need to use a ProviderContainer)
-    final container = ProviderContainer();
-    addTearDown(container.dispose);
-    
-    // Check that the provider is reset after the card is shown
-    // Note: This is a simplification as we can't easily check the state inside the widget's scope
-    expect(container.read(highlightedCommentIdProvider), isNull);
+    // Verify the post-frame callback has reset the highlight as expected
+    final ref = ProviderContainer(
+      overrides: [
+        highlightedCommentIdProvider.overrideWith((_) => 'test-comment-id'),
+        urlLauncherServiceProvider.overrideWithValue(mockUrlLauncherService),
+      ],
+    );
+    final highlightedAfterCallback = ref.read(highlightedCommentIdProvider);
+    expect(
+      highlightedAfterCallback,
+      isNull,
+      reason: 'Highlight should be reset after post-frame callback',
+    );
+
+    // Get the card again and verify it's no longer highlighted (optional verification)
+    final cardAfterCallback = tester.widget<Card>(cardFinder);
+    final borderAfterCallback =
+        (cardAfterCallback.shape as RoundedRectangleBorder).side;
+    expect(
+      borderAfterCallback.width,
+      0.0,
+      reason: 'Border should be reset after highlight is cleared',
+    );
   });
 
   testWidgets('CommentCard shows normal styling when not highlighted',
