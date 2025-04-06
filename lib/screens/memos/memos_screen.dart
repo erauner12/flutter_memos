@@ -66,6 +66,44 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
       }
     }
   }
+  
+  // Build the AppBar when in multi-select mode
+  AppBar _buildMultiSelectAppBar(int selectedCount) {
+    return AppBar(
+      leading: IconButton(
+        icon: const Icon(Icons.close),
+        tooltip: 'Cancel Selection',
+        onPressed: () => ref.read(ui_providers.toggleMemoMultiSelectModeProvider)(),
+      ),
+      title: Text('$selectedCount Selected'),
+      actions: [
+        // Delete button
+        IconButton(
+          icon: const Icon(Icons.delete),
+          tooltip: 'Delete Selected',
+          onPressed: selectedCount > 0
+            ? () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Delete action not implemented yet')),
+                );
+              }
+            : null,
+        ),
+        // Archive button
+        IconButton(
+          icon: const Icon(Icons.archive),
+          tooltip: 'Archive Selected',
+          onPressed: selectedCount > 0
+            ? () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Archive action not implemented yet')),
+                );
+              }
+            : null,
+        ),
+      ],
+    );
+  }
 
   // Pull to refresh handler
   Future<void> _onRefresh() async {
@@ -106,7 +144,7 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
     }
   }
 
-void _selectPreviousMemo() {
+  void _selectPreviousMemo() {
     final memos = ref.read(filteredMemosProvider);
     if (kDebugMode) {
       print('[MemosScreen _selectPreviousMemo] Called. Filtered memos count: ${memos.length}');
@@ -149,7 +187,7 @@ void _selectPreviousMemo() {
     }
   }
 
-void _clearSelectionOrUnfocus() {
+  void _clearSelectionOrUnfocus() {
     final selectedId = ref.read(ui_providers.selectedMemoIdProvider);
     if (selectedId != null) {
       if (kDebugMode) {
@@ -191,48 +229,61 @@ void _clearSelectionOrUnfocus() {
   Widget build(BuildContext context) {
     // Watch the memos notifier state
     final memosState = ref.watch(memosNotifierProvider);
-
+  
     // Watch visible memos list (filtered by hiddenMemoIds)
     final visibleMemos = ref.watch(visibleMemosListProvider);
-
+  
     // Watch current filter
     final currentFilter = ref.watch(filterKeyProvider);
     
+    // Watch multi-select mode and selected IDs
+    final isMultiSelectMode = ref.watch(ui_providers.memoMultiSelectModeProvider);
+    final selectedIds = ref.watch(ui_providers.selectedMemoIdsForMultiSelectProvider);
+    
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Memos (${currentFilter.toUpperCase()})'),
-        actions: [
-          // Advanced filter button
-          IconButton(
-            icon: const Icon(Icons.tune),
-            tooltip: 'Advanced Filters',
-            onPressed: () => _showAdvancedFilterPanel(context),
+      appBar: isMultiSelectMode
+        ? _buildMultiSelectAppBar(selectedIds.length)
+        : AppBar(
+            title: Text('Memos (${currentFilter.toUpperCase()})'),
+            actions: [
+              // Multi-select button
+              IconButton(
+                icon: const Icon(Icons.select_all),
+                tooltip: 'Select Memos',
+                onPressed: () => ref.read(ui_providers.toggleMemoMultiSelectModeProvider)(),
+              ),
+              
+              // Advanced filter button
+              IconButton(
+                icon: const Icon(Icons.tune),
+                tooltip: 'Advanced Filters',
+                onPressed: () => _showAdvancedFilterPanel(context),
+              ),
+              
+              // Filter dropdown
+              _buildFilterButton(),
+  
+              // Create new memo button
+              IconButton(
+                icon: const Icon(Icons.add),
+                tooltip: 'New Memo',
+                onPressed: () {
+                  Navigator.pushNamed(context, '/new-memo').then((_) {
+                    // Refresh list when returning from create screen
+                    ref.read(memosNotifierProvider.notifier).refresh();
+                  });
+                },
+              ),
+            ],
+            // Add search bar in the app bar bottom
+            bottom: PreferredSize(
+              preferredSize: const Size.fromHeight(56.0),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16.0, 0.0, 16.0, 8.0),
+                child: _buildSearchBar(),
+              ),
+            ),
           ),
-          
-          // Filter dropdown
-          _buildFilterButton(),
-
-          // Create new memo button
-          IconButton(
-            icon: const Icon(Icons.add),
-            tooltip: 'New Memo',
-            onPressed: () {
-              Navigator.pushNamed(context, '/new-memo').then((_) {
-                // Refresh list when returning from create screen
-                ref.read(memosNotifierProvider.notifier).refresh();
-              });
-            },
-          ),
-        ],
-        // Add search bar in the app bar bottom
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(56.0),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16.0, 0.0, 16.0, 8.0),
-            child: _buildSearchBar(),
-          ),
-        ),
-      ),
       body: Focus(
         // Wrap the body
         focusNode: _focusNode,
@@ -241,39 +292,40 @@ void _clearSelectionOrUnfocus() {
         child: Column(
           children: [
             // Filter chips can go here (if needed in the future)
-
+  
             // Main list of memos
             Expanded(child: _buildMemosList(memosState, visibleMemos)),
           ],
         ),
       ),
-      floatingActionButton: Column(
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
-          // Advanced filter button
-          FloatingActionButton.small(
-            heroTag: 'advancedFilterFAB',
-            onPressed: () => _showAdvancedFilterPanel(context),
-            tooltip: 'Advanced Filters',
-            child: const Icon(Icons.filter_alt),
+      floatingActionButton: isMultiSelectMode
+        ? null // Hide FAB in multi-select mode
+        : Column(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              // Advanced filter button
+              FloatingActionButton.small(
+                heroTag: 'advancedFilterFAB',
+                onPressed: () => _showAdvancedFilterPanel(context),
+                tooltip: 'Advanced Filters',
+                child: const Icon(Icons.filter_alt),
+              ),
+              const SizedBox(height: 16),
+              // Add new memo button
+              FloatingActionButton(
+                heroTag: 'newMemoFAB',
+                onPressed: () {
+                  Navigator.pushNamed(context, '/new-memo').then((_) {
+                    ref.read(memosNotifierProvider.notifier).refresh();
+                  });
+                },
+                tooltip: 'New Memo',
+                child: const Icon(Icons.add),
+              ),
+            ],
           ),
-          const SizedBox(height: 16),
-          // Add new memo button
-          FloatingActionButton(
-            heroTag: 'newMemoFAB',
-            onPressed: () {
-              Navigator.pushNamed(context, '/new-memo').then((_) {
-                ref.read(memosNotifierProvider.notifier).refresh();
-              });
-            },
-            tooltip: 'New Memo',
-            child: const Icon(Icons.add),
-          ),
-        ],
-      ),
     );
   }
-
   void _showAdvancedFilterPanel(BuildContext context) {
     // Show the advanced filter panel as a modal bottom sheet
     showModalBottomSheet(
