@@ -234,25 +234,23 @@ class _MemoCardState extends State<MemoCard> {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
     // Define styles for different states
+    // Rename pressedStyle to selectedStyle for PERSISTENT selection
     final selectedStyle = (
-      color: isDarkMode ? const Color(0xFF3A3A3A) : Colors.blue.shade50,
-      border: BorderSide(
-        color: kDebugMode ? Colors.red : Theme.of(context).colorScheme.primary,
-        width: kDebugMode ? 3 : 2,
-      ),
-    );
-    // Define a distinct style for the transient pressed state
-    final pressedStyle = (
       color:
           isDarkMode
               ? Colors.grey.shade700.withOpacity(0.6)
-              : Colors.grey.shade300, // Subtler highlight
+              : Colors.grey.shade300,
       border: BorderSide(
-        // Thinner border for press
         color: Theme.of(context).colorScheme.outline.withOpacity(0.5),
         width: 1,
       ),
     );
+    // REMOVE the original selectedStyle definition (prominent border)
+    // final selectedStyle = ( ... ); // This block is removed
+
+    // Define a distinct style for the transient pressed state - Handled by InkWell default now
+    // final pressedStyle = ( ... ); // This block is removed
+
     final defaultStyle = (
       color: isDarkMode ? const Color(0xFF262626) : null, // Default card color
       border:
@@ -261,17 +259,16 @@ class _MemoCardState extends State<MemoCard> {
               : BorderSide.none,
     );
 
-    // Determine current style based on isSelected and _isPressed
+    // Determine current style based ONLY on isSelected
     Color? cardBackgroundColor;
     BorderSide cardBorderStyle;
 
     if (widget.isSelected) {
+      // Use the renamed style for selection
       cardBackgroundColor = selectedStyle.color;
       cardBorderStyle = selectedStyle.border;
-    } else if (_isPressed) {
-      cardBackgroundColor = pressedStyle.color;
-      cardBorderStyle = pressedStyle.border;
     } else {
+      // Use default style otherwise
       cardBackgroundColor = defaultStyle.color;
       cardBorderStyle = defaultStyle.border;
     }
@@ -388,9 +385,7 @@ child: Card(
               });
             }
           },
-          // Make InkWell's own highlight/splash transparent
-          highlightColor: Colors.transparent,
-          splashColor: Colors.transparent,
+
           borderRadius: BorderRadius.circular(10),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(
