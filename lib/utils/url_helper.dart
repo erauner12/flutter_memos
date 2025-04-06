@@ -1,12 +1,13 @@
-import 'dart:io' show Platform; // Added to check platform
+import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // Added for Clipboard
+import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart' as url_launcher;
 
+/// Helper class for handling URLs
 class UrlHelper {
-  /// Launch URL in browser or handle custom schemes
+  /// Launch a URL and return whether the operation was successful
   static Future<bool> launchUrl(String url, {BuildContext? context}) async {
     if (kDebugMode) {
       print('[URL] Launching URL: $url');

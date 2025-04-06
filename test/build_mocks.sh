@@ -1,6 +1,7 @@
 #!/bin/bash
 
 echo "Generating mocks for tests..."
+echo "Make sure to run this after adding any new @GenerateNiceMocks annotations!"
 dart run build_runner build --delete-conflicting-outputs
 
 if [ $? -ne 0 ]; then
@@ -20,3 +21,4 @@ for file in $mock_files; do
 done
 
 echo "✅ Successfully generated all mocks."
+echo "New mocks added: url_launcher_service_test.mocks.dart"
