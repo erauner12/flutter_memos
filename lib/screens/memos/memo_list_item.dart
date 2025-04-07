@@ -103,10 +103,7 @@ class MemoListItemState extends ConsumerState<MemoListItem> {
     Navigator.of(
       context,
       rootNavigator: true,
-    ).pushNamed(
-      '/memo-detail',
-      arguments: {'memoId': widget.memo.id},
-    );
+    ).pushNamed('/memo-detail', arguments: {'memoId': widget.memo.id});
   }
 
   // Removed unused _onCopy method
@@ -134,9 +131,7 @@ class MemoListItemState extends ConsumerState<MemoListItem> {
   }
 
   void _onEdit(BuildContext context) {
-    Navigator.of(
-      context,
-      rootNavigator: true).pushNamed(
+    Navigator.of(context, rootNavigator: true).pushNamed(
       '/edit-entity', // Use the generic route
       arguments: {
         'entityType': 'memo',
@@ -167,7 +162,6 @@ class MemoListItemState extends ConsumerState<MemoListItem> {
           ],
         );
       },
-
     );
 
     if (confirm == true && mounted) {
@@ -209,7 +203,7 @@ class MemoListItemState extends ConsumerState<MemoListItem> {
                       onPressed: () => Navigator.of(ctx).pop(),
                     ),
                   ],
-            ),
+                ),
           );
         }
 
@@ -237,7 +231,7 @@ class MemoListItemState extends ConsumerState<MemoListItem> {
     // Watch for selected memo ID instead of index
     final selectedMemoId = ref.watch(ui_providers.selectedMemoIdProvider);
     final isSelected = selectedMemoId == widget.memo.id;
-  
+
     // Watch for multi-select mode
     final isMultiSelectMode = ref.watch(
       ui_providers.memoMultiSelectModeProvider,
@@ -246,13 +240,13 @@ class MemoListItemState extends ConsumerState<MemoListItem> {
       ui_providers.selectedMemoIdsForMultiSelectProvider,
     );
     final isMultiSelected = selectedIds.contains(widget.memo.id);
-  
+
     if (isSelected && kDebugMode) {
       print(
         '[MemoListItem] Memo ID ${widget.memo.id} at index ${widget.index} is selected',
       );
     }
-  
+
     // Create the main card content
     Widget cardContent = MemoCard(
       key: _memoCardKey, // Pass the key here
@@ -261,12 +255,15 @@ class MemoListItemState extends ConsumerState<MemoListItem> {
       pinned: widget.memo.pinned,
       updatedAt: widget.memo.updateTime,
       showTimeStamps: true,
-      isSelected: isSelected && !isMultiSelectMode, // Only show selection style if not in multi-select
+      isSelected:
+          isSelected &&
+          !isMultiSelectMode, // Only show selection style if not in multi-select
       highlightTimestamp: MemoUtils.formatTimestamp(widget.memo.updateTime),
       timestampType: 'Updated', // Always 'Updated'
-      onTap: isMultiSelectMode
-          ? () => _toggleMultiSelection(widget.memo.id)
-          : () => _navigateToMemoDetail(context, ref),
+      onTap:
+          isMultiSelectMode
+              ? () => _toggleMultiSelection(widget.memo.id)
+              : () => _navigateToMemoDetail(context, ref),
       onArchive: () => _onArchive(context),
       onDelete: () => _onDelete(context),
       onHide: () => _toggleHideMemo(context, ref),
@@ -293,13 +290,15 @@ class MemoListItemState extends ConsumerState<MemoListItem> {
                         onPressed: () => Navigator.of(ctx).pop(),
                       ),
                     ],
-              ),
+                  ),
             );
           }
         }
       },
+      // Pass the onMoveToServer callback from widget to MemoCard
+      onMoveToServer: widget.onMoveToServer,
     );
-  
+
     // In multi-select mode, return a completely different widget structure without Slidable/Dismissible
     if (isMultiSelectMode) {
       // Add extra visual indicator for multi-selected items
@@ -319,7 +318,7 @@ class MemoListItemState extends ConsumerState<MemoListItem> {
           child: cardContent,
         );
       }
-  
+
       // Return a Row directly with Checkbox instead of wrapping with Dismissible/Slidable
       return Padding(
         padding: const EdgeInsets.only(bottom: 12.0),
@@ -341,7 +340,7 @@ class MemoListItemState extends ConsumerState<MemoListItem> {
         ),
       );
     }
-  
+
     // In normal mode, wrap ONLY with Slidable (Dismissible removed)
     return Slidable(
       key: ValueKey('slidable-${widget.memo.id}'),
