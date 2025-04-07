@@ -296,6 +296,12 @@ class MemoCardState extends ConsumerState<MemoCard> {
         onTap: widget.onTap,
         onDoubleTap: kIsWeb ? showContextMenu : null,
         onTapDown: storePosition,
+        // Explicitly ignore vertical drags on this detector to let the parent scroll view handle them.
+        onVerticalDragStart: null,
+        onVerticalDragUpdate: null,
+        onVerticalDragEnd: null,
+        behavior:
+            HitTestBehavior.opaque, // Ensure taps are still captured correctly
         child: Padding(
           padding: const EdgeInsets.fromLTRB(
             16.0,
@@ -321,8 +327,9 @@ class MemoCardState extends ConsumerState<MemoCard> {
                 ),
               MarkdownBody(
                 data: widget.content,
-                selectable: true,
-                shrinkWrap: true,
+                selectable: false, // Temporarily disable selection for testing
+                shrinkWrap: true, // Ensure this is true to fit content height
+                // physics: NeverScrollableScrollPhysics(), // REMOVED: MarkdownBody doesn't take physics
                 styleSheet: MarkdownStyleSheet.fromCupertinoTheme(theme)
                     .copyWith(
                   p: theme.textTheme.textStyle.copyWith(
