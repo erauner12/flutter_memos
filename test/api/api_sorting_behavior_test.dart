@@ -31,7 +31,7 @@ void main() {
         return;
       }
 
-      // First, fetch memos sorted by update time
+      // First, fetch memos sorted by updateTime
       final memosByUpdateTime = await apiService.listMemos(
         parent: 'users/1', // Specify the user ID
         sort: 'updateTime',
@@ -71,10 +71,12 @@ void main() {
                 : DateTime.fromMillisecondsSinceEpoch(0);
 
         // Descending order check (current time should be >= next time)
-        if (currentTime.isBefore(nextTime)) {
+        // Corrected: Use isAfter or isAtSameMomentAs for descending check
+        if (!(currentTime.isAfter(nextTime) ||
+            currentTime.isAtSameMomentAs(nextTime))) {
           clientSortedCorrectly = false;
           print(
-            'Client sorting error at index $i: ${currentMemo.id} (${currentTime.toIso8601String()}) vs ${nextMemo.id} (${nextTime.toIso8601String()})',
+            'Client sorting error at index $i: ${currentMemo.id} (${currentTime.toIso8601String()}) should be >= ${nextMemo.id} (${nextTime.toIso8601String()})',
           );
           break;
         }
@@ -87,7 +89,7 @@ void main() {
       expect(
         clientSortedCorrectly,
         isTrue,
-        reason: 'Client should sort correctly by updateTime',
+        reason: 'Client should sort correctly by updateTime (DESCENDING)',
       );
     });
 
@@ -179,12 +181,12 @@ void main() {
                 : DateTime.fromMillisecondsSinceEpoch(0);
 
         // Descending order check (current time should be >= next time)
+        // Use expect directly with the correct condition
         expect(
-          currentTime.isAfter(nextTime) ||
-              currentTime.isAtSameMomentAs(nextTime),
+          currentTime.isAfter(nextTime) || currentTime.isAtSameMomentAs(nextTime),
           isTrue,
           reason:
-              'Client-side sorting should properly sort by updateTime (newest first). Failed at index $i: ${currentMemo.id} (${currentTime.toIso8601String()}) vs ${nextMemo.id} (${nextTime.toIso8601String()})',
+              'Client-side sorting should properly sort by updateTime (DESCENDING - newest first). Failed at index $i: ${currentMemo.id} (${currentTime.toIso8601String()}) vs ${nextMemo.id} (${nextTime.toIso8601String()})',
         );
       }
 
