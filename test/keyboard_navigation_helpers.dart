@@ -22,7 +22,11 @@ Future<void> focusTextFieldAndWait(
   await tester.pumpAndSettle();
   
   // Verify that the text field has focus
-  final focusNode = Focus.of(tester.element(textFieldFinder));
+  // Get the TextField widget and its FocusNode directly
+  final textField = tester.widget<TextField>(textFieldFinder);
+  final focusNode =
+      textField.focusNode ??
+      Focus.of(tester.element(textFieldFinder)); // Fallback just in case
   expect(focusNode.hasFocus, isTrue, reason: 'Text field should have focus');
 }
 

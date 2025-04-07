@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 /// A custom context menu for memo actions
 class MemoContextMenu extends StatelessWidget {
@@ -14,9 +13,9 @@ class MemoContextMenu extends StatelessWidget {
   final VoidCallback? onHide;
   final VoidCallback? onPin;
   final VoidCallback? onCopy;
-  final VoidCallback? onCopyLink; // Add this parameter
+  final VoidCallback? onCopyLink;
   final VoidCallback? onClose;
-  final VoidCallback? onBump; // Add onBump callback
+  final VoidCallback? onBump;
   final BuildContext parentContext;
   final ScrollController? scrollController;
 
@@ -34,9 +33,9 @@ class MemoContextMenu extends StatelessWidget {
     this.onHide,
     this.onPin,
     this.onCopy,
-    this.onCopyLink, // Include in constructor
+    this.onCopyLink,
     this.onClose,
-    this.onBump, // Add onBump to constructor
+    this.onBump,
   });
 
   @override
@@ -153,18 +152,11 @@ class MemoContextMenu extends StatelessWidget {
                       isDarkMode: isDarkMode,
                     ),
                     _buildMenuItem(
-                      key: const Key('copy_link_menu_item'), // Add key here
+                      key: const Key('copy_link_menu_item'),
                       icon: Icons.link,
                       label: 'Copy Link',
                       onTap: onCopyLink,
-                        final url = 'flutter-memos://memo/$memoId';
-                        await Clipboard.setData(ClipboardData(text: url));
-                        if (onCopyLink != null) {
-                          onCopyLink!();
-                        }
-                      },
                       isDarkMode: isDarkMode,
-                      key: const Key('copy_link_menu_item'),
                     ),
 
                     Divider(

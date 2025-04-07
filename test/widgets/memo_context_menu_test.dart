@@ -37,14 +37,18 @@ void main() {
         MaterialApp(
           home: Scaffold(
             body: Builder(
+                // Wrap in Center to ensure it's laid out reasonably
               builder: (context) {
-                return MemoContextMenu(
-                  memoId: testMemoId,
-                  isPinned: false,
-                  position: const Offset(0, 0),
-                  parentContext: context,
-                  onCopyLink: () => copyLinkTapped = true,
-                  onClose: () {},
+                  return Center(
+                    // Add Center
+                    child: MemoContextMenu(
+                      memoId: testMemoId,
+                      isPinned: false,
+                      position: const Offset(0, 0),
+                      parentContext: context,
+                      onCopyLink: () => copyLinkTapped = true,
+                      onClose: () {},
+                    ),
                 );
               },
             ),
@@ -62,8 +66,8 @@ void main() {
         // Tap only once
         await tester.tap(copyLinkFinder);
       
-        // Add a small delay to allow the async Clipboard.setData operation to complete
-        await tester.pump(const Duration(milliseconds: 50));
+        // Pump slightly longer to ensure callbacks and async operations complete
+        await tester.pump(const Duration(milliseconds: 100));
         // Ensure all microtasks and animations are finished after the delay
         await tester.pumpAndSettle();
       
