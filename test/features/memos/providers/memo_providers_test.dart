@@ -3,7 +3,8 @@ import 'package:flutter_memos/models/memo.dart';
 import 'package:flutter_memos/providers/api_providers.dart';
 import 'package:flutter_memos/providers/filter_providers.dart' as filters;
 import 'package:flutter_memos/providers/memo_providers.dart';
-import 'package:flutter_memos/services/api_service.dart'; // Import ApiService
+import 'package:flutter_memos/services/api_service.dart'
+    as api_service; // Import ApiService
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/annotations.dart'; // Add Mockito annotation import
@@ -13,7 +14,7 @@ import 'package:mockito/mockito.dart'; // Add Mockito import
 import 'memo_providers_test.mocks.dart';
 
 // Annotation to generate nice mock for ApiService
-@GenerateNiceMocks([MockSpec<ApiService>()])
+@GenerateNiceMocks([MockSpec<api_service.ApiService>()])
 // Mock Notifier extending the actual Notifier
 class MockMemosNotifier extends MemosNotifier {
   MockMemosNotifier(super.ref, MemosState initialState)
@@ -99,7 +100,10 @@ void main() {
         ),
       ).thenAnswer((invocation) async {
         // Return the list in PaginatedMemoResponse
-        return PaginatedMemoResponse(memos: memos, nextPageToken: null);
+        return api_service.PaginatedMemoResponse(
+          memos: memos,
+          nextPageToken: null,
+        );
       });
 
       // Stub getMemo
@@ -121,7 +125,6 @@ void main() {
       // Stub deleteMemo
       when(mockApiService.deleteMemo(any)).thenAnswer((_) async => {});
 
-      // Create container with overrides
       container = ProviderContainer(
         overrides: [
           apiServiceProvider.overrideWithValue(mockApiService),
@@ -399,6 +402,25 @@ void main() {
         expect(capturedUnpinMemo.pinned, isFalse);
       },
     );
+    
+    // Add the new test case here
+    test('MemosNotifier.removeMemoOptimistically removes memo from state', () {
+      // Arrange
+      final notifier = container.read(memosNotifierProvider.notifier) as MockMemosNotifier; // Cast to mock
+      final initialMemoCount = notifier.state.memos.length;
+      final memoIdToRemove = memos[1].id; // Remove the second memo ('2')
 
+      // Pre-condition check
+      expect(notifier.state.memos.any((m) => m.id == memoIdToRemove), isTrue);
+
+      // Act
+      notifier.removeMemoOptimistically(memoIdToRemove);
+
+      // Assert
+      final finalState = notifier.state; // Read state after action
+      expect(finalState.memos.length, equals(initialMemoCount - 1));
+      expect(finalState.memos.any((m) => m.id == memoIdToRemove), isFalse);
+    });
+    
   });
 }
