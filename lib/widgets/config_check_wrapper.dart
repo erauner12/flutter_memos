@@ -9,6 +9,7 @@ class ConfigCheckWrapper extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Watch the loading state first
     final configLoadState = ref.watch(loadServerConfigProvider);
 
     return configLoadState.when(
@@ -29,14 +30,15 @@ class ConfigCheckWrapper extends ConsumerWidget {
       ),
       data: (_) {
         // Config loaded (or attempted), now check the actual config state
-        final serverConfig = ref.watch(serverConfigProvider);
+        // Watch the multi-server state
+        final multiServerConfig = ref.watch(multiServerConfigProvider);
 
-        // Determine if this is the initial setup scenario
-        final bool isInitialSetup = serverConfig.serverUrl.isEmpty;
+        // Determine if this is the initial setup scenario (no servers configured)
+        final bool isInitialSetup = multiServerConfig.servers.isEmpty;
 
         if (isInitialSetup) {
           // Not configured, show settings screen for initial setup
-          // Pass a flag to SettingsScreen if needed to adjust UI
+          // Pass a flag to SettingsScreen
           return const SettingsScreen(isInitialSetup: true);
         } else {
           // Configured, show main app home screen

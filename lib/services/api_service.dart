@@ -5,6 +5,7 @@ import 'package:flutter_memos/api/lib/api.dart';
 import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/models/memo.dart';
 import 'package:flutter_memos/models/memo_relation.dart';
+import 'package:flutter_memos/models/server_config.dart'; // Add this import
 import 'package:flutter_memos/utils/env.dart';
 import 'package:flutter_memos/utils/filter_builder.dart';
 import 'package:flutter_memos/utils/memo_utils.dart';
@@ -394,27 +395,110 @@ class ApiService {
     }
   }
 
-  /// Create a new memo
-  Future<Memo> createMemo(Memo memo) async {
+  /// Create a new memo, optionally targeting a specific server
+  Future<Memo> createMemo(
+    Memo memo, {
+    ServerConfig? targetServerOverride,
+  }) async {
+    MemoServiceApi memoApiToUse = _memoApi; // Default to the main instance
+    String serverIdentifier = 'active server'; // For logging
+
+    // If a specific server override is provided, create a temporary client
+    if (targetServerOverride != null) {
+      // Only create a new client if the override differs from the current base URL/token
+      // (Simple check, assumes _baseUrl and _authToken reflect the active config)
+      if (targetServerOverride.serverUrl != _baseUrl ||
+          targetServerOverride.authToken != _authToken) {
+        serverIdentifier = targetServerOverride.name ?? targetServerOverride.id;
+        if (verboseLogging) {
+          print(
+            '[API] Creating temporary API client for createMemo on target server: $serverIdentifier',
+          );
+        }
+        try {
+          // Ensure URL is clean
+          String targetBaseUrl = targetServerOverride.serverUrl;
+          if (targetBaseUrl.toLowerCase().contains('/api/v1')) {
+            final apiIndex = targetBaseUrl.toLowerCase().indexOf('/api/v1');
+            targetBaseUrl = targetBaseUrl.substring(0, apiIndex);
+          } else if (targetBaseUrl.toLowerCase().endsWith('/memos')) {
+            targetBaseUrl = targetBaseUrl.substring(
+              0,
+              targetBaseUrl.length - 6,
+            );
+          }
+          if (targetBaseUrl.endsWith('/')) {
+            targetBaseUrl = targetBaseUrl.substring(
+              0,
+              targetBaseUrl.length - 1,
+            );
+          }
+
+          final tempApiClient = ApiClient(
+            basePath: targetBaseUrl, // Use target URL
+            authentication:
+                HttpBearerAuth()
+                  ..accessToken =
+                      targetServerOverride.authToken, // Use target token
+          );
+          memoApiToUse = MemoServiceApi(tempApiClient);
+        } catch (e) {
+          print(
+            '[API] Error creating temporary client for $serverIdentifier: $e',
+          );
+          throw Exception(
+            'Failed to configure API client for target server: $e',
+          );
+        }
+      } else {
+        if (verboseLogging) {
+          print(
+            '[API] Target server override matches active config, using default client.',
+          );
+        }
+      }
+    }
+
     try {
       final apiMemo = Apiv1Memo(
         content: memo.content,
         pinned: memo.pinned,
         state: _getMemoState(memo.state),
         visibility: _getApiVisibility(memo.visibility),
-        creator: memo.creator ?? 'users/1',
+        // Assuming creator is handled by the server or defaults correctly
+        // creator: memo.creator ?? 'users/1', // Be careful about setting creator explicitly
+        // TODO: Handle resources if needed for creation
+        // resources: [],
       );
 
-      final response = await _memoApi.memoServiceCreateMemo(apiMemo);
-
-      if (response == null) {
-        throw Exception('Failed to create memo: No response from server');
+      if (verboseLogging) {
+        print('[API] Sending createMemo request to $serverIdentifier');
       }
 
+      // Use the determined memoApiToUse instance
+      final response = await memoApiToUse.memoServiceCreateMemo(apiMemo);
+
+      if (response == null) {
+        throw Exception(
+          'Failed to create memo: No response from server $serverIdentifier',
+        );
+      }
+
+      if (verboseLogging) {
+        print(
+          '[API] Memo created successfully on $serverIdentifier with ID: ${_extractIdFromName(response.name ?? "")}',
+        );
+      }
       return _convertApiMemoToAppMemo(response);
     } catch (e) {
-      print('[API] Error creating memo: $e');
-      throw Exception('Failed to create memo: $e');
+      print('[API] Error creating memo on $serverIdentifier: $e');
+      // Consider logging the payload or specific error details if possible
+      if (e is ApiException) {
+        print(
+          '[API] ApiException details: Code=${e.code}, Message=${e.message}, Inner=${e.innerException}, Stack=${e.stackTrace}',
+        );
+      }
+      throw Exception('Failed to create memo on $serverIdentifier: $e');
     }
   }
 
