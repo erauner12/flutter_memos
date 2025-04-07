@@ -8,37 +8,37 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('MemoContextMenu Tests', () {
-    testWidgets('MemoContextMenu "Copy Link" option copies correct URL to clipboard', (
-      WidgetTester tester,
-    ) async {
-      const testMemoId = 'test-memo-id';
-      const testUrl = 'flutter-memos://memo/test-memo-id';
-      bool copyLinkTapped = false;
+    testWidgets(
+      'MemoContextMenu "Copy Link" option copies correct URL to clipboard',
+      (WidgetTester tester) async {
+        const testMemoId = 'test-memo-id';
+        const testUrl = 'flutter-memos://memo/test-memo-id';
+        bool copyLinkTapped = false;
 
-      // Set up mock method call handler for Clipboard
-      List<MethodCall> log = <MethodCall>[];
-      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
-        SystemChannels.platform,
-        (MethodCall methodCall) async {
-          log.add(methodCall);
-          if (methodCall.method == 'Clipboard.setData') {
-            // Simulate success for setData
+        // Set up mock method call handler for Clipboard
+        List<MethodCall> log = <MethodCall>[];
+        tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.platform,
+          (MethodCall methodCall) async {
+            log.add(methodCall);
+            if (methodCall.method == 'Clipboard.setData') {
+              // Simulate success for setData
+              return null;
+            }
+            // Handle other potential platform calls if necessary, otherwise return null
             return null;
-          }
-          // Handle other potential platform calls if necessary, otherwise return null
-          return null;
-        },
-      );
+          },
+        );
 
-      // Since MemoContextMenu is usually shown in a modal bottom sheet,
+        // Since MemoContextMenu is usually shown in a modal bottom sheet,
         // we'll create a wrapper to display it directly for testing.
         // Pump the widget *after* setting the mock handler.
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: Builder(
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: Builder(
                 // Wrap in Center to ensure it's laid out reasonably
-              builder: (context) {
+                builder: (context) {
                   return Center(
                     // Add Center
                     child: MemoContextMenu(
@@ -49,28 +49,36 @@ void main() {
                       onCopyLink: () => copyLinkTapped = true,
                       onClose: () {},
                     ),
-                );
-              },
+                  );
+                },
+              ),
             ),
           ),
-        ),
-      );
+        );
 
-      // Allow the widget to render
-      await tester.pumpAndSettle();
+        // Allow the widget to render
+        await tester.pumpAndSettle();
 
-      // Find and tap the "Copy Link" menu item
-      final copyLinkFinder = find.byKey(const Key('copy_link_menu_item'));
-      expect(copyLinkFinder, findsOneWidget, reason: 'Copy Link menu item should be visible');
-      
+        // Find and tap the "Copy Link" menu item
+        final copyLinkFinder = find.byKey(const Key('copy_link_menu_item'));
+        expect(
+          copyLinkFinder,
+          findsOneWidget,
+          reason: 'Copy Link menu item should be visible',
+        );
+
+        // Ensure the item is visible before tapping
+        await tester.ensureVisible(copyLinkFinder);
+        await tester.pumpAndSettle(); // Wait for scroll animation
+
         // Tap only once
         await tester.tap(copyLinkFinder);
-      
+
         // Pump slightly longer to ensure callbacks and async operations complete
         await tester.pump(const Duration(milliseconds: 100));
         // Ensure all microtasks and animations are finished after the delay
         await tester.pumpAndSettle();
-      
+
         // Filter the log for Clipboard.setData calls
         final clipboardCalls =
             log.where((call) => call.method == 'Clipboard.setData').toList();
@@ -88,15 +96,20 @@ void main() {
           reason: 'Clipboard.setData should be called with the correct URL',
         );
 
-      // Verify the callback was triggered
-      expect(copyLinkTapped, isTrue, reason: 'onCopyLink callback should have been called');
+        // Verify the callback was triggered
+        expect(
+          copyLinkTapped,
+          isTrue,
+          reason: 'onCopyLink callback should have been called',
+        );
 
-      // Clear the handler after the test
-      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
-        SystemChannels.platform,
-        null,
-      );
-    });
+        // Clear the handler after the test
+        tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.platform,
+          null,
+        );
+      },
+    );
 
     testWidgets('MemoContextMenu should display all expected menu options', (
       WidgetTester tester,
@@ -128,7 +141,10 @@ void main() {
       // Verify all expected menu items are present
       expect(find.text('View Memo'), findsOneWidget);
       expect(find.text('Edit'), findsOneWidget);
-      expect(find.text('Pin'), findsOneWidget); // Should be "Pin" since isPinned is false
+      expect(
+        find.text('Pin'),
+        findsOneWidget,
+      ); // Should be "Pin" since isPinned is false
       expect(find.text('Bump'), findsOneWidget);
       expect(find.text('Archive'), findsOneWidget);
       expect(find.text('Hide'), findsOneWidget);
@@ -137,54 +153,61 @@ void main() {
       expect(find.text('Delete'), findsOneWidget);
     });
 
-    testWidgets('MemoContextMenu should toggle between Pin/Unpin based on isPinned', (
-      WidgetTester tester,
-    ) async {
-      const testMemoId = 'test-memo-id';
+    testWidgets(
+      'MemoContextMenu should toggle between Pin/Unpin based on isPinned',
+      (WidgetTester tester) async {
+        const testMemoId = 'test-memo-id';
 
-      // Test with isPinned = true
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: Builder(
-              builder: (context) {
-                return MemoContextMenu(
-                  memoId: testMemoId,
-                  isPinned: true, // Set to true
-                  position: const Offset(0, 0),
-                  parentContext: context,
-                  onClose: () {},
-                );
-              },
+        // Test with isPinned = true
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: Builder(
+                builder: (context) {
+                  return MemoContextMenu(
+                    memoId: testMemoId,
+                    isPinned: true, // Set to true
+                    position: const Offset(0, 0),
+                    parentContext: context,
+                    onClose: () {},
+                  );
+                },
+              ),
             ),
           ),
-        ),
-      );
+        );
 
-      await tester.pumpAndSettle();
-      expect(find.text('Unpin'), findsOneWidget); // Should show "Unpin" when isPinned is true
-      
-      // Rebuild with isPinned = false
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: Builder(
-              builder: (context) {
-                return MemoContextMenu(
-                  memoId: testMemoId,
-                  isPinned: false, // Set to false
-                  position: const Offset(0, 0),
-                  parentContext: context,
-                  onClose: () {},
-                );
-              },
+        await tester.pumpAndSettle();
+        expect(
+          find.text('Unpin'),
+          findsOneWidget,
+        ); // Should show "Unpin" when isPinned is true
+
+        // Rebuild with isPinned = false
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: Builder(
+                builder: (context) {
+                  return MemoContextMenu(
+                    memoId: testMemoId,
+                    isPinned: false, // Set to false
+                    position: const Offset(0, 0),
+                    parentContext: context,
+                    onClose: () {},
+                  );
+                },
+              ),
             ),
           ),
-        ),
-      );
+        );
 
-      await tester.pumpAndSettle();
-      expect(find.text('Pin'), findsOneWidget); // Should show "Pin" when isPinned is false
-    });
+        await tester.pumpAndSettle();
+        expect(
+          find.text('Pin'),
+          findsOneWidget,
+        ); // Should show "Pin" when isPinned is false
+      },
+    );
   });
 }

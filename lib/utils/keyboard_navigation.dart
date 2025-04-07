@@ -10,33 +10,37 @@ mixin KeyboardNavigationMixin<T extends ConsumerStatefulWidget>
   /// Checks if the currently focused node belongs to a text input widget.
   bool _isTextInputFocused([FocusNode? primaryFocus]) {
     final focusNode = primaryFocus ?? FocusManager.instance.primaryFocus;
-    if (focusNode == null || !focusNode.hasPrimaryFocus || focusNode.context == null) {
-      // If no primary focus or no context, assume not text input
+    if (focusNode == null ||
+        !focusNode.hasPrimaryFocus ||
+        focusNode.context == null) {
       if (kDebugMode) print('[_isTextInputFocused] No primary focus or context.');
       return false;
     }
 
-    final widget = focusNode.context!.widget;
-    final renderObject = focusNode.context!.findRenderObject();
+    // Attempt to find the associated widget more directly
+    Element? element = focusNode.context;
+    Widget? widget = element?.widget;
 
     if (kDebugMode) {
       print(
-        '[_isTextInputFocused] Checking Node: $focusNode, Widget: ${widget.runtimeType}, RenderObject: ${renderObject?.runtimeType}',
+        '[_isTextInputFocused] Checking Node: $focusNode, Element: ${element?.runtimeType}, Widget: ${widget?.runtimeType}',
       );
     }
 
-    // Most reliable checks first
+    // Check common text input widgets directly
     if (widget is EditableText || widget is TextField || widget is TextFormField) {
       if (kDebugMode) print('[KeyboardNavigation] Focused widget IS an EditableText/TextField/TextFormField.');
       return true;
     }
+
+    // Check the render object type as a fallback
+    final renderObject = element?.findRenderObject();
     if (renderObject is RenderEditable) {
        if (kDebugMode) print('[KeyboardNavigation] Focused RenderObject IS RenderEditable.');
       return true;
     }
 
-    // Check semantics node configuration for clues (might help in some cases)
-    // This might be less reliable across platforms/versions
+    // Check semantics as another fallback
     try {
        final semanticsNode = renderObject?.debugSemantics;
        if (semanticsNode != null && (semanticsNode.hasFlag(SemanticsFlag.isTextField) || semanticsNode.hasFlag(SemanticsFlag.isObscured))) {
@@ -44,26 +48,40 @@ mixin KeyboardNavigationMixin<T extends ConsumerStatefulWidget>
          return true;
        }
     } catch (e) {
-      // Ignore potential errors accessing debugSemantics
       if (kDebugMode) print('[KeyboardNavigation] Error checking semantics: $e');
     }
 
+    // If direct checks fail, traverse up to see if an ancestor is a text field
+    // This handles cases where focus might be on an internal helper widget
+    bool isTextInputAncestor = false;
+    element?.visitAncestorElements((ancestor) {
+      if (ancestor.widget is TextField ||
+          ancestor.widget is TextFormField ||
+          ancestor.widget is EditableText) {
+        if (kDebugMode) {
+          print(
+            '[KeyboardNavigation] Found text input ancestor: ${ancestor.widget.runtimeType}',
+          );
+        }
+        isTextInputAncestor = true;
+        return false; // Stop traversal
+      }
+      return true; // Continue traversal
+    });
 
-    // Fallback string check (less reliable)
-    final typeStr = widget.runtimeType.toString().toLowerCase();
-    final isPotentiallyTextInput = typeStr.contains('text') ||
-        typeStr.contains('edit') ||
-        typeStr.contains('field') ||
-        typeStr.contains('input');
-
-    if (isPotentiallyTextInput && kDebugMode) {
-      print('[KeyboardNavigation] Potential text input by type string: $typeStr. Returning $isPotentiallyTextInput.');
-    } else if (kDebugMode) {
-       print('[_isTextInputFocused] Focused widget/renderObject is not recognized as text input.');
+    if (isTextInputAncestor) {
+      return true;
     }
 
-    return isPotentiallyTextInput; // Return based on string check if other checks failed
+    if (kDebugMode) {
+      print(
+        '[_isTextInputFocused] Focused widget/ancestor is not recognized as text input.',
+      );
+    }
+
+    return false; // Default to false if no text input found
   }
+
 
   /// Handle a key event with standard navigation shortcuts
   KeyEventResult handleKeyEvent(KeyEvent event, WidgetRef ref, {

@@ -104,9 +104,9 @@ void main() {
       reason: 'Highlighted border style mismatch (Theme: ${theme.brightness})',
     );
 
-    // DO NOT pump again here. Check the state immediately after initial render.
+    // DO NOT pump again here. Assertions above check the highlighted state.
 
-    // Now pump and settle to allow the post-frame callback to execute
+    // Now pump and settle to allow the post-frame callback to execute and reset the highlight
     await tester.pumpAndSettle();
 
     // Get the card again AFTER the reset pump and verify it's no longer highlighted
