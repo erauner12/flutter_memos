@@ -108,21 +108,20 @@ void main() {
         ),
       ).thenAnswer((invocation) async {
         final memoArg = invocation.positionalArguments[0] as Memo;
-        // Return a memo with a new ID simulating creation
-        return memoArg.copyWith(id: 'new-${memoArg.id}');
+        // Return a memo with a new ID - just "new-" without the original ID
+        return memoArg.copyWith(id: 'new-');
       });
 
-      // Mock comment creation for both comments successfully by default
+      // Mock comment creation for both comments
       when(
         mockApiService.createMemoComment(
-          'new-${memoToMove.id}', // Use the expected new memo ID
+          'new-', // Use just "new-" as the new memo ID 
           any, // Match any Comment object
           targetServerOverride: destinationServer,
           resources: anyNamed('resources'),
         ),
       ).thenAnswer((invocation) async {
         final commentArg = invocation.positionalArguments[1] as Comment;
-        // Return the comment, potentially with a new ID if needed
         return commentArg.copyWith(id: 'new-${commentArg.id}');
       });
 
@@ -176,10 +175,10 @@ void main() {
           targetServerOverride: destinationServer,
         ),
       ).called(1);
-      // Verify comment creation for both comments
+      // Verify comment creation for both comments with correct memo ID
       verify(
         mockApiService.createMemoComment(
-          'new-${memoToMove.id}',
+          'new-', // Use just "new-" to match
           argThat(predicate<Comment>((c) => c.content == comment1.content)),
           targetServerOverride: destinationServer,
           resources: anyNamed('resources'),
@@ -187,7 +186,7 @@ void main() {
       ).called(1);
       verify(
         mockApiService.createMemoComment(
-          'new-${memoToMove.id}',
+          'new-', // Use just "new-" to match
           argThat(predicate<Comment>((c) => c.content == comment2.content)),
           targetServerOverride: destinationServer,
           resources: anyNamed('resources'),
@@ -274,7 +273,7 @@ void main() {
       // Make only the second comment fail
       when(
         mockApiService.createMemoComment(
-          'new-${memoToMove.id}',
+          'new-', // Use just "new-"
           argThat(predicate<Comment>((c) => c.content == comment2.content)),
           targetServerOverride: destinationServer,
           resources: anyNamed('resources'),
@@ -319,7 +318,7 @@ void main() {
       // Verify comment creation was attempted for both
       verify(
         mockApiService.createMemoComment(
-          'new-${memoToMove.id}',
+          'new-', // Use just "new-"
           argThat(predicate<Comment>((c) => c.content == comment1.content)),
           targetServerOverride: destinationServer,
           resources: anyNamed('resources'),
@@ -327,7 +326,7 @@ void main() {
       ).called(1); // First comment succeeded
       verify(
         mockApiService.createMemoComment(
-          'new-${memoToMove.id}',
+          'new-', // Use just "new-"
           argThat(predicate<Comment>((c) => c.content == comment2.content)),
           targetServerOverride: destinationServer,
           resources: anyNamed('resources'),
@@ -392,7 +391,7 @@ void main() {
       ).called(1);
       verify(
         mockApiService.createMemoComment(
-          'new-${memoToMove.id}',
+          'new-', // Use just "new-"
           any,
           targetServerOverride: destinationServer,
           resources: anyNamed('resources'),
