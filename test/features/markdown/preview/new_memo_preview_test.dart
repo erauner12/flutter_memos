@@ -4,12 +4,18 @@ import 'package:flutter_memos/screens/new_memo/new_memo_form.dart';
 import 'package:flutter_memos/services/url_launcher_service.dart'; // Import url launcher service
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+// Import mocks for this file (if any other mocks were needed)
+// import 'new_memo_preview_test.mocks.dart'; // Keep if other mocks are generated for this file specifically
+
+import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart'; // Import mockito
 
+import '../../../helpers/test_debug.dart'; // Go up two levels to reach test/helpers/
 // Import mocks
-import '../../../core/services/url_launcher_service_test.mocks.dart'; // Path to core service mocks
-import '../../../utils/test_debug.dart'; // Go up two levels to reach test/utils/
+import '../../../services/url_launcher_service_test.mocks.dart'; // Correct path to UrlLauncherService mock
 
+// Generate mock for UrlLauncherService if not already done elsewhere
+@GenerateNiceMocks([MockSpec<UrlLauncherService>()])
 void main() {
   group('NewMemoForm Markdown Preview Tests', () {
     late MockUrlLauncherService mockUrlLauncherService;

@@ -6,7 +6,7 @@ import 'package:mockito/mockito.dart';
 
 // Generate mock for the UrlLauncherService
 @GenerateNiceMocks([MockSpec<UrlLauncherService>()])
-import 'url_launcher_service_test.mocks.dart';
+import 'url_launcher_service_test.mocks.dart'; // Updated relative import
 
 void main() {
   late ProviderContainer container;

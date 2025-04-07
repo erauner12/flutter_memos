@@ -9,7 +9,7 @@ import '../features/memos/screens/edit_memo_screen_test.mocks.dart'; // Correcte
 void setupCommonApiServiceMocks(MockApiService mockApiService) {
   // Add stub for apiBaseUrl property
   when(mockApiService.apiBaseUrl).thenReturn('http://test-url.com');
-  
+
   // Add a generic listMemos stub to avoid errors during refresh operations
   when(
     mockApiService.listMemos(

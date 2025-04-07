@@ -10,7 +10,7 @@ import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
 
 // Import the generated mock file
-import 'navigation_state_test.mocks.dart';
+import 'navigation_state_test.mocks.dart'; // Updated relative import
 
 // Generate nice mocks for ApiService
 @GenerateNiceMocks([MockSpec<ApiService>()])
@@ -221,24 +221,24 @@ void main() {
       // Arrange
       final memoId = initialMemos[1].id; // Choose a memo to delete
       // Mock API success (already done in setUpAll)
-  
+
       // Act: Execute the delete provider, passing necessary family args
       await container.read(deleteMemoProvider(memoId))();
-  
+
       // Assert: Memo removed from state
       expect(
         container.read(memosNotifierProvider).memos.any((m) => m.id == memoId),
         isFalse,
         reason: "Memo should be removed from the final state",
       );
-  
+
       // Assert: API was called
       verify(mockApiService.deleteMemo(memoId)).called(1);
-  
+
       // Assert: Refresh was NOT called (delete provider doesn't refresh on success)
       verifyNever(mockApiService.listMemos(pageToken: null));
     });
-  
+
     test('deleteMemoProvider adjusts selection correctly (downward preference)', () async {
       // --- Test deleting the selected item (middle) ---
       // Arrange: Select index 2 ('memo_2')
@@ -246,10 +246,10 @@ void main() {
       final memoToDeleteSelectedId = initialMemos[initialIndexSelected].id; // memo_2
       container.read(ui_providers.selectedMemoIdProvider.notifier).state =
           memoToDeleteSelectedId;
-  
+
       // Act: Delete the selected memo
       await container.read(deleteMemoProvider(memoToDeleteSelectedId))();
-  
+
       // Assert: Selection should move DOWN to the next item ('memo_3')
       final expectedNextIdAfterDeleteMiddle =
           initialMemos[initialIndexSelected + 1].id; // memo_3
@@ -259,7 +259,7 @@ void main() {
         reason:
             "Selected memo ID should move DOWN to the next memo after deleting a middle memo",
       );
-  
+
       // --- Test deleting the selected item (first) ---
       // Arrange: Reset state, select index 0 ('memo_0')
       container.read(memosNotifierProvider.notifier).state = const MemosState()
@@ -272,7 +272,7 @@ void main() {
       final memoToDeleteFirstId = initialMemos[initialIndexFirst].id; // memo_0
       container.read(ui_providers.selectedMemoIdProvider.notifier).state =
           memoToDeleteFirstId;
-  
+
       // Act: Delete the first memo
       await container.read(deleteMemoProvider(memoToDeleteFirstId))();
 
@@ -285,7 +285,7 @@ void main() {
         reason:
             "Selected memo ID should move DOWN to the next memo after deleting the first memo",
       );
-  
+
       // --- Test deleting the selected item (last) ---
       // Arrange: Reset state, select index 4 ('memo_4')
       container.read(memosNotifierProvider.notifier).state = const MemosState()
@@ -298,10 +298,10 @@ void main() {
       final memoToDeleteLastId = initialMemos[initialIndexLast].id; // memo_4
       container.read(ui_providers.selectedMemoIdProvider.notifier).state =
           memoToDeleteLastId;
-  
+
       // Act: Delete the last memo
       await container.read(deleteMemoProvider(memoToDeleteLastId))();
-  
+
       // Assert: Selection should move UP to the PREVIOUS item ('memo_3') as it's the new last item
       final expectedNextIdAfterDeleteLast =
           initialMemos[initialIndexLast - 1].id; // memo_3
@@ -311,8 +311,8 @@ void main() {
         reason:
             "Selected memo ID should move UP to the previous memo after deleting the last memo",
       );
-  
-  
+
+
       // --- Test deleting item *before* selection (selection should not change) ---
       // Arrange: Reset state, select index 2 ('memo_2'), delete index 0 ('memo_0')
       container.read(memosNotifierProvider.notifier).state = const MemosState()
@@ -328,14 +328,14 @@ void main() {
 
       // Act: Delete memo before selection
       await container.read(deleteMemoProvider(memoToDeleteBeforeId))();
-  
+
       // Assert: Selection ID remains unchanged
       expect(
         container.read(ui_providers.selectedMemoIdProvider),
         selectedIdBefore,
         reason: "Selected memo ID should remain unchanged when deleting a different memo before it",
       );
-  
+
       // --- Test deleting item *after* selection (selection should not change) ---
       // Arrange: Reset state, select index 0 ('memo_0'), delete index 3 ('memo_3')
       container.read(memosNotifierProvider.notifier).state = const MemosState()
@@ -348,10 +348,10 @@ void main() {
       final memoToDeleteAfterId = initialMemos[3].id; // memo_3
       container.read(ui_providers.selectedMemoIdProvider.notifier).state =
           selectedIdAfter;
-  
+
       // Act: Delete memo after selection
       await container.read(deleteMemoProvider(memoToDeleteAfterId))();
-  
+
       // Assert: Selection ID remains unchanged
       expect(
         container.read(ui_providers.selectedMemoIdProvider),
@@ -359,7 +359,7 @@ void main() {
         reason:
             "Selected memo ID should remain unchanged when deleting a memo after it",
       );
-  
+
       // --- Test deleting the only item ---
       // Arrange: Set up with only one memo and select it
       final singleMemo = createSortedMemos(1);
@@ -371,7 +371,7 @@ void main() {
 
       // Act: Delete the only memo
       await container.read(deleteMemoProvider(singleMemoId))();
-  
+
       // Assert: Selection should become null
       expect(
         container.read(ui_providers.selectedMemoIdProvider),
@@ -380,39 +380,39 @@ void main() {
             "Selection should be null after deleting the only memo in the list",
       );
     });
-  
+
     test('togglePinMemoProvider calls optimistic update then API', () async {
       // Arrange
       final memoId = initialMemos[2].id;
       final originalMemo = initialMemos.firstWhere((m) => m.id == memoId);
       // Mock API calls (already done in setUpAll)
-  
+
       // Act: Toggle memo pin state via the provider
       await container.read(togglePinMemoProvider(memoId))();
-  
+
       // Assert: Verify memo pin state toggled optimistically
       final memos = container.read(memosNotifierProvider).memos;
       final toggledMemo = memos.firstWhere((m) => m.id == memoId);
       expect(toggledMemo.pinned, !originalMemo.pinned);
-  
+
       // Assert: API calls were made
       verify(mockApiService.getMemo(memoId)).called(1);
       verify(mockApiService.updateMemo(memoId, any)).called(1);
-  
+
       // Assert: Refresh was NOT called (togglePin provider doesn't refresh on success)
       verifyNever(mockApiService.listMemos(pageToken: null));
     });
-  
+
     test('archiveMemoProvider calls optimistic update then API, then refreshes and updates selection', () async {
       // Arrange
       final initialIndexSelected = 1;
       final memoId = initialMemos[initialIndexSelected].id; // memo_1
       container.read(ui_providers.selectedMemoIdProvider.notifier).state = memoId; // Select this memo
       // Mocks for get/update/listMemos(refresh) already in setUpAll
-  
+
       // Act: Execute archive provider
       await container.read(archiveMemoProvider(memoId))();
-  
+
       // Assert: Verify memo state update via API calls
       verify(mockApiService.getMemo(memoId)).called(1);
       final verificationResult = verify(mockApiService.updateMemo(memoId, captureAny));
@@ -420,7 +420,7 @@ void main() {
       final capturedMemo = verificationResult.captured.single as Memo;
       expect(capturedMemo.state, MemoState.archived);
       expect(capturedMemo.pinned, isFalse);
-  
+
         // Assert: Refresh was NOT triggered on success
         verifyNever(
           mockApiService.listMemos(
@@ -433,7 +433,7 @@ void main() {
         pageToken: null, // The pageToken should be null for refresh
           ),
         ); // No longer called on success
-  
+
         // Assert: Selection was updated DOWNWARD to the next memo (memo_2)
         final expectedNextIdAfterArchive =
             initialMemos[initialIndexSelected + 1].id; // memo_2

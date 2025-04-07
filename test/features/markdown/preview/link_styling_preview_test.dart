@@ -1,19 +1,24 @@
 import 'package:flutter/cupertino.dart'; // Use Cupertino
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_memos/models/memo.dart';
+import 'package:flutter_memos/providers/api_providers.dart';
 import 'package:flutter_memos/providers/api_providers.dart'; // Import api provider
 import 'package:flutter_memos/screens/edit_memo/edit_memo_form.dart';
 import 'package:flutter_memos/screens/edit_memo/edit_memo_providers.dart'; // Add this import
+import 'package:flutter_memos/services/api_service.dart';
 import 'package:flutter_memos/services/url_launcher_service.dart'; // Import url launcher service
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart'; // Import mockito
 
-import '../../../core/services/url_launcher_service_test.mocks.dart'; // Path to core service mocks
-import '../../../utils/test_debug.dart'; // Go up two levels to reach test/utils/
-// Import mocks
-import '../rendering/markdown_rendering_test.mocks.dart'; // Path to rendering mocks is correct relative to preview
+import '../../../helpers/test_debug.dart'; // Go up two levels to reach test/helpers/
+import '../../../services/url_launcher_service_test.mocks.dart'; // Path to services mocks
+// Import mocks for ApiService generated for this file or a shared location if applicable
+import 'link_styling_preview_test.mocks.dart'; // Assuming ApiService mock is generated here
 
+// Ensure ApiService is mocked if needed by EditMemoForm tests
+@GenerateNiceMocks([MockSpec<ApiService>()])
 // Helper function to find text in RichText widgets
 bool findTextInRichText(WidgetTester tester, String textToFind) {
   final richTextWidgets = tester.widgetList<RichText>(find.byType(RichText));

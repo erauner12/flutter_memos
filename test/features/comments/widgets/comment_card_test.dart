@@ -8,8 +8,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart'; // Import mockito
 
 // Import mocks
-// Corrected path to the mock file in the core/services directory
-import '../../../core/services/url_launcher_service_test.mocks.dart';
+// Corrected path to the mock file in the services directory
+import '../../../services/url_launcher_service_test.mocks.dart';
 
 // Helper to wrap widget for testing with CupertinoApp and CupertinoPageScaffold
 Widget buildTestableWidget(Widget child, {String? highlightedCommentId}) {

@@ -1,7 +1,7 @@
 import 'package:flutter/cupertino.dart'; // Import Cupertino
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_test/flutter_test.dart';
-import '../../../utils/test_debug.dart'; // Go up two levels to reach test/utils/
+import '../../../helpers/test_debug.dart'; // Go up two levels to reach test/helpers/
 
 void main() {
   group('Special URL Schemes Tests (Cupertino)', () {

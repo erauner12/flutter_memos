@@ -16,14 +16,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/annotations.dart'; // Add Mockito annotation import
 import 'package:mockito/mockito.dart'; // Add Mockito import
 
-// Import the mock for UrlLauncherService
-import '../../../core/services/url_launcher_service_test.mocks.dart'; // Path to core service mocks is correct
 // Import test utility
-import '../../../utils/test_debug.dart'; // Go up two levels to reach test/utils/
-// Import the generated mocks file (will be created by build_runner)
+import '../../../helpers/test_debug.dart'; // Go up two levels to reach test/helpers/
+// Import the mock for UrlLauncherService
+import '../../../services/url_launcher_service_test.mocks.dart'; // Correct path to UrlLauncherService mock
+// Import the mock for UrlLauncherService
 import 'markdown_rendering_test.mocks.dart';
 
-// Annotation to generate nice mock for ApiService
+// Annotation to generate nice mock for ApiService only
 @GenerateNiceMocks([MockSpec<ApiService>()])
 
 void main() {

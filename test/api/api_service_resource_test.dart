@@ -14,6 +14,7 @@ void main() {
     late ApiService apiService;
     String? testMemoId; // To store the ID of the memo created for testing
     String? createdCommentId; // To store the ID of the comment created
+    String? uploadedResourceId; // To store the ID of the uploaded resource
 
     setUpAll(() async {
       // --- IMPORTANT ---

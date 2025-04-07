@@ -13,7 +13,7 @@ import 'package:mockito/annotations.dart'; // Add this import for @GenerateNiceM
 import 'package:mockito/mockito.dart';
 
 // Import debug utils
-import '../../../utils/test_debug.dart'; // Go up two levels to reach test/utils/
+import '../../../helpers/test_debug.dart'; // Go up two levels to reach test/helpers/
 // Import the generated mocks for THIS file
 import 'memo_content_links_test.mocks.dart';
 
