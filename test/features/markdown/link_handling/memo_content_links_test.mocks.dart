@@ -202,16 +202,22 @@ class MockApiService extends _i1.Mock implements _i2.ApiService {
       ) as _i7.Future<_i2.PaginatedMemoResponse>);
 
   @override
-  _i7.Future<_i3.Memo> getMemo(String? id) => (super.noSuchMethod(
+  _i7.Future<_i3.Memo> getMemo(
+    String? id, {
+    _i8.ServerConfig? targetServerOverride,
+  }) =>
+      (super.noSuchMethod(
         Invocation.method(
           #getMemo,
           [id],
+          {#targetServerOverride: targetServerOverride},
         ),
         returnValue: _i7.Future<_i3.Memo>.value(_FakeMemo_1(
           this,
           Invocation.method(
             #getMemo,
             [id],
+            {#targetServerOverride: targetServerOverride},
           ),
         )),
         returnValueForMissingStub: _i7.Future<_i3.Memo>.value(_FakeMemo_1(
@@ -219,6 +225,7 @@ class MockApiService extends _i1.Mock implements _i2.ApiService {
           Invocation.method(
             #getMemo,
             [id],
+            {#targetServerOverride: targetServerOverride},
           ),
         )),
       ) as _i7.Future<_i3.Memo>);
@@ -255,8 +262,9 @@ class MockApiService extends _i1.Mock implements _i2.ApiService {
   @override
   _i7.Future<_i3.Memo> updateMemo(
     String? id,
-    _i3.Memo? memo,
-  ) =>
+    _i3.Memo? memo, {
+    _i8.ServerConfig? targetServerOverride,
+  }) =>
       (super.noSuchMethod(
         Invocation.method(
           #updateMemo,
@@ -264,6 +272,7 @@ class MockApiService extends _i1.Mock implements _i2.ApiService {
             id,
             memo,
           ],
+          {#targetServerOverride: targetServerOverride},
         ),
         returnValue: _i7.Future<_i3.Memo>.value(_FakeMemo_1(
           this,
@@ -273,6 +282,7 @@ class MockApiService extends _i1.Mock implements _i2.ApiService {
               id,
               memo,
             ],
+            {#targetServerOverride: targetServerOverride},
           ),
         )),
         returnValueForMissingStub: _i7.Future<_i3.Memo>.value(_FakeMemo_1(
@@ -283,15 +293,21 @@ class MockApiService extends _i1.Mock implements _i2.ApiService {
               id,
               memo,
             ],
+            {#targetServerOverride: targetServerOverride},
           ),
         )),
       ) as _i7.Future<_i3.Memo>);
 
   @override
-  _i7.Future<void> deleteMemo(String? id) => (super.noSuchMethod(
+  _i7.Future<void> deleteMemo(
+    String? id, {
+    _i8.ServerConfig? targetServerOverride,
+  }) =>
+      (super.noSuchMethod(
         Invocation.method(
           #deleteMemo,
           [id],
+          {#targetServerOverride: targetServerOverride},
         ),
         returnValue: _i7.Future<void>.value(),
         returnValueForMissingStub: _i7.Future<void>.value(),
@@ -338,11 +354,15 @@ class MockApiService extends _i1.Mock implements _i2.ApiService {
       ) as _i7.Future<_i4.V1Resource>);
 
   @override
-  _i7.Future<List<_i5.Comment>> listMemoComments(String? memoId) =>
+  _i7.Future<List<_i5.Comment>> listMemoComments(
+    String? memoId, {
+    _i8.ServerConfig? targetServerOverride,
+  }) =>
       (super.noSuchMethod(
         Invocation.method(
           #listMemoComments,
           [memoId],
+          {#targetServerOverride: targetServerOverride},
         ),
         returnValue: _i7.Future<List<_i5.Comment>>.value(<_i5.Comment>[]),
         returnValueForMissingStub:
@@ -354,6 +374,7 @@ class MockApiService extends _i1.Mock implements _i2.ApiService {
     String? memoId,
     _i5.Comment? comment, {
     List<_i4.V1Resource>? resources,
+    _i8.ServerConfig? targetServerOverride,
   }) =>
       (super.noSuchMethod(
         Invocation.method(
@@ -362,7 +383,10 @@ class MockApiService extends _i1.Mock implements _i2.ApiService {
             memoId,
             comment,
           ],
-          {#resources: resources},
+          {
+            #resources: resources,
+            #targetServerOverride: targetServerOverride,
+          },
         ),
         returnValue: _i7.Future<_i5.Comment>.value(_FakeComment_3(
           this,
@@ -372,7 +396,10 @@ class MockApiService extends _i1.Mock implements _i2.ApiService {
               memoId,
               comment,
             ],
-            {#resources: resources},
+            {
+              #resources: resources,
+              #targetServerOverride: targetServerOverride,
+            },
           ),
         )),
         returnValueForMissingStub: _i7.Future<_i5.Comment>.value(_FakeComment_3(
@@ -383,23 +410,31 @@ class MockApiService extends _i1.Mock implements _i2.ApiService {
               memoId,
               comment,
             ],
-            {#resources: resources},
+            {
+              #resources: resources,
+              #targetServerOverride: targetServerOverride,
+            },
           ),
         )),
       ) as _i7.Future<_i5.Comment>);
 
   @override
-  _i7.Future<_i5.Comment> getMemoComment(String? commentId) =>
+  _i7.Future<_i5.Comment> getMemoComment(
+    String? commentId, {
+    _i8.ServerConfig? targetServerOverride,
+  }) =>
       (super.noSuchMethod(
         Invocation.method(
           #getMemoComment,
           [commentId],
+          {#targetServerOverride: targetServerOverride},
         ),
         returnValue: _i7.Future<_i5.Comment>.value(_FakeComment_3(
           this,
           Invocation.method(
             #getMemoComment,
             [commentId],
+            {#targetServerOverride: targetServerOverride},
           ),
         )),
         returnValueForMissingStub: _i7.Future<_i5.Comment>.value(_FakeComment_3(
@@ -407,6 +442,7 @@ class MockApiService extends _i1.Mock implements _i2.ApiService {
           Invocation.method(
             #getMemoComment,
             [commentId],
+            {#targetServerOverride: targetServerOverride},
           ),
         )),
       ) as _i7.Future<_i5.Comment>);
@@ -414,8 +450,9 @@ class MockApiService extends _i1.Mock implements _i2.ApiService {
   @override
   _i7.Future<_i5.Comment> updateMemoComment(
     String? commentId,
-    _i5.Comment? comment,
-  ) =>
+    _i5.Comment? comment, {
+    _i8.ServerConfig? targetServerOverride,
+  }) =>
       (super.noSuchMethod(
         Invocation.method(
           #updateMemoComment,
@@ -423,6 +460,7 @@ class MockApiService extends _i1.Mock implements _i2.ApiService {
             commentId,
             comment,
           ],
+          {#targetServerOverride: targetServerOverride},
         ),
         returnValue: _i7.Future<_i5.Comment>.value(_FakeComment_3(
           this,
@@ -432,6 +470,7 @@ class MockApiService extends _i1.Mock implements _i2.ApiService {
               commentId,
               comment,
             ],
+            {#targetServerOverride: targetServerOverride},
           ),
         )),
         returnValueForMissingStub: _i7.Future<_i5.Comment>.value(_FakeComment_3(
@@ -442,6 +481,7 @@ class MockApiService extends _i1.Mock implements _i2.ApiService {
               commentId,
               comment,
             ],
+            {#targetServerOverride: targetServerOverride},
           ),
         )),
       ) as _i7.Future<_i5.Comment>);
@@ -449,8 +489,9 @@ class MockApiService extends _i1.Mock implements _i2.ApiService {
   @override
   _i7.Future<void> deleteMemoComment(
     String? memoId,
-    String? commentId,
-  ) =>
+    String? commentId, {
+    _i8.ServerConfig? targetServerOverride,
+  }) =>
       (super.noSuchMethod(
         Invocation.method(
           #deleteMemoComment,
@@ -458,6 +499,7 @@ class MockApiService extends _i1.Mock implements _i2.ApiService {
             memoId,
             commentId,
           ],
+          {#targetServerOverride: targetServerOverride},
         ),
         returnValue: _i7.Future<void>.value(),
         returnValueForMissingStub: _i7.Future<void>.value(),
