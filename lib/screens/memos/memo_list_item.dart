@@ -214,7 +214,6 @@ class MemoListItemState extends ConsumerState<MemoListItem> {
     }
   }
 
-  // Add the missing methods
   void _onArchive(BuildContext context) {
     ref.read(archiveMemoProvider(widget.memo.id))().then((_) {
       // Success SnackBar removed
@@ -248,71 +247,73 @@ class MemoListItemState extends ConsumerState<MemoListItem> {
       );
     }
 
-    // Create the main card content without adding the GlobalKey yet
-    Widget buildMemoCard({bool isContextMenuChild = false}) {
-      return MemoCard(
-        // Only add the GlobalKey to the main instance, not the context menu copy
-        key: isContextMenuChild ? null : _memoCardKey,
-        id: widget.memo.id,
-        content: widget.memo.content,
-        pinned: widget.memo.pinned,
-        updatedAt: widget.memo.updateTime,
-        showTimeStamps: true,
-        isSelected: isSelected && !isMultiSelectMode,
-        highlightTimestamp: MemoUtils.formatTimestamp(widget.memo.updateTime),
-        timestampType: 'Updated', // Always 'Updated'
-        onTap:
-            isMultiSelectMode
-                ? () => _toggleMultiSelection(widget.memo.id)
-                : () => _navigateToMemoDetail(context, ref),
-        onArchive: () => _onArchive(context),
-        onDelete: () => _onDelete(context),
-        onHide: () => _toggleHideMemo(context, ref),
-        onTogglePin: () => _onTogglePin(context),
-        onBump: () async {
-          try {
-            await ref.read(bumpMemoProvider(widget.memo.id))();
-          } catch (e) {
-            if (mounted) {
-              showCupertinoDialog(
-                context: context,
-                builder:
-                    (ctx) => CupertinoAlertDialog(
-                      title: const Text('Error'),
-                      content: Text(
-                        'Failed to bump memo: ${e.toString().substring(0, 50)}...',
-                      ),
-                      actions: [
-                        CupertinoDialogAction(
-                          isDefaultAction: true,
-                          child: const Text('OK'),
-                          onPressed: () => Navigator.of(ctx).pop(),
-                        ),
-                      ],
+    // Create the main card content
+    Widget cardContent = MemoCard(
+      key: _memoCardKey, // Pass the key here
+      id: widget.memo.id,
+      content: widget.memo.content,
+      pinned: widget.memo.pinned,
+      updatedAt: widget.memo.updateTime,
+      showTimeStamps: true,
+      isSelected:
+          isSelected &&
+          !isMultiSelectMode, // Only show selection style if not in multi-select
+      highlightTimestamp: MemoUtils.formatTimestamp(widget.memo.updateTime),
+      timestampType: 'Updated', // Always 'Updated'
+      onTap:
+          isMultiSelectMode
+              ? () => _toggleMultiSelection(widget.memo.id)
+              : () => _navigateToMemoDetail(context, ref),
+      onArchive: () => _onArchive(context),
+      onDelete: () => _onDelete(context),
+      onHide: () => _toggleHideMemo(context, ref),
+      onTogglePin: () => _onTogglePin(context),
+      onBump: () async {
+        try {
+          await ref.read(bumpMemoProvider(widget.memo.id))();
+          // Success SnackBar removed
+        } catch (e) {
+          if (mounted) {
+            // Show Cupertino Error Dialog
+            showCupertinoDialog(
+              context: context, // Use current context since we checked mounted
+              builder:
+                  (ctx) => CupertinoAlertDialog(
+                    title: const Text('Error'),
+                    content: Text(
+                      'Failed to bump memo: ${e.toString().substring(0, 50)}...',
                     ),
-              );
-            }
+                    actions: [
+                      CupertinoDialogAction(
+                        isDefaultAction: true,
+                        child: const Text('OK'),
+                        onPressed: () => Navigator.of(ctx).pop(),
+                      ),
+                    ],
+                  ),
+            );
           }
-        },
-        onMoveToServer: widget.onMoveToServer,
-      );
-    }
-
-    // Use the function to create the main cardContent
-    final Widget cardContent = buildMemoCard();
+        }
+      },
+      // Pass the onMoveToServer callback from widget to MemoCard
+      onMoveToServer: widget.onMoveToServer,
+    );
 
     // In multi-select mode, return a completely different widget structure without Slidable/Dismissible
     if (isMultiSelectMode) {
       // Add extra visual indicator for multi-selected items
-      Widget finalContent = cardContent;
       if (isMultiSelected) {
-        finalContent = Container(
+        cardContent = Container(
           decoration: BoxDecoration(
             border: Border.all(
-              color: CupertinoTheme.of(context).primaryColor,
+              color:
+                  CupertinoTheme.of(
+                    context,
+                  ).primaryColor, // Use Cupertino theme color
               width: 2,
             ),
-            borderRadius: BorderRadius.circular(10),
+            // Match MemoCard's radius if different, otherwise keep consistent
+            borderRadius: BorderRadius.circular(10), // Match MemoCard radius
           ),
           child: cardContent,
         );
@@ -326,46 +327,54 @@ class MemoListItemState extends ConsumerState<MemoListItem> {
           children: [
             Padding(
               padding: const EdgeInsets.only(top: 12.0, right: 8.0),
+              // Use CupertinoCheckbox
               child: CupertinoCheckbox(
                 value: isMultiSelected,
                 onChanged: (value) => _toggleMultiSelection(widget.memo.id),
+                // Optionally customize activeColor
+                // activeColor: CupertinoTheme.of(context).primaryColor,
               ),
             ),
-            Expanded(child: finalContent),
+            Expanded(child: cardContent),
           ],
         ),
       );
     }
 
+    // In normal mode, wrap ONLY with Slidable (Dismissible removed)
     return Slidable(
       key: ValueKey('slidable-${widget.memo.id}'),
       startActionPane: ActionPane(
         motion: const DrawerMotion(),
+        // extentRatio: 0.5, // Adjust width of the action pane
         children: [
           SlidableAction(
             onPressed: (_) => _onEdit(context),
-            backgroundColor: CupertinoColors.systemBlue,
+            backgroundColor: CupertinoColors.systemBlue, // Use Cupertino color
             foregroundColor: CupertinoColors.white,
-            icon: CupertinoIcons.pencil,
+            icon: CupertinoIcons.pencil, // Use Cupertino icon
             label: 'Edit',
             autoClose: true,
           ),
           SlidableAction(
             onPressed: (_) => _onTogglePin(context),
-            backgroundColor: CupertinoColors.systemOrange,
+            backgroundColor:
+                CupertinoColors.systemOrange, // Use Cupertino color
             foregroundColor: CupertinoColors.white,
             icon:
                 widget.memo.pinned
-                    ? CupertinoIcons.pin_slash_fill
-                    : CupertinoIcons.pin_fill,
+                    ? CupertinoIcons
+                        .pin_slash_fill // Use Cupertino icon
+                    : CupertinoIcons.pin_fill, // Use Cupertino icon
             label: widget.memo.pinned ? 'Unpin' : 'Pin',
             autoClose: true,
           ),
+          // Add Hide action here if desired as a swipe action
           SlidableAction(
             onPressed: (_) => _toggleHideMemo(context, ref),
-            backgroundColor: CupertinoColors.systemGrey,
+            backgroundColor: CupertinoColors.systemGrey, // Use Cupertino color
             foregroundColor: CupertinoColors.white,
-            icon: CupertinoIcons.eye_slash_fill,
+            icon: CupertinoIcons.eye_slash_fill, // Use Cupertino icon
             label: 'Hide',
             autoClose: true,
           ),
@@ -373,68 +382,57 @@ class MemoListItemState extends ConsumerState<MemoListItem> {
       ),
       endActionPane: ActionPane(
         motion: const DrawerMotion(),
+        // extentRatio: 0.5, // Adjust width of the action pane
         children: [
           SlidableAction(
             onPressed: (_) => _onDelete(context),
-            backgroundColor: CupertinoColors.destructiveRed,
+            backgroundColor:
+                CupertinoColors.destructiveRed, // Use Cupertino color
             foregroundColor: CupertinoColors.white,
-            icon: CupertinoIcons.delete,
+            icon: CupertinoIcons.delete, // Use Cupertino icon
             label: 'Delete',
             autoClose: true,
           ),
           SlidableAction(
             onPressed: (_) => _onArchive(context),
-            backgroundColor: CupertinoColors.systemPurple,
+            backgroundColor:
+                CupertinoColors.systemPurple, // Use Cupertino color
             foregroundColor: CupertinoColors.white,
-            icon: CupertinoIcons.archivebox_fill,
+            icon: CupertinoIcons.archivebox_fill, // Use Cupertino icon
             label: 'Archive',
             autoClose: true,
           ),
         ],
       ),
-      child: CupertinoContextMenu(
-        actions: [
-          CupertinoContextMenuAction(
-            trailingIcon: CupertinoIcons.pencil,
-            onPressed: () {
-              Navigator.of(context).pop();
-              _onEdit(context);
-            },
-            child: const Text('Edit'),
-          ),
-          CupertinoContextMenuAction(
-            trailingIcon:
-                widget.memo.pinned
-                    ? CupertinoIcons.pin_slash
-                    : CupertinoIcons.pin,
-            onPressed: () {
-              Navigator.of(context).pop();
-              _onTogglePin(context);
-            },
-            child: Text(widget.memo.pinned ? 'Unpin' : 'Pin'),
-          ),
-          CupertinoContextMenuAction(
-            trailingIcon: CupertinoIcons.archivebox,
-            onPressed: () {
-              Navigator.of(context).pop();
-              _onArchive(context);
-            },
-            child: const Text('Archive'),
-          ),
-          CupertinoContextMenuAction(
-            isDestructiveAction: true,
-            trailingIcon: CupertinoIcons.delete,
-            onPressed: () {
-              Navigator.of(context).pop();
-              _onDelete(context);
-            },
-            child: const Text('Delete'),
-          ),
-        ],
-        // Create a new instance of the MemoCard for the context menu
-        // without passing the GlobalKey to avoid conflicts
-        child: buildMemoCard(isContextMenuChild: true),
-      ),
-    );
+      // Wrap the Stack in a GestureDetector to handle long press for context menu
+      child: GestureDetector(
+        onLongPress: () {
+          // Access the public showContextMenu method via the GlobalKey
+          _memoCardKey.currentState?.showContextMenu();
+        },
+        child: Stack(
+          children: [
+            cardContent, // The MemoCard widget
+            // Archive button positioned at top-right corner (using CupertinoButton)
+            Positioned(
+              top: 4,
+              right: 4,
+              child: CupertinoButton(
+                padding: const EdgeInsets.all(6), // Slightly smaller padding
+                minSize: 0,
+                onPressed: () => _onArchive(context),
+                child: Icon(
+                  CupertinoIcons.archivebox, // Use Cupertino icon
+                  size: 18, // Slightly smaller icon
+                  color: CupertinoColors.secondaryLabel.resolveFrom(
+                    context,
+                  ), // More subtle color
+                ),
+              ),
+            ),
+          ],
+        ),
+      ), // Close GestureDetector
+    ); // Close Slidable
   }
 }

@@ -1,6 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_memos/screens/memos/memos_screen.dart';
-import 'package:flutter_memos/screens/settings_screen.dart';
+import 'package:flutter_memos/screens/settings_screen.dart'; // Ensure this import is correct
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class HomeScreen extends ConsumerWidget {
@@ -8,6 +8,9 @@ class HomeScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Remove the line below as themeMode is not used directly here
+    // final themeMode = ref.watch(themeProvider);
+
     return CupertinoTabScaffold(
       tabBar: CupertinoTabBar(
         items: const <BottomNavigationBarItem>[
@@ -24,35 +27,21 @@ class HomeScreen extends ConsumerWidget {
       tabBuilder: (BuildContext context, int index) {
         switch (index) {
           case 0:
-            // Memos tab
             return CupertinoTabView(
-              builder: (context) => const MemosScreen(),
-              // Provide routes for this tab's navigator
-              routes: {'/': (context) => const MemosScreen(),
+              builder: (context) {
+                return const CupertinoPageScaffold(child: MemosScreen());
               },
-              defaultTitle: 'Memos',
             );
           case 1:
-            // Settings tab
             return CupertinoTabView(
-              builder:
-                  (context) => const CupertinoPageScaffold(
-                    navigationBar: CupertinoNavigationBar(
-                      middle: Text('Settings'),
-                    ),
-                    child: SettingsScreen(isInitialSetup: false),
+              builder: (context) {
+                return const CupertinoPageScaffold(
+                  navigationBar: CupertinoNavigationBar(
+                    middle: Text('Settings'),
                   ),
-              // Provide routes for this tab's navigator
-              routes: {
-                '/':
-                    (context) => const CupertinoPageScaffold(
-                      navigationBar: CupertinoNavigationBar(
-                        middle: Text('Settings'),
-                      ),
-                      child: SettingsScreen(isInitialSetup: false),
-                    ),
+                  child: SettingsScreen(isInitialSetup: false),
+                );
               },
-              defaultTitle: 'Settings',
             );
           default:
             return const SizedBox.shrink();
