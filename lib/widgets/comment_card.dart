@@ -410,6 +410,12 @@ class _CommentCardState extends ConsumerState<CommentCard> {
       child: GestureDetector(
         onLongPress: isMultiSelectMode ? () => _toggleMultiSelection() : () => _showContextMenu(context),
         onTap: isMultiSelectMode ? () => _toggleMultiSelection() : null,
+        // Add these lines to ignore vertical drags and set behavior
+        onVerticalDragStart: null,
+        onVerticalDragUpdate: null,
+        onVerticalDragEnd: null,
+        behavior:
+            HitTestBehavior.opaque, // Ensure taps are still captured correctly
         child: Padding(
           padding: const EdgeInsets.all(12.0),
           child: Column(
