@@ -10,6 +10,54 @@ import 'package:mockito/mockito.dart'; // Import mockito
 // Import mocks
 import '../services/url_launcher_service_test.mocks.dart'; // For MockUrlLauncherService
 
+
+// Helper to wrap widget for testing with MaterialApp and Scaffold
+Widget buildTestableWidget(Widget child, {String? highlightedCommentId}) {
+  // Create mock inside helper or pass it in
+  final mockUrlLauncherService = MockUrlLauncherService();
+  when(mockUrlLauncherService.launch(any)).thenAnswer((_) async => true);
+
+  return ProviderScope(
+    overrides: [
+      urlLauncherServiceProvider.overrideWithValue(
+        mockUrlLauncherService,
+      ), // Add override
+      // Override highlightedCommentIdProvider if a value is provided
+      if (highlightedCommentId != null)
+        highlightedCommentIdProvider.overrideWith(
+          (ref) => highlightedCommentId,
+        ),
+    ],
+    child: MaterialApp(
+      // Define both light and dark themes to test against
+      theme: ThemeData(
+        brightness: Brightness.light,
+        // Ensure the theme uses the exact colors from CommentCard for highlight
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: Colors.blue,
+          // Explicitly define teal colors used in CommentCard
+          tertiary: Colors.teal,
+          tertiaryContainer: Colors.teal.shade50,
+        ),
+        cardColor: Colors.white, // Default card color
+      ),
+      darkTheme: ThemeData(
+        brightness: Brightness.dark,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: Colors.blue,
+          brightness: Brightness.dark,
+          outline: Colors.grey.shade600,
+          // Explicitly define dark theme teal colors used in CommentCard
+          tertiary: Colors.tealAccent,
+          tertiaryContainer: Colors.teal.shade800.withAlpha(128),
+        ),
+        cardColor: const Color(0xFF222222), // Default dark card color
+      ),
+      home: Scaffold(body: child),
+    ),
+  );
+}
+
 void main() {
   testWidgets('CommentCard shows highlight when ID matches provider state', (
     WidgetTester tester,
@@ -21,49 +69,15 @@ void main() {
       createTime: DateTime.now().millisecondsSinceEpoch,
     );
 
-    // Create mock
-    final mockUrlLauncherService = MockUrlLauncherService();
-    when(mockUrlLauncherService.launch(any)).thenAnswer((_) async => true);
-
     // Set up a ProviderScope with highlight ID matching the comment
     await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          highlightedCommentIdProvider.overrideWith((_) => 'test-comment-id'),
-          urlLauncherServiceProvider.overrideWithValue(
-            mockUrlLauncherService,
-          ), // Add override
-        ],
-        child: MaterialApp(
-          // Use a custom theme that explicitly defines the colors used for highlighting
-          theme: ThemeData(
-            brightness: Brightness.light,
-            useMaterial3: true,
-            colorScheme: const ColorScheme.light(
-              // Explicitly define the teal colors used for highlighting
-              tertiary: Colors.teal, // Ensure tertiary is teal for border check
-              tertiaryContainer: Color(0xFFE0F2F1), // Explicit highlight color
-            ),
-          ),
-          darkTheme: ThemeData(
-            brightness: Brightness.dark,
-            useMaterial3: true,
-            colorScheme: ColorScheme.dark(
-              tertiary: Colors.tealAccent,
-              tertiaryContainer: Colors.teal.shade800.withAlpha(
-                128,
-              ), // Updated from withOpacity(0.5)
-            ),
-          ),
-          home: Scaffold(
-            body: CommentCard(comment: testComment, memoId: 'test-memo-id'),
-          ),
-        ),
+      buildTestableWidget(
+        CommentCard(comment: testComment, memoId: 'test-memo-id'),
+        highlightedCommentId: testComment.id,
       ),
     );
-    // IMPORTANT: Just pump once after pumpWidget to render the initial frame.
-    // Do not use pumpAndSettle() here, as it would execute the post-frame callback
-    // that resets the highlight *before* we can check it.
+
+    // IMPORTANT: Pump only once initially to render the highlighted state.
     await tester.pump();
 
     // Find the Card within the CommentCard
@@ -73,30 +87,44 @@ void main() {
     );
     expect(cardFinder, findsOneWidget);
 
-    // Check that the card has the highlighted style BEFORE the reset pump
+    // --- Assert Highlighted State ---
     final card = tester.widget<Card>(cardFinder);
     final theme = Theme.of(tester.element(cardFinder)); // Get theme context
 
     // Define expected highlight styles based on theme brightness
+    final Color expectedHighlightColor;
     final BorderSide expectedHighlightBorder;
 
     if (theme.brightness == Brightness.dark) {
+      expectedHighlightColor = Colors.teal.shade800.withAlpha(128);
       expectedHighlightBorder = const BorderSide(
         color: Colors.tealAccent,
         width: 2,
-      ); // Adjusted dark theme border
+      );
     } else {
+      expectedHighlightColor = Colors.teal.shade50;
       expectedHighlightBorder = const BorderSide(color: Colors.teal, width: 2);
     }
 
-    // Compare border properties individually with more flexibility
-    final actualBorder = (card.shape as RoundedRectangleBorder).side;
+    // Assert background color
+    expect(
+      card.color,
+      expectedHighlightColor,
+      reason:
+          'Highlighted background color mismatch (Theme: ${theme.brightness})',
+    );
 
-    // Check border width and style
+    // Assert border properties
+    final actualBorder = (card.shape as RoundedRectangleBorder).side;
     expect(
       actualBorder.width,
       expectedHighlightBorder.width,
       reason: 'Highlighted border width mismatch (Theme: ${theme.brightness})',
+    );
+    expect(
+      actualBorder.color,
+      expectedHighlightBorder.color,
+      reason: 'Highlighted border color mismatch (Theme: ${theme.brightness})',
     );
     expect(
       actualBorder.style,
@@ -104,8 +132,7 @@ void main() {
       reason: 'Highlighted border style mismatch (Theme: ${theme.brightness})',
     );
 
-    // DO NOT pump again here. Assertions above check the highlighted state.
-
+    // --- Assert Reset State ---
     // Now pump and settle to allow the post-frame callback to execute and reset the highlight
     await tester.pumpAndSettle();
 
@@ -113,8 +140,21 @@ void main() {
     final cardAfterCallback = tester.widget<Card>(cardFinder);
     final borderAfterCallback =
         (cardAfterCallback.shape as RoundedRectangleBorder).side;
+    final defaultCardColor =
+        theme.brightness == Brightness.dark
+            ? const Color(0xFF222222)
+            : Colors.white;
+
+    // Assert background color is back to default
     expect(
-      // Check if the border is effectively none (either BorderSide.none or width 0)
+      cardAfterCallback.color,
+      defaultCardColor,
+      reason:
+          'Card background color should reset to default (Theme: ${theme.brightness})',
+    );
+
+    // Assert border is reset (BorderSide.none or width 0)
+    expect(
       borderAfterCallback == BorderSide.none ||
           borderAfterCallback.width == 0.0,
       isTrue,
