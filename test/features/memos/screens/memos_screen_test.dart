@@ -10,18 +10,20 @@ import 'package:flutter_memos/providers/server_config_provider.dart'; // Import 
 import 'package:flutter_memos/providers/ui_providers.dart' as ui_providers;
 import 'package:flutter_memos/screens/memos/memo_list_item.dart';
 import 'package:flutter_memos/screens/memos/memos_screen.dart';
-import 'package:flutter_memos/services/api_service.dart';
+import 'package:flutter_memos/services/api_service.dart' as api_service;
+import 'package:flutter_memos/widgets/advanced_filter_panel.dart'; // Import AdvancedFilterPanel
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_slidable/flutter_slidable.dart'; // Keep if Slidable is used
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
+import 'package:shared_preferences/shared_preferences.dart'; // Import SharedPreferences
 import 'package:uuid/uuid.dart'; // Import Uuid
 
 import 'memos_screen_test.mocks.dart';
 
 // Generate nice mock for ApiService
-@GenerateNiceMocks([MockSpec<ApiService>()])
+@GenerateNiceMocks([MockSpec<api_service.ApiService>()])
 // Helper to create a list of dummy memos
 List<Memo> createDummyMemos(int count) {
   return List.generate(count, (i) {
@@ -83,7 +85,14 @@ Widget buildTestableWidget(Widget child, ProviderContainer container) {
             (context) => const CupertinoPageScaffold(
               child: Center(child: Text('New Memo Screen')),
             ),
+        // Add route for settings if needed by server switcher
+        '/settings':
+            (context) => const CupertinoPageScaffold(
+              child: Center(child: Text('Settings Screen')),
+            ),
       },
+      // Add onGenerateRoute for modal popups like AdvancedFilterPanel if needed
+      // or ensure the test setup handles them.
     ),
   );
 } // End of buildTestableWidget
@@ -132,7 +141,10 @@ void main() {
   late ServerConfig mockServer2;
 
   // Use setUp to create the container before each test
-  setUp(() {
+  setUp(() async {
+    // Make setUp async for SharedPreferences
+    // Initialize mock SharedPreferences
+    SharedPreferences.setMockInitialValues({});
     // Initialize the mock API service
     mockApiService = MockApiService();
 
@@ -163,15 +175,16 @@ void main() {
         direction: anyNamed('direction'),
         pageSize: anyNamed('pageSize'),
         pageToken: anyNamed('pageToken'),
-        tags: anyNamed('tags'),
-        visibility: anyNamed('visibility'),
-        contentSearch: anyNamed('contentSearch'),
-        createdAfter: anyNamed('createdAfter'),
-        createdBefore: anyNamed('createdBefore'),
-        updatedAfter: anyNamed('updatedAfter'),
-        updatedBefore: anyNamed('updatedBefore'),
-        timeExpression: anyNamed('timeExpression'),
-        useUpdateTimeForExpression: anyNamed('useUpdateTimeForExpression'),
+        // Remove deprecated parameters
+        // tags: anyNamed('tags'),
+        // visibility: anyNamed('visibility'),
+        // contentSearch: anyNamed('contentSearch'),
+        // createdAfter: anyNamed('createdAfter'),
+        // createdBefore: anyNamed('createdBefore'),
+        // updatedAfter: anyNamed('updatedAfter'),
+        // updatedBefore: anyNamed('updatedBefore'),
+        // timeExpression: anyNamed('timeExpression'),
+        // useUpdateTimeForExpression: anyNamed('useUpdateTimeForExpression'),
       ),
     ).thenAnswer(
       (_) async => PaginatedMemoResponse(
@@ -197,7 +210,7 @@ void main() {
     container = ProviderContainer(
       overrides: [
         // Override the API service with our mock
-        apiServiceProvider.overrideWithValue(mockApiService),
+        api_service.apiServiceProvider.overrideWithValue(mockApiService),
         // Override the actual notifier with our mock builder
         memosNotifierProvider.overrideWith(
           (ref) => MockMemosNotifier(ref, initialMemoState),
@@ -215,10 +228,15 @@ void main() {
           (ref) => {},
         ),
         ui_providers.selectedMemoIdProvider.overrideWith((ref) => null),
-        // Explicitly set the filter key for consistent AppBar title
-        filterKeyProvider.overrideWith((ref) => 'all'),
+        // Explicitly set the filter preset for consistent AppBar title
+        quickFilterPresetProvider.overrideWith(
+          (ref) => 'inbox',
+        ), // Start with 'inbox'
       ],
     );
+
+    // Ensure preferences are loaded (needed for filter preset)
+    await container.read(loadFilterPreferencesProvider.future);
   });
 
   // Use tearDown to dispose the container after each test
@@ -228,96 +246,113 @@ void main() {
 
   // Test 1: Standard UI
   testWidgets(
-    'MemosScreen displays standard CupertinoNavigationBar and server switcher initially',
-    (WidgetTester tester) async {
-      // Arrange
-      await tester.pumpWidget(
-        buildTestableWidget(const MemosScreen(), container),
-      );
-      await tester.pumpAndSettle(); // Wait for initial build
+      'MemosScreen displays standard UI elements initially', (
+    WidgetTester tester,
+  ) async {
+    // Arrange
+    await tester.pumpWidget(
+      buildTestableWidget(const MemosScreen(), container),
+    );
+    await tester.pumpAndSettle(); // Wait for initial build and preference load
 
-      // Act & Assert
-      expect(
-        find.byType(CupertinoNavigationBar),
-        findsOneWidget,
-      ); // Check for CupertinoNavigationBar
-      expect(
-        find.descendant(
-          of: find.byType(CupertinoNavigationBar),
-          matching: find.text('Memos (ALL)'),
-        ),
-        findsOneWidget,
-      );
-      // Verify Server Switcher button exists in leading
-      final navBarFinder = find.byType(CupertinoNavigationBar);
-      final serverSwitcherButtonFinder = find.descendant(
-        of: navBarFinder,
-        matching: find.widgetWithIcon(
-          CupertinoButton,
-          CupertinoIcons.square_stack_3d_down_right,
-        ),
-      );
-      expect(
-        serverSwitcherButtonFinder,
-        findsOneWidget,
-        reason:
-            "Could not find the server switcher button in NavigationBar leading",
-      );
-      // Verify server name is displayed (using the mocked active server)
-      expect(find.textContaining('Mock Server 1'), findsOneWidget);
-      // Verify "Select" button exists in trailing
-      final trailingButtonFinder = find.descendant(
-        of: navBarFinder,
-        matching: find.widgetWithIcon(
-          CupertinoButton,
-          CupertinoIcons.checkmark_seal,
-        ),
-      );
-      expect(
-        trailingButtonFinder,
-        findsOneWidget,
-        reason:
-            "Could not find the Select/Multi-select toggle button (tried checkmark_seal icon) in NavigationBar trailing",
-      );
-      // Verify multi-select actions are NOT present
-      expect(
-        find.widgetWithIcon(CupertinoButton, CupertinoIcons.clear),
-        findsNothing,
-      );
-      expect(find.textContaining('Selected'), findsNothing);
-      expect(
-        find.widgetWithIcon(CupertinoButton, CupertinoIcons.delete),
-        findsNothing,
-      );
-      expect(
-        find.widgetWithIcon(CupertinoButton, CupertinoIcons.archivebox),
-        findsNothing,
-      );
-      // Verify no Checkboxes/Switches are present within list items
-      expect(
-        find.descendant(
-          of: find.byType(MemoListItem),
-          matching: find.byType(CupertinoSwitch),
-        ),
-        findsNothing,
-      );
-      expect(
-        find.descendant(
-          of: find.byType(MemoListItem),
-          matching: find.byType(CupertinoCheckbox),
-        ),
-        findsNothing,
-      );
-      // Verify Slidable/Dismissible are NOT present
-      expect(
-        find.descendant(
-          of: find.byType(MemoListItem),
-          matching: find.byType(Slidable),
-        ),
-        findsNothing,
-      );
-    },
-  );
+    // Act & Assert
+    // Verify NavigationBar
+    expect(find.byType(CupertinoNavigationBar), findsOneWidget,
+    );
+    // Verify Title (based on initial 'inbox' preset)
+    expect(
+      find.descendant(
+        of: find.byType(CupertinoNavigationBar),
+        matching: find.text('Inbox'), // Check for 'Inbox' title
+      ),
+      findsOneWidget,
+    );
+    // Verify Server Switcher button
+    final navBarFinder = find.byType(CupertinoNavigationBar);
+    final serverSwitcherButtonFinder = find.descendant(
+      of: navBarFinder,
+      matching: find.widgetWithIcon(
+        CupertinoButton,
+        CupertinoIcons.square_stack_3d_down_right,
+      ),
+    );
+    expect(serverSwitcherButtonFinder, findsOneWidget);
+    expect(find.textContaining('Mock Server 1'), findsOneWidget);
+
+    // Verify Trailing Buttons
+    final multiSelectButtonFinder = find.descendant(
+      of: navBarFinder,
+      matching: find.widgetWithIcon(
+        CupertinoButton,
+        CupertinoIcons.checkmark_seal,
+      ),
+    );
+    expect(multiSelectButtonFinder, findsOneWidget);
+    final advancedFilterButtonFinder = find.descendant(
+      of: navBarFinder,
+      matching: find.widgetWithIcon(CupertinoButton, CupertinoIcons.tuningfork),
+    );
+    expect(advancedFilterButtonFinder, findsOneWidget);
+    final addButtonFinder = find.descendant(
+      of: navBarFinder,
+      matching: find.widgetWithIcon(CupertinoButton, CupertinoIcons.add),
+    );
+    expect(addButtonFinder, findsOneWidget);
+
+    // Verify Search Bar
+    expect(find.byType(CupertinoSearchTextField), findsOneWidget);
+
+    // Verify Quick Filter Control
+    expect(
+      find.byType(CupertinoSlidingSegmentedControl<String>),
+      findsOneWidget,
+    );
+    expect(find.text('Inbox'), findsWidgets); // Segment label
+    expect(find.text('Today'), findsWidgets); // Segment label
+    expect(find.text('Tagged'), findsWidgets); // Segment label
+    expect(find.text('All'), findsWidgets); // Segment label
+
+    // Verify Memo List Items
+    expect(find.byType(MemoListItem), findsNWidgets(dummyMemos.length));
+
+    // Verify multi-select actions are NOT present
+    expect(
+      find.widgetWithIcon(CupertinoButton, CupertinoIcons.clear),
+      findsNothing,
+    );
+    expect(find.textContaining('Selected'), findsNothing);
+    expect(
+      find.widgetWithIcon(CupertinoButton, CupertinoIcons.delete),
+      findsNothing,
+    );
+    expect(
+      find.widgetWithIcon(CupertinoButton, CupertinoIcons.archivebox),
+      findsNothing,
+    );
+    // Verify no Checkboxes/Switches are present within list items
+    expect(
+      find.descendant(
+        of: find.byType(MemoListItem),
+        matching: find.byType(CupertinoSwitch),
+      ),
+      findsNothing,
+    );
+    expect(
+      find.descendant(
+        of: find.byType(MemoListItem),
+        matching: find.byType(CupertinoCheckbox),
+      ),
+      findsNothing,
+    );
+    // Verify Slidable/Dismissible are NOT present
+    expect(
+      find.descendant(
+        of: find.byType(MemoListItem),
+        matching: find.byType(Slidable),
+      ),
+      findsNothing,
+    );
+  });
 
   // Test 2: Enter Multi-Select Mode
   testWidgets('MemosScreen enters multi-select mode on button tap', (
@@ -329,7 +364,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // Act: Find and tap the "Select" button
+    // Act: Find and tap the "Select" button (checkmark_seal)
     final navBarFinder = find.byType(CupertinoNavigationBar);
     final selectButtonFinder = find.descendant(
       of: navBarFinder,
@@ -338,14 +373,7 @@ void main() {
         CupertinoIcons.checkmark_seal,
       ),
     );
-    expect(
-      selectButtonFinder,
-      findsOneWidget,
-      reason:
-          "Could not find the Select/Multi-select toggle button (tried checkmark_seal icon) to tap",
-    );
-    await tester.ensureVisible(selectButtonFinder);
-    await tester.pumpAndSettle();
+    expect(selectButtonFinder, findsOneWidget);
     await tester.tap(selectButtonFinder);
     await tester.pumpAndSettle();
 
@@ -354,68 +382,64 @@ void main() {
 
     // Verify NavigationBar changes
     expect(
-      find.widgetWithIcon(CupertinoButton, CupertinoIcons.clear),
+      find.widgetWithIcon(
+        CupertinoButton,
+        CupertinoIcons.clear,
+      ), // Cancel button
       findsOneWidget,
     );
-    expect(find.text('0 Selected'), findsOneWidget);
+    expect(find.text('0 Selected'), findsOneWidget); // Title
     expect(
-      find.widgetWithIcon(CupertinoButton, CupertinoIcons.delete),
+      find.widgetWithIcon(
+        CupertinoButton,
+        CupertinoIcons.delete,
+      ), // Delete action
       findsOneWidget,
     );
     expect(
-      find.widgetWithIcon(CupertinoButton, CupertinoIcons.archivebox),
+      find.widgetWithIcon(
+        CupertinoButton,
+        CupertinoIcons.archivebox,
+      ), // Archive action
       findsOneWidget,
     );
-    // Verify standard title and select button are gone
+    // Verify standard title and trailing buttons are gone
+    expect(find.text('Inbox'), findsNothing); // Original title
     expect(
-      find.descendant(
-        of: find.byType(CupertinoNavigationBar),
-        matching: find.text('Memos (ALL)'),
-      ),
-      findsNothing,
-    );
-    final selectButtonFinderAfterModeChange = find.descendant(
-      of: navBarFinder,
-      matching: find.widgetWithIcon(
+      find.widgetWithIcon(
         CupertinoButton,
         CupertinoIcons.checkmark_seal,
-      ),
-    );
-    expect(
-      selectButtonFinderAfterModeChange,
+      ), // Select button
       findsNothing,
-      reason:
-          "Select/Multi-select toggle button (checkmark_seal icon) should not be present in multi-select mode's trailing slot",
-    );
-    final cancelButtonFinder = find.descendant(
-      of: navBarFinder,
-      matching: find.widgetWithIcon(CupertinoButton, CupertinoIcons.clear),
     );
     expect(
-      cancelButtonFinder,
-      findsOneWidget,
-      reason:
-          "Cancel (clear) button should be present in multi-select mode's leading slot",
+      find.widgetWithIcon(
+        CupertinoButton,
+        CupertinoIcons.tuningfork,
+      ), // Advanced filter button
+      findsNothing,
     );
-    final multiSelectWidgetFinder = find.descendant(
+    expect(
+      find.widgetWithIcon(CupertinoButton, CupertinoIcons.add), // Add button
+      findsNothing,
+    );
+    // Verify Search Bar and Filter Control are hidden
+    expect(find.byType(CupertinoSearchTextField), findsNothing);
+    expect(find.byType(CupertinoSlidingSegmentedControl<String>), findsNothing);
+
+    // Verify Checkboxes appear in list items
+    final checkboxFinder = find.descendant(
       of: find.byType(MemoListItem),
       matching: find.byType(CupertinoCheckbox),
     );
-    expect(multiSelectWidgetFinder, findsNWidgets(dummyMemos.length));
-    expect(
-      find.descendant(
-        of: find.byType(MemoListItem),
-        matching: find.byType(Slidable),
-      ),
-      findsNothing,
-    );
+    expect(checkboxFinder, findsNWidgets(dummyMemos.length));
   });
 
   // Test 3: Select/Deselect Item
   testWidgets('MemosScreen selects/deselects memo via Checkbox tap', (
     WidgetTester tester,
   ) async {
-    // Arrange
+    // Arrange: Enter multi-select mode
     await tester.pumpWidget(
       buildTestableWidget(const MemosScreen(), container),
     );
@@ -428,56 +452,10 @@ void main() {
         CupertinoIcons.checkmark_seal,
       ),
     );
-    expect(
-      selectButtonFinder,
-      findsOneWidget,
-      reason:
-          "Could not find the Select/Multi-select toggle button (tried checkmark_seal icon) to tap",
-    );
-    await tester.ensureVisible(selectButtonFinder);
-    await tester.pumpAndSettle();
     await tester.tap(selectButtonFinder);
     await tester.pumpAndSettle();
-    final firstItemFinder = find.byType(MemoListItem).first;
-    final firstMultiSelectWidgetFinder = find.descendant(
-      of: firstItemFinder,
-      matching: find.byType(CupertinoCheckbox),
-    );
-    expect(firstMultiSelectWidgetFinder, findsOneWidget);
-    await tester.tap(firstMultiSelectWidgetFinder);
-    await tester.pumpAndSettle();
-    expect(
-      container.read(ui_providers.selectedMemoIdsForMultiSelectProvider),
-      contains(dummyMemos[0].id),
-    );
-    expect(
-      container.read(ui_providers.selectedMemoIdsForMultiSelectProvider).length,
-      1,
-    );
-    expect(find.text('1 Selected'), findsOneWidget);
-    await tester.tap(firstMultiSelectWidgetFinder);
-    await tester.pumpAndSettle();
-    expect(
-      container.read(ui_providers.selectedMemoIdsForMultiSelectProvider),
-      isEmpty,
-    );
-    expect(find.text('0 Selected'), findsOneWidget);
-  });
 
-  testWidgets('MemosScreen exits multi-select mode via Cancel button', (
-    WidgetTester tester,
-  ) async {
-    // Arrange
-    await tester.pumpWidget(
-      buildTestableWidget(const MemosScreen(), container),
-    );
-    await tester.pumpAndSettle();
-
-    // Enter multi-select mode
-    container.read(ui_providers.toggleMemoMultiSelectModeProvider)();
-    await tester.pumpAndSettle(); // Allow UI to rebuild
-
-    // Tap the checkbox within the first item to select it
+    // Act: Tap the first checkbox
     final firstItemFinder = find.byType(MemoListItem).first;
     final firstCheckboxFinder = find.descendant(
       of: firstItemFinder,
@@ -487,105 +465,109 @@ void main() {
     await tester.tap(firstCheckboxFinder);
     await tester.pumpAndSettle();
 
+    // Assert: Item selected
     expect(
-      container.read(ui_providers.memoMultiSelectModeProvider),
-      isTrue,
-      reason: "Should be in multi-select mode initially",
+      container.read(ui_providers.selectedMemoIdsForMultiSelectProvider),
+      contains(dummyMemos[0].id),
     );
+    expect(
+      container.read(ui_providers.selectedMemoIdsForMultiSelectProvider).length,
+      1,
+    );
+    expect(find.text('1 Selected'), findsOneWidget); // Title updates
+
+    // Act: Tap the first checkbox again
+    await tester.tap(firstCheckboxFinder);
+    await tester.pumpAndSettle();
+
+    // Assert: Item deselected
+    expect(
+      container.read(ui_providers.selectedMemoIdsForMultiSelectProvider),
+      isEmpty,
+    );
+    expect(find.text('0 Selected'), findsOneWidget); // Title updates
+  });
+
+  // Test 4: Exit Multi-Select Mode
+  testWidgets('MemosScreen exits multi-select mode via Cancel button', (
+    WidgetTester tester,
+  ) async {
+    // Arrange: Enter multi-select mode and select an item
+    await tester.pumpWidget(
+      buildTestableWidget(const MemosScreen(), container),
+    );
+    await tester.pumpAndSettle();
+    container.read(ui_providers.toggleMemoMultiSelectModeProvider)();
+    await tester.pumpAndSettle();
+    final firstItemFinder = find.byType(MemoListItem).first;
+    final firstCheckboxFinder = find.descendant(
+      of: firstItemFinder,
+      matching: find.byType(CupertinoCheckbox),
+    );
+    await tester.tap(firstCheckboxFinder);
+    await tester.pumpAndSettle();
+    expect(container.read(ui_providers.memoMultiSelectModeProvider), isTrue);
     expect(
       container.read(ui_providers.selectedMemoIdsForMultiSelectProvider),
       isNotEmpty,
-      reason: "An item should be selected",
     );
 
-    // Act: Tap the Cancel button (leading button in multi-select nav bar)
+    // Act: Tap the Cancel button (clear icon)
     final navBarFinder = find.byType(CupertinoNavigationBar);
     final cancelButtonFinder = find.descendant(
       of: navBarFinder,
-      matching: find.widgetWithIcon(
-        CupertinoButton,
-        CupertinoIcons.clear,
-      ), // Use clear icon
+      matching: find.widgetWithIcon(CupertinoButton, CupertinoIcons.clear),
     );
-    expect(
-      cancelButtonFinder,
-      findsOneWidget,
-      reason: "Could not find Cancel button to tap",
-    );
+    expect(cancelButtonFinder, findsOneWidget);
     await tester.tap(cancelButtonFinder);
     await tester.pumpAndSettle();
 
     // Assert: Exited multi-select mode
-    expect(
-      container.read(ui_providers.memoMultiSelectModeProvider),
-      isFalse,
-      reason: "Failed to exit multi-select mode via Cancel button",
-    );
+    expect(container.read(ui_providers.memoMultiSelectModeProvider), isFalse);
     expect(
       container.read(ui_providers.selectedMemoIdsForMultiSelectProvider),
-      isEmpty,
-      reason: "Selection should be cleared on exit",
+      isEmpty, // Selection cleared
     );
 
     // Verify NavigationBar reverts
+    expect(find.text('Inbox'), findsOneWidget); // Title back to preset label
     expect(
-      find.descendant(
-        of: find.byType(CupertinoNavigationBar),
-        matching: find.text('Memos (ALL)'),
-      ),
-      findsOneWidget,
-    );
-    // Verify the "Select" icon button is back in the trailing slot
-    final selectButtonFinder = find.descendant(
-      of: navBarFinder,
-      matching: find.widgetWithIcon(
+      find.widgetWithIcon(
         CupertinoButton,
         CupertinoIcons.checkmark_seal,
-      ),
-    );
-    expect(
-      selectButtonFinder,
+      ), // Select button back
       findsOneWidget,
-      reason:
-          "Select/Multi-select toggle button (checkmark_seal icon) should reappear after exiting multi-select",
     );
-    // Verify the Cancel (clear) button is gone
     expect(
       find.widgetWithIcon(
         CupertinoButton,
         CupertinoIcons.clear,
-      ), // Use clear icon
-      findsNothing,
-    ); // Cancel button should be gone
-
-    expect(find.textContaining('Selected'), findsNothing);
-
-    // Verify Checkboxes/Switches are gone
-    expect(
-      find.descendant(
-        of: find.byType(MemoListItem),
-        matching: find.byType(CupertinoCheckbox), // Check Checkbox
-      ),
+      ), // Cancel button gone
       findsNothing,
     );
     expect(
-      find.descendant(
-        of: find.byType(MemoListItem),
-        matching: find.byType(CupertinoSwitch), // Also check Switch
-      ),
+      find.textContaining('Selected'),
       findsNothing,
+    ); // Multi-select title gone
+
+    // Verify Search Bar and Filter Control are visible again
+    expect(find.byType(CupertinoSearchTextField), findsOneWidget);
+    expect(
+      find.byType(CupertinoSlidingSegmentedControl<String>),
+      findsOneWidget,
     );
 
-    // Verify Slidable/Dismissible are NOT back (assuming they were replaced)
+    // Verify Checkboxes are gone
     expect(
       find.descendant(
         of: find.byType(MemoListItem),
-        matching: find.byType(Slidable),
+        matching: find.byType(CupertinoCheckbox),
       ),
       findsNothing,
     );
   });
 
+  // Test 5: Server Switcher
   testWidgets('MemosScreen displays server switcher and opens action sheet', (
     WidgetTester tester,
   ) async {
@@ -604,33 +586,86 @@ void main() {
         CupertinoIcons.square_stack_3d_down_right,
       ),
     );
-    expect(
-      serverSwitcherButtonFinder,
-      findsOneWidget,
-      reason: "Could not find the server switcher button",
-    );
+    expect(serverSwitcherButtonFinder, findsOneWidget);
     expect(
       find.textContaining('Mock Server 1'),
       findsOneWidget,
-    ); // Verify initial active server name
+    ); // Initial server
 
     await tester.tap(serverSwitcherButtonFinder);
     await tester.pumpAndSettle(); // Allow action sheet animation
 
-    // Assert: Action sheet appears with server options
-    // Finding action sheets can be tricky, look for characteristic widgets/text
+    // Assert: Action sheet appears
     expect(find.byType(CupertinoActionSheet), findsOneWidget);
     expect(find.text('Switch Active Server'), findsOneWidget); // Title
-    expect(
-      find.text('Mock Server 1'),
-      findsWidgets,
-    ); // Option 1 (might find multiple if name is in button too)
+    expect(find.text('Mock Server 1'), findsWidgets); // Option 1
     expect(find.text('Mock Server 2'), findsWidgets); // Option 2
     expect(find.text('Cancel'), findsOneWidget); // Cancel button
+  });
 
-    // Optional: Tap an option and verify state change (requires mocking notifier interaction)
-    // await tester.tap(find.text('Mock Server 2').last); // Tap the action sheet option
-    // await tester.pumpAndSettle();
-    // expect(container.read(activeServerConfigProvider)?.id, mockServer2.id); // Verify active server changed
+  // Test 6: Quick Filter Control Interaction
+  testWidgets('MemosScreen updates filter preset via segmented control', (
+    WidgetTester tester,
+  ) async {
+    // Arrange
+    await tester.pumpWidget(
+      buildTestableWidget(const MemosScreen(), container),
+    );
+    await tester.pumpAndSettle();
+    expect(container.read(quickFilterPresetProvider), 'inbox'); // Initial state
+    expect(find.text('Inbox'), findsOneWidget); // Initial title
+
+    // Act: Tap the 'Today' segment
+    // Finding specific segments can be tricky. We'll find the text within the control.
+    final todaySegmentFinder = find.descendant(
+      of: find.byType(CupertinoSlidingSegmentedControl<String>),
+      matching: find.text('Today'),
+    );
+    expect(todaySegmentFinder, findsOneWidget);
+    await tester.tap(todaySegmentFinder);
+    await tester.pumpAndSettle();
+
+    // Assert: Provider updated and title changed
+    expect(container.read(quickFilterPresetProvider), 'today');
+    expect(find.text('Today'), findsOneWidget); // Title updated
+
+    // Act: Tap the 'All' segment
+    final allSegmentFinder = find.descendant(
+      of: find.byType(CupertinoSlidingSegmentedControl<String>),
+      matching: find.text('All'),
+    );
+    expect(allSegmentFinder, findsOneWidget);
+    await tester.tap(allSegmentFinder);
+    await tester.pumpAndSettle();
+
+    // Assert: Provider updated and title changed
+    expect(container.read(quickFilterPresetProvider), 'all');
+    expect(find.text('All'), findsOneWidget); // Title updated
+  });
+
+  // Test 7: Open Advanced Filter Panel
+  testWidgets('MemosScreen opens AdvancedFilterPanel on tuning fork tap', (
+    WidgetTester tester,
+  ) async {
+    // Arrange
+    await tester.pumpWidget(
+      buildTestableWidget(const MemosScreen(), container),
+    );
+    await tester.pumpAndSettle();
+
+    // Act: Tap the advanced filter button (tuningfork)
+    final navBarFinder = find.byType(CupertinoNavigationBar);
+    final advancedFilterButtonFinder = find.descendant(
+      of: navBarFinder,
+      matching: find.widgetWithIcon(CupertinoButton, CupertinoIcons.tuningfork),
+    );
+    expect(advancedFilterButtonFinder, findsOneWidget);
+    await tester.tap(advancedFilterButtonFinder);
+    await tester.pumpAndSettle(); // Allow modal animation
+
+    // Assert: AdvancedFilterPanel is displayed
+    // Finding modal popups can require looking for content within them.
+    expect(find.byType(AdvancedFilterPanel), findsOneWidget);
+    expect(find.text('Advanced Filter'), findsOneWidget); // Panel title
   });
 }
