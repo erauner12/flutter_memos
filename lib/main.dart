@@ -5,6 +5,7 @@ import 'package:flutter/cupertino.dart'; // Import Cupertino
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart'; // Keep Material import (needed for ThemeMode enum)
 import 'package:flutter/services.dart';
+import 'package:flutter_localizations/flutter_localizations.dart'; // Import localizations
 import 'package:flutter_memos/providers/server_config_provider.dart';
 import 'package:flutter_memos/providers/theme_provider.dart';
 import 'package:flutter_memos/providers/ui_providers.dart'; // Import for UI providers including highlightedCommentIdProvider
@@ -379,6 +380,17 @@ class _MyAppState extends ConsumerState<MyApp> {
                     _navigatorKey, // Add navigator key for deep link navigation
                 title: 'Flutter Memos',
                 debugShowCheckedModeBanner: false,
+                // Provide Material localizations needed by widgets like AppBar, TextField etc.
+                localizationsDelegates: const [
+                  GlobalMaterialLocalizations.delegate,
+                  GlobalWidgetsLocalizations.delegate,
+                  GlobalCupertinoLocalizations
+                      .delegate, // Include Cupertino defaults too
+                ],
+                supportedLocales: const [
+                  Locale('en', ''), // English, no country code
+                  // Add other locales your app supports here
+                ],
                 // themeMode is handled by the brightness logic above
                 initialRoute: '/',
                 routes: {
@@ -473,116 +485,117 @@ class HomeScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // final themeMode = ref.watch(themeModeProvider); // No longer directly needed for icon logic here
+    final themeMode = ref.watch(themeModeProvider);
 
-    return Scaffold(
-      // Keep Scaffold temporarily until Phase 2
-      appBar: AppBar(
-        // Keep AppBar temporarily until Phase 2
-        title: const Text('Flutter Memos'),
-        // Temporarily comment out actions as PopupMenuButton is Material
-        // actions: [
-        //   // Settings button
-        //   IconButton(
-        //     icon: const Icon(Icons.settings),
-        //     tooltip: 'Settings',
-        //     onPressed: () {
-        //       Navigator.pushNamed(context, '/settings');
-        //     },
-        //   ),
-        //   // Theme toggle button with dropdown
-        //   PopupMenuButton<Object>(
-        //     tooltip: 'Select theme',
-        //     icon: Icon(
-        //       themeMode == ThemeMode.dark
-        //           ? Icons.dark_mode
-        //           : themeMode == ThemeMode.light
-        //               ? Icons.light_mode
-        //               : Icons.brightness_auto,
-        //     ),
-        //     onSelected: (Object value) async {
-        //       if (value is ThemeMode) {
-        //         if (kDebugMode) {
-        //           print('[HomeScreen] User selected theme: $value');
-        //         }
-        //         // Set the theme mode first
-        //         ref.read(themeModeProvider.notifier).state = value;
-        //         // Then save the preference
-        //         await ref.read(saveThemeModeProvider)(value);
-        //         // Provide user feedback
-        //         if (context.mounted) {
-        //           ScaffoldMessenger.of(context).showSnackBar(
-        //             SnackBar(
-        //               content: Text(
-        //                 'Theme set to ${value.toString().split('.').last}',
-        //               ),
-        //               duration: const Duration(seconds: 1),
-        //             ),
-        //           );
-        //         }
-        //       } else if (value == 'settings') {
-        //         Navigator.push(
-        //           context,
-        //           MaterialPageRoute(
-        //             builder: (context) => const SettingsScreen(),
-        //           ),
-        //         );
-        //       }
-        //     },
-        //     itemBuilder:
-        //         (BuildContext context) => <PopupMenuEntry<Object>>[
-        //           const PopupMenuItem<Object>(
-        //             value: ThemeMode.light,
-        //             child: Row(
-        //               children: [
-        //                 Icon(Icons.light_mode, size: 18),
-        //                 SizedBox(width: 8),
-        //                 Text('Light Mode'),
-        //               ],
-        //             ),
-        //           ),
-        //           const PopupMenuItem<Object>(
-        //             value: ThemeMode.dark,
-        //             child: Row(
-        //               children: [
-        //                 Icon(Icons.dark_mode, size: 18),
-        //                 SizedBox(width: 8),
-        //                 Text('Dark Mode'),
-        //               ],
-        //             ),
-        //           ),
-        //           const PopupMenuItem<Object>(
-        //             value: ThemeMode.system,
-        //             child: Row(
-        //               children: [
-        //                 Icon(Icons.brightness_auto, size: 18),
-        //                 SizedBox(width: 8),
-        //                 Text('System Default'),
-        //               ],
-        //             ),
-        //           ),
-        //           const PopupMenuItem<Object>(
-        //             value: 'settings',
-        //             child: Row(
-        //               children: [
-        //                 Icon(Icons.settings, size: 18),
-        //                 SizedBox(width: 8),
-        //                 Text('Settings'),
-        //               ],
-        //             ),
-        //           ),
-        //         ],
-        //   ),
-        // ],
+    // Helper function to show the theme/settings action sheet
+    void showThemeSettingsSheet(BuildContext context) {
+      showCupertinoModalPopup<void>(
+        context: context,
+        builder:
+            (BuildContext context) => CupertinoActionSheet(
+              title: const Text('Appearance & Settings'),
+              // message: const Text('Select your preferred theme'),
+              actions: <CupertinoActionSheetAction>[
+                CupertinoActionSheetAction(
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(CupertinoIcons.sun_max_fill, size: 20),
+                      SizedBox(width: 8),
+                      Text('Light Mode'),
+                    ],
+                  ),
+                  onPressed: () async {
+                    Navigator.pop(context);
+                    ref.read(setThemeModeProvider)(ThemeMode.light);
+                  },
+                ),
+                CupertinoActionSheetAction(
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(CupertinoIcons.moon_fill, size: 20),
+                      SizedBox(width: 8),
+                      Text('Dark Mode'),
+                    ],
+                  ),
+                  onPressed: () async {
+                    Navigator.pop(context);
+                    ref.read(setThemeModeProvider)(ThemeMode.dark);
+                  },
+                ),
+                CupertinoActionSheetAction(
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(CupertinoIcons.device_phone_portrait, size: 20),
+                      SizedBox(width: 8),
+                      Text('System Default'),
+                    ],
+                  ),
+                  onPressed: () async {
+                    Navigator.pop(context);
+                    ref.read(setThemeModeProvider)(ThemeMode.system);
+                  },
+                ),
+                CupertinoActionSheetAction(
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(CupertinoIcons.settings, size: 20),
+                      SizedBox(width: 8),
+                      Text('Settings'),
+                    ],
+                  ),
+                  onPressed: () {
+                    Navigator.pop(context); // Close the sheet first
+                    Navigator.pushNamed(context, '/settings');
+                  },
+                ),
+              ],
+              cancelButton: CupertinoActionSheetAction(
+                isDefaultAction: true,
+                onPressed: () {
+                  Navigator.pop(context);
+                },
+                child: const Text('Cancel'),
+              ),
+            ),
+      );
+    }
+
+    // Determine the icon for the theme button
+    IconData themeIcon;
+    switch (themeMode) {
+      case ThemeMode.light:
+        themeIcon = CupertinoIcons.sun_max;
+        break;
+      case ThemeMode.dark:
+        themeIcon = CupertinoIcons.moon;
+        break;
+      case ThemeMode.system:
+        themeIcon = CupertinoIcons.gear_alt; // Or gear, device_phone_portrait
+        break;
+    }
+
+    return CupertinoPageScaffold(
+      navigationBar: CupertinoNavigationBar(
+        middle: const Text('Flutter Memos'),
+        trailing: CupertinoButton(
+          padding: EdgeInsets.zero,
+          onPressed: () => showThemeSettingsSheet(context),
+          child: Icon(themeIcon),
+        ),
       ),
-      body: const Column(
-        children: [
-          Expanded(child: MemosScreen()),
-
-          // Demo UI components remain commented out
-          /* ... */
-
-        ],
+      child: const SafeArea(
+        // Add SafeArea to avoid overlap with status bar/notch
+        child: Column(
+          children: [
+            Expanded(child: MemosScreen()),
+            // Demo UI components remain commented out
+            /* ... */
+          ],
+        ),
       ),
     );
   }

@@ -12,7 +12,7 @@ dependencies:
   flutter_slidable: ^4.0.0
   cupertino_icons: ^1.0.8
   http: ^1.1.0
-  intl: ^0.20.2
+  intl: ^0.19.0
   shared_preferences: ^2.2.0
   path_provider: ^2.1.0
   flutter_secure_storage: ^9.2.4
@@ -25,6 +25,8 @@ dependencies:
   openapi_generator_annotations: ^6.1.0
   app_links: ^6.4.0
   collection: ^1.18.0  # Added for deep equality comparison
+  flutter_localizations: # Add localization support
+    sdk: flutter         # Add localization support
   file_picker: ^10.0.0 # Add file_picker
   markdown:
     git:
