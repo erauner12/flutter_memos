@@ -66,17 +66,8 @@ void main() {
           apiServiceProvider.overrideWithValue(mockApiService),
           activeServerConfigProvider.overrideWithValue(sourceServer),
           memosNotifierProvider.overrideWith((ref) {
-            // Create and configure the mock INSIDE the override
-            final mockNotifier = MockMemosNotifier();
-            when(mockNotifier.state).thenReturn(
-              MemosState(memos: [memoToMove]), // Set initial state stub
-            );
-            // Stub other methods needed by the provider or tests
-            when(mockNotifier.removeMemoOptimistically(any)).thenAnswer((_) {});
-            when(
-              mockNotifier.refresh(),
-            ).thenAnswer((_) async {}); // Stub refresh
-            return mockNotifier; // Return the configured mock
+            // Create a fresh mock instance for each test
+            return MockMemosNotifier();
           }),
         ],
       );
@@ -85,6 +76,18 @@ void main() {
       // This ensures we are verifying the same instance that Riverpod is using
       mockMemosNotifierInstance =
           container.read(memosNotifierProvider.notifier) as MockMemosNotifier;
+
+      // Now, stub the methods on the retrieved mock instance
+      when(mockMemosNotifierInstance.state).thenReturn(
+        MemosState(memos: [memoToMove]), // Set initial state stub
+      );
+      // Stub other methods needed by the provider or tests
+      when(
+        mockMemosNotifierInstance.removeMemoOptimistically(any),
+      ).thenAnswer((_) {});
+      when(
+        mockMemosNotifierInstance.refresh(),
+      ).thenAnswer((_) async {}); // Stub refresh
 
       // Configure ApiService mocks AFTER the container and notifier mock are set up
       when(
