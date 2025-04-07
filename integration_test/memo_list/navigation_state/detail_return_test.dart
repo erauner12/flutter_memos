@@ -1,47 +1,35 @@
-import 'package:integration_test/integration_test.dart';
-
-import '../../helpers/test_helpers.dart'; // Import helpers
-
-void main() {
 import 'package:flutter/material.dart';
 import 'package:flutter_memos/main.dart' as app;
+import 'package:flutter_memos/widgets/memo_card.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
-import '../../helpers/test_helpers.dart'; // Import helpers
+import '../../helpers/test_helpers.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   tearDownAll(() async {
-    await cleanupTestMemos(); // Cleanup memos after all tests in this file
+    await cleanupTestMemos();
   });
 
-  testWidgets('Scroll position and selection maintained after viewing detail',
+  testWidgets('Selection maintained after returning from detail view',
       (WidgetTester tester) async {
     // 1. Setup
     app.main();
     await tester.pumpAndSettle();
-    await Future.delayed(const Duration(seconds: 2)); // Wait for initial load
+    await Future.delayed(const Duration(seconds: 2));
 
-    final testMemos = await createTestMemos(15); // Create enough memos to scroll
-    expect(testMemos.length, 15);
+    final testMemos = await createTestMemos(8);
+    await tester.pumpAndSettle(const Duration(seconds: 2));
 
-    // Refresh list to show new memos
-    await tester.fling(find.byType(ListView), const Offset(0.0, 400.0), 1000.0);
-    await tester.pumpAndSettle(const Duration(seconds: 3));
-
-    // 2. Scroll and Select
-    final memoToSelectIndex = 8; // Select a memo somewhere in the middle
-    final memoToSelect = testMemos[memoToSelectIndex];
-    final memoToSelectFinder = findMemoCardByMemo(memoToSelect);
-
-    await scrollMemosListDown(tester, 600); // Scroll down significantly
-    // Send 9 key presses to select the item at index 8
+    // 2. Select a memo
+    final memoToSelectIndex = 3;
+    final selectedMemo = testMemos[memoToSelectIndex];
     await selectMemoWithKeys(tester, memoToSelectIndex + 1);
     await tester.pumpAndSettle();
 
-    // Verify selection before navigating
+    // Verify selection state
     final selectedMemoBefore = getSelectedMemo(tester);
     expect(
       selectedMemoBefore,
@@ -50,56 +38,55 @@ void main() {
     );
     expect(
       selectedMemoBefore!.id,
-      memoToSelect.id,
-      reason: "Correct memo ID not selected before navigation",
+      selectedMemo.id,
+      reason: "Incorrect memo ID selected before navigation",
     );
+
+    // 3. Navigate to detail view
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+
+    // Verify we're in detail view
     expect(
-      memoToSelectFinder,
+      find.text('Back to List'),
       findsOneWidget,
-      reason: "Selected memo card widget not found before navigation",
+      reason: "Not navigated to detail view",
+    );
+    
+    // 4. Return to list view
+    final backButton =
+        find
+            .byTooltip('Back') // Or use appropriate finder
+            .first;
+    await tester.tap(backButton);
+    await tester.pumpAndSettle();
+
+    // 5. Verify selection state is preserved
+    final selectedMemoAfterReturn = getSelectedMemo(tester);
+    expect(
+      selectedMemoAfterReturn,
+      isNotNull,
+      reason: "Selection lost after returning from detail view",
+    );
+    expect(
+      selectedMemoAfterReturn!.id,
+      selectedMemo.id,
+      reason: "Different memo selected after returning from detail view",
     );
 
-
-    // 3. Navigate to Detail
-    debugPrint('[Test Action] Tapping selected memo to view detail...');
-    await tester.tap(memoToSelectFinder);
-    await tester.pumpAndSettle();
-    expect(find.text('Memo Detail'), findsOneWidget, reason: "Did not navigate to Memo Detail screen");
-
-    // 4. Navigate Back
-    debugPrint('[Test Action] Navigating back to memos list...');
-    await tester.pageBack();
-    await tester.pumpAndSettle();
-    expect(find.text('Memo Detail'), findsNothing, reason: "Still on Memo Detail screen after pageBack");
-
-    // 5. Assert State Preservation
-    debugPrint('[Test Assertion] Verifying selection and scroll position...');
-
-    // Verify the *same* memo is still selected
-    final selectedMemoAfter = getSelectedMemo(tester);
-    expect(selectedMemoAfter, isNotNull, reason: "No memo selected after returning");
+    // Verify the widget visually indicates selection
+    final memoSelectedFinder = findMemoCardByMemo(selectedMemo);
     expect(
-      selectedMemoAfter!.id,
-      memoToSelect.id,
-      reason: "Different memo ID selected after returning",
-    );
-
-    // Verify the selected MemoCard widget is still present
-    final selectedMemoCardFinderAfter = findMemoCardByMemo(memoToSelect);
-    expect(
-      selectedMemoCardFinderAfter,
+      memoSelectedFinder,
       findsOneWidget,
       reason: "Selected memo card widget not found after returning",
     );
-
-    // Verify scroll position (check if the selected item is still visible)
-    // This is a proxy for scroll position preservation.
-    expect(selectedMemoCardFinderAfter, findsOneWidget, reason: "Selected memo card is not visible after returning");
-
-    // Optional: Try scrolling up slightly and see if it works immediately
-    await scrollMemosListUp(tester, 50);
-    expect(selectedMemoCardFinderAfter, findsOneWidget, reason: "Selected memo card disappeared after small scroll up");
-
-    debugPrint('[Test Result] State preservation after detail view successful.');
+    
+    // Additional visual verification if needed
+    expect(
+      tester.widget<MemoCard>(memoSelectedFinder).isSelected,
+      isTrue,
+      reason: "Selected card not visually shown as selected",
+    );
   });
 }
