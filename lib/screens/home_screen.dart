@@ -56,7 +56,7 @@ class HomeScreen extends ConsumerWidget {
                                     onPressed: () {
                                       ref
                                           .read(
-                                            themeProvider.notifier,
+                                            themeModeProvider.notifier,
                                           ) // Correct usage
                                           .setTheme(ThemeMode.light);
                                       Navigator.pop(context);
@@ -67,7 +67,7 @@ class HomeScreen extends ConsumerWidget {
                                     onPressed: () {
                                       ref
                                           .read(
-                                            themeProvider.notifier,
+                                            themeModeProvider.notifier,
                                           ) // Correct usage
                                           .setTheme(ThemeMode.dark);
                                       Navigator.pop(context);
@@ -78,7 +78,7 @@ class HomeScreen extends ConsumerWidget {
                                     onPressed: () {
                                       ref
                                           .read(
-                                            themeProvider.notifier,
+                                            themeModeProvider.notifier,
                                           ) // Correct usage
                                           .setTheme(ThemeMode.system);
                                       Navigator.pop(context);
