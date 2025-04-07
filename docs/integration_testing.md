@@ -179,7 +179,7 @@ When creating new integration tests:
 Example template for a new test:
 
 ```dart
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart'; // Use Cupertino
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:flutter_memos/main.dart' as app;

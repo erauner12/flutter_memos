@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart'; // Import Cupertino
 import 'package:flutter/services.dart';
 import 'package:flutter_memos/models/memo.dart';
 import 'package:flutter_memos/providers/ui_providers.dart'
@@ -85,13 +85,18 @@ Finder findSelectedMemoCard() {
 Memo? getSelectedMemo(WidgetTester tester) {
   ProviderContainer? container;
   try {
-    // Find the ProviderScope element in the widget tree
-    final element = tester.element(find.byType(ProviderScope));
+    // Find the CupertinoApp element in the widget tree (assuming ProviderScope is top-level within it)
+    final element = tester.element(find.byType(CupertinoApp));
     // Get the container associated with the scope
-    container = ProviderScope.containerOf(element);
+    // Note: This assumes ProviderScope is still used directly under CupertinoApp.
+    // If ProviderScope was removed or moved, this needs adjustment.
+    container = ProviderScope.containerOf(
+      element,
+      listen: false,
+    ); // Use listen: false
   } catch (e) {
     debugPrint(
-      '[getSelectedMemo] Error finding ProviderScope or Container: $e',
+      '[getSelectedMemo] Error finding CupertinoApp or ProviderScope Container: $e',
     );
     return null; // Cannot proceed without the container
   }
@@ -142,7 +147,8 @@ Memo? getSelectedMemo(WidgetTester tester) {
 
 // Helper function to scroll the main memos list down
 Future<void> scrollMemosListDown(WidgetTester tester, double distance) async {
-  final listFinder = find.byType(ListView);
+  // Find the scrollable view (likely CustomScrollView or maybe still ListView)
+  final listFinder = find.byType(Scrollable).first; // More generic finder
   expect(
     listFinder,
     findsOneWidget,
@@ -159,7 +165,8 @@ Future<void> scrollMemosListDown(WidgetTester tester, double distance) async {
 
 // Helper function to scroll the main memos list up
 Future<void> scrollMemosListUp(WidgetTester tester, double distance) async {
-  final listFinder = find.byType(ListView);
+  // Find the scrollable view (likely CustomScrollView or maybe still ListView)
+  final listFinder = find.byType(Scrollable).first; // More generic finder
   expect(
     listFinder,
     findsOneWidget,
@@ -176,20 +183,20 @@ Future<void> scrollMemosListUp(WidgetTester tester, double distance) async {
 
 // Selects a memo using keyboard navigation (down 'count' times)
 Future<void> selectMemoWithKeys(WidgetTester tester, int count) async {
-  // Find the ListView within the MemosScreen
+  // Find the scrollable list within the MemosScreen
   final listFinder = find.descendant(
     of: find.byType(
       MemosScreen,
     ), // Ensure we target the list in the right screen
-    matching: find.byType(ListView),
+    matching: find.byType(Scrollable), // More generic finder
   );
   expect(
     listFinder,
     findsOneWidget,
-    reason: "ListView not found in MemosScreen",
+    reason: "Scrollable list not found in MemosScreen",
   );
 
-  // Tap the ListView to ensure its containing Focus scope receives focus
+  // Tap the Scrollable to ensure its containing Focus scope receives focus
   await tester.tap(listFinder);
   await tester.pumpAndSettle(
     const Duration(milliseconds: 100),

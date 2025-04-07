@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart'; // Import Cupertino
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/models/memo.dart';
@@ -21,7 +21,7 @@ import 'memo_content_links_test.mocks.dart';
 @GenerateNiceMocks([MockSpec<ApiService>(), MockSpec<UrlLauncherService>()])
 
 void main() {
-  group('MemoContent Link Handling Tests', () {
+  group('MemoContent Link Handling Tests (Cupertino)', () {
     late MockApiService mockApiService;
     late MockUrlLauncherService mockUrlLauncherService;
 
@@ -71,8 +71,10 @@ void main() {
             // Override the apiServiceProvider
             apiServiceProvider.overrideWithValue(mockApiService),
           ],
-          child: MaterialApp(
-            home: Scaffold(body: MemoContent(memo: memo, memoId: 'test-id')),
+          child: CupertinoApp( // Use CupertinoApp
+            home: CupertinoPageScaffold( // Use CupertinoPageScaffold
+              child: MemoContent(memo: memo, memoId: 'test-id'),
+            ),
           ),
         ),
       );
@@ -85,12 +87,12 @@ void main() {
 
       // Find the MarkdownBody widget first to narrow down the search area
       expect(find.byType(MarkdownBody), findsAtLeastNWidgets(1));
-  
+
       // Find all RichText widgets to check for our link text
       final richTextWidgets = tester.widgetList<RichText>(
         find.byType(RichText),
       );
-      
+
       // Debug log all RichText content
       debugMarkdown('\nAll RichText widgets content:');
       for (final widget in richTextWidgets) {
@@ -99,7 +101,7 @@ void main() {
 
       // More flexible approach to find our link text
       bool foundLinkText = false;
-  
+
       // First try direct text search
       try {
         expect(find.textContaining('Example Link'), findsAtLeastNWidgets(1));
@@ -117,7 +119,7 @@ void main() {
           }
         }
       }
-  
+
       expect(
         foundLinkText,
         isTrue,
@@ -172,8 +174,10 @@ void main() {
               // Override the apiServiceProvider
               apiServiceProvider.overrideWithValue(mockApiService),
           ],
-          child: MaterialApp(
-            home: Scaffold(body: MemoContent(memo: memo, memoId: 'test-id')),
+          child: CupertinoApp( // Use CupertinoApp
+            home: CupertinoPageScaffold( // Use CupertinoPageScaffold
+              child: MemoContent(memo: memo, memoId: 'test-id'),
+            ),
           ),
         ),
       );
@@ -192,7 +196,7 @@ void main() {
       for (final linkText in linkTexts) {
         // Try different approaches to find the link text
         bool foundText = false;
-        
+
         // Try textContaining finder
         try {
           await tester.runAsync(() async {
@@ -204,13 +208,13 @@ void main() {
         } catch (_) {
           // Ignore error and try alternative method
         }
-        
+
         // If not found, try searching in RichText widgets
         if (!foundText) {
           final richTextWidgets = tester.widgetList<RichText>(
             find.byType(RichText),
           );
-          
+
           for (final widget in richTextWidgets) {
             if (widget.text.toPlainText().contains(linkText)) {
               foundText = true;
@@ -218,7 +222,7 @@ void main() {
             }
           }
         }
-        
+
         expect(
           foundText,
           isTrue,

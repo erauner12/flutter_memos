@@ -1,7 +1,7 @@
 import 'dart:math' as math;
 
+import 'package:flutter/cupertino.dart'; // Import Cupertino
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_memos/providers/filter_providers.dart';
 import 'package:flutter_memos/providers/memo_providers.dart';
@@ -177,145 +177,187 @@ class _MemosBodyState extends ConsumerState<MemosBody>
             return const Center(
               child: Padding(
                 padding: EdgeInsets.all(20.0),
-                child: CircularProgressIndicator(),
+                child: CupertinoActivityIndicator(),
               ),
             );
           }
 
           // 2. Error State (only show if not loading more)
           if (memosState.error != null && !memosState.isLoadingMore) {
-            return RefreshIndicator(
-              onRefresh: () async {
-                if (kDebugMode) {
-                  print('[MemosBody] Refresh triggered (error state)');
-                }
-                // Use the notifier's refresh method
-                await ref.read(memosNotifierProvider.notifier).refresh();
-              },
-              child: LayoutBuilder(
-                // Use LayoutBuilder for constraints
-                builder: (context, constraints) {
-                  return SingleChildScrollView(
-                    // Make it scrollable for refresh
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(
-                        minHeight: constraints.maxHeight,
-                      ),
-                      child: Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(20.0),
-                          child: Text(
-                            'Error loading memos: ${memosState.error.toString().substring(0, math.min(memosState.error.toString().length, 100))}\nPull down to retry.',
-                            style: const TextStyle(color: Colors.red),
+            // Use CustomScrollView for consistency with data state and refresh control
+            return CustomScrollView(
+              physics: const BouncingScrollPhysics(
+                parent: AlwaysScrollableScrollPhysics(),
+              ),
+              slivers: [
+                CupertinoSliverRefreshControl(
+                  onRefresh: () async {
+                    if (kDebugMode) {
+                      print('[MemosBody] Refresh triggered (error state)');
+                    }
+                    await ref.read(memosNotifierProvider.notifier).refresh();
+                  },
+                ),
+                SliverFillRemaining(
+                  // Use SliverFillRemaining to center content
+                  child: Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(20.0),
+                      child: Column(
+                        // Use Column for button
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            'Error loading memos: ${memosState.error.toString().substring(0, math.min(memosState.error.toString().length, 100))}',
+                            style: TextStyle(
+                              color: CupertinoColors.systemRed.resolveFrom(
+                                context,
+                              ),
+                            ),
                             textAlign: TextAlign.center,
                           ),
-                        ),
+                          const SizedBox(height: 16),
+                          CupertinoButton.filled(
+                            onPressed:
+                                () =>
+                                    ref
+                                        .read(memosNotifierProvider.notifier)
+                                        .refresh(),
+                            child: const Text('Retry'),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Or pull down to retry',
+                            style: TextStyle(
+                              color: CupertinoColors.secondaryLabel.resolveFrom(
+                                context,
+                              ),
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                  ); // End of SingleChildScrollView
-                }, // End of LayoutBuilder builder
-              ), // End of LayoutBuilder
-            ); // End of RefreshIndicator
+                  ),
+                ),
+              ],
+            );
           }
 
           // 3. Empty State (after initial load, no errors, no memos)
           if (!memosState.isLoading && filteredMemos.isEmpty) {
-            // Check if empty due to search with no results
             final searchText = ref.watch(searchQueryProvider);
-            
-            return RefreshIndicator(
-              onRefresh: () async {
-                if (kDebugMode) {
-                  print('[MemosBody] Refresh triggered (empty state)');
-                }
-                // Use the notifier's refresh method
-                await ref.read(memosNotifierProvider.notifier).refresh();
-              },
-              child: LayoutBuilder( // Use LayoutBuilder to ensure ListView constraints
-                builder: (context, constraints) {
-                  return SingleChildScrollView( // Make it scrollable for refresh
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                      child:
-                          searchText.isNotEmpty
-                              ? Center(
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    const Icon(
-                                      Icons.search_off,
-                                      size: 48,
-                                      color: Colors.grey,
-                                    ),
-                                    const SizedBox(height: 16),
-                                    Text(
-                                      'No results found for "$searchText"',
-                                      style: const TextStyle(
-                                        fontSize: 16,
-                                        color: Colors.grey,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    ElevatedButton(
-                                      onPressed: () {
-                                        ref
-                                            .read(searchQueryProvider.notifier)
-                                            .state = '';
-                                      },
-                                      child: const Text('Clear Search'),
-                                    ),
-                                  ],
-                                ),
-                              )
-                              : const MemosEmptyState(), // Show the empty state widget
-                    ),
-                  );
-                }
+            // Use CustomScrollView for consistency and refresh control
+            return CustomScrollView(
+              physics: const BouncingScrollPhysics(
+                parent: AlwaysScrollableScrollPhysics(),
               ),
+              slivers: [
+                CupertinoSliverRefreshControl(
+                  onRefresh: () async {
+                    if (kDebugMode) {
+                      print('[MemosBody] Refresh triggered (empty state)');
+                    }
+                    await ref.read(memosNotifierProvider.notifier).refresh();
+                  },
+                ),
+                SliverFillRemaining(
+                  // Center content vertically
+                  child: Center(
+                    child:
+                        searchText.isNotEmpty
+                            ? Column(
+                              // Search empty state
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  CupertinoIcons.search,
+                                  size: 48,
+                                  color: CupertinoColors.secondaryLabel
+                                      .resolveFrom(context),
+                                ),
+                                const SizedBox(height: 16),
+                                Text(
+                                  'No results found for "$searchText"',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    color: CupertinoColors.secondaryLabel
+                                        .resolveFrom(context),
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                CupertinoButton(
+                                  // Use non-filled for secondary action
+                                  onPressed: () {
+                                    ref
+                                        .read(searchQueryProvider.notifier)
+                                        .state = '';
+                                  },
+                                  child: const Text('Clear Search'),
+                                ),
+                              ],
+                            )
+                            : const MemosEmptyState(), // General empty state widget
+                  ),
+                ),
+              ],
             );
           }
 
           // 4. Data State (Memos available)
-          return RefreshIndicator(
-            onRefresh: () async {
-              if (kDebugMode) {
-                print('[MemosBody] Refresh triggered');
-              }
-              // Use the notifier's refresh method
-              await ref.read(memosNotifierProvider.notifier).refresh();
-            },
-            child: ListView.builder(
-              key: const PageStorageKey('memosListView'),
-              controller: _scrollController, // Assign the scroll controller
-              // Ensure the ListView is always scrollable to allow pull-to-refresh
-              // even if the content fits on the screen.
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.all(16.0),
-              // Add 1 to item count if loading more for the indicator
-              itemCount:
-                  filteredMemos.length + (memosState.isLoadingMore ? 1 : 0),
-              itemBuilder: (context, index) {
-                // Check if it's the loading indicator item at the end
-                if (index == filteredMemos.length && memosState.isLoadingMore) {
-                  return const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 16.0),
-                    child: Center(child: CircularProgressIndicator()),
-                  );
-                }
-
-                // Otherwise, it's a memo item (check bounds just in case)
-                if (index < filteredMemos.length) {
-                  final memo = filteredMemos[index];
-                  // Pass the index within the filteredMemos list
-                  return MemoListItem(memo: memo, index: index);
-                }
-
-                // Should not happen, but return an empty box as fallback
-                return const SizedBox.shrink();
-              },
+          // Replace RefreshIndicator + ListView.builder with CustomScrollView + CupertinoSliverRefreshControl + SliverList
+          return CustomScrollView(
+            key: const PageStorageKey(
+              'memosListView',
+            ), // Keep key if needed for state restoration
+            controller: _scrollController,
+            physics: const BouncingScrollPhysics(
+              // Use bouncing physics typical for iOS
+              parent: AlwaysScrollableScrollPhysics(),
             ),
+            slivers: [
+              CupertinoSliverRefreshControl(
+                onRefresh: () async {
+                  if (kDebugMode) {
+                    print('[MemosBody] Refresh triggered');
+                  }
+                  // Use the notifier's refresh method
+                  await ref.read(memosNotifierProvider.notifier).refresh();
+                },
+              ),
+              SliverPadding(
+                // Add padding using SliverPadding
+                padding: const EdgeInsets.all(16.0),
+                sliver: SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) {
+                      // Check if it's the loading indicator item at the end
+                      if (index == filteredMemos.length &&
+                          memosState.isLoadingMore) {
+                        return const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 16.0),
+                          child: Center(child: CupertinoActivityIndicator()),
+                        );
+                      }
+
+                      // Otherwise, it's a memo item (check bounds just in case)
+                      if (index < filteredMemos.length) {
+                        final memo = filteredMemos[index];
+                        // Pass the index within the filteredMemos list
+                        return MemoListItem(memo: memo, index: index);
+                      }
+
+                      // Should not happen, but return an empty box as fallback
+                      return const SizedBox.shrink();
+                    },
+                    // Add 1 to item count if loading more for the indicator
+                    childCount:
+                        filteredMemos.length +
+                        (memosState.isLoadingMore ? 1 : 0),
+                  ),
+                ),
+              ),
+            ],
           );
         },
       ), // End of Builder

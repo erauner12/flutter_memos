@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart'; // Import Cupertino
 import 'package:flutter_memos/models/conversation.dart';
 import 'package:flutter_memos/models/message.dart';
 import 'package:flutter_memos/services/assistant_service.dart';
@@ -44,7 +44,7 @@ class _ChatScreenState extends State<ChatScreen> {
       });
 
       final result = await _assistantService.createConversation();
-      
+
       setState(() {
         _conversationId = result['conversationId'];
         _messages = (result['conversation'] as Conversation).messages;
@@ -59,7 +59,9 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _handleSend() async {
-    if (_conversationId == null || _inputController.text.trim().isEmpty || _sending) {
+    if (_conversationId == null ||
+        _inputController.text.trim().isEmpty ||
+        _sending) {
       return;
     }
 
@@ -68,7 +70,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
     setState(() {
       _sending = true;
-      
+
       // Add temporary user message immediately
       _messages.add(Message(
         id: 'temp-${DateTime.now().millisecondsSinceEpoch}',
@@ -85,13 +87,16 @@ class _ChatScreenState extends State<ChatScreen> {
     });
 
     try {
-      final result = await _assistantService.sendMessage(_conversationId!, userMessage);
-      
+      final result = await _assistantService.sendMessage(
+        _conversationId!,
+        userMessage,
+      );
+
       setState(() {
         _messages = (result['conversation'] as Conversation).messages;
         _sending = false;
       });
-      
+
       // Scroll to the bottom after receiving the response
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _scrollToBottom();
@@ -116,21 +121,28 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Assistant Chat'),
+    // Use CupertinoPageScaffold and CupertinoNavigationBar
+    return CupertinoPageScaffold(
+      navigationBar: const CupertinoNavigationBar(
+        middle: Text('Assistant Chat'),
+        transitionBetweenRoutes: false, // Disable default hero animation
       ),
-      body: _buildBody(),
+      child: SafeArea(
+        // Add SafeArea
+        child: _buildBody(),
+      ),
     );
   }
 
   Widget _buildBody() {
+    final theme = CupertinoTheme.of(context); // Get theme for colors
+
     if (_loading && _conversationId == null) {
       return const Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            CircularProgressIndicator(),
+            CupertinoActivityIndicator(), // Use CupertinoActivityIndicator
             SizedBox(height: 16),
             Text('Initializing assistant...'),
           ],
@@ -142,7 +154,8 @@ class _ChatScreenState extends State<ChatScreen> {
       children: [
         if (_error != null)
           Container(
-            color: Colors.red.shade100,
+            // Use Cupertino dynamic colors
+            color: CupertinoColors.systemRed.resolveFrom(context).withAlpha(50),
             padding: const EdgeInsets.all(10),
             margin: const EdgeInsets.all(10),
             child: Row(
@@ -150,21 +163,28 @@ class _ChatScreenState extends State<ChatScreen> {
                 Expanded(
                   child: Text(
                     _error!,
-                    style: TextStyle(color: Colors.red.shade800),
+                    style: TextStyle(
+                      color: CupertinoColors.systemRed.resolveFrom(context),
+                    ),
                   ),
                 ),
-                TextButton(
+                // Use CupertinoButton
+                CupertinoButton(
                   onPressed: _initializeConversation,
-                  style: TextButton.styleFrom(
-                    backgroundColor: Colors.red.shade800,
-                    foregroundColor: Colors.white,
+                  color: CupertinoColors.systemRed.resolveFrom(context),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
                   ),
-                  child: const Text('Retry'),
+                  child: const Text(
+                    'Retry',
+                    style: TextStyle(color: CupertinoColors.white),
+                  ),
                 ),
               ],
             ),
           ),
-        
+
         Expanded(
           child: ListView.builder(
             controller: _scrollController,
@@ -173,7 +193,16 @@ class _ChatScreenState extends State<ChatScreen> {
             itemBuilder: (context, index) {
               final message = _messages[index];
               final isUser = message.role == 'user';
-              
+
+              // Define colors based on theme and user/assistant
+              final userBubbleColor = theme.primaryColor;
+              final assistantBubbleColor = CupertinoColors.secondarySystemFill
+                  .resolveFrom(context);
+              final userTextColor = CupertinoColors.white;
+              final assistantTextColor = CupertinoColors.label.resolveFrom(
+                context,
+              );
+
               return Align(
                 alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
                 child: Container(
@@ -186,7 +215,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     vertical: 12,
                   ),
                   decoration: BoxDecoration(
-                    color: isUser ? const Color(0xFFDC4C3E) : const Color(0xFFE9E9EB),
+                    color: isUser ? userBubbleColor : assistantBubbleColor,
                     borderRadius: BorderRadius.circular(18),
                   ),
                   child: Column(
@@ -196,7 +225,7 @@ class _ChatScreenState extends State<ChatScreen> {
                         message.content,
                         style: TextStyle(
                           fontSize: 16,
-                          color: isUser ? Colors.white : Colors.black,
+                          color: isUser ? userTextColor : assistantTextColor,
                         ),
                       ),
                       if (message.memoReference != null)
@@ -204,14 +233,20 @@ class _ChatScreenState extends State<ChatScreen> {
                           margin: const EdgeInsets.only(top: 5),
                           padding: const EdgeInsets.all(5),
                           decoration: BoxDecoration(
-                            color: Colors.black.withOpacity(0.1),
+                            color: CupertinoColors.black.withAlpha(
+                              25,
+                            ), // Subtle background
                             borderRadius: BorderRadius.circular(5),
                           ),
                           child: Text(
                             'Memo ID: ${message.memoReference}',
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 12,
                               fontStyle: FontStyle.italic,
+                              color:
+                                  isUser
+                                      ? userTextColor.withAlpha(200)
+                                      : assistantTextColor.withAlpha(200),
                             ),
                           ),
                         ),
@@ -222,38 +257,46 @@ class _ChatScreenState extends State<ChatScreen> {
             },
           ),
         ),
-        
+
+        // Input area
         Container(
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
-            color: Colors.white,
-            boxShadow: [
-              BoxShadow(
-                color: Colors.grey.withOpacity(0.2),
-                spreadRadius: 1,
-                blurRadius: 3,
-                offset: const Offset(0, -1),
+            color: theme.barBackgroundColor, // Use theme background color
+            border: Border(
+              top: BorderSide(
+                color: CupertinoColors.separator.resolveFrom(context),
+                width: 0.5,
               ),
-            ],
+            ),
           ),
           child: Row(
             children: [
               Expanded(
-                child: TextField(
+                // Use CupertinoTextField
+                child: CupertinoTextField(
                   controller: _inputController,
                   focusNode: _inputFocusNode,
-                  decoration: const InputDecoration(
-                    hintText: 'Ask the assistant...',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.all(Radius.circular(20)),
+                  placeholder: 'Ask the assistant...',
+                  placeholderStyle: TextStyle(
+                    color: CupertinoColors.placeholderText.resolveFrom(context),
+                  ),
+                  decoration: BoxDecoration(
+                    color: CupertinoColors.systemFill.resolveFrom(context),
+                    borderRadius: const BorderRadius.all(Radius.circular(20)),
+                    border: Border.all(
+                      color: CupertinoColors.separator.resolveFrom(context),
+                      width: 0.5,
                     ),
-                    contentPadding: EdgeInsets.symmetric(
-                      horizontal: 15,
-                      vertical: 10,
-                    ),
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 15,
+                    vertical: 10,
                   ),
                   maxLines: 3,
                   minLines: 1,
+                  keyboardType: TextInputType.multiline,
+                  textInputAction: TextInputAction.send, // Suggest send action
                   onSubmitted: (_) {
                     if (!_sending && _inputController.text.trim().isNotEmpty) {
                       _handleSend();
@@ -265,28 +308,18 @@ class _ChatScreenState extends State<ChatScreen> {
               SizedBox(
                 width: 60,
                 height: 45,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _sending || _inputController.text.trim().isEmpty
-                        ? Colors.grey
-                        : const Color(0xFFDC4C3E),
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    padding: EdgeInsets.zero,
-                  ),
+                // Use CupertinoButton.filled
+                child: CupertinoButton.filled(
+                  padding: EdgeInsets.zero,
+                  disabledColor: CupertinoColors.inactiveGray,
                   onPressed: _sending || _inputController.text.trim().isEmpty
                       ? null
                       : _handleSend,
                   child: _sending
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
+                          ? const CupertinoActivityIndicator(
+                            // Use CupertinoActivityIndicator
+                            radius: 10,
+                            color: CupertinoColors.white,
                         )
                       : const Text('Send'),
                 ),

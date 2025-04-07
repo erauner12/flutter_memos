@@ -1,13 +1,14 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart'; // Use Cupertino
 import 'package:flutter_memos/main.dart' as app;
 import 'package:flutter_memos/models/memo.dart';
 import 'package:flutter_memos/services/api_service.dart';
+import 'package:flutter_memos/widgets/memo_card.dart'; // Import MemoCard widget
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
-  group('Memos Filter Integration Tests', () {
+  group('Memos Filter Integration Tests (Cupertino)', () {
     // List to store IDs of memos created during the test for cleanup
     final List<String> createdMemoIds = [];
 
@@ -42,27 +43,45 @@ void main() {
         // Fail the test explicitly if setup fails
         fail('Failed to create memo programmatically: $e');
         // Return null or rethrow, depending on desired error handling
-        return null;
       }
     }
 
-    // Helper function to interact with PopupMenuButton (no changes needed here)
+    // Helper function to interact with Filter Button and CupertinoActionSheet
     Future<void> selectFilterOption(
       WidgetTester tester,
-      String buttonTooltip,
+      String buttonTooltip, // Tooltip might still be used on CupertinoButton
       String optionText,
     ) async {
-      // Find the button by tooltip
+      // Find the filter button (assuming CupertinoButton with Tooltip or Icon)
       final filterButtonFinder = find.byTooltip(buttonTooltip);
+      // Alternative: find.widgetWithIcon(CupertinoButton, ...)
       expect(filterButtonFinder, findsOneWidget, reason: '$buttonTooltip button not found');
       await tester.tap(filterButtonFinder);
-      await tester.pumpAndSettle(); // Wait for menu animation
+      await tester.pumpAndSettle(); // Wait for action sheet animation
 
-      // Find the option by text within the menu
-      final optionFinder = find.text(optionText).last; // Use last in case text appears elsewhere
-      expect(optionFinder, findsOneWidget, reason: '$optionText option not found in menu');
+      // Find the CupertinoActionSheet
+      final actionSheetFinder = find.byType(CupertinoActionSheet);
+      expect(
+        actionSheetFinder,
+        findsOneWidget,
+        reason: 'CupertinoActionSheet not found for filter',
+      );
+
+      // Find the specific action by text within the action sheet
+      final optionFinder = find.descendant(
+        of: actionSheetFinder,
+        matching: find.widgetWithText(CupertinoActionSheetAction, optionText),
+      );
+      expect(
+        optionFinder,
+        findsOneWidget,
+        reason: '$optionText option not found in action sheet',
+      );
+
+      // Tap the action
       await tester.tap(optionFinder);
-      await tester.pumpAndSettle(); // Wait for filter application
+      await tester
+          .pumpAndSettle(); // Wait for sheet dismissal and filter application
       await tester.pump(const Duration(milliseconds: 500)); // Extra wait for list refresh
     }
 
@@ -78,17 +97,17 @@ void main() {
       final taggedMemoContent = 'Tagged Filter Test Memo #testtag $timestamp';
       final untaggedMemoContent = 'Untagged Filter Test Memo $timestamp';
 
-      // Create memos PROGRAMMATICALLY and store them (optional, IDs are stored in createMemo)
+      // Create memos PROGRAMMATICALLY
       await createMemo(tester, taggedMemoContent);
       await createMemo(tester, untaggedMemoContent);
 
       // --- Explicit Refresh ---
-      // Find the ListView associated with the RefreshIndicator
-      final listFinder = find.byType(ListView);
+      // Find the Scrollable list
+      final listFinder = find.byType(Scrollable).first;
       expect(
         listFinder,
         findsOneWidget,
-        reason: 'ListView should be present to refresh',
+        reason: 'Scrollable list should be present to refresh',
       );
 
       // Simulate the pull-to-refresh gesture
@@ -96,7 +115,6 @@ void main() {
         '[Test Action] Simulating pull-to-refresh to load created memos...',
       );
       await tester.fling(listFinder, const Offset(0.0, 400.0), 1000.0);
-      // Wait for the refresh indicator and data loading
       await tester.pumpAndSettle(
         const Duration(seconds: 3),
       ); // Allow time for API call + UI update
@@ -104,33 +122,34 @@ void main() {
       // --- End Explicit Refresh ---
 
 
-// Finders for the memos: Use byWidgetPredicate for precise targeting
-      Finder findCardWithText(String text) {
+      // Finders for the memos: Use byWidgetPredicate for precise targeting
+      // Update predicate to find MemoCard containing the text, not Material Card
+      Finder findMemoCardWithText(String text) {
         return find.byWidgetPredicate(
           (Widget widget) =>
-              widget is Card && // Check if the widget is a Card
-              find // Check if this Card has a descendant Text/RichText with the specific content
+              widget is MemoCard && // Check if the widget is a MemoCard
+              find // Check if this MemoCard has a descendant Text/RichText with the specific content
                   .descendant(
                     of: find.byWidget(
                       widget,
-                    ), // Search within this specific Card widget
+                    ), // Search within this specific MemoCard widget
                     matching: find.textContaining(text, findRichText: true),
                   )
                   .evaluate() // Check if the descendant finder finds anything
                   .isNotEmpty,
           description:
-              'Card containing text "$text"', // Description for debugging
+              'MemoCard containing text "$text"', // Description for debugging
         );
-}
+      }
 
-final taggedMemoCardFinder = findCardWithText(taggedMemoContent);
-      final untaggedMemoCardFinder = findCardWithText(untaggedMemoContent);
+      final taggedMemoCardFinder = findMemoCardWithText(taggedMemoContent);
+      final untaggedMemoCardFinder = findMemoCardWithText(untaggedMemoContent);
 
 
-// --- Start Filter Testing ---
+      // --- Start Filter Testing ---
       // Explicitly set to 'All Status' first for a clean start.
       await selectFilterOption(tester, 'Filter by Status', 'All Status');
-      // Assert based on the Card finder now
+      // Assert based on the MemoCard finder now
       expect(
         taggedMemoCardFinder,
         findsOneWidget,
@@ -145,7 +164,7 @@ final taggedMemoCardFinder = findCardWithText(taggedMemoContent);
 
       // --- Test Untagged Filter ---
       await selectFilterOption(tester, 'Filter by Status', 'Untagged');
-      // Assert based on the Card finder now
+      // Assert based on the MemoCard finder now
       expect(
         taggedMemoCardFinder,
         findsNothing,
@@ -160,7 +179,7 @@ final taggedMemoCardFinder = findCardWithText(taggedMemoContent);
 
       // --- Test Tagged Filter ---
       await selectFilterOption(tester, 'Filter by Status', 'Tagged');
-      // Assert based on the Card finder now
+      // Assert based on the MemoCard finder now
       expect(
         taggedMemoCardFinder,
         findsOneWidget,
@@ -175,7 +194,7 @@ final taggedMemoCardFinder = findCardWithText(taggedMemoContent);
 
       // --- Test All Status Filter ---
       await selectFilterOption(tester, 'Filter by Status', 'All Status');
-      // Assert based on the Card finder now
+      // Assert based on the MemoCard finder now
       expect(
         taggedMemoCardFinder,
         findsOneWidget,

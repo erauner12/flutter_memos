@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart'; // Import Cupertino
 import 'package:flutter_memos/models/memo.dart';
 import 'package:flutter_memos/providers/api_providers.dart';
 import 'package:flutter_memos/screens/edit_memo/edit_memo_screen.dart';
@@ -9,14 +9,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
 
+// Import the mock for UrlLauncherService
+// Corrected path to the mock file in the core/services directory
+import '../../../core/services/url_launcher_service_test.mocks.dart';
 // Generate nice mocks for ApiService - this makes undefined methods return null instead of throwing
 @GenerateNiceMocks([MockSpec<ApiService>()])
 
 // This import will work after running build_runner
 import 'edit_memo_screen_test.mocks.dart';
-// Import the mock for UrlLauncherService
-// Corrected path to the mock file in the core/services directory
-import '../../../core/services/url_launcher_service_test.mocks.dart';
 
 
 // We'll use the Mockito-generated MockApiService instead of a custom implementation
@@ -35,10 +35,10 @@ void main() {
 
     // Stub the launch method to return success by default
     when(mockUrlLauncherService.launch(any)).thenAnswer((_) async => true);
-    
+
     // Add stub for apiBaseUrl property
     when(mockApiService.apiBaseUrl).thenReturn('http://test-url.com');
-    
+
     // Create a test memo
     testMemo = Memo(
       id: 'test-edit-memo-id',
@@ -55,19 +55,19 @@ void main() {
       }
       throw Exception('Memo not found: $id');
     });
-    
+
     // Stub updateMemo
     when(mockApiService.updateMemo(argThat(isA<String>()), argThat(isA<Memo>()))).thenAnswer((invocation) async {
       final id = invocation.positionalArguments[0] as String;
       final memo = invocation.positionalArguments[1] as Memo;
-      
+
       // Return updated memo
       return memo.copyWith(
         id: id,
         updateTime: DateTime.now().toIso8601String(),
       );
     });
-    
+
     // Stub listMemos - this is needed to avoid errors during refresh operations
     when(
       mockApiService.listMemos(
@@ -104,7 +104,7 @@ void main() {
         state: MemoState.normal,
       );
     });
-    
+
     // Build our app and trigger a frame.
     await tester.pumpWidget(
       ProviderScope(
@@ -114,7 +114,8 @@ void main() {
             mockUrlLauncherService,
           ), // Add override
         ],
-        child: const MaterialApp(
+        child: const CupertinoApp(
+          // Use CupertinoApp
           home: EditMemoScreen(
             entityId: 'test-memo-id', entityType: 'memo',
           ),
@@ -123,15 +124,24 @@ void main() {
     );
 
     // Initially we should see a loading indicator
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(
+      find.byType(CupertinoActivityIndicator),
+      findsOneWidget,
+    ); // Use CupertinoActivityIndicator
 
     // Wait for the future to complete
     await tester.pumpAndSettle();
 
     // Now we should see the form with the memo content
     expect(find.text('Test Memo Content'), findsOneWidget);
-    expect(find.byType(TextField), findsOneWidget);
-    expect(find.byType(Switch), findsNWidgets(2)); // Pinned and Archived switches
+    expect(
+      find.byType(CupertinoTextField),
+      findsOneWidget,
+    ); // Use CupertinoTextField
+    expect(
+      find.byType(CupertinoSwitch),
+      findsNWidgets(2),
+    ); // Use CupertinoSwitch
   });
 
   testWidgets('EditMemoScreen handles save properly', (WidgetTester tester) async {
@@ -154,7 +164,7 @@ void main() {
         updateTime: DateTime.now().toIso8601String(),
       );
     });
-    
+
     // Build our app and trigger a frame
     await tester.pumpWidget(
       ProviderScope(
@@ -164,7 +174,8 @@ void main() {
             mockUrlLauncherService,
           ), // Add override
         ],
-        child: const MaterialApp(
+        child: const CupertinoApp(
+          // Use CupertinoApp
           home: EditMemoScreen(
             entityId: 'test-edit-memo-id',
             entityType: 'memo',
@@ -177,10 +188,15 @@ void main() {
     await tester.pumpAndSettle();
 
     // Edit the content
-    await tester.enterText(find.byType(TextField), 'Updated Content');
-    
-    // Tap the save button
-    await tester.tap(find.text('Save Changes'));
+    await tester.enterText(
+      find.byType(CupertinoTextField),
+      'Updated Content',
+    ); // Use CupertinoTextField
+
+    // Tap the save button (assuming CupertinoButton with text)
+    await tester.tap(
+      find.widgetWithText(CupertinoButton, 'Save Changes'),
+    ); // Use CupertinoButton
     await tester.pumpAndSettle();
 
     // Verify the updateMemo was called

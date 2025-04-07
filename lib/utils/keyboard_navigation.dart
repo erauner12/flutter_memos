@@ -1,5 +1,5 @@
+import 'package:flutter/cupertino.dart'; // Import Cupertino
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -28,16 +28,22 @@ mixin KeyboardNavigationMixin<T extends ConsumerStatefulWidget>
       );
     }
 
-    // Check common text input widgets directly
-    if (widget is EditableText || widget is TextField || widget is TextFormField) {
-      if (kDebugMode) print('[KeyboardNavigation] Focused widget IS an EditableText/TextField/TextFormField.');
+    // Check common text input widgets directly (Cupertino and general)
+    if (widget is EditableText || widget is CupertinoTextField) {
+      if (kDebugMode) {
+        print(
+          '[KeyboardNavigation] Focused widget IS an EditableText/CupertinoTextField.',
+        );
+      }
       return true;
     }
 
     // Check the render object type as a fallback
+    // RenderEditable is used by both Material and Cupertino text fields internally
     if (renderObject is RenderEditable) {
-      if (kDebugMode)
+      if (kDebugMode) {
         print('[KeyboardNavigation] Focused RenderObject IS RenderEditable.');
+      }
       return true;
     }
 
@@ -47,8 +53,9 @@ mixin KeyboardNavigationMixin<T extends ConsumerStatefulWidget>
       if (semanticsNode != null &&
           (semanticsNode.hasFlag(SemanticsFlag.isTextField) ||
               semanticsNode.hasFlag(SemanticsFlag.isObscured))) {
-        if (kDebugMode)
+        if (kDebugMode) {
           print('[KeyboardNavigation] Semantics indicate text field.');
+        }
         return true;
       }
     } catch (e) {
@@ -60,7 +67,9 @@ mixin KeyboardNavigationMixin<T extends ConsumerStatefulWidget>
     bool isTextInputAncestor = false;
     if (context is Element) { // Ensure context is an Element before visiting ancestors
       context.visitAncestorElements((ancestor) {
-        if (ancestor.widget is TextField || ancestor.widget is TextFormField || ancestor.widget is EditableText) {
+        // Check for CupertinoTextField or the general EditableText
+        if (ancestor.widget is CupertinoTextField ||
+            ancestor.widget is EditableText) {
           if (kDebugMode) print('[KeyboardNavigation] Found text input ancestor: ${ancestor.widget.runtimeType}');
           isTextInputAncestor = true;
           return false; // Stop traversal

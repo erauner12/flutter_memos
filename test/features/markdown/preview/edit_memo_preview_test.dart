@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart'; // Use Cupertino
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_memos/models/memo.dart';
 import 'package:flutter_memos/providers/api_providers.dart'; // Import api provider
@@ -9,10 +9,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart'; // Import mockito
 
-// Import mocks
-import '../rendering/markdown_rendering_test.mocks.dart'; // Path to rendering mocks is correct relative to preview
 import '../../../core/services/url_launcher_service_test.mocks.dart'; // Path to core service mocks
 import '../../../utils/test_debug.dart'; // Go up two levels to reach test/utils/
+// Import mocks
+import '../rendering/markdown_rendering_test.mocks.dart'; // Path to rendering mocks is correct relative to preview
 
 void main() {
   group('EditMemoForm Markdown Preview Tests', () {
@@ -48,10 +48,12 @@ void main() {
               EntityProviderParams(id: 'test-id', type: 'memo'),
             ).overrideWith((ref) => Future.value(memo)),
           ],
-          child: MaterialApp(
-            home: Scaffold(
+          child: CupertinoApp(
+            // Use CupertinoApp
+            home: CupertinoPageScaffold(
+              // Use CupertinoPageScaffold
               // Use the new constructor signature
-              body: EditMemoForm(
+              child: EditMemoForm(
                 entityId: 'test-id',
                 entityType: 'memo',
                 entity: memo, // Add the required entity parameter
@@ -115,10 +117,12 @@ void main() {
               EntityProviderParams(id: 'test-id', type: 'memo'),
             ).overrideWith((ref) => Future.value(memo)),
           ],
-          child: MaterialApp(
-            home: Scaffold(
+          child: CupertinoApp(
+            // Use CupertinoApp
+            home: CupertinoPageScaffold(
+              // Use CupertinoPageScaffold
               // Use the new constructor signature
-              body: EditMemoForm(
+              child: EditMemoForm(
                 entityId: 'test-id',
                 entityType: 'memo',
                 entity: memo, // Add the required entity parameter
@@ -147,7 +151,10 @@ void main() {
 
       // Change the content
       debugMarkdown('Entering new text: # New Heading\\n**Bold**');
-      await tester.enterText(find.byType(TextField), '# New Heading\n**Bold**');
+      await tester.enterText(
+        find.byType(CupertinoTextField),
+        '# New Heading\n**Bold**',
+      ); // Use CupertinoTextField
       await tester.pump();
 
       // Switch to preview mode again
@@ -184,10 +191,12 @@ void main() {
               EntityProviderParams(id: 'test-id', type: 'memo'),
             ).overrideWith((ref) => Future.value(memo)),
           ],
-          child: MaterialApp(
-            home: Scaffold(
+          child: CupertinoApp(
+            // Use CupertinoApp
+            home: CupertinoPageScaffold(
+              // Use CupertinoPageScaffold
               // Use the new constructor signature
-              body: EditMemoForm(
+              child: EditMemoForm(
                 entityId: 'test-id',
                 entityType: 'memo',
                 entity: memo, // Add the required entity parameter
@@ -201,7 +210,10 @@ void main() {
       await tester.pumpAndSettle();
 
       // Initially in edit mode - TextField should be visible
-      expect(find.byType(TextField), findsOneWidget);
+      expect(
+        find.byType(CupertinoTextField),
+        findsOneWidget,
+      ); // Use CupertinoTextField
       expect(find.byType(MarkdownBody), findsNothing);
       debugMarkdown('Initially in edit mode, TextField is visible, MarkdownBody is not');
 
@@ -211,7 +223,10 @@ void main() {
       await tester.pumpAndSettle();
 
       // Now should be in preview mode - MarkdownBody should be visible, TextField hidden
-      expect(find.byType(TextField), findsNothing);
+      expect(
+        find.byType(CupertinoTextField),
+        findsNothing,
+      ); // Use CupertinoTextField
       expect(find.byType(MarkdownBody), findsOneWidget);
       debugMarkdown('Now in preview mode, MarkdownBody is visible, TextField is not');
 
@@ -226,7 +241,10 @@ void main() {
       await tester.pumpAndSettle();
 
       // Should be back in edit mode
-      expect(find.byType(TextField), findsOneWidget);
+      expect(
+        find.byType(CupertinoTextField),
+        findsOneWidget,
+      ); // Use CupertinoTextField
       expect(find.byType(MarkdownBody), findsNothing);
       debugMarkdown('Back in edit mode, TextField is visible, MarkdownBody is not');
     });

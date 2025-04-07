@@ -1,9 +1,10 @@
+import 'package:flutter/cupertino.dart'; // Import Cupertino
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
+// TextDecoration is in dart:ui, usually implicitly imported
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_memos/models/comment.dart'; // Import Comment model
-import 'package:flutter_memos/models/memo.dart';
+import 'package:flutter_memos/models/memo.dart'; // Import Memo model
 import 'package:flutter_memos/utils/keyboard_navigation.dart'; // Import the mixin
 import 'package:flutter_memos/utils/url_helper.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -97,11 +98,13 @@ class _EditMemoFormState extends ConsumerState<EditMemoForm>
         children: [
           Expanded(
             flex: 2,
-            child: SelectableText(
+            child: Text(
+              // Replace SelectableText with Text
               syntax,
-              style: const TextStyle(
+              style: TextStyle(
                 fontFamily: 'monospace',
-                backgroundColor: Color(0xFFF5F5F5),
+                backgroundColor: CupertinoColors.secondarySystemFill
+                    .resolveFrom(context), // Use Cupertino color
               ),
             ),
           ),
@@ -117,8 +120,21 @@ class _EditMemoFormState extends ConsumerState<EditMemoForm>
 
   Future<void> _handleSave() async {
     if (_contentController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Content cannot be empty')),
+      // Replace SnackBar with CupertinoAlertDialog
+      showCupertinoDialog(
+        context: context,
+        builder:
+            (context) => CupertinoAlertDialog(
+              title: const Text('Empty Content'),
+              content: const Text('Content cannot be empty.'),
+              actions: [
+                CupertinoDialogAction(
+                  isDefaultAction: true,
+                  child: const Text('OK'),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+              ],
+            ),
       );
       return;
     }
@@ -183,8 +199,23 @@ class _EditMemoFormState extends ConsumerState<EditMemoForm>
         print('[EditMemoForm] Error saving ${widget.entityType}: $e\n$s');
       }
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error saving: ${e.toString()}')),
+        // Replace SnackBar with CupertinoAlertDialog
+        showCupertinoDialog(
+          context: context,
+          builder:
+              (context) => CupertinoAlertDialog(
+                title: const Text('Save Error'),
+                content: Text(
+                  'Failed to save ${widget.entityType}: ${e.toString()}',
+                ),
+                actions: [
+                  CupertinoDialogAction(
+                    isDefaultAction: true,
+                    child: const Text('OK'),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ],
+              ),
         );
       }
     } finally {
@@ -278,63 +309,87 @@ class _EditMemoFormState extends ConsumerState<EditMemoForm>
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
+                Text(
                   'CONTENT',
                   style: TextStyle(
-                    color: Colors.grey,
+                    color: CupertinoColors.secondaryLabel.resolveFrom(
+                      context,
+                    ), // Use Cupertino color
                     fontWeight: FontWeight.w600,
                     fontSize: 14,
                   ),
                 ),
-                TextButton.icon(
-                  icon: Icon(
-                    _showMarkdownHelp ? Icons.help_outline : Icons.help,
-                  ),
-                  label: Text(
-                    _showMarkdownHelp ? 'Hide Help' : 'Markdown Help',
-                  ),
+                // Replace TextButton.icon with CupertinoButton
+                CupertinoButton(
+                  padding: EdgeInsets.zero,
+                  minSize: 0,
                   onPressed: () {
                     setState(() {
                       _showMarkdownHelp = !_showMarkdownHelp;
                     });
                   },
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _showMarkdownHelp
+                            ? CupertinoIcons.question_circle_fill
+                            : CupertinoIcons.question_circle,
+                        size: 18,
+                        color: CupertinoTheme.of(context).primaryColor,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        _showMarkdownHelp ? 'Hide Help' : 'Markdown Help',
+                        style: TextStyle(
+                          color: CupertinoTheme.of(context).primaryColor,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
 
             if (_showMarkdownHelp)
-              Card(
+              // Replace Card with styled Container
+              Container(
                 margin: const EdgeInsets.only(bottom: 16),
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Markdown Syntax Guide',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      _buildMarkdownHelpItem('# Heading 1', 'Heading 1'),
-                      _buildMarkdownHelpItem('## Heading 2', 'Heading 2'),
-                      _buildMarkdownHelpItem('**Bold text**', 'Bold text'),
-                      _buildMarkdownHelpItem('*Italic text*', 'Italic text'),
-                      _buildMarkdownHelpItem(
-                        '[Link](https://example.com)',
-                        'Link',
-                      ),
-                      _buildMarkdownHelpItem('- Bullet point', 'Bullet point'),
-                      _buildMarkdownHelpItem(
-                        '1. Numbered item',
-                        'Numbered item',
-                      ),
-                      _buildMarkdownHelpItem('`Code`', 'Code'),
-                      _buildMarkdownHelpItem('> Blockquote', 'Blockquote'),
-                    ],
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: CupertinoColors.secondarySystemGroupedBackground
+                      .resolveFrom(context),
+                  borderRadius: BorderRadius.circular(8.0),
+                  border: Border.all(
+                    color: CupertinoColors.separator.resolveFrom(context),
+                    width: 0.5,
                   ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Markdown Syntax Guide',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    _buildMarkdownHelpItem('# Heading 1', 'Heading 1'),
+                    _buildMarkdownHelpItem('## Heading 2', 'Heading 2'),
+                    _buildMarkdownHelpItem('**Bold text**', 'Bold text'),
+                    _buildMarkdownHelpItem('*Italic text*', 'Italic text'),
+                    _buildMarkdownHelpItem(
+                      '[Link](https://example.com)',
+                      'Link',
+                    ),
+                    _buildMarkdownHelpItem('- Bullet point', 'Bullet point'),
+                    _buildMarkdownHelpItem('1. Numbered item', 'Numbered item'),
+                    _buildMarkdownHelpItem('`Code`', 'Code'),
+                    _buildMarkdownHelpItem('> Blockquote', 'Blockquote'),
+                  ],
                 ),
               ),
 
@@ -343,9 +398,10 @@ class _EditMemoFormState extends ConsumerState<EditMemoForm>
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                TextButton.icon(
-                  icon: Icon(_previewMode ? Icons.edit : Icons.visibility),
-                  label: Text(_previewMode ? 'Edit' : 'Preview'),
+                // Replace TextButton.icon with CupertinoButton
+                CupertinoButton(
+                  padding: EdgeInsets.zero,
+                  minSize: 0,
                   onPressed: () {
                     setState(() {
                       _previewMode = !_previewMode;
@@ -383,6 +439,26 @@ class _EditMemoFormState extends ConsumerState<EditMemoForm>
                       }
                     });
                   },
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _previewMode
+                            ? CupertinoIcons.pencil
+                            : CupertinoIcons.eye,
+                        size: 18,
+                        color: CupertinoTheme.of(context).primaryColor,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        _previewMode ? 'Edit' : 'Preview',
+                        style: TextStyle(
+                          color: CupertinoTheme.of(context).primaryColor,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -390,7 +466,9 @@ class _EditMemoFormState extends ConsumerState<EditMemoForm>
             _previewMode
                 ? Container(
                   decoration: BoxDecoration(
-                    border: Border.all(color: Colors.grey.shade400),
+                    border: Border.all(
+                      color: CupertinoColors.separator.resolveFrom(context),
+                    ), // Use Cupertino color
                     borderRadius: BorderRadius.circular(4),
                   ),
                   padding: const EdgeInsets.all(12),
@@ -400,9 +478,21 @@ class _EditMemoFormState extends ConsumerState<EditMemoForm>
                     child: MarkdownBody(
                       data: _contentController.text,
                       selectable: true,
-                      styleSheet: MarkdownStyleSheet(
-                        a: TextStyle(
-                          color: Theme.of(context).colorScheme.primary,
+                      // Apply Cupertino-based styling consistent with MemoContent
+                      styleSheet: MarkdownStyleSheet.fromCupertinoTheme(
+                        CupertinoTheme.of(context),
+                      ).copyWith(
+                        p: CupertinoTheme.of(
+                          context,
+                        ).textTheme.textStyle.copyWith(
+                          fontSize: 17,
+                          height: 1.4,
+                          color: CupertinoColors.label.resolveFrom(context),
+                        ),
+                        a: CupertinoTheme.of(
+                          context,
+                        ).textTheme.textStyle.copyWith(
+                          color: CupertinoTheme.of(context).primaryColor,
                           decoration: TextDecoration.underline,
                         ),
                       ),
@@ -427,79 +517,74 @@ class _EditMemoFormState extends ConsumerState<EditMemoForm>
                     ),
                   ),
                 )
-                : TextField(
+                // Replace TextField with CupertinoTextField
+                : CupertinoTextField(
                   controller: _contentController,
                   focusNode: _contentFocusNode,
-                  decoration: const InputDecoration(
-                    hintText: 'Enter memo content...',
-                    border: OutlineInputBorder(),
-                    contentPadding: EdgeInsets.all(12),
+                  placeholder: 'Enter memo content...',
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: CupertinoColors.systemFill.resolveFrom(context),
+                    border: Border.all(
+                      color: CupertinoColors.separator.resolveFrom(context),
+                      width: 0.5,
+                    ),
+                    borderRadius: BorderRadius.circular(8.0),
                   ),
                   maxLines: 10,
                   minLines: 5,
                   autofocus: true,
+                  keyboardType: TextInputType.multiline,
                 ),
 
             const SizedBox(height: 20),
 
-            // Conditionally show switches based on entity type if needed
-            // Currently, they are shown for both. Hide if comment pinning/archiving is not desired.
-            // if (widget.entityType == 'memo') ... [
-            Card(
-              margin: EdgeInsets.zero,
-              child: ListTile(
-                title: const Text('Pinned'),
-                trailing: Switch(
-                  value: _pinned,
-                  onChanged: (value) {
-                    setState(() {
-                      _pinned = value;
-                    });
-                  },
-                  activeColor: Theme.of(context).colorScheme.primary,
+            // Use CupertinoListSection for grouping toggles
+            CupertinoListSection.insetGrouped(
+              margin: EdgeInsets.zero, // Remove default margin if needed
+              children: [
+                // Replace ListTile/Switch with CupertinoListTile/CupertinoSwitch
+                CupertinoListTile(
+                  title: const Text('Pinned'),
+                  trailing: CupertinoSwitch(
+                    value: _pinned,
+                    onChanged: (value) {
+                      setState(() {
+                        _pinned = value;
+                      });
+                    },
+                    activeTrackColor: CupertinoTheme.of(context).primaryColor,
+                  ),
                 ),
-              ),
-            ),
-
-            const SizedBox(height: 12),
-
-            Card(
-              margin: EdgeInsets.zero,
-              child: ListTile(
-                title: const Text('Archived'),
-                trailing: Switch(
-                  value: _archived,
-                  onChanged: (value) {
-                    setState(() {
-                      _archived = value;
-                    });
-                  },
-                  activeColor: Theme.of(context).colorScheme.primary,
+                CupertinoListTile(
+                  title: const Text('Archived'),
+                  trailing: CupertinoSwitch(
+                    value: _archived,
+                    onChanged: (value) {
+                      setState(() {
+                        _archived = value;
+                      });
+                    },
+                    activeTrackColor: CupertinoTheme.of(context).primaryColor,
+                  ),
                 ),
-              ),
+              ],
             ),
-            // ] // End conditional block if hiding switches for comments
 
             const SizedBox(height: 24),
 
             SizedBox(
               width: double.infinity,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Theme.of(context).colorScheme.primary,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                ),
+              // Replace ElevatedButton with CupertinoButton.filled
+              child: CupertinoButton.filled(
+                padding: const EdgeInsets.symmetric(vertical: 12),
                 onPressed: _saving ? null : _handleSave,
                 child:
                     _saving
-                        ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
+                        // Replace CircularProgressIndicator with CupertinoActivityIndicator
+                        ? const CupertinoActivityIndicator(
+                          color: CupertinoColors.white, // Ensure contrast
+                          radius: 10, // Adjust size
                         )
                         : const Text('Save Changes'),
               ),
@@ -507,6 +592,6 @@ class _EditMemoFormState extends ConsumerState<EditMemoForm>
           ],
         ),
       ),
-    );
-  }
+    ); // Correctly close SingleChildScrollView
+  } // Correctly close build method
 }

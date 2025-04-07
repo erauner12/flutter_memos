@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart'; // Import Cupertino
 import 'package:flutter/services.dart';
 import 'package:flutter_memos/main.dart' as app;
 // Add imports for Memo model and ApiService
@@ -87,8 +87,8 @@ void main() {
 
         // Refresh the list to show the newly created memo
         debugPrint('[Test Action] Simulating pull-to-refresh...');
-        final listFinder = find.byType(ListView);
-        expect(listFinder, findsOneWidget, reason: 'ListView not found');
+        final listFinder = find.byType(Scrollable).first; // Use Scrollable
+        expect(listFinder, findsOneWidget, reason: 'Scrollable list not found');
         await tester.fling(listFinder, const Offset(0.0, 400.0), 1000.0);
         await tester.pumpAndSettle(const Duration(seconds: 3));
         debugPrint('[Test Action] Pull-to-refresh complete.');
@@ -105,8 +105,14 @@ void main() {
         await tester.tap(memoCardFinder);
         await tester.pumpAndSettle();
 
-        // Verify we're on the detail screen
-        expect(find.text('Memo Detail'), findsOneWidget);
+        // Verify we're on the detail screen (check CupertinoNavigationBar title)
+        expect(
+          find.descendant(
+            of: find.byType(CupertinoNavigationBar),
+            matching: find.text('Memo Detail'),
+          ),
+          findsOneWidget,
+        );
 
         // STEP 2: Add a test comment if none exists (Keep UI interaction for comment adding)
         final existingComments = find.byType(CommentCard);
@@ -119,13 +125,18 @@ void main() {
             await tester.pumpAndSettle();
 
             // Type the comment text
-            final commentTextFieldFinder = find.byType(TextField);
+            final commentTextFieldFinder = find.byType(
+              CupertinoTextField,
+            ); // Use CupertinoTextField
             if (commentTextFieldFinder.evaluate().isNotEmpty) {
               await tester.enterText(commentTextFieldFinder.first, 'Test comment for keyboard navigation');
               await tester.pumpAndSettle();
 
-              // Tap the "Add Comment" button
-              final addCommentButtonFinder = find.text('Add Comment');
+              // Tap the "Add Comment" button (assuming CupertinoButton)
+              final addCommentButtonFinder = find.widgetWithText(
+                CupertinoButton,
+                'Add Comment',
+              ); // Use CupertinoButton
               if (addCommentButtonFinder.evaluate().isNotEmpty) {
                 await tester.tap(addCommentButtonFinder);
                 await tester.pumpAndSettle();
@@ -188,9 +199,15 @@ void main() {
         await tester.pageBack();
         await tester.pumpAndSettle();
 
-        // Verify we're back on the main screen
-        final isOnMainScreen = find.text('Flutter Memos').evaluate().isNotEmpty ||
-                               find.text('Memos').evaluate().isNotEmpty;
+        // Verify we're back on the main screen (check CupertinoNavigationBar title)
+        final isOnMainScreen =
+            find
+                .descendant(
+                  of: find.byType(CupertinoNavigationBar),
+                  matching: find.text('Memos'),
+                )
+                .evaluate()
+                .isNotEmpty;
         expect(isOnMainScreen, isTrue, reason: 'Should be back on main screen');
       },
     );

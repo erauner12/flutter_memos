@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart'; // Import Cupertino
+// Remove unused Icons import
 import 'package:flutter_memos/main.dart' as app;
 // Add imports for Memo model and ApiService
 import 'package:flutter_memos/models/memo.dart';
@@ -100,8 +101,9 @@ void main() {
 
       // Refresh the list to show the newly created memo
       debugPrint('[Test Action] Simulating pull-to-refresh...');
-      final listFinder = find.byType(ListView);
-      expect(listFinder, findsOneWidget, reason: 'ListView not found');
+      // Use a more generic finder for the scrollable list
+      final listFinder = find.byType(Scrollable).first;
+      expect(listFinder, findsOneWidget, reason: 'Scrollable list not found');
       await tester.fling(listFinder, const Offset(0.0, 400.0), 1000.0);
       await tester.pumpAndSettle(const Duration(seconds: 3));
       debugPrint('[Test Action] Pull-to-refresh complete.');
@@ -118,8 +120,15 @@ void main() {
       await tester.tap(memoCardFinder);
       await tester.pumpAndSettle();
 
-      // Verify we're on the detail screen
-      expect(find.text('Memo Detail'), findsOneWidget, reason: 'Not on memo detail screen');
+      // Verify we're on the detail screen (check CupertinoNavigationBar title)
+      expect(
+        find.descendant(
+          of: find.byType(CupertinoNavigationBar),
+          matching: find.text('Memo Detail'),
+        ),
+        findsOneWidget,
+        reason: 'Not on memo detail screen',
+      );
 
       // STEP 3: Add a comment with an attachment attempt
       final commentTimestamp = DateTime.now().millisecondsSinceEpoch;
@@ -133,25 +142,28 @@ void main() {
       await tester.tap(find.text('Add a comment...'));
       await tester.pumpAndSettle(); // Wait for expansion animation
 
-      // Find the TextField within the expanded CaptureUtility
+      // Find the CupertinoTextField within the expanded CaptureUtility
       final commentTextFieldFinder = find.descendant(
         of: commentCaptureUtility,
-        matching: find.byType(TextField),
+        matching: find.byType(CupertinoTextField), // Use CupertinoTextField
       );
       expect(
         commentTextFieldFinder,
         findsOneWidget,
-        reason: 'Comment TextField not found in CaptureUtility',
+        reason: 'Comment CupertinoTextField not found in CaptureUtility',
       );
 
       // Type the comment text
       await tester.enterText(commentTextFieldFinder, testCommentText);
       await tester.pumpAndSettle();
 
-      // Find and tap the "Attach file" button
+      // Find and tap the "Attach file" button (assuming it's a CupertinoButton with an icon)
       final attachButtonFinder = find.descendant(
         of: commentCaptureUtility,
-        matching: find.byIcon(Icons.attach_file),
+        matching: find.widgetWithIcon(
+          CupertinoButton,
+          CupertinoIcons.paperclip, // Use Cupertino icon
+        ), // Use CupertinoButton
       );
       expect(
         attachButtonFinder,
@@ -191,12 +203,13 @@ void main() {
         '[Test Action] Programmatically set test file: $testFilename',
       );
 
-      // Find and tap the "Send" button (assuming it's an Icon button now)
+      // Find and tap the "Send" button (assuming it's a CupertinoButton with an icon)
       final sendButtonFinder = find.descendant(
         of: commentCaptureUtility,
-        matching: find.byIcon(
-          Icons.send_rounded,
-        ), // Updated to find the send icon
+        matching: find.widgetWithIcon(
+          CupertinoButton,
+          CupertinoIcons.arrow_up_circle_fill, // Use Cupertino icon
+        ), // Use CupertinoButton
       );
       expect(sendButtonFinder, findsOneWidget, reason: 'Send button not found');
       await tester.tap(sendButtonFinder);
@@ -208,7 +221,7 @@ void main() {
       // STEP 4: Verify the comment appears
       // Scroll down to ensure the comment list is visible if needed
       await tester.drag(
-        find.byType(SingleChildScrollView).first,
+        find.byType(Scrollable).first, // Use more generic Scrollable
         const Offset(0.0, -300),
       );
       await tester.pumpAndSettle();
@@ -247,18 +260,35 @@ void main() {
       // await tester.pumpAndSettle(); // Ensure snackbar is gone
 
       // STEP 5: Go back to the main screen
-      final backButtonFinder = find.byType(BackButton);
-      expect(backButtonFinder, findsOneWidget, reason: 'Back button not found');
+      // Find the Cupertino back button (usually automatic, but can be explicit)
+      final backButtonFinder = find.byType(CupertinoNavigationBarBackButton);
+      // Alternative if it's just an icon in a button:
+      // final backButtonFinder = find.widgetWithIcon(CupertinoButton, CupertinoIcons.back);
+      expect(
+        backButtonFinder,
+        findsOneWidget,
+        reason: 'Cupertino back button not found',
+      );
       await tester.tap(backButtonFinder);
       await tester.pumpAndSettle(
         const Duration(seconds: 2),
       ); // Give more time for navigation
 
-      // Look for either the app title or other main screen indicators
+      // Look for the CupertinoNavigationBar title on the main screen
       final isOnMainScreen =
-          find.text('Memos').evaluate().isNotEmpty ||
-          find.text('Flutter Memos').evaluate().isNotEmpty ||
-          find.byType(app.HomeScreen).evaluate().isNotEmpty;
+          find
+              .descendant(
+                of: find.byType(CupertinoNavigationBar),
+                matching: find.text(
+                  'Memos',
+                ), // Assuming 'Memos' is the title now
+              )
+              .evaluate()
+              .isNotEmpty ||
+          find
+              .byType(app.HomeScreen)
+              .evaluate()
+              .isNotEmpty; // Keep HomeScreen check
 
       expect(
         isOnMainScreen,

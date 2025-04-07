@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart'; // Import Cupertino
 import 'package:flutter/services.dart';
 import 'package:flutter_memos/providers/ui_providers.dart';
 import 'package:flutter_memos/utils/keyboard_navigation.dart';
@@ -49,7 +49,8 @@ class TestKeyboardNavigationState
   
   @override
   Widget build(BuildContext context) {
-    return Container();
+    // Return a basic Cupertino widget instead of Container
+    return const SizedBox.shrink();
   }
   
   // Expose the helper methods for testing
@@ -115,13 +116,16 @@ void main() {
       testKey = GlobalKey<TestKeyboardNavigationState>();
       testTextFieldFocusNode = FocusNode(); // Instantiate FocusNode
       providerScope = ProviderScope(
-        child: MaterialApp(
-          home: Scaffold(
-            body: Column(
+        // Use CupertinoApp and CupertinoPageScaffold
+        child: CupertinoApp(
+          home: CupertinoPageScaffold(
+            child: Column(
               children: [
-                TextField(
+                CupertinoTextField(
+                  // Use CupertinoTextField
                   key: const Key('testTextField'),
                   focusNode: testTextFieldFocusNode, // Assign FocusNode
+                  placeholder: 'Test Input', // Add placeholder
                 ),
                 TestKeyboardNavigationWidget(key: testKey),
               ],
@@ -359,12 +363,14 @@ void main() {
       expect(
         state.nextCalled,
         equals(initialNextCalled),
-        reason: 'nextCalled should not increase when TextField has focus',
+        reason:
+            'nextCalled should not increase when CupertinoTextField has focus',
       );
       expect(
         state.prevCalled,
         equals(initialPrevCalled),
-        reason: 'prevCalled should not increase when TextField has focus',
+        reason:
+            'prevCalled should not increase when CupertinoTextField has focus',
       );
 
       // Verify the key events were correctly ignored by the mixin's handler

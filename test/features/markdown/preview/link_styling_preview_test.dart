@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart'; // Use Cupertino
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_memos/models/memo.dart';
 import 'package:flutter_memos/providers/api_providers.dart'; // Import api provider
@@ -9,10 +9,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart'; // Import mockito
 
-// Import mocks
-import '../rendering/markdown_rendering_test.mocks.dart'; // Path to rendering mocks is correct relative to preview
 import '../../../core/services/url_launcher_service_test.mocks.dart'; // Path to core service mocks
 import '../../../utils/test_debug.dart'; // Go up two levels to reach test/utils/
+// Import mocks
+import '../rendering/markdown_rendering_test.mocks.dart'; // Path to rendering mocks is correct relative to preview
 
 // Helper function to find text in RichText widgets
 bool findTextInRichText(WidgetTester tester, String textToFind) {
@@ -71,9 +71,11 @@ void main() {
               EntityProviderParams(id: 'test-id', type: 'memo'),
             ).overrideWith((ref) => Future.value(memo)),
           ],
-          child: MaterialApp(
-            home: Scaffold(
-              body: EditMemoForm(
+          child: CupertinoApp(
+            // Use CupertinoApp
+            home: CupertinoPageScaffold(
+              // Use CupertinoPageScaffold
+              child: EditMemoForm(
                 entityId: 'test-id',
                 entityType: 'memo',
                 entity: memo,
@@ -87,10 +89,15 @@ void main() {
       await tester.pumpAndSettle();
 
       // Make sure the content is fully loaded in the text field
-      expect(find.byType(TextField), findsOneWidget);
+      expect(
+        find.byType(CupertinoTextField),
+        findsOneWidget,
+      ); // Use CupertinoTextField
       
       // Get the text field to verify content was loaded correctly
-      final textField = tester.widget<TextField>(find.byType(TextField));
+      final textField = tester.widget<CupertinoTextField>(
+        find.byType(CupertinoTextField),
+      ); // Use CupertinoTextField
       expect(textField.controller!.text, contains('UNIQUE_EXAMPLE_LINK'));
       
       // Switch to preview mode
@@ -107,7 +114,10 @@ void main() {
       await tester.pumpAndSettle(); // Final settle
       
       // Verify we've switched to preview mode
-      expect(find.byType(TextField), findsNothing);
+      expect(
+        find.byType(CupertinoTextField),
+        findsNothing,
+      ); // Use CupertinoTextField
       expect(find.byType(MarkdownBody), findsOneWidget);
       
       // Debug logging of widget tree
@@ -187,9 +197,11 @@ void main() {
               EntityProviderParams(id: 'test-id', type: 'memo'),
             ).overrideWith((ref) => Future.value(memo)),
           ],
-          child: MaterialApp(
-            home: Scaffold(
-              body: EditMemoForm(
+          child: CupertinoApp(
+            // Use CupertinoApp
+            home: CupertinoPageScaffold(
+              // Use CupertinoPageScaffold
+              child: EditMemoForm(
                 entityId: 'test-id',
                 entityType: 'memo',
                 entity: memo,
@@ -201,7 +213,9 @@ void main() {
 
       // Wait for initial rendering and verify the TextField has our content (FutureProvider needs time)
       await tester.pumpAndSettle();
-      final textField = tester.widget<TextField>(find.byType(TextField));
+      final textField = tester.widget<CupertinoTextField>(
+        find.byType(CupertinoTextField),
+      ); // Use CupertinoTextField
       expect(textField.controller!.text, contains('MARKER_HEADING'));
       
       // Tap the preview button with extra care for timing
@@ -213,7 +227,10 @@ void main() {
       await tester.pumpAndSettle();
       
       // Verify we're now in preview mode
-      expect(find.byType(TextField), findsNothing);
+      expect(
+        find.byType(CupertinoTextField),
+        findsNothing,
+      ); // Use CupertinoTextField
       expect(find.byType(MarkdownBody), findsOneWidget);
 
       // Debug log all RichText content

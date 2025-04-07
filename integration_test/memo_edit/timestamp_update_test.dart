@@ -1,10 +1,8 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart'; // Use Cupertino
+// Remove unused Icons import
 import 'package:flutter/services.dart';
 import 'package:flutter_memos/main.dart' as app;
 import 'package:flutter_memos/models/memo.dart';
-import 'package:flutter_memos/screens/edit_memo/edit_memo_screen.dart';
-import 'package:flutter_memos/screens/memo_detail/memo_detail_screen.dart';
-import 'package:flutter_memos/screens/memos/memos_screen.dart';
 import 'package:flutter_memos/services/api_service.dart';
 import 'package:flutter_memos/widgets/memo_card.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -62,9 +60,12 @@ void main() {
     await tester.pumpAndSettle(const Duration(seconds: 5));
     debugPrint('[Test Setup] App settled.');
 
-    // Ensure we are on the MemosScreen
+    // Ensure we are on the MemosScreen (check CupertinoNavigationBar title)
     expect(
-      find.byType(MemosScreen),
+      find.descendant(
+        of: find.byType(CupertinoNavigationBar),
+        matching: find.text('Memos'), // Assuming 'Memos' is the title
+      ),
       findsOneWidget,
       reason: 'Should be on MemosScreen after launch',
     );
@@ -86,7 +87,9 @@ void main() {
     int scrollAttempts = 0;
     while (memoCardFinder.evaluate().isEmpty && scrollAttempts < 5) {
       debugPrint('[Test Action] Scrolling down to find memo...');
-      await tester.drag(find.byType(ListView).first, const Offset(0, -300));
+      // Use a more generic finder for the scrollable list
+      final listFinder = find.byType(Scrollable).first;
+      await tester.drag(listFinder, const Offset(0, -300));
       await tester.pumpAndSettle(const Duration(seconds: 1));
       scrollAttempts++;
     }
@@ -96,18 +99,32 @@ void main() {
     // Tap the memo card to navigate to detail
     await tester.tap(memoCardFinder);
     await tester.pumpAndSettle(const Duration(seconds: 1));
-    expect(find.byType(MemoDetailScreen), findsOneWidget, reason: 'Should navigate to MemoDetailScreen');
+    expect(
+      find.descendant(
+        of: find.byType(CupertinoNavigationBar),
+        matching: find.text('Memo Detail'),
+      ),
+      findsOneWidget,
+      reason: 'Should navigate to MemoDetailScreen',
+    );
     debugPrint('[Test Action] Navigated to Memo Detail');
 
-    // Tap the edit button
-    await tester.tap(find.widgetWithIcon(IconButton, Icons.edit));
+    // Tap the edit button (CupertinoButton in trailing)
+    await tester.tap(find.widgetWithIcon(CupertinoButton, Icons.edit));
     await tester.pumpAndSettle(const Duration(seconds: 1));
-    expect(find.byType(EditMemoScreen), findsOneWidget, reason: 'Should navigate to EditMemoScreen');
+    expect(
+      find.descendant(
+        of: find.byType(CupertinoNavigationBar),
+        matching: find.text('Edit Memo'),
+      ),
+      findsOneWidget,
+      reason: 'Should navigate to EditMemoScreen',
+    );
     debugPrint('[Test Action] Navigated to Edit Memo');
 
-    // Modify the content
+    // Modify the content in CupertinoTextField
     final String textToAppend = ' - Edited @ ${DateTime.now()}';
-    final textFieldFinder = find.byType(TextField);
+    final textFieldFinder = find.byType(CupertinoTextField);
     expect(textFieldFinder, findsOneWidget);
     await tester.enterText(textFieldFinder, initialContent + textToAppend);
     await tester.pumpAndSettle();
@@ -120,23 +137,38 @@ void main() {
     await tester.sendKeyUpEvent(LogicalKeyboardKey.meta);
     await tester.pumpAndSettle(const Duration(seconds: 3)); // Wait for save and navigation back
 
-    // Verify back on Detail Screen
+    // Verify back on Detail Screen (check title)
+    expect(
+      find.descendant(
+        of: find.byType(CupertinoNavigationBar),
+        matching: find.text('Memo Detail'),
+      ),
+      findsOneWidget,
+      reason: 'Should be back on MemoDetailScreen after save',
+    );
     debugPrint('[Test Verification] Navigated back to Detail Screen');
     await tester.pumpAndSettle(const Duration(seconds: 1)); // Extra settle
 
-    // Navigate back to the List Screen
-    await tester.tap(find.byType(BackButton));
+    // Navigate back to the List Screen using Cupertino back button
+    await tester.tap(find.byType(CupertinoNavigationBarBackButton));
     debugPrint('[Test Action] Tapped back button to return to list.');
     await tester.pumpAndSettle(
       const Duration(seconds: 4),
     ); // Wait longer for navigation and initial provider refresh
-    expect(find.byType(MemosScreen), findsOneWidget, reason: 'Should navigate back to MemosScreen');
+    expect(
+      find.descendant(
+        of: find.byType(CupertinoNavigationBar),
+        matching: find.text('Memos'),
+      ),
+      findsOneWidget,
+      reason: 'Should navigate back to MemosScreen',
+    );
     debugPrint('[Test Verification] Navigated back to List Screen');
 
     // --- Explicit Refresh ---
     debugPrint('[Test Action] Performing pull-to-refresh on list screen...');
     await tester.fling(
-      find.byType(ListView).first,
+      find.byType(Scrollable).first, // Use generic Scrollable
       const Offset(0.0, 400.0),
       1000.0,
     );

@@ -1,8 +1,9 @@
+import 'package:flutter/cupertino.dart'; // Import Cupertino
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
+// TextDecoration is in dart:ui, usually implicitly imported
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
-import 'package:flutter_memos/models/memo.dart';
+import 'package:flutter_memos/models/memo.dart'; // Import Memo model
 import 'package:flutter_memos/utils/keyboard_navigation.dart'; // Import the mixin
 import 'package:flutter_memos/utils/url_helper.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -52,11 +53,13 @@ class _NewMemoFormState extends ConsumerState<NewMemoForm>
         children: [
           Expanded(
             flex: 2,
-            child: SelectableText(
+            child: Text(
+              // Replace SelectableText with Text
               syntax,
-              style: const TextStyle(
+              style: TextStyle(
                 fontFamily: 'monospace',
-                backgroundColor: Color(0xFFF5F5F5),
+                backgroundColor: CupertinoColors.secondarySystemFill
+                    .resolveFrom(context), // Use Cupertino color
               ),
             ),
           ),
@@ -75,8 +78,20 @@ class _NewMemoFormState extends ConsumerState<NewMemoForm>
 
     if (content.isEmpty) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please enter some memo content')),
+        showCupertinoDialog(
+          context: context,
+          builder:
+              (context) => CupertinoAlertDialog(
+                title: const Text('Empty Memo'),
+                content: const Text('Please enter some content for your memo.'),
+                actions: [
+                  CupertinoDialogAction(
+                    isDefaultAction: true,
+                    child: const Text('OK'),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ],
+              ),
         );
       }
       return;
@@ -126,7 +141,6 @@ class _NewMemoFormState extends ConsumerState<NewMemoForm>
       }
 
       if (mounted) {
-        // Navigate to the memo detail screen instead of popping
         Navigator.pushNamed(
           context,
           '/memo-detail',
@@ -144,10 +158,19 @@ class _NewMemoFormState extends ConsumerState<NewMemoForm>
           _loading = false;
         });
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error creating memo: ${e.toString()}'),
-            backgroundColor: Colors.red,
+        showCupertinoDialog(
+          context: context,
+          builder:
+              (context) => CupertinoAlertDialog(
+                title: const Text('Error'),
+                content: Text('Failed to create memo: ${e.toString()}'),
+                actions: [
+                  CupertinoDialogAction(
+                    isDefaultAction: true,
+                    child: const Text('OK'),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ],
           ),
         );
       }
@@ -186,7 +209,6 @@ class _NewMemoFormState extends ConsumerState<NewMemoForm>
           }
         }
 
-        // First, explicitly check for Command+Enter
         if (event is KeyDownEvent &&
             event.logicalKey == LogicalKeyboardKey.enter &&
             (HardwareKeyboard.instance.isLogicalKeyPressed(
@@ -199,7 +221,6 @@ class _NewMemoFormState extends ConsumerState<NewMemoForm>
                   LogicalKeyboardKey.metaRight,
                 ))) {
           if (!_loading) {
-            // Prevent double submission
             if (kDebugMode) {
               print(
                 '[NewMemoForm] Command+Enter detected, calling _handleCreateMemo',
@@ -216,7 +237,6 @@ class _NewMemoFormState extends ConsumerState<NewMemoForm>
           return KeyEventResult.handled;
         }
 
-        // Handle other keys (like Escape) using the mixin
         final result = handleKeyEvent(
           event,
           ref,
@@ -225,13 +245,11 @@ class _NewMemoFormState extends ConsumerState<NewMemoForm>
               _contentFocusNode.unfocus();
               _formFocusNode.requestFocus();
             } else {
-              // If form has focus (not text field), pop screen on Escape
               Navigator.of(context).pop();
             }
           },
         );
 
-        // Return handled if the mixin handled it, otherwise ignore
         return result;
       },
       child: Padding(
@@ -243,72 +261,94 @@ class _NewMemoFormState extends ConsumerState<NewMemoForm>
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
+                Text(
                   'CONTENT',
                   style: TextStyle(
-                    color: Colors.grey,
+                    color: CupertinoColors.secondaryLabel.resolveFrom(
+                      context,
+                    ), // Use Cupertino color
                     fontWeight: FontWeight.w600,
                     fontSize: 14,
                   ),
                 ),
-                TextButton.icon(
-                  icon: Icon(
-                    _showMarkdownHelp ? Icons.help_outline : Icons.help,
-                  ),
-                  label: Text(
-                    _showMarkdownHelp ? 'Hide Help' : 'Markdown Help',
-                  ),
+                CupertinoButton(
+                  padding: EdgeInsets.zero,
+                  minSize: 0,
                   onPressed: () {
                     setState(() {
                       _showMarkdownHelp = !_showMarkdownHelp;
                     });
                   },
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _showMarkdownHelp
+                            ? CupertinoIcons.question_circle_fill
+                            : CupertinoIcons.question_circle,
+                        size: 18,
+                        color: CupertinoTheme.of(context).primaryColor,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        _showMarkdownHelp ? 'Hide Help' : 'Markdown Help',
+                        style: TextStyle(
+                          color: CupertinoTheme.of(context).primaryColor,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
 
             if (_showMarkdownHelp)
-              Card(
+              Container(
                 margin: const EdgeInsets.only(bottom: 16),
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Markdown Syntax Guide',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      _buildMarkdownHelpItem('# Heading 1', 'Heading 1'),
-                      _buildMarkdownHelpItem('## Heading 2', 'Heading 2'),
-                      _buildMarkdownHelpItem('**Bold text**', 'Bold text'),
-                      _buildMarkdownHelpItem('*Italic text*', 'Italic text'),
-                      _buildMarkdownHelpItem(
-                        '[Link](https://example.com)',
-                        'Link',
-                      ),
-                      _buildMarkdownHelpItem('- Bullet point', 'Bullet point'),
-                      _buildMarkdownHelpItem(
-                        '1. Numbered item',
-                        'Numbered item',
-                      ),
-                      _buildMarkdownHelpItem('`Code`', 'Code'),
-                      _buildMarkdownHelpItem('> Blockquote', 'Blockquote'),
-                    ],
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: CupertinoColors.secondarySystemGroupedBackground
+                      .resolveFrom(context),
+                  borderRadius: BorderRadius.circular(8.0),
+                  border: Border.all(
+                    color: CupertinoColors.separator.resolveFrom(context),
+                    width: 0.5,
                   ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Markdown Syntax Guide',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    _buildMarkdownHelpItem('# Heading 1', 'Heading 1'),
+                    _buildMarkdownHelpItem('## Heading 2', 'Heading 2'),
+                    _buildMarkdownHelpItem('**Bold text**', 'Bold text'),
+                    _buildMarkdownHelpItem('*Italic text*', 'Italic text'),
+                    _buildMarkdownHelpItem(
+                      '[Link](https://example.com)',
+                      'Link',
+                    ),
+                    _buildMarkdownHelpItem('- Bullet point', 'Bullet point'),
+                    _buildMarkdownHelpItem('1. Numbered item', 'Numbered item'),
+                    _buildMarkdownHelpItem('`Code`', 'Code'),
+                    _buildMarkdownHelpItem('> Blockquote', 'Blockquote'),
+                  ],
                 ),
               ),
 
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                TextButton.icon(
-                  icon: Icon(_previewMode ? Icons.edit : Icons.visibility),
-                  label: Text(_previewMode ? 'Edit' : 'Preview'),
+                CupertinoButton(
+                  padding: EdgeInsets.zero,
+                  minSize: 0,
                   onPressed: () {
                     setState(() {
                       _previewMode = !_previewMode;
@@ -345,6 +385,26 @@ class _NewMemoFormState extends ConsumerState<NewMemoForm>
                       }
                     });
                   },
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _previewMode
+                            ? CupertinoIcons.pencil
+                            : CupertinoIcons.eye,
+                        size: 18,
+                        color: CupertinoTheme.of(context).primaryColor,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        _previewMode ? 'Edit' : 'Preview',
+                        style: TextStyle(
+                          color: CupertinoTheme.of(context).primaryColor,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -352,7 +412,9 @@ class _NewMemoFormState extends ConsumerState<NewMemoForm>
             _previewMode
                 ? Container(
                   decoration: BoxDecoration(
-                    border: Border.all(color: Colors.grey.shade400),
+                    border: Border.all(
+                      color: CupertinoColors.separator.resolveFrom(context),
+                    ), // Use Cupertino color
                     borderRadius: BorderRadius.circular(4),
                   ),
                   padding: const EdgeInsets.all(12),
@@ -362,9 +424,21 @@ class _NewMemoFormState extends ConsumerState<NewMemoForm>
                     child: MarkdownBody(
                       data: _contentController.text,
                       selectable: true,
-                      styleSheet: MarkdownStyleSheet(
-                        a: TextStyle(
-                          color: Theme.of(context).colorScheme.primary,
+                      // Apply Cupertino-based styling consistent with MemoContent
+                      styleSheet: MarkdownStyleSheet.fromCupertinoTheme(
+                        CupertinoTheme.of(context),
+                      ).copyWith(
+                        p: CupertinoTheme.of(
+                          context,
+                        ).textTheme.textStyle.copyWith(
+                          fontSize: 17,
+                          height: 1.4,
+                          color: CupertinoColors.label.resolveFrom(context),
+                        ),
+                        a: CupertinoTheme.of(
+                          context,
+                        ).textTheme.textStyle.copyWith(
+                          color: CupertinoTheme.of(context).primaryColor,
                           decoration: TextDecoration.underline,
                         ),
                       ),
@@ -388,42 +462,45 @@ class _NewMemoFormState extends ConsumerState<NewMemoForm>
                     ),
                   ),
                 )
-                : TextField(
+                : CupertinoTextField(
                   controller: _contentController,
                   focusNode: _contentFocusNode,
-                  decoration: const InputDecoration(
-                    hintText: 'Enter your memo content...',
-                    border: OutlineInputBorder(),
-                    contentPadding: EdgeInsets.all(12),
+                  placeholder: 'Enter your memo content...',
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: CupertinoColors.systemFill.resolveFrom(context),
+                    border: Border.all(
+                      color: CupertinoColors.separator.resolveFrom(context),
+                      width: 0.5,
+                    ),
+                    borderRadius: BorderRadius.circular(8.0),
                   ),
                   maxLines: 10,
                   minLines: 5,
                   autofocus: true,
+                  keyboardType: TextInputType.multiline,
                 ),
             if (_error != null)
               Padding(
                 padding: const EdgeInsets.only(top: 8.0),
-                child: Text(_error!, style: const TextStyle(color: Colors.red)),
+                child: Text(
+                  _error!,
+                  style: TextStyle(
+                    color: CupertinoColors.systemRed.resolveFrom(context),
+                  ),
+                ), // Use Cupertino color
               ),
             const SizedBox(height: 20),
             SizedBox(
               width: double.infinity,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Theme.of(context).colorScheme.primary,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                ),
+              child: CupertinoButton.filled(
+                padding: const EdgeInsets.symmetric(vertical: 12),
                 onPressed: _loading ? null : _handleCreateMemo,
                 child:
                     _loading
-                        ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
+                        ? const CupertinoActivityIndicator(
+                          color: CupertinoColors.white,
+                          radius: 10,
                         )
                         : const Text('Create Memo'),
               ),

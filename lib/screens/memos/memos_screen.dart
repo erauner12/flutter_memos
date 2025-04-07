@@ -1,12 +1,14 @@
+import 'package:flutter/cupertino.dart'; // Import Cupertino
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
+// Keep specific framework imports needed
 import 'package:flutter/services.dart'; // Add import for keyboard events
 import 'package:flutter_memos/models/memo.dart';
 import 'package:flutter_memos/providers/filter_providers.dart';
 import 'package:flutter_memos/providers/memo_providers.dart';
 import 'package:flutter_memos/providers/ui_providers.dart'
     as ui_providers; // Add import
-import 'package:flutter_memos/screens/memos/memo_list_item.dart';
+// Import MemosBody
+import 'package:flutter_memos/screens/memos/memos_body.dart';
 import 'package:flutter_memos/utils/keyboard_navigation.dart'; // Add import
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -19,16 +21,18 @@ class MemosScreen extends ConsumerStatefulWidget {
 
 class _MemosScreenState extends ConsumerState<MemosScreen>
     with KeyboardNavigationMixin<MemosScreen> {
-  final ScrollController _scrollController = ScrollController();
-  final GlobalKey<RefreshIndicatorState> _refreshIndicatorKey =
-      GlobalKey<RefreshIndicatorState>();
-  final FocusNode _focusNode = FocusNode(); // Add FocusNode
-  
+  // ScrollController and RefreshIndicatorKey are now managed within MemosBody
+  // final ScrollController _scrollController = ScrollController();
+  // final GlobalKey<RefreshIndicatorState> _refreshIndicatorKey =
+  //     GlobalKey<RefreshIndicatorState>();
+  final FocusNode _focusNode =
+      FocusNode(); // Keep FocusNode for the screen level
+
   @override
   void initState() {
     super.initState();
-    // Add scroll listener to detect when we're near the bottom
-    _scrollController.addListener(_onScroll);
+    // Scroll listener is now managed within MemosBody
+    // _scrollController.addListener(_onScroll);
     // Request focus after the first frame to ensure the context is available
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
@@ -40,84 +44,116 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
 
   @override
   void dispose() {
-    _scrollController.removeListener(_onScroll);
-    _scrollController.dispose();
+    // ScrollController is now managed within MemosBody
+    // _scrollController.removeListener(_onScroll);
+    // _scrollController.dispose();
     _focusNode.dispose(); // Dispose the focus node
-    super.dispose();
+    super.dispose(); // Must call super
   }
 
-  // Check if we need to load more memos when scrolling
-  void _onScroll() {
-    if (!_scrollController.hasClients) return;
+  // _onScroll is now handled within MemosBody
 
-    final maxScroll = _scrollController.position.maxScrollExtent;
-    final currentScroll = _scrollController.position.pixels;
-    const loadMoreThreshold = 300.0; // Load more when within 300px of bottom
-
-    // Check if we're close to the bottom and can load more
-    if (maxScroll - currentScroll <= loadMoreThreshold) {
-      final memosState = ref.read(memosNotifierProvider);
-
-      if (memosState.canLoadMore) {
-        if (kDebugMode) {
-          print('[MemosScreen] Near bottom, loading more memos...');
-        }
-        ref.read(memosNotifierProvider.notifier).fetchMoreMemos();
-      }
-    }
-  }
-  
-  // Build the AppBar when in multi-select mode
-  AppBar _buildMultiSelectAppBar(int selectedCount) {
-    return AppBar(
-      leading: IconButton(
-        icon: const Icon(Icons.close),
-        tooltip: 'Cancel Selection',
+  // Build the CupertinoNavigationBar when in multi-select mode
+  CupertinoNavigationBar _buildMultiSelectNavBar(int selectedCount) {
+    return CupertinoNavigationBar(
+      transitionBetweenRoutes: false, // Disable default hero animation
+      // Use leading for the cancel button
+      leading: CupertinoButton(
+        padding: EdgeInsets.zero,
         onPressed: () {
           if (kDebugMode) {
             print('[MemosScreen] Exit multi-select via Cancel button');
           }
-          // Make sure we're explicitly calling the toggle provider
           ref.read(ui_providers.toggleMemoMultiSelectModeProvider)();
         },
+        child: const Icon(CupertinoIcons.clear),
       ),
-      title: Text('$selectedCount Selected'),
-      actions: [
-        // Delete button
-        IconButton(
-          icon: const Icon(Icons.delete),
-          tooltip: 'Delete Selected',
-          onPressed: selectedCount > 0
-            ? () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Delete action not implemented yet')),
-                );
-              }
-            : null,
-        ),
-        // Archive button
-        IconButton(
-          icon: const Icon(Icons.archive),
-          tooltip: 'Archive Selected',
-          onPressed: selectedCount > 0
-            ? () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Archive action not implemented yet')),
-                );
-              }
-            : null,
-        ),
-      ],
+      middle: Text('$selectedCount Selected'),
+      // Use trailing for action buttons
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Delete button
+          CupertinoButton(
+            padding: const EdgeInsets.symmetric(horizontal: 8.0),
+            minSize: 0,
+            onPressed:
+                selectedCount > 0
+                    ? () {
+                      // TODO: Implement multi-delete logic
+                      // Show confirmation dialog first
+                      showCupertinoDialog(
+                        context: context,
+                        builder:
+                            (context) => CupertinoAlertDialog(
+                              title: Text('Delete $selectedCount Memos?'),
+                              content: const Text(
+                                'This action cannot be undone.',
+                              ),
+                              actions: [
+                                CupertinoDialogAction(
+                                  child: const Text('Cancel'),
+                                  onPressed: () => Navigator.pop(context),
+                                ),
+                                CupertinoDialogAction(
+                                  isDestructiveAction: true,
+                                  child: const Text('Delete'),
+                                  onPressed: () {
+                                    Navigator.pop(context);
+                                    // TODO: Actual deletion logic here...
+                                    if (kDebugMode) {
+                                      print(
+                                        '[MemosScreen] Multi-delete action triggered (not implemented)',
+                                      );
+                                    }
+                                    // Optionally show a CupertinoDialog for feedback if needed
+                                    // showCupertinoDialog(...);
+                                  },
+                                ),
+                              ],
+                            ),
+                      );
+                    }
+                    : null,
+            child: Icon(
+              CupertinoIcons.delete,
+              color:
+                  selectedCount > 0
+                      ? CupertinoColors.destructiveRed
+                      : CupertinoColors.inactiveGray,
+            ),
+          ),
+          // Archive button
+          CupertinoButton(
+            padding: const EdgeInsets.symmetric(horizontal: 8.0),
+            minSize: 0,
+            onPressed:
+                selectedCount > 0
+                    ? () {
+                      // TODO: Implement multi-archive logic
+                      if (kDebugMode) {
+                        print(
+                          '[MemosScreen] Multi-archive action triggered (not implemented)',
+                        );
+                      }
+                      // Optionally show a CupertinoDialog for feedback if needed
+                      // showCupertinoDialog(...);
+                    }
+                    : null,
+            child: Icon(
+              CupertinoIcons.archivebox,
+              color:
+                  selectedCount > 0
+                      ? CupertinoTheme.of(context).primaryColor
+                      : CupertinoColors.inactiveGray,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
-  // Pull to refresh handler
-  Future<void> _onRefresh() async {
-    if (kDebugMode) {
-      print('[MemosScreen] Pull-to-refresh triggered');
-    }
-    return ref.read(memosNotifierProvider.notifier).refresh();
-  }
+  // _onRefresh is now handled within MemosBody
 
   // Add keyboard navigation methods
   void _selectNextMemo() {
@@ -153,29 +189,33 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
   void _selectPreviousMemo() {
     final memos = ref.read(filteredMemosProvider);
     if (kDebugMode) {
-      print('[MemosScreen _selectPreviousMemo] Called. Filtered memos count: ${memos.length}');
+      print(
+        '[MemosScreen _selectPreviousMemo] Called. Filtered memos count: ${memos.length}',
+      );
     }
-  
+
     if (memos.isEmpty) return;
-  
+
     final currentId = ref.read(ui_providers.selectedMemoIdProvider);
     int currentIndex = -1;
     if (currentId != null) {
       currentIndex = memos.indexWhere((memo) => memo.id == currentId);
     }
-  
+
     // Use the mixin's helper function
     final prevIndex = getPreviousIndex(currentIndex, memos.length);
-  
+
     if (prevIndex != -1) {
       final prevMemoId = memos[prevIndex].id;
       ref.read(ui_providers.selectedMemoIdProvider.notifier).state = prevMemoId;
       if (kDebugMode) {
-        print('[MemosScreen _selectPreviousMemo] Updated selectedMemoIdProvider to: $prevMemoId');
+        print(
+          '[MemosScreen _selectPreviousMemo] Updated selectedMemoIdProvider to: $prevMemoId',
+        );
       }
     }
   }
-  
+
   void _viewSelectedMemo() {
     final selectedId = ref.read(ui_providers.selectedMemoIdProvider);
     if (selectedId != null) {
@@ -211,8 +251,12 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
 
     if (kDebugMode) {
-      print('[MemosScreen _handleKeyEvent] Received key: ${event.logicalKey.keyLabel}');
-      print('[MemosScreen _handleKeyEvent] FocusNode has focus: ${node.hasFocus}');
+      print(
+        '[MemosScreen _handleKeyEvent] Received key: ${event.logicalKey.keyLabel}',
+      );
+      print(
+        '[MemosScreen _handleKeyEvent] FocusNode has focus: ${node.hasFocus}',
+      );
     }
 
     // Use the mixin's handler
@@ -226,130 +270,130 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
     );
 
     if (kDebugMode) {
-      print('[MemosScreen _handleKeyEvent] Mixin handleKeyEvent result: $result');
+      print(
+        '[MemosScreen _handleKeyEvent] Mixin handleKeyEvent result: $result',
+      );
     }
     return result;
   }
-  
+
   @override
   Widget build(BuildContext context) {
     // Watch the memos notifier state
     final memosState = ref.watch(memosNotifierProvider);
-  
+
     // Watch visible memos list (filtered by hiddenMemoIds)
     final visibleMemos = ref.watch(visibleMemosListProvider);
-  
+
     // Watch current filter
     final currentFilter = ref.watch(filterKeyProvider);
-    
+
     // Watch multi-select mode and selected IDs
-    final isMultiSelectMode = ref.watch(ui_providers.memoMultiSelectModeProvider);
-    final selectedIds = ref.watch(ui_providers.selectedMemoIdsForMultiSelectProvider);
-    
-    return Scaffold(
-      appBar: isMultiSelectMode
-        ? _buildMultiSelectAppBar(selectedIds.length)
-        : AppBar(
-            title: Text('Memos (${currentFilter.toUpperCase()})'),
-            actions: [
-              // Multi-select button
-              IconButton(
-                icon: const Icon(Icons.select_all),
-                tooltip: 'Select Memos',
-                onPressed: () => ref.read(ui_providers.toggleMemoMultiSelectModeProvider)(),
+    final isMultiSelectMode = ref.watch(
+      ui_providers.memoMultiSelectModeProvider,
+    );
+    final selectedIds = ref.watch(
+      ui_providers.selectedMemoIdsForMultiSelectProvider,
+    );
+
+    // Use CupertinoPageScaffold
+    return CupertinoPageScaffold(
+      // Use CupertinoNavigationBar
+      navigationBar:
+          isMultiSelectMode
+              ? _buildMultiSelectNavBar(
+                selectedIds.length,
+              ) // Use the new Cupertino Nav Bar
+              : CupertinoNavigationBar(
+                transitionBetweenRoutes:
+                    false, // Disable default hero animation
+                middle: Text('Memos (${currentFilter.toUpperCase()})'),
+                // Combine actions into the trailing widget
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Multi-select button
+                    CupertinoButton(
+                      padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                      minSize: 0,
+                      onPressed:
+                          () =>
+                              ref.read(
+                                ui_providers.toggleMemoMultiSelectModeProvider,
+                              )(),
+                      child: const Icon(
+                        CupertinoIcons.checkmark_seal,
+                      ), // Example icon
+                    ),
+                    // Advanced filter button
+                    CupertinoButton(
+                      padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                      minSize: 0,
+                      onPressed: () => _showAdvancedFilterPanel(context),
+                      child: const Icon(CupertinoIcons.tuningfork),
+                    ),
+                    // Filter dropdown (Keep Material for now, replace later)
+                    _buildFilterButton(),
+                    // Create new memo button
+                    CupertinoButton(
+                      padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                      minSize: 0,
+                      onPressed: () {
+                        Navigator.pushNamed(context, '/new-memo').then((_) {
+                          ref.read(memosNotifierProvider.notifier).refresh();
+                        });
+                      },
+                      child: const Icon(CupertinoIcons.add),
+                    ),
+                  ],
+                ),
+                // Search bar needs a different approach in Cupertino.
+                // Option 1: Place it below the Nav Bar using a Column in the body.
+                // Option 2: Use CupertinoSearchTextField (requires more integration).
+                // Let's go with Option 1 for now.
               ),
-              
-              // Advanced filter button
-              IconButton(
-                icon: const Icon(Icons.tune),
-                tooltip: 'Advanced Filters',
-                onPressed: () => _showAdvancedFilterPanel(context),
-              ),
-              
-              // Filter dropdown
-              _buildFilterButton(),
-  
-              // Create new memo button
-              IconButton(
-                icon: const Icon(Icons.add),
-                tooltip: 'New Memo',
-                onPressed: () {
-                  Navigator.pushNamed(context, '/new-memo').then((_) {
-                    // Refresh list when returning from create screen
-                    ref.read(memosNotifierProvider.notifier).refresh();
-                  });
-                },
-              ),
+      child: SafeArea(
+        // Add SafeArea
+        child: Focus(
+          // Wrap the body content
+          focusNode: _focusNode,
+          autofocus: true, // Try to grab focus automatically
+          onKeyEvent: _handleKeyEvent, // Use the handler
+          // Add Column to place SearchBar above the list
+          child: Column(
+            children: [
+              // Add Search Bar here if not in multi-select mode
+              if (!isMultiSelectMode)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 8.0),
+                  child: _buildSearchBar(), // Build the search bar widget
+                ),
+
+              // Main list of memos
+              Expanded(child: _buildMemosList(memosState, visibleMemos)),
             ],
-            // Add search bar in the app bar bottom
-            bottom: PreferredSize(
-              preferredSize: const Size.fromHeight(56.0),
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16.0, 0.0, 16.0, 8.0),
-                child: _buildSearchBar(),
-              ),
-            ),
           ),
-      body: Focus(
-        // Wrap the body
-        focusNode: _focusNode,
-        autofocus: true, // Try to grab focus automatically
-        onKeyEvent: _handleKeyEvent, // Use the handler
-        child: Column(
-          children: [
-            // Filter chips can go here (if needed in the future)
-  
-            // Main list of memos
-            Expanded(child: _buildMemosList(memosState, visibleMemos)),
-          ],
         ),
       ),
-      floatingActionButton: isMultiSelectMode
-        ? null // Hide FAB in multi-select mode
-        : Column(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              // Advanced filter button
-              FloatingActionButton.small(
-                heroTag: 'advancedFilterFAB',
-                onPressed: () => _showAdvancedFilterPanel(context),
-                tooltip: 'Advanced Filters',
-                child: const Icon(Icons.filter_alt),
-              ),
-              const SizedBox(height: 16),
-              // Add new memo button
-              FloatingActionButton(
-                heroTag: 'newMemoFAB',
-                onPressed: () {
-                  Navigator.pushNamed(context, '/new-memo').then((_) {
-                    ref.read(memosNotifierProvider.notifier).refresh();
-                  });
-                },
-                tooltip: 'New Memo',
-                child: const Icon(Icons.add),
-              ),
-            ],
-          ),
+      // Remove FloatingActionButtons - actions moved to NavBar
     );
   }
+
   void _showAdvancedFilterPanel(BuildContext context) {
-    // Show the advanced filter panel as a modal bottom sheet
-    showModalBottomSheet(
+    // Show the advanced filter panel using showCupertinoModalPopup
+    // Note: DraggableScrollableSheet behavior needs custom implementation if required.
+    // This example shows a fixed-height modal popup.
+    showCupertinoModalPopup(
       context: context,
-      isScrollControlled: true, // Takes up full screen height
-      backgroundColor: Colors.transparent, // Transparent background
-      builder: (context) {
-        // Determine initial sheet size based on screen dimensions
-        final screenWidth = MediaQuery.of(context).size.width;
-        final initialChildSize = screenWidth > 600 ? 0.7 : 0.8; // More space on larger screens
-        
-        return DraggableScrollableSheet(
-          initialChildSize: initialChildSize,
-          minChildSize: 0.5, // At least half the screen
-          maxChildSize: 0.95, // Almost full screen
-          builder: (_, scrollController) {
-            return _buildAdvancedFilterPanel(scrollController);
-          },
+      builder: (BuildContext context) {
+        // You might need to adjust the height or make it scrollable
+        // depending on the content of the filter panel.
+        return SizedBox(
+          // Example: Set height to 80% of screen height
+          height: MediaQuery.of(context).size.height * 0.8,
+          child: _buildAdvancedFilterPanel(
+            ScrollController(),
+          ), // Pass a new ScrollController
         );
       },
     );
@@ -357,9 +401,11 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
 
   // Define the AdvancedFilterPanel
   Widget _buildAdvancedFilterPanel(ScrollController scrollController) {
+    // Use CupertinoTheme for background color
+    final theme = CupertinoTheme.of(context);
     return Container(
       decoration: BoxDecoration(
-        color: Theme.of(context).scaffoldBackgroundColor,
+        color: theme.scaffoldBackgroundColor, // Use Cupertino theme color
         borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
       ),
       child: Column(
@@ -370,7 +416,10 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
             width: 40,
             height: 4,
             decoration: BoxDecoration(
-              color: Colors.grey.withOpacity(0.3),
+              // Use withAlpha instead of deprecated withOpacity
+              color: CupertinoColors.systemGrey.withAlpha(
+                77,
+              ), // Approx 0.3 opacity
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -385,8 +434,10 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
                 const Spacer(),
-                IconButton(
-                  icon: const Icon(Icons.close),
+                // Replace IconButton with CupertinoButton
+                CupertinoButton(
+                  padding: EdgeInsets.zero,
+                  child: const Icon(CupertinoIcons.clear_thick),
                   onPressed: () => Navigator.pop(context),
                 ),
               ],
@@ -408,37 +459,77 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
       ),
     );
   }
-  
+
+  // Method to show the filter selection action sheet
+  void _showFilterActionSheet(BuildContext context, WidgetRef ref) {
+    final currentFilter = ref.read(filterKeyProvider);
+    final availableFilters = {
+      'all': 'All Memos',
+      'inbox': 'Inbox',
+      'archive': 'Archive',
+      // Add more filters here if needed
+    };
+
+    showCupertinoModalPopup<void>(
+      context: context,
+      builder:
+          (BuildContext context) => CupertinoActionSheet(
+            title: const Text('Select Filter'),
+            actions:
+                availableFilters.entries.map((entry) {
+                  return CupertinoActionSheetAction(
+                    isDefaultAction: entry.key == currentFilter,
+                    onPressed: () {
+                      ref.read(filterKeyProvider.notifier).state = entry.key;
+                      Navigator.pop(context); // Close the action sheet
+                    },
+                    child: Text(entry.value),
+                  );
+                }).toList(),
+            cancelButton: CupertinoActionSheetAction(
+              isDestructiveAction: true,
+              onPressed: () {
+                Navigator.pop(context);
+              },
+              child: const Text('Cancel'),
+            ),
+          ),
+    );
+  }
+
+  // Updated to use CupertinoButton and trigger the action sheet
   Widget _buildFilterButton() {
     final currentFilter = ref.watch(filterKeyProvider);
+    final filterLabel =
+        {'all': 'All', 'inbox': 'Inbox', 'archive': 'Archive'}[currentFilter] ??
+        currentFilter; // Fallback to key if label not found
 
-    return PopupMenuButton<String>(
-      tooltip: 'Filter',
-      // Removed icon property since we're using child property instead
-      onSelected: (String filter) {
-        ref.read(filterKeyProvider.notifier).state = filter;
-      },
-      itemBuilder:
-          (BuildContext context) => <PopupMenuEntry<String>>[
-            const PopupMenuItem<String>(value: 'all', child: Text('All Memos')),
-            const PopupMenuItem<String>(value: 'inbox', child: Text('Inbox')),
-            const PopupMenuItem<String>(
-              value: 'archive',
-              child: Text('Archive'),
-            ),
-            // Add more filter options as needed
-          ],
+    // Use a CupertinoButton to trigger the action sheet
+    return CupertinoButton(
+      padding: const EdgeInsets.symmetric(horizontal: 8.0),
+      minSize: 0,
+      onPressed: () => _showFilterActionSheet(context, ref),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Chip(
-            label: Text(currentFilter),
-            backgroundColor: Theme.of(
-              context,
-            ).colorScheme.primary.withOpacity(0.2),
+          // Use Text instead of Chip for a more Cupertino feel
+          Text(
+            filterLabel,
+            style: TextStyle(
+              color: CupertinoTheme.of(context).primaryColor,
+              fontSize: 14, // Adjust size as needed
+            ),
           ),
           const SizedBox(width: 4),
-          const Icon(Icons.arrow_drop_down),
+          // Correct Icon constructor: size and color are named parameters
+          Icon(
+            CupertinoIcons.chevron_down, // Use Cupertino icon
+            size: 16, // Pass size as named argument
+            color:
+                CupertinoTheme.of(
+                  context,
+                ).primaryColor, // Pass color as named argument
+          ),
         ],
       ),
     );
@@ -447,28 +538,24 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
   // Build the search bar widget
   Widget _buildSearchBar() {
     final searchQuery = ref.watch(searchQueryProvider);
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final TextEditingController controller = TextEditingController(
+      text: searchQuery,
+    );
+    controller.selection = TextSelection.fromPosition(
+      TextPosition(offset: controller.text.length),
+    ); // Place cursor at the end
 
-    return TextField(
-      decoration: InputDecoration(
-        hintText: 'Search memos...',
-        prefixIcon: const Icon(Icons.search),
-        suffixIcon:
-            searchQuery.isNotEmpty
-                ? IconButton(
-                  icon: const Icon(Icons.clear),
-                  onPressed: () {
-                    ref.read(searchQueryProvider.notifier).state = '';
-                  },
-                )
-                : null,
-        filled: true,
-        fillColor: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade200,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16.0),
-          borderSide: BorderSide.none,
-        ),
+    // Use CupertinoSearchTextField for a native look
+    return CupertinoSearchTextField(
+      controller: controller,
+      placeholder: 'Search memos...',
+      // Style based on theme
+      style: TextStyle(color: CupertinoColors.label.resolveFrom(context)),
+      decoration: BoxDecoration(
+        color: CupertinoColors.systemFill.resolveFrom(context),
+        borderRadius: BorderRadius.circular(10.0),
       ),
+      // prefixIcon and suffixIcon are built-in
       onChanged: (value) {
         // Update the search query provider as user types
         ref.read(searchQueryProvider.notifier).state = value;
@@ -485,102 +572,11 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
     );
   }
 
+  // Simplified _buildMemosList to delegate to MemosBody
   Widget _buildMemosList(MemosState memosState, List<Memo> visibleMemos) {
-    // Use filteredMemos instead of visibleMemos directly
-    final filteredMemos = ref.watch(filteredMemosProvider);
-    final searchQuery = ref.watch(searchQueryProvider);
-    
-    // Show loading spinner for initial load
-    if (memosState.isLoading && visibleMemos.isEmpty) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    // Show error message if there's an error and no memos to display
-    if (memosState.error != null && visibleMemos.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              'Error loading memos',
-              style: TextStyle(color: Theme.of(context).colorScheme.error),
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed:
-                  () => ref.read(memosNotifierProvider.notifier).refresh(),
-              child: const Text('Retry'),
-            ),
-          ],
-        ),
-      );
-    }
-
-    // Show empty state for search with no results
-    if (filteredMemos.isEmpty && searchQuery.isNotEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.search_off, size: 48, color: Colors.grey),
-            const SizedBox(height: 16),
-            Text(
-              'No results found for "$searchQuery"',
-              style: const TextStyle(fontSize: 16, color: Colors.grey),
-            ),
-            const SizedBox(height: 8),
-            ElevatedButton(
-              onPressed: () {
-                ref.read(searchQueryProvider.notifier).state = '';
-              },
-              child: const Text('Clear Search'),
-            ),
-          ],
-        ),
-      );
-    }
-
-    // Show general empty state message if no memos and not loading
-    if (visibleMemos.isEmpty && !memosState.isLoading && searchQuery.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Text('No memos found'),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: () => Navigator.pushNamed(context, '/new-memo'),
-              child: const Text('Create New Memo'),
-            ),
-          ],
-        ),
-      );
-    }
-    
-    // Show list with pull-to-refresh
-    return RefreshIndicator(
-      key: _refreshIndicatorKey,
-      onRefresh: _onRefresh,
-      child: ListView.builder(
-        physics: const AlwaysScrollableScrollPhysics(),
-        controller: _scrollController,
-        padding: const EdgeInsets.all(16),
-        // Add +1 item if we're loading more (for the loading indicator)
-        itemCount: filteredMemos.length + (memosState.isLoadingMore ? 1 : 0),
-        itemBuilder: (context, index) {
-          // Show loading indicator as the last item when loading more
-          if (index == filteredMemos.length) {
-            return const Padding(
-              padding: EdgeInsets.symmetric(vertical: 16.0),
-              child: Center(child: CircularProgressIndicator()),
-            );
-          }
-          
-          // Regular memo list item - now using filtered memos
-          final memo = filteredMemos[index];
-          return MemoListItem(memo: memo, index: index);
-        },
-      ),
-    );
+    // The logic for displaying loading, error, empty, and data states,
+    // including the ListView.builder and RefreshIndicator,
+    // is now handled within the MemosBody widget.
+    return const MemosBody();
   }
 }

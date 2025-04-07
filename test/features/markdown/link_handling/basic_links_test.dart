@@ -1,21 +1,23 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart'; // Import Cupertino
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../../utils/test_debug.dart'; // Go up two levels to reach test/utils/
 
 void main() {
-  group('Basic Markdown Link Tests', () {
+  group('Basic Markdown Link Tests (Cupertino)', () {
     testWidgets('MarkdownBody passes link tap events to callback', (WidgetTester tester) async {
       // Track if the link callback was called
       bool linkTapped = false;
       String? tappedUrl;
 
-      // Build a MarkdownBody with a link
+      // Build a MarkdownBody with a link inside CupertinoApp
       await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: MarkdownBody(
+        CupertinoApp(
+          // Use CupertinoApp
+          home: CupertinoPageScaffold(
+            // Use CupertinoPageScaffold
+            child: MarkdownBody(
               data: '[Test Link](https://example.com)',
               onTapLink: (text, href, title) {
                 linkTapped = true;
@@ -29,7 +31,7 @@ void main() {
         ),
       );
 
-      // Find and tap the link
+      // Find and tap the link (rendered as RichText)
       await tester.tap(find.text('Test Link'));
       await tester.pump();
 
@@ -51,19 +53,23 @@ void main() {
 
       // Build a MarkdownBody with different link types and explicit styling
       await tester.pumpWidget(
-        MaterialApp(
-          theme: ThemeData(
+        CupertinoApp(
+          // Use CupertinoApp
+          theme: const CupertinoThemeData(
+            // Use CupertinoThemeData
             // Ensure links have explicit styling that we can detect
-            textTheme: const TextTheme(
-              bodyMedium: TextStyle(color: Colors.black),
+            textTheme: CupertinoTextThemeData(
+              // Use CupertinoTextThemeData
+              textStyle: TextStyle(color: CupertinoColors.black), // Base style
             ),
           ),
-          home: Scaffold(
-            body: MarkdownBody(
+          home: CupertinoPageScaffold(
+            // Use CupertinoPageScaffold
+            child: MarkdownBody(
               data: markdownText,
               styleSheet: MarkdownStyleSheet(
                 a: const TextStyle(
-                  color: Colors.blue,
+                  color: CupertinoColors.activeBlue, // Use Cupertino color
                   decoration: TextDecoration.underline,
                 ),
               ),
@@ -91,7 +97,7 @@ void main() {
           find.byType(RichText),
         );
         bool foundText = false;
-      
+
         for (final richText in richTextWidgets) {
           if (richText.text.toPlainText().contains(linkText)) {
             foundText = true;
@@ -99,7 +105,7 @@ void main() {
             break;
           }
         }
-      
+
         expect(
           foundText,
           isTrue,
@@ -107,10 +113,10 @@ void main() {
               'Could not find the link text "$linkText" in any RichText widget',
         );
       }
-    
+
       // Find all TextSpan instances and verify at least one has underline decoration
       bool foundUnderlinedText = false;
-    
+
       // Helper function to traverse TextSpan tree
       void findUnderlinedText(InlineSpan span) {
         if (span is TextSpan) {
@@ -121,7 +127,7 @@ void main() {
               'Found underlined text: ${span.text}',
             ); // Add debug log
           }
-        
+
           // Check children if they exist
           if (!foundUnderlinedText && span.children != null) {
             for (final child in span.children!) {
@@ -131,14 +137,14 @@ void main() {
           }
         }
       }
-    
+
       // Get all RichText widgets and check their text spans
       final allRichText = tester.widgetList<RichText>(find.byType(RichText));
       for (final richText in allRichText) {
         findUnderlinedText(richText.text);
         if (foundUnderlinedText) break;
       }
-    
+
       expect(
         foundUnderlinedText,
         isTrue,

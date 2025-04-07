@@ -1,4 +1,5 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart'; // Import Cupertino
+// Remove unused Icons import
 import 'package:flutter/services.dart'; // Add this for LogicalKeyboardKey
 import 'package:flutter_memos/main.dart' as app;
 import 'package:flutter_memos/widgets/memo_card.dart';
@@ -22,7 +23,12 @@ void main() {
     await Future.delayed(const Duration(seconds: 2));
 
     final testMemos = await createTestMemos(10);
-    await tester.fling(find.byType(ListView), const Offset(0.0, 400.0), 1000.0);
+    // Use generic Scrollable finder
+    await tester.fling(
+      find.byType(Scrollable).first,
+      const Offset(0.0, 400.0),
+      1000.0,
+    );
     await tester.pumpAndSettle(const Duration(seconds: 3));
 
     // 2. Scroll and Select
@@ -57,34 +63,76 @@ void main() {
     // 3. Navigate to Detail -> Edit
     await tester.tap(memoToEditFinder);
     await tester.pumpAndSettle();
-    expect(find.text('Memo Detail'), findsOneWidget);
+    // Check CupertinoNavigationBar title
+    expect(
+      find.descendant(
+        of: find.byType(CupertinoNavigationBar),
+        matching: find.text('Memo Detail'),
+      ),
+      findsOneWidget,
+    );
 
-    await tester.tap(find.byIcon(Icons.edit));
+    // Find edit button in CupertinoNavigationBar trailing
+    await tester.tap(find.widgetWithIcon(CupertinoButton, Icons.edit));
     await tester.pumpAndSettle();
-    expect(find.text('Edit Memo'), findsOneWidget); // Assuming Edit screen has this title
+    // Check CupertinoNavigationBar title
+    expect(
+      find.descendant(
+        of: find.byType(CupertinoNavigationBar),
+        matching: find.text('Edit Memo'),
+      ),
+      findsOneWidget,
+    );
 
     // 4. Edit and Save
-    final editTextField = find.byType(TextField);
+    final editTextField = find.byType(
+      CupertinoTextField,
+    ); // Use CupertinoTextField
     expect(editTextField, findsOneWidget);
     const suffix = ' - Edited';
     await tester.enterText(editTextField, memoToEdit.content + suffix);
     await tester.pumpAndSettle();
 
-    // Find and tap the save button (adjust finder as needed)
-    final saveButtonFinder = find.byTooltip('Save Memo'); // Or find.byIcon(Icons.save), find.text('Save')
-    expect(saveButtonFinder, findsOneWidget);
-    await tester.tap(saveButtonFinder);
-    await tester.pumpAndSettle(const Duration(seconds: 2)); // Wait for save and potential navigation
+    // Find and tap the save button (assuming CupertinoButton with text or icon)
+    // Using Command+Enter shortcut instead of tapping a button
+    debugPrint('Sending Command+Enter to save...');
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.meta);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.meta);
+    await tester.pumpAndSettle(
+      const Duration(seconds: 3),
+    ); // Wait for save and navigation
 
     // Should be back on Detail screen after save
-    expect(find.text('Memo Detail'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(CupertinoNavigationBar),
+        matching: find.text('Memo Detail'),
+      ),
+      findsOneWidget,
+    );
     // Verify edited content is shown on detail screen
-    expect(find.textContaining(suffix), findsOneWidget);
+    expect(find.textContaining(suffix, findRichText: true), findsWidgets);
 
     // 5. Navigate Back to List
-    await tester.pageBack();
+    await tester.pageBack(); // Use tester.pageBack() for Cupertino navigation
     await tester.pumpAndSettle();
-    expect(find.text('Memo Detail'), findsNothing);
+    expect(
+      find.descendant(
+        of: find.byType(CupertinoNavigationBar),
+        matching: find.text('Memo Detail'),
+      ),
+      findsNothing,
+    );
+    // Check for Memos screen title
+    expect(
+      find.descendant(
+        of: find.byType(CupertinoNavigationBar),
+        matching: find.text('Memos'),
+      ),
+      findsOneWidget,
+    );
+
 
     // 6. Assert State Preservation
     final selectedMemoAfter = getSelectedMemo(tester);
@@ -149,26 +197,45 @@ void main() {
     ); // Assuming 'e' key opens edit
     await tester.pumpAndSettle();
 
-    // Verify we're in edit view
+    // Verify we're in edit view (check CupertinoNavigationBar title)
     expect(
-      find.text('Edit Memo'),
+      find.descendant(
+        of: find.byType(CupertinoNavigationBar),
+        matching: find.text('Edit Memo'),
+      ),
       findsOneWidget,
       reason: "Not navigated to edit view",
     );
 
     // 4. Make a small edit
-    final titleField = find.byType(TextField).first;
+    final titleField =
+        find.byType(CupertinoTextField).first; // Use CupertinoTextField
     await tester.enterText(
       titleField,
       "${selectedMemo.content} (edited)",
     ); // Using the correct property 'content' instead of 'text'
 
-    // 5. Save and return
-    final saveButton = find.byType(ElevatedButton).first;
-    await tester.tap(saveButton);
+    // 5. Save and return using Command+Enter
+    debugPrint('Sending Command+Enter to save...');
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.meta);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.meta);
     await tester.pumpAndSettle(
-      const Duration(seconds: 2),
+      const Duration(seconds: 3),
     ); // Wait for save and return
+
+    // Should be back on Detail screen after save
+    expect(
+      find.descendant(
+        of: find.byType(CupertinoNavigationBar),
+        matching: find.text('Memo Detail'),
+      ),
+      findsOneWidget,
+    );
+
+    // Navigate back to list
+    await tester.pageBack();
+    await tester.pumpAndSettle();
 
     // 6. Verify selection state is preserved
     final selectedMemoAfterReturn = getSelectedMemo(tester);

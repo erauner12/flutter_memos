@@ -1,4 +1,5 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart'; // Import Cupertino
+// Remove unused Icons import
 import 'package:flutter/services.dart'; // Import for LogicalKeyboardKey
 import 'package:flutter_memos/main.dart' as app;
 import 'package:flutter_memos/widgets/capture_utility.dart';
@@ -33,29 +34,31 @@ Future<void> _verifyCollapsed(WidgetTester tester, double initialHeight) async {
         'CaptureUtility should be collapsed (Height: $collapsedHeight, Expected near: $initialHeight)',
   );
 
-  // The TextField is always present now but should be minimal in collapsed state
+  // The CupertinoTextField is always present now but should be minimal in collapsed state
   final textField = find.descendant(
     of: captureUtilityFinder,
-    matching: find.byType(TextField),
+    matching: find.byType(CupertinoTextField), // Use CupertinoTextField
   );
 
   if (textField.evaluate().isNotEmpty) {
-    // If TextField is found, check if it's using minLines setting (collapsed state)
-    final textFieldWidget = tester.widget<TextField>(textField);
+    // If CupertinoTextField is found, check if it's using minLines setting (collapsed state)
+    final textFieldWidget = tester.widget<CupertinoTextField>(
+      textField,
+    ); // Use CupertinoTextField
     expect(
       textFieldWidget.minLines,
       equals(1),
       reason: 'TextField should have minLines of 1 when collapsed',
     );
   } else {
-    // Legacy test behavior - check that TextField is not visible when collapsed
+    // Legacy test behavior - check that CupertinoTextField is not visible when collapsed
     expect(
       find.descendant(
         of: captureUtilityFinder,
-        matching: find.byType(TextField),
+        matching: find.byType(CupertinoTextField), // Use CupertinoTextField
       ),
       findsNothing,
-      reason: 'TextField should not be visible when collapsed',
+      reason: 'CupertinoTextField should not be visible when collapsed',
     );
   }
 }
@@ -76,25 +79,25 @@ Future<void> _verifyExpanded(WidgetTester tester, double initialHeight) async {
         'CaptureUtility should be expanded (Height: $expandedHeight, Expected > ${initialHeight + 50})',
   );
 
-  // Check that the TextField is visible and focused when expanded
+  // Check that the CupertinoTextField is visible and focused when expanded
   final textFieldFinder = find.descendant(
     of: captureUtilityFinder,
-    matching: find.byType(TextField),
+    matching: find.byType(CupertinoTextField), // Use CupertinoTextField
   );
   expect(
     textFieldFinder,
     findsOneWidget,
-    reason: 'TextField should be visible when expanded',
+    reason: 'CupertinoTextField should be visible when expanded',
   );
 
-  // Verify that expanded mode shows the Add button
+  // Verify that expanded mode shows the Add button (assuming it's a CupertinoButton)
   expect(
     find.descendant(
       of: captureUtilityFinder,
-      matching: find.byType(ElevatedButton),
+      matching: find.byType(CupertinoButton), // Use CupertinoButton
     ),
-    findsOneWidget,
-    reason: 'Add Memo button should be visible when expanded',
+    findsOneWidget, // Or findsAtLeastNWidgets(1) if there are other buttons
+    reason: 'Add Memo button (CupertinoButton) should be visible when expanded',
   );
 }
 
@@ -153,7 +156,7 @@ void main() {
       // Try to find the expand icon button
       final expandIconFinder = find.descendant(
         of: captureUtilityFinder,
-        matching: find.byIcon(Icons.expand_less),
+        matching: find.byIcon(CupertinoIcons.chevron_up), // Use Cupertino icon
       );
 
       if (expandIconFinder.evaluate().isNotEmpty) {
@@ -213,14 +216,17 @@ void main() {
       // Enter text
       final textFieldFinder = find.descendant(
         of: captureUtilityFinder,
-        matching: find.byType(TextField),
+        matching: find.byType(CupertinoTextField), // Use CupertinoTextField
       );
       expect(textFieldFinder, findsOneWidget);
       await tester.enterText(textFieldFinder, 'Test memo for submit collapse');
       await tester.pumpAndSettle();
 
-      // Tap the "Add Memo" button
-      final addButtonFinder = find.widgetWithText(ElevatedButton, 'Add Memo');
+      // Tap the "Add Memo" button (assuming it's a CupertinoButton)
+      final addButtonFinder = find.widgetWithText(
+        CupertinoButton,
+        'Add Memo',
+      ); // Use CupertinoButton
       expect(addButtonFinder, findsOneWidget);
       debugPrint('Tapping Add Memo button...');
       await tester.tap(addButtonFinder);
@@ -247,10 +253,10 @@ void main() {
       await tester.pumpAndSettle(const Duration(milliseconds: 600));
       await _verifyExpanded(tester, initialHeight);
 
-      // Ensure the TextField or the utility itself has focus for the key event
+      // Ensure the CupertinoTextField or the utility itself has focus for the key event
       final textFieldFinder = find.descendant(
         of: captureUtilityFinder,
-        matching: find.byType(TextField),
+        matching: find.byType(CupertinoTextField), // Use CupertinoTextField
       );
       await tester.tap(textFieldFinder); // Tap text field to ensure focus
       await tester.pumpAndSettle();

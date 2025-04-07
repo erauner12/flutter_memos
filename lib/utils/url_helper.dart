@@ -1,122 +1,82 @@
+import 'package:flutter/cupertino.dart'; // Import Cupertino
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-// Remove direct import of url_launcher
-// import 'package:url_launcher/url_launcher.dart' as url_launcher;
-import 'package:flutter_riverpod/flutter_riverpod.dart'; // Add Riverpod import
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart' as launcher; // Add prefix
 
-import '../services/url_launcher_service.dart'; // Import the new service
-
-/// Helper class for handling URLs
 class UrlHelper {
-  // Modify to accept WidgetRef
   static Future<bool> launchUrl(
-    String url, {
-    required WidgetRef ref,
-    BuildContext? context,
+    String urlString, {
+    required BuildContext context,
+    required WidgetRef ref, // Keep ref if needed for other logic
   }) async {
-    if (kDebugMode) {
-      print('[URL Helper] Launching URL: $url');
-    }
-
-    // Get the service instance from the provider
-    final launcherService = ref.read(urlLauncherServiceProvider);
-
-    // Delegate the launch call to the service
-    final success = await launcherService.launch(url);
-
-    // Handle failure feedback (optional, could also be handled by caller)
-    if (!success && context != null && context.mounted) {
+    final Uri? uri = Uri.tryParse(urlString);
+    if (uri == null) {
       if (kDebugMode) {
-        print('[URL Helper] Launch failed for $url, showing Snackbar');
+        debugPrint('[UrlHelper] Invalid URL: $urlString');
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Could not open link: $url'),
-          action: SnackBarAction(
-            label: 'Copy URL',
-            onPressed: () {
-              Clipboard.setData(ClipboardData(text: url));
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('URL copied to clipboard')),
-                );
-              }
-            },
-          ),
-        ),
-      );
-    } else if (success && kDebugMode) {
-      print('[URL Helper] Launch successful for $url');
+      // Check mounted status even before await, as context might become invalid.
+      if (context.mounted) {
+        _showErrorDialog(
+          context,
+          'Invalid URL',
+          'Could not parse the URL: $urlString',
+        );
+      }
+      return false;
     }
 
-    return success;
+    try {
+      // Use the launchUrl function from url_launcher package
+      if (await launcher.canLaunchUrl(uri)) {
+        // Use prefix
+        // Pass Uri object
+        // Pass Uri object. Remove mode parameter as it seems to cause issues.
+        final bool launched = await launcher.launchUrl(uri); // Use prefix
+        if (!launched && kDebugMode) {
+          debugPrint('[UrlHelper] Could not launch URL: $urlString');
+          // Optionally show error dialog even if canLaunchUrl was true but launchUrl failed
+          // if (context.mounted) _showErrorDialog(context, 'Launch Error', 'Could not open the URL: $urlString');
+        }
+        return launched;
+      } else {
+        if (kDebugMode) {
+          debugPrint('[UrlHelper] Cannot launch URL: $urlString');
+        }
+        // Add mounted check after await
+        if (!context.mounted) return false;
+        _showErrorDialog(context, 'Cannot Launch URL', 'Device cannot handle this URL: $urlString');
+        return false;
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('[UrlHelper] Error launching URL $urlString: $e');
+      }
+      // Add mounted check after await/catch
+      if (!context.mounted) return false;
+      _showErrorDialog(context, 'Launch Error', 'An error occurred while trying to open the URL: $e');
+      return false;
+    }
   }
 
-  // TODO: find the right place to call this (DO NOT REMOVE)
-  /// Check if a scheme appears to be a custom app scheme
-  static bool _isCustomAppScheme(String scheme) {
-    // List of common custom app schemes
-    final customSchemes = [
-      'fb',
-      'twitter',
-      'instagram',
-      'snapchat',
-      'whatsapp',
-      'telegram',
-      'spotify',
-      'youtube',
-      'netflix',
-      'maps',
-      'uber',
-      'lyft',
-      'paypal',
-      'venmo',
-      'cashapp',
-      'zelle',
-      'drafts', // Drafts app scheme
-      'things',
-      'omnifocus',
-      'bear',
-      'notion',
-      'obsidian',
-      'tweetbot',
-      'twitterrific',
-      'mastodon',
-      'testflight',
-      'shortcuts',
-      'workflow',
-      'dropbox',
-      'evernote',
-      'onenote',
-      'pocket',
-      'overcast',
-      'castro',
-      'pcast',
-    ];
-
-    // More advanced scheme detection and logging
-    final isCustom =
-        customSchemes.contains(scheme.toLowerCase()) ||
-        scheme.contains(
-          '.',
-        ) || // Often used in reverse-domain notation (com.example.app)
-        scheme.length >= 3; // Most custom schemes are at least 3 chars
-
-    if (kDebugMode) {
-      if (isCustom) {
-        print('[URL] Identified scheme "$scheme" as a custom app scheme');
-
-        if (customSchemes.contains(scheme.toLowerCase())) {
-          print('[URL] Matched "$scheme" in known app schemes list');
-        } else if (scheme.contains('.')) {
-          print('[URL] Detected "$scheme" as likely reverse-domain format');
-        }
-      } else {
-        print('[URL] Scheme "$scheme" not identified as a custom app scheme');
-      }
-    }
-
-    return isCustom;
+  // Removed unused ref parameter
+  static void _showErrorDialog(BuildContext context, String title, String content) {
+    // Use showCupertinoDialog and CupertinoAlertDialog
+    // Check mounted before showing dialog, although less critical here as it's synchronous
+    if (!context.mounted) return;
+    showCupertinoDialog(
+      context: context,
+      builder: (context) => CupertinoAlertDialog(
+        title: Text(title),
+        content: Text(content),
+        actions: [
+          // Use CupertinoDialogAction
+          CupertinoDialogAction(
+            isDefaultAction: true,
+            child: const Text('OK'),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+        ],
+      ),
+    );
   }
 }

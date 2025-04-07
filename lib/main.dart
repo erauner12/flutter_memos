@@ -3,8 +3,8 @@ import 'dart:async'; // Import for StreamSubscription
 import 'package:app_links/app_links.dart';
 import 'package:flutter/cupertino.dart'; // Import Cupertino
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart'; // Keep Material import (needed for ThemeMode enum)
-import 'package:flutter/services.dart';
+import 'package:flutter/material.dart'
+    show ThemeMode; // Keep Material import ONLY for ThemeMode enum
 import 'package:flutter_localizations/flutter_localizations.dart'; // Import localizations
 import 'package:flutter_memos/providers/server_config_provider.dart';
 import 'package:flutter_memos/providers/theme_provider.dart';
@@ -216,33 +216,8 @@ class _MyAppState extends ConsumerState<MyApp> {
       print('[MyApp] Building with theme mode: $themeMode');
     }
 
-    // Configure keyboard settings for macOS to avoid key event issues
-    if (Theme.of(context).platform == TargetPlatform.macOS) {
-      // Create a set to track pressed keys
-      final pressedKeys = <int>{};
-      
-      ServicesBinding.instance.keyboard.addHandler((KeyEvent event) {
-        // For KeyDownEvent, check if we've already seen this key
-        if (event is KeyDownEvent) {
-          final keyCode = event.physicalKey.usbHidUsage;
-
-          // If key is already tracked as pressed, consume the event to prevent duplicates
-          if (pressedKeys.contains(keyCode)) {
-            return true; // Handle the event (don't propagate)
-          }
-
-          // Track the key as pressed
-          pressedKeys.add(keyCode);
-        }
-        // For KeyUpEvent, remove from our tracking set
-        else if (event is KeyUpEvent) {
-          pressedKeys.remove(event.physicalKey.usbHidUsage);
-        }
-        
-        // Allow the event to propagate to the framework
-        return false;
-      });
-    }
+    // Removed custom macOS keyboard handler as it seems to cause assertion errors.
+    // Relying on default Flutter keyboard handling for now.
     
     if (kDebugMode) {
       print('[MyApp] Current theme mode: $themeMode');
@@ -411,8 +386,8 @@ class _MyAppState extends ConsumerState<MyApp> {
                   // until screens are migrated.
                   if (settings.name == '/memo-detail') {
                     final args = settings.arguments as Map<String, dynamic>;
-                    return MaterialPageRoute(
-                      // Keep MaterialPageRoute for now
+                    return CupertinoPageRoute(
+                      // Use CupertinoPageRoute
                       builder:
                           (context) =>
                           MemoDetailScreen(memoId: args['memoId'] as String),
@@ -424,8 +399,8 @@ class _MyAppState extends ConsumerState<MyApp> {
                         args['entityType'] as String? ?? 'memo';
                     final entityId = args['entityId'] as String;
 
-                    return MaterialPageRoute(
-                      // Keep MaterialPageRoute for now
+                    return CupertinoPageRoute(
+                      // Use CupertinoPageRoute
                       builder:
                           (context) => EditMemoScreen(
                         entityId: entityId,
@@ -441,8 +416,8 @@ class _MyAppState extends ConsumerState<MyApp> {
                         args['commentIdToHighlight'] as String?;
 
                     if (memoId != null) {
-                      return MaterialPageRoute(
-                        // Keep MaterialPageRoute for now
+                      return CupertinoPageRoute(
+                        // Use CupertinoPageRoute
                         builder:
                             (context) => ProviderScope(
                               overrides: [
@@ -458,17 +433,21 @@ class _MyAppState extends ConsumerState<MyApp> {
                     return null;
                   }
                   // Fallback for unknown routes (maybe show a 404 screen)
-                  return MaterialPageRoute(
-                    // Keep MaterialPageRoute for now
+                  // Update fallback to use Cupertino widgets
+                  return CupertinoPageRoute(
+                    // Use CupertinoPageRoute
                     builder:
-                        (context) => Scaffold(
-                          appBar: AppBar(title: const Text('Not Found')),
-                          body: Center(
+                        (context) => CupertinoPageScaffold(
+                          navigationBar: const CupertinoNavigationBar(
+                            middle: Text('Not Found'),
+                          ),
+                          child: Center(
                             child: Text(
                               'No route defined for ${settings.name}',
                             ),
                           ),
                         ),
+                    settings: settings, // Pass settings
                   );
                 },
               );
@@ -580,6 +559,7 @@ class HomeScreen extends ConsumerWidget {
 
     return CupertinoPageScaffold(
       navigationBar: CupertinoNavigationBar(
+        transitionBetweenRoutes: false, // Disable default hero animation
         middle: const Text('Flutter Memos'),
         trailing: CupertinoButton(
           padding: EdgeInsets.zero,

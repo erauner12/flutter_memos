@@ -1,5 +1,5 @@
+import 'package:flutter/cupertino.dart'; // Import Cupertino for IconData
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart'; // Import Material for IconData
 import 'package:flutter_memos/utils/filter_builder.dart';
 import 'package:flutter_memos/utils/filter_presets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -19,36 +19,57 @@ const List<FilterOption> statusFilterOptions = [
   FilterOption(
     key: 'untagged',
     label: 'Untagged',
-    icon: Icons.new_releases_outlined,
+    icon:
+        CupertinoIcons.clear, // Using clear icon since tag_slash doesn't exist
   ),
-  FilterOption(key: 'tagged', label: 'Tagged', icon: Icons.label),
-  FilterOption(key: 'all', label: 'All Status', icon: Icons.select_all),
+  FilterOption(
+    key: 'tagged',
+    label: 'Tagged',
+    icon: CupertinoIcons.tag,
+  ), // Changed to Cupertino equivalent
+  FilterOption(
+    key: 'all',
+    label: 'All Status',
+    icon: CupertinoIcons.collections,
+  ), // Changed to Cupertino equivalent
 ];
 
 /// OPTIMIZATION: Constant list for time filter options
 const List<FilterOption> timeFilterOptions = [
-  FilterOption(key: 'today', label: 'Today', icon: Icons.today),
+  FilterOption(
+    key: 'today',
+    label: 'Today',
+    icon: CupertinoIcons.today,
+  ), // Changed to Cupertino equivalent
   FilterOption(
     key: 'created_today',
     label: 'Created Today',
-    icon: Icons.add_circle_outline,
+    icon: CupertinoIcons.add_circled, // Changed to Cupertino equivalent
   ),
   FilterOption(
     key: 'updated_today',
     label: 'Updated Today',
-    icon: Icons.update,
+    icon: CupertinoIcons.refresh_circled, // Changed to Cupertino equivalent
   ),
   FilterOption(
     key: 'this_week',
     label: 'This Week',
-    icon: Icons.calendar_view_week,
+    icon:
+        CupertinoIcons
+            .calendar_today, // Changed to Cupertino equivalent (calendar_view_week doesn't exist)
   ),
   FilterOption(
     key: 'important',
     label: 'Important',
-    icon: Icons.star_border,
+    icon:
+        CupertinoIcons
+            .star, // Changed to Cupertino equivalent (star_border doesn't exist)
   ), // Assuming 'important' maps to a tag
-  FilterOption(key: 'all', label: 'All Time', icon: Icons.calendar_month),
+  FilterOption(
+    key: 'all',
+    label: 'All Time',
+    icon: CupertinoIcons.calendar,
+  ), // Changed to Cupertino equivalent
 ];
 
 /// Provider for advanced CEL filter expressions entered directly by the user

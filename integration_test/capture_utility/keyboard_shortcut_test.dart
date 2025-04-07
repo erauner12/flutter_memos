@@ -1,4 +1,5 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart'; // Import Cupertino
+// Remove unused Icons import
 import 'package:flutter/services.dart';
 import 'package:flutter_memos/main.dart' as app;
 import 'package:flutter_memos/widgets/capture_utility.dart';
@@ -50,10 +51,10 @@ Future<void> _verifyExpanded(WidgetTester tester, double initialHeight) async {
         'CaptureUtility should be expanded (Height: $expandedHeight, Expected > ${initialHeight + 50})',
   );
 
-  // Check that the TextField is visible and focused when expanded
+  // Check that the CupertinoTextField is visible and focused when expanded
   final textFieldFinder = find.descendant(
     of: captureUtilityFinder,
-    matching: find.byType(TextField),
+    matching: find.byType(CupertinoTextField), // Use CupertinoTextField
   );
   expect(
     textFieldFinder,
@@ -75,7 +76,6 @@ void main() {
       await tester.pumpAndSettle(const Duration(seconds: 2)); // Allow init time
 
       // Get the initial height (collapsed state)
-      final captureUtilityFinder = find.byType(CaptureUtility);
       final initialHeight = _getInitialHeight(tester);
       await _verifyCollapsed(tester, initialHeight); // Verify initial state
 
@@ -118,12 +118,30 @@ void main() {
       // Get the initial height (collapsed state)
       final initialHeight = _getInitialHeight(tester);
 
-      // Navigate to settings screen
-      await tester.tap(find.byIcon(Icons.settings));
+      // Navigate to settings screen - Assume button is now CupertinoButton with Icon
+      // Finder might need adjustment based on actual implementation
+      final settingsButtonFinder = find.widgetWithIcon(
+        CupertinoButton,
+        CupertinoIcons.settings, // Use Cupertino icon
+      );
+      // Fallback if it's just an icon
+      // final settingsButtonFinder = find.byIcon(Icons.settings);
+      expect(
+        settingsButtonFinder,
+        findsOneWidget,
+        reason: 'Settings button/icon not found',
+      );
+      await tester.tap(settingsButtonFinder);
       await tester.pumpAndSettle();
 
-      // Verify we're on settings screen
-      expect(find.text('Settings'), findsOneWidget);
+      // Verify we're on settings screen (check for CupertinoNavigationBar title)
+      expect(
+        find.descendant(
+          of: find.byType(CupertinoNavigationBar),
+          matching: find.text('Settings'),
+        ),
+        findsOneWidget,
+      );
 
       // Send Command+Shift+M to toggle expansion
       debugPrint('Sending Command+Shift+M shortcut while on settings screen...');

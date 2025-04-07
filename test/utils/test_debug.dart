@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart'; // Import Cupertino for RichText etc.
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 

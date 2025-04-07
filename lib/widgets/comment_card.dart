@@ -1,14 +1,12 @@
+import 'package:flutter/cupertino.dart'; // Import Cupertino
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/providers/api_providers.dart'; // Import apiServiceProvider
 import 'package:flutter_memos/providers/comment_providers.dart';
 import 'package:flutter_memos/providers/ui_providers.dart';
-import 'package:flutter_memos/screens/memo_detail/memo_detail_providers.dart'; // Import memoCommentsProvider
 import 'package:flutter_memos/utils/url_helper.dart';
-import 'package:flutter_memos/widgets/comment_context_menu.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:intl/intl.dart';
@@ -35,80 +33,102 @@ class _CommentCardState extends ConsumerState<CommentCard> {
   void _showContextMenu(BuildContext context) {
     final fullId = '${widget.memoId}/${widget.comment.id}';
 
-    showModalBottomSheet(
+    // Replace showModalBottomSheet with showCupertinoModalPopup
+    showCupertinoModalPopup<void>(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (BuildContext bottomSheetContext) {
-        return CommentContextMenu(
-          commentId: widget.comment.id,
-          isPinned: widget.comment.pinned,
-          onArchive: () async {
-            Navigator.of(bottomSheetContext).pop();
-            if (!mounted) return;
-            _onArchive(context);
-          },
-          onDelete: () async {
-            Navigator.of(bottomSheetContext).pop();
-            if (!mounted) return;
-            _onDelete(context);
-          },
-          onHide: () {
-            Navigator.of(bottomSheetContext).pop();
-            if (!mounted) return;
-            _onHide(context);
-          },
-          onTogglePin: () async {
-            Navigator.of(bottomSheetContext).pop();
-            if (!mounted) return;
-            _onTogglePin(context);
-          },
-          onCopy: () {
-            Navigator.of(bottomSheetContext).pop();
-            Clipboard.setData(ClipboardData(text: widget.comment.content)).then(
-              (_) {
-                if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Comment copied to clipboard')),
-                );
-              },
-            );
-          },
-          onCopyLink: () {
-            Navigator.of(bottomSheetContext).pop();
-            final url =
-                'flutter-memos://comment/${widget.memoId}/${widget.comment.id}';
-            Clipboard.setData(ClipboardData(text: url)).then((_) {
+      builder: (BuildContext context) => CupertinoActionSheet( // Use CupertinoActionSheet
+        title: const Text('Comment Actions'), // Optional title
+        actions: <CupertinoActionSheetAction>[
+          // Replicate actions using CupertinoActionSheetAction
+          CupertinoActionSheetAction(
+            child: const Text('Edit'),
+            onPressed: () {
+              Navigator.pop(context); // Close sheet first
+              Navigator.pushNamed(
+                context,
+                '/edit-entity',
+                arguments: {'entityType': 'comment', 'entityId': fullId},
+              );
+            },
+          ),
+          CupertinoActionSheetAction(
+            child: Text(widget.comment.pinned ? 'Unpin' : 'Pin'),
+            onPressed: () {
+              Navigator.pop(context);
+              _onTogglePin(context);
+            },
+          ),
+          CupertinoActionSheetAction(
+            child: const Text('Copy Content'),
+            onPressed: () async {
+              Navigator.pop(context);
+              await Clipboard.setData(ClipboardData(text: widget.comment.content));
               if (!mounted) return;
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Comment link copied to clipboard'),
+              showCupertinoDialog(
+                context: context,
+                builder: (context) => CupertinoAlertDialog(
+                  title: const Text('Copied'),
+                  content: const Text('Comment copied to clipboard.'),
+                  actions: [ CupertinoDialogAction(isDefaultAction: true, child: const Text('OK'), onPressed: () => Navigator.pop(context)) ],
                 ),
               );
-            });
+            },
+          ),
+          CupertinoActionSheetAction(
+            child: const Text('Copy Link'),
+            onPressed: () async {
+              Navigator.pop(context);
+              final url = 'flutter-memos://comment/${widget.memoId}/${widget.comment.id}';
+              await Clipboard.setData(ClipboardData(text: url));
+               if (!mounted) return;
+              showCupertinoDialog(
+                context: context,
+                builder: (context) => CupertinoAlertDialog(
+                  title: const Text('Copied'),
+                  content: const Text('Comment link copied to clipboard.'),
+                  actions: [ CupertinoDialogAction(isDefaultAction: true, child: const Text('OK'), onPressed: () => Navigator.pop(context)) ],
+                ),
+              );
+            },
+          ),
+           CupertinoActionSheetAction(
+            child: const Text('Convert to Memo'),
+            onPressed: () {
+              Navigator.pop(context);
+              _onConvertToMemo(context);
+            },
+          ),
+          CupertinoActionSheetAction(
+            child: const Text('Hide'),
+            onPressed: () {
+              Navigator.pop(context);
+              _onHide(context);
+            },
+          ),
+           CupertinoActionSheetAction(
+            child: const Text('Archive'),
+            onPressed: () {
+              Navigator.pop(context);
+              _onArchive(context);
+            },
+          ),
+          CupertinoActionSheetAction(
+            isDestructiveAction: true,
+            child: const Text('Delete'),
+            onPressed: () {
+              Navigator.pop(context);
+              _onDelete(context); // Assumes onDelete handles confirmation
+            },
+          ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          isDefaultAction: true,
+          onPressed: () {
+            Navigator.pop(context);
           },
-          onConvertToMemo: () async {
-            Navigator.of(bottomSheetContext).pop();
-            if (!mounted) return;
-            _onConvertToMemo(context);
-          },
-          onEdit: () {
-            Navigator.of(bottomSheetContext).pop();
-            if (!mounted) return;
-            Navigator.pushNamed(
-              context,
-              '/edit-entity',
-              arguments: {
-                'entityType': 'comment',
-                'entityId': fullId,
-              },
-            );
-          },
-          onClose: () {
-            Navigator.of(bottomSheetContext).pop();
-          },
-        );
-      },
+          child: const Text('Cancel'),
+        ),
+      ),
     );
   }
 
@@ -117,46 +137,42 @@ class _CommentCardState extends ConsumerState<CommentCard> {
     try {
       await ref.read(togglePinCommentProvider(fullId))();
       if (!mounted) return;
+      
+      // Confirmation removed - UI update is sufficient
+      // ScaffoldMessenger.of(context).showSnackBar(...);
 
-      final commentsData = ref.read(memoCommentsProvider(widget.memoId)).asData;
-      final currentCommentState = commentsData?.value.firstWhere(
-        (c) => c.id == widget.comment.id,
-        orElse: () => widget.comment,
-      );
-      final isNowPinned = currentCommentState?.pinned ?? widget.comment.pinned;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            isNowPinned ? 'Comment pinned' : 'Comment unpinned',
-          ),
-        ),
-      );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(
-        SnackBar(content: Text('Error toggling pin: $e')),
+      // Replace SnackBar with CupertinoAlertDialog
+      showCupertinoDialog(
+        context: context,
+        builder: (context) => CupertinoAlertDialog(
+          title: const Text('Error'),
+          content: Text('Failed to toggle pin: $e'),
+          actions: [ CupertinoDialogAction(isDefaultAction: true, child: const Text('OK'), onPressed: () => Navigator.pop(context)) ],
+        ),
       );
     }
   }
 
   Future<void> _onDelete(BuildContext context) async {
-    final confirmed = await showDialog<bool>(
+    // Replace showDialog with showCupertinoDialog
+    final confirmed = await showCupertinoDialog<bool>(
       context: context,
-      builder:
-          (ctx) => AlertDialog(
+      builder: (ctx) => CupertinoAlertDialog( // Use CupertinoAlertDialog
             title: const Text('Delete Comment'),
             content: const Text(
               'Are you sure you want to delete this comment?',
             ),
             actions: [
-              TextButton(
+              // Replace TextButton with CupertinoDialogAction
+              CupertinoDialogAction(
+                isDefaultAction: true,
                 onPressed: () => Navigator.of(ctx).pop(false),
                 child: const Text('Cancel'),
               ),
-              TextButton(
+              CupertinoDialogAction(
+                isDestructiveAction: true,
                 onPressed: () => Navigator.of(ctx).pop(true),
                 child: const Text('Delete'),
               ),
@@ -175,21 +191,23 @@ class _CommentCardState extends ConsumerState<CommentCard> {
     try {
       await ref.read(deleteCommentProvider(fullId))();
 
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(
-        const SnackBar(content: Text('Comment deleted')),
-      );
+      // Confirmation removed - UI update is sufficient
+      // if (!mounted) return;
+      // ScaffoldMessenger.of(context).showSnackBar(...);
+
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _isDeleting = false;
       });
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(
-        SnackBar(content: Text('Error deleting comment: $e')),
+      // Replace SnackBar with CupertinoAlertDialog
+      showCupertinoDialog(
+        context: context,
+        builder: (context) => CupertinoAlertDialog(
+          title: const Text('Error'),
+          content: Text('Failed to delete comment: $e'),
+          actions: [ CupertinoDialogAction(isDefaultAction: true, child: const Text('OK'), onPressed: () => Navigator.pop(context)) ],
+        ),
       );
     }
   }
@@ -198,18 +216,19 @@ class _CommentCardState extends ConsumerState<CommentCard> {
     final fullId = '${widget.memoId}/${widget.comment.id}';
     try {
       await ref.read(archiveCommentProvider(fullId))();
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(
-        const SnackBar(content: Text('Comment archived')),
-      );
+      // Confirmation removed - UI update is sufficient
+      // if (!mounted) return;
+      // ScaffoldMessenger.of(context).showSnackBar(...);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(
-        SnackBar(content: Text('Error archiving comment: $e')),
+      // Replace SnackBar with CupertinoAlertDialog
+       showCupertinoDialog(
+        context: context,
+        builder: (context) => CupertinoAlertDialog(
+          title: const Text('Error'),
+          content: Text('Failed to archive comment: $e'),
+          actions: [ CupertinoDialogAction(isDefaultAction: true, child: const Text('OK'), onPressed: () => Navigator.pop(context)) ],
+        ),
       );
     }
   }
@@ -219,16 +238,19 @@ class _CommentCardState extends ConsumerState<CommentCard> {
     try {
       final convertFunction = ref.read(convertCommentToMemoProvider(fullId));
       await convertFunction();
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Comment converted to memo')),
-      );
+      // Confirmation removed - UI update is sufficient
+      // if (!mounted) return;
+      // ScaffoldMessenger.of(context).showSnackBar(...);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(
-        SnackBar(content: Text('Error converting to memo: $e')),
+      // Replace SnackBar with CupertinoAlertDialog
+      showCupertinoDialog(
+        context: context,
+        builder: (context) => CupertinoAlertDialog(
+          title: const Text('Error'),
+          content: Text('Failed to convert comment to memo: $e'),
+          actions: [ CupertinoDialogAction(isDefaultAction: true, child: const Text('OK'), onPressed: () => Navigator.pop(context)) ],
+        ),
       );
     }
   }
@@ -236,11 +258,8 @@ class _CommentCardState extends ConsumerState<CommentCard> {
   void _onHide(BuildContext context) {
     final fullId = '${widget.memoId}/${widget.comment.id}';
     ref.read(toggleHideCommentProvider(fullId))();
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(
-      const SnackBar(content: Text('Comment hidden from view')),
-    );
+    // Confirmation removed - UI update is sufficient
+    // ScaffoldMessenger.of(context).showSnackBar(...);
   }
 
   void _toggleMultiSelection() {
@@ -266,11 +285,18 @@ class _CommentCardState extends ConsumerState<CommentCard> {
 
   @override
   Widget build(BuildContext context) {
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    // Use CupertinoTheme for brightness check
+    final isDarkMode = CupertinoTheme.of(context).brightness == Brightness.dark;
     final textColor =
         widget.comment.pinned
-            ? Colors.blue
-            : (isDarkMode ? Colors.white : Colors.black87);
+            ? CupertinoColors.systemBlue.resolveFrom(
+              context,
+            ) // Use Cupertino color
+            : (isDarkMode
+                ? CupertinoColors.white
+                : CupertinoColors.label.resolveFrom(
+                  context,
+                )); // Use Cupertino colors
 
     final dateTime = DateTime.fromMillisecondsSinceEpoch(
       widget.comment.createTime,
@@ -296,32 +322,26 @@ class _CommentCardState extends ConsumerState<CommentCard> {
     // Define card style variables
     Color cardBackgroundColor;
     BorderSide cardBorderStyle;
-    final theme = Theme.of(context);
 
     // Determine card style based on selection and highlight state
     if (isHighlighted) {
-      cardBackgroundColor =
-          theme.brightness == Brightness.dark
-              ? Colors.teal.shade800.withAlpha(128)
-              : Colors.teal.shade50;
+      cardBackgroundColor = isDarkMode
+          ? CupertinoColors.systemTeal.darkColor.withAlpha(100) // Adjusted alpha
+          : CupertinoColors.systemTeal.color.withAlpha(50); // Adjusted alpha
       cardBorderStyle = BorderSide(
-        color:
-            theme.brightness == Brightness.dark
-                ? Colors.tealAccent
-                : Colors.teal,
+        color: isDarkMode
+            ? CupertinoColors.systemTeal.darkColor
+            : CupertinoColors.systemTeal.color,
         width: 2,
       );
     } else if (widget.isSelected && !isMultiSelectMode) {
-      cardBackgroundColor =
-          isDarkMode
-              ? Colors.grey.shade700.withAlpha(153)
-              : Colors.grey.shade300;
+      cardBackgroundColor = CupertinoColors.systemGrey4.resolveFrom(context);
       cardBorderStyle = BorderSide(
-        color: Theme.of(context).colorScheme.outline.withAlpha(128),
+        color: CupertinoColors.systemGrey2.resolveFrom(context),
         width: 1,
       );
     } else {
-      cardBackgroundColor = isDarkMode ? const Color(0xFF222222) : Colors.white;
+      cardBackgroundColor = CupertinoColors.secondarySystemGroupedBackground.resolveFrom(context);
       cardBorderStyle = BorderSide.none;
     }
 
@@ -367,21 +387,28 @@ class _CommentCardState extends ConsumerState<CommentCard> {
                 ? Key('selected-comment-card-${widget.comment.id}')
                 : null);
 
-    Widget commentCardWidget = Card(
+    // Replace Card with Container
+    Widget commentCardWidget = Container(
       key: cardKey,
-      elevation:
-          isHighlighted ? 4 : (widget.isSelected && !isMultiSelectMode ? 2 : 1),
       margin: const EdgeInsets.symmetric(vertical: 6.0, horizontal: 0),
-      color: cardBackgroundColor,
-      shape: RoundedRectangleBorder(
+      decoration: BoxDecoration(
+        color: cardBackgroundColor,
         borderRadius: BorderRadius.circular(8),
-        side: cardBorderStyle,
+        border: Border.fromBorderSide(cardBorderStyle),
+         // Add subtle shadow for light mode if desired
+        boxShadow: !isDarkMode && !widget.isSelected && !isHighlighted ? [
+          BoxShadow(
+                    color: CupertinoColors.black.withAlpha(
+                      25,
+                    ), // Replace withOpacity with withAlpha
+            blurRadius: 4,
+            offset: const Offset(0, 1),
+          )
+        ] : null,
       ),
-      child: InkWell(
-        onLongPress:
-            isMultiSelectMode
-                ? () => _toggleMultiSelection()
-                : () => _showContextMenu(context),
+      // Replace InkWell with GestureDetector
+      child: GestureDetector(
+        onLongPress: isMultiSelectMode ? () => _toggleMultiSelection() : () => _showContextMenu(context),
         onTap: isMultiSelectMode ? () => _toggleMultiSelection() : null,
         child: Padding(
           padding: const EdgeInsets.all(12.0),
@@ -461,18 +488,11 @@ class _CommentCardState extends ConsumerState<CommentCard> {
                                           width: 50,
                                           height: 50,
                                           alignment: Alignment.center,
-                                          color: Colors.grey[300],
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                            value:
-                                                loadingProgress
-                                                            .expectedTotalBytes !=
-                                                        null
-                                                    ? loadingProgress
-                                                            .cumulativeBytesLoaded /
-                                                        loadingProgress
-                                                            .expectedTotalBytes!
-                                                    : null,
+                                          color: CupertinoColors.systemGrey5.resolveFrom(context), // Use Cupertino color
+                                          // Replace CircularProgressIndicator with CupertinoActivityIndicator
+                                          child: const CupertinoActivityIndicator(
+                                            radius: 10, // Adjust size
+                                            // Value cannot be directly set for CupertinoActivityIndicator
                                           ),
                                         );
                                       },
@@ -484,10 +504,10 @@ class _CommentCardState extends ConsumerState<CommentCard> {
                                         return Container(
                                           width: 50,
                                           height: 50,
-                                          color: Colors.grey[300],
+                                          color: CupertinoColors.systemGrey5.resolveFrom(context), // Use Cupertino color
                                           child: const Icon(
-                                            Icons.broken_image,
-                                            color: Colors.grey,
+                                            CupertinoIcons.exclamationmark_circle, // Use Cupertino icon
+                                            color: CupertinoColors.systemGrey,
                                           ),
                                         );
                                       },
@@ -512,15 +532,15 @@ class _CommentCardState extends ConsumerState<CommentCard> {
                     formattedDate,
                     style: TextStyle(
                       fontSize: 12,
-                      color: isDarkMode ? Colors.grey[400] : Colors.grey[600],
+                      color: CupertinoColors.secondaryLabel.resolveFrom(context), // Use Cupertino color
                       fontStyle: FontStyle.italic,
                     ),
                   ),
                   if (widget.comment.pinned)
-                    const Icon(
-                      Icons.push_pin,
+                    Icon( // Use Cupertino icon
+                      CupertinoIcons.pin_fill,
                       size: 16,
-                      color: Colors.blue,
+                      color: CupertinoColors.systemBlue.resolveFrom(context), // Use Cupertino color
                     ),
                 ],
               ),
@@ -535,7 +555,7 @@ class _CommentCardState extends ConsumerState<CommentCard> {
         commentCardWidget = Container(
           decoration: BoxDecoration(
             border: Border.all(
-              color: Theme.of(context).colorScheme.primary,
+              color: CupertinoTheme.of(context).primaryColor, // Use Cupertino theme color
               width: 2,
             ),
             borderRadius: BorderRadius.circular(10),
@@ -547,10 +567,16 @@ class _CommentCardState extends ConsumerState<CommentCard> {
       return Padding(
         padding: const EdgeInsets.only(bottom: 12.0),
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start, // Align checkbox with top of card
           children: [
-            Checkbox(
-              value: isMultiSelected,
-              onChanged: (value) => _toggleMultiSelection(),
+            // Replace Checkbox with CupertinoCheckbox
+            Padding(
+              padding: const EdgeInsets.only(top: 12.0, right: 8.0), // Adjust padding
+              child: CupertinoCheckbox(
+                value: isMultiSelected,
+                onChanged: (value) => _toggleMultiSelection(),
+                activeColor: CupertinoTheme.of(context).primaryColor,
+              ),
             ),
             Expanded(child: commentCardWidget),
           ],
@@ -567,20 +593,20 @@ class _CommentCardState extends ConsumerState<CommentCard> {
           children: [
             SlidableAction(
               onPressed: (_) => _onTogglePin(context),
-              backgroundColor: Colors.blue,
-              foregroundColor: Colors.white,
+              backgroundColor: CupertinoColors.systemBlue, // Use Cupertino color
+              foregroundColor: CupertinoColors.white,
               icon:
                   widget.comment.pinned
-                      ? Icons.push_pin_outlined
-                      : Icons.push_pin,
+                      ? CupertinoIcons.pin_slash_fill // Use Cupertino icon
+                      : CupertinoIcons.pin_fill, // Use Cupertino icon
               label: widget.comment.pinned ? 'Unpin' : 'Pin',
               autoClose: true,
             ),
             SlidableAction(
               onPressed: (_) => _onConvertToMemo(context),
-              backgroundColor: Colors.teal,
-              foregroundColor: Colors.white,
-              icon: Icons.note_add,
+              backgroundColor: CupertinoColors.systemTeal, // Use Cupertino color
+              foregroundColor: CupertinoColors.white,
+              icon: CupertinoIcons.doc_text_fill, // Use Cupertino icon
               label: 'To Memo',
               autoClose: true,
             ),
@@ -591,17 +617,17 @@ class _CommentCardState extends ConsumerState<CommentCard> {
           children: [
             SlidableAction(
               onPressed: (_) => _onDelete(context),
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
-              icon: Icons.delete,
+              backgroundColor: CupertinoColors.destructiveRed, // Use Cupertino color
+              foregroundColor: CupertinoColors.white,
+              icon: CupertinoIcons.delete, // Use Cupertino icon
               label: 'Delete',
               autoClose: true,
             ),
             SlidableAction(
               onPressed: (_) => _onArchive(context),
-              backgroundColor: Colors.purple,
-              foregroundColor: Colors.white,
-              icon: Icons.archive,
+              backgroundColor: CupertinoColors.systemPurple, // Use Cupertino color
+              foregroundColor: CupertinoColors.white,
+              icon: CupertinoIcons.archivebox_fill, // Use Cupertino icon
               label: 'Archive',
               autoClose: true,
             ),

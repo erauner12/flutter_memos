@@ -1,9 +1,8 @@
+import 'package:flutter/cupertino.dart'; // Import Cupertino
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_memos/utils/url_helper.dart';
-import 'package:flutter_memos/widgets/memo_context_menu.dart' as memo_menu;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class MemoCard extends ConsumerStatefulWidget {
@@ -41,10 +40,11 @@ class MemoCard extends ConsumerStatefulWidget {
   });
 
   @override
-  ConsumerState<MemoCard> createState() => _MemoCardState();
+  ConsumerState<MemoCard> createState() => MemoCardState();
 }
 
-class _MemoCardState extends ConsumerState<MemoCard> {
+// Renamed from _MemoCardState to make it public for GlobalKey access
+class MemoCardState extends ConsumerState<MemoCard> {
   Offset tapPosition = Offset.zero;
 
   // Helper method to format date strings for display
@@ -86,135 +86,162 @@ class _MemoCardState extends ConsumerState<MemoCard> {
     tapPosition = details.globalPosition;
   }
 
+  // Made public to be called via GlobalKey
   void showContextMenu() {
-    showModalBottomSheet(
+    // Replace showModalBottomSheet with showCupertinoModalPopup
+    showCupertinoModalPopup<void>(
       context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      constraints: const BoxConstraints(
-        // Limit maximum height to prevent overflow issues
-        maxHeight: double.infinity,
-      ),
-      // Use useSafeArea to respect device safe areas
-      useSafeArea: true,
-      builder: (context) {
-        // Get screen dimensions to adapt the sheet size
-        final screenHeight = MediaQuery.of(context).size.height;
-
-        // Dynamic initial size based on screen height
-        // Smaller on phones, larger on tablets/desktop
-        final initialSize = screenHeight < 600 ? 0.6 : 0.4;
-
-        return DraggableScrollableSheet(
-          initialChildSize: initialSize,
-          minChildSize: 0.25,
-          maxChildSize: 0.85, // Prevent taking the full screen
-          expand: false,
-          snap: true, // Enable snapping to common sizes
-          snapSizes: const [0.4, 0.6, 0.85], // Common snap points
-          builder: (BuildContext context, ScrollController scrollController) {
-            return memo_menu.MemoContextMenu(
-              memoId: widget.id,
-              isPinned: widget.pinned,
-              position: tapPosition,
-              parentContext: context,
-              scrollController: scrollController,
-              onClose: () => Navigator.pop(context),
-              onView: widget.onTap,
-              onEdit: () async {
+      builder:
+          (BuildContext context) => CupertinoActionSheet(
+            title: const Text('Memo Actions'), // Optional title
+            actions: <CupertinoActionSheetAction>[
+              if (widget.onTap != null)
+                CupertinoActionSheetAction(
+                  child: const Text('View'),
+                  onPressed: () {
+                    Navigator.pop(context);
+                    widget.onTap!();
+                  },
+                ),
+              CupertinoActionSheetAction(
+                child: const Text('Edit'),
+                onPressed: () {
+                  Navigator.pop(context);
+                  Navigator.pushNamed(
+                    context,
+                    '/edit-entity',
+                    arguments: {'entityType': 'memo', 'entityId': widget.id},
+                  );
+                },
+              ),
+              CupertinoActionSheetAction(
+                child: Text(widget.pinned ? 'Unpin' : 'Pin'),
+                onPressed: () {
+                  Navigator.pop(context);
+                  widget.onTogglePin?.call();
+                },
+              ),
+              if (widget.onBump != null)
+                CupertinoActionSheetAction(
+                  child: const Text('Bump'),
+                  onPressed: () {
                 Navigator.pop(context);
-                if (!mounted) return;
-                Navigator.pushNamed(
-                  context,
-                  '/edit-entity', // Use the generic route
-                  arguments: {
-                    'entityType': 'memo',
-                    'entityId': widget.id,
-                  }, // Specify type and ID
-                );
+                    widget.onBump!();
               },
-              onArchive: () {
+                ),
+              CupertinoActionSheetAction(
+                child: const Text('Copy Content'),
+                onPressed: () async {
+                  Navigator.pop(context);
+                  await Clipboard.setData(ClipboardData(text: widget.content));
+                  if (!mounted) return;
+                  showCupertinoDialog(
+                    context: context,
+                    builder:
+                        (context) => CupertinoAlertDialog(
+                          title: const Text('Copied'),
+                          content: const Text(
+                            'Memo content copied to clipboard.',
+                          ),
+                          actions: [
+                            CupertinoDialogAction(
+                              isDefaultAction: true,
+                              child: const Text('OK'),
+                              onPressed: () => Navigator.pop(context),
+                            ),
+                          ],
+                        ),
+                  );
+                },
+              ),
+              CupertinoActionSheetAction(
+                child: const Text('Copy Link'),
+                onPressed: () async {
+                  Navigator.pop(context);
+                  final url = 'flutter-memos://memo/${widget.id}';
+                  await Clipboard.setData(ClipboardData(text: url));
+                  if (!mounted) return;
+                  showCupertinoDialog(
+                    context: context,
+                    builder:
+                        (context) => CupertinoAlertDialog(
+                          title: const Text('Copied'),
+                          content: const Text('Memo link copied to clipboard.'),
+                          actions: [
+                            CupertinoDialogAction(
+                              isDefaultAction: true,
+                              child: const Text('OK'),
+                              onPressed: () => Navigator.pop(context),
+                            ),
+                          ],
+                        ),
+                  );
+                },
+              ),
+              if (widget.onHide != null)
+                CupertinoActionSheetAction(
+                  child: const Text('Hide'),
+                  onPressed: () {
                 Navigator.pop(context);
-                widget.onArchive?.call();
+                    widget.onHide!();
               },
-              onDelete: () {
+                ),
+              if (widget.onArchive != null)
+                CupertinoActionSheetAction(
+                  child: const Text('Archive'),
+                  onPressed: () {
+                    Navigator.pop(context);
+                    widget.onArchive!();
+                  },
+                ),
+              if (widget.onDelete != null)
+                CupertinoActionSheetAction(
+                  isDestructiveAction: true,
+                  child: const Text('Delete'),
+                  onPressed: () {
+                    Navigator.pop(context);
+                    widget.onDelete!();
+                  },
+                ),
+            ],
+            cancelButton: CupertinoActionSheetAction(
+              isDefaultAction: true,
+              onPressed: () {
                 Navigator.pop(context);
-                widget.onDelete?.call();
               },
-              onHide: () {
-                Navigator.pop(context);
-                widget.onHide?.call();
-              },
-              onPin: () {
-                Navigator.pop(context);
-                widget.onTogglePin?.call();
-              },
-              onCopy: () async {
-                Navigator.pop(context);
-                await Clipboard.setData(ClipboardData(text: widget.content));
-                if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Memo content copied to clipboard'),
-                    duration: Duration(seconds: 2),
-                  ),
-                );
-              },
-              onCopyLink: () async {
-                Navigator.pop(context);
-                final url =
-                    'flutter-memos://memo/${widget.id}'; // Use correct URL format with host
-                await Clipboard.setData(ClipboardData(text: url));
-                if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Memo link copied to clipboard'),
-                    duration: Duration(seconds: 2),
-                  ),
-                );
-              },
-              onBump: () {
-                // Add onBump handler
-                Navigator.pop(context);
-                widget.onBump?.call();
-              },
-            );
-          },
-        );
-      },
+              child: const Text('Cancel'),
+            ),
+          ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final theme = CupertinoTheme.of(context);
+    final isDarkMode = theme.brightness == Brightness.dark;
 
-    // Define styles for different states
-    // Define the SUBTLE style for PERSISTENT selection
     final selectedStyle = (
-      color:
-          isDarkMode
-              ? Colors.grey.shade700.withOpacity(0.6)
-              : Colors.grey.shade300,
+      color: CupertinoColors.systemGrey.resolveFrom(context).withOpacity(0.3),
       border: BorderSide(
-        color: Theme.of(context).colorScheme.outline.withOpacity(0.5),
+        color: CupertinoColors.systemGrey3.resolveFrom(context),
         width: 1,
       ),
     );
 
-    // Define the default style (remains the same)
     final defaultStyle = (
-      color: isDarkMode ? const Color(0xFF262626) : null, // Default card color
+      color: CupertinoColors.secondarySystemGroupedBackground.resolveFrom(
+        context,
+      ),
       border:
           isDarkMode
-              ? BorderSide(color: Colors.grey[850]!, width: 0.5)
+              ? BorderSide(
+                color: CupertinoColors.systemGrey5.resolveFrom(context),
+                width: 0.5,
+              )
               : BorderSide.none,
     );
 
-    // Determine style based ONLY on widget.isSelected
-    Color? cardBackgroundColor;
+    Color cardBackgroundColor;
     BorderSide cardBorderStyle;
 
     if (widget.isSelected) {
@@ -225,11 +252,8 @@ class _MemoCardState extends ConsumerState<MemoCard> {
       cardBorderStyle = defaultStyle.border;
     }
 
-    // Debug logging for memo card rendering
     if (kDebugMode && widget.isSelected) {
       print('[MemoCard] Building selected memo card: ${widget.id}');
-
-      // Log content details
       if (widget.content.length < 100) {
         print('[MemoCard] Content: "${widget.content}"');
       } else {
@@ -238,7 +262,6 @@ class _MemoCardState extends ConsumerState<MemoCard> {
         );
       }
 
-      // Check for URLs that might cause issues
       final urlRegex = RegExp(r'(https?://[^\s]+)|([\w-]+://[^\s]+)');
       final matches = urlRegex.allMatches(widget.content);
       if (matches.isNotEmpty) {
@@ -249,40 +272,49 @@ class _MemoCardState extends ConsumerState<MemoCard> {
       }
     }
 
-    return Card(
+    return Container(
       key: ValueKey(
         'memo-card-${widget.id}',
-      ), // Always use a consistent key based on ID
-      elevation: isDarkMode ? 0 : 1,
-      margin: const EdgeInsets.only(bottom: 12),
-      color: cardBackgroundColor,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(10),
-        side: cardBorderStyle,
       ),
-      child: InkWell(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: cardBackgroundColor,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.fromBorderSide(cardBorderStyle),
+        boxShadow:
+            !isDarkMode && !widget.isSelected
+                ? [
+                  BoxShadow(
+                    color: CupertinoColors.black.withOpacity(0.1),
+                    blurRadius: 4,
+                    offset: const Offset(0, 1),
+                  ),
+                ]
+                : null,
+      ),
+      child: GestureDetector(
         onTap: widget.onTap,
-        onLongPress: showContextMenu,
         onDoubleTap: kIsWeb ? showContextMenu : null,
         onTapDown: storePosition,
-        borderRadius: BorderRadius.circular(10),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(
             16.0,
             16.0,
             40.0,
             16.0,
-          ), // Extra padding on right for archive button
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Log selection state in debug mode
               if (widget.isSelected && kDebugMode)
                 Builder(
                   builder: (context) {
-                    // Use post-frame callback to avoid layout phase
                     WidgetsBinding.instance.addPostFrameCallback((_) {
-                      print('[MemoCard] Rendering selected card: ${widget.id}');
+                      if (mounted) {
+                        print(
+                          '[MemoCard] Rendering selected card: ${widget.id}',
+                        );
+                      }
                     });
                     return const SizedBox.shrink();
                   },
@@ -290,47 +322,50 @@ class _MemoCardState extends ConsumerState<MemoCard> {
               MarkdownBody(
                 data: widget.content,
                 selectable: true,
-                styleSheet: MarkdownStyleSheet(
-                  p: TextStyle(
-                    fontSize: 17,
-                    height: 1.3,
-                    color:
-                        isDarkMode
-                            ? const Color(0xFFE0E0E0)
-                            : const Color(0xFF333333),
-                  ),
-                  a: TextStyle(
-                    color: Theme.of(context).colorScheme.primary,
-                    decoration: TextDecoration.underline,
-                  ),
-                ),
                 shrinkWrap: true,
-                fitContent: true,
+                styleSheet: MarkdownStyleSheet.fromCupertinoTheme(theme)
+                    .copyWith(
+                  p: theme.textTheme.textStyle.copyWith(
+                    fontSize: 15,
+                    height: 1.3,
+                    color: CupertinoColors.label.resolveFrom(context),
+                  ),
+                  code: theme.textTheme.textStyle.copyWith(
+                    fontFamily: 'monospace',
+                    fontSize: 14,
+                    backgroundColor: CupertinoColors.systemGrey6.resolveFrom(
+                      context,
+                    ),
+                  ),
+                  blockquoteDecoration: BoxDecoration(
+                    color: CupertinoColors.systemGrey6.resolveFrom(context),
+                    border: Border(
+                      left: BorderSide(
+                        color: CupertinoColors.systemGrey.resolveFrom(context),
+                        width: 4,
+                      ),
+                    ),
+                  ),
+                  blockquotePadding: const EdgeInsets.all(8),
+                ),
                 onTapLink: (text, href, title) {
-                  if (kDebugMode) {
-                    print(
-                      '[MemoCard] Link tapped in memo ${widget.id}: "$text" -> "$href"',
-                    );
-                  }
                   if (href != null) {
                     UrlHelper.launchUrl(href, ref: ref, context: context);
                   }
                 },
               ),
-              const SizedBox(height: 10),
-              // Pinned indicator with improved styling
+              const SizedBox(height: 8),
               if (widget.pinned)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 8.0),
                   child: Row(
                     children: [
                       Icon(
-                        Icons.push_pin,
+                        CupertinoIcons.pin_fill,
                         size: 14,
-                        color:
-                            isDarkMode
-                                ? const Color(0xFF9CCC65)
-                                : Colors.green[700],
+                        color: CupertinoColors.systemGreen.resolveFrom(
+                          context,
+                        ),
                       ),
                       const SizedBox(width: 4),
                       Text(
@@ -338,16 +373,14 @@ class _MemoCardState extends ConsumerState<MemoCard> {
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w500,
-                          color:
-                              isDarkMode
-                                  ? const Color(0xFF9CCC65)
-                                  : Colors.green[700],
+                          color: CupertinoColors.systemGreen.resolveFrom(
+                            context,
+                          ),
                         ),
                       ),
                     ],
                   ),
                 ),
-              // Primary timestamp display with better formatting
               if (widget.highlightTimestamp != null)
                 Padding(
                   padding: const EdgeInsets.only(top: 4.0),
@@ -355,30 +388,27 @@ class _MemoCardState extends ConsumerState<MemoCard> {
                     children: [
                       Icon(
                         widget.timestampType == 'Updated'
-                            ? Icons.update
-                            : Icons.calendar_today,
+                            ? CupertinoIcons.refresh_thin
+                            : CupertinoIcons.calendar,
                         size: 14,
-                        color:
-                            isDarkMode
-                                ? const Color(0xFF9E9E9E)
-                                : Colors.grey[700],
+                        color: CupertinoColors.secondaryLabel.resolveFrom(
+                          context,
+                        ),
                       ),
                       const SizedBox(width: 6),
                       Text(
                         '${widget.timestampType}: ${widget.highlightTimestamp}',
                         style: TextStyle(
                           fontSize: 14,
-                          color:
-                              isDarkMode
-                                  ? const Color(0xFF9E9E9E)
-                                  : Colors.grey[700],
+                          color: CupertinoColors.secondaryLabel.resolveFrom(
+                            context,
+                          ),
                           fontWeight: FontWeight.w400,
                         ),
                       ),
                     ],
                   ),
                 ),
-              // Show detailed timestamps with improved styling
               if (widget.showTimeStamps && widget.updatedAt != null)
                 Padding(
                   padding: const EdgeInsets.only(top: 8.0),
@@ -388,22 +418,20 @@ class _MemoCardState extends ConsumerState<MemoCard> {
                       Row(
                         children: [
                           Icon(
-                            Icons.update,
+                            CupertinoIcons.refresh_thin,
                             size: 14,
-                            color:
-                                isDarkMode
-                                    ? const Color(0xFF9E9E9E)
-                                    : Colors.grey[600],
+                            color: CupertinoColors.tertiaryLabel.resolveFrom(
+                              context,
+                            ),
                           ),
                           const SizedBox(width: 4),
                           Text(
                             'Updated: ${formatDateTime(widget.updatedAt!)}',
                             style: TextStyle(
                               fontSize: 13,
-                              color:
-                                  isDarkMode
-                                      ? const Color(0xFF9E9E9E)
-                                      : Colors.grey[600],
+                              color: CupertinoColors.tertiaryLabel.resolveFrom(
+                                context,
+                              ),
                             ),
                           ),
                         ],

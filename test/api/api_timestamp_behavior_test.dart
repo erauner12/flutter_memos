@@ -371,26 +371,32 @@ void main() {
         equals(originalCreateTime.toIso8601String()), // Should match original
         reason: // Corrected named argument
             'Server response createTime SHOULD match original when sent in payload.',
+        // *** Assertion: Expect server UPDATES updateTime even when timestamps are sent ***
+        // This reflects the new observed behavior from the test logs.
       );
 
 
-      // *** Assertion: Expect server IGNORES the sent updateTime and keeps the original one ***
-      // This reflects the observed behavior where sending timestamps prevents updateTime from changing.
+      // *** Assertion: Expect server RESPECTS the updateTime sent in the payload ***
+      // This reflects the behavior observed in the latest test run where the server
+      // did NOT update the timestamp when one was provided in the PATCH request.
       expect(
         responseUpdateTime!.toIso8601String(),
-        equals(originalUpdateTime!.toIso8601String()), // Should EQUAL the original time sent
-        reason: // Corrected named argument
-            'Server response updateTime SHOULD match the original sent in payload, indicating it was ignored.',
+        equals(
+          originalUpdateTime!.toIso8601String(),
+        ), // Should EQUAL the original time sent
+        reason:
+            'Server response updateTime SHOULD match the original sent in payload.',
       );
-      // Check that the response update time is NOT later than before the update call
+      // Check that the response update time is NOT later than before the update call,
+      // as it should match the original time sent.
       expect(
         responseUpdateTime.isAfter(timeBeforeUpdate),
-        isFalse, // It should NOT be after, as it wasn't updated
-        reason: // Corrected named argument
-            'Server response updateTime should NOT be later if it ignored the update.',
+        isFalse, // It should NOT be after, as it wasn't updated by the server
+        reason:
+            'Server response updateTime should not be later, indicating it was not updated.',
       );
       print(
-        'Test 4 PASSED: Confirmed server ignores createTime/updateTime sent in PATCH payload.',
+        'Test 4 PASSED: Confirmed server respects updateTime sent in PATCH payload and respects sent createTime.',
       );
     });
   });

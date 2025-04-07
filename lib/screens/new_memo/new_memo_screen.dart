@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart'; // Import Cupertino
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'new_memo_form.dart';
@@ -8,11 +8,17 @@ class NewMemoScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Create a New Memo'),
+    // Use CupertinoPageScaffold and CupertinoNavigationBar
+    return const CupertinoPageScaffold(
+      navigationBar: CupertinoNavigationBar(
+        middle: Text('Create a New Memo'),
+        transitionBetweenRoutes: false, // Disable default hero animation
+        // Add previousPageTitle automatically if pushed from a Cupertino route
       ),
-      body: const NewMemoForm(),
+      child: SafeArea(
+        // Add SafeArea
+        child: NewMemoForm(),
+      ),
     );
   }
 }

@@ -4,7 +4,7 @@
 // utility in the flutter_test package. For example, you can send tap and scroll
 // gestures. You can also use WidgetTester to find child widgets in the widget
 // tree, read text, and verify that the values of widget properties are correct.
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart'; // Import Cupertino
 import 'package:flutter_memos/main.dart';
 import 'package:flutter_memos/models/memo.dart';
 import 'package:flutter_memos/providers/api_providers.dart';
@@ -82,14 +82,19 @@ void main() {
       ),
     );
 
-    // Verify that our app initializes correctly
-    expect(find.byType(Scaffold), findsWidgets);
-    expect(find.text('Flutter Memos'), findsOneWidget);
-    
+    // Verify that our app initializes correctly using Cupertino widgets
+    // CupertinoPageScaffold might appear multiple times if nested, use findsWidgets
+    expect(find.byType(CupertinoPageScaffold), findsWidgets);
+    expect(
+      find.text('Flutter Memos'),
+      findsOneWidget,
+    ); // App title should still be there
+
     // Wait for all animations to complete
     await tester.pumpAndSettle();
-    
-    // Verify some basic elements of our UI exist
-    expect(find.byType(AppBar), findsWidgets);
+
+    // Verify CupertinoNavigationBar exists instead of AppBar
+    // CupertinoNavigationBar might appear multiple times, use findsWidgets
+    expect(find.byType(CupertinoNavigationBar), findsWidgets);
   });
 }

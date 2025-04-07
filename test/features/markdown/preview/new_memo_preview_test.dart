@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart'; // Use Cupertino
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_memos/screens/new_memo/new_memo_form.dart';
 import 'package:flutter_memos/services/url_launcher_service.dart'; // Import url launcher service
@@ -30,20 +30,28 @@ void main() {
               mockUrlLauncherService,
             ), // Add override
           ],
-          child: const MaterialApp(home: Scaffold(body: NewMemoForm())),
+          child: const CupertinoApp(
+            home: CupertinoPageScaffold(child: NewMemoForm()),
+          ), // Use Cupertino
         ),
       );
 
       // Enter some markdown text
       const testMarkdown = '# Test Heading\n**Bold text**\n*Italic text*';
       debugMarkdown('Entering text: $testMarkdown');
-      await tester.enterText(find.byType(TextField), testMarkdown);
+      await tester.enterText(
+        find.byType(CupertinoTextField),
+        testMarkdown,
+      ); // Use CupertinoTextField
 
       // Pump after text entry so widget can rebuild
       await tester.pumpAndSettle();
 
       // Initially we should see the TextField, not the MarkdownBody
-      expect(find.byType(TextField), findsOneWidget);
+      expect(
+        find.byType(CupertinoTextField),
+        findsOneWidget,
+      ); // Use CupertinoTextField
       expect(find.byType(MarkdownBody), findsNothing);
       debugMarkdown('Initial state: TextField visible, MarkdownBody not visible');
 
@@ -53,7 +61,10 @@ void main() {
       await tester.pumpAndSettle();
 
       // Now the text field should be replaced by MarkdownBody
-      expect(find.byType(TextField), findsNothing);
+      expect(
+        find.byType(CupertinoTextField),
+        findsNothing,
+      ); // Use CupertinoTextField
       expect(find.byType(MarkdownBody), findsOneWidget);
       debugMarkdown('After toggle: TextField hidden, MarkdownBody visible');
 
@@ -76,9 +87,11 @@ void main() {
               mockUrlLauncherService,
             ), // Add override
           ],
-          child: const MaterialApp(
-            home: Scaffold(
-              body: SizedBox(
+          child: const CupertinoApp(
+            // Use CupertinoApp
+            home: CupertinoPageScaffold(
+              // Use CupertinoPageScaffold
+              child: SizedBox(
                 width: 800,
                 height: 600,
                 child: SingleChildScrollView(child: NewMemoForm()),

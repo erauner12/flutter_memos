@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart'; // Use Cupertino
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/models/memo.dart';
@@ -16,12 +16,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/annotations.dart'; // Add Mockito annotation import
 import 'package:mockito/mockito.dart'; // Add Mockito import
 
-// Import the generated mocks file (will be created by build_runner)
-import 'markdown_rendering_test.mocks.dart';
 // Import the mock for UrlLauncherService
 import '../../../core/services/url_launcher_service_test.mocks.dart'; // Path to core service mocks is correct
 // Import test utility
 import '../../../utils/test_debug.dart'; // Go up two levels to reach test/utils/
+// Import the generated mocks file (will be created by build_runner)
+import 'markdown_rendering_test.mocks.dart';
 
 // Annotation to generate nice mock for ApiService
 @GenerateNiceMocks([MockSpec<ApiService>()])
@@ -61,11 +61,11 @@ void main() {
 ''';
       debugMarkdown('Test markdown content: $markdownText');
 
-      // Build a basic MarkdownBody widget
+      // Build a basic MarkdownBody widget within Cupertino context
       await tester.pumpWidget(
-        const MaterialApp(
-          home: Scaffold(
-            body: SingleChildScrollView(
+        const CupertinoApp(
+          home: CupertinoPageScaffold(
+            child: SingleChildScrollView(
               child: MarkdownBody(data: markdownText),
             ),
           ),
@@ -98,13 +98,14 @@ void main() {
     testWidgets('Markdown renders with custom styling', (WidgetTester tester) async {
       const markdownText = '**Bold text with custom color**';
       final customColor =
-          Colors.red; // Using standard Color instead of MaterialColor
+          CupertinoColors
+              .systemRed; // Using standard Color instead of MaterialColor
 
-      // Build a MarkdownBody with custom styling
+      // Build a MarkdownBody with custom styling within Cupertino context
       await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: MarkdownBody(
+        CupertinoApp(
+          home: CupertinoPageScaffold(
+            child: MarkdownBody(
               data: markdownText,
               styleSheet: MarkdownStyleSheet(
                 strong: TextStyle(color: customColor, fontWeight: FontWeight.w800),
@@ -246,9 +247,11 @@ void main() {
               (ref, id) => Future.value(comments),
             ),
           ],
-          child: MaterialApp(
-            home: Scaffold(
-              body: MemoContent(memo: memo, memoId: 'test-id'),
+          child: CupertinoApp(
+            // Use CupertinoApp
+            home: CupertinoPageScaffold(
+              // Use CupertinoPageScaffold
+              child: MemoContent(memo: memo, memoId: 'test-id'),
             ),
           ),
         ),
@@ -279,9 +282,11 @@ void main() {
           overrides: [
             urlLauncherServiceProvider.overrideWithValue(mockUrlLauncherService), // Add override
           ],
-          child: MaterialApp(
-            home: Scaffold(
-              body: CommentCard(
+          child: CupertinoApp(
+            // Use CupertinoApp
+            home: CupertinoPageScaffold(
+              // Use CupertinoPageScaffold
+              child: CommentCard(
                 comment: comment,
                 memoId: 'test-memo-id',
               ),
@@ -309,9 +314,11 @@ void main() {
           overrides: [
             urlLauncherServiceProvider.overrideWithValue(mockUrlLauncherService), // Add override
           ],
-          child: const MaterialApp(
-            home: Scaffold(
-              body: MemoCard(
+          child: const CupertinoApp(
+            // Use CupertinoApp
+            home: CupertinoPageScaffold(
+              // Use CupertinoPageScaffold
+              child: MemoCard(
                 id: 'test-id',
                 content: '# Card Heading\n**Bold text**\n- List item',
                 pinned: false,
@@ -358,10 +365,12 @@ void main() {
               EntityProviderParams(id: 'test-id', type: 'memo'),
             ).overrideWith((ref) => Future.value(memo)),
           ],
-          child: MaterialApp(
-            home: Scaffold(
+          child: CupertinoApp(
+            // Use CupertinoApp
+            home: CupertinoPageScaffold(
+              // Use CupertinoPageScaffold
               // Use the new constructor signature
-              body: EditMemoForm(
+              child: EditMemoForm(
                 entityId: 'test-id',
                 entityType: 'memo',
                 entity: memo,
@@ -374,16 +383,16 @@ void main() {
       // Wait for the FutureProvider to resolve and the form to build
       await tester.pumpAndSettle();
 
-      // Initially in edit mode - TextField should be visible
-      expect(find.byType(TextField), findsOneWidget);
+      // Initially in edit mode - CupertinoTextField should be visible
+      expect(find.byType(CupertinoTextField), findsOneWidget);
       expect(find.byType(MarkdownBody), findsNothing);
 
       // Find and tap the Preview button
       await tester.tap(find.text('Preview'));
       await tester.pumpAndSettle();
 
-      // Now should be in preview mode - MarkdownBody should be visible, TextField hidden
-      expect(find.byType(TextField), findsNothing);
+      // Now should be in preview mode - MarkdownBody should be visible, CupertinoTextField hidden
+      expect(find.byType(CupertinoTextField), findsNothing);
       expect(find.byType(MarkdownBody), findsOneWidget);
 
       // Verify markdown content is rendered
@@ -395,7 +404,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Should be back in edit mode
-      expect(find.byType(TextField), findsOneWidget);
+      expect(find.byType(CupertinoTextField), findsOneWidget);
       expect(find.byType(MarkdownBody), findsNothing);
     });
 
@@ -412,11 +421,11 @@ void main() {
 2. Second item with >quote
 ''';
 
-      // Build a MarkdownBody with complex content
+      // Build a MarkdownBody with complex content within Cupertino context
       await tester.pumpWidget(
-        const MaterialApp(
-          home: Scaffold(
-            body: SingleChildScrollView(
+        const CupertinoApp(
+          home: CupertinoPageScaffold(
+            child: SingleChildScrollView(
               child: MarkdownBody(data: complexMarkdown),
             ),
           ),
@@ -444,11 +453,11 @@ Code with special <html> &tags
 ```
 ''';
 
-      // Build a MarkdownBody with special characters
+      // Build a MarkdownBody with special characters within Cupertino context
       await tester.pumpWidget(
-        const MaterialApp(
-          home: Scaffold(
-            body: MarkdownBody(data: specialCharsMarkdown),
+        const CupertinoApp(
+          home: CupertinoPageScaffold(
+            child: MarkdownBody(data: specialCharsMarkdown),
           ),
         ),
       );

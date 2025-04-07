@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart'; // Import Cupertino
 import 'package:flutter_memos/providers/memo_detail_provider.dart'
     hide memoCommentsProvider; // Hide this to avoid conflict
 import 'package:flutter_memos/providers/memo_providers.dart' as memo_providers;
@@ -60,25 +60,34 @@ class EditMemoScreen extends ConsumerWidget {
           }
         }
       },
-      child: Scaffold(
-        appBar: AppBar(
-          title: Text(
+      // Replace Scaffold with CupertinoPageScaffold
+      child: CupertinoPageScaffold(
+        // Replace AppBar with CupertinoNavigationBar
+        navigationBar: CupertinoNavigationBar(
+          middle: Text(
             entityType == 'comment' ? 'Edit Comment' : 'Edit Memo',
-          ), // Conditional title
+          ),
+          transitionBetweenRoutes: false, // Disable default hero animation
+          // Add previousPageTitle automatically if pushed from a Cupertino route
         ),
-        body: entityAsync.when(
-          data:
-              (entity) => EditMemoForm(
-                entity: entity, // Pass the dynamic entity
-                entityId: entityId,
-                entityType: entityType,
-              ),
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error:
-              (error, _) => Center(
-                child: Text(
-                  'Error loading ${entityType == 'comment' ? 'comment' : 'memo'}: $error',
-                  style: const TextStyle(color: Colors.red),
+        // Wrap body content with SafeArea
+        child: SafeArea(
+          child: entityAsync.when(
+            data:
+                (entity) => EditMemoForm(
+                  entity: entity, // Pass the dynamic entity
+                  entityId: entityId,
+                  entityType: entityType,
+                ),
+            // Replace CircularProgressIndicator with CupertinoActivityIndicator
+            loading: () => const Center(child: CupertinoActivityIndicator()),
+            error:
+                (error, _) => Center(
+                  child: Text(
+                    'Error loading ${entityType == 'comment' ? 'comment' : 'memo'}: $error',
+                    // Use CupertinoColors for error text
+                    style: const TextStyle(color: CupertinoColors.systemRed),
+                  ),
                 ),
           ),
         ),

@@ -1,9 +1,10 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart'; // Import Cupertino
 import 'package:flutter_memos/main.dart' as app;
 // Add imports for Memo model and ApiService
 import 'package:flutter_memos/models/memo.dart';
 import 'package:flutter_memos/services/api_service.dart';
 import 'package:flutter_memos/widgets/memo_card.dart';
+import 'package:flutter_slidable/flutter_slidable.dart'; // Keep if Slidable is still used
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
@@ -89,8 +90,9 @@ void main() {
 
       // Refresh the list to show the newly created memo
       debugPrint('[Test Action] Simulating pull-to-refresh...');
-      final listFinder = find.byType(ListView);
-      expect(listFinder, findsOneWidget, reason: 'ListView not found');
+      final listFinder =
+          find.byType(Scrollable).first; // Use generic Scrollable
+      expect(listFinder, findsOneWidget, reason: 'Scrollable list not found');
       await tester.fling(listFinder, const Offset(0.0, 400.0), 1000.0);
       await tester.pumpAndSettle(const Duration(seconds: 3));
       debugPrint('[Test Action] Pull-to-refresh complete.');
@@ -105,21 +107,12 @@ void main() {
       final afterCreateCount = find.byType(MemoCard).evaluate().length;
       debugPrint('Memo count after creation: $afterCreateCount');
 
-      // Find the Card widget associated with the memo to swipe
-      final cardFinder = find.ancestor(
-        of: find.textContaining(testMemoContent),
-        matching: find.byType(
-          Card,
-        ), // Target the Card which is often the Slidable container
-      );
-      expect(
-        cardFinder,
-        findsOneWidget,
-        reason: 'Card containing memo text not found',
-      );
+      // Find the widget to swipe (assuming MemoCard is the target)
+      final swipeTargetFinder = memoCardFinder; // Swipe the MemoCard itself
 
       // Find the slidable action to delete by dragging and then tapping Delete
-      await tester.drag(cardFinder, const Offset(-300, 0)); // Swipe left
+      // (Assuming Slidable is still used)
+      await tester.drag(swipeTargetFinder, const Offset(-300, 0)); // Swipe left
       await tester.pumpAndSettle();
 
       // Wait for animations to complete
@@ -127,23 +120,23 @@ void main() {
       await tester.pumpAndSettle();
 
       // Find and tap the Delete button that appears after sliding
-      final deleteButtonFinder = find.text('Delete');
+      final deleteButtonFinder = find.widgetWithText(SlidableAction, 'Delete');
       expect(deleteButtonFinder, findsOneWidget, reason: 'Delete button not found after sliding');
       await tester.tap(deleteButtonFinder);
       await tester.pumpAndSettle();
 
-      // Tap "Delete" on the confirmation dialog
-      final alertDialogFinder = find.byType(AlertDialog);
+      // Tap "Delete" on the confirmation dialog (CupertinoAlertDialog)
+      final alertDialogFinder = find.byType(CupertinoAlertDialog);
       expect(
         alertDialogFinder,
         findsOneWidget,
-        reason: 'Alert dialog not found after tapping Delete',
+        reason: 'CupertinoAlertDialog not found after tapping Delete',
       );
 
-      // Find the Delete button within the dialog
+      // Find the Delete button within the dialog (CupertinoDialogAction)
       final deleteConfirmButtonFinder = find.descendant(
         of: alertDialogFinder,
-        matching: find.text('Delete'),
+        matching: find.widgetWithText(CupertinoDialogAction, 'Delete'),
       );
       expect(
         deleteConfirmButtonFinder,
@@ -168,7 +161,12 @@ void main() {
       debugPrint('Memo count after deletion: $afterDeleteCount');
 
       // Check if our memo is still visible anywhere - add more debugging
-      bool memoFound = find.text(testMemoContent).evaluate().isNotEmpty;
+      // Use findRichText for markdown content
+      bool memoFound =
+          find
+              .textContaining(testMemoContent, findRichText: true)
+              .evaluate()
+              .isNotEmpty;
       if (memoFound) {
         debugPrint(
           'WARNING: Memo content still found in the UI after deletion!',
@@ -181,7 +179,10 @@ void main() {
         );
 
         // Try to find our specific text again and get more details
-        final specificTextFinder = find.text(testMemoContent);
+        final specificTextFinder = find.textContaining(
+          testMemoContent,
+          findRichText: true,
+        );
         debugPrint(
           'Number of instances of memo text: ${specificTextFinder.evaluate().length}',
         );
@@ -194,17 +195,21 @@ void main() {
       // If not found immediately, try scrolling to find it
       if (!memoFound) {
         debugPrint('Checking if memo is really gone by scrolling...');
-        final listViewFinder = find.byType(ListView);
+        final scrollableListFinder = find.byType(Scrollable).first;
 
         // Only try scrolling if there are memos to scroll through
         if (find.byType(MemoCard).evaluate().isNotEmpty &&
-            listViewFinder.evaluate().isNotEmpty) {
+            scrollableListFinder.evaluate().isNotEmpty) {
           for (int i = 0; i < 3; i++) {
-            await tester.drag(listViewFinder.first, const Offset(0, -300));
+            await tester.drag(scrollableListFinder, const Offset(0, -300));
             await tester.pumpAndSettle();
 
             // Check after each scroll if we can find our memo
-            memoFound = find.text(testMemoContent).evaluate().isNotEmpty;
+            memoFound =
+                find
+                    .textContaining(testMemoContent, findRichText: true)
+                    .evaluate()
+                    .isNotEmpty;
             if (memoFound) {
               debugPrint('Found memo after scrolling $i times - deletion failed');
               break;
@@ -216,17 +221,19 @@ void main() {
       // Final verification - memo should not be found
       expect(memoFound, isFalse, reason: 'Deleted memo is still visible');
 
-      // Optional: Check for a snackbar confirmation
-      final snackbarFinder = find.descendant(
-        of: find.byType(SnackBar),
-        matching: find.textContaining('deleted'),
-      );
-
-      // Just log this result, don't fail the test if snackbar isn't shown
-      if (snackbarFinder.evaluate().isEmpty) {
-        debugPrint('Warning: Deletion confirmation snackbar not found');
+      // Optional: Check for a confirmation (e.g., text in an alert or overlay)
+      // SnackBar is Material, so this check is removed/modified.
+      // Example: Check for text in a potential CupertinoAlertDialog
+      final confirmationTextFinder = find.textContaining('deleted');
+      if (confirmationTextFinder.evaluate().isNotEmpty) {
+        debugPrint('Found deletion confirmation text');
+        // If it was an alert, it should have been dismissed already.
+        // If it's a temporary overlay, it might still be fading.
+        await tester.pumpAndSettle(
+          const Duration(seconds: 2),
+        ); // Wait for potential fade out
       } else {
-        debugPrint('Found deletion confirmation snackbar');
+        debugPrint('Warning: Deletion confirmation text not found');
       }
     });
   });

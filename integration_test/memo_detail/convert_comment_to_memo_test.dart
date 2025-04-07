@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart'; // Import Cupertino
 import 'package:flutter_memos/main.dart' as app;
 // Add imports for Memo model and ApiService
 import 'package:flutter_memos/models/memo.dart';
@@ -42,7 +42,6 @@ void main() {
         '[Test Setup] Error creating memo programmatically: $e\n$stackTrace',
       );
       fail('Failed to create memo programmatically: $e');
-      return null;
     }
   }
 
@@ -82,8 +81,8 @@ void main() {
 
       // Refresh the list to show the newly created memo
       debugPrint('[Test Action] Simulating pull-to-refresh...');
-      final listFinder = find.byType(ListView);
-      expect(listFinder, findsOneWidget, reason: 'ListView not found');
+      final listFinder = find.byType(Scrollable).first; // Use Scrollable
+      expect(listFinder, findsOneWidget, reason: 'Scrollable list not found');
       await tester.fling(listFinder, const Offset(0.0, 400.0), 1000.0);
       await tester.pumpAndSettle(const Duration(seconds: 3));
       debugPrint('[Test Action] Pull-to-refresh complete.');
@@ -103,8 +102,15 @@ void main() {
       await tester.tap(memoCardFinder);
       await tester.pumpAndSettle();
 
-      // Verify we're on the detail screen
-      expect(find.text('Memo Detail'), findsOneWidget, reason: 'Not on memo detail screen');
+      // Verify we're on the detail screen (check CupertinoNavigationBar title)
+      expect(
+        find.descendant(
+          of: find.byType(CupertinoNavigationBar),
+          matching: find.text('Memo Detail'),
+        ),
+        findsOneWidget,
+        reason: 'Not on memo detail screen',
+      );
 
       // STEP 3: Add a comment (Keep UI interaction for comment adding)
       final commentTimestamp = DateTime.now().millisecondsSinceEpoch;
@@ -119,13 +125,22 @@ void main() {
       await tester.pumpAndSettle();
 
       // Type the comment text
-      final commentTextFieldFinder = find.byType(TextField);
-      expect(commentTextFieldFinder, findsAtLeastNWidgets(1), reason: 'Comment TextField not found');
+      final commentTextFieldFinder = find.byType(
+        CupertinoTextField,
+      ); // Use CupertinoTextField
+      expect(
+        commentTextFieldFinder,
+        findsAtLeastNWidgets(1),
+        reason: 'Comment CupertinoTextField not found',
+      );
       await tester.enterText(commentTextFieldFinder.first, testCommentText);
       await tester.pumpAndSettle();
 
-      // Tap the "Add Comment" button
-      final addCommentButtonFinder = find.text('Add Comment');
+      // Tap the "Add Comment" button (assuming it's a CupertinoButton)
+      final addCommentButtonFinder = find.widgetWithText(
+        CupertinoButton,
+        'Add Comment',
+      ); // Use CupertinoButton
       expect(addCommentButtonFinder, findsOneWidget, reason: 'Add Comment button not found');
       await tester.tap(addCommentButtonFinder);
       await tester.pumpAndSettle();
@@ -149,13 +164,21 @@ void main() {
 
       // Long press to open context menu
       await tester.longPress(commentCardFinder);
-      await tester.pumpAndSettle();
+      await tester.pumpAndSettle(); // Wait for CupertinoContextMenu animation
 
-      // Find and tap the "Convert to Memo" option
-      final convertToMemoFinder = find.text('Convert to Memo');
-      expect(convertToMemoFinder, findsOneWidget, reason: 'Convert to Memo option not found');
+      // Find and tap the "Convert to Memo" option within the CupertinoContextMenu
+      // The text might be inside a CupertinoContextMenuAction
+      final convertToMemoFinder = find.widgetWithText(
+        CupertinoContextMenuAction,
+        'Convert to Memo',
+      );
+      expect(
+        convertToMemoFinder,
+        findsOneWidget,
+        reason: 'Convert to Memo option not found in context menu',
+      );
       await tester.tap(convertToMemoFinder);
-      await tester.pumpAndSettle();
+      await tester.pumpAndSettle(); // Wait for action and menu dismissal
 
       // Wait longer for conversion and UI update
       await tester.pump(const Duration(seconds: 3));
@@ -180,14 +203,25 @@ void main() {
 
       // STEP 5: Go back to main screen and verify new memo
 
-      // Find and tap the back button
-      final backButtonFinder = find.byType(BackButton);
-      expect(backButtonFinder, findsOneWidget, reason: 'Back button not found');
+      // Find and tap the Cupertino back button
+      final backButtonFinder = find.byType(CupertinoNavigationBarBackButton);
+      expect(
+        backButtonFinder,
+        findsOneWidget,
+        reason: 'Cupertino back button not found',
+      );
       await tester.tap(backButtonFinder);
       await tester.pumpAndSettle();
 
-      // Verify we're back on the main screen
-      expect(find.text('Flutter Memos'), findsOneWidget, reason: 'Not back on main screen');
+      // Verify we're back on the main screen (check CupertinoNavigationBar title)
+      expect(
+        find.descendant(
+          of: find.byType(CupertinoNavigationBar),
+          matching: find.text('Memos'),
+        ),
+        findsOneWidget,
+        reason: 'Not back on main screen',
+      );
 
       // Wait longer for the new memo to appear after returning to the list
       await tester.pump(const Duration(seconds: 3));

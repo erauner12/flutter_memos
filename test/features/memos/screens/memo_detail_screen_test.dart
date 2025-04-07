@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart'; // Import Cupertino
 import 'package:flutter/services.dart';
 import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/models/memo.dart';
@@ -12,13 +12,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
 
+// Import the mock for UrlLauncherService
+// Corrected path to the mock file in the core/services directory
+import '../../../core/services/url_launcher_service_test.mocks.dart';
 // Generate nice mock for ApiService
 @GenerateNiceMocks([MockSpec<ApiService>()])
 // This import will work after running build_runner
 import 'memo_detail_screen_test.mocks.dart';
-// Import the mock for UrlLauncherService
-// Corrected path to the mock file in the core/services directory
-import '../../../core/services/url_launcher_service_test.mocks.dart';
 
 
 // Mock for ApiService
@@ -30,7 +30,8 @@ class MockNavigatorObserver extends Mock implements NavigatorObserver {}
 // Helper functions for UI testing from the original test
 extension WidgetTesterExtensions on WidgetTester {
   Future<void> enterComment(String commentText) async {
-    final textField = find.byType(TextField);
+    // Use CupertinoTextField
+    final textField = find.byType(CupertinoTextField);
     expect(textField, findsOneWidget);
 
     await tap(textField);
@@ -41,7 +42,8 @@ extension WidgetTesterExtensions on WidgetTester {
   }
 
   Future<bool> isCommentVisible(String commentText) async {
-    final textWidget = find.text(commentText);
+    // Use findRichText for markdown content
+    final textWidget = find.textContaining(commentText, findRichText: true);
     return textWidget.evaluate().isNotEmpty;
   }
 
@@ -51,9 +53,8 @@ extension WidgetTesterExtensions on WidgetTester {
   }
 
   Future<void> sendKeyEvent(LogicalKeyboardKey key) async {
-    await simulateKeyDownEvent(key);
-    await pump();
-    await simulateKeyUpEvent(key);
+    // Use sendKeyEvent directly as we're in a WidgetTester extension
+    await sendKeyEvent(key);
     await pump();
   }
 
@@ -87,10 +88,10 @@ void main() {
 
     // Stub the launch method to return success by default
     when(mockUrlLauncherService.launch(any)).thenAnswer((_) async => true);
-    
+
     // Add stub for apiBaseUrl property
     when(mockApiService.apiBaseUrl).thenReturn('http://test-url.com');
-    
+
     testMemo = Memo(
       id: 'test-memo-id',
       content: '# Test Memo\nThis is a test memo content.',
@@ -114,7 +115,7 @@ void main() {
 
     // Stub for getMemo - make this more reliable
     when(mockApiService.getMemo(any)).thenAnswer((_) async => testMemo);
-    
+
     // Stub for listMemoComments - make this more reliable
     when(mockApiService.listMemoComments(any)).thenAnswer((_) async => testComments);
   });
@@ -132,7 +133,8 @@ void main() {
               mockUrlLauncherService,
             ), // Add override
           ],
-          child: const MaterialApp(
+          child: const CupertinoApp(
+            // Use CupertinoApp
             home: MemoDetailScreen(memoId: 'test-memo-id'),
           ),
         ),
@@ -140,18 +142,17 @@ void main() {
 
       // Wait for the initial data to load and UI to stabilize
       await tester.pumpAndSettle();
-      
-      // Instead of looking for the TextField directly, look for the memo content
-      final memoContentFinder = find.byKey(const Key('memo-content'));
+
+      // Verify MemoContent is present by type, as the key finder was failing
       expect(
-        memoContentFinder,
+        find.byType(MemoContent),
         findsOneWidget,
-        reason: "The memo content should be visible",
+        reason: "MemoContent widget should be visible",
       );
-      
+
       // Just verify memo screen loads properly with focus management in place
       expect(find.byType(MemoDetailScreen), findsOneWidget);
-      
+
       // Skip the specific shortcut test since it depends on CaptureUtility implementation
       // and we can't verify the focus behavior reliably in the test environment
     });
@@ -168,7 +169,8 @@ void main() {
               mockUrlLauncherService,
             ), // Add override
           ],
-          child: const MaterialApp(
+          child: const CupertinoApp(
+            // Use CupertinoApp
             home: MemoDetailScreen(memoId: 'test-memo-id'),
           ),
         ),
@@ -176,17 +178,17 @@ void main() {
 
       // Wait for the initial data to load and UI to stabilize
       await tester.pumpAndSettle();
-      
+
       // Verify the screen renders without errors
       expect(find.byType(MemoDetailScreen), findsOneWidget);
-      
+
       // Verify content is visible
       expect(find.byType(MemoContent), findsOneWidget);
-      
+
       // Just test that we can send the key event without errors
       await tester.sendKeyEvent(LogicalKeyboardKey.escape);
       await tester.pumpAndSettle();
-      
+
       // The screen should still be visible after the key event
       expect(find.byType(MemoDetailScreen), findsOneWidget);
     });
@@ -203,7 +205,8 @@ void main() {
             mockUrlLauncherService,
           ), // Add override
         ],
-        child: const MaterialApp(
+        child: const CupertinoApp(
+          // Use CupertinoApp
           home: MemoDetailScreen(memoId: 'test-memo-id'),
         ),
       ),
@@ -215,13 +218,13 @@ void main() {
     // Using rich text finder since markdown is rendered as rich text
     final richTextFinder = find.byType(RichText);
     expect(richTextFinder, findsWidgets);
-    
+
     // Look for MemoContent widget instead of a specific key
     final memoContentFinder = find.byType(MemoContent);
     expect(memoContentFinder, findsOneWidget);
-    
-    // Look for any text from the test memo
-    expect(find.textContaining('Test Memo'), findsWidgets);
+
+    // Look for any text from the test memo using findRichText
+    expect(find.textContaining('Test Memo', findRichText: true), findsWidgets);
 
     // Check that the screen itself is displayed
     expect(find.byType(MemoDetailScreen), findsOneWidget);

@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart'; // Import Cupertino
 import 'package:flutter/services.dart'; // Add this for LogicalKeyboardKey
 import 'package:flutter_memos/main.dart' as app;
 import 'package:flutter_memos/widgets/memo_card.dart';
@@ -46,19 +47,24 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pumpAndSettle();
 
-    // Verify we're in detail view
+    // Verify we're in detail view (check CupertinoNavigationBar title)
     expect(
-      find.text('Back to List'),
+      find.descendant(
+        of: find.byType(CupertinoNavigationBar),
+        matching: find.text('Memo Detail'),
+      ),
       findsOneWidget,
       reason: "Not navigated to detail view",
     );
-    
-    // 4. Return to list view
-    final backButton =
-        find
-            .byTooltip('Back') // Or use appropriate finder
-            .first;
-    await tester.tap(backButton);
+
+    // 4. Return to list view using Cupertino back button
+    final backButtonFinder = find.byType(CupertinoNavigationBarBackButton);
+    expect(
+      backButtonFinder,
+      findsOneWidget,
+      reason: 'Cupertino back button not found',
+    );
+    await tester.tap(backButtonFinder);
     await tester.pumpAndSettle();
 
     // 5. Verify selection state is preserved
@@ -81,7 +87,7 @@ void main() {
       findsOneWidget,
       reason: "Selected memo card widget not found after returning",
     );
-    
+
     // Additional visual verification if needed
     expect(
       tester.widget<MemoCard>(memoSelectedFinder).isSelected,

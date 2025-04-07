@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart'; // Import Cupertino
 import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/providers/comment_providers.dart'
     as comment_providers; // Add this import
@@ -29,10 +29,12 @@ class _CommentFormState extends ConsumerState<CommentForm> {
   }
   
   void _showMarkdownHelp() {
-    showDialog(
+    // Replace showDialog with showCupertinoDialog
+    showCupertinoDialog(
       context: context,
       builder:
-          (context) => AlertDialog(
+          (context) => CupertinoAlertDialog(
+            // Use CupertinoAlertDialog
             title: const Text('Markdown Syntax'),
             content: SingleChildScrollView(
               child: Column(
@@ -51,7 +53,9 @@ class _CommentFormState extends ConsumerState<CommentForm> {
               ),
             ),
             actions: [
-              TextButton(
+              // Replace TextButton with CupertinoDialogAction
+              CupertinoDialogAction(
+                isDefaultAction: true,
                 onPressed: () => Navigator.pop(context),
                 child: const Text('Close'),
               ),
@@ -105,8 +109,21 @@ class _CommentFormState extends ConsumerState<CommentForm> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error adding comment: ${e.toString()}')),
+        // Replace SnackBar with CupertinoAlertDialog
+        showCupertinoDialog(
+          context: context,
+          builder:
+              (context) => CupertinoAlertDialog(
+                title: const Text('Error'),
+                content: Text('Failed to add comment: ${e.toString()}'),
+                actions: [
+                  CupertinoDialogAction(
+                    isDefaultAction: true,
+                    child: const Text('OK'),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ],
+              ),
         );
       }
     } finally {
@@ -120,27 +137,52 @@ class _CommentFormState extends ConsumerState<CommentForm> {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
+    // Replace Card with styled Container
+    return Container(
       margin: const EdgeInsets.only(top: 16.0, bottom: 16.0),
-      child: Padding(
-        padding: const EdgeInsets.all(8.0),
-        child: Column(
+      padding: const EdgeInsets.all(8.0),
+      decoration: BoxDecoration(
+        color: CupertinoColors.secondarySystemGroupedBackground.resolveFrom(
+          context,
+        ),
+        borderRadius: BorderRadius.circular(8.0),
+        border: Border.all(
+          color: CupertinoColors.separator.resolveFrom(context),
+          width: 0.5,
+        ),
+      ),
+      child: Column(
           children: [
-            TextField(
+          // Replace TextField with CupertinoTextField
+          CupertinoTextField(
               controller: _controller,
               focusNode: _focusNode,
-              decoration: InputDecoration(
-                hintText: 'Add a comment...',
-                hintStyle: const TextStyle(color: Colors.grey),
-                border: const OutlineInputBorder(),
-                contentPadding: const EdgeInsets.all(10),
-                suffixIcon: IconButton(
-                  icon: const Icon(Icons.text_format),
-                  tooltip: 'Markdown formatting',
-                  onPressed: _showMarkdownHelp,
+            placeholder: 'Add a comment...',
+            placeholderStyle: TextStyle(
+              color: CupertinoColors.placeholderText.resolveFrom(context),
+            ),
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: CupertinoColors.systemFill.resolveFrom(context),
+              border: Border.all(
+                color: CupertinoColors.separator.resolveFrom(context),
+                width: 0.5,
+              ),
+              borderRadius: BorderRadius.circular(8.0),
+            ),
+            // Add suffix for Markdown help button
+            suffix: CupertinoButton(
+              padding: const EdgeInsets.symmetric(horizontal: 8.0),
+              minSize: 0,
+              onPressed: _showMarkdownHelp,
+              child: Icon(
+                CupertinoIcons.textformat_alt, // Use Cupertino icon
+                size: 20,
+                color: CupertinoTheme.of(context).primaryColor,
                 ),
               ),
               maxLines: 3,
+            keyboardType: TextInputType.multiline, // Ensure multiline keyboard
               onSubmitted: (_) {
                 if (!_submittingComment && _controller.text.trim().isNotEmpty) {
                   _handleAddComment();
@@ -150,26 +192,23 @@ class _CommentFormState extends ConsumerState<CommentForm> {
             const SizedBox(height: 8),
             Align(
               alignment: Alignment.centerRight,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Theme.of(context).colorScheme.primary,
-                  foregroundColor: Colors.white,
-                ),
+            // Replace ElevatedButton with CupertinoButton.filled
+            child: CupertinoButton.filled(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 8,
+              ), // Adjust padding
                 onPressed: _submittingComment ? null : _handleAddComment,
                 child: _submittingComment
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
+                      // Replace CircularProgressIndicator with CupertinoActivityIndicator
+                      ? const CupertinoActivityIndicator(
+                        color: CupertinoColors.white, // Ensure contrast
+                        radius: 10, // Adjust size
                       )
                     : const Text('Post'),
               ),
             ),
-          ],
-        ),
+        ],
       ),
     );
   }

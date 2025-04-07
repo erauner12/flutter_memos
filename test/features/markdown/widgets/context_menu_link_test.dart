@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart'; // Use Cupertino
 import 'package:flutter/services.dart'; // Import for ServicesBinding and SystemChannels
 import 'package:flutter_memos/widgets/context_menu_link.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -32,9 +32,11 @@ void main() {
       );
 
       await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: ContextMenuLink(
+        CupertinoApp(
+          // Use CupertinoApp
+          home: CupertinoPageScaffold(
+            // Use CupertinoPageScaffold
+            child: ContextMenuLink(
               text: testText,
               url: testUrl,
               onTap: () => linkTapped = true,
@@ -110,9 +112,11 @@ void main() {
       bool linkTapped = false;
 
       await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: ContextMenuLink(
+        CupertinoApp(
+          // Use CupertinoApp
+          home: CupertinoPageScaffold(
+            // Use CupertinoPageScaffold
+            child: ContextMenuLink(
               text: testText,
               url: testUrl,
               onTap: () => linkTapped = true,

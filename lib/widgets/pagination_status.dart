@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart'; // Import Cupertino
 import 'package:flutter_memos/providers/memo_providers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -8,17 +8,28 @@ class PaginationStatus extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final memosState = ref.watch(memosNotifierProvider);
-    
+    final theme = CupertinoTheme.of(context); // Get Cupertino theme
+
     // Don't show anything if there's nothing to show
     if (!memosState.isLoading &&
         !memosState.isLoadingMore &&
         memosState.error == null) {
       return const SizedBox.shrink();
     }
-    
+
+    // Use Cupertino dynamic colors
+    final Color backgroundColor = theme.scaffoldBackgroundColor;
+    final Color errorColor = CupertinoColors.systemRed.resolveFrom(context);
+    final Color primaryColor = theme.primaryColor;
+    // Define a bodySmall style based on Cupertino theme
+    final TextStyle bodySmallStyle = theme.textTheme.textStyle.copyWith(
+      fontSize: 12,
+      color: CupertinoColors.secondaryLabel.resolveFrom(context),
+    );
+
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
-      color: Theme.of(context).scaffoldBackgroundColor,
+      color: backgroundColor, // Use Cupertino background color
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -28,10 +39,12 @@ class PaginationStatus extends ConsumerWidget {
               padding: const EdgeInsets.only(bottom: 8.0),
               child: Text(
                 'Error: ${memosState.error}',
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
+                style: TextStyle(
+                  color: errorColor,
+                ), // Use Cupertino error color
               ),
             ),
-          
+
           // Show loading status
           if (memosState.isLoading || memosState.isLoadingMore)
             Row(
@@ -40,11 +53,10 @@ class PaginationStatus extends ConsumerWidget {
                 SizedBox(
                   width: 16,
                   height: 16,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                      Theme.of(context).primaryColor,
-                    ),
+                  // Replace CircularProgressIndicator with CupertinoActivityIndicator
+                  child: CupertinoActivityIndicator(
+                    radius: 8, // Adjust radius as needed
+                    color: primaryColor, // Use Cupertino primary color
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -52,18 +64,18 @@ class PaginationStatus extends ConsumerWidget {
                   memosState.isLoading
                       ? 'Loading memos...'
                       : 'Loading more memos...',
-                  style: Theme.of(context).textTheme.bodySmall,
+                  style: bodySmallStyle, // Use Cupertino text style
                 ),
               ],
             ),
-          
+
           // Show total count when available
           if (memosState.memos.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 4.0),
               child: Text(
                 'Loaded ${memosState.totalLoaded} memos${memosState.hasReachedEnd ? " (end of list)" : ""}',
-                style: Theme.of(context).textTheme.bodySmall,
+                style: bodySmallStyle, // Use Cupertino text style
               ),
             ),
         ],

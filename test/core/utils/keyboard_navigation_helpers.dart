@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart'; // Import Cupertino
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -10,23 +10,30 @@ Future<void> focusTextFieldAndWait(
 ) async {
   // Focus the text field
   await tester.tap(textFieldFinder);
-  
+
   // Pump once to start processing the focus request
   await tester.pump();
-  
+
   // Add a small delay to ensure the focus is properly established
   // before proceeding with keyboard events
   await tester.pump(const Duration(milliseconds: 200));
-  
+
   // Final pump to ensure all animations and focus changes are complete
   await tester.pumpAndSettle();
-  
+
   // Verify that the text field has focus
-  // Get the TextField widget and its FocusNode directly
-  final textField = tester.widget<TextField>(textFieldFinder);
-  final focusNode = textField.focusNode!; // Assume node is now always assigned
-  expect(focusNode.hasFocus, isTrue, reason: 'Text field should have focus');
+  // Get the CupertinoTextField widget and its FocusNode directly
+  final textField = tester.widget<CupertinoTextField>(textFieldFinder);
+  final focusNode =
+      textField.focusNode; // CupertinoTextField focusNode is nullable
+  expect(focusNode, isNotNull, reason: 'FocusNode should not be null');
+  expect(
+    focusNode!.hasFocus,
+    isTrue,
+    reason: 'CupertinoTextField should have focus',
+  );
 }
+
 
 /// Helper to send a keyboard event and properly wait for it to be processed
 Future<void> sendKeyEventAndWait(

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart'; // Import Cupertino
 import 'package:flutter_memos/providers/memo_providers.dart' as memo_providers;
 import 'package:flutter_memos/providers/ui_providers.dart';
 import 'package:flutter_memos/utils/keyboard_navigation.dart';
@@ -12,10 +12,7 @@ import 'memo_detail_providers.dart';
 class MemoDetailScreen extends ConsumerStatefulWidget {
   final String memoId;
 
-  const MemoDetailScreen({
-    super.key,
-    required this.memoId,
-  });
+  const MemoDetailScreen({super.key, required this.memoId});
 
   @override
   ConsumerState<MemoDetailScreen> createState() => _MemoDetailScreenState();
@@ -70,54 +67,55 @@ class _MemoDetailScreenState extends ConsumerState<MemoDetailScreen>
         // Ensure tapping anywhere gives focus back to the screen
         onTap: () => _screenFocusNode.requestFocus(),
         behavior: HitTestBehavior.translucent,
-        child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Memo Detail'),
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.edit),
+        child: CupertinoPageScaffold(
+          navigationBar: CupertinoNavigationBar(
+            middle: const Text('Memo Detail'),
+            transitionBetweenRoutes: false, // Disable default hero animation
+            trailing: CupertinoButton(
+              // Replace IconButton with CupertinoButton
+              padding: EdgeInsets.zero,
+              child: const Icon(CupertinoIcons.pencil), // Use Cupertino icon
               onPressed: () {
                 Navigator.pushNamed(
                   context,
-                    '/edit-entity', // Use the generic route
-                    arguments: {
-                      'entityType': 'memo',
-                      'entityId': widget.memoId,
-                    }, // Specify type and ID
+                  '/edit-entity', // Use the generic route
+                  arguments: {
+                    'entityType': 'memo',
+                    'entityId': widget.memoId,
+                  }, // Specify type and ID
                 ).then((_) {
-                    // Refresh only the detail data, not the entire memos list
+                  // Refresh only the detail data, not the entire memos list
                   ref.invalidate(memoDetailProvider(widget.memoId));
                   ref.invalidate(memoCommentsProvider(widget.memoId));
 
-                    // Ensure memo is not hidden
-                    ref
-                        .read(memo_providers.hiddenMemoIdsProvider.notifier)
-                        .update(
-                          (state) =>
-                              state.contains(widget.memoId)
-                                  ? (state..remove(widget.memoId))
-                                  : state,
-                        );
+                  // Ensure memo is not hidden
+                  ref
+                      .read(memo_providers.hiddenMemoIdsProvider.notifier)
+                      .update(
+                        (state) =>
+                            state.contains(widget.memoId)
+                                ? (state..remove(widget.memoId))
+                                : state,
+                      );
                 });
               },
             ),
-          ],
+          ),
+          child: Column(
+            // Column as the child of CupertinoPageScaffold
+            children: [
+              // Content area (expandable)
+              Expanded(child: _buildBody()),
+              // Fixed bottom area for CaptureUtility
+              CaptureUtility(
+                mode: CaptureMode.addComment,
+                memoId: widget.memoId,
+                hintText: 'Add a comment...',
+                buttonText: 'Add Comment',
+              ),
+            ],
+          ),
         ),
-        // Use a Column for vertical layout - this ensures proper bottom alignment
-        body: Column(
-          children: [
-            // Content area (expandable)
-            Expanded(child: _buildBody()),
-            // Fixed bottom area for CaptureUtility
-            CaptureUtility(
-              mode: CaptureMode.addComment,
-              memoId: widget.memoId,
-              hintText: 'Add a comment...',
-              buttonText: 'Add Comment',
-            ),
-          ],
-        ),
-      ),
       ),
     );
   }
@@ -126,16 +124,16 @@ class _MemoDetailScreenState extends ConsumerState<MemoDetailScreen>
   void _selectNextComment() {
     // Get the current list of comments
     final commentsAsync = ref.read(memoCommentsProvider(widget.memoId));
-    
+
     commentsAsync.whenData((comments) {
       if (comments.isEmpty) return;
-      
+
       // Get the current selection
       final currentIndex = ref.read(selectedCommentIndexProvider);
-      
+
       // Calculate next index using helper from mixin
       final nextIndex = getNextIndex(currentIndex, comments.length);
-      
+
       // Only update if the index actually changed, to avoid unnecessary rebuilds
       if (nextIndex != currentIndex) {
         // Update the selection
@@ -147,16 +145,16 @@ class _MemoDetailScreenState extends ConsumerState<MemoDetailScreen>
   void _selectPreviousComment() {
     // Get the current list of comments
     final commentsAsync = ref.read(memoCommentsProvider(widget.memoId));
-    
+
     commentsAsync.whenData((comments) {
       if (comments.isEmpty) return;
-      
+
       // Get the current selection
       final currentIndex = ref.read(selectedCommentIndexProvider);
-      
+
       // Calculate previous index using helper from mixin
       final prevIndex = getPreviousIndex(currentIndex, comments.length);
-      
+
       // Only update if the index actually changed, to avoid unnecessary rebuilds
       if (prevIndex != currentIndex) {
         // Update the selection
@@ -177,7 +175,14 @@ class _MemoDetailScreenState extends ConsumerState<MemoDetailScreen>
               MemoContent(memo: memo, memoId: widget.memoId),
 
               // Divider between content and comments
-              const Divider(),
+              // Replace Divider with Container
+              Container(
+                height: 0.5,
+                color: CupertinoColors.separator.resolveFrom(context),
+                margin: const EdgeInsets.symmetric(
+                  vertical: 8.0,
+                ), // Add margin if needed
+              ),
 
               // Comments section
               MemoComments(memoId: widget.memoId),
@@ -185,14 +190,18 @@ class _MemoDetailScreenState extends ConsumerState<MemoDetailScreen>
           ),
         );
       },
-      loading: () => const Center(child: CircularProgressIndicator()),
+      // Replace CircularProgressIndicator with CupertinoActivityIndicator
+      loading: () => const Center(child: CupertinoActivityIndicator()),
       error:
           (error, _) => Center(
             child: Text(
               'Error: $error',
-              style: const TextStyle(color: Colors.red),
+              // Use Cupertino color for error text
+              style: TextStyle(
+                color: CupertinoColors.systemRed.resolveFrom(context),
+              ),
             ),
-      ),
+          ),
     );
   }
 }

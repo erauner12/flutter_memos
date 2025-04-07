@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart'; // Import Cupertino
 import 'package:flutter_memos/services/mcp_service.dart';
 
 class McpDemoWidget extends StatefulWidget {
@@ -10,7 +10,7 @@ class McpDemoWidget extends StatefulWidget {
 
 class _McpDemoWidgetState extends State<McpDemoWidget> {
   final McpService _mcpService = McpService();
-  
+
   dynamic _data;
   bool _loading = false;
   String? _error;
@@ -24,34 +24,40 @@ class _McpDemoWidgetState extends State<McpDemoWidget> {
 
     try {
       print('Fetching $type via MCP');
-      
+
       final response = await _mcpService.fetchFromMcp(type);
-      
+
       setState(() {
         _data = response['data'];
         _loading = false;
       });
-      
+
       print('MCP fetch $type successful: $response');
     } catch (e) {
       setState(() {
         _error = 'Failed to fetch $type: ${e.toString()}';
         _loading = false;
       });
-      
+
       print('Error fetching $type via MCP: $e');
     }
   }
 
   Widget _renderMemos(dynamic data) {
     if (data == null || data['memos'] == null || data['memos'].isEmpty) {
-      return const Center(
-        child: Text('No memos found', style: TextStyle(fontStyle: FontStyle.italic, color: Colors.grey)),
+      return Center(
+        child: Text(
+          'No memos found',
+          style: TextStyle(
+            fontStyle: FontStyle.italic,
+            color: CupertinoColors.secondaryLabel.resolveFrom(context),
+          ),
+        ),
       );
     }
 
     final memos = data['memos'] as List;
-    
+
     return ListView.builder(
       shrinkWrap: true,
       itemCount: memos.length,
@@ -60,11 +66,15 @@ class _McpDemoWidgetState extends State<McpDemoWidget> {
         final id = memo['name'].toString().split('/').last;
         final isPinned = memo['pinned'] == true;
         final isArchived = memo['state'] == 'ARCHIVED';
-        
+
         return Container(
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
-            border: Border(bottom: BorderSide(color: Colors.grey[300]!)),
+            border: Border(
+              bottom: BorderSide(
+                color: CupertinoColors.separator.resolveFrom(context),
+              ),
+            ),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -79,21 +89,34 @@ class _McpDemoWidgetState extends State<McpDemoWidget> {
                 children: [
                   Text(
                     'ID: $id',
-                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: CupertinoColors.secondaryLabel.resolveFrom(
+                        context,
+                      ),
+                    ),
                   ),
                   Row(
                     children: [
                       if (isPinned)
-                        const Text(
+                        Text(
                           '📌 Pinned',
-                          style: TextStyle(fontSize: 12, color: Color(0xFF0079BF)),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: CupertinoTheme.of(context).primaryColor,
+                          ),
                         ),
                       if (isArchived)
-                        const Padding(
-                          padding: EdgeInsets.only(left: 8.0),
+                        Padding(
+                          padding: const EdgeInsets.only(left: 8.0),
                           child: Text(
                             '🗄️ Archived',
-                            style: TextStyle(fontSize: 12, color: Colors.grey),
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: CupertinoColors.secondaryLabel.resolveFrom(
+                                context,
+                              ),
+                            ),
                           ),
                         ),
                     ],
@@ -109,13 +132,19 @@ class _McpDemoWidgetState extends State<McpDemoWidget> {
 
   Widget _renderTags(dynamic data) {
     if (data == null || data['tags'] == null || data['tags'].isEmpty) {
-      return const Center(
-        child: Text('No tags found', style: TextStyle(fontStyle: FontStyle.italic, color: Colors.grey)),
+      return Center(
+        child: Text(
+          'No tags found',
+          style: TextStyle(
+            fontStyle: FontStyle.italic,
+            color: CupertinoColors.secondaryLabel.resolveFrom(context),
+          ),
+        ),
       );
     }
 
     final tags = data['tags'] as List;
-    
+
     return Wrap(
       spacing: 8,
       runSpacing: 8,
@@ -123,12 +152,14 @@ class _McpDemoWidgetState extends State<McpDemoWidget> {
         return Container(
           padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
           decoration: BoxDecoration(
-            color: Colors.grey[200],
+                color: CupertinoColors.systemGrey5.resolveFrom(context),
             borderRadius: BorderRadius.circular(20),
           ),
           child: Text(
             tag['name'] ?? '',
-            style: const TextStyle(color: Color(0xFF333333)),
+                style: TextStyle(
+                  color: CupertinoColors.label.resolveFrom(context),
+                ),
           ),
         );
       }).toList(),
@@ -137,35 +168,51 @@ class _McpDemoWidgetState extends State<McpDemoWidget> {
 
   Widget _renderUsers(dynamic data) {
     if (data == null || data['users'] == null || data['users'].isEmpty) {
-      return const Center(
-        child: Text('No users found', style: TextStyle(fontStyle: FontStyle.italic, color: Colors.grey)),
+      return Center(
+        child: Text(
+          'No users found',
+          style: TextStyle(
+            fontStyle: FontStyle.italic,
+            color: CupertinoColors.secondaryLabel.resolveFrom(context),
+          ),
+        ),
       );
     }
 
     final users = data['users'] as List;
-    
+
     return ListView.builder(
       shrinkWrap: true,
       itemCount: users.length,
       itemBuilder: (context, index) {
         final user = users[index];
         final id = user['name'].toString().split('/').last;
-        
+
         return Container(
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
-            border: Border(bottom: BorderSide(color: Colors.grey[300]!)),
+            border: Border(
+              bottom: BorderSide(
+                color: CupertinoColors.separator.resolveFrom(context),
+              ),
+            ),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 user['nickname'] ?? 'User',
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
               Text(
                 'ID: $id',
-                style: const TextStyle(fontSize: 12, color: Colors.grey),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: CupertinoColors.secondaryLabel.resolveFrom(context),
+                ),
               ),
             ],
           ),
@@ -179,7 +226,7 @@ class _McpDemoWidgetState extends State<McpDemoWidget> {
       return const Center(
         child: Padding(
           padding: EdgeInsets.all(40.0),
-          child: CircularProgressIndicator(),
+          child: CupertinoActivityIndicator(), // Use CupertinoActivityIndicator
         ),
       );
     }
@@ -190,7 +237,11 @@ class _McpDemoWidgetState extends State<McpDemoWidget> {
           padding: const EdgeInsets.all(20.0),
           child: Text(
             _error!,
-            style: const TextStyle(color: Colors.red),
+            style: TextStyle(
+              color: CupertinoColors.systemRed.resolveFrom(
+                context,
+              ), // Use Cupertino color
+            ),
             textAlign: TextAlign.center,
           ),
         ),
@@ -198,12 +249,17 @@ class _McpDemoWidgetState extends State<McpDemoWidget> {
     }
 
     if (_data == null) {
-      return const Center(
+      return Center(
         child: Padding(
-          padding: EdgeInsets.all(20.0),
+          padding: const EdgeInsets.all(20.0),
           child: Text(
             'Select a data type to fetch',
-            style: TextStyle(fontStyle: FontStyle.italic, color: Colors.grey),
+            style: TextStyle(
+              fontStyle: FontStyle.italic,
+              color: CupertinoColors.secondaryLabel.resolveFrom(
+                context,
+              ), // Use Cupertino color
+            ),
           ),
         ),
       );
@@ -231,73 +287,91 @@ class _McpDemoWidgetState extends State<McpDemoWidget> {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Data Fetching Demo',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF333333),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFDC4C3E),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                    ),
-                    onPressed: () => _handleFetchData('memos'),
-                    child: const Text('Fetch Memos'),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF0079BF),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                    ),
-                    onPressed: () => _handleFetchData('tags'),
-                    child: const Text('Fetch Tags'),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF5AAC44),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                    ),
-                    onPressed: () => _handleFetchData('users'),
-                    child: const Text('Fetch Users'),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Container(
-              height: 300,
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF8F8F8),
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: const Color(0xFFEEEEEE)),
-              ),
-              child: _renderContent(),
-            ),
-          ],
+    // Replace Card with Container
+    return Container(
+      margin: const EdgeInsets.all(8.0), // Add margin similar to Card
+      padding: const EdgeInsets.all(16.0),
+      decoration: BoxDecoration(
+        color: CupertinoColors.secondarySystemGroupedBackground.resolveFrom(
+          context,
         ),
+        borderRadius: BorderRadius.circular(10.0),
+        boxShadow: [
+          BoxShadow(
+            color: CupertinoColors.systemGrey
+                .resolveFrom(context)
+                .withOpacity(0.2),
+            spreadRadius: 1,
+            blurRadius: 5,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Data Fetching Demo',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: CupertinoColors.label.resolveFrom(context),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                // Replace ElevatedButton with CupertinoButton.filled
+                child: CupertinoButton.filled(
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  // Use specific colors or theme primary
+                  // backgroundColor: const Color(0xFFDC4C3E), // Example color
+                  // foregroundColor: CupertinoColors.white,
+                  onPressed: () => _handleFetchData('memos'),
+                  child: const Text('Fetch Memos'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: CupertinoButton.filled(
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  // backgroundColor: const Color(0xFF0079BF),
+                  // foregroundColor: CupertinoColors.white,
+                  onPressed: () => _handleFetchData('tags'),
+                  child: const Text('Fetch Tags'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: CupertinoButton.filled(
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  // backgroundColor: const Color(0xFF5AAC44),
+                  // foregroundColor: CupertinoColors.white,
+                  onPressed: () => _handleFetchData('users'),
+                  child: const Text('Fetch Users'),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Container(
+            height: 300,
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: CupertinoColors.systemGroupedBackground.resolveFrom(
+                context,
+              ), // Use Cupertino color
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(
+                color: CupertinoColors.separator.resolveFrom(
+                  context,
+                ), // Use Cupertino color
+              ),
+            ),
+            child: _renderContent(),
+          ),
+        ],
       ),
     );
   }

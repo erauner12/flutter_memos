@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart'; // Import Cupertino
 import 'package:flutter/services.dart';
 import 'package:flutter_memos/main.dart' as app;
 import 'package:flutter_memos/models/comment.dart'; // Add Comment model import
@@ -83,44 +83,56 @@ group('Deep Link Integration Tests', () {
         const Duration(seconds: 3),
       ); // Allow time for initial load
 
-      // Find a memo card
+      // Find a memo card (assuming MemoCard is still the type, adjust if needed)
       final memoCardFinder = find.byType(MemoCard);
       expect(memoCardFinder, findsWidgets, reason: 'Should find memo cards');
 
-      // Long press to open context menu
+      // Long press to open context menu (assuming CupertinoContextMenu)
       await tester.longPress(memoCardFinder.first);
       await tester.pumpAndSettle(
-        const Duration(seconds: 2),
-      ); // Increased settle time
+        const Duration(seconds: 1),
+      ); // Wait for CupertinoContextMenu animation
 
-      // Find the "Copy Link" option using its key
-      final copyLinkFinder = find.byKey(const Key('copy_link_menu_item'));
+      // Find the "Copy Link" option within the CupertinoContextMenu
+      // The text might be inside a CupertinoContextMenuAction
+      final copyLinkFinder = find.widgetWithText(
+        CupertinoContextMenuAction,
+        'Copy Link',
+      );
       expect(
         copyLinkFinder,
         findsOneWidget,
-        reason: 'Should find Copy Link option by key',
+        reason: 'Should find Copy Link option in context menu',
       );
 
-      // Ensure the item is visible before tapping (might help with sheet scrolling)
+      // Ensure the item is visible before tapping
       await tester.ensureVisible(copyLinkFinder);
       await tester.pumpAndSettle();
 
       // Tap the Copy Link option
       await tester.tap(copyLinkFinder, warnIfMissed: false);
-      // Refined pump sequence:
-      await tester.pump(); // Process tap, start pop
-      await tester.pump(); // Finish pop, start clipboard/snackbar
+      // Refined pump sequence for menu dismissal and clipboard
+      await tester.pump(); // Process tap, start dismiss
+      await tester.pump(); // Finish dismiss, start clipboard/alert
       await tester.pump(
         const Duration(milliseconds: 500),
-      ); // Allow snackbar animation to start
+      ); // Allow alert animation to start
       await tester.pumpAndSettle(); // Settle everything
 
-      // Verify snackbar appears
+      // Verify confirmation (assuming CupertinoAlertDialog now)
       expect(
-        find.text('Memo link copied to clipboard'),
+        find.widgetWithText(
+          CupertinoAlertDialog,
+          'Memo link copied to clipboard',
+        ),
         findsOneWidget,
-        reason: 'Should show confirmation snackbar',
+        reason: 'Should show confirmation alert',
       );
+
+      // Dismiss the alert
+      await tester.tap(find.widgetWithText(CupertinoDialogAction, 'OK'));
+      await tester.pumpAndSettle();
+
 
       // Get clipboard data
       final clipboardData = await Clipboard.getData('text/plain');
@@ -155,7 +167,7 @@ group('Deep Link Integration Tests', () {
 
       // Find the navigator
       final navigatorState = tester.state<NavigatorState>(
-        find.byType(Navigator),
+        find.byType(Navigator), // Navigator is still used by CupertinoApp
       );
 
       // Simulate deep link navigation using the *actual* created IDs

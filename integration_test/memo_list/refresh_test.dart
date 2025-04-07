@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart'; // Import Cupertino
 import 'package:flutter_memos/main.dart' as app;
 import 'package:flutter_memos/models/memo.dart';
 import 'package:flutter_memos/services/api_service.dart';
@@ -45,7 +45,8 @@ void main() {
       // --- Test Setup ---
       final uniqueContent =
           'Pull-to-refresh test memo ${DateTime.now().millisecondsSinceEpoch}';
-      final memoFinder = find.textContaining(uniqueContent);
+      // Use find.textContaining with findRichText for markdown content
+      final memoFinder = find.textContaining(uniqueContent, findRichText: true);
 
       // 1. Verify the memo is NOT initially visible
       expect(memoFinder, findsNothing,
@@ -60,22 +61,31 @@ void main() {
       expect(memoFinder, findsNothing,
           reason: 'Memo should not be visible before manual refresh');
 
-      // 4. Find the RefreshIndicator (associated with the ListView or its wrapper)
-      // We target the ListView itself, as RefreshIndicator wraps it.
-      final listFinder = find.byType(ListView);
+      // 4. Find the scrollable list (might be ListView, CustomScrollView, etc.)
+      // Use a more generic finder
+      final listFinder = find.byType(Scrollable).first;
       expect(listFinder, findsOneWidget,
-          reason: 'ListView should be present to refresh');
+        reason: 'Scrollable list should be present to refresh',
+      );
 
-      // 5. Simulate the pull-to-refresh gesture
+      // 5. Simulate the pull-to-refresh gesture (CupertinoSliverRefreshControl handles this)
       debugPrint('[Test Action] Simulating pull-to-refresh...');
       // Drag down from the center of the list view
       await tester.fling(listFinder, const Offset(0.0, 400.0), 1000.0);
       // Wait for the refresh indicator to appear and the refresh operation to complete
-      await tester.pumpAndSettle(const Duration(seconds: 3)); // Allow time for API call + UI update
+      // CupertinoSliverRefreshControl might have different timing
+      await tester.pump(); // Start animation
+      await tester.pump(const Duration(milliseconds: 500)); // Show indicator
+      await tester.pumpAndSettle(
+        const Duration(seconds: 3),
+      ); // Allow time for API call + UI update + indicator dismiss
       debugPrint('[Test Action] Pull-to-refresh simulation complete.');
 
 
       // 6. Verify the memo IS NOW visible
+      // Scroll down slightly in case it's just off-screen
+      await tester.drag(listFinder, const Offset(0.0, -100.0));
+      await tester.pumpAndSettle();
       expect(memoFinder, findsOneWidget,
           reason: 'Memo should be visible after pull-to-refresh');
 

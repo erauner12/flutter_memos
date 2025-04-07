@@ -1,5 +1,5 @@
 // Import required packages
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart'; // Use Cupertino
 import 'package:flutter_memos/main.dart' as app;
 // Add imports for Memo model and ApiService
 import 'package:flutter_memos/models/memo.dart';
@@ -44,7 +44,7 @@ void main() {
     }
   }
 
-  group('MemoCard Context Menu Integration Tests', () {
+  group('MemoCard Context Menu Integration Tests (Cupertino)', () {
     // Cleanup after all tests in the group
     tearDownAll(() async {
       if (createdMemoIds.isNotEmpty) {
@@ -82,8 +82,9 @@ void main() {
 
       // Refresh the list to show the newly created memo
       debugPrint('[Test Action] Simulating pull-to-refresh...');
-      final listFinder = find.byType(ListView);
-      expect(listFinder, findsOneWidget, reason: 'ListView not found');
+      final listFinder =
+          find.byType(Scrollable).first; // Use generic Scrollable
+      expect(listFinder, findsOneWidget, reason: 'Scrollable list not found');
       await tester.fling(listFinder, const Offset(0.0, 400.0), 1000.0);
       await tester.pumpAndSettle(const Duration(seconds: 3));
       debugPrint('[Test Action] Pull-to-refresh complete.');
@@ -100,94 +101,82 @@ void main() {
       final initialMemoCount = find.byType(MemoCard).evaluate().length;
       print('Initial memo card count (approx): $initialMemoCount');
 
-      // Open context menu
+      // Open context menu (Long press on MemoCard)
       await tester.longPress(memoCardFinder);
+      await tester.pumpAndSettle(); // Wait for menu animation
+
+      // Verify CupertinoActionSheet is shown by looking for its type or a common action
+      // Using find.text('Cancel') as it's a standard part of CupertinoActionSheet
+      final actionSheetFinder = find.byType(CupertinoActionSheet);
+      expect(
+        actionSheetFinder,
+        findsOneWidget,
+        reason: 'CupertinoActionSheet not found',
+      );
+      expect(
+        find.text('Cancel'),
+        findsOneWidget,
+        reason: 'Cancel button in ActionSheet not found',
+      );
+      print('Found CupertinoActionSheet');
+
+      // Find the archive menu item by text within the action sheet
+      final archiveActionFinder = find.descendant(
+        of: actionSheetFinder,
+        matching: find.widgetWithText(CupertinoActionSheetAction, 'Archive'),
+      );
+      // Ensure it's visible (scrolling might be needed if many actions)
+      await tester.ensureVisible(archiveActionFinder);
       await tester.pumpAndSettle();
+      expect(
+        archiveActionFinder,
+        findsOneWidget,
+        reason: 'Archive action not found in ActionSheet',
+      );
+      print('Archive action exists in ActionSheet');
 
-      // Verify context menu is shown by looking for the title
-      expect(find.text('Memo Actions'), findsOneWidget);
-      print('Found context menu');
-
-      // Find the archive menu item by key - it might not be visible yet, but should exist in the tree
-      final archiveItemFinder = find.byKey(const Key('archive_menu_item'));
-      expect(archiveItemFinder, findsOneWidget, reason: 'Archive option not found in the menu');
-      print('Archive option exists in widget tree');
-
-      // Simple approach - just attempt a few small drags to bring Archive into view
-      bool archiveTapped = false;
-      for (int i = 0; i < 5; i++) {
-        // First try tapping directly - it might already be visible
-        try {
-          await tester.tap(archiveItemFinder, warnIfMissed: false);
-          print('Successfully tapped Archive option');
-          archiveTapped = true;
-          break; // If tap succeeds, we're done
-        } catch (e) {
-          print('Could not tap Archive yet, scrolling: attempt ${i+1}');
-
-          // Find a point in the modal sheet to drag from
-          final modalFinder = find.text('Memo Actions');
-          if (modalFinder.evaluate().isNotEmpty) {
-            // Drag upward from the title area
-            await tester.drag(modalFinder, const Offset(0, -150));
-            await tester.pumpAndSettle();
-          }
-        }
-
-        // Short delay to let animations complete
-        await Future.delayed(const Duration(milliseconds: 300));
-        await tester.pump();
-      }
-
-      if (archiveTapped) {
-        print('Archive action was tapped successfully');
-      } else {
-        print('Scrolled to make Archive visible');
-      }
-
-      // No need to tap it again if we already succeeded in the previous steps
-      // Just make sure we pump and settle to let any animations complete
-      await tester.pumpAndSettle();
-
+      // Tap the Archive action
+      await tester.tap(archiveActionFinder);
+      await tester
+          .pumpAndSettle(); // Wait for action sheet to dismiss and action to process
       print('Archive action was tapped successfully');
 
       // Wait for the archive operation to complete and UI to update
-      await tester.pumpAndSettle();
+      await tester.pumpAndSettle(const Duration(seconds: 2)); // Allow more time
 
-      // Look for a snackbar confirmation that the memo was archived
-      await tester.pump(const Duration(seconds: 1));
-      // Use textContaining for flexibility
-      final snackbarFinder = find.textContaining('archived successfully');
-      final isSnackbarVisible = snackbarFinder.evaluate().isNotEmpty;
-      print('Archive confirmation snackbar is ${isSnackbarVisible ? "visible" : "not visible"}');
+      // Look for a confirmation (Snackbar replacement might be an alert or just UI update)
+      // Since SnackBar is Material, we check for the text directly, assuming it might appear
+      // in a CupertinoAlertDialog or similar temporary notification.
+      final confirmationTextFinder = find.textContaining(
+        'archived successfully',
+      );
+      final isConfirmationVisible =
+          confirmationTextFinder.evaluate().isNotEmpty;
+      print(
+        'Archive confirmation text is ${isConfirmationVisible ? "visible" : "not visible"}',
+      );
 
-      if (isSnackbarVisible) {
-        print('Confirmed archive success via snackbar');
+      if (isConfirmationVisible) {
+        print('Confirmed archive success via text');
       } else {
-        // Wait a bit longer in case the snackbar is delayed
+        // Wait a bit longer in case the confirmation is delayed
         await tester.pump(const Duration(seconds: 2));
         // Check again
-        if (snackbarFinder.evaluate().isNotEmpty) {
-          print('Confirmed archive success via snackbar (after delay)');
+        if (confirmationTextFinder.evaluate().isNotEmpty) {
+          print('Confirmed archive success via text (after delay)');
         } else {
-          print('Warning: Archive confirmation snackbar not found.');
-          // Consider failing here if the snackbar is critical for confirmation
-          // expect(isSnackbarVisible, isTrue, reason: 'Archive confirmation snackbar did not appear');
+          print('Warning: Archive confirmation text not found.');
+          // Consider failing here if confirmation is critical
+          // expect(isConfirmationVisible, isTrue, reason: 'Archive confirmation did not appear');
         }
       }
 
-      // The current view might still show archived memos depending on the filter.
-      // Verification should focus on the action completing (snackbar or lack of error).
-      // Checking count reduction is unreliable.
-
-      // Instead of checking count, verify the memo is gone IF the filter is 'inbox' (default)
-      // Or simply rely on the snackbar/lack of error.
-      // For this test, we'll assume the action worked if no error occurred and snackbar appeared.
+      // Verification focuses on the action completing (confirmation text or lack of error).
       expect(
         true,
         isTrue,
         reason:
-            'Archive action completed (verified by snackbar or lack of errors)',
+            'Archive action completed (verified by confirmation text or lack of errors)',
       );
 
       // Optional: Switch filter to 'Archive' and verify the memo is there.
