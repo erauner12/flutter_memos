@@ -190,7 +190,8 @@ class MemosNotifier extends StateNotifier<MemosState> {
     try {
       // Use the local apiService variable here
       final response = await apiService.listMemos(
-        parent: 'users/1',
+        // Use 'users/-' to fetch memos for the authenticated user
+        parent: 'users/-',
         filter: finalFilter,
         state: stateFilter.isNotEmpty ? stateFilter : null,
         sort: 'updateTime', // Keep consistent sorting

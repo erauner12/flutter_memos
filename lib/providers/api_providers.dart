@@ -146,7 +146,7 @@ Future<void> _checkApiHealth(Ref ref) async {
     // TODO: Replace 'users/1' with a more robust check if possible (e.g., get workspace settings)
     await apiService.listMemos(
       pageSize: 1,
-      parent: 'users/1', // Assuming user 1 exists or adjust as needed
+      parent: 'users/-', // Assuming user 1 exists or adjust as needed
     );
 
     // If we get here, the API is available
