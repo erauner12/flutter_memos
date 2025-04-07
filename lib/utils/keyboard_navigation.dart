@@ -17,13 +17,14 @@ mixin KeyboardNavigationMixin<T extends ConsumerStatefulWidget>
       return false;
     }
 
-    // Attempt to find the associated widget more directly
-    Element? element = focusNode.context;
-    Widget? widget = element?.widget;
+    // Get the BuildContext and associated Widget/RenderObject
+    final BuildContext? context = focusNode.context;
+    final Widget? widget = context?.widget;
+    final RenderObject? renderObject = context?.findRenderObject();
 
     if (kDebugMode) {
       print(
-        '[_isTextInputFocused] Checking Node: $focusNode, Element: ${element?.runtimeType}, Widget: ${widget?.runtimeType}',
+        '[_isTextInputFocused] Checking Node: $focusNode, Context: ${context?.runtimeType}, Widget: ${widget?.runtimeType}, RenderObject: ${renderObject?.runtimeType}',
       );
     }
 
@@ -34,19 +35,22 @@ mixin KeyboardNavigationMixin<T extends ConsumerStatefulWidget>
     }
 
     // Check the render object type as a fallback
-    final renderObject = element?.findRenderObject();
     if (renderObject is RenderEditable) {
-       if (kDebugMode) print('[KeyboardNavigation] Focused RenderObject IS RenderEditable.');
+      if (kDebugMode)
+        print('[KeyboardNavigation] Focused RenderObject IS RenderEditable.');
       return true;
     }
 
     // Check semantics as another fallback
     try {
-       final semanticsNode = renderObject?.debugSemantics;
-       if (semanticsNode != null && (semanticsNode.hasFlag(SemanticsFlag.isTextField) || semanticsNode.hasFlag(SemanticsFlag.isObscured))) {
-         if (kDebugMode) print('[KeyboardNavigation] Semantics indicate text field.');
-         return true;
-       }
+      final semanticsNode = renderObject?.debugSemantics;
+      if (semanticsNode != null &&
+          (semanticsNode.hasFlag(SemanticsFlag.isTextField) ||
+              semanticsNode.hasFlag(SemanticsFlag.isObscured))) {
+        if (kDebugMode)
+          print('[KeyboardNavigation] Semantics indicate text field.');
+        return true;
+      }
     } catch (e) {
       if (kDebugMode) print('[KeyboardNavigation] Error checking semantics: $e');
     }
@@ -54,20 +58,18 @@ mixin KeyboardNavigationMixin<T extends ConsumerStatefulWidget>
     // If direct checks fail, traverse up to see if an ancestor is a text field
     // This handles cases where focus might be on an internal helper widget
     bool isTextInputAncestor = false;
-    element?.visitAncestorElements((ancestor) {
-      if (ancestor.widget is TextField ||
-          ancestor.widget is TextFormField ||
-          ancestor.widget is EditableText) {
-        if (kDebugMode) {
-          print(
-            '[KeyboardNavigation] Found text input ancestor: ${ancestor.widget.runtimeType}',
-          );
+    if (context is Element) { // Ensure context is an Element before visiting ancestors
+      context.visitAncestorElements((ancestor) {
+        if (ancestor.widget is TextField || ancestor.widget is TextFormField || ancestor.widget is EditableText) {
+          if (kDebugMode) print('[KeyboardNavigation] Found text input ancestor: ${ancestor.widget.runtimeType}');
+          isTextInputAncestor = true;
+          return false; // Stop traversal
         }
-        isTextInputAncestor = true;
-        return false; // Stop traversal
-      }
-      return true; // Continue traversal
-    });
+        return true; // Continue traversal
+      });
+    } else if (kDebugMode) {
+      print('[KeyboardNavigation] Context is not an Element, cannot visit ancestors.');
+    }
 
     if (isTextInputAncestor) {
       return true;
@@ -81,7 +83,6 @@ mixin KeyboardNavigationMixin<T extends ConsumerStatefulWidget>
 
     return false; // Default to false if no text input found
   }
-
 
   /// Handle a key event with standard navigation shortcuts
   KeyEventResult handleKeyEvent(KeyEvent event, WidgetRef ref, {
