@@ -1,7 +1,10 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter_memos/models/comment.dart'; // Import Comment model
 import 'package:flutter_memos/models/memo.dart';
+import 'package:flutter_memos/models/server_config.dart'; // Import ServerConfig
 import 'package:flutter_memos/providers/api_providers.dart';
 import 'package:flutter_memos/providers/filter_providers.dart';
+import 'package:flutter_memos/providers/server_config_provider.dart'; // Import server config provider
 import 'package:flutter_memos/providers/ui_providers.dart' as ui_providers;
 import 'package:flutter_memos/utils/filter_builder.dart';
 import 'package:flutter_memos/utils/memo_utils.dart';
@@ -84,6 +87,26 @@ class MemosState {
   }
 }
 
+@immutable
+class MoveMemoParams {
+  final String memoId;
+  final ServerConfig targetServer;
+
+  const MoveMemoParams({required this.memoId, required this.targetServer});
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is MoveMemoParams &&
+          runtimeType == other.runtimeType &&
+          memoId == other.memoId &&
+          targetServer == other.targetServer;
+
+  @override
+  int get hashCode => memoId.hashCode ^ targetServer.hashCode;
+}
+
+  
 // Removed MemoSortMode enum and memoSortModeProvider
 // We now exclusively sort by updateTime due to server inconsistencies 
 // with createTime after updates.
@@ -829,7 +852,181 @@ final togglePinMemoProvider = Provider.family<Future<Memo> Function(), String>((
   };
 });
 
-/// OPTIMIZATION: Provider to check if a memo is hidden
+/// Provider for moving a memo to another server
+final moveMemoProvider = Provider.family<
+  Future<void> Function(),
+  MoveMemoParams
+>((ref, params) {
+  return () async {
+    final memoId = params.memoId;
+    final targetServer = params.targetServer;
+    final apiService = ref.read(apiServiceProvider);
+    final notifier = ref.read(memosNotifierProvider.notifier);
+    // Get the source server config (which is the currently active one)
+    final sourceServer = ref.read(activeServerConfigProvider);
+
+    if (sourceServer == null) {
+      throw Exception('Cannot move memo: No active source server configured.');
+    }
+    if (sourceServer.id == targetServer.id) {
+      throw Exception(
+        'Cannot move memo: Source and target servers are the same.',
+      );
+    }
+
+    if (kDebugMode) {
+      print(
+        '[moveMemoProvider] Starting move for memo $memoId from ${sourceServer.name ?? sourceServer.id} to ${targetServer.name ?? targetServer.id}',
+      );
+    }
+
+    // 1. Optimistic Removal from source list
+    notifier.removeMemoOptimistically(memoId);
+
+    Memo sourceMemo;
+    List<Comment> sourceComments = [];
+    Memo? createdMemoOnTarget;
+
+    try {
+      // 2. Fetch Memo details from Source Server
+      if (kDebugMode) {
+        print('[moveMemoProvider] Fetching memo details from source...');
+      }
+      sourceMemo = await apiService.getMemo(
+        memoId,
+        targetServerOverride: sourceServer,
+      );
+
+      // 3. Fetch Comments from Source Server
+      if (kDebugMode) {
+        print('[moveMemoProvider] Fetching comments from source...');
+      }
+      try {
+        sourceComments = await apiService.listMemoComments(
+          memoId,
+          targetServerOverride: sourceServer,
+        );
+        if (kDebugMode) {
+          print(
+            '[moveMemoProvider] Found ${sourceComments.length} comments on source.',
+          );
+        }
+      } catch (e) {
+        if (kDebugMode) {
+          print(
+            '[moveMemoProvider] Warning: Failed to fetch comments from source: $e. Proceeding without comments.',
+          );
+        }
+        sourceComments = []; // Continue without comments if fetch fails
+      }
+
+      // 4. Create Memo on Target Server
+      if (kDebugMode) {
+        print('[moveMemoProvider] Creating memo on target server...');
+      }
+      // Create a new Memo object without the ID for creation
+      final memoToCreate = Memo(
+        id: '', // ID will be assigned by the target server
+        content: sourceMemo.content,
+        pinned: sourceMemo.pinned,
+        state: sourceMemo.state,
+        visibility: sourceMemo.visibility,
+        resourceNames:
+            sourceMemo.resourceNames, // TODO: Handle resource moving?
+        relationList: sourceMemo.relationList, // TODO: Handle relation moving?
+        parent: sourceMemo.parent,
+        creator:
+            sourceMemo
+                .creator, // Creator might change based on target server user
+        createTime:
+            sourceMemo.createTime, // Preserve original create time if possible
+        // updateTime: sourceMemo.updateTime, // Let target server set update time
+        displayTime: sourceMemo.displayTime,
+      );
+      createdMemoOnTarget = await apiService.createMemo(
+        memoToCreate,
+        targetServerOverride: targetServer,
+      );
+      if (kDebugMode) {
+        print(
+          '[moveMemoProvider] Memo created on target with ID: ${createdMemoOnTarget.id}',
+        );
+      }
+
+      // 5. Create Comments on Target Server
+      if (sourceComments.isNotEmpty) {
+        if (kDebugMode) {
+          print(
+            '[moveMemoProvider] Creating ${sourceComments.length} comments on target...',
+          );
+        }
+        for (final comment in sourceComments) {
+          try {
+            // Create a new Comment object without the ID
+            final commentToCreate = Comment(
+              id: '',
+              content: comment.content,
+              creatorId:
+                  comment
+                      .creatorId, // May need adjustment based on target server users
+              createTime: comment.createTime, // Preserve original time
+              state: comment.state,
+              pinned: comment.pinned,
+              resources: comment.resources, // TODO: Handle resource moving?
+            );
+            await apiService.createMemoComment(
+              createdMemoOnTarget.id, // Use the new memo ID from target
+              commentToCreate,
+              targetServerOverride: targetServer,
+              resources: comment.resources, // Pass resources if they exist
+            );
+          } catch (e) {
+            // Log comment creation errors but continue the process
+            if (kDebugMode) {
+              print(
+                '[moveMemoProvider] Warning: Failed to create comment (original ID: ${comment.id}) on target server: $e',
+              );
+            }
+          }
+        }
+        if (kDebugMode) {
+          print('[moveMemoProvider] Finished creating comments on target.');
+        }
+      }
+
+      // 6. Delete Memo from Source Server (only after successful creation on target)
+      if (kDebugMode) {
+        print('[moveMemoProvider] Deleting memo from source server...');
+      }
+      await apiService.deleteMemo(memoId, targetServerOverride: sourceServer);
+      if (kDebugMode) {
+        print(
+          '[moveMemoProvider] Memo $memoId successfully deleted from source.',
+        );
+      }
+
+      if (kDebugMode) {
+        print(
+          '[moveMemoProvider] Move completed successfully for memo $memoId.',
+        );
+      }
+    } catch (e, st) {
+      if (kDebugMode) {
+        print(
+          '[moveMemoProvider] Error during move operation for memo $memoId: $e',
+        );
+        print(st);
+      }
+      // Attempt to rollback or notify user?
+      // For now, just rethrow the error. Critical failure.
+      // Refresh the source list to potentially bring back the memo if deletion didn't happen
+      await notifier.refresh();
+      rethrow; // Rethrow the exception that caused the failure
+    }
+  };
+}, name: 'moveMemoProvider');
+
+/// OPTIMIZATION: Provider for checking if a memo is hidden
 final isMemoHiddenProvider = Provider.family<bool, String>((ref, id) {
   final hiddenMemoIds = ref.watch(hiddenMemoIdsProvider.select((ids) => ids));
   return hiddenMemoIds.contains(id);
