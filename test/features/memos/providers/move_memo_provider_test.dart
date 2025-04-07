@@ -59,28 +59,25 @@ void main() {
 
     setUp(() {
       mockApiService = MockApiService(); // Instantiate ApiService mock
+      mockMemosNotifierInstance = MockMemosNotifier();
 
       // Create the container with overrides, including the mock notifier setup
       container = ProviderContainer(
         overrides: [
           apiServiceProvider.overrideWithValue(mockApiService),
           activeServerConfigProvider.overrideWithValue(sourceServer),
-          memosNotifierProvider.overrideWith((ref) {
-            // Create a fresh mock instance for each test
-            return MockMemosNotifier();
+          // Fix: Override with an actual StateNotifier that Riverpod can initialize properly
+          memosNotifierProvider.overrideWith((_) {
+            // Initialize the notifier with a proper initial state
+            when(
+              mockMemosNotifierInstance.state,
+            ).thenReturn(MemosState(memos: [memoToMove]));
+            // Create a proper StateNotifier implementation that delegates to our mock
+            return TestMemosNotifier(mockMemosNotifierInstance);
           }),
         ],
       );
 
-      // Retrieve the created mock instance from the container for verification purposes
-      // This ensures we are verifying the same instance that Riverpod is using
-      mockMemosNotifierInstance =
-          container.read(memosNotifierProvider.notifier) as MockMemosNotifier;
-
-      // Now, stub the methods on the retrieved mock instance
-      when(mockMemosNotifierInstance.state).thenReturn(
-        MemosState(memos: [memoToMove]), // Set initial state stub
-      );
       // Stub other methods needed by the provider or tests
       when(
         mockMemosNotifierInstance.removeMemoOptimistically(any),
@@ -411,4 +408,26 @@ void main() {
       ).called(1);
     });
   });
+}
+
+// Add this helper class at the end of the file
+class TestMemosNotifier extends StateNotifier<MemosState>
+    implements MemosNotifier {
+  final MockMemosNotifier mock;
+
+  TestMemosNotifier(this.mock) : super(mock.state);
+
+  @override
+  Future<void> refresh() => mock.refresh();
+
+  @override
+  void removeMemoOptimistically(String memoId) {
+    mock.removeMemoOptimistically(memoId);
+  }
+
+  // Add other methods from MemosNotifier that your tests use
+  @override
+  noSuchMethod(Invocation invocation) {
+    return mock.noSuchMethod(invocation);
+  }
 }
