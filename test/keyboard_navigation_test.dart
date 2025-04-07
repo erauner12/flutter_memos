@@ -109,21 +109,30 @@ void main() {
   group('KeyboardNavigationMixin Tests', () {
     late GlobalKey<TestKeyboardNavigationState> testKey;
     late ProviderScope providerScope;
+    late FocusNode testTextFieldFocusNode; // Declare FocusNode
     
     setUp(() {
       testKey = GlobalKey<TestKeyboardNavigationState>();
+      testTextFieldFocusNode = FocusNode(); // Instantiate FocusNode
       providerScope = ProviderScope(
         child: MaterialApp(
           home: Scaffold(
             body: Column(
               children: [
-                const TextField(key: Key('testTextField')),
+                TextField(
+                  key: const Key('testTextField'),
+                  focusNode: testTextFieldFocusNode, // Assign FocusNode
+                ),
                 TestKeyboardNavigationWidget(key: testKey),
               ],
             ),
           ),
         ),
       );
+    });
+
+    tearDown(() {
+      testTextFieldFocusNode.dispose(); // Dispose FocusNode
     });
 
     testWidgets('next/previous index calculation works correctly', (

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // Import services
 
 /// A custom context menu for memo actions
 class MemoContextMenu extends StatelessWidget {
@@ -153,9 +154,15 @@ class MemoContextMenu extends StatelessWidget {
                     ),
                     _buildMenuItem(
                       key: const Key('copy_link_menu_item'),
-                      icon: Icons.link,
                       label: 'Copy Link',
-                      onTap: onCopyLink,
+                      icon: Icons.link,
+                      onTap: () async {
+                        // Make async
+                        final url = 'flutter-memos://memo/$memoId';
+                        await Clipboard.setData(ClipboardData(text: url));
+                        onCopyLink
+                            ?.call(); // Call the passed callback if it exists
+                      },
                       isDarkMode: isDarkMode,
                     ),
 

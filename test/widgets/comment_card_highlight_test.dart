@@ -104,12 +104,10 @@ void main() {
       reason: 'Highlighted border style mismatch (Theme: ${theme.brightness})',
     );
 
-    // Now pump again to trigger the post-frame callback that resets the highlight
-    await tester.pump();
+    // DO NOT pump again here. Check the state immediately after initial render.
 
-    // We need to read the provider *from the test's context* after the pump,
-    // not create a new container. Let's assume the provider was reset correctly
-    // and check the widget's appearance.
+    // Now pump and settle to allow the post-frame callback to execute
+    await tester.pumpAndSettle();
 
     // Get the card again AFTER the reset pump and verify it's no longer highlighted
     final cardAfterCallback = tester.widget<Card>(cardFinder);
