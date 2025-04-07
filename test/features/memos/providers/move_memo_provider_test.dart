@@ -167,8 +167,10 @@ void main() {
       // Act
       await container.read(
         moveMemoProvider(
-          memoId: memoToMove.id,
-          targetServer: destinationServer,
+          MoveMemoParams(
+            memoId: memoToMove.id,
+            targetServer: destinationServer,
+          ),
         ),
       )(); // Call the returned function
 
@@ -238,8 +240,10 @@ void main() {
       await expectLater(
         container.read(
           moveMemoProvider(
-            memoId: memoToMove.id,
-            targetServer: destinationServer,
+            MoveMemoParams(
+              memoId: memoToMove.id,
+              targetServer: destinationServer,
+            ),
           ),
         )(),
         throwsA(exception), // Expect the specific exception
@@ -308,8 +312,10 @@ void main() {
       // Expect it to complete successfully despite the comment error
       await container.read(
         moveMemoProvider(
-          memoId: memoToMove.id,
-          targetServer: destinationServer,
+          MoveMemoParams(
+            memoId: memoToMove.id,
+            targetServer: destinationServer,
+          ),
         ),
       )();
 
@@ -382,8 +388,10 @@ void main() {
       await expectLater(
         container.read(
           moveMemoProvider(
-            memoId: memoToMove.id,
-            targetServer: destinationServer,
+            MoveMemoParams(
+              memoId: memoToMove.id,
+              targetServer: destinationServer,
+            ),
           ),
         )(),
         throwsA(deleteException), // Expect the deletion exception
