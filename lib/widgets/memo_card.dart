@@ -148,51 +148,69 @@ class MemoCardState extends ConsumerState<MemoCard> {
               CupertinoActionSheetAction(
                 child: const Text('Copy Content'),
                 onPressed: () async {
-                  Navigator.pop(context);
+                  // Capture context before async gap
+                  final BuildContext dialogContext = context;
+                  Navigator.pop(
+                    dialogContext,
+                  ); // Close sheet with original context
+
                   await Clipboard.setData(ClipboardData(text: widget.content));
-                  if (!mounted) return;
-                  showCupertinoDialog(
-                    context: context,
-                    builder:
-                        (context) => CupertinoAlertDialog(
-                          title: const Text('Copied'),
-                          content: const Text(
-                            'Memo content copied to clipboard.',
-                          ),
-                          actions: [
-                            CupertinoDialogAction(
-                              isDefaultAction: true,
-                              child: const Text('OK'),
-                              onPressed: () => Navigator.pop(context),
+
+                  // Check mounted *before* using the captured context
+                  if (mounted) {
+                    showCupertinoDialog(
+                      context: dialogContext, // Use captured context
+                      builder:
+                          (ctx) => CupertinoAlertDialog(
+                            title: const Text('Copied'),
+                            content: const Text(
+                              'Memo content copied to clipboard.',
                             ),
-                          ],
-                        ),
-                  );
+                            actions: [
+                              CupertinoDialogAction(
+                                isDefaultAction: true,
+                                child: const Text('OK'),
+                                onPressed: () => Navigator.pop(ctx),
+                              ),
+                            ],
+                          ),
+                    );
+                  }
                 },
               ),
               // 7. Copy Link Action
               CupertinoActionSheetAction(
                 child: const Text('Copy Link'),
                 onPressed: () async {
-                  Navigator.pop(context);
+                  // Capture context before async gap
+                  final BuildContext dialogContext = context;
+                  Navigator.pop(
+                    dialogContext,
+                  ); // Close sheet with original context
+
                   final url = 'flutter-memos://memo/${widget.id}';
                   await Clipboard.setData(ClipboardData(text: url));
-                  if (!mounted) return;
-                  showCupertinoDialog(
-                    context: context,
-                    builder:
-                        (context) => CupertinoAlertDialog(
-                          title: const Text('Copied'),
-                          content: const Text('Memo link copied to clipboard.'),
-                          actions: [
-                            CupertinoDialogAction(
-                              isDefaultAction: true,
-                              child: const Text('OK'),
-                              onPressed: () => Navigator.pop(context),
+
+                  // Check mounted *before* using the captured context
+                  if (mounted) {
+                    showCupertinoDialog(
+                      context: dialogContext, // Use captured context
+                      builder:
+                          (ctx) => CupertinoAlertDialog(
+                            title: const Text('Copied'),
+                            content: const Text(
+                              'Memo link copied to clipboard.',
                             ),
-                          ],
-                        ),
-                  );
+                            actions: [
+                              CupertinoDialogAction(
+                                isDefaultAction: true,
+                                child: const Text('OK'),
+                                onPressed: () => Navigator.pop(ctx),
+                              ),
+                            ],
+                          ),
+                    );
+                  }
                 },
               ),
               // 8. Hide Action
@@ -241,7 +259,10 @@ class MemoCardState extends ConsumerState<MemoCard> {
     final isDarkMode = theme.brightness == Brightness.dark;
 
     final selectedStyle = (
-      color: CupertinoColors.systemGrey.resolveFrom(context).withOpacity(0.3),
+      // Use withAlpha instead of deprecated withOpacity
+      color: CupertinoColors.systemGrey
+          .resolveFrom(context)
+          .withAlpha((255 * 0.3).round()),
       border: BorderSide(
         color: CupertinoColors.systemGrey3.resolveFrom(context),
         width: 1,
