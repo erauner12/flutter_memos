@@ -55,10 +55,8 @@ class HomeScreen extends ConsumerWidget {
                                     child: const Text('Light'),
                                     onPressed: () {
                                       ref
-                                          .read(
-                                            themeModeProvider.notifier,
-                                          ) // Correct usage
-                                          .setTheme(ThemeMode.light);
+                                          .read(themeModeProvider.notifier)
+                                          .state = ThemeMode.light;
                                       Navigator.pop(context);
                                     },
                                   ),
@@ -66,10 +64,8 @@ class HomeScreen extends ConsumerWidget {
                                     child: const Text('Dark'),
                                     onPressed: () {
                                       ref
-                                          .read(
-                                            themeModeProvider.notifier,
-                                          ) // Correct usage
-                                          .setTheme(ThemeMode.dark);
+                                          .read(themeModeProvider.notifier)
+                                          .state = ThemeMode.dark;
                                       Navigator.pop(context);
                                     },
                                   ),
@@ -77,10 +73,8 @@ class HomeScreen extends ConsumerWidget {
                                     child: const Text('System'),
                                     onPressed: () {
                                       ref
-                                          .read(
-                                            themeModeProvider.notifier,
-                                          ) // Correct usage
-                                          .setTheme(ThemeMode.system);
+                                          .read(themeModeProvider.notifier)
+                                          .state = ThemeMode.system;
                                       Navigator.pop(context);
                                     },
                                   ),
