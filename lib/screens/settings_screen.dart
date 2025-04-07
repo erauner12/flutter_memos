@@ -1,7 +1,9 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_memos/models/server_config.dart';
 import 'package:flutter_memos/providers/api_providers.dart';
 import 'package:flutter_memos/providers/server_config_provider.dart';
+import 'package:flutter_memos/screens/add_edit_server_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -112,6 +114,106 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
   }
 
+  void _showServerActions(
+    BuildContext context,
+    ServerConfig server,
+    MultiServerConfigNotifier notifier,
+    bool isActive,
+    bool isDefault,
+  ) {
+    showCupertinoModalPopup<void>(
+      context: context,
+      builder:
+          (BuildContext context) => CupertinoActionSheet(
+            title: Text(server.name ?? server.serverUrl),
+            // message: const Text('Select an action'),
+            actions: <CupertinoActionSheetAction>[
+              CupertinoActionSheetAction(
+                child: const Text('Edit'),
+                onPressed: () {
+                  Navigator.pop(context); // Close the action sheet
+                  Navigator.of(context).push(
+                    CupertinoPageRoute(
+                      builder:
+                          (context) =>
+                              AddEditServerScreen(serverToEdit: server),
+                    ),
+                  );
+                },
+              ),
+              if (!isActive) // Only show if not already active
+                CupertinoActionSheetAction(
+                  child: const Text('Set Active'),
+                  onPressed: () {
+                    notifier.setActiveServer(server.id);
+                    Navigator.pop(context); // Close the action sheet
+                  },
+                ),
+              if (!isDefault) // Only show if not already default
+                CupertinoActionSheetAction(
+                  child: const Text('Set Default'),
+                  onPressed: () {
+                    notifier.setDefaultServer(server.id);
+                    Navigator.pop(context); // Close the action sheet
+                  },
+                ),
+              if (isDefault) // Option to unset default
+                CupertinoActionSheetAction(
+                  child: const Text('Unset Default'),
+                  onPressed: () {
+                    notifier.setDefaultServer(null); // Set default to null
+                    Navigator.pop(context); // Close the action sheet
+                  },
+                ),
+              CupertinoActionSheetAction(
+                isDestructiveAction: true,
+                child: const Text('Delete'),
+                onPressed: () async {
+                  Navigator.pop(context); // Close the action sheet first
+                  final confirmed = await showCupertinoDialog<bool>(
+                    context: context, // Use the original context
+                    builder:
+                        (context) => CupertinoAlertDialog(
+                          title: const Text('Delete Server?'),
+                          content: Text(
+                            'Are you sure you want to delete "${server.name ?? server.serverUrl}"?',
+                          ),
+                          actions: [
+                            CupertinoDialogAction(
+                              child: const Text('Cancel'),
+                              onPressed: () => Navigator.of(context).pop(false),
+                            ),
+                            CupertinoDialogAction(
+                              isDestructiveAction: true,
+                              child: const Text('Delete'),
+                              onPressed: () => Navigator.of(context).pop(true),
+                            ),
+                          ],
+                        ),
+                  );
+                  if (confirmed == true) {
+                    final success = await notifier.removeServer(server.id);
+                    if (!success && mounted) {
+                      _showResultDialog(
+                        'Error',
+                        'Failed to delete server.',
+                        isError: true,
+                      );
+                    }
+                  }
+                },
+              ),
+            ],
+            cancelButton: CupertinoActionSheetAction(
+              child: const Text('Cancel'),
+              onPressed: () {
+                Navigator.pop(context);
+              },
+            ),
+          ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     // Watch the multi-server state
@@ -129,16 +231,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         navigationBar: CupertinoNavigationBar(
           middle: Text(widget.isInitialSetup ? 'Server Setup' : 'Settings'),
           automaticallyImplyLeading: automaticallyImplyLeading,
+          transitionBetweenRoutes: false, // Add this line
           // Replace Save with Add button
           trailing: CupertinoButton(
             padding: EdgeInsets.zero,
             onPressed: () {
-              // TODO: Implement navigation to Add/Edit Server Screen
-              print("Navigate to Add Server Screen");
-              _showResultDialog(
-                "Not Implemented",
-                "Adding servers will be implemented next.",
+              // Navigate to AddEditServerScreen for adding a new server
+              Navigator.of(context).push(
+                CupertinoPageRoute(
+                  builder: (context) => const AddEditServerScreen(),
+                ),
               );
+              // print("Navigate to Add Server Screen");
+              // _showResultDialog("Not Implemented", "Adding servers will be implemented next.");
             },
             child: const Icon(CupertinoIcons.add),
           ),
@@ -240,12 +345,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             minSize: 0,
                             child: const Icon(CupertinoIcons.ellipsis),
                             onPressed: () {
-                              // TODO: Show action sheet/menu for Edit, Delete, Set Active, Set Default
-                              print("Show actions for server: ${server.id}");
-                              _showResultDialog(
-                                "Not Implemented",
-                                "Server actions (Edit, Delete, etc.) will be implemented next.",
+                              _showServerActions(
+                                context,
+                                server,
+                                notifier,
+                                isActive,
+                                isDefault,
                               );
+                              // print("Show actions for server: ${server.id}");
+                              //  _showResultDialog("Not Implemented", "Server actions (Edit, Delete, etc.) will be implemented next.");
                             },
                           ),
                         ],
