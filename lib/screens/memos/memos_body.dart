@@ -103,6 +103,34 @@ class _MemosBodyState extends ConsumerState<MemosBody> {
     _ensureInitialSelection();
   }
 
+  // Add this method to the _MemosBodyState class
+  Widget _buildRefreshIndicator(
+    BuildContext context,
+    RefreshIndicatorMode refreshState,
+    double pulledExtent,
+    double refreshTriggerPullDistance,
+    double refreshIndicatorExtent,
+  ) {
+    // Calculate the opacity based on pull distance
+    final double opacity = pulledExtent / refreshTriggerPullDistance;
+
+    return Center(
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          if (refreshState == RefreshIndicatorMode.refresh ||
+              refreshState == RefreshIndicatorMode.armed)
+            const CupertinoActivityIndicator(radius: 14.0)
+          else if (refreshState == RefreshIndicatorMode.drag)
+            Opacity(
+              opacity: opacity.clamp(0.0, 1.0),
+              child: const CupertinoActivityIndicator(radius: 14.0),
+            ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final memosState = ref.watch(memosNotifierProvider);
@@ -150,56 +178,69 @@ class _MemosBodyState extends ConsumerState<MemosBody> {
       );
     }
 
-    // Data State (List View) - Now using CustomScrollView with slivers
-    return ScrollConfiguration(
-      behavior: const CupertinoScrollBehavior(), // Use Cupertino scroll physics
-      child: CustomScrollView(
-        controller: _scrollController, // Use the same scroll controller
-        slivers: [
-          // Pull-to-refresh using CupertinoSliverRefreshControl
-          CupertinoSliverRefreshControl(onRefresh: _onRefresh),
-
-          // Padding for the list
-          SliverPadding(
-            padding: const EdgeInsets.all(16.0),
-            sliver: SliverList(
-              delegate: SliverChildBuilderDelegate((context, index) {
-                // Memo List Item
-                final memo = visibleMemos[index];
-                if (kDebugMode) {
-                  // Log only when the specific callback is actually being passed
-                  if (widget.onMoveMemoToServer != null) {
-                    print(
-                      '[MemosBody] Building MemoListItem for ${memo.id}, passing onMoveToServer callback.',
-                    );
-                  }
-                }
-                return MemoListItem(
-                  key: ValueKey(
-                    memo.id,
-                  ), // Use ValueKey for better list updates
-                  memo: memo,
-                  index: index,
-                  // Pass the callback received by MemosBody down to MemoListItem
-                  // Use a lambda to capture the specific memo.id for the callback
-                  onMoveToServer:
-                      widget.onMoveMemoToServer != null
-                          ? () => widget.onMoveMemoToServer!(memo.id)
-                          : null,
-                );
-              }, childCount: visibleMemos.length),
+    // In the build method, wrap the ScrollConfiguration with CupertinoScrollbar
+    // Data State (List View)
+    return CupertinoScrollbar(
+      controller: _scrollController,
+      thumbVisibility: true,
+      thickness: 6.0,
+      radius: const Radius.circular(3.0),
+      child: ScrollConfiguration(
+        behavior: const CupertinoScrollBehavior(),
+        child: CustomScrollView(
+          controller: _scrollController,
+          slivers: [
+            // Existing slivers...
+            CupertinoSliverRefreshControl(
+              onRefresh: _onRefresh,
+              refreshIndicatorExtent: 60.0,
+              refreshTriggerPullDistance: 100.0,
+              builder: _buildRefreshIndicator,
             ),
-          ),
+            // Rest of your slivers...
 
-          // Loading More Indicator
-          if (memosState.isLoadingMore)
-            const SliverToBoxAdapter(
-              child: Padding(
-                padding: EdgeInsets.symmetric(vertical: 16.0),
-                child: Center(child: CupertinoActivityIndicator()),
+            // Padding for the list
+            SliverPadding(
+              padding: const EdgeInsets.all(16.0),
+              sliver: SliverList(
+                delegate: SliverChildBuilderDelegate((context, index) {
+                  // Memo List Item
+                  final memo = visibleMemos[index];
+                  if (kDebugMode) {
+                    // Log only when the specific callback is actually being passed
+                    if (widget.onMoveMemoToServer != null) {
+                      print(
+                        '[MemosBody] Building MemoListItem for ${memo.id}, passing onMoveToServer callback.',
+                      );
+                    }
+                  }
+                  return MemoListItem(
+                    key: ValueKey(
+                      memo.id,
+                    ), // Use ValueKey for better list updates
+                    memo: memo,
+                    index: index,
+                    // Pass the callback received by MemosBody down to MemoListItem
+                    // Use a lambda to capture the specific memo.id for the callback
+                    onMoveToServer:
+                        widget.onMoveMemoToServer != null
+                            ? () => widget.onMoveMemoToServer!(memo.id)
+                            : null,
+                  );
+                }, childCount: visibleMemos.length),
               ),
             ),
-        ],
+
+            // Loading More Indicator
+            if (memosState.isLoadingMore)
+              const SliverToBoxAdapter(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(vertical: 16.0),
+                  child: Center(child: CupertinoActivityIndicator()),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }

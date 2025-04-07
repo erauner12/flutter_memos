@@ -168,25 +168,30 @@ class _MemoDetailScreenState extends ConsumerState<MemoDetailScreen>
 
     return memoAsync.when(
       data: (memo) {
-        return SingleChildScrollView(
-          child: Column(
-            children: [
-              // Memo content section
-              MemoContent(memo: memo, memoId: widget.memoId),
+        return CupertinoScrollbar(
+          thumbVisibility: true,
+          thickness: 6.0,
+          radius: const Radius.circular(3.0),
+          child: SingleChildScrollView(
+            child: Column(
+              children: [
+                // Memo content section
+                MemoContent(memo: memo, memoId: widget.memoId),
 
-              // Divider between content and comments
-              // Replace Divider with Container
-              Container(
-                height: 0.5,
-                color: CupertinoColors.separator.resolveFrom(context),
-                margin: const EdgeInsets.symmetric(
-                  vertical: 8.0,
-                ), // Add margin if needed
-              ),
+                // Divider between content and comments
+                // Replace Divider with Container
+                Container(
+                  height: 0.5,
+                  color: CupertinoColors.separator.resolveFrom(context),
+                  margin: const EdgeInsets.symmetric(
+                    vertical: 8.0,
+                  ), // Add margin if needed
+                ),
 
-              // Comments section
-              MemoComments(memoId: widget.memoId),
-            ],
+                // Comments section
+                MemoComments(memoId: widget.memoId),
+              ],
+            ),
           ),
         );
       },
