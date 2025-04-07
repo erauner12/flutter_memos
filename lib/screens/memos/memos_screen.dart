@@ -224,8 +224,10 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
       }
       // Ensure context is valid before navigating
       if (mounted) {
-        Navigator.pushNamed(
+        Navigator.of(
           context,
+          rootNavigator: true,
+        ).pushNamed(
           '/memo-detail',
           arguments: {'memoId': selectedId},
         );

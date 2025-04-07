@@ -76,8 +76,8 @@ class _MemoDetailScreenState extends ConsumerState<MemoDetailScreen>
               padding: EdgeInsets.zero,
               child: const Icon(CupertinoIcons.pencil), // Use Cupertino icon
               onPressed: () {
-                Navigator.pushNamed(
-                  context,
+                Navigator.of(context, rootNavigator: true)
+                    .pushNamed(
                   '/edit-entity', // Use the generic route
                   arguments: {
                     'entityType': 'memo',

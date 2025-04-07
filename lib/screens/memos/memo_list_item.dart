@@ -127,8 +127,9 @@ class MemoListItemState extends ConsumerState<MemoListItem> {
   }
 
   void _onEdit(BuildContext context) {
-    Navigator.pushNamed(
+    Navigator.of(
       context,
+      rootNavigator: true).pushNamed(
       '/edit-entity', // Use the generic route
       arguments: {
         'entityType': 'memo',
