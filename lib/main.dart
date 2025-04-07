@@ -21,6 +21,7 @@ import 'package:flutter_memos/screens/riverpod_demo_screen.dart';
 import 'package:flutter_memos/screens/settings_screen.dart';
 import 'package:flutter_memos/utils/keyboard_shortcuts.dart'; // Import keyboard shortcuts
 import 'package:flutter_memos/utils/provider_logger.dart';
+import 'package:flutter_memos/widgets/config_check_wrapper.dart'; // Import the new wrapper
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 void main() {
@@ -367,13 +368,16 @@ class _MyAppState extends ConsumerState<MyApp> {
                   // Add other locales your app supports here
                 ],
                 // themeMode is handled by the brightness logic above
-                initialRoute: '/',
+                home:
+                    const ConfigCheckWrapper(), // Use ConfigCheckWrapper as home
                 routes: {
-                  '/': (context) => const HomeScreen(),
+                  // Define explicit routes needed for navigation
+                  '/home':
+                      (context) =>
+                          const HomeScreen(), // Main app screen after config check
                   '/memos': (context) => const MemosScreen(),
                   '/chat': (context) => const ChatScreen(),
                   '/mcp': (context) => const McpScreen(),
-                  // Keep new-memo route for backward compatibility but it's no longer the primary way to create memos
                   '/new-memo': (context) => const NewMemoScreen(),
                   '/filter-demo': (context) => const FilterDemoScreen(),
                   '/riverpod-demo': (context) => const RiverpodDemoScreen(),

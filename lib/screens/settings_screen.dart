@@ -7,7 +7,10 @@ import 'package:flutter_memos/providers/server_config_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
-  const SettingsScreen({super.key});
+  // Add flag to indicate if this is the initial setup screen
+  final bool isInitialSetup;
+
+  const SettingsScreen({super.key, this.isInitialSetup = false});
 
   @override
   ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
@@ -232,20 +235,29 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     // Use CupertinoTheme for brightness check if needed, or rely on resolveFrom
     // final isDarkMode = CupertinoTheme.of(context).brightness == Brightness.dark;
 
+    // Determine if the back button should be automatically implied
+    // It should NOT be implied if this is the initial setup screen
+    final bool automaticallyImplyLeading = !widget.isInitialSetup;
+
     return GestureDetector(
       // Dismiss keyboard on tap outside fields
       onTap: () => FocusScope.of(context).unfocus(),
       child: CupertinoPageScaffold(
         navigationBar: CupertinoNavigationBar(
-          middle: const Text('Settings'),
-          // Add Save button to nav bar, enabled only when changes exist
+          middle: Text(widget.isInitialSetup ? 'Server Setup' : 'Settings'),
+          // Conditionally hide the default back button during initial setup
+          automaticallyImplyLeading: automaticallyImplyLeading,
+          // Add Save button to nav bar, enabled only when changes exist or initial setup
           trailing: CupertinoButton(
             padding: EdgeInsets.zero,
-            onPressed: _hasChanges && !_isLoading ? _saveConfiguration : null,
+            onPressed:
+                (_hasChanges || widget.isInitialSetup) && !_isLoading
+                    ? _saveConfiguration
+                    : null,
             child:
                 _isLoading && !_isTesting
                     ? const CupertinoActivityIndicator()
-                    : const Text('Save'),
+                    : Text(widget.isInitialSetup ? 'Connect' : 'Save'),
           ),
         ),
         child: SafeArea(
@@ -253,6 +265,39 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             // Use ListView directly for scrolling content
             padding: const EdgeInsets.only(top: 16.0), // Add padding at the top
             children: [
+              // Show a prompt during initial setup
+              if (widget.isInitialSetup)
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16.0,
+                    vertical: 8.0,
+                  ),
+                  child: Container(
+                    padding: const EdgeInsets.all(12.0),
+                    decoration: BoxDecoration(
+                      color: CupertinoColors.systemBlue.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: CupertinoColors.systemBlue.withOpacity(0.3),
+                      ),
+                    ),
+                    child: const Row(
+                      children: [
+                        Icon(
+                          CupertinoIcons.info_circle_fill,
+                          color: CupertinoColors.systemBlue,
+                        ),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Please enter your Memos server details to get started.',
+                            style: TextStyle(color: CupertinoColors.systemBlue),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               // Server Configuration Section
               CupertinoFormSection.insetGrouped(
                 header: const Text('SERVER CONFIGURATION'),
@@ -318,28 +363,53 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ],
               ),
 
-              // Action Buttons Section
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16.0,
-                  vertical: 10.0,
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    CupertinoButton(
-                      padding: EdgeInsets.zero,
-                      onPressed: _resetToDefaults,
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(CupertinoIcons.restart, size: 18),
-                          SizedBox(width: 4),
-                          Text('Reset Defaults'),
-                        ],
+              // Action Buttons Section - Conditionally show based on initial setup
+              if (!widget.isInitialSetup)
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16.0,
+                    vertical: 10.0,
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      CupertinoButton(
+                        padding: EdgeInsets.zero,
+                        onPressed: _resetToDefaults,
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(CupertinoIcons.restart, size: 18),
+                            SizedBox(width: 4),
+                            Text('Reset Defaults'),
+                          ],
+                        ),
                       ),
-                    ),
-                    CupertinoButton(
+                      CupertinoButton(
+                        padding: EdgeInsets.zero,
+                        onPressed: _pasteTokenFromClipboard,
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(CupertinoIcons.doc_on_clipboard, size: 18),
+                            SizedBox(width: 4),
+                            Text('Paste Token'),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              // Add Paste Token button separately for initial setup if desired
+              if (widget.isInitialSetup)
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16.0,
+                    vertical: 0.0,
+                  ), // Reduced vertical padding
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: CupertinoButton(
                       padding: EdgeInsets.zero,
                       onPressed: _pasteTokenFromClipboard,
                       child: const Row(
@@ -351,9 +421,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         ],
                       ),
                     ),
-                  ],
+                  ),
                 ),
-              ),
 
               // Help Text Section
               Padding(
