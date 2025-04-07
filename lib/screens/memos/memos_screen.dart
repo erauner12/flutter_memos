@@ -394,84 +394,21 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
 
   void _showAdvancedFilterPanel(BuildContext context) {
     // Show the advanced filter panel using showCupertinoModalPopup
-    // Note: DraggableScrollableSheet behavior needs custom implementation if required.
-    // This example shows a fixed-height modal popup.
     showCupertinoModalPopup(
       context: context,
       builder: (BuildContext context) {
-        // You might need to adjust the height or make it scrollable
-        // depending on the content of the filter panel.
+        // Use the AdvancedFilterPanel widget directly instead of creating a custom panel
         return SizedBox(
-          // Example: Set height to 80% of screen height
+          // Set height to 80% of screen height
           height: MediaQuery.of(context).size.height * 0.8,
-          child: _buildAdvancedFilterPanel(
-            ScrollController(),
-          ), // Pass a new ScrollController
+          child: AdvancedFilterPanel(onClose: () => Navigator.pop(context)),
         );
       },
     );
   }
 
   // Define the AdvancedFilterPanel
-  Widget _buildAdvancedFilterPanel(ScrollController scrollController) {
-    // Use CupertinoTheme for background color
-    final theme = CupertinoTheme.of(context);
-    return Container(
-      decoration: BoxDecoration(
-        color: theme.scaffoldBackgroundColor, // Use Cupertino theme color
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      child: Column(
-        children: [
-          // Handle bar
-          Container(
-            margin: const EdgeInsets.symmetric(vertical: 8),
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(
-              // Use withAlpha instead of deprecated withOpacity
-              color: CupertinoColors.systemGrey.withAlpha(
-                77,
-              ), // Approx 0.3 opacity
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
 
-          // Header
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Row(
-              children: [
-                const Text(
-                  'Advanced Filters',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-                const Spacer(),
-                // Replace IconButton with CupertinoButton
-                CupertinoButton(
-                  padding: EdgeInsets.zero,
-                  child: const Icon(CupertinoIcons.clear_thick),
-                  onPressed: () => Navigator.pop(context),
-                ),
-              ],
-            ),
-          ),
-
-          // Filter content - to be implemented
-          Expanded(
-            child: ListView(
-              controller: scrollController,
-              padding: const EdgeInsets.all(16.0),
-              children: const [
-                Text('Filter options will be implemented here'),
-                // TODO: Implement actual filter options
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
   // Method to show the filter selection action sheet
   void _showFilterActionSheet(BuildContext context, WidgetRef ref) {
