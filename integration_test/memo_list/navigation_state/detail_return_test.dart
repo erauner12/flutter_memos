@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // Add this for LogicalKeyboardKey
 import 'package:flutter_memos/main.dart' as app;
 import 'package:flutter_memos/widgets/memo_card.dart';
 import 'package:flutter_test/flutter_test.dart';

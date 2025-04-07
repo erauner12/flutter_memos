@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // Add this for LogicalKeyboardKey
 import 'package:flutter_memos/main.dart' as app;
 import 'package:flutter_memos/widgets/memo_card.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -157,7 +158,10 @@ void main() {
 
     // 4. Make a small edit
     final titleField = find.byType(TextField).first;
-    await tester.enterText(titleField, "${selectedMemo.title} (edited)");
+    await tester.enterText(
+      titleField,
+      "${selectedMemo.content} (edited)",
+    ); // Using the correct property 'content' instead of 'text'
 
     // 5. Save and return
     final saveButton = find.byType(ElevatedButton).first;
