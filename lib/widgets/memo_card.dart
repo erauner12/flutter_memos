@@ -97,6 +97,14 @@ class MemoCardState extends ConsumerState<MemoCard> {
           (BuildContext context) => CupertinoActionSheet(
             title: const Text('Memo Actions'), // Optional title
             actions: <CupertinoActionSheetAction>[
+              if (widget.onMoveToServer != null)
+                CupertinoActionSheetAction(
+                  child: const Text('Move to Server...'),
+                  onPressed: () {
+                    Navigator.pop(context); // Close the sheet
+                    widget.onMoveToServer!(); // Call the new callback
+                  },
+                ),
               if (widget.onTap != null)
                 CupertinoActionSheetAction(
                   child: const Text('View'),
@@ -127,17 +135,8 @@ class MemoCardState extends ConsumerState<MemoCard> {
                 CupertinoActionSheetAction(
                   child: const Text('Bump'),
                   onPressed: () {
-                Navigator.pop(context);
+                    Navigator.pop(context);
                     widget.onBump!();
-              },
-                ),
-              if (widget.onMoveToServer !=
-                  null) // Add check for the new callback
-                CupertinoActionSheetAction(
-                  child: const Text('Move to Server...'),
-                  onPressed: () {
-                    Navigator.pop(context); // Close the sheet
-                    widget.onMoveToServer!(); // Call the new callback
                   },
                 ),
               CupertinoActionSheetAction(
@@ -193,9 +192,9 @@ class MemoCardState extends ConsumerState<MemoCard> {
                 CupertinoActionSheetAction(
                   child: const Text('Hide'),
                   onPressed: () {
-                Navigator.pop(context);
+                    Navigator.pop(context);
                     widget.onHide!();
-              },
+                  },
                 ),
               if (widget.onArchive != null)
                 CupertinoActionSheetAction(
