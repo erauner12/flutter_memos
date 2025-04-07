@@ -77,10 +77,9 @@ void main() {
       ),
     );
 
-    // IMPORTANT: Pump only once initially to render the highlighted state.
-    await tester.pump();
-
     // Find the Card within the CommentCard
+    // Assertion should happen immediately after pumpWidget to catch the highlighted state
+    // before the post-frame callback resets it.
     final cardFinder = find.descendant(
       of: find.byType(CommentCard),
       matching: find.byType(Card),
