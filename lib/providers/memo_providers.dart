@@ -136,6 +136,7 @@ class MemosNotifier extends StateNotifier<MemosState> {
     fetchInitialPage();
   }
 
+  // Modified _fetchPage with raw API logging and conditional client-side filtering
   Future<void> _fetchPage({String? pageToken}) async {
     // Read current filters INSIDE the fetch method to get latest values
     final combinedFilter = _ref.read(combinedFilterProvider);
@@ -168,10 +169,10 @@ class MemosNotifier extends StateNotifier<MemosState> {
               ? tagFilter
               : FilterBuilder.and([finalFilter, tagFilter]);
     }
-
+  
     // Read status filter for potential client-side filtering (e.g., untagged)
     final statusFilter = _ref.read(statusFilterProvider);
-
+  
     if (kDebugMode) {
       print(
         '[MemosNotifier] Fetching page with filter: $finalFilter, state: $stateFilter, pageToken: ${pageToken ?? "null"}',
@@ -183,7 +184,7 @@ class MemosNotifier extends StateNotifier<MemosState> {
         '[MemosNotifier] Current state: ${state.memos.length} memos, isLoading=${state.isLoading}, isLoadingMore=${state.isLoadingMore}, hasReachedEnd=${state.hasReachedEnd}',
       );
     }
-
+  
     try {
       final response = await _apiService.listMemos(
         parent: 'users/1',
@@ -194,14 +195,27 @@ class MemosNotifier extends StateNotifier<MemosState> {
         pageSize: _pageSize,
         pageToken: pageToken,
       );
-
+  
+      // *** ADDED LOGGING ***
+      if (kDebugMode) {
+        print(
+          '[MemosNotifier] Raw API Response: ${response.memos.length} memos received. Next page token: ${response.nextPageToken ?? "null"}',
+        );
+        if (response.memos.isNotEmpty) {
+          print(
+            '[MemosNotifier] First received memo state: ${response.memos.first.state}',
+          );
+        }
+      }
+      // *** END ADDED LOGGING ***
+  
       // Sort client-side by updateTime and pinned status
       MemoUtils.sortByPinnedThenUpdateTime(response.memos);
-
+  
       var newMemos = response.memos;
       final nextPageToken = response.nextPageToken;
-
-      // Apply client-side filtering if needed (e.g., for 'untagged')
+  
+      // *** MODIFIED: Only apply client-side untagged filter if statusFilter is 'untagged' ***
       if (statusFilter == 'untagged' && newMemos.isNotEmpty) {
         newMemos =
             newMemos.where((memo) {
@@ -217,24 +231,27 @@ class MemosNotifier extends StateNotifier<MemosState> {
           );
         }
       }
-
+      // *** END MODIFICATION ***
+  
       // Determine if we've reached the end
       final hasReachedEnd =
           nextPageToken == null || nextPageToken.isEmpty || newMemos.isEmpty;
-
+  
       // Update total loaded count
       final newTotalLoaded =
           (pageToken == null)
               ? newMemos.length
               : state.totalLoaded + newMemos.length;
-
+  
       if (kDebugMode) {
-        print('[MemosNotifier] Fetched ${newMemos.length} new memos');
+        print(
+          '[MemosNotifier] Fetched ${newMemos.length} new memos (after potential client filter)',
+        );
         print('[MemosNotifier] nextPageToken: ${nextPageToken ?? "null"}');
         print('[MemosNotifier] hasReachedEnd: $hasReachedEnd');
         print('[MemosNotifier] totalLoaded: $newTotalLoaded');
       }
-
+  
       // De-duplicate memos if we somehow received duplicate IDs
       final List<Memo> resultMemos;
       if (pageToken == null) {
@@ -255,7 +272,7 @@ class MemosNotifier extends StateNotifier<MemosState> {
         resultMemos = mergedMemos.values.toList();
         MemoUtils.sortMemos(resultMemos, 'updateTime');
       }
-
+  
       state = state.copyWith(
         memos: resultMemos,
         nextPageToken: nextPageToken,
