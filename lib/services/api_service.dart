@@ -10,6 +10,7 @@ import 'package:flutter_memos/utils/env.dart';
 import 'package:flutter_memos/utils/filter_builder.dart';
 import 'package:flutter_memos/utils/memo_utils.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart'; // Add riverpod import
+import 'package:http/http.dart' as http; // Import http for Response
 
 // Placeholder provider for ApiService - replace with your actual provider definition
 final apiServiceProvider = Provider<ApiService>((ref) {
@@ -32,13 +33,13 @@ class PaginatedMemoResponse {
   List<Memo> where(bool Function(Memo) test) {
     return memos.where(test).toList();
   }
-  
+
   // Utility method to check if there are more pages
   bool get hasMorePages => nextPageToken != null && nextPageToken!.isNotEmpty;
 
   // Utility method to check if empty
   bool get isEmpty => memos.isEmpty;
-  
+
   // Optional: Factory constructor from JSON if needed
   // factory PaginatedMemoResponse.fromJson(Map<String, dynamic> json) { ... }
 }
@@ -58,17 +59,18 @@ class ApiService {
   // Getter for the base URL
   String get apiBaseUrl => _baseUrl;
 
-  // Configuration flags
-  static const bool CLIENT_SIDE_SORTING_ENABLED = true; // Always use client-side sorting
+  // Configuration flags (moved inside the class as static members)
+  static const bool clientSideSortingEnabled =
+      true; // Always use client-side sorting
   static bool verboseLogging = true; // Enable detailed logging
   static bool useFilterExpressions = true; // Enable CEL filter expressions
 
-  // For testing purposes
+  // For testing purposes (moved inside the class as static members)
   static List<String>? _lastServerOrder;
   static List<String> get lastServerOrder => _lastServerOrder ?? [];
 
-  // Document the sorting limitation and filter support
-  static const String SORTING_LIMITATION = """
+  // Document the sorting limitation and filter support (moved inside the class as static members)
+  static const String sortingLimitation = """
     NOTE: The Memos server doesn't fully support dynamic sort fields.
     The backend code uses specific boolean flags (OrderByUpdatedTs, OrderByTimeAsc)
     rather than a generic sort parameter. Client-side sorting is used as a reliable
@@ -111,66 +113,7 @@ class ApiService {
       rethrow;
     }
   }
-}
 
-/// HELPER METHODS
-
-// Helper to get an ApiClient configured for a specific server or the default one
-ApiClient _getApiClientForServer(ServerConfig? serverConfig) {
-  // Use default/active client if no override or if override matches active
-  if (serverConfig == null || (serverConfig.serverUrl == _baseUrl && serverConfig.authToken == _authToken)) {
-    if (verboseLogging && serverConfig != null) {
-       print('[API Helper] Using active client for server: ${serverConfig.name ?? serverConfig.id}');
-    }
-    return _apiClient;
-  }
-
-  // Create temporary client for the target server
-  if (verboseLogging) {
-    print('[API Helper] Creating temporary client for server: ${serverConfig.name ?? serverConfig.id}');
-  }
-  try {
-    String targetBaseUrl = serverConfig.serverUrl;
-    // Clean up the base URL (same logic as in _initializeClient)
-    if (targetBaseUrl.toLowerCase().contains('/api/v1')) {
-      final apiIndex = targetBaseUrl.toLowerCase().indexOf('/api/v1');
-      targetBaseUrl = targetBaseUrl.substring(0, apiIndex);
-    } else if (targetBaseUrl.toLowerCase().endsWith('/memos')) {
-      targetBaseUrl = targetBaseUrl.substring(0, targetBaseUrl.length - 6);
-    }
-    if (targetBaseUrl.endsWith('/')) {
-      targetBaseUrl = targetBaseUrl.substring(0, targetBaseUrl.length - 1);
-    }
-
-    return ApiClient(
-      basePath: targetBaseUrl,
-      authentication: HttpBearerAuth()..accessToken = serverConfig.authToken,
-    );
-  } catch (e) {
-     print('[API Helper] Error creating temporary client for ${serverConfig.name ?? serverConfig.id}: $e');
-     // Fallback to default client? Or throw? Throwing is safer.
-     throw Exception('Failed to create API client for target server ${serverConfig.name ?? serverConfig.id}: $e');
-  }
-}
-
-// Helper to get a MemoServiceApi instance for a specific server or the default one
-MemoServiceApi _getMemoApiForServer(ServerConfig? serverConfig) {
-   return MemoServiceApi(_getApiClientForServer(serverConfig));
-}
-
-// Helper to get a ResourceServiceApi instance for a specific server or the default one
-ResourceServiceApi _getResourceApiForServer(ServerConfig? serverConfig) {
-   return ResourceServiceApi(_getApiClientForServer(serverConfig));
-}
-
-
-String _formatResourceName(String id, String resourceType) {
-  // Ensure ID doesn't already have the prefix, preventing "memos/memos/123"
-  if (id.startsWith('$resourceType/')) {
-     return id;
-  }
-  return '$resourceType/$id';
-}
   /// Initialize the API client with the given base URL and auth token
   void _initializeClient(String baseUrl, String authToken) {
     try {
@@ -370,6 +313,15 @@ String _formatResourceName(String id, String resourceType) {
         );
       }
 
+      // Handle potential null response from the API
+      if (response == null) {
+        if (verboseLogging) {
+          print('[API-DEBUG] Server returned null response for listMemos.');
+        }
+        return PaginatedMemoResponse(memos: [], nextPageToken: null);
+      }
+
+      // Safely access memos and nextPageToken now that response is not null
       final memos = response.memos.map(_convertApiMemoToAppMemo).toList();
       final nextPageToken = response.nextPageToken; // Extract next page token
 
@@ -402,7 +354,7 @@ String _formatResourceName(String id, String resourceType) {
       }
 
       // Client-side sorting remains important, especially if API sorting is limited
-      if (CLIENT_SIDE_SORTING_ENABLED) {
+      if (clientSideSortingEnabled) {
         final preSortOrder = memos.map((memo) => memo.id).toList();
         MemoUtils.sortMemos(memos, sort);
         final postSortOrder = memos.map((memo) => memo.id).toList();
@@ -438,22 +390,30 @@ String _formatResourceName(String id, String resourceType) {
 
   /// Get a single memo by ID, optionally targeting a specific server
   Future<Memo> getMemo(String id, {ServerConfig? targetServerOverride}) async {
-    final serverIdForLog = targetServerOverride?.name ?? targetServerOverride?.id ?? 'active';
+    final serverIdForLog =
+        targetServerOverride?.name ?? targetServerOverride?.id ?? 'active';
     try {
       final memoApi = _getMemoApiForServer(targetServerOverride); // Use helper
       final formattedId = _formatResourceName(id, 'memos');
-      if (verboseLogging) print('[API getMemo] Getting memo $formattedId from server $serverIdForLog');
-  
+      if (verboseLogging)
+        print(
+          '[API getMemo] Getting memo $formattedId from server $serverIdForLog',
+        );
+
       final apiMemo = await memoApi.memoServiceGetMemo(formattedId);
-  
+
       if (apiMemo == null) {
         throw Exception('Memo $id not found on server $serverIdForLog');
       }
-  
+
       return _convertApiMemoToAppMemo(apiMemo);
     } catch (e) {
-      print('[API getMemo] Error getting memo $id from server $serverIdForLog: $e');
-      throw Exception('Failed to load memo $id from server $serverIdForLog: $e');
+      print(
+        '[API getMemo] Error getting memo $id from server $serverIdForLog: $e',
+      );
+      throw Exception(
+        'Failed to load memo $id from server $serverIdForLog: $e',
+      );
     }
   }
 
@@ -464,8 +424,11 @@ String _formatResourceName(String id, String resourceType) {
   }) async {
     // Determine which API instance and server identifier to use
     final memoApiToUse = _getMemoApiForServer(targetServerOverride);
-    final serverIdentifier = targetServerOverride?.name ?? targetServerOverride?.id ?? 'active server';
-  
+    final serverIdentifier =
+        targetServerOverride?.name ??
+        targetServerOverride?.id ??
+        'active server';
+
     try {
       final apiMemo = Apiv1Memo(
         content: memo.content,
@@ -474,20 +437,22 @@ String _formatResourceName(String id, String resourceType) {
         visibility: _getApiVisibility(memo.visibility),
         // TODO: Handle resources/relations if needed for creation
       );
-  
+
       if (verboseLogging) {
-        print('[API createMemo] Sending createMemo request to $serverIdentifier');
+        print(
+          '[API createMemo] Sending createMemo request to $serverIdentifier',
+        );
       }
-  
+
       // Use the determined memoApiToUse instance
       final response = await memoApiToUse.memoServiceCreateMemo(apiMemo);
-  
+
       if (response == null) {
         throw Exception(
           'Failed to create memo: No response from server $serverIdentifier',
         );
       }
-  
+
       final createdId = _extractIdFromName(response.name ?? "");
       if (verboseLogging) {
         print(
@@ -507,23 +472,31 @@ String _formatResourceName(String id, String resourceType) {
   }
 
   /// Update an existing memo, optionally targeting a specific server
-  Future<Memo> updateMemo(String id, Memo memo, {ServerConfig? targetServerOverride}) async {
-    final serverIdForLog = targetServerOverride?.name ?? targetServerOverride?.id ?? 'active';
+  Future<Memo> updateMemo(
+    String id,
+    Memo memo, {
+    ServerConfig? targetServerOverride,
+  }) async {
+    final serverIdForLog =
+        targetServerOverride?.name ?? targetServerOverride?.id ?? 'active';
     try {
       final memoApi = _getMemoApiForServer(targetServerOverride); // Use helper
       final formattedId = _formatResourceName(id, 'memos');
-      if (verboseLogging) print('[API updateMemo] Updating memo $formattedId on server $serverIdForLog');
-  
+      if (verboseLogging)
+        print(
+          '[API updateMemo] Updating memo $formattedId on server $serverIdForLog',
+        );
+
       // Use the createTime from the memo object passed in, which should be the original.
       final originalCreateTime = memo.createTime;
       final clientNow = DateTime.now().toUtc(); // Get client's current time
-  
+
       if (verboseLogging) {
         print(
           '[API updateMemo] Sending client time as updateTime: ${clientNow.toIso8601String()}',
         );
       }
-  
+
       final updatePayload = TheMemoToUpdateTheNameFieldIsRequired(
         content: memo.content,
         pinned: memo.pinned,
@@ -533,19 +506,21 @@ String _formatResourceName(String id, String resourceType) {
         updateTime: clientNow,
         // createTime: null, // Explicitly not sending createTime
       );
-  
+
       final response = await memoApi.memoServiceUpdateMemo(
         formattedId,
         updatePayload,
       );
-  
+
       if (response == null) {
-        throw Exception('Failed to update memo $id on $serverIdForLog: No response from server');
+        throw Exception(
+          'Failed to update memo $id on $serverIdForLog: No response from server',
+        );
       }
-  
+
       // Convert the API response to our app model
       Memo updatedAppMemo = _convertApiMemoToAppMemo(response);
-  
+
       // Check if the server returned an incorrect epoch createTime
       final responseCreateTimeStr = response.createTime?.toIso8601String();
       if (responseCreateTimeStr != null &&
@@ -562,7 +537,7 @@ String _formatResourceName(String id, String resourceType) {
           createTime: originalCreateTime,
         );
       }
-  
+
       return updatedAppMemo;
     } catch (e) {
       print('[API updateMemo] Error updating memo $id on $serverIdForLog: $e');
@@ -571,32 +546,50 @@ String _formatResourceName(String id, String resourceType) {
   }
 
   /// Delete a memo, optionally targeting a specific server
-  Future<void> deleteMemo(String id, {ServerConfig? targetServerOverride}) async {
-    final serverIdForLog = targetServerOverride?.name ?? targetServerOverride?.id ?? 'active';
+  Future<void> deleteMemo(
+    String id, {
+    ServerConfig? targetServerOverride,
+  }) async {
+    final serverIdForLog =
+        targetServerOverride?.name ?? targetServerOverride?.id ?? 'active';
     try {
       final memoApi = _getMemoApiForServer(targetServerOverride); // Use helper
       final formattedId = _formatResourceName(id, 'memos');
-      if (verboseLogging) print('[API deleteMemo] Deleting memo $formattedId from server $serverIdForLog');
-  
-      final response = await memoApi.memoServiceDeleteMemoWithHttpInfo(formattedId);
-  
+      if (verboseLogging)
+        print(
+          '[API deleteMemo] Deleting memo $formattedId from server $serverIdForLog',
+        );
+
+      final response = await memoApi.memoServiceDeleteMemoWithHttpInfo(
+        formattedId,
+      );
+
       // Check for success status codes
       if (response.statusCode >= 200 && response.statusCode < 300) {
-         if (verboseLogging) print('[API deleteMemo] Successfully deleted memo $id from server $serverIdForLog');
+        if (verboseLogging)
+          print(
+            '[API deleteMemo] Successfully deleted memo $id from server $serverIdForLog',
+          );
         return;
       } else {
         // Handle error status codes
         final errorBody = await _decodeBodyBytes(response);
-        print('[API deleteMemo] Error deleting memo $id from server $serverIdForLog: HTTP ${response.statusCode}, Body: $errorBody');
+        print(
+          '[API deleteMemo] Error deleting memo $id from server $serverIdForLog: HTTP ${response.statusCode}, Body: $errorBody',
+        );
         throw ApiException(response.statusCode, errorBody);
       }
     } catch (e) {
       // Catch other potential errors (network issues, etc.)
-      print('[API deleteMemo] Error deleting memo $id from server $serverIdForLog: $e');
+      print(
+        '[API deleteMemo] Error deleting memo $id from server $serverIdForLog: $e',
+      );
       if (e is ApiException) {
         rethrow;
       }
-      throw Exception('Failed to delete memo $id from server $serverIdForLog: $e');
+      throw Exception(
+        'Failed to delete memo $id from server $serverIdForLog: $e',
+      );
     }
   }
 
@@ -652,26 +645,43 @@ String _formatResourceName(String id, String resourceType) {
   // COMMENT OPERATIONS
 
   /// List comments for a memo, optionally targeting a specific server
-  Future<List<Comment>> listMemoComments(String memoId, {ServerConfig? targetServerOverride}) async {
-    final serverIdForLog = targetServerOverride?.name ?? targetServerOverride?.id ?? 'active';
+  Future<List<Comment>> listMemoComments(
+    String memoId, {
+    ServerConfig? targetServerOverride,
+  }) async {
+    final serverIdForLog =
+        targetServerOverride?.name ?? targetServerOverride?.id ?? 'active';
     try {
       final memoApi = _getMemoApiForServer(targetServerOverride); // Use helper
       final formattedId = _formatResourceName(memoId, 'memos');
-      if (verboseLogging) print('[API listMemoComments] Listing comments for memo $formattedId from server $serverIdForLog');
-  
+      if (verboseLogging)
+        print(
+          '[API listMemoComments] Listing comments for memo $formattedId from server $serverIdForLog',
+        );
+
       final response = await memoApi.memoServiceListMemoComments(formattedId);
-  
+
       if (response == null) {
-        if (verboseLogging) print('[API listMemoComments] No comments found for memo $memoId on server $serverIdForLog.');
+        if (verboseLogging)
+          print(
+            '[API listMemoComments] No comments found for memo $memoId on server $serverIdForLog.',
+          );
         return [];
       }
-  
+
       final comments = _parseCommentsFromApiResponse(response);
-      if (verboseLogging) print('[API listMemoComments] Found ${comments.length} comments for memo $memoId on server $serverIdForLog.');
+      if (verboseLogging)
+        print(
+          '[API listMemoComments] Found ${comments.length} comments for memo $memoId on server $serverIdForLog.',
+        );
       return comments;
     } catch (e) {
-      print('[API listMemoComments] Error listing comments for memo $memoId from server $serverIdForLog: $e');
-      throw Exception('Failed to load comments for memo $memoId from server $serverIdForLog: $e');
+      print(
+        '[API listMemoComments] Error listing comments for memo $memoId from server $serverIdForLog: $e',
+      );
+      throw Exception(
+        'Failed to load comments for memo $memoId from server $serverIdForLog: $e',
+      );
     }
   }
 
@@ -682,11 +692,12 @@ String _formatResourceName(String id, String resourceType) {
     List<V1Resource>? resources, // Add optional resources parameter
     ServerConfig? targetServerOverride, // Add target server override
   }) async {
-    final serverIdForLog = targetServerOverride?.name ?? targetServerOverride?.id ?? 'active';
+    final serverIdForLog =
+        targetServerOverride?.name ?? targetServerOverride?.id ?? 'active';
     try {
       final memoApi = _getMemoApiForServer(targetServerOverride); // Use helper
       final formattedMemoId = _formatResourceName(memoId, 'memos');
-  
+
       final apiMemo = Apiv1Memo(
         content: comment.content,
         // Creator might be implicitly set by the server based on the auth token
@@ -696,147 +707,249 @@ String _formatResourceName(String id, String resourceType) {
         resources: resources ?? [], // Include resources in the payload
         // Visibility might be inherited or default
       );
-  
+
       if (verboseLogging) {
         print(
           '[API createMemoComment] Creating comment for memo $formattedMemoId on server $serverIdForLog with ${resources?.length ?? 0} resources.',
         );
       }
-  
+
       final response = await memoApi.memoServiceCreateMemoComment(
         formattedMemoId,
         apiMemo,
       );
-  
+
       if (response == null) {
-        throw Exception('Failed to create comment on server $serverIdForLog: No response from server');
+        throw Exception(
+          'Failed to create comment on server $serverIdForLog: No response from server',
+        );
       }
-  
+
       final createdCommentId = _extractIdFromName(response.name ?? "");
       if (verboseLogging) {
         print(
-          '[API createMemoComment] Comment created successfully on server $serverIdForLog with ID: $createdCommentId',
+          '[API createMemoComment] Comment created successfully on $serverIdForLog with ID: $createdCommentId',
         );
       }
-  
+
       return _convertApiMemoToComment(response);
     } catch (e) {
-      print('[API createMemoComment] Error creating comment for memo $memoId on server $serverIdForLog: $e');
+      print(
+        '[API createMemoComment] Error creating comment for memo $memoId on server $serverIdForLog: $e',
+      );
       if (e is ApiException) {
         print('[API createMemoComment] ApiException details: ${e.message}');
       }
-      throw Exception('Failed to create comment for memo $memoId on server $serverIdForLog: $e');
-    }
-  }
-      throw Exception('Failed to create comment: $e');
+      throw Exception(
+        'Failed to create comment for memo $memoId on server $serverIdForLog: $e',
+      );
     }
   }
 
   /// Get a single comment, optionally targeting a specific server
   /// commentId should be the child memo's ID without 'memos/' prefix
-  Future<Comment> getMemoComment(String commentId, {ServerConfig? targetServerOverride}) async {
-    final serverIdForLog = targetServerOverride?.name ?? targetServerOverride?.id ?? 'active';
+  Future<Comment> getMemoComment(
+    String commentId, {
+    ServerConfig? targetServerOverride,
+  }) async {
+    final serverIdForLog =
+        targetServerOverride?.name ?? targetServerOverride?.id ?? 'active';
     try {
       final memoApi = _getMemoApiForServer(targetServerOverride); // Use helper
       // Process combined IDs in format "memoId/commentId" if needed, extracting only the comment's ID
-      final String childId = commentId.contains('/') ? commentId.split('/').last : commentId;
+      final String childId =
+          commentId.contains('/') ? commentId.split('/').last : commentId;
       final formattedId = _formatResourceName(childId, 'memos');
-  
+
       if (verboseLogging) {
-        print('[API getMemoComment] Getting comment $formattedId from server $serverIdForLog');
+        print(
+          '[API getMemoComment] Getting comment $formattedId from server $serverIdForLog',
+        );
       }
-  
+
       final response = await memoApi.memoServiceGetMemo(formattedId);
-  
+
       if (response == null) {
         throw Exception('Comment $childId not found on server $serverIdForLog');
       }
-  
+
       return _convertApiMemoToComment(response);
     } catch (e) {
-      print('[API getMemoComment] Error getting comment $commentId from server $serverIdForLog: $e');
-      throw Exception('Failed to load comment $commentId from server $serverIdForLog: $e');
+      print(
+        '[API getMemoComment] Error getting comment $commentId from server $serverIdForLog: $e',
+      );
+      throw Exception(
+        'Failed to load comment $commentId from server $serverIdForLog: $e',
+      );
     }
   }
 
   /// Update a comment, optionally targeting a specific server
   /// commentId should be the child memo's ID (can be in the format "memoId/commentId")
-  Future<Comment> updateMemoComment(String commentId, Comment comment, {ServerConfig? targetServerOverride}) async {
-    final serverIdForLog = targetServerOverride?.name ?? targetServerOverride?.id ?? 'active';
+  Future<Comment> updateMemoComment(
+    String commentId,
+    Comment comment, {
+    ServerConfig? targetServerOverride,
+  }) async {
+    final serverIdForLog =
+        targetServerOverride?.name ?? targetServerOverride?.id ?? 'active';
     try {
       final memoApi = _getMemoApiForServer(targetServerOverride); // Use helper
       // Process combined IDs in format "memoId/commentId" if needed
-      final String childId = commentId.contains('/') ? commentId.split('/').last : commentId;
+      final String childId =
+          commentId.contains('/') ? commentId.split('/').last : commentId;
       final formattedId = _formatResourceName(childId, 'memos');
-  
+
       if (verboseLogging) {
-        print('[API updateMemoComment] Updating comment $formattedId on server $serverIdForLog');
+        print(
+          '[API updateMemoComment] Updating comment $formattedId on server $serverIdForLog',
+        );
       }
-  
+
       final updateMemo = TheMemoToUpdateTheNameFieldIsRequired(
         content: comment.content,
         pinned: comment.pinned,
         state: _getApiStateFromCommentState(comment.state),
         // Add other fields if comments allow updating them (e.g., visibility)
       );
-  
+
       final response = await memoApi.memoServiceUpdateMemo(
         formattedId,
         updateMemo,
       );
-  
+
       if (response == null) {
-        throw Exception('Failed to update comment $childId on server $serverIdForLog: No response from server');
+        throw Exception(
+          'Failed to update comment $childId on server $serverIdForLog: No response from server',
+        );
       }
-  
+
       return _convertApiMemoToComment(response);
     } catch (e) {
-      print('[API updateMemoComment] Error updating comment $commentId on server $serverIdForLog: $e');
-      throw Exception('Failed to update comment $commentId on server $serverIdForLog: $e');
+      print(
+        '[API updateMemoComment] Error updating comment $commentId on server $serverIdForLog: $e',
+      );
+      throw Exception(
+        'Failed to update comment $commentId on server $serverIdForLog: $e',
+      );
     }
   }
 
   /// Delete a comment, optionally targeting a specific server
   /// commentId should be the child memo's ID (can be in the format "memoId/commentId")
-  Future<void> deleteMemoComment(String memoId, String commentId, {ServerConfig? targetServerOverride}) async {
-    final serverIdForLog = targetServerOverride?.name ?? targetServerOverride?.id ?? 'active';
+  Future<void> deleteMemoComment(
+    String memoId,
+    String commentId, {
+    ServerConfig? targetServerOverride,
+  }) async {
+    final serverIdForLog =
+        targetServerOverride?.name ?? targetServerOverride?.id ?? 'active';
     try {
       final memoApi = _getMemoApiForServer(targetServerOverride); // Use helper
       // Process combined IDs in format "memoId/commentId" if needed
-      final String childId = commentId.contains('/') ? commentId.split('/').last : commentId;
+      final String childId =
+          commentId.contains('/') ? commentId.split('/').last : commentId;
       final formattedId = _formatResourceName(childId, 'memos');
-  
+
       if (verboseLogging) {
-        print('[API deleteMemoComment] Deleting comment $formattedId (from memo: $memoId) on server $serverIdForLog');
+        print(
+          '[API deleteMemoComment] Deleting comment $formattedId (from memo: $memoId) on server $serverIdForLog',
+        );
       }
-  
-      final response = await memoApi.memoServiceDeleteMemoWithHttpInfo(formattedId);
-  
+
+      final response = await memoApi.memoServiceDeleteMemoWithHttpInfo(
+        formattedId,
+      );
+
       // Check for success status codes
       if (response.statusCode >= 200 && response.statusCode < 300) {
         if (verboseLogging) {
-          print('[API deleteMemoComment] Successfully deleted comment $childId from server $serverIdForLog');
+          print(
+            '[API deleteMemoComment] Successfully deleted comment $childId from server $serverIdForLog',
+          );
         }
         return;
       } else {
         // Handle error status codes
         final errorBody = await _decodeBodyBytes(response);
-        print('[API deleteMemoComment] Error deleting comment $childId from server $serverIdForLog: HTTP ${response.statusCode}, Body: $errorBody');
+        print(
+          '[API deleteMemoComment] Error deleting comment $childId from server $serverIdForLog: HTTP ${response.statusCode}, Body: $errorBody',
+        );
         throw ApiException(response.statusCode, errorBody);
       }
     } catch (e) {
-      print('[API deleteMemoComment] Error deleting comment $commentId (memo $memoId) on server $serverIdForLog: $e');
+      print(
+        '[API deleteMemoComment] Error deleting comment $commentId (memo $memoId) on server $serverIdForLog: $e',
+      );
       if (e is ApiException) {
         rethrow; // Keep the specific API exception
       }
-      throw Exception('Failed to delete comment $commentId (memo $memoId) on server $serverIdForLog: $e');
+      throw Exception(
+        'Failed to delete comment $commentId (memo $memoId) on server $serverIdForLog: $e',
+      );
     }
   }
 
-  /// HELPER METHODS
+  /// HELPER METHODS (moved inside the class)
+
+  // Helper to get an ApiClient configured for a specific server or the default one
+  ApiClient _getApiClientForServer(ServerConfig? serverConfig) {
+    // Use default/active client if no override or if override matches active
+    if (serverConfig == null ||
+        (serverConfig.serverUrl == _baseUrl &&
+            serverConfig.authToken == _authToken)) {
+      if (verboseLogging && serverConfig != null) {
+        print(
+          '[API Helper] Using active client for server: ${serverConfig.name ?? serverConfig.id}',
+        );
+      }
+      return _apiClient;
+    }
+
+    // Create temporary client for the target server
+    if (verboseLogging) {
+      print(
+        '[API Helper] Creating temporary client for server: ${serverConfig.name ?? serverConfig.id}',
+      );
+    }
+    try {
+      String targetBaseUrl = serverConfig.serverUrl;
+      // Clean up the base URL (same logic as in _initializeClient)
+      if (targetBaseUrl.toLowerCase().contains('/api/v1')) {
+        final apiIndex = targetBaseUrl.toLowerCase().indexOf('/api/v1');
+        targetBaseUrl = targetBaseUrl.substring(0, apiIndex);
+      } else if (targetBaseUrl.toLowerCase().endsWith('/memos')) {
+        targetBaseUrl = targetBaseUrl.substring(0, targetBaseUrl.length - 6);
+      }
+      if (targetBaseUrl.endsWith('/')) {
+        targetBaseUrl = targetBaseUrl.substring(0, targetBaseUrl.length - 1);
+      }
+
+      return ApiClient(
+        basePath: targetBaseUrl,
+        authentication: HttpBearerAuth()..accessToken = serverConfig.authToken,
+      );
+    } catch (e) {
+      print(
+        '[API Helper] Error creating temporary client for ${serverConfig.name ?? serverConfig.id}: $e',
+      );
+      // Fallback to default client? Or throw? Throwing is safer.
+      throw Exception(
+        'Failed to create API client for target server ${serverConfig.name ?? serverConfig.id}: $e',
+      );
+    }
+  }
+
+  // Helper to get a MemoServiceApi instance for a specific server or the default one
+  MemoServiceApi _getMemoApiForServer(ServerConfig? serverConfig) {
+    return MemoServiceApi(_getApiClientForServer(serverConfig));
+  }
 
   String _formatResourceName(String id, String resourceType) {
-    return id.startsWith('$resourceType/') ? id : '$resourceType/$id';
+    if (id.startsWith('$resourceType/')) {
+      return id;
+    }
+    return '$resourceType/$id';
   }
 
   String _extractIdFromName(String name) {
@@ -934,13 +1047,13 @@ String _formatResourceName(String id, String resourceType) {
 
   Comment _convertApiMemoToComment(Apiv1Memo apiMemo) {
     final commentId = _extractIdFromName(apiMemo.name ?? '');
-  
+
     // Ensure createTime is handled correctly (convert DateTime? to int)
     final createTimeMillis =
         apiMemo.createTime?.millisecondsSinceEpoch ??
         DateTime.now().millisecondsSinceEpoch;
     final updateTimeMillis = apiMemo.updateTime?.millisecondsSinceEpoch;
-  
+
     return Comment(
       id: commentId,
       content: apiMemo.content ?? '',
@@ -971,7 +1084,33 @@ String _formatResourceName(String id, String resourceType) {
     return true;
   }
 
-  Future<void> setMemoRelations(String memoId, List<MemoRelation> relations) async {
+  // Helper function to decode response body bytes (moved inside)
+  Future<String> _decodeBodyBytes(http.Response response) async {
+    // Handle potential gzip encoding
+    if (response.headers['content-encoding'] == 'gzip') {
+      try {
+        // Assuming GZipCodec is available or imported
+        // final decodedBytes = GZipCodec().decode(response.bodyBytes);
+        // return utf8.decode(decodedBytes);
+        // Placeholder if GZipCodec is not readily available:
+        return utf8.decode(
+          response.bodyBytes,
+          allowMalformed: true,
+        ); // Less ideal
+      } catch (e) {
+        print('[API Decode Error] Failed to decode gzipped response: $e');
+        // Fallback to standard decoding, might be garbled
+        return utf8.decode(response.bodyBytes, allowMalformed: true);
+      }
+    }
+    // Standard UTF-8 decoding
+    return utf8.decode(response.bodyBytes, allowMalformed: true);
+  }
+
+  Future<void> setMemoRelations(
+    String memoId,
+    List<MemoRelation> relations,
+  ) async {
     try {
       final formattedId = _formatResourceName(memoId, 'memos');
 
@@ -998,7 +1137,9 @@ String _formatResourceName(String id, String resourceType) {
       }
 
       if (verboseLogging) {
-        print('[API] Prepared ${apiRelations.length} relations for memo: $memoId');
+        print(
+          '[API] Prepared ${apiRelations.length} relations for memo: $memoId',
+        );
       }
 
       final requestBody = MemoServiceSetMemoRelationsBody(
