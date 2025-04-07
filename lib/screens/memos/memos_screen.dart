@@ -3,8 +3,10 @@ import 'package:flutter/foundation.dart';
 // Keep specific framework imports needed
 import 'package:flutter/services.dart'; // Add import for keyboard events
 import 'package:flutter_memos/models/memo.dart';
+import 'package:flutter_memos/models/server_config.dart'; // Import ServerConfig
 import 'package:flutter_memos/providers/filter_providers.dart';
 import 'package:flutter_memos/providers/memo_providers.dart';
+import 'package:flutter_memos/providers/server_config_provider.dart'; // Import server config provider
 import 'package:flutter_memos/providers/ui_providers.dart'
     as ui_providers; // Add import
 // Import MemosBody
@@ -307,58 +309,62 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
                 selectedIds.length,
               ) // Use the new Cupertino Nav Bar
               : CupertinoNavigationBar(
-                transitionBetweenRoutes:
-                    false, // Disable default hero animation
-                middle: Text('Memos (${currentFilter.toUpperCase()})'),
-                // Combine actions into the trailing widget
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Multi-select button
-                    CupertinoButton(
-                      padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                      minSize: 0,
-                      onPressed:
-                          () =>
-                              ref.read(
-                                ui_providers.toggleMemoMultiSelectModeProvider,
-                              )(),
-                      child: const Icon(
-                        CupertinoIcons.checkmark_seal,
-                      ), // Example icon
-                    ),
-                    // Advanced filter button
-                    CupertinoButton(
-                      padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                      minSize: 0,
-                      onPressed: () => _showAdvancedFilterPanel(context),
-                      child: const Icon(CupertinoIcons.tuningfork),
-                    ),
-                    // Filter dropdown (Keep Material for now, replace later)
-                    _buildFilterButton(),
-                    // Create new memo button
-                    CupertinoButton(
-                      padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                      minSize: 0,
-                      onPressed: () {
-                        // Use the root navigator to push the route
-                        Navigator.of(
-                          context,
-                          rootNavigator: true,
-                        ).pushNamed('/new-memo').then((_) {
-                          // Refresh after returning from new memo screen
-                          ref.read(memosNotifierProvider.notifier).refresh();
-                        });
-                      },
-                      child: const Icon(CupertinoIcons.add),
-                    ),
-                  ],
-                ),
-                // Search bar needs a different approach in Cupertino.
-                // Option 1: Place it below the Nav Bar using a Column in the body.
-                // Option 2: Use CupertinoSearchTextField (requires more integration).
-                // Let's go with Option 1 for now.
+              transitionBetweenRoutes:
+                  false, // Disable default hero animation
+              // Add Server Switcher to leading
+              leading: _buildServerSwitcherButton(),
+              // Adjust middle text if needed, or keep as is
+              middle: Text('Memos (${currentFilter.toUpperCase()})'),
+              // Combine actions into the trailing widget
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Multi-select button
+                  CupertinoButton(
+                    padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                    minSize: 0,
+                    onPressed:
+                        () =>
+                            ref.read(
+                              ui_providers.toggleMemoMultiSelectModeProvider,
+                            )(),
+                    child: const Icon(
+                      CupertinoIcons.checkmark_seal,
+                    ), // Example icon
+                  ),
+                  // Advanced filter button
+                  CupertinoButton(
+                    padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                    minSize: 0,
+                    onPressed: () => _showAdvancedFilterPanel(context),
+                    child: const Icon(CupertinoIcons.tuningfork),
+                  ),
+                  // Filter dropdown (Keep Material for now, replace later)
+                  _buildFilterButton(),
+                  // Create new memo button
+                  CupertinoButton(
+                    padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                    minSize: 0,
+                    onPressed: () {
+                      // Use the root navigator to push the route
+                      Navigator.of(
+                        context,
+                        rootNavigator: true,
+                      ).pushNamed('/new-memo').then((_) {
+                        // Refresh after returning from new memo screen
+                        // No longer needed here, MemosNotifier should refresh automatically
+                        // ref.read(memosNotifierProvider.notifier).refresh();
+                      });
+                    },
+                    child: const Icon(CupertinoIcons.add),
+                  ),
+                ],
               ),
+              // Search bar needs a different approach in Cupertino.
+              // Option 1: Place it below the Nav Bar using a Column in the body.
+              // Option 2: Use CupertinoSearchTextField (requires more integration).
+              // Let's go with Option 1 for now.
+            )
       child: SafeArea(
         // Add SafeArea
         child: Focus(
@@ -542,6 +548,95 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
     );
   }
 
+  // Method to build the server switcher button
+  Widget _buildServerSwitcherButton() {
+    final activeServer = ref.watch(activeServerConfigProvider);
+    final serverName = activeServer?.name ?? activeServer?.serverUrl ?? 'No Server';
+    final truncatedName = serverName.length > 15 ? '${serverName.substring(0, 12)}...' : serverName;
+
+    return CupertinoButton(
+      padding: const EdgeInsets.only(left: 8.0), // Adjust padding as needed
+      onPressed: () => _showServerSelectionSheet(context, ref),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(CupertinoIcons.square_stack_3d_down_right, size: 20), // Example icon
+          const SizedBox(width: 4),
+          Text(
+            truncatedName,
+            style: const TextStyle(fontSize: 14), // Adjust style as needed
+            overflow: TextOverflow.ellipsis,
+          ),
+          const Icon(CupertinoIcons.chevron_down, size: 14),
+        ],
+      ),
+    );
+  }
+
+  // Method to show the server selection action sheet
+  void _showServerSelectionSheet(BuildContext context, WidgetRef ref) {
+    final multiServerState = ref.read(multiServerConfigProvider);
+    final servers = multiServerState.servers;
+    final activeServerId = multiServerState.activeServerId;
+    final notifier = ref.read(multiServerConfigProvider.notifier);
+
+    if (servers.isEmpty) {
+      // Optionally show a message or navigate to settings
+      showCupertinoDialog(
+        context: context,
+        builder: (context) => CupertinoAlertDialog(
+          title: const Text('No Servers'),
+          content: const Text('Please add a server configuration in Settings.'),
+          actions: [
+            CupertinoDialogAction(
+              child: const Text('Settings'),
+              onPressed: () {
+                Navigator.pop(context); // Close dialog
+                Navigator.of(context, rootNavigator: true).pushNamed('/settings');
+              },
+            ),
+            CupertinoDialogAction(
+              isDefaultAction: true,
+              child: const Text('OK'),
+              onPressed: () => Navigator.pop(context),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    showCupertinoModalPopup<void>(
+      context: context,
+      builder: (BuildContext context) => CupertinoActionSheet(
+        title: const Text('Switch Active Server'),
+        actions: servers.map((server) {
+          final bool isActive = server.id == activeServerId;
+          return CupertinoActionSheetAction(
+            isDefaultAction: isActive, // Highlight the active server
+            onPressed: () {
+              if (!isActive) {
+                if (kDebugMode) {
+                  print('[MemosScreen] Setting active server to: ${server.name ?? server.id}');
+                }
+                notifier.setActiveServer(server.id);
+                // MemosNotifier should auto-refresh due to dependency on apiServiceProvider
+              }
+              Navigator.pop(context); // Close the action sheet
+            },
+            child: Text(server.name ?? server.serverUrl),
+          );
+        }).toList(),
+        cancelButton: CupertinoActionSheetAction(
+          child: const Text('Cancel'),
+          onPressed: () {
+            Navigator.pop(context);
+          },
+        ),
+      ),
+    );
+  }
+
   // Build the search bar widget
   Widget _buildSearchBar() {
     final searchQuery = ref.watch(searchQueryProvider);
@@ -564,6 +659,40 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
       ),
       // prefixIcon and suffixIcon are built-in
       onChanged: (value) {
+        // Update the search query provider as user types
+        ref.read(searchQueryProvider.notifier).state = value;
+
+        // If value is non-empty and we have local search disabled, we might want
+        // to trigger a server search after debouncing
+        final isLocalSearch = ref.read(localSearchEnabledProvider);
+        if (!isLocalSearch && value.isNotEmpty) {
+          // In a real app, you'd add debouncing logic here
+          // For now, we'll refresh immediately when local search is disabled
+          ref.read(memosNotifierProvider.notifier).refresh();
+        }
+      },
+    );
+  }
+    final searchQuery = ref.watch(searchQueryProvider);
+    final TextEditingController controller = TextEditingController(
+      text: searchQuery,
+    );
+    controller.selection = TextSelection.fromPosition(
+      TextPosition(offset = controller.text.length),
+    ); // Place cursor at the end
+
+    // Use CupertinoSearchTextField for a native look
+    return CupertinoSearchTextField(
+      controller = controller,
+      placeholder = 'Search memos...',
+      // Style based on theme
+      style = TextStyle(color: CupertinoColors.label.resolveFrom(context)),
+      decoration = BoxDecoration(
+        color: CupertinoColors.systemFill.resolveFrom(context),
+        borderRadius: BorderRadius.circular(10.0),
+      ),
+      // prefixIcon and suffixIcon are built-in
+      onChanged = (value) {
         // Update the search query provider as user types
         ref.read(searchQueryProvider.notifier).state = value;
 
