@@ -3,7 +3,7 @@ import 'package:flutter/foundation.dart';
 // Keep specific framework imports needed
 import 'package:flutter/services.dart'; // Add import for keyboard events
 import 'package:flutter_memos/models/memo.dart';
-import 'package:flutter_memos/models/server_config.dart'; // Import ServerConfig
+ // import 'package:flutter_memos/models/server_config.dart'; // Remove this import
 import 'package:flutter_memos/providers/filter_providers.dart';
 import 'package:flutter_memos/providers/memo_providers.dart';
 import 'package:flutter_memos/providers/server_config_provider.dart'; // Import server config provider

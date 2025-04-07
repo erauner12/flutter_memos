@@ -6,12 +6,26 @@ import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_memos/models/memo.dart'; // Import Memo model
 import 'package:flutter_memos/models/server_config.dart'; // Import ServerConfig
+import 'package:flutter_memos/providers/api_providers.dart' as api_providers;
+import 'package:flutter_memos/providers/memo_providers.dart'
+    as memo_providers; // Add alias
 import 'package:flutter_memos/providers/server_config_provider.dart'; // Import server config provider
 import 'package:flutter_memos/utils/keyboard_navigation.dart'; // Import the mixin
 import 'package:flutter_memos/utils/url_helper.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'new_memo_providers.dart';
+// Define the provider locally within the form file
+// Update the provider signature to accept targetServerOverride
+final createMemoProvider = Provider<
+  Future<Memo> Function(Memo memo, {ServerConfig? targetServerOverride})
+>((ref) {
+  final apiService = ref.watch(api_providers.apiServiceProvider);
+  // Return the function that takes the memo and the override
+  return (memo, {targetServerOverride}) => apiService.createMemo(
+    memo,
+    targetServerOverride: targetServerOverride, // Pass it here
+  );
+});
 
 class NewMemoForm extends ConsumerStatefulWidget {
   const NewMemoForm({super.key});
