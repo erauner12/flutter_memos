@@ -16,7 +16,7 @@ import 'package:mockito/mockito.dart';
 
 // Generate nice mock for ApiService
 @GenerateNiceMocks([MockSpec<ApiService>()])
-import 'widget_test.mocks.dart';
+import 'app_test.mocks.dart'; // Corrected import
 
 void main() {
   late MockApiService mockApiService;

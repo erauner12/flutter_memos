@@ -17,7 +17,8 @@ import 'package:mockito/mockito.dart';
 // This import will work after running build_runner
 import 'memo_detail_screen_test.mocks.dart';
 // Import the mock for UrlLauncherService
-import 'services/url_launcher_service_test.mocks.dart';
+// Corrected path to the mock file in the core/services directory
+import '../../../core/services/url_launcher_service_test.mocks.dart';
 
 
 // Mock for ApiService

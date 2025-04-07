@@ -8,7 +8,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart'; // Import mockito
 
 // Import mocks
-import '../services/url_launcher_service_test.mocks.dart'; // For MockUrlLauncherService
+// Corrected path to the mock file in the core/services directory
+import '../../../core/services/url_launcher_service_test.mocks.dart';
 
 
 // Helper to wrap widget for testing with MaterialApp and Scaffold

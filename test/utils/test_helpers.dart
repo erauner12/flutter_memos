@@ -3,7 +3,7 @@ import 'package:flutter_memos/services/api_service.dart';
 import 'package:mockito/mockito.dart';
 
 // Import the generated mock file
-import 'edit_memo_screen_test.mocks.dart';
+import '../features/memos/screens/edit_memo_screen_test.mocks.dart'; // Corrected path
 
 /// Configure common stubs for the mock ApiService
 void setupCommonApiServiceMocks(MockApiService mockApiService) {

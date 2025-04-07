@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import '../utils/test_debug.dart'; // Import the debug utilities
+import '../../../utils/test_debug.dart'; // Corrected path
 
 void main() {
   group('Basic Markdown Link Tests', () {

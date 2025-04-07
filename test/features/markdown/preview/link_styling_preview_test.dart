@@ -10,9 +10,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart'; // Import mockito
 
 // Import mocks
-import '../markdown_rendering_test.mocks.dart'; // For MockApiService
-import '../services/url_launcher_service_test.mocks.dart'; // For MockUrlLauncherService
-import '../utils/test_debug.dart';
+import '../rendering/markdown_rendering_test.mocks.dart'; // Corrected path
+import '../../../core/services/url_launcher_service_test.mocks.dart'; // Corrected path
+import '../../../utils/test_debug.dart'; // Corrected path
 
 // Helper function to find text in RichText widgets
 bool findTextInRichText(WidgetTester tester, String textToFind) {

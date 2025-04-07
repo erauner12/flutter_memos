@@ -49,10 +49,11 @@ void main() {
       print(
         '\n--- First 3 memos sorted by updateTime (after client-side sorting) ---',
       );
-      for (int i = 0; i < min(3, memosByUpdateTime.length); i++) {
-        print('[${i + 1}] ID: ${memosByUpdateTime[i].id}');
-        print('    updateTime: ${memosByUpdateTime[i].updateTime}');
-        // print('    createTime: ${memosByUpdateTime[i].createTime}'); // Removed createTime log
+      // Access the .memos list
+      for (int i = 0; i < min(3, memosByUpdateTime.memos.length); i++) {
+        print('[${i + 1}] ID: ${memosByUpdateTime.memos[i].id}');
+        print('    updateTime: ${memosByUpdateTime.memos[i].updateTime}');
+        // print('    createTime: ${memosByUpdateTime.memos[i].createTime}'); // Removed createTime log
       }
 
       // Removed logging/checks related to createTime sort and server order comparison
@@ -61,19 +62,20 @@ void main() {
       print('\n--- Client-Side Sorting Verification ---');
       // Verify the client-side sorting by updateTime worked (redundant with sorting_test but good here too)
       bool clientSortedCorrectly = true;
-      for (int i = 0; i < memosByUpdateTime.length - 1; i++) {
+      // Access the .memos list
+      for (int i = 0; i < memosByUpdateTime.memos.length - 1; i++) {
         final current =
-            memosByUpdateTime[i].updateTime != null
-                ? DateTime.parse(memosByUpdateTime[i].updateTime!)
+            memosByUpdateTime.memos[i].updateTime != null
+                ? DateTime.parse(memosByUpdateTime.memos[i].updateTime!)
                 : DateTime.fromMillisecondsSinceEpoch(0);
         final next =
-            memosByUpdateTime[i + 1].updateTime != null
-                ? DateTime.parse(memosByUpdateTime[i + 1].updateTime!)
+            memosByUpdateTime.memos[i + 1].updateTime != null
+                ? DateTime.parse(memosByUpdateTime.memos[i + 1].updateTime!)
                 : DateTime.fromMillisecondsSinceEpoch(0);
         if (!(current.isAfter(next) || current.isAtSameMomentAs(next))) {
           clientSortedCorrectly = false;
           print(
-            'Client sorting error at index $i: ${memosByUpdateTime[i].id} vs ${memosByUpdateTime[i + 1].id}',
+            'Client sorting error at index $i: ${memosByUpdateTime.memos[i].id} vs ${memosByUpdateTime.memos[i + 1].id}',
           );
           break;
         }
@@ -115,7 +117,8 @@ void main() {
       // Reconstruct what the memo list would have looked like directly from the server
       // (before our client-side sorting was applied)
       final Map<String, Memo> memoMap = {};
-      for (var memo in memos) {
+      // Access the .memos list
+      for (var memo in memos.memos) {
         memoMap[memo.id] = memo;
       }
 
@@ -133,15 +136,21 @@ void main() {
       }
       
       print('\n--- First 3 memos after client-side sorting ---');
-      for (int i = 0; i < min(3, memos.length); i++) {
-        print('[${i + 1}] ID: ${memos[i].id}');
-        print('    updateTime: ${memos[i].updateTime}');
+      // Access the .memos list
+      for (int i = 0; i < min(3, memos.memos.length); i++) {
+        print('[${i + 1}] ID: ${memos.memos[i].id}');
+        print('    updateTime: ${memos.memos[i].updateTime}');
       }
       
       // Check for differences in ordering
       bool ordersAreDifferent = false;
-      for (int i = 0; i < min(serverOrderedMemos.length, memos.length); i++) {
-        if (serverOrderedMemos[i].id != memos[i].id) {
+      // Access the .memos list
+      for (
+        int i = 0;
+        i < min(serverOrderedMemos.length, memos.memos.length);
+        i++
+      ) {
+        if (serverOrderedMemos[i].id != memos.memos[i].id) {
           ordersAreDifferent = true;
           break;
         }
@@ -158,16 +167,17 @@ void main() {
       }
       
       // Verify that the client-side sorting actually produced a correctly sorted list
-      for (int i = 0; i < memos.length - 1; i++) {
+      // Access the .memos list
+      for (int i = 0; i < memos.memos.length - 1; i++) {
         final current =
-            memos[i].updateTime != null
-                ? DateTime.parse(memos[i].updateTime!)
+            memos.memos[i].updateTime != null
+                ? DateTime.parse(memos.memos[i].updateTime!)
                 :
                         DateTime.fromMillisecondsSinceEpoch(0);
         
         final next =
-            memos[i + 1].updateTime != null
-                ? DateTime.parse(memos[i + 1].updateTime!)
+            memos.memos[i + 1].updateTime != null
+                ? DateTime.parse(memos.memos[i + 1].updateTime!)
                 :
                      DateTime.fromMillisecondsSinceEpoch(0);
         

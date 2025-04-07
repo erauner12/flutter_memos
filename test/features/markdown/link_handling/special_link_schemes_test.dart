@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_test/flutter_test.dart';
-import '../utils/test_debug.dart';  // Add this import
+import '../../../utils/test_debug.dart'; // Corrected path
 
 void main() {
   group('Special URL Schemes Tests', () {
