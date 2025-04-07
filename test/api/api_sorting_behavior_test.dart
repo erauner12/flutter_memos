@@ -61,6 +61,21 @@ void main() {
       for (int i = 0; i < sortedMemos.length - 1; i++) {
         final currentMemo = sortedMemos[i];
         final nextMemo = sortedMemos[i + 1];
+
+        // 1. Check pinned status first
+        if (currentMemo.pinned && !nextMemo.pinned) {
+          continue; // Correct order: pinned comes first
+        }
+        if (!currentMemo.pinned && nextMemo.pinned) {
+          clientSortedCorrectly =
+              false; // Incorrect order: unpinned before pinned
+          print(
+            'Client sorting error at index $i: Unpinned memo ${currentMemo.id} found before pinned memo ${nextMemo.id}',
+          );
+          break;
+        }
+
+        // 2. If pinned status is the same, check updateTime (descending)
         final currentTime =
             currentMemo.updateTime != null
                 ? DateTime.parse(currentMemo.updateTime!)
@@ -71,12 +86,11 @@ void main() {
                 : DateTime.fromMillisecondsSinceEpoch(0);
 
         // Descending order check (current time should be >= next time)
-        // Corrected: Use isAfter or isAtSameMomentAs for descending check
         if (!(currentTime.isAfter(nextTime) ||
             currentTime.isAtSameMomentAs(nextTime))) {
           clientSortedCorrectly = false;
           print(
-            'Client sorting error at index $i: ${currentMemo.id} (${currentTime.toIso8601String()}) should be >= ${nextMemo.id} (${nextTime.toIso8601String()})',
+            'Client sorting error at index $i (same pinned status): ${currentMemo.id} (pinned=${currentMemo.pinned}, time=${currentTime.toIso8601String()}) should be >= ${nextMemo.id} (pinned=${nextMemo.pinned}, time=${nextTime.toIso8601String()})',
           );
           break;
         }
@@ -171,6 +185,20 @@ void main() {
       for (int i = 0; i < sortedMemos.length - 1; i++) {
         final currentMemo = sortedMemos[i];
         final nextMemo = sortedMemos[i + 1];
+
+        // 1. Check pinned status first
+        if (currentMemo.pinned && !nextMemo.pinned) {
+          // Correct order: pinned comes first, continue loop
+          continue;
+        }
+        if (!currentMemo.pinned && nextMemo.pinned) {
+          // Incorrect order: fail the test
+          fail(
+            'Client sorting error at index $i: Unpinned memo ${currentMemo.id} found before pinned memo ${nextMemo.id}',
+          );
+        }
+
+        // 2. If pinned status is the same, check updateTime (descending)
         final currentTime =
             currentMemo.updateTime != null
                 ? DateTime.parse(currentMemo.updateTime!)
@@ -181,12 +209,11 @@ void main() {
                 : DateTime.fromMillisecondsSinceEpoch(0);
 
         // Descending order check (current time should be >= next time)
-        // Use expect directly with the correct condition
         expect(
           currentTime.isAfter(nextTime) || currentTime.isAtSameMomentAs(nextTime),
           isTrue,
           reason:
-              'Client-side sorting should properly sort by updateTime (DESCENDING - newest first). Failed at index $i: ${currentMemo.id} (${currentTime.toIso8601String()}) vs ${nextMemo.id} (${nextTime.toIso8601String()})',
+              'Client-side sorting should properly sort by updateTime (DESCENDING - newest first) when pinned status is the same. Failed at index $i: ${currentMemo.id} (pinned=${currentMemo.pinned}, time=${currentTime.toIso8601String()}) vs ${nextMemo.id} (pinned=${nextMemo.pinned}, time=${nextTime.toIso8601String()})',
         );
       }
 
