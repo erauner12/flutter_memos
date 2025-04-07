@@ -44,7 +44,7 @@ void main() {
       memos.shuffle(random);
       
       // Apply sorting using the actual implementation
-      MemoUtils.sortByUpdateTime(memos);
+      MemoUtils.sortMemos(memos, 'updateTime'); // Use the main sort function
       
       // Verify the order (newest first)
       expect(
@@ -93,7 +93,7 @@ void main() {
       ];
 
       // Test update time sorting
-      MemoUtils.sortByUpdateTime(memos);
+      MemoUtils.sortMemos(memos, 'updateTime'); // Use the main sort function
       expect(
         memos[0].id,
         equals('3'),

@@ -2,92 +2,80 @@ import 'package:flutter_memos/models/memo.dart';
 
 /// Utility class for memo-related operations
 class MemoUtils {
-  /// Sort memos by update time (newest first)
-  static void sortByUpdateTime(List<Memo> memos) {
-    memos.sort((a, b) {
-      // Handle null or invalid update times
-      DateTime aTime;
-      DateTime bTime;
-      
-      try {
-        aTime =
-            a.updateTime != null
-                ? DateTime.parse(a.updateTime!)
-                : DateTime(1970);
-      } catch (_) {
-        aTime = DateTime(1970);
-      }
-      
-      try {
-        bTime =
-            b.updateTime != null
-                ? DateTime.parse(b.updateTime!)
-                : DateTime(1970);
-      } catch (_) {
-        bTime = DateTime(1970);
-      }
-      
-      return bTime.compareTo(aTime); // Newest first
-    });
-  }
-
-  /// Sort memos by creation time (newest first)
+  /// Sort memos by creation time (descending - newest first)
   static void sortByCreateTime(List<Memo> memos) {
     memos.sort((a, b) {
-      // Handle null or invalid create times
-      DateTime aTime;
-      DateTime bTime;
+      // Note: This version doesn't prioritize pinned status.
+      // If createTime sort should also prioritize pinned, add the pinned check here too.
+      
+      final aTime = safeParseDateTime(a.createTime);
+      final bTime = safeParseDateTime(b.createTime);
 
-      try {
-        aTime =
-            a.createTime != null
-                ? DateTime.parse(a.createTime!)
-                : DateTime(1970);
-      } catch (_) {
-        aTime = DateTime(1970);
-      }
-
-      try {
-        bTime =
-            b.createTime != null
-                ? DateTime.parse(b.createTime!)
-                : DateTime(1970);
-      } catch (_) {
-        bTime = DateTime(1970);
-      }
-
-      return bTime.compareTo(aTime); // Newest first
+      // *** Ensure descending order: Newest (larger DateTime) comes first ***
+      return bTime.compareTo(aTime);
     });
   }
 
   /// Helper method to safely parse date strings
+  /// Returns epoch (1970-01-01) if parsing fails or input is null.
   static DateTime safeParseDateTime(String? isoTime) {
     if (isoTime == null) return DateTime.fromMillisecondsSinceEpoch(0);
     try {
-      return DateTime.parse(isoTime);
-    } catch (_) {
+      // Ensure parsing happens correctly
+      final parsedDate = DateTime.parse(isoTime);
+      // Check for potential zero/epoch dates that might arise from parsing issues
+      if (parsedDate.millisecondsSinceEpoch == 0) {
+        // Optionally log this case if it's unexpected
+        // print('[MemoUtils] Warning: Parsed date resulted in epoch for input: $isoTime');
+      }
+      return parsedDate;
+    } catch (e) {
+      // Log parsing errors for debugging
+      print('[MemoUtils] Error parsing date "$isoTime": $e. Returning epoch.');
       return DateTime.fromMillisecondsSinceEpoch(0);
     }
   }
 
-  /// Sort memos by pinned status first, then by update time
+  /// Sort memos by pinned status first, then by update time (descending)
   static void sortByPinnedThenUpdateTime(List<Memo> memos) {
     memos.sort((a, b) {
       // 1) Pinned items first
-      if (a.pinned && !b.pinned) return -1;
-      if (!a.pinned && b.pinned) return 1;
+      if (a.pinned && !b.pinned) return -1; // a comes first
+      if (!a.pinned && b.pinned) return 1; // b comes first
 
-      // 2) Then compare updateTime descending
+      // 2) If pinning is the same, compare updateTime descending
       final aTime = safeParseDateTime(a.updateTime);
       final bTime = safeParseDateTime(b.updateTime);
-      return bTime.compareTo(aTime); // Newest first
+      
+      // Handle cases where one or both times might be epoch due to null/parse error
+      // Standard compareTo handles epoch correctly (epoch is considered older)
+
+      // *** Ensure descending order: Newest (larger DateTime) comes first ***
+      return bTime.compareTo(aTime);
     });
   }
 
-  /// Sort memos by specified field (updateTime or pinned-first)
+  /// Sort memos by specified field (updateTime, createTime, or pinned-first)
   static void sortMemos(List<Memo> memos, String sortField) {
-    // Use the new pinned-first sorting by default
-    sortByPinnedThenUpdateTime(memos);
+    // Default to descending order for time-based sorts
+    switch (sortField.toLowerCase()) {
+      case 'updatetime':
+      case 'pinned': // Treat 'pinned' sort as pinned-then-updateTime descending
+        // This function handles pinned first, then updateTime descending
+        sortByPinnedThenUpdateTime(memos);
+        break;
+      case 'createtime':
+        // This function handles createTime descending
+        sortByCreateTime(memos);
+        break;
+      default:
+        // Fallback to the primary sorting method if the field is unknown
+        print(
+          '[MemoUtils] Unknown sortField "$sortField", defaulting to pinned then updateTime.',
+        );
+        sortByPinnedThenUpdateTime(memos);
+        break;
+    }
   }
 
   /// Get a human readable date string from a timestamp
