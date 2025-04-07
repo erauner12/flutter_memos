@@ -141,7 +141,8 @@ class _NewMemoFormState extends ConsumerState<NewMemoForm>
       }
 
       if (mounted) {
-        Navigator.pushNamed(
+        // Replace pushNamed with pushReplacementNamed
+        Navigator.pushReplacementNamed(
           context,
           '/memo-detail',
           arguments: {'memoId': createdMemo.id},
