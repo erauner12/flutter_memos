@@ -53,6 +53,8 @@ void main() {
   group('moveMemoProvider Tests', () {
     late MockApiService mockApiService;
     late ProviderContainer container;
+    // Add a variable to hold the mock notifier instance
+    late MockMemosNotifier mockMemosNotifierInstance;
 
 
     final sourceServer = ServerConfig(
@@ -100,10 +102,12 @@ void main() {
           // Use overrideWith for StateNotifierProvider
           memosNotifierProvider.overrideWith((ref) {
             // Initialize the mock notifier with an empty state or relevant initial state
-            return MockMemosNotifier(
+            // Assign the created instance to our variable
+            mockMemosNotifierInstance = MockMemosNotifier(
               ref, // Pass the ref from the override function
               MemosState(memos: [memoToMove]), // Start with the memo present
             );
+            return mockMemosNotifierInstance; // Return the instance
           }),
         ],
       );
@@ -176,10 +180,9 @@ void main() {
 
       // Assert
       // Verify optimistic removal was called on the notifier
+      // Use the stored mock instance here
       verify(
-        container
-            .read(memosNotifierProvider.notifier)
-            .removeMemoOptimistically(memoToMove.id),
+        mockMemosNotifierInstance.removeMemoOptimistically(memoToMove.id),
       ).called(1);
 
       // Verify API calls
@@ -250,10 +253,9 @@ void main() {
       );
 
       // Verify optimistic removal was still called
+      // Use the stored mock instance here
       verify(
-        container
-            .read(memosNotifierProvider.notifier)
-            .removeMemoOptimistically(memoToMove.id),
+        mockMemosNotifierInstance.removeMemoOptimistically(memoToMove.id),
       ).called(1);
 
       // Verify initial fetches happened
@@ -319,12 +321,9 @@ void main() {
         ),
       )();
 
-      // Assert
-      // Verify optimistic removal
+      // Use the stored mock instance here
       verify(
-        container
-            .read(memosNotifierProvider.notifier)
-            .removeMemoOptimistically(memoToMove.id),
+        mockMemosNotifierInstance.removeMemoOptimistically(memoToMove.id),
       ).called(1);
 
       // Verify all initial steps happened

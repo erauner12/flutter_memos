@@ -12,8 +12,15 @@ import 'package:flutter_slidable/flutter_slidable.dart'; // Add this import for 
 class MemoListItem extends ConsumerStatefulWidget {
   final Memo memo;
   final int index; // Add index for selection tracking
+  // Add the callback parameter
+  final VoidCallback? onMoveToServer;
 
-  const MemoListItem({super.key, required this.memo, required this.index});
+  const MemoListItem({
+    super.key,
+    required this.memo,
+    required this.index,
+    this.onMoveToServer, // Add to constructor
+  });
 
   @override
   MemoListItemState createState() => MemoListItemState();
@@ -160,6 +167,7 @@ class MemoListItemState extends ConsumerState<MemoListItem> {
           ],
         );
       },
+
     );
 
     if (confirm == true && mounted) {
