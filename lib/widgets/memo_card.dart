@@ -97,14 +97,16 @@ class MemoCardState extends ConsumerState<MemoCard> {
           (BuildContext context) => CupertinoActionSheet(
             title: const Text('Memo Actions'), // Optional title
             actions: <CupertinoActionSheetAction>[
+              // 1. Move to Server Action (Conditionally added first)
               if (widget.onMoveToServer != null)
                 CupertinoActionSheetAction(
                   child: const Text('Move to Server...'),
                   onPressed: () {
                     Navigator.pop(context); // Close the sheet
-                    widget.onMoveToServer!(); // Call the new callback
+                    widget.onMoveToServer!(); // Call the provided callback
                   },
                 ),
+              // 2. View Action
               if (widget.onTap != null)
                 CupertinoActionSheetAction(
                   child: const Text('View'),
@@ -113,6 +115,7 @@ class MemoCardState extends ConsumerState<MemoCard> {
                     widget.onTap!();
                   },
                 ),
+              // 3. Edit Action
               CupertinoActionSheetAction(
                 child: const Text('Edit'),
                 onPressed: () {
@@ -124,6 +127,7 @@ class MemoCardState extends ConsumerState<MemoCard> {
                   );
                 },
               ),
+              // 4. Pin/Unpin Action
               CupertinoActionSheetAction(
                 child: Text(widget.pinned ? 'Unpin' : 'Pin'),
                 onPressed: () {
@@ -131,6 +135,7 @@ class MemoCardState extends ConsumerState<MemoCard> {
                   widget.onTogglePin?.call();
                 },
               ),
+              // 5. Bump Action
               if (widget.onBump != null)
                 CupertinoActionSheetAction(
                   child: const Text('Bump'),
@@ -139,6 +144,7 @@ class MemoCardState extends ConsumerState<MemoCard> {
                     widget.onBump!();
                   },
                 ),
+              // 6. Copy Content Action
               CupertinoActionSheetAction(
                 child: const Text('Copy Content'),
                 onPressed: () async {
@@ -164,6 +170,7 @@ class MemoCardState extends ConsumerState<MemoCard> {
                   );
                 },
               ),
+              // 7. Copy Link Action
               CupertinoActionSheetAction(
                 child: const Text('Copy Link'),
                 onPressed: () async {
@@ -188,6 +195,7 @@ class MemoCardState extends ConsumerState<MemoCard> {
                   );
                 },
               ),
+              // 8. Hide Action
               if (widget.onHide != null)
                 CupertinoActionSheetAction(
                   child: const Text('Hide'),
@@ -196,6 +204,7 @@ class MemoCardState extends ConsumerState<MemoCard> {
                     widget.onHide!();
                   },
                 ),
+              // 9. Archive Action
               if (widget.onArchive != null)
                 CupertinoActionSheetAction(
                   child: const Text('Archive'),
@@ -204,6 +213,7 @@ class MemoCardState extends ConsumerState<MemoCard> {
                     widget.onArchive!();
                   },
                 ),
+              // 10. Delete Action
               if (widget.onDelete != null)
                 CupertinoActionSheetAction(
                   isDestructiveAction: true,
