@@ -1,16 +1,19 @@
 import 'dart:convert';
-import 'package:http/http.dart' as http;
+
 import 'package:flutter_memos/models/conversation.dart';
 import 'package:flutter_memos/models/message.dart';
-import 'package:flutter_memos/utils/env.dart';
+import 'package:http/http.dart' as http;
 
 class AssistantService {
   static final AssistantService _instance = AssistantService._internal();
   factory AssistantService() => _instance;
   AssistantService._internal();
 
-  final String _baseUrl = Env.mcpServerUrl;
-  final String _mcpKey = Env.mcpServerKey;
+  // TODO: Configure MCP URL and Key via settings/provider, not Env
+  // final String _baseUrl = Env.mcpServerUrl;
+  // final String _mcpKey = Env.mcpServerKey;
+  final String _baseUrl = ''; // Placeholder
+  final String _mcpKey = ''; // Placeholder
 
   /// Helper function to call the assistant API
   Future<dynamic> _assistantRequest(

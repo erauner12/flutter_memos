@@ -40,45 +40,32 @@ class _McpScreenState extends State<McpScreen> {
     });
 
     try {
-      print('Testing MCP connection with URL: ${Env.mcpServerUrl}');
-      print('MCP key present: ${Env.mcpServerKey.isNotEmpty ? "Yes" : "No"}');
-
-      if (Env.mcpServerKey.isNotEmpty) {
-        print('MCP key length: ${Env.mcpServerKey.length}');
-        print('MCP key trimmed length: ${Env.mcpServerKey.trim().length}');
-      }
-
       final response = await _mcpService.pingMcpServer();
 
       setState(() {
         _pingResult = response;
         _loading = false;
       });
-
-      print('MCP Server ping successful: $response');
     } catch (e) {
       setState(() {
         _error = e.toString();
         _loading = false;
       });
 
-      print('Error pinging MCP server: $e');
-
-      // Use CupertinoAlertDialog
+      if (!mounted) return;
       showCupertinoDialog(
         context: context,
         builder:
             (context) => CupertinoAlertDialog(
           title: const Text('MCP Server Error'),
           content: Text(
-            'Failed to connect to the MCP server at ${Env.mcpServerUrl}. '
+                'Failed to connect to the MCP server at ${Env.apiBaseUrl}. '
             'Error: ${e.toString()}\n\n'
             'Note: If using Docker, make sure you\'re not using \'localhost\' in your URL, '
-            'as Docker containers need to reference each other by service name (e.g., \'mcp-server:8080\').'
+                'as Docker containers need to reference each other by service name (e.g., \'mcp-server:8080\').',
           ),
           actions: [
                 CupertinoDialogAction(
-                  // Use CupertinoDialogAction
                   isDefaultAction: true,
               onPressed: () => Navigator.of(context).pop(),
               child: const Text('OK'),
@@ -91,7 +78,7 @@ class _McpScreenState extends State<McpScreen> {
 
   Future<void> _handleSendMemo() async {
     if (_inputController.text.trim().isEmpty) {
-      // Consider a CupertinoAlertDialog instead of SnackBar for feedback
+      if (!mounted) return;
       showCupertinoDialog(
         context: context,
         builder:
@@ -123,9 +110,8 @@ class _McpScreenState extends State<McpScreen> {
       };
 
       final response = await _mcpService.sendToMcp(memoData, target: 'memos');
-      print('MCP Memo creation successful: $response');
 
-      // Use CupertinoAlertDialog
+      if (!mounted) return;
       showCupertinoDialog(
         context: context,
         builder:
@@ -152,7 +138,7 @@ class _McpScreenState extends State<McpScreen> {
         _error = e.toString();
       });
 
-      // Use CupertinoAlertDialog
+      if (!mounted) return;
       showCupertinoDialog(
         context: context,
         builder:
@@ -178,10 +164,9 @@ class _McpScreenState extends State<McpScreen> {
   Widget _renderTokenDebug() {
     if (!_showTokenDebug) return const SizedBox.shrink();
 
-    final tokenValue = Env.mcpServerKey;
+    final tokenValue = Env.memosApiKey;
     final tokenTrimmed = tokenValue.trim();
 
-    // Use Cupertino dynamic colors
     final Color backgroundColor = CupertinoColors.secondarySystemFill
         .resolveFrom(context);
     final Color borderColor = CupertinoColors.separator.resolveFrom(context);
@@ -193,7 +178,7 @@ class _McpScreenState extends State<McpScreen> {
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
         color: backgroundColor,
-        borderRadius: BorderRadius.circular(8), // Use slightly larger radius
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(color: borderColor, width: 0.5),
       ),
       child: Column(
@@ -224,16 +209,13 @@ class _McpScreenState extends State<McpScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Use CupertinoPageScaffold and CupertinoNavigationBar
     return CupertinoPageScaffold(
       navigationBar: const CupertinoNavigationBar(
         middle: Text('MCP Server Integration'),
         transitionBetweenRoutes: false,
       ),
       child: SafeArea(
-        // Add SafeArea
         child: ListView(
-          // Use ListView for scrolling content
           padding: const EdgeInsets.all(16.0),
           children: [
             const Padding(
@@ -243,26 +225,22 @@ class _McpScreenState extends State<McpScreen> {
                 style: TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.w700,
-                  // Use Cupertino dynamic color
                   color: CupertinoColors.label,
                 ),
               ),
             ),
-
-            // Server Status Section - Replace Card with CupertinoListSection
             CupertinoListSection.insetGrouped(
               header: const Text('SERVER STATUS'),
               children: [
-                // Display configuration status
                 CupertinoListTile(
                   title: const Text('MCP Server URL'),
                   subtitle: Text(
-                    Env.mcpServerUrl.isNotEmpty
-                        ? Env.mcpServerUrl
+                    Env.apiBaseUrl.isNotEmpty
+                        ? Env.apiBaseUrl
                         : 'Not configured',
                     style: TextStyle(
                       color:
-                          Env.mcpServerUrl.isNotEmpty
+                          Env.apiBaseUrl.isNotEmpty
                               ? CupertinoColors.secondaryLabel.resolveFrom(
                                 context,
                               )
@@ -273,29 +251,25 @@ class _McpScreenState extends State<McpScreen> {
                 CupertinoListTile(
                   title: const Text('MCP Server Key'),
                   subtitle: Text(
-                    Env.mcpServerKey.isNotEmpty
-                        ? 'Configured (length: ${Env.mcpServerKey.length}, last 4: ${Env.mcpServerKey.substring(Env.mcpServerKey.length - 4)})'
+                    Env.memosApiKey.isNotEmpty
+                        ? 'Configured (length: ${Env.memosApiKey.length}, last 4: ${Env.memosApiKey.substring(Env.memosApiKey.length - 4)})'
                         : 'Not configured',
                     style: TextStyle(
                       color:
-                          Env.mcpServerKey.isNotEmpty
+                          Env.memosApiKey.isNotEmpty
                               ? CupertinoColors.secondaryLabel.resolveFrom(
                                 context,
                               )
                               : CupertinoColors.systemRed.resolveFrom(context),
                     ),
                   ),
-                  // Use trailing for the debug button
                   trailing: CupertinoButton(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 10,
                       vertical: 4,
                     ),
                     minSize: 0,
-                    color:
-                        CupertinoTheme.of(
-                          context,
-                        ).primaryColor, // Use theme color
+                    color: CupertinoTheme.of(context).primaryColor,
                     onPressed: () {
                       setState(() {
                         _showTokenDebug = !_showTokenDebug;
@@ -310,8 +284,6 @@ class _McpScreenState extends State<McpScreen> {
                     ),
                   ),
                 ),
-
-                // Render token debug info if enabled
                 if (_showTokenDebug)
                   Padding(
                     padding: const EdgeInsets.symmetric(
@@ -320,8 +292,6 @@ class _McpScreenState extends State<McpScreen> {
                     ),
                     child: _renderTokenDebug(),
                   ),
-
-                // Status display
                 if (_loading && _pingResult == null)
                   const Padding(
                     padding: EdgeInsets.all(16.0),
@@ -352,7 +322,6 @@ class _McpScreenState extends State<McpScreen> {
                         ),
                         const SizedBox(height: 10),
                         CupertinoButton.filled(
-                          // Use filled button
                           onPressed: _testMcpConnection,
                           child: const Text('Retry Connection'),
                         ),
@@ -441,10 +410,7 @@ class _McpScreenState extends State<McpScreen> {
                   ),
               ],
             ),
-
             const SizedBox(height: 16),
-
-            // Send Memo Section - Replace Card with CupertinoListSection
             CupertinoListSection.insetGrouped(
               header: const Text('SEND A TEST MEMO'),
               children: [
@@ -454,7 +420,6 @@ class _McpScreenState extends State<McpScreen> {
                     vertical: 10.0,
                   ),
                   child: CupertinoTextField(
-                    // Use CupertinoTextField
                     controller: _inputController,
                     placeholder: 'Enter memo content...',
                     padding: const EdgeInsets.all(10),
@@ -467,7 +432,7 @@ class _McpScreenState extends State<McpScreen> {
                       borderRadius: BorderRadius.circular(8.0),
                     ),
                     maxLines: 5,
-                    minLines: 3, // Adjust min lines if needed
+                    minLines: 3,
                     keyboardType: TextInputType.multiline,
                     onChanged: (value) {
                       setState(() {
@@ -484,7 +449,6 @@ class _McpScreenState extends State<McpScreen> {
                   child: SizedBox(
                     width: double.infinity,
                     child: CupertinoButton.filled(
-                      // Use CupertinoButton.filled
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       onPressed: _loading ? null : _handleSendMemo,
                       child: const Text('Send via MCP'),
@@ -498,10 +462,7 @@ class _McpScreenState extends State<McpScreen> {
                   ),
               ],
             ),
-
             const SizedBox(height: 16),
-
-            // Demo Component (Assuming McpDemoWidget is also migrated)
             const McpDemoWidget(),
           ],
         ),

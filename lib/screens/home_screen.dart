@@ -55,7 +55,9 @@ class HomeScreen extends ConsumerWidget {
                                     child: const Text('Light'),
                                     onPressed: () {
                                       ref
-                                          .read(themeProvider.notifier)
+                                          .read(
+                                            themeProvider.notifier,
+                                          ) // Correct usage
                                           .setTheme(ThemeMode.light);
                                       Navigator.pop(context);
                                     },
@@ -64,7 +66,9 @@ class HomeScreen extends ConsumerWidget {
                                     child: const Text('Dark'),
                                     onPressed: () {
                                       ref
-                                          .read(themeProvider.notifier)
+                                          .read(
+                                            themeProvider.notifier,
+                                          ) // Correct usage
                                           .setTheme(ThemeMode.dark);
                                       Navigator.pop(context);
                                     },
@@ -73,7 +77,9 @@ class HomeScreen extends ConsumerWidget {
                                     child: const Text('System'),
                                     onPressed: () {
                                       ref
-                                          .read(themeProvider.notifier)
+                                          .read(
+                                            themeProvider.notifier,
+                                          ) // Correct usage
                                           .setTheme(ThemeMode.system);
                                       Navigator.pop(context);
                                     },

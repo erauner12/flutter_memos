@@ -1,6 +1,5 @@
 import 'dart:convert';
 
-import 'package:flutter_memos/utils/env.dart';
 import 'package:http/http.dart' as http;
 
 class McpService {
@@ -8,8 +7,11 @@ class McpService {
   factory McpService() => _instance;
   McpService._internal();
 
-  final String _baseUrl = Env.mcpServerUrl;
-  final String _mcpKey = Env.mcpServerKey;
+  // TODO: Configure MCP URL and Key via settings/provider, not Env
+  // final String _baseUrl = Env.mcpServerUrl;
+  // final String _mcpKey = Env.mcpServerKey;
+  final String _baseUrl = ''; // Placeholder
+  final String _mcpKey = ''; // Placeholder
 
   /// Make a request to the MCP server
   Future<dynamic> _mcpRequest(
