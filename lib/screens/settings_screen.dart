@@ -59,7 +59,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     if (initialConfig != null) {
       final changed =
           currentUrl != initialConfig.serverUrl ||
-                      currentToken != initialConfig.authToken;
+          currentToken != initialConfig.authToken;
       if (changed != _hasChanges) {
         setState(() {
           _hasChanges = changed;
@@ -89,7 +89,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final url = _serverUrlController.text.trim();
     if (!_validateUrl(url)) return; // Validate before saving
 
-    setState(() { _isLoading = true; });
+    setState(() {
+      _isLoading = true;
+    });
 
     try {
       final authToken = _authTokenController.text.trim();
@@ -118,7 +120,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       }
     } finally {
       if (mounted) {
-        setState(() { _isLoading = false; });
+        setState(() {
+          _isLoading = false;
+        });
       }
     }
   }
@@ -164,7 +168,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       _isLoading = true;
     }); // Use _isTesting specifically
     final apiService = ref.read(apiServiceProvider);
-    
+
     try {
       // Use a lightweight API call, like fetching user status or workspace setting
       // Replace getAuthStatus with a known working call, limited to 1 result

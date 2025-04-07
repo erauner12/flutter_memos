@@ -14,3 +14,6 @@ class Env {
 
   static const String memosApiKey = String.fromEnvironment(
     'MEMOS_API_KEY',
+    defaultValue: '', // Provide a default value if needed, or handle absence
+  );
+}

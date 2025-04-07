@@ -10,15 +10,11 @@ import 'package:flutter_memos/providers/server_config_provider.dart';
 import 'package:flutter_memos/providers/theme_provider.dart';
 import 'package:flutter_memos/providers/ui_providers.dart'; // Import for UI providers including highlightedCommentIdProvider
 import 'package:flutter_memos/screens/chat_screen.dart';
-import 'package:flutter_memos/screens/codegen_test_screen.dart';
 import 'package:flutter_memos/screens/edit_memo/edit_memo_screen.dart';
-import 'package:flutter_memos/screens/filter_demo_screen.dart';
+import 'package:flutter_memos/screens/home_screen.dart';
 import 'package:flutter_memos/screens/mcp_screen.dart';
 import 'package:flutter_memos/screens/memo_detail/memo_detail_screen.dart';
 import 'package:flutter_memos/screens/memos/memos_screen.dart';
-import 'package:flutter_memos/screens/new_memo/new_memo_screen.dart';
-import 'package:flutter_memos/screens/riverpod_demo_screen.dart';
-import 'package:flutter_memos/screens/settings_screen.dart';
 import 'package:flutter_memos/utils/keyboard_shortcuts.dart'; // Import keyboard shortcuts
 import 'package:flutter_memos/utils/provider_logger.dart';
 import 'package:flutter_memos/widgets/config_check_wrapper.dart'; // Import the new wrapper
@@ -372,17 +368,13 @@ class _MyAppState extends ConsumerState<MyApp> {
                     const ConfigCheckWrapper(), // Use ConfigCheckWrapper as home
                 routes: {
                   // Define explicit routes needed for navigation
+                  // '/' route is implicitly handled by 'home' now.
                   '/home':
                       (context) =>
-                          const HomeScreen(), // Main app screen after config check
+                          const HomeScreen(),
                   '/memos': (context) => const MemosScreen(),
                   '/chat': (context) => const ChatScreen(),
                   '/mcp': (context) => const McpScreen(),
-                  '/new-memo': (context) => const NewMemoScreen(),
-                  '/filter-demo': (context) => const FilterDemoScreen(),
-                  '/riverpod-demo': (context) => const RiverpodDemoScreen(),
-                  '/codegen-test': (context) => const CodegenTestScreen(),
-                  '/settings': (context) => const SettingsScreen(),
                 },
                 onGenerateRoute: (settings) {
                   // Use CupertinoPageRoute for iOS-style transitions later (Phase 4)
@@ -463,124 +455,3 @@ class _MyAppState extends ConsumerState<MyApp> {
   }
 }
 
-class HomeScreen extends ConsumerWidget {
-  const HomeScreen({super.key});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final themeMode = ref.watch(themeModeProvider);
-
-    // Helper function to show the theme/settings action sheet
-    void showThemeSettingsSheet(BuildContext context) {
-      showCupertinoModalPopup<void>(
-        context: context,
-        builder:
-            (BuildContext context) => CupertinoActionSheet(
-              title: const Text('Appearance & Settings'),
-              // message: const Text('Select your preferred theme'),
-              actions: <CupertinoActionSheetAction>[
-                CupertinoActionSheetAction(
-                  child: const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(CupertinoIcons.sun_max_fill, size: 20),
-                      SizedBox(width: 8),
-                      Text('Light Mode'),
-                    ],
-                  ),
-                  onPressed: () async {
-                    Navigator.pop(context);
-                    ref.read(setThemeModeProvider)(ThemeMode.light);
-                  },
-                ),
-                CupertinoActionSheetAction(
-                  child: const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(CupertinoIcons.moon_fill, size: 20),
-                      SizedBox(width: 8),
-                      Text('Dark Mode'),
-                    ],
-                  ),
-                  onPressed: () async {
-                    Navigator.pop(context);
-                    ref.read(setThemeModeProvider)(ThemeMode.dark);
-                  },
-                ),
-                CupertinoActionSheetAction(
-                  child: const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(CupertinoIcons.device_phone_portrait, size: 20),
-                      SizedBox(width: 8),
-                      Text('System Default'),
-                    ],
-                  ),
-                  onPressed: () async {
-                    Navigator.pop(context);
-                    ref.read(setThemeModeProvider)(ThemeMode.system);
-                  },
-                ),
-                CupertinoActionSheetAction(
-                  child: const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(CupertinoIcons.settings, size: 20),
-                      SizedBox(width: 8),
-                      Text('Settings'),
-                    ],
-                  ),
-                  onPressed: () {
-                    Navigator.pop(context); // Close the sheet first
-                    Navigator.pushNamed(context, '/settings');
-                  },
-                ),
-              ],
-              cancelButton: CupertinoActionSheetAction(
-                isDefaultAction: true,
-                onPressed: () {
-                  Navigator.pop(context);
-                },
-                child: const Text('Cancel'),
-              ),
-            ),
-      );
-    }
-
-    // Determine the icon for the theme button
-    IconData themeIcon;
-    switch (themeMode) {
-      case ThemeMode.light:
-        themeIcon = CupertinoIcons.sun_max;
-        break;
-      case ThemeMode.dark:
-        themeIcon = CupertinoIcons.moon;
-        break;
-      case ThemeMode.system:
-        themeIcon = CupertinoIcons.gear_alt; // Or gear, device_phone_portrait
-        break;
-    }
-
-    return CupertinoPageScaffold(
-      navigationBar: CupertinoNavigationBar(
-        transitionBetweenRoutes: false, // Disable default hero animation
-        middle: const Text('Flutter Memos'),
-        trailing: CupertinoButton(
-          padding: EdgeInsets.zero,
-          onPressed: () => showThemeSettingsSheet(context),
-          child: Icon(themeIcon),
-        ),
-      ),
-      child: const SafeArea(
-        // Add SafeArea to avoid overlap with status bar/notch
-        child: Column(
-          children: [
-            Expanded(child: MemosScreen()),
-            // Demo UI components remain commented out
-            /* ... */
-          ],
-        ),
-      ),
-    );
-  }
-}

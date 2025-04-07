@@ -1,6 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_memos/providers/server_config_provider.dart';
-import 'package:flutter_memos/screens/home_screen.dart'; // Import HomeScreen
+import 'package:flutter_memos/screens/home_screen.dart';
 import 'package:flutter_memos/screens/settings_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
