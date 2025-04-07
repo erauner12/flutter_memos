@@ -15,6 +15,7 @@ import 'package:flutter_memos/screens/home_screen.dart';
 import 'package:flutter_memos/screens/mcp_screen.dart';
 import 'package:flutter_memos/screens/memo_detail/memo_detail_screen.dart';
 import 'package:flutter_memos/screens/memos/memos_screen.dart';
+import 'package:flutter_memos/screens/new_memo/new_memo_screen.dart'; // Import NewMemoScreen
 import 'package:flutter_memos/utils/keyboard_shortcuts.dart'; // Import keyboard shortcuts
 import 'package:flutter_memos/utils/provider_logger.dart';
 import 'package:flutter_memos/widgets/config_check_wrapper.dart'; // Import the new wrapper
@@ -375,6 +376,8 @@ class _MyAppState extends ConsumerState<MyApp> {
                   '/memos': (context) => const MemosScreen(),
                   '/chat': (context) => const ChatScreen(),
                   '/mcp': (context) => const McpScreen(),
+                  '/new-memo':
+                      (context) => const NewMemoScreen(), // Add this route
                 },
                 onGenerateRoute: (settings) {
                   // Use CupertinoPageRoute for iOS-style transitions later (Phase 4)
@@ -454,4 +457,3 @@ class _MyAppState extends ConsumerState<MyApp> {
     );
   }
 }
-

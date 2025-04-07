@@ -339,7 +339,12 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
                       padding: const EdgeInsets.symmetric(horizontal: 8.0),
                       minSize: 0,
                       onPressed: () {
-                        Navigator.pushNamed(context, '/new-memo').then((_) {
+                        // Use the root navigator to push the route
+                        Navigator.of(
+                          context,
+                          rootNavigator: true,
+                        ).pushNamed('/new-memo').then((_) {
+                          // Refresh after returning from new memo screen
                           ref.read(memosNotifierProvider.notifier).refresh();
                         });
                       },
