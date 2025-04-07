@@ -1,10 +1,8 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
-// Remove Material RefreshIndicator import and only keep what's needed
 import 'package:flutter/services.dart'; // Add for haptic feedback
 import 'package:flutter_memos/providers/memo_providers.dart';
-import 'package:flutter_memos/providers/ui_providers.dart'
-    as ui_providers; // Add import
+import 'package:flutter_memos/providers/ui_providers.dart' as ui_providers;
 import 'package:flutter_memos/screens/memos/memo_list_item.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -90,15 +88,15 @@ class _MemosBodyState extends ConsumerState<MemosBody> {
     if (kDebugMode) {
       print('[MemosBody] Pull-to-refresh triggered.');
     }
-
+    
     // Add light haptic feedback when refresh begins
     HapticFeedback.lightImpact();
-
+    
     await ref.read(memosNotifierProvider.notifier).refresh();
-
+    
     // Add success haptic feedback when refresh completes
     HapticFeedback.mediumImpact();
-
+    
     // Ensure selection after refresh
     _ensureInitialSelection();
   }
@@ -113,7 +111,7 @@ class _MemosBodyState extends ConsumerState<MemosBody> {
   ) {
     // Calculate the opacity based on pull distance
     final double opacity = pulledExtent / refreshTriggerPullDistance;
-
+    
     return Center(
       child: Stack(
         alignment: Alignment.center,
