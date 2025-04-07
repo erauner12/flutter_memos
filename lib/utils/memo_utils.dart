@@ -50,12 +50,8 @@ class MemoUtils {
       // Handle cases where one or both times might be epoch due to null/parse error
       // Standard compareTo handles epoch correctly (epoch is considered older)
 
-      // *** DIAGNOSTIC: Try swapping aTime and bTime to see if it fixes the test ***
-      // This *should* result in ascending order, but the test failed with descending logic.
-      final comparisonResult = aTime.compareTo(bTime);
-      // Optional: Add logging here in the actual code if needed for debugging
-      // print('[Sort Debug] Comparing ${a.id} (${aTime}) vs ${b.id} (${bTime}): Result = $comparisonResult');
-      return comparisonResult;
+      // *** Ensure descending order: Newest (larger DateTime) comes first ***
+      return bTime.compareTo(aTime);
     });
   }
 
