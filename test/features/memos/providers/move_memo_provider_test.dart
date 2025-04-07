@@ -58,36 +58,35 @@ void main() {
     );
 
     setUp(() {
-      mockApiService = MockApiService();
-      // Instantiate the generated mock
-      mockMemosNotifierInstance = MockMemosNotifier();
+      mockApiService = MockApiService(); // Instantiate ApiService mock
 
-      // Set up default behavior for the mock notifier
-      when(mockMemosNotifierInstance.state).thenReturn(
-        MemosState(memos: [memoToMove]), // Initial state with the memo
-      );
-      // Mock the removeMemoOptimistically method
-      when(
-        mockMemosNotifierInstance.removeMemoOptimistically(any),
-      ).thenAnswer((_) {});
-      // Mock the refresh method if needed during error handling
-      when(mockMemosNotifierInstance.refresh()).thenAnswer((_) async {
-        return;
-      });
-
+      // Create the container with overrides, including the mock notifier setup
       container = ProviderContainer(
         overrides: [
           apiServiceProvider.overrideWithValue(mockApiService),
-          // Provide the source server as the active one initially
           activeServerConfigProvider.overrideWithValue(sourceServer),
-          // Override with the generated mock instance
-          memosNotifierProvider.overrideWith(
-            (ref) => mockMemosNotifierInstance,
-          ),
+          memosNotifierProvider.overrideWith((ref) {
+            // Create and configure the mock INSIDE the override
+            final mockNotifier = MockMemosNotifier();
+            when(mockNotifier.state).thenReturn(
+              MemosState(memos: [memoToMove]), // Set initial state stub
+            );
+            // Stub other methods needed by the provider or tests
+            when(mockNotifier.removeMemoOptimistically(any)).thenAnswer((_) {});
+            when(
+              mockNotifier.refresh(),
+            ).thenAnswer((_) async {}); // Stub refresh
+            return mockNotifier; // Return the configured mock
+          }),
         ],
       );
 
-      // Default successful mocks (can be overridden in specific tests)
+      // Retrieve the created mock instance from the container for verification purposes
+      // This ensures we are verifying the same instance that Riverpod is using
+      mockMemosNotifierInstance =
+          container.read(memosNotifierProvider.notifier) as MockMemosNotifier;
+
+      // Configure ApiService mocks AFTER the container and notifier mock are set up
       when(
         mockApiService.getMemo(
           memoToMove.id,
