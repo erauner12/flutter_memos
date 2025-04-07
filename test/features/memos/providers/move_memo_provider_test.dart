@@ -3,8 +3,11 @@ import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/models/memo.dart';
 import 'package:flutter_memos/models/server_config.dart';
 import 'package:flutter_memos/providers/api_providers.dart';
-import 'package:flutter_memos/providers/memo_providers.dart'; // Import memo_providers for moveMemoProvider
+// Ensure this import is present and correct
+import 'package:flutter_memos/providers/memo_providers.dart';
 import 'package:flutter_memos/providers/server_config_provider.dart';
+import 'package:flutter_memos/services/api_service.dart'
+    as api_service_file; // Import the file containing ApiService
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/annotations.dart';
@@ -44,7 +47,8 @@ class MockMemosNotifier extends MemosNotifier {
   }
 }
 
-@GenerateNiceMocks([MockSpec<ApiService>()])
+// Use the imported class type here
+@GenerateNiceMocks([MockSpec<api_service_file.ApiService>()])
 void main() {
   group('moveMemoProvider Tests', () {
     late MockApiService mockApiService;
@@ -386,7 +390,11 @@ void main() {
       );
 
       // Verify optimistic removal
-      verify(mockMemosNotifier.removeMemoOptimistically(memoToMove.id)).called(1);
+      verify(
+        container
+            .read(memosNotifierProvider.notifier)
+            .removeMemoOptimistically(memoToMove.id),
+      ).called(1);
 
       // Verify all creation steps happened
       verify(
