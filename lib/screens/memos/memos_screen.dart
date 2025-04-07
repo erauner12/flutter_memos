@@ -12,6 +12,7 @@ import 'package:flutter_memos/providers/ui_providers.dart'
 // Import MemosBody
 import 'package:flutter_memos/screens/memos/memos_body.dart';
 import 'package:flutter_memos/utils/keyboard_navigation.dart'; // Add import
+import 'package:flutter_memos/widgets/advanced_filter_panel.dart'; // Add import for AdvancedFilterPanel
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class MemosScreen extends ConsumerStatefulWidget {
