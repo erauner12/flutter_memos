@@ -21,7 +21,7 @@ import 'markdown_rendering_test.mocks.dart';
 // Import the mock for UrlLauncherService
 import '../../../core/services/url_launcher_service_test.mocks.dart'; // Path to core service mocks is correct
 // Import test utility
-import '../../utils/test_debug.dart'; // Corrected path relative to features/markdown/rendering
+import '../../../utils/test_debug.dart'; // Go up two levels to reach test/utils/
 
 // Annotation to generate nice mock for ApiService
 @GenerateNiceMocks([MockSpec<ApiService>()])

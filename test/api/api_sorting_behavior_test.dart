@@ -17,13 +17,13 @@ const bool RUN_API_TESTS = true;
 void main() {
   group('API Server Tests - Sorting Behavior', () {
     late ApiService apiService;
-    
+
     setUp(() {
       apiService = ApiService();
       ApiService.verboseLogging = true;
       // Make sure snake_case conversion is enabled for API requests
     });
-    
+
     test('Server respects sort parameters', () async {
       // Skip this test unless RUN_API_TESTS is true
       if (!RUN_API_TESTS) {
@@ -37,7 +37,7 @@ void main() {
         sort: 'updateTime',
         direction: 'DESC',
       );
-      
+
       // Removed fetching by createTime as it's unreliable and not used
 
       // Log the first few memos from the query after client-side sorting
@@ -57,20 +57,24 @@ void main() {
       print('\n--- Client-Side Sorting Verification ---');
       // Verify the client-side sorting by updateTime worked (redundant with sorting_test but good here too)
       bool clientSortedCorrectly = true;
-      // Access the .memos list
-      for (int i = 0; i < memosByUpdateTime.memos.length - 1; i++) {
-        final current =
-            memosByUpdateTime.memos[i].updateTime != null
-                ? DateTime.parse(memosByUpdateTime.memos[i].updateTime!)
+      final sortedMemos = memosByUpdateTime.memos; // Get the list once
+      for (int i = 0; i < sortedMemos.length - 1; i++) {
+        final currentMemo = sortedMemos[i];
+        final nextMemo = sortedMemos[i + 1];
+        final currentTime =
+            currentMemo.updateTime != null
+                ? DateTime.parse(currentMemo.updateTime!)
                 : DateTime.fromMillisecondsSinceEpoch(0);
-        final next =
-            memosByUpdateTime.memos[i + 1].updateTime != null
-                ? DateTime.parse(memosByUpdateTime.memos[i + 1].updateTime!)
+        final nextTime =
+            nextMemo.updateTime != null
+                ? DateTime.parse(nextMemo.updateTime!)
                 : DateTime.fromMillisecondsSinceEpoch(0);
-        if (!(current.isAfter(next) || current.isAtSameMomentAs(next))) {
+
+        // Descending order check (current time should be >= next time)
+        if (currentTime.isBefore(nextTime)) {
           clientSortedCorrectly = false;
           print(
-            'Client sorting error at index $i: ${memosByUpdateTime.memos[i].id} vs ${memosByUpdateTime.memos[i + 1].id}',
+            'Client sorting error at index $i: ${currentMemo.id} (${currentTime.toIso8601String()}) vs ${nextMemo.id} (${nextTime.toIso8601String()})',
           );
           break;
         }
@@ -85,7 +89,6 @@ void main() {
         isTrue,
         reason: 'Client should sort correctly by updateTime',
       );
-
     });
 
     test('Verify client-side sorting behavior', () async {
@@ -98,14 +101,14 @@ void main() {
       print('\n=== SERVER SORTING LIMITATION DOCUMENTATION ===');
       print(ApiService.SORTING_LIMITATION);
       print('\n=== TESTING CLIENT-SIDE SORTING CAPABILITIES ===');
-      
+
       // Get memos with server-side sort by updateTime
       final memos = await apiService.listMemos(
         parent: 'users/1', // Specify the user ID
         sort: 'updateTime',
         direction: 'DESC',
       );
-      
+
       // Get the original server order before client-side sorting was applied
       final originalServerOrder = ApiService.lastServerOrder;
 
@@ -122,21 +125,21 @@ void main() {
               .where((id) => memoMap.containsKey(id))
               .map((id) => memoMap[id]!)
               .toList();
-      
+
       // Log the first few memos from the original server order vs client-sorted order
       print('\n--- First 3 memos in original server order ---');
       for (int i = 0; i < min(3, serverOrderedMemos.length); i++) {
         print('[${i + 1}] ID: ${serverOrderedMemos[i].id}');
         print('    updateTime: ${serverOrderedMemos[i].updateTime}');
       }
-      
+
       print('\n--- First 3 memos after client-side sorting ---');
       // Access the .memos list
       for (int i = 0; i < min(3, memos.memos.length); i++) {
         print('[${i + 1}] ID: ${memos.memos[i].id}');
         print('    updateTime: ${memos.memos[i].updateTime}');
       }
-      
+
       // Check for differences in ordering
       bool ordersAreDifferent = false;
       // Access the .memos list
@@ -150,7 +153,7 @@ void main() {
           break;
         }
       }
-      
+
       if (ordersAreDifferent) {
         print(
           '✅ Client-side sorting changed the order - server sorting was not optimal',
@@ -160,27 +163,31 @@ void main() {
           'ℹ️ Client-side sorting preserved the order - server sort was already correct',
         );
       }
-      
+
       // Verify that the client-side sorting actually produced a correctly sorted list
-      // Access the .memos list
-      for (int i = 0; i < memos.memos.length - 1; i++) {
-        final current =
-            memos.memos[i].updateTime != null
-                ? DateTime.parse(memos.memos[i].updateTime!)
-                :
-                        DateTime.fromMillisecondsSinceEpoch(0);
-        
-        final next =
-            memos.memos[i + 1].updateTime != null
-                ? DateTime.parse(memos.memos[i + 1].updateTime!)
-                :
-                     DateTime.fromMillisecondsSinceEpoch(0);
-        
-        // Newest first, so current should be >= next
-        expect(current.isAfter(next) || current.isAtSameMomentAs(next), isTrue,
-              reason: 'Client-side sorting should properly sort by updateTime (newest first)');
+      final sortedMemos = memos.memos; // Get the list once
+      for (int i = 0; i < sortedMemos.length - 1; i++) {
+        final currentMemo = sortedMemos[i];
+        final nextMemo = sortedMemos[i + 1];
+        final currentTime =
+            currentMemo.updateTime != null
+                ? DateTime.parse(currentMemo.updateTime!)
+                : DateTime.fromMillisecondsSinceEpoch(0);
+        final nextTime =
+            nextMemo.updateTime != null
+                ? DateTime.parse(nextMemo.updateTime!)
+                : DateTime.fromMillisecondsSinceEpoch(0);
+
+        // Descending order check (current time should be >= next time)
+        expect(
+          currentTime.isAfter(nextTime) ||
+              currentTime.isAtSameMomentAs(nextTime),
+          isTrue,
+          reason:
+              'Client-side sorting should properly sort by updateTime (newest first). Failed at index $i: ${currentMemo.id} (${currentTime.toIso8601String()}) vs ${nextMemo.id} (${nextTime.toIso8601String()})',
+        );
       }
-      
+
       // Check if the server already sorted correctly by updateTime
       bool serverSortedCorrectly = true;
       for (int i = 0; i < serverOrderedMemos.length - 1; i++) {
@@ -206,7 +213,7 @@ void main() {
         print('⚠️ Server did NOT sort correctly by updateTime');
       }
     });
-    
+
     test('Compare snake_case vs camelCase API sorting', () async {
       // Skip this test unless RUN_API_TESTS is true
       if (!RUN_API_TESTS) {
