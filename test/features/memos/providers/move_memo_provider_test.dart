@@ -1,28 +1,55 @@
-import 'package:flutter_memos/api/lib/api.dart';
+import 'package:flutter/foundation.dart'; // Import for kDebugMode
 import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/models/memo.dart';
 import 'package:flutter_memos/models/server_config.dart';
 import 'package:flutter_memos/providers/api_providers.dart';
-import 'package:flutter_memos/providers/memo_providers.dart';
+import 'package:flutter_memos/providers/memo_providers.dart'; // Import memo_providers for moveMemoProvider
 import 'package:flutter_memos/providers/server_config_provider.dart';
-import 'package:flutter_memos/services/api_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
 
-// Import mocks from memo_providers_test for MemosNotifier
-import 'memo_providers_test.mocks.dart' show MockMemosNotifier;
 // Import generated mocks
 import 'move_memo_provider_test.mocks.dart';
 
 // Generate mocks for ApiService
+class MockMemosNotifier extends MemosNotifier {
+  MockMemosNotifier(super.ref, MemosState initialState)
+    : super(skipInitialFetchForTesting: true) {
+    if (kDebugMode) {
+      print(
+        '[MockMemosNotifier - move_memo_test] Initializing with ${initialState.memos.length} memos',
+      );
+    }
+    state = initialState;
+  }
+
+  @override
+  Future<void> refresh() async {
+    if (kDebugMode) {
+      print('[MockMemosNotifier - move_memo_test] Refresh called - no-op');
+    }
+    /* No-op */
+  }
+
+  @override
+  Future<void> fetchMoreMemos() async {
+    if (kDebugMode) {
+      print(
+        '[MockMemosNotifier - move_memo_test] FetchMoreMemos called - no-op',
+      );
+    }
+    /* No-op */
+  }
+}
+
 @GenerateNiceMocks([MockSpec<ApiService>()])
 void main() {
   group('moveMemoProvider Tests', () {
     late MockApiService mockApiService;
     late ProviderContainer container;
-    late MockMemosNotifier mockMemosNotifier; // Use the mock notifier
+
 
     final sourceServer = ServerConfig(
       id: 'source-id',
@@ -55,17 +82,10 @@ void main() {
       createTime: DateTime.now().millisecondsSinceEpoch,
     );
 
-    // Corresponding API models for comments (needed for mocking createMemoComment)
-    final apiComment1 = Apiv1Memo(name: 'memos/comment1', content: comment1.content);
-    final apiComment2 = Apiv1Memo(name: 'memos/comment2', content: comment2.content);
+
 
     setUp(() {
       mockApiService = MockApiService();
-      // Initialize the mock notifier with an empty state or relevant initial state
-      mockMemosNotifier = MockMemosNotifier(
-        ProviderContainer(), // Pass a dummy container or ref
-        MemosState(memos: [memoToMove]), // Start with the memo present
-      );
 
       container = ProviderContainer(
         overrides: [
@@ -73,12 +93,14 @@ void main() {
           // Provide the source server as the active one initially
           activeServerConfigProvider.overrideWithValue(sourceServer),
           // Override the memosNotifierProvider to use our mock
-          memosNotifierProvider.overrideWithValue(
-            mockMemosNotifier,
-            // Provide the notifier instance directly
-            // This requires adjusting the override slightly if using overrideWith
-            // For simplicity, overrideWithValue is used here.
-          ),
+          // Use overrideWith for StateNotifierProvider
+          memosNotifierProvider.overrideWith((ref) {
+            // Initialize the mock notifier with an empty state or relevant initial state
+            return MockMemosNotifier(
+              ref, // Pass the ref from the override function
+              MemosState(memos: [memoToMove]), // Start with the memo present
+            );
+          }),
         ],
       );
 
@@ -148,7 +170,11 @@ void main() {
 
       // Assert
       // Verify optimistic removal was called on the notifier
-      verify(mockMemosNotifier.removeMemoOptimistically(memoToMove.id)).called(1);
+      verify(
+        container
+            .read(memosNotifierProvider.notifier)
+            .removeMemoOptimistically(memoToMove.id),
+      ).called(1);
 
       // Verify API calls
       verify(
@@ -216,7 +242,11 @@ void main() {
       );
 
       // Verify optimistic removal was still called
-      verify(mockMemosNotifier.removeMemoOptimistically(memoToMove.id)).called(1);
+      verify(
+        container
+            .read(memosNotifierProvider.notifier)
+            .removeMemoOptimistically(memoToMove.id),
+      ).called(1);
 
       // Verify initial fetches happened
       verify(
@@ -281,7 +311,11 @@ void main() {
 
       // Assert
       // Verify optimistic removal
-      verify(mockMemosNotifier.removeMemoOptimistically(memoToMove.id)).called(1);
+      verify(
+        container
+            .read(memosNotifierProvider.notifier)
+            .removeMemoOptimistically(memoToMove.id),
+      ).called(1);
 
       // Verify all initial steps happened
       verify(
