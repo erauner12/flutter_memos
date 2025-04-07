@@ -3,7 +3,7 @@ import 'package:flutter/foundation.dart';
 // Keep specific framework imports needed
 import 'package:flutter/services.dart'; // Add import for keyboard events
 import 'package:flutter_memos/models/memo.dart';
- // import 'package:flutter_memos/models/server_config.dart'; // Remove this import
+// import 'package:flutter_memos/models/server_config.dart'; // Remove this import
 import 'package:flutter_memos/providers/filter_providers.dart';
 import 'package:flutter_memos/providers/memo_providers.dart';
 import 'package:flutter_memos/providers/server_config_provider.dart'; // Import server config provider
@@ -364,7 +364,7 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
               // Option 1: Place it below the Nav Bar using a Column in the body.
               // Option 2: Use CupertinoSearchTextField (requires more integration).
               // Let's go with Option 1 for now.
-            )
+              ), // Added comma here
       child: SafeArea(
         // Add SafeArea
         child: Focus(
@@ -659,40 +659,6 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
       ),
       // prefixIcon and suffixIcon are built-in
       onChanged: (value) {
-        // Update the search query provider as user types
-        ref.read(searchQueryProvider.notifier).state = value;
-
-        // If value is non-empty and we have local search disabled, we might want
-        // to trigger a server search after debouncing
-        final isLocalSearch = ref.read(localSearchEnabledProvider);
-        if (!isLocalSearch && value.isNotEmpty) {
-          // In a real app, you'd add debouncing logic here
-          // For now, we'll refresh immediately when local search is disabled
-          ref.read(memosNotifierProvider.notifier).refresh();
-        }
-      },
-    );
-  }
-    final searchQuery = ref.watch(searchQueryProvider);
-    final TextEditingController controller = TextEditingController(
-      text: searchQuery,
-    );
-    controller.selection = TextSelection.fromPosition(
-      TextPosition(offset = controller.text.length),
-    ); // Place cursor at the end
-
-    // Use CupertinoSearchTextField for a native look
-    return CupertinoSearchTextField(
-      controller = controller,
-      placeholder = 'Search memos...',
-      // Style based on theme
-      style = TextStyle(color: CupertinoColors.label.resolveFrom(context)),
-      decoration = BoxDecoration(
-        color: CupertinoColors.systemFill.resolveFrom(context),
-        borderRadius: BorderRadius.circular(10.0),
-      ),
-      // prefixIcon and suffixIcon are built-in
-      onChanged = (value) {
         // Update the search query provider as user types
         ref.read(searchQueryProvider.notifier).state = value;
 
