@@ -296,12 +296,12 @@ void main() {
         isNotNull,
         reason: 'Highlighted border side should exist (Light)',
       );
-      // Use equals for direct Color comparison
+      // Use equals for direct Color comparison by value
       expect(
-        actualBorderSide?.color,
+        actualBorderSide?.color.value,
         equals(
-          resolvedBorderColor,
-        ), // Compare the actual Color with the expected resolved Color
+          resolvedBorderColor.value,
+        ), // Compare the actual Color value with the expected resolved Color value
         reason: 'Highlighted border color mismatch (Light)',
       );
       expect(
@@ -359,12 +359,12 @@ void main() {
         isNotNull,
         reason: 'Highlight override border side should exist',
       );
-      // Use equals for direct Color comparison
+      // Use equals for direct Color comparison by value
       expect(
-        actualBorderSide?.color,
+        actualBorderSide?.color.value,
         equals(
-          resolvedBorderColor,
-        ), // Compare the actual Color with the expected resolved Color
+          resolvedBorderColor.value,
+        ), // Compare the actual Color value with the expected resolved Color value
         reason: 'Highlight override border color mismatch',
       );
       expect(

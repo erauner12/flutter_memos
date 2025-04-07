@@ -137,11 +137,12 @@ void main() {
       tester.element(containerFinder), // Pass the context here
     );
     // Ensure we compare Color objects, not CupertinoDynamicColor
+    // Compare the resolved value
     expect(
-      actualBorder?.top.color, // Check one side's color
+      actualBorder?.top.color.value, // Check one side's color value
       equals(
-        resolvedExpectedBorderColor,
-      ), // Compare the actual Color with the resolved Color
+        resolvedExpectedBorderColor.value,
+      ), // Compare the actual Color value with the resolved Color value
       reason: 'Highlighted border color mismatch (Theme: ${theme.brightness})',
     );
 
