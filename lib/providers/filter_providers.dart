@@ -1,80 +1,69 @@
 import 'package:flutter/cupertino.dart'; // Import Cupertino for IconData
 import 'package:flutter/foundation.dart';
-import 'package:flutter_memos/utils/filter_builder.dart';
 import 'package:flutter_memos/utils/filter_presets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// OPTIMIZATION: Define a class for filter options
-class FilterOption {
+// Define preset details including the CEL filter string
+class QuickFilterPreset {
   final String key;
   final String label;
-  final IconData? icon; // Optional icon
+  final String celFilter; // The actual filter string for this preset
+  final IconData? icon; // Optional icon for display
 
-  const FilterOption({required this.key, required this.label, this.icon});
+  const QuickFilterPreset({
+    required this.key,
+    required this.label,
+    required this.celFilter,
+    this.icon,
+  });
 }
 
-/// OPTIMIZATION: Constant list for status filter options
-const List<FilterOption> statusFilterOptions = [
-  FilterOption(
-    key: 'untagged',
-    label: 'Untagged',
-    icon:
-        CupertinoIcons.clear, // Using clear icon since tag_slash doesn't exist
+// Define the available quick filter presets
+final Map<String, QuickFilterPreset> quickFilterPresets = {
+  'inbox': QuickFilterPreset(
+    key: 'inbox',
+    label: 'Inbox',
+    celFilter: FilterPresets.untaggedFilter(), // Example: Inbox = Untagged
+    icon: CupertinoIcons.tray_arrow_down,
   ),
-  FilterOption(
-    key: 'tagged',
-    label: 'Tagged',
-    icon: CupertinoIcons.tag,
-  ), // Changed to Cupertino equivalent
-  FilterOption(
-    key: 'all',
-    label: 'All Status',
-    icon: CupertinoIcons.collections,
-  ), // Changed to Cupertino equivalent
-];
-
-/// OPTIMIZATION: Constant list for time filter options
-const List<FilterOption> timeFilterOptions = [
-  FilterOption(
+  'today': QuickFilterPreset(
     key: 'today',
     label: 'Today',
+    celFilter: FilterPresets.todayFilter(),
     icon: CupertinoIcons.today,
-  ), // Changed to Cupertino equivalent
-  FilterOption(
-    key: 'created_today',
-    label: 'Created Today',
-    icon: CupertinoIcons.add_circled, // Changed to Cupertino equivalent
   ),
-  FilterOption(
-    key: 'updated_today',
-    label: 'Updated Today',
-    icon: CupertinoIcons.refresh_circled, // Changed to Cupertino equivalent
+  'tagged': QuickFilterPreset(
+    key: 'tagged',
+    label: 'Tagged',
+    celFilter: FilterPresets.taggedFilter(),
+    icon: CupertinoIcons.tag,
   ),
-  FilterOption(
-    key: 'this_week',
-    label: 'This Week',
-    icon:
-        CupertinoIcons
-            .calendar_today, // Changed to Cupertino equivalent (calendar_view_week doesn't exist)
-  ),
-  FilterOption(
-    key: 'important',
-    label: 'Important',
-    icon:
-        CupertinoIcons
-            .star, // Changed to Cupertino equivalent (star_border doesn't exist)
-  ), // Assuming 'important' maps to a tag
-  FilterOption(
+  'all': QuickFilterPreset(
     key: 'all',
-    label: 'All Time',
-    icon: CupertinoIcons.calendar,
-  ), // Changed to Cupertino equivalent
-];
+    label: 'All',
+    celFilter: FilterPresets.allFilter(), // Use the new allFilter preset
+    icon: CupertinoIcons.collections,
+  ),
+  // Special key to indicate a custom filter from the advanced panel is active
+  'custom': const QuickFilterPreset(
+    key: 'custom',
+    label: 'Custom', // Label for when advanced filter is used
+    celFilter: '', // Filter comes from rawCelFilterProvider
+    icon: CupertinoIcons.tuningfork,
+  ),
+};
+
+/// Provider for the key of the currently selected quick filter preset.
+/// Defaults to 'inbox'.
+final quickFilterPresetProvider = StateProvider<String>(
+  (ref) => 'inbox', // Default preset
+  name: 'quickFilterPresetProvider',
+);
 
 /// Provider for advanced CEL filter expressions entered directly by the user
 /// This allows users to enter complex filter expressions that can't be
-/// easily expressed through the UI controls
+/// easily expressed through the UI controls. Used when quickFilterPresetProvider is 'custom'.
 final rawCelFilterProvider = StateProvider<String>(
   (ref) => '',
   name: 'rawCelFilter',
@@ -90,27 +79,33 @@ final showAdvancedFilterProvider = StateProvider<bool>(
 /// When true, pinned items will be hidden from view
 final hidePinnedProvider = StateProvider<bool>((ref) => false);
 
-/// Provider for the time-based filter option ('today', 'this_week', etc.)
-///
-/// OPTIMIZATION: Added name for better debugging
-final timeFilterProvider = StateProvider<String>(
-  (ref) => 'all',
-  name: 'timeFilter',
-);
-
-/// Provider for the status-based filter option ('untagged', 'tagged', 'all')
-///
-/// OPTIMIZATION: Added name for better debugging
-final statusFilterProvider = StateProvider<String>(
-  (ref) => 'untagged',
-  name: 'statusFilter',
-);
+// REMOVED: timeFilterProvider
+// REMOVED: statusFilterProvider
 
 /// Provider for the current filter key ('inbox', 'archive', 'all', or a tag)
-///
-/// OPTIMIZATION: Added name for better debugging
+/// This seems redundant now with quickFilterPresetProvider, consider removing or refactoring if not used elsewhere.
+/// Keeping it for now in case MemosNotifier or other parts rely on it directly.
+/// It now attempts to derive its state from the quick preset.
 final filterKeyProvider = StateProvider<String>(
-  (ref) => 'inbox',
+  (ref) {
+  // Attempt to sync with quickFilterPresetProvider if possible
+  final presetKey = ref.watch(quickFilterPresetProvider);
+  // Map preset keys to legacy filter keys if needed, otherwise return preset key
+  // This mapping might need adjustment based on how MemosNotifier uses filterKey
+  if (presetKey == 'inbox')
+    return 'inbox'; // Assuming 'inbox' preset maps to 'inbox' key
+  if (presetKey == 'all')
+    return 'all'; // Assuming 'all' preset maps to 'all' key
+  if (presetKey == 'tagged')
+    return 'all'; // Example: Maybe 'tagged' should show 'all' states? Adjust as needed.
+  if (presetKey == 'today')
+    return 'all'; // Example: Maybe 'today' should show 'all' states? Adjust as needed.
+  if (presetKey == 'custom')
+    return 'all'; // Custom filter likely applies to 'all' states
+
+  // Fallback if presetKey doesn't match known legacy keys
+  return presetKey;
+},
   name: 'filterKey',
 );
 
@@ -141,186 +136,114 @@ final searchDebounceProvider = StateProvider<int>(
 );
 
 /// Provider that combines all filter options into a single filter string
-///
-/// OPTIMIZATION: Added memoization, better commenting, and debugging
+/// Prioritizes quick presets, falls back to raw CEL filter if preset is 'custom'.
 final combinedFilterProvider = Provider<String>((ref) {
-  // First check if an advanced raw CEL filter is present
-  final rawCelFilter = ref.watch(rawCelFilterProvider.select((value) => value));
-
-  // If a raw CEL filter is provided, it takes precedence over UI-based filters
-  if (rawCelFilter.isNotEmpty) {
-    if (kDebugMode) {
-      print('[combinedFilterProvider] Using raw CEL filter: $rawCelFilter');
-    }
-    return rawCelFilter;
-  }
-
-  // Otherwise continue with UI-based filters
-  // OPTIMIZATION: Use select() to only watch the specific values needed
-  final timeFilter = ref.watch(timeFilterProvider.select((value) => value));
-  final statusFilter = ref.watch(statusFilterProvider.select((value) => value));
-  final filterList = <String>[];
+  final selectedPresetKey = ref.watch(quickFilterPresetProvider);
 
   if (kDebugMode) {
-    print(
-      '[combinedFilterProvider] Building filter with time=$timeFilter, status=$statusFilter',
-    );
+    print('[combinedFilterProvider] Selected preset key: $selectedPresetKey');
   }
 
-  // Apply time-based filter
-  String? timeFilterString;
-  switch (timeFilter) {
-    case 'today':
-      timeFilterString = FilterPresets.todayFilter();
-      break;
-    case 'created_today':
-      timeFilterString = FilterPresets.createdTodayFilter();
-      break;
-    case 'updated_today':
-      timeFilterString = FilterPresets.updatedTodayFilter();
-      break;
-    case 'this_week':
-      timeFilterString = FilterPresets.thisWeekFilter();
-      break;
-    case 'important':
-      timeFilterString = FilterPresets.importantFilter();
-      break;
-    case 'all':
-    default:
-      timeFilterString = null; // No time filter
-  }
-
-  // Apply status-based filter
-  String? statusFilterString;
-  switch (statusFilter) {
-    case 'untagged':
-      statusFilterString = FilterPresets.untaggedFilter();
-      break;
-    case 'tagged':
-      statusFilterString = FilterPresets.taggedFilter();
-      break;
-    case 'all':
-    default:
-      statusFilterString = null; // No status filter
-  }
-
-  // Add filters to the list
-  if (timeFilterString != null) {
-    filterList.add(timeFilterString);
+  if (selectedPresetKey == 'custom') {
+    // Use the raw CEL filter from the advanced panel
+    final rawFilter = ref.watch(rawCelFilterProvider);
     if (kDebugMode) {
-      print('[combinedFilterProvider] Added time filter: $timeFilterString');
+      print('[combinedFilterProvider] Using raw CEL filter: $rawFilter');
     }
-  }
-
-  if (statusFilterString != null) {
-    filterList.add(statusFilterString);
+    return rawFilter;
+  } else {
+    // Look up the CEL filter associated with the selected quick preset
+    final preset = quickFilterPresets[selectedPresetKey];
+    final presetFilter =
+        preset?.celFilter ?? ''; // Default to empty if key not found
     if (kDebugMode) {
       print(
-        '[combinedFilterProvider] Added status filter: $statusFilterString',
+        '[combinedFilterProvider] Using filter for preset "$selectedPresetKey": $presetFilter',
       );
     }
+    return presetFilter;
   }
-
-  // Combine all active filters
-  if (filterList.isEmpty) {
-    return '';
-  }
-  
-  final combinedFilter = FilterBuilder.and(filterList);
-
-  if (kDebugMode) {
-    print('[combinedFilterProvider] Final filter: $combinedFilter');
-  }
-
-  return combinedFilter;
 }, name: 'combinedFilter');
 
-/// Provider for storing filter preferences
-///
-/// OPTIMIZATION: Added better error handling, logging, and caching of preferences
+/// Provider for storing filter preferences (now stores the preset key)
 final filterPreferencesProvider = Provider<
-  Future<bool> Function(String timeFilter, String statusFilter)
+  Future<bool> Function(String presetKey)
 >((ref) {
-  return (String timeFilter, String statusFilter) async {
+  return (String presetKey) async {
     try {
       if (kDebugMode) {
         print(
-          '[filterPreferencesProvider] Saving preferences: time=$timeFilter, status=$statusFilter',
+          '[filterPreferencesProvider] Saving preset preference: $presetKey',
         );
       }
-      
       final prefs = await SharedPreferences.getInstance();
-      
-      // OPTIMIZATION: Save in parallel for better performance
-      final results = await Future.wait([
-        prefs.setString('last_time_filter', timeFilter),
-        prefs.setString('last_status_filter', statusFilter),
-      ]);
-
-      // Check if all operations succeeded
-      final success = results.every((result) => result);
+      // Ensure we only save valid preset keys (excluding 'custom')
+      final keyToSave =
+          quickFilterPresets.containsKey(presetKey) && presetKey != 'custom'
+              ? presetKey
+              : 'inbox'; // Default to 'inbox' if invalid or 'custom'
+      final success = await prefs.setString('last_quick_preset', keyToSave);
 
       if (kDebugMode) {
         print(
-          '[filterPreferencesProvider] Saved preferences: ${success ? 'success' : 'partial failure'}',
+          '[filterPreferencesProvider] Saved preset preference ($keyToSave): ${success ? 'success' : 'failure'}',
         );
       }
-
       return success;
     } catch (e) {
       if (kDebugMode) {
-        print('[filterPreferencesProvider] Error saving preferences: $e');
+        print('[filterPreferencesProvider] Error saving preset preference: $e');
       }
       return false;
     }
   };
 }, name: 'filterPreferences');
 
-/// Provider for loading saved filter preferences
-///
-/// OPTIMIZATION: Added better error handling, logging, and caching
+/// Provider for loading saved filter preferences (now loads the preset key)
 final loadFilterPreferencesProvider = FutureProvider<bool>((ref) async {
   if (kDebugMode) {
-    print('[loadFilterPreferencesProvider] Loading saved filter preferences');
+    print('[loadFilterPreferencesProvider] Loading saved preset preference');
   }
-  
   try {
     final prefs = await SharedPreferences.getInstance();
-    
-    // OPTIMIZATION: Read all preferences at once to avoid multiple async calls
-    final lastTimeFilter = prefs.getString('last_time_filter');
-    final lastStatusFilter = prefs.getString('last_status_filter');
-    
-    // OPTIMIZATION: Only update state if we actually have saved preferences
-    if (lastTimeFilter != null) {
-      ref.read(timeFilterProvider.notifier).state = lastTimeFilter;
-      if (kDebugMode) {
-        print(
-          '[loadFilterPreferencesProvider] Loaded time filter: $lastTimeFilter',
-        );
-      }
-    }
+    final lastPresetKey = prefs.getString('last_quick_preset');
 
-    if (lastStatusFilter != null) {
-      ref.read(statusFilterProvider.notifier).state = lastStatusFilter;
+    // Load the saved preset if it's valid and exists in our map
+    if (lastPresetKey != null &&
+        quickFilterPresets.containsKey(lastPresetKey)) {
+      // Do not load 'custom' as the initial state, default to 'inbox' instead
+      final keyToLoad = lastPresetKey == 'custom' ? 'inbox' : lastPresetKey;
+      ref.read(quickFilterPresetProvider.notifier).state = keyToLoad;
       if (kDebugMode) {
         print(
-          '[loadFilterPreferencesProvider] Loaded status filter: $lastStatusFilter',
+          '[loadFilterPreferencesProvider] Loaded preset preference: $keyToLoad',
         );
       }
+    } else if (lastPresetKey != null) {
+      if (kDebugMode) {
+        print(
+          '[loadFilterPreferencesProvider] Ignored invalid saved preset key: $lastPresetKey',
+        );
+      }
+      // Optionally set to default if saved key is invalid
+      // ref.read(quickFilterPresetProvider.notifier).state = 'inbox';
+    } else {
+      // If no preference saved, ensure default is set (although provider default handles this)
+      // ref.read(quickFilterPresetProvider.notifier).state = 'inbox';
     }
 
     return true;
   } catch (e) {
     if (kDebugMode) {
-      print('[loadFilterPreferencesProvider] Error loading preferences: $e');
+      print(
+        '[loadFilterPreferencesProvider] Error loading preset preference: $e',
+      );
     }
     return false;
   }
 }, name: 'loadFilterPreferences');
 
 /// OPTIMIZATION: Provider that keeps track of filter change history
-/// This is useful for implementing undo/redo functionality
 final filterHistoryProvider = StateProvider<List<Map<String, String>>>((ref) {
   // Store up to 10 recent filter configurations
   return [];
@@ -328,45 +251,56 @@ final filterHistoryProvider = StateProvider<List<Map<String, String>>>((ref) {
 
 /// OPTIMIZATION: A listener that adds configurations to history when they change
 final filterHistoryTrackerProvider = Provider<void>((ref) {
-  // Set up a listener for filter changes
-  ref.listen<String>(timeFilterProvider, (previous, current) {
+  // Listen to the quick preset provider
+  ref.listen<String>(quickFilterPresetProvider, (previous, current) {
     if (previous != current) {
-      _addToHistory(ref);
-    }
-  });
-
-  ref.listen<String>(statusFilterProvider, (previous, current) {
-    if (previous != current) {
-      _addToHistory(ref);
-    }
-  });
-
-  ref.listen<String>(filterKeyProvider, (previous, current) {
-    if (previous != current) {
-      // Also track the previous filter key
+      // Track the previous preset key
       ref.read(lastUsedFilterKeyProvider.notifier).state = previous;
+      _addToHistory(ref); // Add the new state to history
+    }
+  });
+
+  // Also listen to raw filter changes when the mode is 'custom'
+  ref.listen<String>(rawCelFilterProvider, (previous, current) {
+    final currentPreset = ref.read(quickFilterPresetProvider);
+    // Only add raw filter changes to history if we are in custom mode
+    if (currentPreset == 'custom' && previous != current) {
       _addToHistory(ref);
     }
   });
-  
+
+  // No need to listen to filterKeyProvider anymore if it's derived
+
   return;
 }, name: 'filterHistoryTracker');
 
 // Helper function to add current filter configuration to history
 void _addToHistory(Ref ref) {
-  final timeFilter = ref.read(timeFilterProvider);
-  final statusFilter = ref.read(statusFilterProvider);
-  final filterKey = ref.read(filterKeyProvider);
+  final presetKey = ref.read(quickFilterPresetProvider);
+  final rawFilter = ref.read(rawCelFilterProvider);
 
   final history = ref.read(filterHistoryProvider);
 
   // Create a new configuration
   final config = {
-    'timeFilter': timeFilter,
-    'statusFilter': statusFilter,
-    'filterKey': filterKey,
+    'presetKey': presetKey,
+    // Store raw filter only if relevant (i.e., preset is 'custom')
+    'rawFilter': presetKey == 'custom' ? rawFilter : '',
   };
+
+  // Avoid adding duplicate consecutive states
+  if (history.isNotEmpty &&
+      history.first['presetKey'] == config['presetKey'] &&
+      history.first['rawFilter'] == config['rawFilter']) {
+    if (kDebugMode) {
+      print('[filterHistory] Skipping duplicate state: $config');
+    }
+    return;
+  }
 
   // Add to history, limiting to 10 items
   ref.read(filterHistoryProvider.notifier).state = [config, ...history.take(9)];
+  if (kDebugMode) {
+    print('[filterHistory] Added state: $config');
+  }
 }

@@ -144,7 +144,7 @@ class MemosNotifier extends StateNotifier<MemosState> {
       }
       return;
     }
-    
+  
     // Listen to providers that should trigger a full refresh
     _ref.listen(
       apiServiceProvider,
@@ -152,9 +152,9 @@ class MemosNotifier extends StateNotifier<MemosState> {
     ); // Add listener for API service changes
     _ref.listen(combinedFilterProvider, (_, __) => refresh());
     _ref.listen(filterKeyProvider, (_, __) => refresh());
-    _ref.listen(statusFilterProvider, (_, __) => refresh());
-    _ref.listen(timeFilterProvider, (_, __) => refresh());
-
+    // REMOVED: Listener for statusFilterProvider
+    // REMOVED: Listener for timeFilterProvider
+  
     // Fetch initial data
     fetchInitialPage();
   }
@@ -195,8 +195,7 @@ class MemosNotifier extends StateNotifier<MemosState> {
               : FilterBuilder.and([finalFilter, tagFilter]);
     }
   
-    // Read status filter for potential client-side filtering (e.g., untagged)
-    final statusFilter = _ref.read(statusFilterProvider);
+    // REMOVED: Reading statusFilterProvider
   
     if (kDebugMode) {
       print(
@@ -242,23 +241,9 @@ class MemosNotifier extends StateNotifier<MemosState> {
       var newMemos = response.memos;
       final nextPageToken = response.nextPageToken;
   
-      // *** MODIFIED: Only apply client-side untagged filter if statusFilter is 'untagged' ***
-      if (statusFilter == 'untagged' && newMemos.isNotEmpty) {
-        newMemos =
-            newMemos.where((memo) {
-              final hasTags =
-                  memo.content.contains('#') ||
-                  (memo.resourceNames != null &&
-                      memo.resourceNames!.isNotEmpty);
-              return !hasTags;
-            }).toList();
-        if (kDebugMode) {
-          print(
-            '[MemosNotifier] Applied client-side untagged filter, ${newMemos.length} memos remain.',
-          );
-        }
-      }
-      // *** END MODIFICATION ***
+      // REMOVED: Client-side untagged filter logic based on statusFilterProvider
+      // This filtering should now be handled by the server via combinedFilterProvider
+      // or specific presets like FilterPresets.untaggedFilter().
   
       // Determine if we've reached the end
       final hasReachedEnd =

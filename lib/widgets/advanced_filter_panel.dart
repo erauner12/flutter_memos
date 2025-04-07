@@ -2,7 +2,6 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 // No Material import needed anymore
 import 'package:flutter_memos/providers/filter_providers.dart';
-import 'package:flutter_memos/providers/memo_providers.dart';
 import 'package:flutter_memos/utils/filter_builder.dart';
 import 'package:flutter_memos/utils/filter_presets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -22,8 +21,10 @@ class AdvancedFilterPanel extends ConsumerStatefulWidget {
 class _AdvancedFilterPanelState extends ConsumerState<AdvancedFilterPanel> {
   // Controllers for filter inputs
   late TextEditingController _rawFilterController;
+  // Add a ScrollController that will be properly disposed
+  final ScrollController _scrollController = ScrollController();
 
-  // Local state for filter builder
+  // Local state for filter builder (Simplified: remove time/status)
   bool _useVisibilityFilter = false;
   String _selectedVisibility = 'PUBLIC';
   bool _useTagFilter = false;
@@ -31,51 +32,67 @@ class _AdvancedFilterPanelState extends ConsumerState<AdvancedFilterPanel> {
   List<String> _selectedTags = [];
   bool _useContentFilter = false;
   String _contentFilter = '';
-  bool _useTimeFilter = false;
-  String _selectedTimeRange = 'today';
+  // REMOVED: _useTimeFilter
+  // REMOVED: _selectedTimeRange
 
   // State for syntax validation
   String _syntaxError = '';
   bool _isValid = true;
 
-  // Currently selected filter preset
-  String? _selectedPreset;
+  // Currently selected filter preset (from this panel's presets)
+  String? _selectedPreset; // Keep for the panel's own presets
 
   @override
   void initState() {
     super.initState();
     _rawFilterController = TextEditingController(
-      text: ref.read(rawCelFilterProvider),
+      // Initialize with current raw filter ONLY if the current preset is 'custom'
+      text:
+          ref.read(quickFilterPresetProvider) == 'custom'
+              ? ref.read(rawCelFilterProvider)
+              : '',
     );
     _rawFilterController.addListener(_validateFilter);
 
-    // Initialize filter settings from current filter if possible
-    _initializeFromCurrentFilter();
+    // Initialize filter settings from current filter if possible (only if custom)
+    if (ref.read(quickFilterPresetProvider) == 'custom') {
+      _initializeFromCurrentFilter(ref.read(rawCelFilterProvider));
+    }
+    // Initial validation
+    _validateFilter();
   }
 
-  void _initializeFromCurrentFilter() {
-    final currentFilter = ref.read(rawCelFilterProvider);
+  // Modified to accept the current filter string
+  void _initializeFromCurrentFilter(String currentFilter) {
+    // final currentFilter = ref.read(rawCelFilterProvider); // No longer read directly
     if (currentFilter.isEmpty) return;
 
+    // Reset builder states before parsing
+    _useVisibilityFilter = false;
+    _useTagFilter = false;
+    _selectedTags = [];
+    _useContentFilter = false;
+    _contentFilter = '';
+    // Time filter state removed
+
     try {
+      // Parse visibility
       if (currentFilter.contains('visibility ==') ||
           currentFilter.contains('visibility in')) {
         _useVisibilityFilter = true;
-
-        if (currentFilter.contains('"PUBLIC"')) {
+        if (currentFilter.contains('"PUBLIC"'))
           _selectedVisibility = 'PUBLIC';
-        } else if (currentFilter.contains('"PROTECTED"')) {
+        else if (currentFilter.contains('"PROTECTED"'))
           _selectedVisibility = 'PROTECTED';
-        } else if (currentFilter.contains('"PRIVATE"')) {
+        else if (currentFilter.contains('"PRIVATE"'))
           _selectedVisibility = 'PRIVATE';
-        }
       }
 
+      // Parse tags
       if (currentFilter.contains('tag in')) {
-        _useTagFilter = true;
-
         final tagMatch = RegExp(r'tag in \[(.*?)\]').firstMatch(currentFilter);
         if (tagMatch != null && tagMatch.group(1) != null) {
+          _useTagFilter = true;
           final tagString = tagMatch.group(1)!;
           _selectedTags = tagString
                   .split(',')
@@ -85,36 +102,30 @@ class _AdvancedFilterPanelState extends ConsumerState<AdvancedFilterPanel> {
         }
       }
 
+      // Parse content
       if (currentFilter.contains('content.contains')) {
-        _useContentFilter = true;
-
         final contentMatch = RegExp(r'content.contains\("(.*?)"\)').firstMatch(currentFilter);
         if (contentMatch != null && contentMatch.group(1) != null) {
+          _useContentFilter = true;
           _contentFilter = contentMatch.group(1)!;
         }
       }
 
-      if (currentFilter.contains('create_time') || currentFilter.contains('update_time')) {
-        _useTimeFilter = true;
+      // Time filter parsing removed
 
-        if (currentFilter.contains('today')) {
-          _selectedTimeRange = 'today';
-        } else if (currentFilter.contains('this week')) {
-          _selectedTimeRange = 'this_week';
-        } else if (currentFilter.contains('this month')) {
-          _selectedTimeRange = 'this_month';
-        }
-      }
     } catch (e) {
       if (kDebugMode) {
         print('[AdvancedFilterPanel] Error parsing filter: $e');
       }
+      // Optionally reset builder state on error
     }
   }
+
 
   @override
   void dispose() {
     _rawFilterController.dispose();
+    _scrollController.dispose(); // Dispose the ScrollController
     super.dispose();
   }
 
@@ -128,6 +139,7 @@ class _AdvancedFilterPanelState extends ConsumerState<AdvancedFilterPanel> {
       return;
     }
 
+    // Use detailed validation
     final error = FilterBuilder.validateCelExpressionDetailed(filter);
     setState(() {
       _syntaxError = error;
@@ -135,8 +147,11 @@ class _AdvancedFilterPanelState extends ConsumerState<AdvancedFilterPanel> {
     });
   }
 
+  // Apply filter generated by the builder UI
   void _buildAndApplyFilter() {
-    _selectedPreset = null;
+    setState(() {
+      _selectedPreset = null; // Clear panel's preset selection
+    });
 
     List<String> filterParts = [];
 
@@ -152,26 +167,7 @@ class _AdvancedFilterPanelState extends ConsumerState<AdvancedFilterPanel> {
       filterParts.add(FilterBuilder.byContent(_contentFilter));
     }
 
-    if (_useTimeFilter) {
-      switch (_selectedTimeRange) {
-        case 'today':
-          filterParts.add(FilterPresets.todayFilter());
-          break;
-        case 'this_week':
-          filterParts.add(FilterPresets.thisWeekFilter());
-          break;
-        case 'this_month':
-          final now = DateTime.now();
-          final startOfMonth = DateTime(now.year, now.month, 1);
-          final endOfMonth = (now.month < 12)
-              ? DateTime(now.year, now.month + 1, 0)
-                  : DateTime(now.year + 1, 1, 0);
-          filterParts.add(FilterBuilder.byCreateTimeRange(startOfMonth, endOfMonth));
-          break;
-        default:
-          filterParts.add(FilterPresets.todayFilter());
-      }
-    }
+    // Time filter builder removed
 
     String finalFilter = '';
     if (filterParts.isNotEmpty) {
@@ -179,41 +175,76 @@ class _AdvancedFilterPanelState extends ConsumerState<AdvancedFilterPanel> {
     }
 
     _rawFilterController.text = finalFilter;
+    _validateFilter(); // Validate the built filter
 
-    _applyFilter(finalFilter);
-  }
-
-  void _applyFilter(String filter) {
-    ref.read(rawCelFilterProvider.notifier).state = filter;
-
-    ref.read(memosNotifierProvider.notifier).refresh();
-
-    if (mounted) {
-      // Replace SnackBar with CupertinoAlertDialog
-      showCupertinoDialog(
-        context: context,
-        builder: (context) => CupertinoAlertDialog(
-          title: const Text('Filter Applied'),
-          content: Text(filter.isEmpty ? 'Showing all memos.' : 'Custom filter is active.'),
-          actions: [
-            CupertinoDialogAction(
-              isDefaultAction: true,
-              child: const Text('OK'),
-              onPressed: () => Navigator.pop(context),
-            ),
-          ],
-        ),
-      );
+    // Apply the generated filter (which also sets preset to 'custom')
+    // Only apply if valid
+    if (_isValid) {
+      _applyFilter(finalFilter);
+    } else {
+      if (kDebugMode) {
+        print(
+          '[AdvancedFilterPanel] Builder generated invalid filter: $finalFilter',
+        );
+      }
+      // Optionally show an error message to the user
     }
   }
 
+  // Apply a filter (either from raw input, builder, or panel preset)
+  void _applyFilter(String filter) {
+    // Ensure the filter is valid before applying
+    final error = FilterBuilder.validateCelExpressionDetailed(filter);
+    if (error.isNotEmpty) {
+      setState(() {
+        _syntaxError = error;
+        _isValid = false;
+      });
+      if (kDebugMode) {
+        print('[AdvancedFilterPanel] Cannot apply invalid filter: $filter');
+      }
+      // Optionally show error dialog
+      showCupertinoDialog(
+        context: context,
+        builder:
+            (context) => CupertinoAlertDialog(
+              title: const Text('Invalid Filter'),
+              content: Text('The filter expression has errors:\n$error'),
+              actions: [
+                CupertinoDialogAction(
+                  isDefaultAction: true,
+                  child: const Text('OK'),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ],
+            ),
+      );
+      return;
+    }
+
+    // Update the raw filter provider
+    ref.read(rawCelFilterProvider.notifier).state = filter;
+    // Set the main screen's preset to 'custom' to indicate advanced filter is active
+    ref.read(quickFilterPresetProvider.notifier).state = 'custom';
+
+    // Trigger refresh (MemosNotifier should react)
+    // ref.read(memosNotifierProvider.notifier).refresh(); // Not needed if notifier watches combinedFilterProvider
+
+    // Close the panel after applying
+    widget.onClose();
+
+    // Optional: Show feedback (removed SnackBar/Dialog for brevity)
+  }
+
+  // Apply a preset *from this panel's list*
   void _applyPreset(String presetKey) {
     String filter = '';
 
     setState(() {
-      _selectedPreset = presetKey;
+      _selectedPreset = presetKey; // Track selected preset within the panel
     });
 
+    // Generate filter based on the panel's preset key
     switch (presetKey) {
       case 'today':
         filter = FilterPresets.todayFilter();
@@ -242,15 +273,23 @@ class _AdvancedFilterPanelState extends ConsumerState<AdvancedFilterPanel> {
       case 'private':
         filter = 'visibility == "PRIVATE"';
         break;
+      // Add more panel-specific presets if needed
     }
 
     _rawFilterController.text = filter;
+    _validateFilter(); // Validate the preset filter
 
-    _applyFilter(filter);
+    // Apply the generated filter (which also sets preset to 'custom')
+    // Only apply if valid (presets should always be valid, but check anyway)
+    if (_isValid) {
+      _applyFilter(filter);
+    }
   }
 
+  // Reset filters within the panel and set main screen preset back to default
   void _resetFilters() {
     setState(() {
+      // Reset builder state
       _useVisibilityFilter = false;
       _selectedVisibility = 'PUBLIC';
       _useTagFilter = false;
@@ -258,31 +297,47 @@ class _AdvancedFilterPanelState extends ConsumerState<AdvancedFilterPanel> {
       _selectedTags = [];
       _useContentFilter = false;
       _contentFilter = '';
-      _useTimeFilter = false;
-      _selectedTimeRange = 'today';
-      _selectedPreset = null;
+      // Time filter state removed
+      _selectedPreset = null; // Clear panel's preset selection
     });
 
+    // Clear the raw filter text field and validation state
     _rawFilterController.text = '';
+    _validateFilter(); // Reset validation state
 
-    _applyFilter('');
+    // Clear the raw filter provider state
+    ref.read(rawCelFilterProvider.notifier).state = '';
+    // Reset the main screen's preset provider to default (e.g., 'inbox')
+    ref.read(quickFilterPresetProvider.notifier).state =
+        'inbox'; // Or your desired default
+
+    // Trigger refresh (MemosNotifier should react)
+    // ref.read(memosNotifierProvider.notifier).refresh(); // Not needed if notifier watches combinedFilterProvider
+
+    // Close the panel
+    widget.onClose();
   }
+
 
   void _addTag() {
     if (_tagInput.isEmpty) return;
+    final tagToAdd = _tagInput.trim(); // Trim whitespace
+    if (tagToAdd.isEmpty) return; // Don't add empty tags
 
     setState(() {
-      if (!_selectedTags.contains(_tagInput)) {
-        _selectedTags.add(_tagInput);
+      if (!_selectedTags.contains(tagToAdd)) {
+        _selectedTags.add(tagToAdd);
       }
-      _tagInput = '';
+      _tagInput = ''; // Clear input field
     });
+    // Optionally rebuild & apply filter immediately, or wait for Apply Builder button
   }
 
   void _removeTag(String tag) {
     setState(() {
       _selectedTags.remove(tag);
     });
+    // Optionally rebuild & apply filter immediately, or wait for Apply Builder button
   }
 
   @override
@@ -307,14 +362,14 @@ class _AdvancedFilterPanelState extends ConsumerState<AdvancedFilterPanel> {
     final Color invalidBorderColor = errorColor;
 
     return Container(
+      // Clip content to rounded corners
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: panelBackgroundColor,
         borderRadius: const BorderRadius.only(
           topLeft: Radius.circular(16),
           topRight: Radius.circular(16),
         ),
-        // Use system materials for background blur if desired (more advanced)
-        // Or keep simple shadow
         boxShadow: [
           BoxShadow(
             color: CupertinoColors.black.withAlpha(38),
@@ -323,308 +378,370 @@ class _AdvancedFilterPanelState extends ConsumerState<AdvancedFilterPanel> {
           ),
         ],
       ),
-      padding: const EdgeInsets.only(top: 12.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Drag Handle
-          Center(
-            child: Container(
-              margin: const EdgeInsets.only(bottom: 8),
-              width: 40,
-              height: 5,
-              decoration: BoxDecoration(
-                color: handleColor,
-                borderRadius: BorderRadius.circular(2.5),
+      // Use SafeArea to avoid intrusions at the bottom (like home indicator)
+      child: SafeArea(
+        top: false, // No top padding needed as we handle it
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min, // Make column height fit content
+          children: [
+            // Drag Handle
+            Center(
+              child: Container(
+                margin: const EdgeInsets.only(
+                  top: 8,
+                  bottom: 8,
+                ), // Adjust margin
+                width: 40,
+                height: 5,
+                decoration: BoxDecoration(
+                  color: handleColor,
+                  borderRadius: BorderRadius.circular(2.5),
+                ),
               ),
             ),
-          ),
-          // Header Row
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text('Advanced Filter', style: titleStyle),
-                CupertinoButton(
-                  padding: EdgeInsets.zero,
-                  onPressed: widget.onClose,
-                  child: const Icon(CupertinoIcons.clear_thick_circled),
-                ),
-              ],
-            ),
-          ),
-          // Separator
-          Container(
-            height: 0.5,
-            color: separatorColor,
-            margin: const EdgeInsets.symmetric(vertical: 8.0),
-          ),
-          // Scrollable Content Area
-          Expanded(
-            child: Padding(
+            // Header Row
+            Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: SingleChildScrollView(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // Filter Presets Section
-                    Text('Filter Presets', style: sectionHeaderStyle),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  // Reset button on the left
+                  CupertinoButton(
+                    padding: EdgeInsets.zero,
+                    onPressed: _resetFilters, // Call reset function
+                    child: const Text('Reset'),
+                  ),
+                  // Title in the middle
+                  Text('Advanced Filter', style: titleStyle),
+                  // Done button on the right (acts like close)
+                  CupertinoButton(
+                    padding: EdgeInsets.zero,
+                    onPressed: widget.onClose,
+                    child: const Text(
+                      'Done',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Separator
+            Container(
+              height: 0.5,
+              color: separatorColor,
+              margin: const EdgeInsets.symmetric(vertical: 8.0),
+            ),
+            // Scrollable Content Area
+            Flexible(
+              // Use Flexible instead of Expanded for DraggableScrollableSheet
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                child: CupertinoScrollbar(
+                  // Use CupertinoScrollbar
+                  controller: _scrollController, // Attach the controller
+                  thumbVisibility: true, // Make scrollbar always visible
+                  child: SingleChildScrollView(
+                    controller:
+                        _scrollController, // Use the same controller here
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        _buildPresetChip('today', 'Today'),
-                        _buildPresetChip('created_today', 'Created Today'),
-                        _buildPresetChip('updated_today', 'Updated Today'),
-                        _buildPresetChip('this_week', 'This Week'),
-                        _buildPresetChip('important', 'Important'),
-                        _buildPresetChip('untagged', 'Untagged'),
-                        _buildPresetChip('tagged', 'Tagged'),
-                        _buildPresetChip('public', 'Public'),
-                        _buildPresetChip('private', 'Private'),
-                      ],
-                    ),
-                    const SizedBox(height: 24),
-
-                    // Build a Filter Section
-                    Text('Build a Filter', style: sectionHeaderStyle),
-                    // Visibility Filter
-                    CupertinoListTile(
-                      title: const Text('Filter by Visibility'),
-                      trailing: CupertinoSwitch(
-                        value: _useVisibilityFilter,
-                        onChanged: (value) => setState(() => _useVisibilityFilter = value),
-                      ),
-                    ),
-                    if (_useVisibilityFilter)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        child: CupertinoSegmentedControl<String>(
-                          children: const {
-                            'PUBLIC': Padding(padding: EdgeInsets.symmetric(vertical: 6), child: Text('Public')),
-                            'PROTECTED': Padding(padding: EdgeInsets.symmetric(vertical: 6), child: Text('Protected')),
-                            'PRIVATE': Padding(padding: EdgeInsets.symmetric(vertical: 6), child: Text('Private')),
-                          },
-                          groupValue: _selectedVisibility,
-                          onValueChanged: (value) => setState(() => _selectedVisibility = value),
-                        ),
-                      ),
-                    // Tag Filter
-                    CupertinoListTile(
-                      title: const Text('Filter by Tags'),
-                      trailing: CupertinoSwitch(
-                        value: _useTagFilter,
-                        onChanged: (value) => setState(() => _useTagFilter = value),
-                      ),
-                    ),
-                    if (_useTagFilter)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                        // Filter Presets Section (Panel specific presets)
+                        Text('Quick Presets', style: sectionHeaderStyle),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
                           children: [
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: CupertinoTextField(
-                                    controller: TextEditingController(text: _tagInput) // Control input field
-                                      ..selection = TextSelection.collapsed(offset: _tagInput.length),
-                                    placeholder: 'Enter a tag',
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                    clearButtonMode: OverlayVisibilityMode.editing,
-                                    onChanged: (value) => setState(() => _tagInput = value),
-                                    onSubmitted: (_) => _addTag(),
-                                  ),
+                            _buildPresetChip('today', 'Today'),
+                            _buildPresetChip('created_today', 'Created Today'),
+                            _buildPresetChip('updated_today', 'Updated Today'),
+                            _buildPresetChip('this_week', 'This Week'),
+                            _buildPresetChip('important', 'Important'),
+                            _buildPresetChip('untagged', 'Untagged'),
+                            _buildPresetChip('tagged', 'Tagged'),
+                            _buildPresetChip('public', 'Public'),
+                            _buildPresetChip('private', 'Private'),
+                          ],
+                        ),
+                        const SizedBox(height: 24),
+
+                        // Build a Filter Section
+                        Text('Build a Filter', style: sectionHeaderStyle),
+                        // Visibility Filter
+                        CupertinoListTile(
+                          title: const Text('Filter by Visibility'),
+                          trailing: CupertinoSwitch(
+                            value: _useVisibilityFilter,
+                            onChanged:
+                                (value) => setState(
+                                  () => _useVisibilityFilter = value,
                                 ),
-                                const SizedBox(width: 8),
-                                CupertinoButton.filled(
-                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                                  minSize: 0,
-                                  onPressed: _addTag,
-                                  child: const Text('Add'),
+                          ),
+                        ),
+                        if (_useVisibilityFilter)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 8,
+                            ),
+                            child: CupertinoSegmentedControl<String>(
+                              children: const {
+                                'PUBLIC': Padding(
+                                  padding: EdgeInsets.symmetric(vertical: 6),
+                                  child: Text('Public'),
+                                ),
+                                'PROTECTED': Padding(
+                                  padding: EdgeInsets.symmetric(vertical: 6),
+                                  child: Text('Protected'),
+                                ),
+                                'PRIVATE': Padding(
+                                  padding: EdgeInsets.symmetric(vertical: 6),
+                                  child: Text('Private'),
+                                ),
+                              },
+                              groupValue: _selectedVisibility,
+                              onValueChanged:
+                                  (value) => setState(
+                                    () => _selectedVisibility = value,
+                                  ),
+                            ),
+                          ),
+                        // Tag Filter
+                        CupertinoListTile(
+                          title: const Text('Filter by Tags'),
+                          trailing: CupertinoSwitch(
+                            value: _useTagFilter,
+                            onChanged:
+                                (value) =>
+                                    setState(() => _useTagFilter = value),
+                          ),
+                        ),
+                        if (_useTagFilter)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 8,
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: CupertinoTextField(
+                                        // Use a separate controller for the tag input field
+                                        controller: TextEditingController(
+                                          text: _tagInput,
+                                        ),
+                                        placeholder: 'Enter a tag',
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                          vertical: 8,
+                                        ),
+                                        clearButtonMode:
+                                            OverlayVisibilityMode.editing,
+                                        onChanged:
+                                            (value) =>
+                                                _tagInput =
+                                                    value, // Update state variable directly
+                                        onSubmitted: (_) => _addTag(),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    CupertinoButton.filled(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 16,
+                                        vertical: 8,
+                                      ),
+                                      minSize: 0,
+                                      onPressed: _addTag,
+                                      child: const Text('Add'),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 4,
+                                  children:
+                                      _selectedTags
+                                          .map((tag) => _buildTagChip(tag))
+                                          .toList(),
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 8),
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 4,
-                              children: _selectedTags.map((tag) => _buildTagChip(tag)).toList(),
+                          ),
+                        // Content Filter
+                        CupertinoListTile(
+                          title: const Text('Filter by Content'),
+                          trailing: CupertinoSwitch(
+                            value: _useContentFilter,
+                            onChanged:
+                                (value) =>
+                                    setState(() => _useContentFilter = value),
+                          ),
+                        ),
+                        if (_useContentFilter)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 8,
                             ),
-                          ],
-                        ),
-                      ),
-                    // Content Filter
-                    CupertinoListTile(
-                      title: const Text('Filter by Content'),
-                      trailing: CupertinoSwitch(
-                        value: _useContentFilter,
-                        onChanged: (value) => setState(() => _useContentFilter = value),
-                      ),
-                    ),
-                    if (_useContentFilter)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        child: CupertinoTextField(
-                          placeholder: 'Content contains...',
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                          clearButtonMode: OverlayVisibilityMode.editing,
-                          controller: TextEditingController(text: _contentFilter)
-                            ..selection = TextSelection.collapsed(offset: _contentFilter.length),
-                          onChanged: (value) => setState(() => _contentFilter = value),
-                        ),
-                      ),
-                    // Time Filter
-                    CupertinoListTile(
-                      title: const Text('Filter by Time'),
-                      trailing: CupertinoSwitch(
-                        value: _useTimeFilter,
-                        onChanged: (value) => setState(() => _useTimeFilter = value),
-                      ),
-                    ),
-                    if (_useTimeFilter)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        child: CupertinoButton(
-                          color: textFieldBackgroundColor,
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                          onPressed: () => _showTimeRangePicker(context),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                _selectedTimeRange.replaceAll('_', ' ').capitalizeFirstLetter(),
-                                style: TextStyle(color: CupertinoColors.label.resolveFrom(context)),
+                            child: CupertinoTextField(
+                              placeholder: 'Content contains...',
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
                               ),
-                              const Icon(
-                                CupertinoIcons.chevron_down,
-                                size: 16,
-                                color: CupertinoColors.secondaryLabel,
+                              clearButtonMode: OverlayVisibilityMode.editing,
+                              // Use a separate controller for content filter
+                              controller: TextEditingController(
+                                  text: _contentFilter,
+                                )
+                                ..selection = TextSelection.collapsed(
+                                  offset: _contentFilter.length,
+                                ),
+                              onChanged:
+                                  (value) =>
+                                      setState(() => _contentFilter = value),
+                            ),
+                          ),
+                        // REMOVED: Time Filter UI Section
+                        const SizedBox(height: 16),
+                        // Apply Builder Button
+                        Center(
+                          // Center the single button
+                          child: CupertinoButton.filled(
+                            onPressed: _buildAndApplyFilter,
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(CupertinoIcons.checkmark_alt),
+                                SizedBox(width: 4),
+                                Text('Apply Builder & Close'),
+                              ],
+                            ),
+                          ),
+                        ),
+                        // REMOVED: Reset Builder Button (handled by header Reset)
+                        const SizedBox(height: 24),
+
+                        // Raw CEL Filter Section
+                        Text(
+                          'Raw CEL Filter Expression',
+                          style: sectionHeaderStyle,
+                        ),
+                        const SizedBox(height: 8),
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: textFieldBackgroundColor,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color:
+                                  _isValid
+                                      ? validBorderColor
+                                      : invalidBorderColor,
+                              width: 0.5,
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Use SyntaxHighlightTextField (or CupertinoTextField if highlighting fails)
+                              SyntaxHighlightTextField(
+                                // Keep using this for now
+                                controller: _rawFilterController,
+                                placeholder: 'Enter a CEL filter expression...',
+                                maxLines: 4,
+                                style: TextStyle(
+                                  fontFamily: 'monospace',
+                                  fontSize: 14,
+                                  color: CupertinoColors.label.resolveFrom(
+                                    context,
+                                  ),
+                                ),
+                                onChanged:
+                                    (_) =>
+                                        _validateFilter(), // Re-validate on change
                               ),
+                              /* // Fallback to CupertinoTextField if needed
+                              CupertinoTextField(
+                                controller: _rawFilterController,
+                                placeholder: 'Enter a CEL filter expression...',
+                                keyboardType: TextInputType.multiline,
+                                maxLines: 4,
+                                style: TextStyle(
+                                  fontFamily: 'monospace',
+                                  fontSize: 14,
+                                  color: CupertinoColors.label.resolveFrom(context),
+                                ),
+                                decoration: BoxDecoration( // Remove default border
+                                  border: Border.all(color: CupertinoColors.transparent, width: 0),
+                                ),
+                                padding: EdgeInsets.zero, // Adjust padding as needed
+                                onChanged: (_) => _validateFilter(), // Re-validate on change
+                                autocorrect: false,
+                                enableSuggestions: false,
+                              ),
+                              */
+                              if (_syntaxError.isNotEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 8),
+                                  child: Text(
+                                    _syntaxError,
+                                    style: TextStyle(
+                                      color: errorColor,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ),
                             ],
                           ),
                         ),
-                      ),
-                    const SizedBox(height: 16),
-                    // Apply/Reset Builder Buttons
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        CupertinoButton.filled(
-                          onPressed: _buildAndApplyFilter,
-                          child: const Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(CupertinoIcons.checkmark_alt),
-                              SizedBox(width: 4),
-                              Text('Apply Builder'),
-                            ],
+                        const SizedBox(height: 8),
+                        // Apply Raw Filter Button
+                        Center(
+                          child: CupertinoButton(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 8,
+                            ),
+                            // Apply the raw filter text and close
+                            onPressed:
+                                () => _applyFilter(_rawFilterController.text),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  CupertinoIcons
+                                      .chevron_left_slash_chevron_right,
+                                ),
+                                SizedBox(width: 4),
+                                Text('Apply Raw Filter & Close'),
+                              ],
+                            ),
                           ),
                         ),
-                        const SizedBox(width: 16),
-                        CupertinoButton(
-                          onPressed: _resetFilters,
-                          child: const Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(CupertinoIcons.clear),
-                              SizedBox(width: 4),
-                              Text('Reset All'),
-                            ],
-                          ),
-                        ),
+                        // Help Section
+                        _buildHelpSection(context),
+                        // Add some bottom padding inside the scroll view
+                        const SizedBox(height: 30),
                       ],
                     ),
-                    const SizedBox(height: 24),
-
-                    // Raw CEL Filter Section
-                    Text('Raw CEL Filter Expression', style: sectionHeaderStyle),
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: textFieldBackgroundColor,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color: _isValid ? validBorderColor : invalidBorderColor,
-                          width: 0.5,
-                        ),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Use CupertinoTextField directly for raw input for now
-                          // SyntaxHighlightTextField needs deeper refactoring
-                          CupertinoTextField(
-                            controller: _rawFilterController,
-                            placeholder: 'Enter a CEL filter expression...',
-                            keyboardType: TextInputType.multiline,
-                            maxLines: 4,
-                            style: TextStyle(
-                              fontFamily: 'monospace',
-                              fontSize: 14,
-                              color: CupertinoColors.label.resolveFrom(context),
-                            ),
-                            decoration: BoxDecoration( // Remove default border
-                              border: Border.all(color: CupertinoColors.transparent, width: 0),
-                            ),
-                            padding: EdgeInsets.zero, // Adjust padding as needed
-                          ),
-                          // SyntaxHighlightTextField( // Keep commented out until refactored
-                          //   controller: _rawFilterController,
-                          //   decoration: InputDecoration(
-                          //     hintText: 'Enter a CEL filter expression...',
-                          //     border: InputBorder.none,
-                          //     isDense: true,
-                          //     hintStyle: TextStyle(color: CupertinoColors.placeholderText.resolveFrom(context)),
-                          //   ),
-                          //   style: TextStyle(
-                          //     fontFamily: 'monospace',
-                          //     fontSize: 14,
-                          //     color: CupertinoColors.label.resolveFrom(context),
-                          //   ),
-                          //   maxLines: 4,
-                          // ),
-                          if (_syntaxError.isNotEmpty)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 8),
-                              child: Text(
-                                _syntaxError,
-                                style: TextStyle(color: errorColor),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    // Apply Raw Filter Button
-                    Center(
-                      child: CupertinoButton(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        onPressed: () => _applyFilter(_rawFilterController.text),
-                        child: const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(CupertinoIcons.chevron_left_slash_chevron_right),
-                            SizedBox(width: 4),
-                            Text('Apply Raw Filter'),
-                          ],
-                        ),
-                      ),
-                    ),
-                    // Help Section
-                    _buildHelpSection(context),
-                  ],
+                  ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
+
 
   // Updated _buildTagChip to remove isDarkMode parameter and use context for theme
   Widget _buildTagChip(String tag) {
@@ -658,71 +775,7 @@ class _AdvancedFilterPanelState extends ConsumerState<AdvancedFilterPanel> {
     );
   }
 
-  void _showTimeRangePicker(BuildContext context) {
-    final Map<String, String> timeRanges = {
-      'today': 'Today',
-      'this_week': 'This Week',
-      'this_month': 'This Month',
-    };
-    final initialIndex = timeRanges.keys.toList().indexOf(_selectedTimeRange);
-
-    showCupertinoModalPopup<void>(
-      context: context,
-      builder: (BuildContext context) {
-        String tempSelection = _selectedTimeRange;
-        return Container(
-          height: 250,
-          color: CupertinoColors.systemBackground.resolveFrom(context),
-          child: Column(
-            children: [
-              Container(
-                color: CupertinoColors.secondarySystemBackground.resolveFrom(
-                  context,
-                ),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16.0,
-                  vertical: 8.0,
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    CupertinoButton(
-                      padding: EdgeInsets.zero,
-                      child: const Text('Cancel'),
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                    CupertinoButton(
-                      padding: EdgeInsets.zero,
-                      child: const Text(
-                        'Done',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      onPressed: () {
-                        setState(() => _selectedTimeRange = tempSelection);
-                        Navigator.pop(context);
-                      },
-                    ),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: CupertinoPicker(
-                  itemExtent: 32.0,
-                  scrollController: FixedExtentScrollController(initialItem: initialIndex),
-                  onSelectedItemChanged: (int index) {
-                    tempSelection = timeRanges.keys.elementAt(index);
-                  },
-                  children: timeRanges.values.map((String value) {
-                    return Center(child: Text(value));
-                      }).toList(),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
+  // REMOVED: _showTimeRangePicker method
 
   // Updated _buildPresetChip for better Cupertino styling
   Widget _buildPresetChip(String key, String label) {
@@ -741,9 +794,8 @@ class _AdvancedFilterPanelState extends ConsumerState<AdvancedFilterPanel> {
       borderRadius: BorderRadius.circular(16),
       color: backgroundColor,
       onPressed: () {
-        if (!isSelected) {
-          _applyPreset(key);
-        }
+        // Apply the preset from this panel
+        _applyPreset(key);
       },
       child: Text(
         label,
@@ -757,14 +809,14 @@ class _AdvancedFilterPanelState extends ConsumerState<AdvancedFilterPanel> {
 
   Widget _buildCodeExample(String code) {
     // Use CupertinoTheme to determine dark mode
-    final isDarkMode = CupertinoTheme.of(context).brightness == Brightness.dark; // Keep for logic below
+    final isDarkMode = CupertinoTheme.of(context).brightness == Brightness.dark;
     final Color codeBackgroundColor = isDarkMode
         ? CupertinoColors.darkBackgroundGray
         : CupertinoColors.extraLightBackgroundGray;
     // Use Cupertino dynamic colors for text if possible, or define specific ones
-    final Color codeTextColor = isDarkMode
-        ? CupertinoColors.systemGreen.color
-        : CupertinoColors.systemGreen.darkColor;
+    final Color codeTextColor = CupertinoColors.label.resolveFrom(
+      context,
+    ); // Use label color
 
 
     return Padding(
@@ -773,7 +825,10 @@ class _AdvancedFilterPanelState extends ConsumerState<AdvancedFilterPanel> {
         padding: EdgeInsets.zero,
         onPressed: () {
           _rawFilterController.text = code;
-          _applyFilter(code);
+          // Optionally validate before applying
+          _validateFilter();
+          // Apply the raw filter (which also closes the panel)
+          // _applyFilter(code); // Commented out: Let user click Apply Raw Filter button
         },
         child: Container(
           width: double.infinity,
@@ -865,6 +920,7 @@ class _AdvancedFilterPanelState extends ConsumerState<AdvancedFilterPanel> {
   }
 }
 
+// SyntaxHighlightTextField and helpers remain unchanged for now
 // TODO: Refactor SyntaxHighlightTextField to fully use Cupertino styles and avoid Material dependencies.
 // This is a placeholder refactor, focusing on replacing the TextField.
 // Proper syntax highlighting color mapping to Cupertino dynamic colors is needed.
@@ -905,15 +961,19 @@ class _SyntaxHighlightTextFieldState extends State<SyntaxHighlightTextField> {
   }
 
   void _handleTextChanged() {
-    // Trigger rebuild to update RichText, but avoid calling setState if not needed
-    // setState(() {}); // This might be too aggressive, consider alternatives if performance issues arise
+    // Trigger rebuild to update RichText
+    if (mounted) {
+      setState(() {}); // Need setState to trigger RichText rebuild
+    }
+    // Call user's onChanged callback if provided
+    widget.onChanged?.call(widget.controller.text);
   }
 
   // Placeholder: Needs proper mapping to Cupertino dynamic colors
   List<TextSpan> _buildHighlightedSpans(String text, BuildContext context) {
      final theme = CupertinoTheme.of(context);
     // No need for isDarkMode as colors automatically adapt with resolveFrom(context)
-     
+
      // Define colors based on Cupertino theme (example mapping)
      final Color operatorColor = CupertinoColors.systemOrange.resolveFrom(context);
      final Color keywordColor = CupertinoColors.systemBlue.resolveFrom(context);
@@ -921,48 +981,38 @@ class _SyntaxHighlightTextFieldState extends State<SyntaxHighlightTextField> {
      final Color normalColor = CupertinoColors.label.resolveFrom(context);
      final Color functionColor = CupertinoColors.systemPurple.resolveFrom(context);
      final Color commentColor = CupertinoColors.secondaryLabel.resolveFrom(context); // Example for comments
+    final Color numberColor = CupertinoColors.systemRed.resolveFrom(
+      context,
+    ); // Example for numbers
 
-    // Regex remains the same
+    // Regex remains the same, added number regex
     final operatorRegex = RegExp(r'&&|\|\||!|==|!=|<=|>=|<|>|\bin\b'); // Added word boundary for 'in'
     final keywordRegex = RegExp(
       r'\b(tag|visibility|create_time|update_time|state|content|true|false|null)\b',
     );
-    // Define string patterns separately for better readability
-    final doubleQuoteStringRegex = RegExp(
-      r'"(?:[^"\\]|\\.)*"',
-    ); // Double-quoted strings
-    final singleQuoteStringRegex = RegExp(
-      r"'(?:[^'\\]|\\.)*'",
-    ); // Single-quoted strings
-
-    // Function call pattern with explicit lookahead
+    final doubleQuoteStringRegex = RegExp(r'"(?:[^"\\]|\\.)*"');
+    final singleQuoteStringRegex = RegExp(r"'(?:[^'\\]|\\.)*'");
     final functionRegex = RegExp(
       r'\b(contains|size|startsWith|endsWith)\b(?=\()',
     );
-
-    // Simple comment pattern
     final commentRegex = RegExp(r'//.*');
+    final numberRegex = RegExp(r'\b\d+(\.\d+)?\b'); // Basic number regex
 
-    // Combine string patterns when processing
     List<TextSpan> spans = [];
     int currentPosition = 0;
 
     void addSpan(int start, int end, Color color) {
       if (start < end) {
-        // Ensure a base style exists, even if theme.textTheme.textStyle is null
-        final baseStyle =
-            widget.style ?? theme.textTheme.textStyle;
+        final baseStyle = widget.style ?? theme.textTheme.textStyle;
         spans.add(
           TextSpan(
             text: text.substring(start, end),
-            // Use base style and override color
             style: baseStyle.copyWith(color: color),
           ),
         );
       }
     }
 
-    // Combine all regex matches and sort by start position
     List<_HighlightMatch> matches = [];
     operatorRegex
         .allMatches(text)
@@ -982,11 +1032,20 @@ class _SyntaxHighlightTextFieldState extends State<SyntaxHighlightTextField> {
     commentRegex
         .allMatches(text)
         .forEach((m) => matches.add(_HighlightMatch(m, commentColor)));
+    numberRegex
+        .allMatches(text)
+        .forEach(
+          (m) => matches.add(_HighlightMatch(m, numberColor)),
+        ); // Add number matches
 
     matches.sort((a, b) => a.match.start.compareTo(b.match.start));
 
-    // Process matches and add spans
+    // Process matches and add spans, handling overlaps simply by taking the first match
+    int lastMatchEnd = 0;
     for (var highlight in matches) {
+      // Skip overlapping matches
+      if (highlight.match.start < lastMatchEnd) continue;
+
       // Add normal text before the current match
       if (highlight.match.start > currentPosition) {
         addSpan(currentPosition, highlight.match.start, normalColor);
@@ -994,6 +1053,7 @@ class _SyntaxHighlightTextFieldState extends State<SyntaxHighlightTextField> {
       // Add the highlighted match itself
       addSpan(highlight.match.start, highlight.match.end, highlight.color);
       currentPosition = highlight.match.end;
+      lastMatchEnd = highlight.match.end; // Update last match end
     }
 
     // Add any remaining normal text after the last match
@@ -1001,13 +1061,10 @@ class _SyntaxHighlightTextFieldState extends State<SyntaxHighlightTextField> {
       addSpan(currentPosition, text.length, normalColor);
     }
 
-    // If no spans were added (empty text), add an empty span to avoid errors
     if (spans.isEmpty && text.isEmpty) {
-       // Ensure a base style exists
       final baseStyle = widget.style ?? theme.textTheme.textStyle;
        spans.add(TextSpan(text: '', style: baseStyle));
     }
-
 
     return spans;
   }
@@ -1044,7 +1101,7 @@ class _SyntaxHighlightTextFieldState extends State<SyntaxHighlightTextField> {
           padding: const EdgeInsets.symmetric(vertical: 6.0, horizontal: 8.0), // Match RichText padding
           placeholder: widget.placeholder,
           maxLines: widget.maxLines,
-          onChanged: widget.onChanged,
+          // onChanged is handled by the listener calling widget.onChanged
           // Make the text transparent to see the RichText underneath
           style: defaultTextStyle.copyWith(color: CupertinoColors.transparent),
           // Remove default CupertinoTextField border/background
@@ -1053,6 +1110,11 @@ class _SyntaxHighlightTextFieldState extends State<SyntaxHighlightTextField> {
           ),
           // Ensure keyboard type allows multiple lines if needed
           keyboardType: widget.maxLines != 1 ? TextInputType.multiline : TextInputType.text,
+          // Add autocorrect and spellcheck disabling for code-like input
+          autocorrect: false,
+          enableSuggestions: false,
+          smartDashesType: SmartDashesType.disabled,
+          smartQuotesType: SmartQuotesType.disabled,
         ),
       ],
     );
