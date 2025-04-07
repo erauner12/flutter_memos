@@ -93,8 +93,10 @@ class MemoListItemState extends ConsumerState<MemoListItem> {
     ref.read(ui_providers.selectedMemoIdProvider.notifier).state =
         widget.memo.id;
 
-    Navigator.pushNamed(
+    Navigator.of(
       context,
+      rootNavigator: true,
+    ).pushNamed(
       '/memo-detail',
       arguments: {'memoId': widget.memo.id},
     );

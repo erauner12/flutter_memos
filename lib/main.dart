@@ -378,6 +378,12 @@ class _MyAppState extends ConsumerState<MyApp> {
                   '/mcp': (context) => const McpScreen(),
                   '/new-memo':
                       (context) => const NewMemoScreen(), // Add this route
+                  '/memo-detail': (context) {
+                    final args =
+                        ModalRoute.of(context)!.settings.arguments
+                            as Map<String, dynamic>;
+                    return MemoDetailScreen(memoId: args['memoId'] as String);
+                  },
                 },
                 onGenerateRoute: (settings) {
                   // Use CupertinoPageRoute for iOS-style transitions later (Phase 4)
