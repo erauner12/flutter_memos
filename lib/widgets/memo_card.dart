@@ -20,6 +20,7 @@ class MemoCard extends ConsumerStatefulWidget {
   final VoidCallback? onTogglePin;
   final bool isSelected; // Add isSelected property for keyboard navigation
   final VoidCallback? onBump; // Add onBump callback
+  final VoidCallback? onMoveToServer; // Add onMoveToServer callback
 
   const MemoCard({
     super.key,
@@ -37,6 +38,7 @@ class MemoCard extends ConsumerStatefulWidget {
     this.onTogglePin,
     this.isSelected = false, // Default to not selected
     this.onBump, // Add onBump to constructor
+    this.onMoveToServer, // Add onMoveToServer to constructor
   });
 
   @override
@@ -128,6 +130,15 @@ class MemoCardState extends ConsumerState<MemoCard> {
                 Navigator.pop(context);
                     widget.onBump!();
               },
+                ),
+              if (widget.onMoveToServer !=
+                  null) // Add check for the new callback
+                CupertinoActionSheetAction(
+                  child: const Text('Move to Server...'),
+                  onPressed: () {
+                    Navigator.pop(context); // Close the sheet
+                    widget.onMoveToServer!(); // Call the new callback
+                  },
                 ),
               CupertinoActionSheetAction(
                 child: const Text('Copy Content'),
