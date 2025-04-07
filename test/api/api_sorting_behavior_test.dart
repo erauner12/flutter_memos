@@ -38,11 +38,6 @@ void main() {
         direction: 'DESC',
       );
       
-      // Store the server order from the first query
-      final firstQueryServerOrder = List<String>.from(
-        ApiService.lastServerOrder,
-      );
-
       // Removed fetching by createTime as it's unreliable and not used
 
       // Log the first few memos from the query after client-side sorting
@@ -222,7 +217,7 @@ void main() {
       print('\n[TEST] Using snake_case sort fields (enabled)');
 
       // Test with updateTime as it's the only one we use now
-      final memosWithSnakeCase = await apiService.listMemos(
+      await apiService.listMemos(
         parent: 'users/1',
         sort: 'updateTime', // Changed to updateTime
         direction: 'DESC',
@@ -232,7 +227,7 @@ void main() {
 
       // Then try with snake_case conversion DISABLED (if applicable to your generator/client)
       // Assuming the client handles this automatically or it's not relevant now
-      final memosWithCamelCase = await apiService.listMemos(
+      await apiService.listMemos(
         parent: 'users/1',
         sort: 'updateTime', // Changed to updateTime
         direction: 'DESC',

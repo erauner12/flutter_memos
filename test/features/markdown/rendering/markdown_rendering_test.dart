@@ -19,9 +19,9 @@ import 'package:mockito/mockito.dart'; // Add Mockito import
 // Import the generated mocks file (will be created by build_runner)
 import 'markdown_rendering_test.mocks.dart';
 // Import the mock for UrlLauncherService
-import '../../../core/services/url_launcher_service_test.mocks.dart'; // Corrected path
+import '../../../core/services/url_launcher_service_test.mocks.dart'; // Path to core service mocks is correct
 // Import test utility
-import '../../../utils/test_debug.dart'; // Corrected path
+import '../../utils/test_debug.dart'; // Corrected path relative to features/markdown/rendering
 
 // Annotation to generate nice mock for ApiService
 @GenerateNiceMocks([MockSpec<ApiService>()])
