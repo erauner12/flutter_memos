@@ -4,12 +4,13 @@
 
 // ignore_for_file: no_leading_underscores_for_library_prefixes
 import 'dart:async' as _i7;
-import 'dart:typed_data' as _i8;
+import 'dart:typed_data' as _i9;
 
 import 'package:flutter_memos/api/lib/api.dart' as _i4;
 import 'package:flutter_memos/models/comment.dart' as _i5;
 import 'package:flutter_memos/models/memo.dart' as _i3;
-import 'package:flutter_memos/models/memo_relation.dart' as _i9;
+import 'package:flutter_memos/models/memo_relation.dart' as _i10;
+import 'package:flutter_memos/models/server_config.dart' as _i8;
 import 'package:flutter_memos/services/api_service.dart' as _i2;
 import 'package:mockito/mockito.dart' as _i1;
 import 'package:mockito/src/dummies.dart' as _i6;
@@ -222,16 +223,22 @@ class MockApiService extends _i1.Mock implements _i2.ApiService {
       ) as _i7.Future<_i3.Memo>);
 
   @override
-  _i7.Future<_i3.Memo> createMemo(_i3.Memo? memo) => (super.noSuchMethod(
+  _i7.Future<_i3.Memo> createMemo(
+    _i3.Memo? memo, {
+    _i8.ServerConfig? targetServerOverride,
+  }) =>
+      (super.noSuchMethod(
         Invocation.method(
           #createMemo,
           [memo],
+          {#targetServerOverride: targetServerOverride},
         ),
         returnValue: _i7.Future<_i3.Memo>.value(_FakeMemo_1(
           this,
           Invocation.method(
             #createMemo,
             [memo],
+            {#targetServerOverride: targetServerOverride},
           ),
         )),
         returnValueForMissingStub: _i7.Future<_i3.Memo>.value(_FakeMemo_1(
@@ -239,6 +246,7 @@ class MockApiService extends _i1.Mock implements _i2.ApiService {
           Invocation.method(
             #createMemo,
             [memo],
+            {#targetServerOverride: targetServerOverride},
           ),
         )),
       ) as _i7.Future<_i3.Memo>);
@@ -290,7 +298,7 @@ class MockApiService extends _i1.Mock implements _i2.ApiService {
 
   @override
   _i7.Future<_i4.V1Resource> uploadResource(
-    _i8.Uint8List? fileBytes,
+    _i9.Uint8List? fileBytes,
     String? filename,
     String? contentType,
   ) =>
@@ -457,7 +465,7 @@ class MockApiService extends _i1.Mock implements _i2.ApiService {
   @override
   _i7.Future<void> setMemoRelations(
     String? memoId,
-    List<_i9.MemoRelation>? relations,
+    List<_i10.MemoRelation>? relations,
   ) =>
       (super.noSuchMethod(
         Invocation.method(
@@ -472,17 +480,17 @@ class MockApiService extends _i1.Mock implements _i2.ApiService {
       ) as _i7.Future<void>);
 
   @override
-  _i7.Future<List<_i9.MemoRelation>> listMemoRelations(String? memoId) =>
+  _i7.Future<List<_i10.MemoRelation>> listMemoRelations(String? memoId) =>
       (super.noSuchMethod(
         Invocation.method(
           #listMemoRelations,
           [memoId],
         ),
         returnValue:
-            _i7.Future<List<_i9.MemoRelation>>.value(<_i9.MemoRelation>[]),
+            _i7.Future<List<_i10.MemoRelation>>.value(<_i10.MemoRelation>[]),
         returnValueForMissingStub:
-            _i7.Future<List<_i9.MemoRelation>>.value(<_i9.MemoRelation>[]),
-      ) as _i7.Future<List<_i9.MemoRelation>>);
+            _i7.Future<List<_i10.MemoRelation>>.value(<_i10.MemoRelation>[]),
+      ) as _i7.Future<List<_i10.MemoRelation>>);
 
   @override
   String parseRelationType(dynamic type) => (super.noSuchMethod(

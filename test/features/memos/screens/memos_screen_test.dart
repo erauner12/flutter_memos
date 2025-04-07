@@ -22,7 +22,6 @@ import 'memos_screen_test.mocks.dart';
 
 // Generate nice mock for ApiService
 @GenerateNiceMocks([MockSpec<ApiService>()])
-
 // Helper to create a list of dummy memos
 List<Memo> createDummyMemos(int count) {
   return List.generate(count, (i) {
@@ -38,8 +37,6 @@ List<Memo> createDummyMemos(int count) {
     );
   });
 }
-
-
 
 // Mock Notifier extending the actual Notifier
 class MockMemosNotifier extends MemosNotifier {
@@ -89,6 +86,42 @@ Widget buildTestableWidget(Widget child, ProviderContainer container) {
       },
     ),
   );
+} // End of buildTestableWidget
+
+// Mock Notifier for MultiServerConfigState that extends the real one
+class MockMultiServerConfigNotifier extends MultiServerConfigNotifier {
+  MockMultiServerConfigNotifier(MultiServerConfigState initialState) : super() {
+    // Manually set the initial state after calling the super constructor
+    state = initialState;
+  }
+
+  // Override methods only if their behavior needs to be mocked for the test
+  @override
+  Future<void> loadFromPreferences() async {
+    // No-op for mock
+  }
+
+  @override
+  Future<bool> addServer(ServerConfig config) async {
+    // Simple state update for testing purposes if needed
+    state = state.copyWith(servers: [...state.servers, config]);
+    return true;
+  }
+
+  @override
+  void setActiveServer(String? serverId) {
+    // Simple state update for testing purposes if needed
+    state = state.copyWith(activeServerId: serverId);
+  }
+
+  @override
+  Future<bool> setDefaultServer(String? serverId) async {
+    // Simple state update for testing purposes if needed
+    state = state.copyWith(defaultServerId: () => serverId);
+    return true;
+  }
+
+  // Add other overrides if necessary for specific test interactions
 }
 
 void main() {
@@ -169,22 +202,18 @@ void main() {
         memosNotifierProvider.overrideWith(
           (ref) => MockMemosNotifier(ref, initialMemoState),
         ),
-        // Override multi-server config provider with a simple StateNotifier holding the initial state
+        // Override multi-server config provider with an instance of the mock notifier
         multiServerConfigProvider.overrideWith(
-          (ref) => StateNotifierProvider<
-            StateNotifier<MultiServerConfigState>,
-            MultiServerConfigState
-          >(
-            (ref) =>
-                StateNotifier<MultiServerConfigState>(initialMultiServerState),
-          ),
+          (ref) => MockMultiServerConfigNotifier(initialMultiServerState),
         ),
         // Override active server config (derived from multiServerConfigProvider)
         // No need to override activeServerConfigProvider directly if multiServerConfigProvider is mocked correctly
 
         // Ensure UI providers start in a known state
         ui_providers.memoMultiSelectModeProvider.overrideWith((ref) => false),
-        ui_providers.selectedMemoIdsForMultiSelectProvider.overrideWith((ref) => {}),
+        ui_providers.selectedMemoIdsForMultiSelectProvider.overrideWith(
+          (ref) => {},
+        ),
         ui_providers.selectedMemoIdProvider.overrideWith((ref) => null),
         // Explicitly set the filter key for consistent AppBar title
         filterKeyProvider.overrideWith((ref) => 'all'),
@@ -235,8 +264,7 @@ void main() {
             "Could not find the server switcher button in NavigationBar leading",
       );
       // Verify server name is displayed (using the mocked active server)
-      expect(find.textContaining('Mock Server 1'), findsOneWidget,
-      );
+      expect(find.textContaining('Mock Server 1'), findsOneWidget);
       // Verify "Select" button exists in trailing
       final trailingButtonFinder = find.descendant(
         of: navBarFinder,
@@ -253,19 +281,16 @@ void main() {
       );
       // Verify multi-select actions are NOT present
       expect(
-        find.widgetWithIcon(CupertinoButton, CupertinoIcons.clear,
-        ),
+        find.widgetWithIcon(CupertinoButton, CupertinoIcons.clear),
         findsNothing,
       );
       expect(find.textContaining('Selected'), findsNothing);
       expect(
-        find.widgetWithIcon(CupertinoButton, CupertinoIcons.delete,
-        ),
+        find.widgetWithIcon(CupertinoButton, CupertinoIcons.delete),
         findsNothing,
       );
       expect(
-        find.widgetWithIcon(CupertinoButton, CupertinoIcons.archivebox,
-        ),
+        find.widgetWithIcon(CupertinoButton, CupertinoIcons.archivebox),
         findsNothing,
       );
       // Verify no Checkboxes/Switches are present within list items
@@ -295,9 +320,13 @@ void main() {
   );
 
   // Test 2: Enter Multi-Select Mode
-  testWidgets('MemosScreen enters multi-select mode on button tap', (WidgetTester tester) async {
+  testWidgets('MemosScreen enters multi-select mode on button tap', (
+    WidgetTester tester,
+  ) async {
     // Arrange
-    await tester.pumpWidget(buildTestableWidget(const MemosScreen(), container));
+    await tester.pumpWidget(
+      buildTestableWidget(const MemosScreen(), container),
+    );
     await tester.pumpAndSettle();
 
     // Act: Find and tap the "Select" button
@@ -360,8 +389,7 @@ void main() {
     );
     final cancelButtonFinder = find.descendant(
       of: navBarFinder,
-      matching: find.widgetWithIcon(CupertinoButton, CupertinoIcons.clear,
-      ),
+      matching: find.widgetWithIcon(CupertinoButton, CupertinoIcons.clear),
     );
     expect(
       cancelButtonFinder,
@@ -374,7 +402,13 @@ void main() {
       matching: find.byType(CupertinoCheckbox),
     );
     expect(multiSelectWidgetFinder, findsNWidgets(dummyMemos.length));
-    expect(find.descendant(of: find.byType(MemoListItem), matching: find.byType(Slidable)), findsNothing);
+    expect(
+      find.descendant(
+        of: find.byType(MemoListItem),
+        matching: find.byType(Slidable),
+      ),
+      findsNothing,
+    );
   });
 
   // Test 3: Select/Deselect Item
@@ -382,7 +416,9 @@ void main() {
     WidgetTester tester,
   ) async {
     // Arrange
-    await tester.pumpWidget(buildTestableWidget(const MemosScreen(), container));
+    await tester.pumpWidget(
+      buildTestableWidget(const MemosScreen(), container),
+    );
     await tester.pumpAndSettle();
     final navBarFinder = find.byType(CupertinoNavigationBar);
     final selectButtonFinder = find.descendant(
@@ -428,9 +464,13 @@ void main() {
     expect(find.text('0 Selected'), findsOneWidget);
   });
 
-  testWidgets('MemosScreen exits multi-select mode via Cancel button', (WidgetTester tester) async {
+  testWidgets('MemosScreen exits multi-select mode via Cancel button', (
+    WidgetTester tester,
+  ) async {
     // Arrange
-    await tester.pumpWidget(buildTestableWidget(const MemosScreen(), container));
+    await tester.pumpWidget(
+      buildTestableWidget(const MemosScreen(), container),
+    );
     await tester.pumpAndSettle();
 
     // Enter multi-select mode
@@ -484,7 +524,7 @@ void main() {
     expect(
       container.read(ui_providers.selectedMemoIdsForMultiSelectProvider),
       isEmpty,
-      reason: "Selection should be cleared on exit"
+      reason: "Selection should be cleared on exit",
     );
 
     // Verify NavigationBar reverts
@@ -537,7 +577,13 @@ void main() {
     );
 
     // Verify Slidable/Dismissible are NOT back (assuming they were replaced)
-    expect(find.descendant(of: find.byType(MemoListItem), matching: find.byType(Slidable)), findsNothing);
+    expect(
+      find.descendant(
+        of: find.byType(MemoListItem),
+        matching: find.byType(Slidable),
+      ),
+      findsNothing,
+    );
   });
 
   testWidgets('MemosScreen displays server switcher and opens action sheet', (

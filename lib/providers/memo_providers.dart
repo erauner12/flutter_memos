@@ -3,7 +3,6 @@ import 'package:flutter_memos/models/memo.dart';
 import 'package:flutter_memos/providers/api_providers.dart';
 import 'package:flutter_memos/providers/filter_providers.dart';
 import 'package:flutter_memos/providers/ui_providers.dart' as ui_providers;
-import 'package:flutter_memos/services/api_service.dart'; // Import ApiService
 import 'package:flutter_memos/utils/filter_builder.dart';
 import 'package:flutter_memos/utils/memo_utils.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -140,7 +139,7 @@ class MemosNotifier extends StateNotifier<MemosState> {
   // Modified _fetchPage with raw API logging and conditional client-side filtering
   Future<void> _fetchPage({String? pageToken}) async {
     // Read apiService inside the method where it's used
-    final apiService = _ref.read(apiServiceProvider);
+    final apiService = _ref.read(apiServiceProvider); // Read the service here
     // Read current filters INSIDE the fetch method to get latest values
     final combinedFilter = _ref.read(combinedFilterProvider);
     final filterKey = _ref.read(filterKeyProvider);
@@ -151,15 +150,15 @@ class MemosNotifier extends StateNotifier<MemosState> {
     } else if (filterKey == 'archive') {
       stateFilter = 'ARCHIVED';
     }
-    
+  
     // Check if a raw CEL filter is being used
     final rawCelFilter = _ref.read(rawCelFilterProvider);
     bool usingRawFilter = rawCelFilter.isNotEmpty;
-    
+  
     // Apply filter logic for category/visibility based on filterKey
     // Only if not using raw filter (raw filter takes precedence)
     String? finalFilter = combinedFilter.isNotEmpty ? combinedFilter : null;
-    
+  
     // If using a normal filterKey tag and not using raw filter, add tag condition
     if (!usingRawFilter &&
         filterKey != 'all' &&
@@ -189,7 +188,8 @@ class MemosNotifier extends StateNotifier<MemosState> {
     }
   
     try {
-      final response = await _apiService.listMemos(
+      // Use the local apiService variable here
+      final response = await apiService.listMemos(
         parent: 'users/1',
         filter: finalFilter,
         state: stateFilter.isNotEmpty ? stateFilter : null,
