@@ -1,8 +1,9 @@
 import 'dart:async'; // Import for StreamSubscription
 
 import 'package:app_links/app_links.dart';
+import 'package:flutter/cupertino.dart'; // Import Cupertino
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart'; // Keep Material import (needed for ThemeMode enum)
 import 'package:flutter/services.dart';
 import 'package:flutter_memos/providers/server_config_provider.dart';
 import 'package:flutter_memos/providers/theme_provider.dart';
@@ -116,10 +117,14 @@ class _MyAppState extends ConsumerState<MyApp> {
     try {
       final initialUri = await _appLinks.getInitialLink();
       if (initialUri != null) {
-        if (kDebugMode) print('[AppLinks] Initial link found: $initialUri');
+        if (kDebugMode) {
+          print('[AppLinks] Initial link found: $initialUri');
+        }
         _handleDeepLink(initialUri);
       } else {
-        if (kDebugMode) print('[AppLinks] No initial link.');
+        if (kDebugMode) {
+          print('[AppLinks] No initial link.');
+        }
       }
     } catch (e) {
       // Handle potential errors during initialization
@@ -129,13 +134,16 @@ class _MyAppState extends ConsumerState<MyApp> {
     // Handle links received while the app is running
     _linkSubscription = _appLinks.uriLinkStream.listen(
       (uri) {
-        if (kDebugMode) print('[AppLinks] Link received while running: $uri');
+        if (kDebugMode) {
+          print('[AppLinks] Link received while running: $uri');
+        }
         _handleDeepLink(uri);
       },
       onError: (err) {
         // Handle potential errors in the stream
-        if (kDebugMode)
+        if (kDebugMode) {
           print('[AppLinks] Error listening to link stream: $err');
+        }
       },
     );
   }
@@ -143,18 +151,24 @@ class _MyAppState extends ConsumerState<MyApp> {
   // Handle the deep link URI (This method remains unchanged)
   void _handleDeepLink(Uri? uri) {
     if (uri == null || uri.scheme != 'flutter-memos') {
-      if (kDebugMode && uri != null)
-        print('[DeepLink] Ignoring URI: ${uri.toString()}');
+      if (kDebugMode && uri != null) {
+        if (kDebugMode) {
+          print('[DeepLink] Ignoring URI: ${uri.toString()}');
+        }
+      }
       return;
     }
 
-    if (kDebugMode) print('[DeepLink] Handling URI: ${uri.toString()}');
+    if (kDebugMode) {
+      print('[DeepLink] Handling URI: ${uri.toString()}');
+    }
 
     final host = uri.host; // Get the host: 'memo' or 'comment'
     final pathSegments = uri.pathSegments;
 
-    if (kDebugMode)
+    if (kDebugMode) {
       print('[DeepLink] Host: $host, Path segments: $pathSegments');
+    }
 
     // Variables to extract
     String? memoId;
@@ -168,17 +182,19 @@ class _MyAppState extends ConsumerState<MyApp> {
       memoId = pathSegments[0];
       commentIdToHighlight = pathSegments[1];
     } else {
-      if (kDebugMode)
+      if (kDebugMode) {
         print(
           '[DeepLink] Invalid URI structure: $host/${pathSegments.join('/')}',
         );
+      }
       return;
     }
 
-    if (kDebugMode)
+    if (kDebugMode) {
       print(
         '[DeepLink] Navigating to memo: $memoId, highlight comment: $commentIdToHighlight',
       );
+    }
 
     // Use the navigator key to access the navigator from anywhere
     _navigatorKey.currentState?.pushNamed(
@@ -279,142 +295,171 @@ class _MyAppState extends ConsumerState<MyApp> {
             FocusManager.instance.primaryFocus?.unfocus();
             // Don't toggle theme on general taps
           },
-          child: MaterialApp(
-            navigatorKey:
-                _navigatorKey, // Add navigator key for deep link navigation
-            title: 'Flutter Memos',
-            debugShowCheckedModeBanner: false,
-            // Light theme configuration
-            theme: ThemeData(
-              colorScheme: ColorScheme.fromSeed(
-                seedColor: const Color(0xFFDC4C3E),
-                primary: const Color(0xFFDC4C3E),
-              ),
-              appBarTheme: const AppBarTheme(
-                backgroundColor: Colors.white,
-                foregroundColor: Color(0xFFDC4C3E),
-                elevation: 0,
-              ),
-              scaffoldBackgroundColor: const Color(0xFFF8F8F8),
-              useMaterial3: true,
-            ),
-            // Dark theme configuration
-            darkTheme: ThemeData(
-              brightness: Brightness.dark,
-              colorScheme: const ColorScheme.dark(
-                primary: Color(0xFFFF6B58), // Brighter primary color
-                secondary: Color(0xFFFF8A7A), // Brighter secondary
-                surface: Color(0xFF282828),
-                onSurface: Color(0xFFF0F0F0), // Brighter text on background
-                error: Color(0xFFFF5252), // Error color
-              ),
-              scaffoldBackgroundColor: const Color(
-                0xFF1A1A1A,
-              ), // Darker scaffold
-              cardColor: const Color(0xFF2C2C2C), // Slightly lighter card
-              canvasColor: const Color(0xFF2C2C2C),
-              appBarTheme: const AppBarTheme(
-                backgroundColor: Color(0xFF252525), // Darker app bar
-                foregroundColor: Color(0xFFFF6B58), // Brighter text/icons
-                elevation: 0,
-                iconTheme: IconThemeData(color: Color(0xFFFF6B58)),
-              ),
-              dividerColor: const Color(0xFF404040),
-              textTheme: const TextTheme(
-                bodyLarge: TextStyle(color: Color(0xFFF0F0F0)),
-                bodyMedium: TextStyle(color: Color(0xFFF0F0F0)),
-                bodySmall: TextStyle(color: Color(0xFFD0D0D0)),
-                titleLarge: TextStyle(color: Color(0xFFF0F0F0)),
-                titleMedium: TextStyle(color: Color(0xFFF0F0F0)),
-                titleSmall: TextStyle(color: Color(0xFFF0F0F0)),
-              ),
-              chipTheme: const ChipThemeData(
-                backgroundColor: Color(0xFF383838),
-                disabledColor: Color(0xFF323232),
-                selectedColor: Color(0xFF505050),
-                secondarySelectedColor: Color(0xFF606060),
-                padding: EdgeInsets.all(4),
-                labelStyle: TextStyle(color: Color(0xFFF0F0F0)),
-                secondaryLabelStyle: TextStyle(color: Color(0xFFF0F0F0)),
-                brightness: Brightness.dark,
-              ),
-              // Ensure better visibility for widgets like TextFields, Buttons, etc.
-              inputDecorationTheme: const InputDecorationTheme(
-                fillColor: Color(0xFF353535),
-                filled: true,
-                border: OutlineInputBorder(
-                  borderSide: BorderSide(color: Color(0xFF505050)),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderSide: BorderSide(color: Color(0xFFFF6B58), width: 2),
-                ),
-                labelStyle: TextStyle(color: Color(0xFFD0D0D0)),
-              ),
-              useMaterial3: true,
-            ),
-            themeMode: themeMode, // Use the theme mode from the provider
-            initialRoute: '/',
-            routes: {
-              '/': (context) => const HomeScreen(),
-              '/memos': (context) => const MemosScreen(),
-              '/chat': (context) => const ChatScreen(),
-              '/mcp': (context) => const McpScreen(),
-              // Keep new-memo route for backward compatibility but it's no longer the primary way to create memos
-              '/new-memo': (context) => const NewMemoScreen(),
-              '/filter-demo': (context) => const FilterDemoScreen(),
-              '/riverpod-demo': (context) => const RiverpodDemoScreen(),
-              '/codegen-test': (context) => const CodegenTestScreen(),
-              '/settings': (context) => const SettingsScreen(),
-            },
-            onGenerateRoute: (settings) {
-              if (settings.name == '/memo-detail') {
-                final args = settings.arguments as Map<String, dynamic>;
-                return MaterialPageRoute(
-                  builder:
-                      (context) =>
-                          MemoDetailScreen(memoId: args['memoId'] as String),
-                );
-              } else if (settings.name == '/edit-entity') {
-                // Renamed route
-                final args = settings.arguments as Map<String, dynamic>;
-                final entityType =
-                    args['entityType'] as String? ?? 'memo'; // Default to memo
-                final entityId =
-                    args['entityId']
-                        as String; // Will be memoId or "memoId/commentId"
+          child: Builder(
+            // Use Builder to get context for MediaQuery
+            builder: (context) {
+              // Determine Brightness based on provider and system setting
+              final themePreference = ref.watch(themeModeProvider);
+              final platformBrightness =
+                  MediaQuery.of(context).platformBrightness;
 
-                return MaterialPageRoute(
-                  builder:
-                      (context) => EditMemoScreen(
+              Brightness finalBrightness;
+              switch (themePreference) {
+                case ThemeMode.light:
+                  finalBrightness = Brightness.light;
+                  break;
+                case ThemeMode.dark:
+                  finalBrightness = Brightness.dark;
+                  break;
+                case ThemeMode.system:
+                  finalBrightness = platformBrightness;
+                  break;
+              }
+
+              // Define base text style for mapping
+              const TextStyle baseTextStyle = TextStyle(
+                fontFamily: '.SF Pro Text', // Standard iOS font
+                color: CupertinoColors.label, // Default label color
+              );
+              const TextStyle baseDarkTextStyle = TextStyle(
+                fontFamily: '.SF Pro Text',
+                color: CupertinoColors.label, // Default label color adapts
+              );
+
+              // Create CupertinoThemeData
+              final cupertinoTheme = CupertinoThemeData(
+                brightness: finalBrightness,
+                // Map colors (example mapping, adjust as needed)
+                primaryColor:
+                    finalBrightness == Brightness.dark
+                        ? CupertinoColors.systemOrange
+                        : CupertinoColors.systemBlue,
+                scaffoldBackgroundColor:
+                    finalBrightness == Brightness.dark
+                        ? CupertinoColors.black
+                        : CupertinoColors.systemGroupedBackground,
+                barBackgroundColor:
+                    finalBrightness == Brightness.dark
+                        ? const Color(0xFF1D1D1D) // Dark nav bar background
+                        : CupertinoColors
+                            .systemGrey6, // Light nav bar background
+                // Map text theme (basic example)
+                textTheme: CupertinoTextThemeData(
+                  textStyle:
+                      finalBrightness == Brightness.dark
+                          ? baseDarkTextStyle.copyWith(fontSize: 17)
+                          : baseTextStyle.copyWith(fontSize: 17),
+                  actionTextStyle:
+                      finalBrightness == Brightness.dark
+                          ? baseDarkTextStyle.copyWith(
+                            fontSize: 17,
+                            color: CupertinoColors.systemOrange,
+                          )
+                          : baseTextStyle.copyWith(
+                            fontSize: 17,
+                            color: CupertinoColors.systemBlue,
+                          ),
+                  navTitleTextStyle:
+                      finalBrightness == Brightness.dark
+                          ? baseDarkTextStyle.copyWith(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w600,
+                          )
+                          : baseTextStyle.copyWith(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w600,
+                          ),
+                  // Add other mappings as needed (navLargeTitleTextStyle, etc.)
+                ),
+              );
+
+              return CupertinoApp(
+                theme: cupertinoTheme,
+                navigatorKey:
+                    _navigatorKey, // Add navigator key for deep link navigation
+                title: 'Flutter Memos',
+                debugShowCheckedModeBanner: false,
+                // themeMode is handled by the brightness logic above
+                initialRoute: '/',
+                routes: {
+                  '/': (context) => const HomeScreen(),
+                  '/memos': (context) => const MemosScreen(),
+                  '/chat': (context) => const ChatScreen(),
+                  '/mcp': (context) => const McpScreen(),
+                  // Keep new-memo route for backward compatibility but it's no longer the primary way to create memos
+                  '/new-memo': (context) => const NewMemoScreen(),
+                  '/filter-demo': (context) => const FilterDemoScreen(),
+                  '/riverpod-demo': (context) => const RiverpodDemoScreen(),
+                  '/codegen-test': (context) => const CodegenTestScreen(),
+                  '/settings': (context) => const SettingsScreen(),
+                },
+                onGenerateRoute: (settings) {
+                  // Use CupertinoPageRoute for iOS-style transitions later (Phase 4)
+                  // For now, keep MaterialPageRoute to avoid breaking existing navigation
+                  // until screens are migrated.
+                  if (settings.name == '/memo-detail') {
+                    final args = settings.arguments as Map<String, dynamic>;
+                    return MaterialPageRoute(
+                      // Keep MaterialPageRoute for now
+                      builder:
+                          (context) =>
+                          MemoDetailScreen(memoId: args['memoId'] as String),
+                      settings: settings, // Pass settings
+                    );
+                  } else if (settings.name == '/edit-entity') {
+                    final args = settings.arguments as Map<String, dynamic>;
+                    final entityType =
+                        args['entityType'] as String? ?? 'memo';
+                    final entityId = args['entityId'] as String;
+
+                    return MaterialPageRoute(
+                      // Keep MaterialPageRoute for now
+                      builder:
+                          (context) => EditMemoScreen(
                         entityId: entityId,
                         entityType: entityType,
                       ),
-                );
-              } else if (settings.name == '/deep-link-target') {
-                // Handle deep link target route
-                final args = settings.arguments as Map<String, dynamic>? ?? {};
-                final memoId = args['memoId'] as String?;
-                final commentIdToHighlight =
-                    args['commentIdToHighlight'] as String?;
+                      settings: settings, // Pass settings
+                    );
+                  } else if (settings.name == '/deep-link-target') {
+                    final args =
+                        settings.arguments as Map<String, dynamic>? ?? {};
+                    final memoId = args['memoId'] as String?;
+                    final commentIdToHighlight =
+                        args['commentIdToHighlight'] as String?;
 
-                if (memoId != null) {
-                  // Return a route with the provider override to set the highlighted comment
-                  return MaterialPageRoute(
-                    builder:
-                        (context) => ProviderScope(
-                          overrides: [
-                            // Set the highlighted comment ID provider value
+                    if (memoId != null) {
+                      return MaterialPageRoute(
+                        // Keep MaterialPageRoute for now
+                        builder:
+                            (context) => ProviderScope(
+                              overrides: [
                             highlightedCommentIdProvider.overrideWith(
                               (ref) => commentIdToHighlight,
                             ),
                           ],
                           child: MemoDetailScreen(memoId: memoId),
                         ),
+                        settings: settings, // Pass settings
+                      );
+                    }
+                    return null;
+                  }
+                  // Fallback for unknown routes (maybe show a 404 screen)
+                  return MaterialPageRoute(
+                    // Keep MaterialPageRoute for now
+                    builder:
+                        (context) => Scaffold(
+                          appBar: AppBar(title: const Text('Not Found')),
+                          body: Center(
+                            child: Text(
+                              'No route defined for ${settings.name}',
+                            ),
+                          ),
+                        ),
                   );
-                }
-                return null;
-              }
-              return null;
+                },
+              );
             },
           ),
         ),
@@ -428,147 +473,115 @@ class HomeScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final themeMode = ref.watch(themeModeProvider);
+    // final themeMode = ref.watch(themeModeProvider); // No longer directly needed for icon logic here
 
     return Scaffold(
+      // Keep Scaffold temporarily until Phase 2
       appBar: AppBar(
+        // Keep AppBar temporarily until Phase 2
         title: const Text('Flutter Memos'),
-        actions: [
-          // Settings button
-          IconButton(
-            icon: const Icon(Icons.settings),
-            tooltip: 'Settings',
-            onPressed: () {
-              Navigator.pushNamed(context, '/settings');
-            },
-          ),
-          // Theme toggle button with dropdown
-          PopupMenuButton<Object>(
-            tooltip: 'Select theme',
-            icon: Icon(
-              themeMode == ThemeMode.dark
-                  ? Icons.dark_mode
-                  : themeMode == ThemeMode.light
-                      ? Icons.light_mode
-                      : Icons.brightness_auto,
-            ),
-            onSelected: (Object value) async {
-              if (value is ThemeMode) {
-                if (kDebugMode) {
-                  print('[HomeScreen] User selected theme: $value');
-                }
-
-                // Set the theme mode first
-                ref.read(themeModeProvider.notifier).state = value;
-
-                // Then save the preference
-                await ref.read(saveThemeModeProvider)(value);
-
-                // Provide user feedback
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        'Theme set to ${value.toString().split('.').last}',
-                      ),
-                      duration: const Duration(seconds: 1),
-                    ),
-                  );
-                }
-              } else if (value == 'settings') {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const SettingsScreen(),
-                  ),
-                );
-              }
-            },
-            itemBuilder:
-                (BuildContext context) => <PopupMenuEntry<Object>>[
-                  const PopupMenuItem<Object>(
-                    value: ThemeMode.light,
-                    child: Row(
-                      children: [
-                        Icon(Icons.light_mode, size: 18),
-                        SizedBox(width: 8),
-                        Text('Light Mode'),
-                      ],
-                    ),
-                  ),
-                  const PopupMenuItem<Object>(
-                    value: ThemeMode.dark,
-                    child: Row(
-                      children: [
-                        Icon(Icons.dark_mode, size: 18),
-                        SizedBox(width: 8),
-                        Text('Dark Mode'),
-                      ],
-                    ),
-                  ),
-                  const PopupMenuItem<Object>(
-                    value: ThemeMode.system,
-                    child: Row(
-                      children: [
-                        Icon(Icons.brightness_auto, size: 18),
-                        SizedBox(width: 8),
-                        Text('System Default'),
-                      ],
-                    ),
-                  ),
-                  const PopupMenuItem<Object>(
-                    value: 'settings',
-                    child: Row(
-                      children: [
-                        Icon(Icons.settings, size: 18),
-                        SizedBox(width: 8),
-                        Text('Settings'),
-                      ],
-                    ),
-                  ),
-                ],
-          ),
-        ],
+        // Temporarily comment out actions as PopupMenuButton is Material
+        // actions: [
+        //   // Settings button
+        //   IconButton(
+        //     icon: const Icon(Icons.settings),
+        //     tooltip: 'Settings',
+        //     onPressed: () {
+        //       Navigator.pushNamed(context, '/settings');
+        //     },
+        //   ),
+        //   // Theme toggle button with dropdown
+        //   PopupMenuButton<Object>(
+        //     tooltip: 'Select theme',
+        //     icon: Icon(
+        //       themeMode == ThemeMode.dark
+        //           ? Icons.dark_mode
+        //           : themeMode == ThemeMode.light
+        //               ? Icons.light_mode
+        //               : Icons.brightness_auto,
+        //     ),
+        //     onSelected: (Object value) async {
+        //       if (value is ThemeMode) {
+        //         if (kDebugMode) {
+        //           print('[HomeScreen] User selected theme: $value');
+        //         }
+        //         // Set the theme mode first
+        //         ref.read(themeModeProvider.notifier).state = value;
+        //         // Then save the preference
+        //         await ref.read(saveThemeModeProvider)(value);
+        //         // Provide user feedback
+        //         if (context.mounted) {
+        //           ScaffoldMessenger.of(context).showSnackBar(
+        //             SnackBar(
+        //               content: Text(
+        //                 'Theme set to ${value.toString().split('.').last}',
+        //               ),
+        //               duration: const Duration(seconds: 1),
+        //             ),
+        //           );
+        //         }
+        //       } else if (value == 'settings') {
+        //         Navigator.push(
+        //           context,
+        //           MaterialPageRoute(
+        //             builder: (context) => const SettingsScreen(),
+        //           ),
+        //         );
+        //       }
+        //     },
+        //     itemBuilder:
+        //         (BuildContext context) => <PopupMenuEntry<Object>>[
+        //           const PopupMenuItem<Object>(
+        //             value: ThemeMode.light,
+        //             child: Row(
+        //               children: [
+        //                 Icon(Icons.light_mode, size: 18),
+        //                 SizedBox(width: 8),
+        //                 Text('Light Mode'),
+        //               ],
+        //             ),
+        //           ),
+        //           const PopupMenuItem<Object>(
+        //             value: ThemeMode.dark,
+        //             child: Row(
+        //               children: [
+        //                 Icon(Icons.dark_mode, size: 18),
+        //                 SizedBox(width: 8),
+        //                 Text('Dark Mode'),
+        //               ],
+        //             ),
+        //           ),
+        //           const PopupMenuItem<Object>(
+        //             value: ThemeMode.system,
+        //             child: Row(
+        //               children: [
+        //                 Icon(Icons.brightness_auto, size: 18),
+        //                 SizedBox(width: 8),
+        //                 Text('System Default'),
+        //               ],
+        //             ),
+        //           ),
+        //           const PopupMenuItem<Object>(
+        //             value: 'settings',
+        //             child: Row(
+        //               children: [
+        //                 Icon(Icons.settings, size: 18),
+        //                 SizedBox(width: 8),
+        //                 Text('Settings'),
+        //               ],
+        //             ),
+        //           ),
+        //         ],
+        //   ),
+        // ],
       ),
       body: const Column(
         children: [
           Expanded(child: MemosScreen()),
 
-          // Demo UI components have been temporarily removed but preserved in code
-          // The following code is commented out but kept for future reference
-          /*
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              children: [
-                // MCP Integration Demo
-                DemoService.buildMCPIntegrationDemo(context: context),
-                const SizedBox(height: 10),
-                
-                // Assistant Chat - partially implemented
-                DemoService.buildAssistantChat(context: context),
-                const SizedBox(height: 10),
-                
-                // Filter Demo
-                DemoService.buildFilterDemo(context: context),
-                const SizedBox(height: 10),
-                
-                // Riverpod Demo
-                DemoService.buildRiverpodDemo(context: context),
-                const SizedBox(height: 10),
-                
-                // Riverpod Codegen Test
-                DemoService.buildRiverpodCodegenTest(context: context),
-                const SizedBox(height: 10),
-              ],
-            ),
-          ),
-          */
+          // Demo UI components remain commented out
+          /* ... */
 
-          // TODO: To restore demo functionality:
-          // 1. Uncomment the code block above
-          // 2. All demo buttons are now encapsulated in the DemoService class
-          // 3. Demo code is still present in respective screen files, ready to be used
         ],
       ),
     );
