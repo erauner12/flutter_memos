@@ -71,7 +71,7 @@ void main() {
         // Launch the app
         app.main();
         await tester.pumpAndSettle();
-        
+
         await Future.delayed(const Duration(seconds: 2));
         await tester.pumpAndSettle();
 
@@ -117,13 +117,13 @@ void main() {
             // Tap on the placeholder text to expand
             await tester.tap(find.textContaining('Add a comment'));
             await tester.pumpAndSettle();
-            
+
             // Type the comment text
             final commentTextFieldFinder = find.byType(TextField);
             if (commentTextFieldFinder.evaluate().isNotEmpty) {
               await tester.enterText(commentTextFieldFinder.first, 'Test comment for keyboard navigation');
               await tester.pumpAndSettle();
-              
+
               // Tap the "Add Comment" button
               final addCommentButtonFinder = find.text('Add Comment');
               if (addCommentButtonFinder.evaluate().isNotEmpty) {
@@ -134,60 +134,60 @@ void main() {
             }
           }
         }
-        
+
         // STEP 3: Test keyboard navigation while screen has focus
-        
+
         // Tap somewhere on the screen to give it focus
         await tester.tap(find.text('Comments'));
         await tester.pumpAndSettle();
-        
+
         // Try keyboard navigation with Shift+Arrow keys
         await tester.sendKeyDownEvent(LogicalKeyboardKey.shift);
         await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
         await tester.sendKeyUpEvent(LogicalKeyboardKey.shift);
         await tester.pumpAndSettle();
-        
+
         await tester.sendKeyDownEvent(LogicalKeyboardKey.shift);
         await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
         await tester.sendKeyUpEvent(LogicalKeyboardKey.shift);
         await tester.pumpAndSettle();
-        
+
         // STEP 4: Test keyboard navigation after focusing on different UI elements
-        
+
         // 1. Try after focusing on a comment
         final commentCards = find.byType(CommentCard);
         if (commentCards.evaluate().isNotEmpty) {
           await tester.tap(commentCards.first);
           await tester.pumpAndSettle();
-          
+
           // Try navigation after tapping a comment
           await tester.sendKeyDownEvent(LogicalKeyboardKey.shift);
           await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
           await tester.sendKeyUpEvent(LogicalKeyboardKey.shift);
           await tester.pumpAndSettle();
         }
-        
+
         // 2. Try after focusing on the comment input
         final commentTextBox = find.textContaining('Add a comment');
         if (commentTextBox.evaluate().isNotEmpty) {
           await tester.tap(commentTextBox);
           await tester.pumpAndSettle();
-          
+
           // Try to navigate while text input has focus (should be ignored)
           await tester.sendKeyDownEvent(LogicalKeyboardKey.shift);
           await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
           await tester.sendKeyUpEvent(LogicalKeyboardKey.shift);
           await tester.pumpAndSettle();
-          
+
           // Tap outside to unfocus
           await tester.tap(find.text('Comments'));
           await tester.pumpAndSettle();
         }
-        
+
         // STEP 5: Go back to main screen
         await tester.pageBack();
         await tester.pumpAndSettle();
-        
+
         // Verify we're back on the main screen
         final isOnMainScreen = find.text('Flutter Memos').evaluate().isNotEmpty ||
                                find.text('Memos').evaluate().isNotEmpty;

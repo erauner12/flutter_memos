@@ -101,11 +101,11 @@ void main() {
         direction: 'DESC',
       );
 
-      expect(memoList, isNotEmpty, reason: 'Memo list should not be empty');
-      print('Fetched list with ${memoList.length} memos.');
+      expect(memoList.memos, isNotEmpty, reason: 'Memo list should not be empty'); // Check .memos
+      print('Fetched list with ${memoList.memos.length} memos.'); // Check .memos
 
       // 4. Find the updated memo in the list
-      final memoFromList = memoList.firstWhere(
+      final memoFromList = memoList.memos.firstWhere( // Check .memos
             (m) => m.id == testMemoId,
         orElse: () => throw StateError('Updated memo $testMemoId not found in the fetched list!'),
       );
@@ -116,7 +116,7 @@ void main() {
       // 5. Assertions
       // Verify Sorting: The updated memo should be the first one due to sorting
       expect(
-        memoList.first.id,
+        memoList.memos.first.id, // Check .memos
         equals(testMemoId),
         reason: 'Updated memo should be the first in the list when sorted by updateTime',
       );

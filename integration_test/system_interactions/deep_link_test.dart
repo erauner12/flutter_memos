@@ -14,7 +14,7 @@ void main() {
   final ApiService apiService =
       ApiService(); // Instance for programmatic access
   final List<String> createdMemoIds = []; // Track IDs for cleanup
-  
+
   setUp(() {
     // Reset clipboard between tests
     Clipboard.setData(const ClipboardData(text: ''));
@@ -82,11 +82,11 @@ group('Deep Link Integration Tests', () {
       await tester.pumpAndSettle(
         const Duration(seconds: 3),
       ); // Allow time for initial load
-      
+
       // Find a memo card
       final memoCardFinder = find.byType(MemoCard);
       expect(memoCardFinder, findsWidgets, reason: 'Should find memo cards');
-      
+
       // Long press to open context menu
       await tester.longPress(memoCardFinder.first);
       await tester.pumpAndSettle(
@@ -121,7 +121,7 @@ group('Deep Link Integration Tests', () {
         findsOneWidget,
         reason: 'Should show confirmation snackbar',
       );
-      
+
       // Get clipboard data
       final clipboardData = await Clipboard.getData('text/plain');
       expect(
@@ -130,7 +130,7 @@ group('Deep Link Integration Tests', () {
         reason: 'Clipboard should contain a valid memo link',
       );
     });
-    
+
     testWidgets('Simulated deep link opens correct memo and highlights comment',
         (WidgetTester tester) async {
       // Launch app

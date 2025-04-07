@@ -10,7 +10,7 @@ extension SlidableTestExtension on CommonFinders {
       matching: find.text(label),
     );
   }
-  
+
   /// Find a slidable's end action pane (right side, typically delete/archive)
   Finder slidableEndActionPane() {
     return find.byWidgetPredicate((widget) {
@@ -38,10 +38,10 @@ class SlidableTestUtils {
       Offset(slideRight ? 300 : -300, 0)
     );
     await tester.pumpAndSettle();
-    
+
     // Allow animation to complete
     await tester.pump(const Duration(milliseconds: 300));
-    
+
     // Find and tap the action
     final actionFinder = find.text(actionLabel);
     expect(actionFinder, findsOneWidget, reason: '$actionLabel button not found');

@@ -1,9 +1,14 @@
+import 'package:integration_test/integration_test.dart';
+
+import '../../helpers/test_helpers.dart'; // Import helpers
+
+void main() {
 import 'package:flutter/material.dart';
 import 'package:flutter_memos/main.dart' as app;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
-import 'test_helpers.dart'; // Import helpers
+import '../../helpers/test_helpers.dart'; // Import helpers
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();

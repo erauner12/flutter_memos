@@ -32,7 +32,7 @@ Future<void> _verifyCollapsed(WidgetTester tester, double initialHeight) async {
     reason:
         'CaptureUtility should be collapsed (Height: $collapsedHeight, Expected near: $initialHeight)',
   );
-  
+
   // The TextField is always present now but should be minimal in collapsed state
   final textField = find.descendant(
     of: captureUtilityFinder,
@@ -75,7 +75,7 @@ Future<void> _verifyExpanded(WidgetTester tester, double initialHeight) async {
     reason:
         'CaptureUtility should be expanded (Height: $expandedHeight, Expected > ${initialHeight + 50})',
   );
-  
+
   // Check that the TextField is visible and focused when expanded
   final textFieldFinder = find.descendant(
     of: captureUtilityFinder,
@@ -86,7 +86,7 @@ Future<void> _verifyExpanded(WidgetTester tester, double initialHeight) async {
     findsOneWidget,
     reason: 'TextField should be visible when expanded',
   );
-  
+
   // Verify that expanded mode shows the Add button
   expect(
     find.descendant(

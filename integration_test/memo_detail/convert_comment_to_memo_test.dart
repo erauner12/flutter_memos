@@ -109,58 +109,58 @@ void main() {
       // STEP 3: Add a comment (Keep UI interaction for comment adding)
       final commentTimestamp = DateTime.now().millisecondsSinceEpoch;
       final testCommentText = 'Test Comment to Convert to Memo - $commentTimestamp';
-      
+
       // Find the comment capture utility
       final commentCaptureUtility = find.byType(CaptureUtility);
       expect(commentCaptureUtility, findsOneWidget, reason: 'Comment CaptureUtility not found');
-      
+
       // Tap on the placeholder text to expand
       await tester.tap(find.text('Add a comment...'));
       await tester.pumpAndSettle();
-      
+
       // Type the comment text
       final commentTextFieldFinder = find.byType(TextField);
       expect(commentTextFieldFinder, findsAtLeastNWidgets(1), reason: 'Comment TextField not found');
       await tester.enterText(commentTextFieldFinder.first, testCommentText);
       await tester.pumpAndSettle();
-      
+
       // Tap the "Add Comment" button
       final addCommentButtonFinder = find.text('Add Comment');
       expect(addCommentButtonFinder, findsOneWidget, reason: 'Add Comment button not found');
       await tester.tap(addCommentButtonFinder);
       await tester.pumpAndSettle();
-      
+
       // Wait longer for comment to be added
       await tester.pump(const Duration(seconds: 2));
       await tester.pumpAndSettle();
-      
+
       // STEP 4: Convert comment to memo
-      
+
       // Find the comment card
       final commentTextFinder = find.text(testCommentText);
       expect(commentTextFinder, findsOneWidget, reason: 'Added comment not found');
-      
+
       // Find the CommentCard containing our test content
       final commentCardFinder = find.ancestor(
         of: commentTextFinder.first,
         matching: find.byType(CommentCard),
       );
       expect(commentCardFinder, findsOneWidget, reason: 'CommentCard not found');
-      
+
       // Long press to open context menu
       await tester.longPress(commentCardFinder);
       await tester.pumpAndSettle();
-      
+
       // Find and tap the "Convert to Memo" option
       final convertToMemoFinder = find.text('Convert to Memo');
       expect(convertToMemoFinder, findsOneWidget, reason: 'Convert to Memo option not found');
       await tester.tap(convertToMemoFinder);
       await tester.pumpAndSettle();
-      
+
       // Wait longer for conversion and UI update
       await tester.pump(const Duration(seconds: 3));
       await tester.pumpAndSettle();
-      
+
       // Check for success message (accept either message since relation might fail but conversion succeeds)
       bool foundSuccessMessage = false;
       if (find.text('Comment converted to memo').evaluate().isNotEmpty) {
@@ -177,22 +177,22 @@ void main() {
         isTrue,
         reason: 'No conversion success message found',
       );
-      
+
       // STEP 5: Go back to main screen and verify new memo
-      
+
       // Find and tap the back button
       final backButtonFinder = find.byType(BackButton);
       expect(backButtonFinder, findsOneWidget, reason: 'Back button not found');
       await tester.tap(backButtonFinder);
       await tester.pumpAndSettle();
-      
+
       // Verify we're back on the main screen
       expect(find.text('Flutter Memos'), findsOneWidget, reason: 'Not back on main screen');
-      
+
       // Wait longer for the new memo to appear after returning to the list
       await tester.pump(const Duration(seconds: 3));
       await tester.pumpAndSettle();
-      
+
       // Look for the new memo (which contains the comment text)
       // Need to find by partial text since the memo list might truncate content
       final newMemoText = testCommentText.substring(0, 20); // First part of comment text
@@ -200,9 +200,9 @@ void main() {
         'Looking for converted memo with content starting with: $newMemoText',
       );
       final newMemoFinder = find.textContaining(newMemoText);
-      
+
       expect(newMemoFinder, findsAtLeastNWidgets(1), reason: 'Newly created memo from comment not found');
-      
+
       debugPrint('Comment to memo conversion test completed successfully');
     });
   });

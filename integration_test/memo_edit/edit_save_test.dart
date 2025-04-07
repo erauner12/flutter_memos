@@ -107,7 +107,7 @@ void main() {
         await tester.sendKeyDownEvent(LogicalKeyboardKey.meta);
         await tester.sendKeyEvent(LogicalKeyboardKey.enter);
         await tester.sendKeyUpEvent(LogicalKeyboardKey.meta);
-        
+
       // Wait longer to ensure the save completes and navigation happens
       debugPrint('Waiting for save to complete and navigation to occur...');
       await tester.pumpAndSettle(const Duration(seconds: 3));

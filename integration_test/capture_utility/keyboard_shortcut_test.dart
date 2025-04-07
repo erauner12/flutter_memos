@@ -49,7 +49,7 @@ Future<void> _verifyExpanded(WidgetTester tester, double initialHeight) async {
     reason:
         'CaptureUtility should be expanded (Height: $expandedHeight, Expected > ${initialHeight + 50})',
   );
-  
+
   // Check that the TextField is visible and focused when expanded
   final textFieldFinder = find.descendant(
     of: captureUtilityFinder,
@@ -86,10 +86,10 @@ void main() {
       await tester.sendKeyEvent(LogicalKeyboardKey.keyM);
       await tester.sendKeyUpEvent(LogicalKeyboardKey.shift);
       await tester.sendKeyUpEvent(LogicalKeyboardKey.meta);
-      
+
       // Allow time for animation to complete
       await tester.pumpAndSettle(const Duration(milliseconds: 600));
-      
+
       // Verify it expanded
       await _verifyExpanded(tester, initialHeight);
 
@@ -100,10 +100,10 @@ void main() {
       await tester.sendKeyEvent(LogicalKeyboardKey.keyM);
       await tester.sendKeyUpEvent(LogicalKeyboardKey.shift);
       await tester.sendKeyUpEvent(LogicalKeyboardKey.meta);
-      
+
       // Allow time for animation to complete
       await tester.pumpAndSettle(const Duration(milliseconds: 600));
-      
+
       // Verify it collapsed
       await _verifyCollapsed(tester, initialHeight);
     });
@@ -117,11 +117,11 @@ void main() {
 
       // Get the initial height (collapsed state)
       final initialHeight = _getInitialHeight(tester);
-      
+
       // Navigate to settings screen
       await tester.tap(find.byIcon(Icons.settings));
       await tester.pumpAndSettle();
-      
+
       // Verify we're on settings screen
       expect(find.text('Settings'), findsOneWidget);
 
@@ -132,25 +132,25 @@ void main() {
       await tester.sendKeyEvent(LogicalKeyboardKey.keyM);
       await tester.sendKeyUpEvent(LogicalKeyboardKey.shift);
       await tester.sendKeyUpEvent(LogicalKeyboardKey.meta);
-      
+
       await tester.pumpAndSettle(const Duration(milliseconds: 600));
-      
+
       // Navigate back to main screen to verify utility state
       await tester.pageBack();
       await tester.pumpAndSettle();
-      
+
       // Verify utility is expanded
       await _verifyExpanded(tester, initialHeight);
-      
+
       // Toggle back to collapsed state
       await tester.sendKeyDownEvent(LogicalKeyboardKey.meta);
       await tester.sendKeyDownEvent(LogicalKeyboardKey.shift);
       await tester.sendKeyEvent(LogicalKeyboardKey.keyM);
       await tester.sendKeyUpEvent(LogicalKeyboardKey.shift);
       await tester.sendKeyUpEvent(LogicalKeyboardKey.meta);
-      
+
       await tester.pumpAndSettle(const Duration(milliseconds: 600));
-      
+
       // Verify utility is collapsed
       await _verifyCollapsed(tester, initialHeight);
     });

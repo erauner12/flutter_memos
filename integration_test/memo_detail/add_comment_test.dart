@@ -17,7 +17,7 @@ void main() {
 
   // List to store IDs of memos created during the test for cleanup
   final List<String> createdMemoIds = [];
-  
+
   // Helper function to create test file data
   Uint8List createTestFileData() {
     // Create a simple test file (a small PNG-like byte array)
@@ -158,7 +158,7 @@ void main() {
         findsOneWidget,
         reason: 'Attach file button not found',
       );
-      
+
       // Instead of tapping the attach button, which would launch the native picker,
       // use a more direct approach to set file data programmatically
       final testFileData = createTestFileData();
@@ -186,7 +186,7 @@ void main() {
 
       // Wait for UI to update with the file
       await tester.pumpAndSettle();
-      
+
       debugPrint(
         '[Test Action] Programmatically set test file: $testFilename',
       );
@@ -259,7 +259,7 @@ void main() {
           find.text('Memos').evaluate().isNotEmpty ||
           find.text('Flutter Memos').evaluate().isNotEmpty ||
           find.byType(app.HomeScreen).evaluate().isNotEmpty;
-      
+
       expect(
         isOnMainScreen,
         isTrue,

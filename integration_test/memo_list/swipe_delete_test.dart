@@ -158,7 +158,7 @@ void main() {
       // Wait longer for deletion to complete and UI to refresh
       await tester.pump(const Duration(seconds: 1));
       await tester.pumpAndSettle();
-      
+
       // Force an additional pump with delay to ensure all animations and state updates complete
       await tester.pump(const Duration(seconds: 2));
       await tester.pumpAndSettle();
@@ -166,7 +166,7 @@ void main() {
       // Log the counts for debugging
       final afterDeleteCount = find.byType(MemoCard).evaluate().length;
       debugPrint('Memo count after deletion: $afterDeleteCount');
-      
+
       // Check if our memo is still visible anywhere - add more debugging
       bool memoFound = find.text(testMemoContent).evaluate().isNotEmpty;
       if (memoFound) {
@@ -190,7 +190,7 @@ void main() {
           'SUCCESS: Memo content no longer found in the UI after deletion',
         );
       }
-      
+
       // If not found immediately, try scrolling to find it
       if (!memoFound) {
         debugPrint('Checking if memo is really gone by scrolling...');
@@ -212,16 +212,16 @@ void main() {
           }
         }
       }
-      
+
       // Final verification - memo should not be found
       expect(memoFound, isFalse, reason: 'Deleted memo is still visible');
-      
+
       // Optional: Check for a snackbar confirmation
       final snackbarFinder = find.descendant(
         of: find.byType(SnackBar),
         matching: find.textContaining('deleted'),
       );
-      
+
       // Just log this result, don't fail the test if snackbar isn't shown
       if (snackbarFinder.evaluate().isEmpty) {
         debugPrint('Warning: Deletion confirmation snackbar not found');
