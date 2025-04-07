@@ -103,14 +103,14 @@ final hidePinnedProvider = StateProvider<bool>(
 
 class MemosNotifier extends StateNotifier<MemosState> {
   final Ref _ref;
-  final ApiService _apiService;
+
   static const int _pageSize = 20; // Or make configurable
   final bool _skipInitialFetchForTesting; // Flag for testing
 
   MemosNotifier(this._ref, {bool skipInitialFetchForTesting = false})
-    : _apiService = _ref.read(apiServiceProvider),
-      _skipInitialFetchForTesting = skipInitialFetchForTesting,
+    : _skipInitialFetchForTesting = skipInitialFetchForTesting,
       super(const MemosState(isLoading: true)) {
+    _ref.read(apiServiceProvider);
     _initialize();
   }
 
@@ -123,12 +123,13 @@ class MemosNotifier extends StateNotifier<MemosState> {
       return;
     }
     
-    // Listen to filter changes and trigger refresh
-    // Use select to avoid unnecessary refreshes if only part of the filter changes,
-    // but the combined result remains the same (less likely but possible).
+    // Listen to providers that should trigger a full refresh
+    _ref.listen(
+      apiServiceProvider,
+      (_, __) => refresh(),
+    ); // Add listener for API service changes
     _ref.listen(combinedFilterProvider, (_, __) => refresh());
     _ref.listen(filterKeyProvider, (_, __) => refresh());
-    // Add listeners for any other providers that should trigger a full refresh
     _ref.listen(statusFilterProvider, (_, __) => refresh());
     _ref.listen(timeFilterProvider, (_, __) => refresh());
 
@@ -138,6 +139,8 @@ class MemosNotifier extends StateNotifier<MemosState> {
 
   // Modified _fetchPage with raw API logging and conditional client-side filtering
   Future<void> _fetchPage({String? pageToken}) async {
+    // Read apiService inside the method where it's used
+    final apiService = _ref.read(apiServiceProvider);
     // Read current filters INSIDE the fetch method to get latest values
     final combinedFilter = _ref.read(combinedFilterProvider);
     final filterKey = _ref.read(filterKeyProvider);

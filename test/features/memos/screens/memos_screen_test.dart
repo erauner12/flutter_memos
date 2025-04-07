@@ -39,30 +39,7 @@ List<Memo> createDummyMemos(int count) {
   });
 }
 
-// Mock Notifier for MultiServerConfigState
-class MockMultiServerConfigNotifier
-    extends StateNotifier<MultiServerConfigState> {
-  MockMultiServerConfigNotifier(super.initialState);
 
-  // Override methods if needed for testing interactions, otherwise keep simple
-  Future<void> loadFromPreferences() async {}
-
-  Future<bool> addServer(ServerConfig config) async {
-    state = state.copyWith(servers: [...state.servers, config]);
-    return true;
-  }
-
-  void setActiveServer(String? serverId) {
-    state = state.copyWith(activeServerId: serverId);
-  }
-
-  Future<bool> setDefaultServer(String? serverId) async {
-    state = state.copyWith(defaultServerId: () => serverId);
-    return true;
-  }
-
-  // Add other methods as needed for tests
-}
 
 // Mock Notifier extending the actual Notifier
 class MockMemosNotifier extends MemosNotifier {
@@ -192,9 +169,15 @@ void main() {
         memosNotifierProvider.overrideWith(
           (ref) => MockMemosNotifier(ref, initialMemoState),
         ),
-        // Override multi-server config state
+        // Override multi-server config provider with a simple StateNotifier holding the initial state
         multiServerConfigProvider.overrideWith(
-          (ref) => MockMultiServerConfigNotifier(initialMultiServerState),
+          (ref) => StateNotifierProvider<
+            StateNotifier<MultiServerConfigState>,
+            MultiServerConfigState
+          >(
+            (ref) =>
+                StateNotifier<MultiServerConfigState>(initialMultiServerState),
+          ),
         ),
         // Override active server config (derived from multiServerConfigProvider)
         // No need to override activeServerConfigProvider directly if multiServerConfigProvider is mocked correctly

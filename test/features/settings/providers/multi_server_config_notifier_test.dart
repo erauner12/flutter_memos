@@ -196,7 +196,7 @@ void main() {
      test('Removes the only server', () async {
       await notifier.addServer(server1);
       final success = await notifier.removeServer(server1.id);
-      await Future.delayed(Duration.zero); // Add delay
+
 
       expect(success, isTrue);
       expect(notifier.state.servers, isEmpty);
