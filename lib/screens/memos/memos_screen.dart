@@ -680,11 +680,184 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
     );
   }
 
-  // Simplified _buildMemosList to delegate to MemosBody
+  // Function to handle the move process for a specific memo
+  void _handleMoveMemoToServer(String memoId) {
+    if (kDebugMode) {
+      print(
+        '[MemosScreen] _handleMoveMemoToServer called for memo ID: $memoId',
+      );
+    }
+
+    // 1. Get available servers
+    final multiServerState = ref.read(multiServerConfigProvider);
+    final servers = multiServerState.servers;
+    final activeServerId = multiServerState.activeServerId;
+    final availableTargetServers =
+        servers.where((s) => s.id != activeServerId).toList();
+
+    if (kDebugMode) {
+      print(
+        '[MemosScreen] Found ${availableTargetServers.length} target servers.',
+      );
+    }
+
+    if (availableTargetServers.isEmpty) {
+      // Show dialog: No other servers available
+      showCupertinoDialog(
+        context: context, // Use context from the State class
+        builder:
+            (ctx) => CupertinoAlertDialog(
+              title: const Text('No Other Servers'),
+              content: const Text(
+                'You need to configure at least one other server to move memos.',
+              ),
+              actions: [
+                CupertinoDialogAction(
+                  isDefaultAction: true,
+                  child: const Text('OK'),
+                  onPressed: () => Navigator.pop(ctx),
+                ),
+              ],
+            ),
+      );
+      return;
+    }
+
+    // 2. Show CupertinoActionSheet to select target server
+    showCupertinoModalPopup<ServerConfig>(
+      context: context, // Use context from the State class
+      builder:
+          (sheetContext) => CupertinoActionSheet(
+            title: const Text('Move Memo To...'),
+            actions:
+                availableTargetServers
+                    .map(
+                      (server) => CupertinoActionSheetAction(
+                        child: Text(server.name ?? server.serverUrl),
+                        onPressed: () {
+                          if (kDebugMode) {
+                            print(
+                              '[MemosScreen] Selected target server: ${server.name ?? server.id}',
+                            );
+                          }
+                          Navigator.pop(
+                            sheetContext,
+                            server,
+                          ); // Return selected server
+                        },
+                      ),
+                    )
+                    .toList(),
+            cancelButton: CupertinoActionSheetAction(
+              child: const Text('Cancel'),
+              onPressed: () => Navigator.pop(sheetContext),
+            ),
+          ),
+    ).then((selectedServer) {
+      if (selectedServer != null) {
+        // 3. Call the moveMemoProvider if a server was selected
+        if (kDebugMode) {
+          print(
+            '[MemosScreen] Calling moveMemoProvider for memo $memoId to server ${selectedServer.id}',
+          );
+        }
+        final moveParams = MoveMemoParams(
+          memoId: memoId,
+          targetServer: selectedServer,
+        );
+        // Consider showing a loading indicator here
+        ref
+            .read(moveMemoProvider(moveParams))()
+            .then((_) {
+              if (kDebugMode) {
+                print('[MemosScreen] Move successful for memo $memoId');
+              }
+              // Optional: Show success feedback
+              if (mounted) {
+                // Check mounted after async operation
+                showCupertinoDialog(
+                  context: context, // Use context from the State class
+                  builder:
+                      (ctx) => CupertinoAlertDialog(
+                        title: const Text('Move Successful'),
+                        content: Text(
+                          'Memo moved to ${selectedServer.name ?? selectedServer.serverUrl}.',
+                        ),
+                        actions: [
+                          CupertinoDialogAction(
+                            isDefaultAction: true,
+                            child: const Text('OK'),
+                            onPressed: () => Navigator.pop(ctx),
+                          ),
+                        ],
+                      ),
+                );
+              }
+            })
+            .catchError((error) {
+              if (kDebugMode) {
+                print('[MemosScreen] Move failed for memo $memoId: $error');
+              }
+              // Show error dialog
+              if (mounted) {
+                // Check mounted after async operation
+                showCupertinoDialog(
+                  context: context, // Use context from the State class
+                  builder:
+                      (ctx) => CupertinoAlertDialog(
+                        title: const Text('Move Failed'),
+                        content: Text('Error moving memo: $error'),
+                        actions: [
+                          CupertinoDialogAction(
+                            isDefaultAction: true,
+                            child: const Text('OK'),
+                            onPressed: () => Navigator.pop(ctx),
+                          ),
+                        ],
+                      ),
+                );
+              }
+            });
+      } else {
+        if (kDebugMode) {
+          print('[MemosScreen] No target server selected.');
+        }
+      }
+    });
+  }
+
+  // Simplified _buildMemosList to delegate to MemosBody, passing the callback
   Widget _buildMemosList(MemosState memosState, List<Memo> visibleMemos) {
     // The logic for displaying loading, error, empty, and data states,
     // including the ListView.builder and RefreshIndicator,
     // is now handled within the MemosBody widget.
-    return const MemosBody();
+
+    // IMPORTANT: If MemosBody builds the list, you need to pass
+    // _handleMoveMemoToServer down to it, and MemosBody needs to accept
+    // it and pass it to MemoListItem.
+    // Assuming MemosBody takes the callback:
+    return MemosBody(
+      // Pass the actual handler function down to MemosBody
+      onMoveMemoToServer: _handleMoveMemoToServer,
+    );
+
+    // If MemosScreen *directly* builds the list (less likely now):
+    /*
+    return ListView.builder(
+      itemCount: visibleMemos.length,
+      itemBuilder: (context, index) {
+        final memo = visibleMemos[index];
+        if (kDebugMode) {
+           print('[MemosScreen] Building MemoListItem for ${memo.id}, passing onMoveToServer callback.');
+        }
+        return MemoListItem(
+          key: ValueKey(memo.id),
+          memo: memo,
+          index: index,
+          onMoveToServer: () => _handleMoveMemoToServer(memo.id), // Pass the handler
+        );
+      },
+    );
+    */
   }
 }
