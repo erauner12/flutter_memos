@@ -196,6 +196,7 @@ void main() {
      test('Removes the only server', () async {
       await notifier.addServer(server1);
       final success = await notifier.removeServer(server1.id);
+      await Future.delayed(Duration.zero); // Add delay
 
       expect(success, isTrue);
       expect(notifier.state.servers, isEmpty);
@@ -216,6 +217,8 @@ void main() {
       await notifier.addServer(server2);
 
       notifier.setActiveServer(server2.id);
+      await Future.delayed(Duration.zero); // Add delay
+
       expect(notifier.state.activeServerId, server2.id);
       expect(notifier.state.defaultServerId, server1.id); // Default unchanged
 
@@ -233,6 +236,8 @@ void main() {
       await notifier.addServer(server2);
 
       final success = await notifier.setDefaultServer(server2.id);
+      await Future.delayed(Duration.zero); // Add delay
+
       expect(success, isTrue);
       expect(notifier.state.activeServerId, server1.id); // Active unchanged
       expect(notifier.state.defaultServerId, server2.id); // Default changed
@@ -248,9 +253,11 @@ void main() {
      test('Unsets default server', () async {
       await notifier.addServer(server1);
       await notifier.setDefaultServer(server1.id);
+      await Future.delayed(Duration.zero); // Add delay
       expect(notifier.state.defaultServerId, server1.id);
 
       final success = await notifier.setDefaultServer(null);
+      await Future.delayed(Duration.zero); // Add delay
       expect(success, isTrue);
       expect(notifier.state.defaultServerId, isNull);
 
@@ -266,6 +273,7 @@ void main() {
       await notifier.addServer(server1);
       await notifier.addServer(server2);
       notifier.setActiveServer(server2.id);
+      await Future.delayed(Duration.zero); // Add delay
 
       final activeConfig = container.read(activeServerConfigProvider);
       expect(activeConfig, isNotNull);
@@ -275,15 +283,17 @@ void main() {
      test('activeServerConfigProvider returns null when no active server', () async {
       await notifier.addServer(server1);
       notifier.setActiveServer(null); // Explicitly set active to null
+        await Future.delayed(Duration.zero); // Add delay
 
       final activeConfig = container.read(activeServerConfigProvider);
-      expect(activeConfig, isNull);
+        expect(activeConfig, isNull); // This assertion should now pass
     });
 
      test('activeServerConfigProvider returns null when active ID is invalid', () async {
       await notifier.addServer(server1);
       // Manually set state to an invalid active ID
       notifier.state = notifier.state.copyWith(activeServerId: 'invalid-id');
+        await Future.delayed(Duration.zero); // Add delay
 
       final activeConfig = container.read(activeServerConfigProvider);
       expect(activeConfig, isNull);

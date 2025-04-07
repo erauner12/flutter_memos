@@ -620,7 +620,13 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
                   print('[MemosScreen] Setting active server to: ${server.name ?? server.id}');
                 }
                 notifier.setActiveServer(server.id);
-                // MemosNotifier should auto-refresh due to dependency on apiServiceProvider
+                        // Explicitly invalidate the memos notifier to trigger a refresh
+                        ref.invalidate(memosNotifierProvider);
+                        if (kDebugMode) {
+                          print(
+                            '[MemosScreen] Invalidated memosNotifierProvider after server switch.',
+                          );
+                        }
               }
               Navigator.pop(context); // Close the action sheet
             },

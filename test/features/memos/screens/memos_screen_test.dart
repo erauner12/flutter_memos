@@ -45,21 +45,17 @@ class MockMultiServerConfigNotifier
   MockMultiServerConfigNotifier(super.initialState);
 
   // Override methods if needed for testing interactions, otherwise keep simple
-  @override
   Future<void> loadFromPreferences() async {}
 
-  @override
   Future<bool> addServer(ServerConfig config) async {
     state = state.copyWith(servers: [...state.servers, config]);
     return true;
   }
 
-  @override
   void setActiveServer(String? serverId) {
     state = state.copyWith(activeServerId: serverId);
   }
 
-  @override
   Future<bool> setDefaultServer(String? serverId) async {
     state = state.copyWith(defaultServerId: () => serverId);
     return true;
@@ -218,211 +214,110 @@ void main() {
     container.dispose();
   });
 
+  // Test 1: Standard UI
   testWidgets(
-    'MemosScreen displays standard CupertinoNavigationBar and no checkboxes initially',
+    'MemosScreen displays standard CupertinoNavigationBar and server switcher initially',
     (WidgetTester tester) async {
-      testWidgets(
-        'MemosScreen displays standard CupertinoNavigationBar and server switcher initially',
-        (WidgetTester tester) async {
-    // Arrange
-    await tester.pumpWidget(buildTestableWidget(const MemosScreen(), container));
-    await tester.pumpAndSettle(); // Wait for initial build
+      // Arrange
+      await tester.pumpWidget(
+        buildTestableWidget(const MemosScreen(), container),
+      );
+      await tester.pumpAndSettle(); // Wait for initial build
 
-    // Act & Assert
-          expect(
-            find.byType(CupertinoNavigationBar),
-            findsOneWidget,
-          ); // Check for CupertinoNavigationBar
-    expect(
-      find.descendant(
+      // Act & Assert
+      expect(
+        find.byType(CupertinoNavigationBar),
+        findsOneWidget,
+      ); // Check for CupertinoNavigationBar
+      expect(
+        find.descendant(
           of: find.byType(CupertinoNavigationBar),
-          matching: find.text('Memos (ALL)'), // Check middle title
-      ),
-      findsOneWidget,
-    );
+          matching: find.text('Memos (ALL)'),
+        ),
+        findsOneWidget,
+      );
+      // Verify Server Switcher button exists in leading
+      final navBarFinder = find.byType(CupertinoNavigationBar);
+      final serverSwitcherButtonFinder = find.descendant(
+        of: navBarFinder,
+        matching: find.widgetWithIcon(
+          CupertinoButton,
+          CupertinoIcons.square_stack_3d_down_right,
+        ),
+      );
+      expect(
+        serverSwitcherButtonFinder,
+        findsOneWidget,
+        reason:
+            "Could not find the server switcher button in NavigationBar leading",
+      );
+      // Verify server name is displayed (using the mocked active server)
+      expect(find.textContaining('Mock Server 1'), findsOneWidget,
+      );
+      // Verify "Select" button exists in trailing
+      final trailingButtonFinder = find.descendant(
+        of: navBarFinder,
+        matching: find.widgetWithIcon(
+          CupertinoButton,
+          CupertinoIcons.checkmark_seal,
+        ),
+      );
+      expect(
+        trailingButtonFinder,
+        findsOneWidget,
+        reason:
+            "Could not find the Select/Multi-select toggle button (tried checkmark_seal icon) in NavigationBar trailing",
+      );
+      // Verify multi-select actions are NOT present
+      expect(
+        find.widgetWithIcon(CupertinoButton, CupertinoIcons.clear,
+        ),
+        findsNothing,
+      );
+      expect(find.textContaining('Selected'), findsNothing);
+      expect(
+        find.widgetWithIcon(CupertinoButton, CupertinoIcons.delete,
+        ),
+        findsNothing,
+      );
+      expect(
+        find.widgetWithIcon(CupertinoButton, CupertinoIcons.archivebox,
+        ),
+        findsNothing,
+      );
+      // Verify no Checkboxes/Switches are present within list items
+      expect(
+        find.descendant(
+          of: find.byType(MemoListItem),
+          matching: find.byType(CupertinoSwitch),
+        ),
+        findsNothing,
+      );
+      expect(
+        find.descendant(
+          of: find.byType(MemoListItem),
+          matching: find.byType(CupertinoCheckbox),
+        ),
+        findsNothing,
+      );
+      // Verify Slidable/Dismissible are NOT present
+      expect(
+        find.descendant(
+          of: find.byType(MemoListItem),
+          matching: find.byType(Slidable),
+        ),
+        findsNothing,
+      );
+    },
+  );
 
-          // Verify Server Switcher button exists in leading
-          final navBarFinder = find.byType(CupertinoNavigationBar);
-          final serverSwitcherButtonFinder = find.descendant(
-            of: navBarFinder,
-            matching: find.widgetWithIcon(
-              CupertinoButton,
-              CupertinoIcons.square_stack_3d_down_right,
-            ),
-          );
-          expect(
-            serverSwitcherButtonFinder,
-            findsOneWidget,
-            reason:
-                "Could not find the server switcher button in NavigationBar leading",
-          );
-          // Verify server name is displayed (using the mocked active server)
-          expect(
-            find.textContaining('Mock Server 1'),
-            findsOneWidget,
-          ); // Check for active server name
-
-          // Verify "Select" button exists in trailing
-          final trailingButtonFinder = find.descendant(
-            of: navBarFinder,
-            matching: find.widgetWithIcon(
-              CupertinoButton,
-              CupertinoIcons.checkmark_seal,
-            ),
-          );
-          expect(
-            trailingButtonFinder,
-            findsOneWidget,
-            reason:
-                "Could not find the Select/Multi-select toggle button (tried checkmark_seal icon) in NavigationBar trailing",
-          );
-
-    // Verify multi-select actions are NOT present
-          expect(
-            find.widgetWithIcon(
-              CupertinoButton,
-              CupertinoIcons.clear,
-            ), // Cancel button (was xmark)
-            findsNothing,
-          );
-    expect(find.textContaining('Selected'), findsNothing); // "X Selected" text
-          expect(
-            find.widgetWithIcon(
-              CupertinoButton,
-              CupertinoIcons.delete,
-            ), // Delete action
-            findsNothing,
-          );
-          expect(
-            find.widgetWithIcon(
-              CupertinoButton,
-              CupertinoIcons.archivebox,
-            ), // Archive action
-            findsNothing,
-          );
-
-          // Verify no Checkboxes/Switches are present within list items
-          expect(
-            find.descendant(
-              of: find.byType(MemoListItem),
-              matching: find.byType(CupertinoSwitch),
-            ),
-            findsNothing,
-          );
-          expect(
-            find.descendant(
-              of: find.byType(MemoListItem),
-              matching: find.byType(CupertinoCheckbox),
-            ),
-            findsNothing,
-          );
-
-          // Verify Slidable/Dismissible are NOT present (replaced by context menu/multi-select)
-    expect(find.descendant(of: find.byType(MemoListItem), matching: find.byType(Slidable)), findsNothing);
-  });
-
+  // Test 2: Enter Multi-Select Mode
   testWidgets('MemosScreen enters multi-select mode on button tap', (WidgetTester tester) async {
     // Arrange
     await tester.pumpWidget(buildTestableWidget(const MemosScreen(), container));
     await tester.pumpAndSettle();
 
-        // Act: Find and tap the "Select" button
-    final navBarFinder = find.byType(CupertinoNavigationBar);
-    final selectButtonFinder = find.descendant(
-      of: navBarFinder,
-      matching: find.widgetWithIcon(
-        CupertinoButton,
-        CupertinoIcons.checkmark_seal,
-      ),
-    );
-    expect(
-      selectButtonFinder,
-      findsOneWidget,
-      reason:
-          "Could not find the Select/Multi-select toggle button (tried checkmark_seal icon) to tap",
-    );
-    await tester.ensureVisible(selectButtonFinder); // Ensure it's visible
-    await tester.pumpAndSettle(); // Wait for scroll/animations
-    await tester.tap(selectButtonFinder);
-    await tester.pumpAndSettle();
-
-        // Assert
-    expect(container.read(ui_providers.memoMultiSelectModeProvider), isTrue);
-
-    // Verify NavigationBar changes
-    expect(
-          find.widgetWithIcon(
-            CupertinoButton,
-            CupertinoIcons.clear,
-          ), // Cancel button (was xmark)
-      findsOneWidget,
-        );
-    expect(find.text('0 Selected'), findsOneWidget); // Initial count
-    expect(
-      find.widgetWithIcon(CupertinoButton, CupertinoIcons.delete),
-      findsOneWidget,
-    ); // Delete action
-    expect(
-      find.widgetWithIcon(CupertinoButton, CupertinoIcons.archivebox),
-      findsOneWidget,
-    ); // Archive action
-
-    // Verify standard title and select button are gone from NavigationBar
-    expect(
-      find.descendant(
-        of: find.byType(CupertinoNavigationBar), // Check within Nav Bar
-        matching: find.text('Memos (ALL)'),
-      ),
-      findsNothing,
-    );
-    // Check that the trailing button is no longer the "Select" icon button
-    final selectButtonFinderAfterModeChange = find.descendant(
-      of: navBarFinder,
-      matching: find.widgetWithIcon(
-        CupertinoButton,
-        CupertinoIcons.checkmark_seal,
-      ),
-    );
-    expect(
-      selectButtonFinderAfterModeChange,
-      findsNothing,
-      reason:
-          "Select/Multi-select toggle button (checkmark_seal icon) should not be present in multi-select mode's trailing slot",
-    );
-
-        // Check that the Cancel (clear) button IS present in the leading slot
-    final cancelButtonFinder = find.descendant(
-      of: navBarFinder,
-          matching: find.widgetWithIcon(
-            CupertinoButton,
-            CupertinoIcons.clear,
-          ), // Use clear icon
-    );
-    expect(
-      cancelButtonFinder,
-      findsOneWidget,
-      reason:
-              "Cancel (clear) button should be present in multi-select mode's leading slot",
-    );
-
-    // Verify Checkboxes appear for each item
-    final multiSelectWidgetFinder = find.descendant(
-      of: find.byType(MemoListItem),
-      matching: find.byType(CupertinoCheckbox), // Use CupertinoCheckbox
-    );
-    expect(multiSelectWidgetFinder, findsNWidgets(dummyMemos.length));
-
-    // Verify Slidable/Dismissible are gone
-    expect(find.descendant(of: find.byType(MemoListItem), matching: find.byType(Slidable)), findsNothing);
-  });
-
-      testWidgets('MemosScreen selects/deselects memo via Checkbox tap', (
-    WidgetTester tester,
-  ) async {
-    // Arrange
-    await tester.pumpWidget(buildTestableWidget(const MemosScreen(), container));
-    await tester.pumpAndSettle();
-    // Enter multi-select mode by tapping the "Select" icon button
+    // Act: Find and tap the "Select" button
     final navBarFinder = find.byType(CupertinoNavigationBar);
     final selectButtonFinder = find.descendant(
       of: navBarFinder,
@@ -442,19 +337,96 @@ void main() {
     await tester.tap(selectButtonFinder);
     await tester.pumpAndSettle();
 
-    // Find the first multi-select widget (CupertinoCheckbox)
+    // Assert
+    expect(container.read(ui_providers.memoMultiSelectModeProvider), isTrue);
+
+    // Verify NavigationBar changes
+    expect(
+      find.widgetWithIcon(CupertinoButton, CupertinoIcons.clear),
+      findsOneWidget,
+    );
+    expect(find.text('0 Selected'), findsOneWidget);
+    expect(
+      find.widgetWithIcon(CupertinoButton, CupertinoIcons.delete),
+      findsOneWidget,
+    );
+    expect(
+      find.widgetWithIcon(CupertinoButton, CupertinoIcons.archivebox),
+      findsOneWidget,
+    );
+    // Verify standard title and select button are gone
+    expect(
+      find.descendant(
+        of: find.byType(CupertinoNavigationBar),
+        matching: find.text('Memos (ALL)'),
+      ),
+      findsNothing,
+    );
+    final selectButtonFinderAfterModeChange = find.descendant(
+      of: navBarFinder,
+      matching: find.widgetWithIcon(
+        CupertinoButton,
+        CupertinoIcons.checkmark_seal,
+      ),
+    );
+    expect(
+      selectButtonFinderAfterModeChange,
+      findsNothing,
+      reason:
+          "Select/Multi-select toggle button (checkmark_seal icon) should not be present in multi-select mode's trailing slot",
+    );
+    final cancelButtonFinder = find.descendant(
+      of: navBarFinder,
+      matching: find.widgetWithIcon(CupertinoButton, CupertinoIcons.clear,
+      ),
+    );
+    expect(
+      cancelButtonFinder,
+      findsOneWidget,
+      reason:
+          "Cancel (clear) button should be present in multi-select mode's leading slot",
+    );
+    final multiSelectWidgetFinder = find.descendant(
+      of: find.byType(MemoListItem),
+      matching: find.byType(CupertinoCheckbox),
+    );
+    expect(multiSelectWidgetFinder, findsNWidgets(dummyMemos.length));
+    expect(find.descendant(of: find.byType(MemoListItem), matching: find.byType(Slidable)), findsNothing);
+  });
+
+  // Test 3: Select/Deselect Item
+  testWidgets('MemosScreen selects/deselects memo via Checkbox tap', (
+    WidgetTester tester,
+  ) async {
+    // Arrange
+    await tester.pumpWidget(buildTestableWidget(const MemosScreen(), container));
+    await tester.pumpAndSettle();
+    final navBarFinder = find.byType(CupertinoNavigationBar);
+    final selectButtonFinder = find.descendant(
+      of: navBarFinder,
+      matching: find.widgetWithIcon(
+        CupertinoButton,
+        CupertinoIcons.checkmark_seal,
+      ),
+    );
+    expect(
+      selectButtonFinder,
+      findsOneWidget,
+      reason:
+          "Could not find the Select/Multi-select toggle button (tried checkmark_seal icon) to tap",
+    );
+    await tester.ensureVisible(selectButtonFinder);
+    await tester.pumpAndSettle();
+    await tester.tap(selectButtonFinder);
+    await tester.pumpAndSettle();
     final firstItemFinder = find.byType(MemoListItem).first;
     final firstMultiSelectWidgetFinder = find.descendant(
       of: firstItemFinder,
-      matching: find.byType(CupertinoCheckbox), // Use CupertinoCheckbox
+      matching: find.byType(CupertinoCheckbox),
     );
-    expect(firstMultiSelectWidgetFinder, findsOneWidget); // Ensure it's found
-
-    // Act: Tap the first checkbox to select
+    expect(firstMultiSelectWidgetFinder, findsOneWidget);
     await tester.tap(firstMultiSelectWidgetFinder);
     await tester.pumpAndSettle();
-
-        // Assert: Selection state updated
     expect(
       container.read(ui_providers.selectedMemoIdsForMultiSelectProvider),
       contains(dummyMemos[0].id),
@@ -464,21 +436,14 @@ void main() {
       1,
     );
     expect(find.text('1 Selected'), findsOneWidget);
-
-    // Act: Tap the first widget again to deselect
     await tester.tap(firstMultiSelectWidgetFinder);
     await tester.pumpAndSettle();
-
-        // Assert: Selection state updated
     expect(
       container.read(ui_providers.selectedMemoIdsForMultiSelectProvider),
       isEmpty,
     );
     expect(find.text('0 Selected'), findsOneWidget);
   });
-      expect(find.text('0 Selected'), findsOneWidget);
-    },
-  );
 
   testWidgets('MemosScreen exits multi-select mode via Cancel button', (WidgetTester tester) async {
     // Arrange
