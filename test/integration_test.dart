@@ -5,7 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 // Set this to true to run integration tests against a real server
 // WARNING: These tests will create and modify real data!
-const bool RUN_INTEGRATION_TESTS = true;
+const bool RUN_INTEGRATION_TESTS = false;
 
 void main() {
   group('API Integration Tests', () {

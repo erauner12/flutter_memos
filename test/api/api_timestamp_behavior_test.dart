@@ -2,7 +2,7 @@ import 'package:flutter_memos/api/lib/api.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 // Set to true to run these tests against a live server
-const bool RUN_TIMESTAMP_API_TESTS = true;
+const bool RUN_TIMESTAMP_API_TESTS = false;
 
 void main() {
   group('API Timestamp Behavior Tests (Raw Client)', () {
