@@ -19,26 +19,30 @@ const KEYCHAIN_OPENAI_KEY = "openai_api_key"; // Added for OpenAI
  * @returns {Promise<any|null>} The data passed to the completion() function from JS, or null if dismissed.
  * @throws {Error} If WebView presentation or JS evaluation fails unexpectedly.
  */
-async function presentWebViewForm(htmlContent, fullscreen = false, preferredSize = null) {
-    console.log("Presenting WebView form...");
-    try {
-      const wv = new WebView();
-      // Optional: Set up shouldAllowRequest if needed to restrict navigation/resources
+async function presentWebViewForm(
+  htmlContent,
+  fullscreen = false,
+  preferredSize = null
+) {
+  console.log("Presenting WebView form...");
+  try {
+    const wv = new WebView();
+    // Optional: Set up shouldAllowRequest if needed to restrict navigation/resources
 
-      // Note: The static methods like WebView.loadHTML present immediately.
-      // We need an instance to load HTML and then evaluate JS.
-      await wv.loadHTML(htmlContent);
+    // Note: The static methods like WebView.loadHTML present immediately.
+    // We need an instance to load HTML and then evaluate JS.
+    await wv.loadHTML(htmlContent);
 
-      // *** Add this line to actually display the WebView ***
-      console.log(`Presenting WebView (fullscreen: ${fullscreen})...`);
-      await wv.present(fullscreen);
-      // *** End of added line ***
+    // *** Add this line to actually display the WebView ***
+    console.log(`Presenting WebView (fullscreen: ${fullscreen})...`);
+    await wv.present(fullscreen);
+    // *** End of added line ***
 
-      // Now that the WebView is visible, evaluate the JS that sets up the completion callback.
-      // Now that the WebView is visible, evaluate the JS that sets up the completion callback.
-      // Scriptable waits for the global completion() function to be called from the presented WebView.
-      const result = await wv.evaluateJavaScript(
-        `
+    // Now that the WebView is visible, evaluate the JS that sets up the completion callback.
+    // Now that the WebView is visible, evaluate the JS that sets up the completion callback.
+    // Scriptable waits for the global completion() function to be called from the presented WebView.
+    const result = await wv.evaluateJavaScript(
+      `
             // Define the completion function globally for the HTML's JS
             let scriptableCompletion; // Store the callback
 
@@ -67,26 +71,25 @@ async function presentWebViewForm(htmlContent, fullscreen = false, preferredSize
             // Return the promise Scriptable will wait for
             promise;
             `,
-        true // useCallback = true - Scriptable waits for the promise resolved by scriptableCompletion
-      );
+      true // useCallback = true - Scriptable waits for the promise resolved by scriptableCompletion
+    );
 
-      console.log("WebView form submitted or closed.");
-      // Note: If the user closes the WebView manually without the JS calling completion,
-      // Scriptable might throw an error or return undefined/null depending on version/context.
-      // Robust error handling might be needed here based on observed behavior.
-      // For now, assume completion() is called or it returns null/undefined on dismissal.
-      return result; // This is the data passed to completion() in the HTML's JS
-    } catch (e) {
-        console.error(`WebView presentation/evaluation failed: ${e}`);
-        // Decide how to handle errors - rethrow, return null, show an alert?
-        // Returning null might be consistent with cancellation.
-        // Let's re-throw for now, as cancellation might be indistinguishable from errors otherwise.
-        // Or, check error message for specific cancellation types if possible.
-        // For simplicity, returning null on error.
-        return null;
-    }
+    console.log("WebView form submitted or closed.");
+    // Note: If the user closes the WebView manually without the JS calling completion,
+    // Scriptable might throw an error or return undefined/null depending on version/context.
+    // Robust error handling might be needed here based on observed behavior.
+    // For now, assume completion() is called or it returns null/undefined on dismissal.
+    return result; // This is the data passed to completion() in the HTML's JS
+  } catch (e) {
+    console.error(`WebView presentation/evaluation failed: ${e}`);
+    // Decide how to handle errors - rethrow, return null, show an alert?
+    // Returning null might be consistent with cancellation.
+    // Let's re-throw for now, as cancellation might be indistinguishable from errors otherwise.
+    // Or, check error message for specific cancellation types if possible.
+    // For simplicity, returning null on error.
+    return null;
+  }
 }
-
 
 /**
  * Basic HTML escaping function.
@@ -94,15 +97,14 @@ async function presentWebViewForm(htmlContent, fullscreen = false, preferredSize
  * @returns {string} Escaped string.
  */
 function escapeHtml(unsafe) {
-    if (typeof unsafe !== 'string') return '';
-    return unsafe
-         .replace(/&/g, "&amp;")
-         .replace(/</g, "&lt;")
-         .replace(/>/g, "&gt;")
-         .replace(/"/g, "&quot;")
-         .replace(/'/g, "&#039;");
+  if (typeof unsafe !== "string") return "";
+  return unsafe
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }
-
 
 /**
  * Generates HTML for the Memos configuration form.
@@ -110,8 +112,8 @@ function escapeHtml(unsafe) {
  * @returns {string} HTML content for the configuration form.
  */
 function generateConfigFormHtml(existingUrl) {
-    // Basic CSS for better appearance
-    const css = `
+  // Basic CSS for better appearance
+  const css = `
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 15px; background-color: #f8f8f8; color: #333; }
         label { display: block; margin-bottom: 5px; font-weight: bold; }
         input[type=text], input[type=password] { width: 95%; padding: 10px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 5px; font-size: 16px; }
@@ -122,10 +124,10 @@ function generateConfigFormHtml(existingUrl) {
         p { color: #555; }
     `;
 
-    // Pre-fill URL if provided
-    const urlValue = existingUrl ? `value="${escapeHtml(existingUrl)}"` : '';
+  // Pre-fill URL if provided
+  const urlValue = existingUrl ? `value="${escapeHtml(existingUrl)}"` : "";
 
-    return `
+  return `
     <!DOCTYPE html>
     <html>
     <head>
@@ -152,8 +154,9 @@ function generateConfigFormHtml(existingUrl) {
         </form>
 
         <script>
-            // Wrap setup logic in a function
-            function initializeForm() {
+        // Wrap setup logic in a function
+        function initializeForm() {
+            try { // Add try block
                 const form = document.getElementById('configForm');
                 const urlInput = document.getElementById('memosUrl');
                 const tokenInput = document.getElementById('accessToken');
@@ -164,6 +167,7 @@ function generateConfigFormHtml(existingUrl) {
                 if (!form || !urlInput || !tokenInput || !openaiInput || !urlError || !tokenError) {
                     console.error("Config form elements not found during initialization.");
                     alert("Error initializing config form elements.");
+                    if (typeof completion === 'function') completion({ error: "Initialization failed: Elements missing" });
                     return;
                 }
 
@@ -208,14 +212,19 @@ function generateConfigFormHtml(existingUrl) {
                     }
                 });
                 console.log("Config form initialized.");
+            } catch (initError) { // Add catch block
+                console.error("Error during config form initialization:", initError);
+                alert("A critical error occurred setting up the configuration form.");
+                // Call completion with an error object if possible
+                if (typeof completion === 'function') completion({ error: "Initialization crashed", details: initError.message });
             }
-             // Do NOT call initializeForm() here directly anymore.
-        </script>
-    </body>
-    </html>
-    `;
+        }
+         // Do NOT call initializeForm() here directly anymore.
+    </script>
+</body>
+</html>
+`;
 }
-
 
 /**
  * Generates HTML for the main text input form.
@@ -269,47 +278,54 @@ function generateInputFormHtml(prefillText = "", showAiOption = false) {
         <script>
             // Wrap setup logic in a function to be called by evaluateJavaScript
             function initializeForm() {
-                const form = document.getElementById('inputForm');
-                const contentInput = document.getElementById('memoContent');
-                const useAiCheckbox = document.getElementById('useAi');
+                try { // Add try block
+                    const form = document.getElementById('inputForm');
+                    const contentInput = document.getElementById('memoContent');
+                    const useAiCheckbox = document.getElementById('useAi'); // Might be null
 
-                if (!form || !contentInput) {
-                    console.error("Form or content input not found during initialization.");
-                    alert("Error initializing form elements.");
-                    return;
-                }
-
-                form.addEventListener('submit', (event) => {
-                    event.preventDefault();
-                    const content = contentInput.value.trim();
-                    const processWithAi = useAiCheckbox ? useAiCheckbox.checked : false;
-
-                    if (content) {
-                         // completion is guaranteed to exist here because initializeForm
-                         // is called *after* completion is defined by evaluateJavaScript
-                         if (typeof completion === 'function') {
-                            completion({
-                                text: content,
-                                useAi: processWithAi
-                            });
-                        } else {
-                             // This case should ideally not happen now
-                             console.error('CRITICAL: completion function unexpectedly not available!');
-                             alert('Error: Cannot submit form due to internal issue.');
-                        }
-                    } else {
-                        alert("Please enter some content for the memo.");
+                    if (!form || !contentInput) {
+                        console.error("Form or content input not found during initialization.");
+                        alert("Error initializing form elements.");
+                        if (typeof completion === 'function') completion({ error: "Initialization failed: Elements missing" });
+                        return;
                     }
-                });
 
-                 // Auto-focus the text area
-                 contentInput.focus();
-                 console.log("Input form initialized and focused.");
+                    form.addEventListener('submit', (event) => {
+                        event.preventDefault();
+                        const content = contentInput.value.trim();
+                        const processWithAi = useAiCheckbox ? useAiCheckbox.checked : false;
+
+                        if (content) {
+                             // completion is guaranteed to exist here because initializeForm
+                             // is called *after* completion is defined by evaluateJavaScript
+                             if (typeof completion === 'function') {
+                                completion({
+                                    text: content,
+                                    useAi: processWithAi
+                                });
+                            } else {
+                                 // This case should ideally not happen now
+                                 console.error('CRITICAL: completion function unexpectedly not available!');
+                                 alert('Error: Cannot submit form due to internal issue.');
+                            }
+                        } else {
+                            alert("Please enter some content for the memo.");
+                        }
+                    });
+
+                     // Auto-focus the text area
+                     contentInput.focus();
+                     console.log("Input form initialized and focused.");
+                } catch (initError) { // Add catch block
+                    console.error("Error during input form initialization:", initError);
+                    alert("A critical error occurred setting up the input form.");
+                     // Call completion with an error object if possible
+                    if (typeof completion === 'function') completion({ error: "Initialization crashed", details: initError.message });
+                }
             }
 
              // Do NOT call initializeForm() here directly anymore.
              // It will be called by the evaluateJavaScript in presentWebViewForm.
-             // Remove or comment out: window.addEventListener('load', initializeForm);
         </script>
     </body>
     </html>
@@ -364,29 +380,37 @@ function generateAiConfirmHtml(originalText, processedText) {
         <script>
             // Wrap setup logic in a function
             function initializeForm() {
-                const useProcessedButton = document.getElementById('useProcessed');
-                const useOriginalButton = document.getElementById('useOriginal');
+                try { // Add try block
+                    const useProcessedButton = document.getElementById('useProcessed');
+                    const useOriginalButton = document.getElementById('useOriginal');
 
-                if (!useProcessedButton || !useOriginalButton) {
-                     console.error("AI confirm form elements not found during initialization.");
-                     alert("Error initializing AI confirm form elements.");
-                     return;
+                    if (!useProcessedButton || !useOriginalButton) {
+                         console.error("AI confirm form elements not found during initialization.");
+                         alert("Error initializing AI confirm form elements.");
+                         if (typeof completion === 'function') completion({ error: "Initialization failed: Elements missing" });
+                         return;
+                    }
+
+                    useProcessedButton.addEventListener('click', () => {
+                         if (typeof completion === 'function') {
+                            completion({ useProcessed: true });
+                         } else { console.error('CRITICAL: completion function unexpectedly not available!'); alert('Error submitting choice.'); }
+                    });
+
+                    useOriginalButton.addEventListener('click', () => {
+                         if (typeof completion === 'function') {
+                            completion({ useProcessed: false });
+                         } else { console.error('CRITICAL: completion function unexpectedly not available!'); alert('Error submitting choice.'); }
+                    });
+                    console.log("AI Confirm form initialized.");
+                } catch (initError) { // Add catch block
+                    console.error("Error during AI confirm form initialization:", initError);
+                    alert("A critical error occurred setting up the AI confirmation form.");
+                     // Call completion with an error object if possible
+                    if (typeof completion === 'function') completion({ error: "Initialization crashed", details: initError.message });
                 }
-
-                useProcessedButton.addEventListener('click', () => {
-                     if (typeof completion === 'function') {
-                        completion({ useProcessed: true });
-                     } else { console.error('CRITICAL: completion function unexpectedly not available!'); alert('Error submitting choice.'); }
-                });
-
-                useOriginalButton.addEventListener('click', () => {
-                     if (typeof completion === 'function') {
-                        completion({ useProcessed: false });
-                     } else { console.error('CRITICAL: completion function unexpectedly not available!'); alert('Error submitting choice.'); }
-                });
-                console.log("AI Confirm form initialized.");
             }
-             // Do NOT call initializeForm() here directly anymore.
+                 // Do NOT call initializeForm() here directly anymore.
         </script>
     </body>
     </html>
