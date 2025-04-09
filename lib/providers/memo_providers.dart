@@ -770,29 +770,28 @@ final updateMemoProvider = Provider.family<Future<Memo> Function(Memo), String>(
         // Update memo through API
         final result = await apiService.updateMemo(id, updatedMemo);
 
-      // --- Update Cache and Invalidate ---
-      // Update the detail cache *before* invalidating the detail provider
-        if (ref.exists(memoDetailCacheProvider)) {
-          ref
-              .read(memoDetailCacheProvider.notifier)
-              .update((state) => {...state, id: result});
-        if (kDebugMode) {
-          print('[updateMemoProvider] Updated memoDetailCacheProvider for $id');
-        }
-        }
-
-      // Refresh the main list after successful update
-      ref.invalidate(memosNotifierProvider);
-      // Invalidate the specific memo detail provider to ensure freshness if needed elsewhere
-      ref.invalidate(memoDetailProvider(id));
-      // --- End Update Cache and Invalidate ---
+      // --- REMOVE CACHE UPDATE AND INVALIDATIONS ---
+      // // Update the detail cache *before* invalidating the detail provider
+      // if (ref.exists(memoDetailCacheProvider)) {
+      //   ref
+      //       .read(memoDetailCacheProvider.notifier)
+      //       .update((state) => {...state, id: result});
+      //   if (kDebugMode) {
+      //     print('[updateMemoProvider] Updated memoDetailCacheProvider for $id');
+      //   }
+      // }
+      //
+      // // Refresh the main list after successful update
+      // ref.invalidate(memosNotifierProvider);
+      // // Invalidate the specific memo detail provider to ensure freshness if needed elsewhere
+      // ref.invalidate(memoDetailProvider(id));
+      // --- END REMOVAL ---
 
       if (kDebugMode) {
         print(
-          '[updateMemoProvider] Memo $id updated successfully, updated cache, invalidated list and detail providers.',
-        );
+            '[updateMemoProvider] Memo $id updated successfully via API.');
       }
-      return result;
+      return result; // Return the result
     } catch (e, stackTrace) {
       if (kDebugMode) {
         print('[updateMemoProvider] Error updating memo: $e');

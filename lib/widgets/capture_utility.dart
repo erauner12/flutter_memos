@@ -71,6 +71,38 @@ class CaptureUtility extends ConsumerStatefulWidget {
 
 class _CaptureUtilityState extends ConsumerState<CaptureUtility>
     with SingleTickerProviderStateMixin {
+  // Move these method definitions to the top of the class to fix reference errors
+  Future<void> createMemo(String content) async {
+    final newMemo = Memo(id: 'temp', content: content, visibility: 'PUBLIC');
+    await ref.read(memo_providers.createMemoProvider)(newMemo);
+  }
+
+  Future<void> addComment(
+    String content,
+    String memoId, {
+    Uint8List? fileBytes,
+    String? filename,
+    String? contentType,
+  }) async {
+    if (kDebugMode) {
+      print(
+        '[CaptureUtility._addComment] Adding comment: memoId=$memoId, content_empty=${content.isEmpty}, filename=$filename, contentType=$contentType, data_length=${fileBytes?.length}',
+      );
+    }
+    final newComment = Comment(
+      id: 'temp-${DateTime.now().millisecondsSinceEpoch}',
+      content: content,
+      creatorId: '1',
+      createTime: DateTime.now().millisecondsSinceEpoch,
+    );
+    await ref.read(comment_providers.createCommentProvider(memoId))(
+      newComment,
+      fileBytes: fileBytes,
+      filename: filename,
+      contentType: contentType,
+    );
+  }
+
   // Method definition added inside the state class
   void setFileDataForTest(
     Uint8List fileData,
@@ -631,11 +663,12 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
     setState(() {
       _isSubmitting = true;
     });
-
+    // --- Define variable for the updated memo result ---
+    Memo? updatedMemoResult;
     try {
       if (widget.mode == CaptureMode.createMemo) {
         // Create Memo logic (remains unchanged, attachments handled separately if needed)
-        await _createMemo(content);
+        await createMemo(content);
       } else if (widget.mode == CaptureMode.addComment &&
           widget.memoId != null) {
         // Add Comment logic (expanded)
@@ -662,7 +695,7 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
 
         switch (currentAction) {
           case SubmitAction.newComment:
-            await _addComment(
+            await addComment(
               currentContent,
               memoId,
               fileBytes: _selectedFileData,
@@ -697,30 +730,38 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
             }
             break;
           case SubmitAction.appendToMemo:
+          case SubmitAction.prependToMemo: // Combine logic for append/prepend memo
             if (parentMemo != null) {
-              final updatedContent = "${parentMemo.content}\n$currentContent";
-              final updatedMemo = parentMemo.copyWith(content: updatedContent);
-              // Call updateMemoProvider
-              await ref.read(memo_providers.updateMemoProvider(memoId))(
-                updatedMemo,
+              final updatedContent = (currentAction == SubmitAction.appendToMemo)
+                  ? "${parentMemo.content}\n$currentContent"
+                  : "$currentContent\n${parentMemo.content}";
+              final updatedMemoData = parentMemo.copyWith(content: updatedContent);
+
+              // Call updateMemoProvider and store the result
+              updatedMemoResult = await ref.read(memo_providers.updateMemoProvider(memoId))(
+                updatedMemoData,
               );
+
+              // --- Manually update cache and refresh providers ---
+               if (ref.exists(memo_providers.memoDetailCacheProvider)) {
+                  ref.read(memo_providers.memoDetailCacheProvider.notifier)
+                     .update((state) => {...state, memoId: updatedMemoResult!});
+                  if (kDebugMode) {
+                    print('[CaptureUtility] Manually updated memoDetailCacheProvider for $memoId');
+                  }
+               }
+               // Explicitly refresh the detail provider AFTER updating cache
+              // Store refresh result to prevent unused_result warning
+              final _ = ref.refresh(memoDetailProvider(memoId));
+               // Explicitly refresh the list provider
+              final __ = ref.refresh(memo_providers.memosNotifierProvider);
+               if (kDebugMode) {
+                 print('[CaptureUtility] Explicitly refreshed memoDetailProvider and memosNotifierProvider for $memoId');
+               }
+              // --- End manual update and refresh ---
             } else {
               throw Exception(
-                "Cannot append: Parent memo not loaded or available.",
-              );
-            }
-            break;
-          case SubmitAction.prependToMemo:
-            if (parentMemo != null) {
-              final updatedContent = "$currentContent\n${parentMemo.content}";
-              final updatedMemo = parentMemo.copyWith(content: updatedContent);
-              // Call updateMemoProvider
-              await ref.read(memo_providers.updateMemoProvider(memoId))(
-                updatedMemo,
-              );
-            } else {
-              throw Exception(
-                "Cannot prepend: Parent memo not loaded or available.",
+                "Cannot ${currentAction == SubmitAction.appendToMemo ? 'append' : 'prepend'}: Parent memo not loaded or available.",
               );
             }
             break;
@@ -764,38 +805,7 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
     }
   }
 
-  Future<void> _createMemo(String content) async {
-    final newMemo = Memo(id: 'temp', content: content, visibility: 'PUBLIC');
-    await ref.read(memo_providers.createMemoProvider)(newMemo);
-  }
-
-  Future<void> _addComment(
-    String content,
-    String memoId, {
-    Uint8List? fileBytes,
-    String? filename,
-    String? contentType,
-  }) async {
-    if (kDebugMode) {
-      print(
-        '[CaptureUtility._addComment] Adding comment: memoId=$memoId, content_empty=${content.isEmpty}, filename=$filename, contentType=$contentType, data_length=${fileBytes?.length}',
-      );
-    }
-    final newComment = Comment(
-      id: 'temp-${DateTime.now().millisecondsSinceEpoch}',
-      content: content,
-      creatorId: '1',
-      createTime: DateTime.now().millisecondsSinceEpoch,
-    );
-    await ref.read(comment_providers.createCommentProvider(memoId))(
-      newComment,
-      fileBytes: fileBytes,
-      filename: filename,
-      contentType: contentType,
-    );
-  }
-
-  KeyEventResult _handleKeyEvent(KeyEvent event) {
+  KeyEventResult handleKeyEvent(KeyEvent event) {
     if (event is KeyDownEvent) {
       if (event.logicalKey == LogicalKeyboardKey.escape) {
         if (_isExpanded) {
@@ -814,7 +824,7 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
     return KeyEventResult.ignored;
   }
 
-  void _showOverflowActionSheet() {
+  void showOverflowActionSheet() {
     showCupertinoModalPopup<void>(
       context: context,
       builder:
@@ -862,7 +872,7 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
     );
   }
 
-  Widget _buildExpandedContent(String hintText, String buttonText) {
+  Widget buildExpandedContent(String hintText, String buttonText) {
     // final isDarkMode = CupertinoTheme.of(context).brightness == Brightness.dark; // No longer needed here
 
     return Column(
@@ -872,7 +882,7 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
         Expanded(
           child: KeyboardListener(
             focusNode: FocusNode(),
-            onKeyEvent: _handleKeyEvent,
+            onKeyEvent: handleKeyEvent,
             child: CupertinoTextField(
               controller: _textController,
               focusNode: _focusNode,
@@ -984,7 +994,7 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
                   CupertinoButton(
                     padding: EdgeInsets.zero,
                     minSize: 40,
-                    onPressed: _showOverflowActionSheet,
+                    onPressed: showOverflowActionSheet,
                     child: Icon(
                       CupertinoIcons.ellipsis_circle,
                       size: 20,
@@ -1038,7 +1048,7 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
     );
   }
 
-  Widget _buildCollapsedContent(String placeholderText) {
+  Widget buildCollapsedContent(String placeholderText) {
     // final isDarkMode = CupertinoTheme.of(context).brightness == Brightness.dark; // No longer needed
 
     return Center(
@@ -1323,14 +1333,14 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
                                       ),
                                     ),
                                   Expanded(
-                                    child: _buildExpandedContent(
+                                    child: buildExpandedContent(
                                       hintText,
                                       buttonText,
                                     ),
                                   ),
                                 ],
                               )
-                              : _buildCollapsedContent(placeholderText),
+                              : buildCollapsedContent(placeholderText),
                     ),
                   ),
                 ],
