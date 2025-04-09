@@ -195,6 +195,12 @@ class MinimalOpenAiService {
       throw Exception('MinimalOpenAiService not configured with API token.');
     }
     
+    if (kDebugMode) {
+      print(
+        '[MinimalOpenAiService] Fixing grammar for text (${text.length} chars)',
+      );
+    }
+    
     final request = MinimalCompletionRequest(
       model: 'gpt-3.5-turbo-instruct',
       prompt: 'Correct the grammar and spelling of the following text:\n\n$text\n\nCorrected text:',
@@ -208,7 +214,15 @@ class MinimalOpenAiService {
       throw Exception('OpenAI returned no correction.');
     }
     
-    return response.choices[0].text.trim();
+    final correctedText = response.choices[0].text.trim();
+
+    if (kDebugMode) {
+      print(
+        '[MinimalOpenAiService] Grammar fix complete. Original: ${text.length} chars, Corrected: ${correctedText.length} chars',
+      );
+    }
+
+    return correctedText;
   }
 
   void dispose() {
