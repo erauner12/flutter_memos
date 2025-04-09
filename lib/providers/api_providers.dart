@@ -140,7 +140,11 @@ Future<void> _checkApiHealth(Ref ref) async {
   }
 
   // Set status to checking
+  // Check current state before setting to avoid unnecessary updates
+  final currentStatus = ref.read(apiStatusProvider);
+  if (currentStatus == 'checking') return; // Already checking
   ref.read(apiStatusProvider.notifier).state = 'checking';
+
 
   try {
     // Use a lightweight call like listMemos with pageSize=1
@@ -153,7 +157,9 @@ Future<void> _checkApiHealth(Ref ref) async {
     // If we get here, the API is available
     // Check if the status is still 'checking' before updating to 'available'
     // This prevents race conditions if the active server changes during the check
-    if (ref.read(apiStatusProvider) == 'checking') {
+    // Also check if the config hasn't changed *during* the check
+    if (ref.read(activeServerConfigProvider)?.id == activeConfig.id &&
+        ref.read(apiStatusProvider) == 'checking') {
       ref.read(apiStatusProvider.notifier).state = 'available';
     }
   } catch (e) {
@@ -163,7 +169,9 @@ Future<void> _checkApiHealth(Ref ref) async {
         '[apiHealthChecker] API health check failed for ${activeConfig.name ?? activeConfig.id}: $e',
       );
     }
-    if (ref.read(apiStatusProvider) == 'checking') {
+    // Also check if the config hasn't changed *during* the check
+    if (ref.read(activeServerConfigProvider)?.id == activeConfig.id &&
+        ref.read(apiStatusProvider) == 'checking') {
       ref.read(apiStatusProvider.notifier).state = 'unavailable';
     }
   }
@@ -188,6 +196,8 @@ final todoistApiServiceProvider = Provider<TodoistApiService>((ref) {
       );
     }
     // Return unconfigured service, which will fail if used
+    // Ensure the service is initialized even without a token
+    todoistApiService.configureService(authToken: '');
   } else {
     todoistApiService.configureService(authToken: todoistToken);
     if (kDebugMode) {
@@ -211,8 +221,11 @@ final todoistApiServiceProvider = Provider<TodoistApiService>((ref) {
 
 /// Provider for Todoist API service status (available, unavailable, etc.)
 final todoistApiStatusProvider = StateProvider<String>((ref) {
-  return 'unknown';
+  // Initial state depends on whether the token is configured
+  final token = Env.todoistApiKey;
+  return token.isEmpty ? 'unconfigured' : 'unknown';
 }, name: 'todoistApiStatus');
+
 
 /// Provider that checks Todoist API health periodically
 final todoistApiHealthCheckerProvider = Provider<void>((ref) {
@@ -230,22 +243,45 @@ final todoistApiHealthCheckerProvider = Provider<void>((ref) {
 
 // Helper function to check Todoist API health
 Future<void> _checkTodoistApiHealth(Ref ref) async {
+  // Get the service instance. The provider itself handles configuration.
+  final todoistApiService = ref.read(todoistApiServiceProvider);
+
+  // If the service isn't configured (no token), set status and return.
+  if (!todoistApiService.isConfigured) {
+    ref.read(todoistApiStatusProvider.notifier).state = 'unconfigured';
+    return;
+  }
+
   // Set status to checking
+  // Check current state before setting to avoid unnecessary updates
+  final currentStatus = ref.read(todoistApiStatusProvider);
+  if (currentStatus == 'checking') return; // Already checking
   ref.read(todoistApiStatusProvider.notifier).state = 'checking';
 
+
   try {
-    final todoistApiService = ref.read(todoistApiServiceProvider);
+    // Call the health check method on the service instance
     final isHealthy = await todoistApiService.checkHealth();
 
-    if (isHealthy) {
-      ref.read(todoistApiStatusProvider.notifier).state = 'available';
-    } else {
-      ref.read(todoistApiStatusProvider.notifier).state = 'unavailable';
+    // Check if the status is still 'checking' before updating
+    // This prevents race conditions if the check takes time
+    if (ref.read(todoistApiStatusProvider) == 'checking') {
+      if (isHealthy) {
+        ref.read(todoistApiStatusProvider.notifier).state = 'available';
+      } else {
+        // If checkHealth returns false, it means the API call failed
+        ref.read(todoistApiStatusProvider.notifier).state = 'unavailable';
+      }
     }
+
   } catch (e) {
+    // Catch any exceptions during the health check
     if (kDebugMode) {
       print('[todoistApiHealthChecker] Error checking health: $e');
     }
-    ref.read(todoistApiStatusProvider.notifier).state = 'error';
+    if (ref.read(todoistApiStatusProvider) == 'checking') {
+      ref.read(todoistApiStatusProvider.notifier).state =
+          'error'; // Or 'unavailable'
+    }
   }
 }
