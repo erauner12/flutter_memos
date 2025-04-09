@@ -702,29 +702,43 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
               filename: _selectedFilename,
               contentType: _selectedContentType,
             );
+            // After adding a comment, also refresh the parent memo detail
+            // to potentially show updated comment counts or related info.
+            // Assign to _ to handle unused_result warning
+            final _ = ref.refresh(memoDetailProvider(memoId));
             break;
           case SubmitAction.appendToLastComment:
             if (lastComment != null) {
-              final updatedContent = "${lastComment.content}\n$currentContent";
+              // Ensure double newline
+              final updatedContent =
+                  "${lastComment.content}\n\n$currentContent";
               // Call updateCommentProvider (assuming it exists and takes these args)
               await ref.read(comment_providers.updateCommentProvider)(
                 memoId,
                 lastComment.id,
                 updatedContent,
               );
+              // Refresh parent memo detail after comment update
+              // Assign to _ to handle unused_result warning
+              final _ = ref.refresh(memoDetailProvider(memoId));
             } else {
               throw Exception("Cannot append: No last comment found.");
             }
             break;
           case SubmitAction.prependToLastComment:
             if (lastComment != null) {
-              final updatedContent = "$currentContent\n${lastComment.content}";
+              // Ensure double newline
+              final updatedContent =
+                  "$currentContent\n\n${lastComment.content}";
               // Call updateCommentProvider
               await ref.read(comment_providers.updateCommentProvider)(
                 memoId,
                 lastComment.id,
                 updatedContent,
               );
+              // Refresh parent memo detail after comment update
+              // Assign to _ to handle unused_result warning
+              final _ = ref.refresh(memoDetailProvider(memoId));
             } else {
               throw Exception("Cannot prepend: No last comment found.");
             }
@@ -732,10 +746,10 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
           case SubmitAction.appendToMemo:
           case SubmitAction.prependToMemo: // Combine logic for append/prepend memo
             if (parentMemo != null) {
-              // Ensure newline is added between existing and new content
+              // Ensure double newline is added between existing and new content
               final updatedContent = (currentAction == SubmitAction.appendToMemo)
-                      ? "${parentMemo.content}\n$currentContent" // Add newline before new content
-                      : "$currentContent\n${parentMemo.content}"; // Add newline after new content
+                      ? "${parentMemo.content}\n\n$currentContent" // Add double newline before new content
+                      : "$currentContent\n\n${parentMemo.content}"; // Add double newline after new content
               final updatedMemoData = parentMemo.copyWith(content: updatedContent);
 
               // Call updateMemoProvider and store the result
@@ -756,7 +770,8 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
                 memoDetailProvider(memoId).future,
               ); // Await the future
               // Explicitly refresh the list provider (no need to await this one for immediate detail update)
-              ref.refresh(memo_providers.memosNotifierProvider);
+              // Assign to _ to handle unused_result warning
+              final _ = ref.refresh(memo_providers.memosNotifierProvider);
                if (kDebugMode) {
                 print(
                   '[CaptureUtility] Explicitly refreshed (and awaited detail) providers for $memoId',
