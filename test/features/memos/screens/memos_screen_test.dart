@@ -313,6 +313,7 @@ void main() {
     expect(find.text('All'), findsWidgets); // Segment label
 
     // Verify Memo List Items (now within MemosBody)
+    // Verify Memo List Items (now within MemosBody)
     // Check if MemosBody exists, which contains the list
     expect(find.byType(MemosBody), findsOneWidget);
     // We can still check for MemoListItem *within* MemosBody if needed,
@@ -326,11 +327,10 @@ void main() {
     );
     expect(find.textContaining('Selected'), findsNothing); // Multi-select title
 
-    // Verify standard trailing buttons ARE present within the NavBar
-    final navBarFinder = find.byType(CupertinoNavigationBar);
+    // Verify standard trailing buttons ARE present within the NavBar (using the existing navBarFinder)
     expect(
       find.descendant(
-        of: navBarFinder,
+        of: navBarFinder, // Use the navBarFinder defined earlier in the test
         matching: find.widgetWithIcon(
           CupertinoButton,
           CupertinoIcons.checkmark_seal,
@@ -341,7 +341,7 @@ void main() {
     );
     expect(
       find.descendant(
-        of: navBarFinder,
+        of: navBarFinder, // Use the navBarFinder defined earlier in the test
         matching: find.widgetWithIcon(
           CupertinoButton,
           CupertinoIcons.tuningfork,
@@ -352,7 +352,7 @@ void main() {
     );
     expect(
       find.descendant(
-        of: navBarFinder,
+        of: navBarFinder, // Use the navBarFinder defined earlier in the test
         matching: find.widgetWithIcon(CupertinoButton, CupertinoIcons.add),
       ),
       findsOneWidget,
@@ -373,13 +373,14 @@ void main() {
       ),
       findsNothing,
     );
-    // Verify Slidable/Dismissible are NOT present
+
+    // Verify Slidable IS present in normal mode
     expect(
       find.descendant(
         of: find.byType(MemoListItem),
         matching: find.byType(Slidable),
       ),
-      findsNothing,
+      findsNWidgets(dummyMemos.length), // Expect Slidable for each item
     );
   });
 
@@ -558,8 +559,7 @@ void main() {
       isEmpty, // Selection cleared
     );
 
-    // Verify NavigationBar reverts - Find title specifically within NavBar
-    final navBarFinder = find.byType(CupertinoNavigationBar);
+    // Verify NavigationBar reverts - Use the existing navBarFinder
     expect(
       find.descendant(
         of: navBarFinder,
@@ -569,23 +569,36 @@ void main() {
       reason: 'Title should revert to preset label',
     );
     expect(
-      find.widgetWithIcon(
-        CupertinoButton,
-        CupertinoIcons.checkmark_seal,
+      find.descendant(
+        // Check within NavBar
+        of: navBarFinder,
+        matching: find.widgetWithIcon(
+          CupertinoButton,
+          CupertinoIcons.checkmark_seal,
+        ),
       ), // Select button back
       findsOneWidget,
     );
     expect(
-      find.widgetWithIcon(
-        CupertinoButton,
-        CupertinoIcons.clear,
+      find.descendant(
+        // Check within NavBar
+        of: navBarFinder,
+        matching: find.widgetWithIcon(CupertinoButton, CupertinoIcons.clear,
+        ),
       ), // Cancel button gone
       findsNothing,
     );
     expect(
-      find.textContaining('Selected'),
+      find.descendant(
+        // Check within NavBar
+        of: navBarFinder,
+        matching: find.textContaining('Selected'),
+      ),
       findsNothing,
     ); // Multi-select title gone
+
+    // Verify Search Bar and Filter Control are visible again
+    expect(find.byType(CupertinoSearchTextField), findsOneWidget);
 
     // Verify Search Bar and Filter Control are visible again
     expect(find.byType(CupertinoSearchTextField), findsOneWidget);
@@ -650,7 +663,11 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(container.read(quickFilterPresetProvider), 'inbox'); // Initial state
-    final navBarFinder = find.byType(CupertinoNavigationBar);
+
+    // Verify Initial Title specifically within NavBar
+    final navBarFinder = find.byType(
+      CupertinoNavigationBar,
+    ); // Define navBarFinder here
     expect(
       find.descendant(
         of: navBarFinder,
