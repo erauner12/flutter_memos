@@ -22,11 +22,11 @@ const COMMON_AI_TASKS = [
 function escapeHtml(unsafe) { /* ... (keep existing) ... */
     if (typeof unsafe !== "string") return "";
     return unsafe
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
+      .replace(/&/g, "&")
+      .replace(/</g, "<")
+      .replace(/>/g, ">")
       .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#039;");
+      .replace(/'/g, "'");
 }
 
 /** Presents an HTML form in a WebView */
@@ -59,119 +59,15 @@ function generateConfigFormHtml(existingUrl, existingToken, existingOpenAIKey) {
     return ` <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Memos Configuration</title><style>${css}</style></head> <body><h2>Memos Configuration</h2><p>Enter your Memos instance URL, Access Token (OpenAPI), and your OpenAI API Key.</p> <div class="info">Existing tokens/keys are not shown. Enter a new value only if you need to change it. Leave blank to keep the existing value (if any).</div> <form id="configForm"><label for="memosUrl">Memos URL:</label><input type="text" id="memosUrl" name="memosUrl" ${urlValue} required placeholder="https://your-memos.com"><div id="urlError" class="error" style="display: none;"></div> <label for="accessToken">Access Token:</label><input type="password" id="accessToken" name="accessToken" ${tokenPlaceholder} ><div id="tokenError" class="error" style="display: none;"></div> <label for="openaiKey">OpenAI API Key:</label><input type="password" id="openaiKey" name="openaiKey" ${openaiKeyPlaceholder}><div id="openaiError" class="error" style="display: none;"></div> <button type="submit">Save Configuration</button></form> <script> function initializeForm() { try { const form=document.getElementById('configForm'),urlInput=document.getElementById('memosUrl'),tokenInput=document.getElementById('accessToken'),openaiInput=document.getElementById('openaiKey'),urlError=document.getElementById('urlError'),tokenError=document.getElementById('tokenError'),openaiError=document.getElementById('openaiError'); if(!form||!urlInput||!tokenInput||!openaiInput||!urlError||!tokenError||!openaiError){console.error("Config form elements not found.");alert("Error initializing config form elements.");if(typeof completion==='function')completion({error:"Initialization failed: Elements missing"});return;} form.addEventListener('submit',(event)=>{ event.preventDefault();urlError.style.display='none';tokenError.style.display='none';openaiError.style.display='none';let isValid=true;const url=urlInput.value.trim(),newToken=tokenInput.value.trim(),newOpenaiApiKey=openaiInput.value.trim();if(!url){urlError.textContent='Memos URL is required.';urlError.style.display='block';isValid=false;}else if(!url.toLowerCase().startsWith('http://')&&!url.toLowerCase().startsWith('https://')){urlError.textContent='URL must start with http:// or https://';urlError.style.display='block';isValid=false;} if(isValid){if(typeof completion==='function'){completion({action:'submit',data:{url:url,token:newToken||null,openaiApiKey:newOpenaiApiKey||null}});}else{console.error('CRITICAL: completion function unavailable!');alert('Error: Cannot submit config form.');}} }); console.log("Config form initialized."); } catch (initError) { console.error("Error during config form initialization:", initError); alert("A critical error occurred setting up the configuration form."); if(typeof completion==='function')completion({error:"Initialization crashed",details:initError.message}); } } </script></body></html>`;
 }
 
-/**
- * Generates HTML for the main text input form with Compose field and Common Options.
- * Includes focus tracking and cursor insertion logic.
- * @param {string} [prefillText=''] - Text to pre-fill the main content textarea.
- * @returns {string} HTML content for the input form.
- */
-function generateInputFormHtml(prefillText = "") {
-    const css = `
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 15px; display: flex; flex-direction: column; height: 95vh; background-color: #f8f8f8; color: #333; }
-        textarea { width: 95%; padding: 10px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 8px; font-size: 16px; resize: none; }
-        #memoContent { flex-grow: 1; margin-bottom: 15px; }
-        #composeInstructions { height: 60px; margin-bottom: 15px; }
-        label { display: block; margin-bottom: 5px; font-weight: bold; font-size: 0.9em; color: #555; }
-        .button-bar { display: flex; gap: 10px; margin-bottom: 15px; }
-        .button-bar button { flex-grow: 1; padding: 10px 15px; background-color: #e0e0e0; color: #333; border: 1px solid #ccc; border-radius: 8px; cursor: pointer; font-size: 14px; }
-        .button-bar button:hover { background-color: #d0d0d0; }
-        button[type=submit] { padding: 12px 20px; background-color: #007aff; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; width: 100%; margin-top: auto; }
-        button[type=submit]:hover { background-color: #0056b3; }
-        .options-section { margin-bottom: 15px; }
-        .options-section label { font-weight: bold; font-size: 0.9em; color: #555; margin-bottom: 8px; }
-        .common-options { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 10px; }
-        .common-options div { display: flex; align-items: center; }
-        .common-options label { margin-left: 4px; font-weight: normal; font-size: 0.9em; }
-        .ai-toggle { display: flex; align-items: center; }
-        .ai-toggle label { margin-left: 8px; font-weight: normal; }
-        input[type=checkbox] { width: 18px; height: 18px; }
-        h2 { margin-top: 0; color: #111; }
-        .clipboard-notice { font-size: 0.9em; color: #666; margin-bottom: 10px; }
-        form { display: flex; flex-direction: column; flex-grow: 1; }
-    `;
-
-    const shareSheetNotice = prefillText ? `<div class="clipboard-notice">Text pre-filled from Share Sheet.</div>` : "";
-    const escapedPrefillText = escapeHtml(prefillText);
-    let commonOptionsHtml = '<label>Common Tasks:</label><div class="common-options">';
-    COMMON_AI_TASKS.forEach(task => { const id = `common-opt-${task.value}`; commonOptionsHtml += `<div><input type="checkbox" id="${id}" name="commonOptions" value="${task.value}"><label for="${id}">${escapeHtml(task.label)}</label></div>`; });
-    commonOptionsHtml += '</div>';
-    const aiToggleHtml = `<div class="ai-toggle"><input type="checkbox" id="useAi" name="useAi" checked><label for="useAi">Process with AI</label></div>`;
-
-    return `
-    <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"><title>Enter Memo Content</title><style>${css}</style></head>
-    <body><h2>Enter Memo Content</h2>${shareSheetNotice}
-    <form id="inputForm">
-        <label for="memoContent">Content:</label>
-        <textarea id="memoContent" name="memoContent" placeholder="Type, paste, or dictate content here..." required onfocus="window.activeTextAreaId = this.id">${escapedPrefillText}</textarea>
-
-        <div class="options-section">
-             ${aiToggleHtml}
-             ${commonOptionsHtml}
-        </div>
-
-        <label for="composeInstructions">Custom Instructions (Optional):</label>
-        <textarea id="composeInstructions" name="composeInstructions" placeholder="e.g., Summarize, make this more formal..." onfocus="window.activeTextAreaId = this.id"></textarea>
-
-        <div class="button-bar"><button type="button" id="pasteButton">Paste</button><button type="button" id="dictateButton">Dictate</button></div>
-
-        <button type="submit">Add Memo</button>
-    </form>
-    <script>
-        // Track focused element for dictation/paste
-        window.activeTextAreaId = 'memoContent'; // Default
-
-        // Function to insert text at cursor position
-        function updateSpecificTextArea(targetId, textToInsert) {
-            const textarea = document.getElementById(targetId);
-            if (textarea && textToInsert != null) {
-                const start = textarea.selectionStart;
-                const end = textarea.selectionEnd;
-                const currentText = textarea.value;
-                const before = currentText.substring(0, start);
-                const after = currentText.substring(end, currentText.length);
-
-                // Insert the text (with spaces if inserting between words)
-                let textWithSpacing = textToInsert;
-                // Add leading space if not at start and previous char isn't space/newline
-                if (start > 0 && !/\\s/.test(before.slice(-1))) {
-                    textWithSpacing = " " + textWithSpacing;
-                }
-                 // Add trailing space if not at end and next char isn't space/newline
-                if (end < currentText.length && !/\\s/.test(after.charAt(0))) {
-                     textWithSpacing += " ";
-                }
-
-                textarea.value = before + textWithSpacing + after;
-
-                // Set cursor position after inserted text
-                const newCursorPos = start + textWithSpacing.length;
-                textarea.selectionStart = newCursorPos;
-                textarea.selectionEnd = newCursorPos;
-
-                textarea.focus(); // Keep focus
-                console.log(\`Text inserted into '\${targetId}' at position \${start}.\`);
-
-                // Trigger input event for frameworks if needed (optional)
-                // textarea.dispatchEvent(new Event('input', { bubbles: true }));
-
-            } else {
-                console.error(\`Could not find text area with ID '\${targetId}' or text was null.\`);
-            }
-        }
-
-        // Legacy function (not really needed now but safe to keep)
-        function updateTextArea(text) {
-             updateSpecificTextArea('memoContent', text);
-        }
-
-        function initializeForm(){try{const t=document.getElementById("inputForm"),e=document.getElementById("memoContent"),o=document.getElementById("composeInstructions"),n=document.getElementById("useAi"),c=document.getElementById("pasteButton"),l=document.getElementById("dictateButton");if(!t||!e||!o||!n||!c||!l)return console.error("Required form elements not found."),alert("Error initializing form elements."),void(typeof completion=="function"&&completion({error:"Initialization failed: Elements missing"}));t.addEventListener("submit",t=>{t.preventDefault();const a=e.value.trim(),i=o.value.trim(),s=n.checked,r=[];document.querySelectorAll('input[name="commonOptions"]:checked').forEach(t=>{r.push(t.value)});a||i||r.length>0?typeof completion=="function"?completion({action:"submit",data:{text:a,compose:i,useAi:s,commonOptions:r}}):(console.error("CRITICAL: completion unavailable!"),alert("Error: Cannot submit form.")):alert("Please enter content, instructions, or select a common task.")}),c.addEventListener("click",()=>{console.log("Paste button clicked."),typeof completion=="function"?completion({action:"paste"}):(console.error("CRITICAL: completion unavailable!"),alert("Error: Cannot request paste."))}),l.addEventListener("click",()=>{console.log("Dictate button clicked."),typeof completion=="function"?completion({action:"dictate"}):(console.error("CRITICAL: completion unavailable!"),alert("Error: Cannot request dictation."))}),e.focus(),console.log("Input form initialized.")}catch(t){console.error("Error during input form initialization:",t),alert("A critical error occurred setting up the input form."),typeof completion=="function"&&completion({error:"Initialization crashed",details:t.message})}}
-    </script></body></html>`;
+/** Generates HTML for the main text input form */
+function generateInputFormHtml(prefillText = "") { /* ... (keep existing - stable) ... */
+    const css = ` body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 15px; display: flex; flex-direction: column; height: 95vh; background-color: #f8f8f8; color: #333; } textarea { width: 95%; padding: 10px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 8px; font-size: 16px; resize: none; } #memoContent { flex-grow: 1; margin-bottom: 15px; } #composeInstructions { height: 60px; margin-bottom: 15px; } label { display: block; margin-bottom: 5px; font-weight: bold; font-size: 0.9em; color: #555; } .button-bar { display: flex; gap: 10px; margin-bottom: 15px; } .button-bar button { flex-grow: 1; padding: 10px 15px; background-color: #e0e0e0; color: #333; border: 1px solid #ccc; border-radius: 8px; cursor: pointer; font-size: 14px; } .button-bar button:hover { background-color: #d0d0d0; } button[type=submit] { padding: 12px 20px; background-color: #007aff; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; width: 100%; margin-top: auto; } button[type=submit]:hover { background-color: #0056b3; } .options-section { margin-bottom: 15px; } .options-section label { font-weight: bold; font-size: 0.9em; color: #555; margin-bottom: 8px; } .common-options { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 10px; } .common-options div { display: flex; align-items: center; } .common-options label { margin-left: 4px; font-weight: normal; font-size: 0.9em; } .ai-toggle { display: flex; align-items: center; } .ai-toggle label { margin-left: 8px; font-weight: normal; } input[type=checkbox] { width: 18px; height: 18px; } h2 { margin-top: 0; color: #111; } .clipboard-notice { font-size: 0.9em; color: #666; margin-bottom: 10px; } form { display: flex; flex-direction: column; flex-grow: 1; } `;
+    const shareSheetNotice = prefillText ? `<div class="clipboard-notice">Text pre-filled from Share Sheet.</div>` : ""; const escapedPrefillText = escapeHtml(prefillText); let commonOptionsHtml = '<label>Common Tasks:</label><div class="common-options">'; COMMON_AI_TASKS.forEach(task => { const id = `common-opt-${task.value}`; commonOptionsHtml += `<div><input type="checkbox" id="${id}" name="commonOptions" value="${task.value}"><label for="${id}">${escapeHtml(task.label)}</label></div>`; }); commonOptionsHtml += '</div>'; const aiToggleHtml = `<div class="ai-toggle"><input type="checkbox" id="useAi" name="useAi" checked><label for="useAi">Process with AI</label></div>`;
+    return ` <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"><title>Enter Memo Content</title><style>${css}</style></head> <body><h2>Enter Memo Content</h2>${shareSheetNotice} <form id="inputForm"> <label for="memoContent">Content:</label> <textarea id="memoContent" name="memoContent" placeholder="Type, paste, or dictate content here..." required onfocus="window.activeTextAreaId = this.id">${escapedPrefillText}</textarea> <div class="options-section"> ${aiToggleHtml} ${commonOptionsHtml} </div> <label for="composeInstructions">Custom Instructions (Optional):</label> <textarea id="composeInstructions" name="composeInstructions" placeholder="e.g., Summarize, make this more formal..." onfocus="window.activeTextAreaId = this.id"></textarea> <div class="button-bar"><button type="button" id="pasteButton">Paste</button><button type="button" id="dictateButton">Dictate</button></div> <button type="submit">Add Memo</button> </form> <script> window.activeTextAreaId = 'memoContent'; function updateSpecificTextArea(targetId, textToInsert) { const textarea = document.getElementById(targetId); if (textarea && textToInsert != null) { const start = textarea.selectionStart; const end = textarea.selectionEnd; const currentText = textarea.value; const before = currentText.substring(0, start); const after = currentText.substring(end, currentText.length); let textWithSpacing = textToInsert; if (start > 0 && !/\\s/.test(before.slice(-1))) { textWithSpacing = " " + textWithSpacing; } if (end < currentText.length && !/\\s/.test(after.charAt(0))) { textWithSpacing += " "; } textarea.value = before + textWithSpacing + after; const newCursorPos = start + textWithSpacing.length; textarea.selectionStart = newCursorPos; textarea.selectionEnd = newCursorPos; textarea.focus(); console.log(\`Text inserted into '\${targetId}' at position \${start}.\`); } else { console.error(\`Could not find text area with ID '\${targetId}' or text was null.\`); } } function updateTextArea(text) { updateSpecificTextArea('memoContent', text); } function initializeForm(){try{const t=document.getElementById("inputForm"),e=document.getElementById("memoContent"),o=document.getElementById("composeInstructions"),n=document.getElementById("useAi"),c=document.getElementById("pasteButton"),l=document.getElementById("dictateButton");if(!t||!e||!o||!n||!c||!l)return console.error("Required form elements not found."),alert("Error initializing form elements."),void(typeof completion=="function"&&completion({error:"Initialization failed: Elements missing"}));t.addEventListener("submit",t=>{t.preventDefault();const a=e.value.trim(),i=o.value.trim(),s=n.checked,r=[];document.querySelectorAll('input[name="commonOptions"]:checked').forEach(t=>{r.push(t.value)});a||i||r.length>0?typeof completion=="function"?completion({action:"submit",data:{text:a,compose:i,useAi:s,commonOptions:r}}):(console.error("CRITICAL: completion unavailable!"),alert("Error: Cannot submit form.")):alert("Please enter content, instructions, or select a common task.")}),c.addEventListener("click",()=>{console.log("Paste button clicked."),typeof completion=="function"?completion({action:"paste"}):(console.error("CRITICAL: completion unavailable!"),alert("Error: Cannot request paste."))}),l.addEventListener("click",()=>{console.log("Dictate button clicked."),typeof completion=="function"?completion({action:"dictate"}):(console.error("CRITICAL: completion unavailable!"),alert("Error: Cannot request dictation."))}),e.focus(),console.log("Input form initialized.")}catch(t){console.error("Error during input form initialization:",t),alert("A critical error occurred setting up the input form."),typeof completion=="function"&&completion({error:"Initialization crashed",details:t.message})}} </script></body></html>`;
 }
 
-
 /**
- * Generates HTML to display the parsed AI plan for review, using proposals with diff styling.
- * Removed placeholder comments.
+ * Generates HTML to display the parsed AI plan for review, with live preview.
  * @param {object} parsedPlanData - The structured plan object from parseAiXmlResponse.
  * @param {string} originalContent - The original user input text.
  * @returns {string} HTML content string.
@@ -196,12 +92,9 @@ function generatePlanReviewHtml(parsedPlanData, originalContent = "") {
         .text-content.original { background-color: #ffebee; border-color: #ffcdd2; text-decoration: line-through; color: #d32f2f; }
         .text-content.added { background-color: #e8f5e9; border-color: #c8e6c9; color: #2e7d32; }
         .text-content.kept { background-color: #f5f5f5; border-color: #e0e0e0; }
-        
-        /* Preview Area Styles */
         #preview-section { margin-top: 25px; padding-top: 15px; border-top: 1px solid #ddd; }
         #preview-section label { font-weight: bold; font-size: 1em; color: #333; margin-bottom: 8px; display: block; }
         #finalPreview { width: 95%; height: 150px; padding: 10px; border: 1px solid #ccc; border-radius: 8px; font-size: 0.95em; background-color: #fff; resize: none; white-space: pre-wrap; word-wrap: break-word; }
-        
         button[type=submit] { padding: 12px 20px; background-color: #007aff; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; width: 100%; margin-top: 20px; }
         button[type=submit]:hover { background-color: #0056b3; }
         h2, h3 { margin-top: 0; color: #111; }
@@ -209,112 +102,36 @@ function generatePlanReviewHtml(parsedPlanData, originalContent = "") {
         form { margin-top: 10px; }
     `;
 
-    const originalContentHtml = originalContent
-      ? `
+    const originalContentHtml = originalContent ? `
         <div class="original-content-section">
-            <details> <summary>Show Original Input</summary> <div class="original-content-text">${escapeHtml(
-              originalContent
-            )}</div> </details>
-        </div>`
-      : "";
+            <details> <summary>Show Original Input</summary> <div class="original-content-text">${escapeHtml(originalContent)}</div> </details>
+        </div>` : "";
 
     let proposalsHtml = "";
     if (parsedPlanData?.proposals?.length > 0) {
-      parsedPlanData.proposals.forEach((proposal, index) => {
-        const proposalId = proposal.id || `prop-${index}`;
-        const isChecked = proposal.action !== "delete";
-        let innerProposalContent = "";
-        if (proposal.description) {
-          innerProposalContent += `<div class="proposal-description">${escapeHtml(
-            proposal.description
-          )}</div>`;
-        }
-        if (
-          proposal.original &&
-          ["replace", "delete", "keep"].includes(proposal.action)
-        ) {
-          innerProposalContent += `<div class="text-block"><span class="text-label">Original${
-            proposal.action === "delete"
-              ? " (Deleted)"
-              : proposal.action === "keep"
-              ? " (Kept)"
-              : ""
-          }:</span><div class="text-content original">${escapeHtml(
-            proposal.original
-          )}</div></div>`;
-        }
-        if (
-          proposal.content &&
-          ["add", "replace", "keep"].includes(proposal.action)
-        ) {
-          const label =
-            proposal.action === "replace"
-              ? "Proposed:"
-              : proposal.action === "keep"
-              ? "Kept:"
-              : "Added:";
-          const contentClass =
-            proposal.action === "keep"
-              ? "text-content kept"
-              : "text-content added";
-          innerProposalContent += `<div class="text-block"><span class="text-label">${label}</span><div class="${contentClass}">${escapeHtml(
-            proposal.content
-          )}</div></div>`;
-        } else if (proposal.action === "add" && proposal.content) {
-          innerProposalContent += `<div class="text-block"><span class="text-label">Added:</span><div class="text-content added">${escapeHtml(
-            proposal.content
-          )}</div></div>`;
-        }
+        parsedPlanData.proposals.forEach((proposal, index) => {
+            const proposalId = proposal.id || `prop-${index}`;
+            const isChecked = proposal.action !== 'delete';
+            let innerProposalContent = "";
+            if (proposal.description) { innerProposalContent += `<div class="proposal-description">${escapeHtml(proposal.description)}</div>`; }
+            if (proposal.original && ['replace', 'delete', 'keep'].includes(proposal.action)) { innerProposalContent += `<div class="text-block"><span class="text-label">Original${proposal.action === 'delete' ? ' (Deleted)' : (proposal.action === 'keep' ? ' (Kept)' : '')}:</span><div class="text-content original">${escapeHtml(proposal.original)}</div></div>`; }
+            if (proposal.content && ['add', 'replace', 'keep'].includes(proposal.action)) { const label = proposal.action === 'replace' ? 'Proposed:' : (proposal.action === 'keep' ? 'Kept:' : 'Added:'); const contentClass = proposal.action === 'keep' ? 'text-content kept' : 'text-content added'; innerProposalContent += `<div class="text-block"><span class="text-label">${label}</span><div class="${contentClass}">${escapeHtml(proposal.content)}</div></div>`; }
+            else if (proposal.action === 'add' && proposal.content) { innerProposalContent += `<div class="text-block"><span class="text-label">Added:</span><div class="text-content added">${escapeHtml(proposal.content)}</div></div>`; }
 
-        proposalsHtml += `
+            proposalsHtml += `
             <div class="proposal-block">
-              <div class="proposal-header"> <span class="proposal-title">Proposal ${
-                index + 1
-              } (${escapeHtml(
-          proposal.action || "suggest"
-        )})</span> <div class="proposal-include"> <input type="checkbox" class="proposal-toggle" id="${proposalId}" name="${proposalId}" data-proposal-id="${proposalId}" ${
-          isChecked ? "checked" : ""
-        }> <label for="${proposalId}">Include</label> </div> </div>
+              <div class="proposal-header"> <span class="proposal-title">Proposal ${index + 1} (${escapeHtml(proposal.action || 'suggest')})</span> <div class="proposal-include"> <input type="checkbox" class="proposal-toggle" id="${proposalId}" name="${proposalId}" data-proposal-id="${proposalId}" ${isChecked ? 'checked' : ''}> <label for="${proposalId}">Include</label> </div> </div>
               <div class="proposal-content-area"> ${innerProposalContent} </div>
             </div>`;
-      });
-    } else {
-      if (
-        parsedPlanData.chatName === "AI Plan Error" ||
-        parsedPlanData.chatName === "AI Plan Warning"
-      ) {
-        proposalsHtml = `<p style="color: red;">${escapeHtml(
-          parsedPlanData.planText || "Unknown error."
-        )}</p>`;
-      } else {
-        proposalsHtml = "<p>No specific proposals found in the plan.</p>";
-      }
+        });
+    } else { /* ... (keep existing error/warning handling) ... */
+        if (parsedPlanData.chatName === "AI Plan Error" || parsedPlanData.chatName === "AI Plan Warning") { proposalsHtml = `<p style="color: red;">${escapeHtml(parsedPlanData.planText || "Unknown error.")}</p>`; } else { proposalsHtml = "<p>No specific proposals found in the plan.</p>"; }
     }
 
-    const planDescriptionHtml =
-      parsedPlanData.planText &&
-      !parsedPlanData.chatName?.includes("Error") &&
-      !parsedPlanData.chatName?.includes("Warning")
-        ? `<div class="plan-description"><strong>Plan:</strong>\n${escapeHtml(
-            parsedPlanData.planText
-          )}</div>`
-        : "";
-    const chatNameHtml =
-      parsedPlanData.chatName &&
-      !parsedPlanData.chatName?.includes("Error") &&
-      !parsedPlanData.chatName?.includes("Warning")
-        ? `<h3>${escapeHtml(parsedPlanData.chatName)}</h3>`
-        : parsedPlanData.chatName
-        ? `<h3 style="color: ${
-            parsedPlanData.chatName.includes("Error") ? "red" : "orange"
-          };">${escapeHtml(parsedPlanData.chatName)}</h3>`
-        : "";
+    const planDescriptionHtml = parsedPlanData.planText && !parsedPlanData.chatName?.includes("Error") && !parsedPlanData.chatName?.includes("Warning") ? `<div class="plan-description"><strong>Plan:</strong>\n${escapeHtml(parsedPlanData.planText)}</div>` : "";
+    const chatNameHtml = parsedPlanData.chatName && !parsedPlanData.chatName?.includes("Error") && !parsedPlanData.chatName?.includes("Warning") ? `<h3>${escapeHtml(parsedPlanData.chatName)}</h3>` : (parsedPlanData.chatName ? `<h3 style="color: ${parsedPlanData.chatName.includes('Error') ? 'red' : 'orange'};">${escapeHtml(parsedPlanData.chatName)}</h3>` : "");
     const disableSubmit = parsedPlanData.chatName === "AI Plan Error";
-
-    // Embed plan data for JS use
-    const embeddedPlanData = JSON.stringify(
-      parsedPlanData || { proposals: [] }
-    );
+    const embeddedPlanData = JSON.stringify(parsedPlanData || { proposals: [] });
 
     return `
     <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Review AI Generated Plan</title><style>${css}</style></head>
@@ -324,32 +141,46 @@ function generatePlanReviewHtml(parsedPlanData, originalContent = "") {
     ${planDescriptionHtml}
     <form id="reviewForm">
         ${proposalsHtml}
-        
-        <!-- Live Preview Section -->
         <div id="preview-section">
             <label for="finalPreview">Live Preview:</label>
             <textarea id="finalPreview" readonly placeholder="Preview will appear here..."></textarea>
         </div>
-        
-        <button type="submit" ${
-          disableSubmit ? 'disabled style="background-color: #aaa;"' : ""
-        }>Finalize Memo</button>
+        <button type="submit" ${disableSubmit ? 'disabled style="background-color: #aaa;"' : ''}>Finalize Memo</button>
     </form>
     <script>
-        // Embed the plan data
         const planData = ${embeddedPlanData};
 
-        // Function to build preview text (mirrors Scriptable's constructFinalMemoText)
+        // *** UPDATED buildPreviewText function ***
         function buildPreviewText(proposals, includedIds) {
             if (!proposals || !Array.isArray(includedIds)) return "";
             let outputLines = [];
             let currentListType = null;
-            proposals.forEach(proposal => {
-                if (includedIds.includes(proposal.id)) {
-                    let textToUse = "";
-                    if (proposal.action === 'delete') return; // Skip deleted
-                    textToUse = (proposal.action === 'keep' ? proposal.original : proposal.content) || "";
 
+            proposals.forEach(proposal => {
+                const isIncluded = includedIds.includes(proposal.id);
+                let textToUse = null; // Start with null
+
+                if (proposal.action === 'delete') {
+                    if (!isIncluded) { // If delete is NOT included, keep original
+                        textToUse = proposal.original || "";
+                    } else {
+                        return; // If delete IS included, skip entirely
+                    }
+                } else if (proposal.action === 'replace') {
+                    textToUse = isIncluded ? (proposal.content || "") : (proposal.original || ""); // Use content if included, original if not
+                } else if (proposal.action === 'keep') {
+                     textToUse = proposal.original || proposal.content || ""; // Always use original/content if kept
+                     if (!isIncluded) return; // Skip if 'keep' is unchecked
+                } else { // Default to 'add' or 'suggest'
+                    if (isIncluded) {
+                        textToUse = proposal.content || "";
+                    } else {
+                        return; // Skip if 'add'/'suggest' is unchecked
+                    }
+                }
+
+                // Add the determined text to output lines with formatting
+                if (textToUse !== null) {
                     if (proposal.type === 'list_item') {
                         if (currentListType !== 'list_item') {
                             if (outputLines.length > 0 && currentListType !== null) outputLines.push("");
@@ -363,58 +194,17 @@ function generatePlanReviewHtml(parsedPlanData, originalContent = "") {
                         if (proposal.type === 'heading') outputLines.push("");
                     }
                 }
-                if (proposal.type !== 'list_item') { currentListType = null; }
+                 if (proposal.type !== 'list_item') { currentListType = null; }
             });
             return outputLines.join("\\n").trim();
         }
 
-        // Function to update the preview textarea
-        function updatePreview() {
-            const previewArea = document.getElementById('finalPreview');
-            const checkboxes = document.querySelectorAll(".proposal-toggle");
-            const includedIds = [];
-            checkboxes.forEach(cb => {
-                if (cb.checked) {
-                    includedIds.push(cb.dataset.proposalId);
-                }
-            });
-            console.log("Updating preview with IDs:", includedIds);
-            const previewText = buildPreviewText(planData.proposals, includedIds);
-            previewArea.value = previewText;
+        function updatePreview() { /* ... (keep existing updatePreview logic) ... */
+            const previewArea = document.getElementById('finalPreview'); const checkboxes = document.querySelectorAll(".proposal-toggle"); const includedIds = []; checkboxes.forEach(cb => { if (cb.checked) { includedIds.push(cb.dataset.proposalId); } }); console.log("Updating preview with IDs:", includedIds); const previewText = buildPreviewText(planData.proposals, includedIds); previewArea.value = previewText;
         }
 
-        function initializeForm(){
-            try {
-                const form = document.getElementById("reviewForm");
-                const checkboxes = document.querySelectorAll(".proposal-toggle");
-
-                if (!form) { throw new Error("Review form not found."); }
-
-                // Attach change listeners to checkboxes
-                checkboxes.forEach(checkbox => {
-                    checkbox.addEventListener('change', updatePreview);
-                });
-
-                // Form submission handler
-                form.addEventListener("submit", e => {
-                    e.preventDefault();
-                    const includedIds = [];
-                    checkboxes.forEach(cb => { if (cb.checked) includedIds.push(cb.dataset.proposalId); });
-                    console.log("Final Included proposal IDs:", includedIds);
-                    if (typeof completion === "function") {
-                        completion({ action: "submit", data: { includedProposalIds: includedIds } });
-                    } else { console.error("CRITICAL: completion unavailable!"); alert("Error submitting choices."); }
-                });
-
-                // Initial preview update
-                updatePreview();
-
-                console.log("AI Plan Review form initialized with preview.");
-            } catch(e) {
-                console.error("Error during review init:", e);
-                alert("A critical error occurred setting up review form.");
-                if (typeof completion === "function") completion({ error: "Initialization crashed", details: e.message });
-            }
+        function initializeForm(){ /* ... (keep existing initializeForm logic) ... */
+            try { const form = document.getElementById("reviewForm"); const checkboxes = document.querySelectorAll(".proposal-toggle"); if (!form) { throw new Error("Review form not found."); } checkboxes.forEach(checkbox => { checkbox.addEventListener('change', updatePreview); }); form.addEventListener("submit", e => { e.preventDefault(); const includedIds = []; checkboxes.forEach(cb => { if (cb.checked) includedIds.push(cb.dataset.proposalId); }); console.log("Final Included proposal IDs:", includedIds); if (typeof completion === "function") { completion({ action: "submit", data: { includedProposalIds: includedIds } }); } else { console.error("CRITICAL: completion unavailable!"); alert("Error submitting choices."); } }); updatePreview(); console.log("AI Plan Review form initialized with preview."); } catch(e) { console.error("Error during review init:", e); alert("A critical error occurred setting up review form."); if (typeof completion === "function") completion({ error: "Initialization crashed", details: e.message }); }
         }
     </script></body></html>`;
 }
@@ -452,10 +242,63 @@ function parseAiXmlResponse(xmlString) { /* ... (keep existing - stable) ... */
     console.log("Parsing AI XML response (proposal format)..."); if (!xmlString || typeof xmlString !== 'string' || xmlString.trim() === '') { console.error("Cannot parse empty or invalid XML string."); return null; } try { const parser = new XMLParser(xmlString); let parsedData = { planText: null, proposals: [] }; let currentProposal = null; let currentTag = null; let accumulatedChars = ""; let parseError = null; parser.didStartElement = (name, attrs) => { currentTag = name.toLowerCase(); accumulatedChars = ""; if (currentTag === "proposal") { currentProposal = { id: attrs.id || `prop-${Date.now()}-${Math.random()}`, type: attrs.type || "unknown", action: attrs.action || "suggest", description: null, original: null, content: null, }; } }; parser.foundCharacters = (chars) => { if (currentTag) { accumulatedChars += chars; } }; parser.didEndElement = (name) => { const tagName = name.toLowerCase(); const trimmedChars = accumulatedChars.trim(); if (tagName === "plan") { parsedData.planText = trimmedChars; } else if (tagName === "proposal") { if (currentProposal) { parsedData.proposals.push(currentProposal); currentProposal = null; } } else if (currentProposal) { if (tagName === "description") { currentProposal.description = trimmedChars; } else if (tagName === "original") { currentProposal.original = trimmedChars.replace(/^===\s*|\s*===$/g, "").trim(); } else if (tagName === "content") { currentProposal.content = trimmedChars.replace(/^===\s*|\s*===$/g, "").trim(); } } currentTag = null; accumulatedChars = ""; }; parser.parseErrorOccurred = (line, column, message) => { parseError = `XML Parse Error at ${line}:${column}: ${message}`; console.error(parseError); return; }; const success = parser.parse(); if (!success || parseError) { console.error("XML parsing failed.", parseError || ""); return null; } if (parsedData.proposals.length === 0 && !parsedData.planText) { console.warn("XML parsed successfully, but no <plan> or <proposal> tags were found."); return { chatName: "Parsing Issue", planText: "Warning: The AI response was parsed, but contained no recognizable plan or proposals.", proposals: [] }; } console.log("XML parsing successful (proposal format)."); return parsedData; } catch (e) { console.error(`Error during XML parsing setup or execution: ${e}`); return null; }
 }
 
-/** Constructs the final memo text based on selected proposals */
-function constructFinalMemoText(parsedPlanData, includedProposalIds) { /* ... (keep existing - stable) ... */
-    if (!parsedPlanData || !parsedPlanData.proposals || !Array.isArray(includedProposalIds)) { console.error("Invalid input for constructing final memo text."); return "Error: Could not construct final memo text."; } let outputLines = []; let currentListType = null; parsedPlanData.proposals.forEach(proposal => { if (includedProposalIds.includes(proposal.id)) { let textToUse = ""; if (proposal.action === 'delete') { return; } else if (proposal.action === 'keep') { textToUse = proposal.original || proposal.content || ""; } else { textToUse = proposal.content || ""; } if (proposal.type === 'list_item') { if (currentListType !== 'list_item') { if (outputLines.length > 0 && currentListType !== null) { outputLines.push(""); } currentListType = 'list_item'; } outputLines.push(`- ${textToUse.trim()}`); } else { if (currentListType === 'list_item') { outputLines.push(""); } currentListType = proposal.type; outputLines.push(textToUse); if (proposal.type === 'heading') { outputLines.push(""); } } } if (proposal.type !== 'list_item') { currentListType = null; } }); return outputLines.join("\n").trim();
+/**
+ * Constructs the final memo text based on selected proposals.
+ * Handles 'replace' action correctly based on checkbox state.
+ * @param {object} parsedPlanData - The structured plan object containing proposals.
+ * @param {string[]} includedProposalIds - Array of IDs for proposals to include.
+ * @returns {string} Formatted final memo text string.
+ */
+function constructFinalMemoText(parsedPlanData, includedProposalIds) {
+    if (!parsedPlanData || !parsedPlanData.proposals || !Array.isArray(includedProposalIds)) {
+        console.error("Invalid input for constructing final memo text.");
+        return "Error: Could not construct final memo text.";
+    }
+    let outputLines = [];
+    let currentListType = null;
+
+    parsedPlanData.proposals.forEach(proposal => {
+        const isIncluded = includedProposalIds.includes(proposal.id);
+        let textToUse = null; // Start with null
+
+        if (proposal.action === 'delete') {
+            if (!isIncluded) { // If delete is NOT included, keep original
+                textToUse = proposal.original || "";
+            } // If delete IS included, textToUse remains null (effectively skipping)
+        } else if (proposal.action === 'replace') {
+            // If included, use proposed content; if NOT included, use original content
+            textToUse = isIncluded ? (proposal.content || "") : (proposal.original || "");
+        } else if (proposal.action === 'keep') {
+             // If included, use original/content; if NOT included, skip
+             if (isIncluded) {
+                 textToUse = proposal.original || proposal.content || "";
+             }
+        } else { // Default to 'add' or 'suggest'
+            if (isIncluded) {
+                textToUse = proposal.content || "";
+            } // If NOT included, skip
+        }
+
+        // Add the determined text to output lines with formatting
+        if (textToUse !== null) {
+            if (proposal.type === 'list_item') {
+                if (currentListType !== 'list_item') {
+                    if (outputLines.length > 0 && currentListType !== null) outputLines.push("");
+                    currentListType = 'list_item';
+                }
+                outputLines.push(`- ${textToUse.trim()}`);
+            } else {
+                if (currentListType === 'list_item') outputLines.push("");
+                currentListType = proposal.type;
+                outputLines.push(textToUse);
+                if (proposal.type === 'heading') outputLines.push("");
+            }
+        }
+         if (proposal.type !== 'list_item') { currentListType = null; }
+    });
+    return outputLines.join("\n").trim();
 }
+
 
 /** Adds a comment to an existing memo */
 async function addCommentToMemo(config, memoId, commentText) { /* ... (keep existing - stable) ... */
@@ -532,6 +375,7 @@ async function addCommentToMemo(config, memoId, commentText) { /* ... (keep exis
                      finalText = originalContent;
                 } else {
                     if (parsedPlan.chatName !== "AI Plan Error" && parsedPlan.chatName !== "AI Plan Warning") {
+                        // Use the Scriptable-side function which now handles replace logic correctly
                         finalText = constructFinalMemoText(parsedPlan, reviewResult.includedProposalIds);
                         planUsed = true;
                         console.log("User finalized choices from AI proposals.");
