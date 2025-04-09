@@ -69,7 +69,7 @@ void main() {
       ),
     ).thenAnswer((_) async {
       // Return empty for refresh calls to isolate optimistic update tests
-      return PaginatedMemoResponse(memos: [], nextPageToken: null);
+      return api_service.PaginatedMemoResponse(memos: [], nextPageToken: null);
     });
 
     when(mockApiService.deleteMemo(any)).thenAnswer((_) async {
