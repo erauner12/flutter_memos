@@ -8,6 +8,12 @@ import 'package:flutter_test/flutter_test.dart';
 // Since there's no '--no-skip' flag in Flutter test, we'll use a manual toggle
 const bool RUN_API_TESTS = true;
 
+// Documentation of API sorting limitations
+const String SORTING_LIMITATION =
+    'The server does not support dynamic sort fields properly '
+    'and uses specific boolean flags instead of generic sort parameters. '
+    'We implement reliable client-side sorting as a solution.';
+
 /// These tests document the limitations of the server-side sorting functionality
 /// and verify that our client-side sorting solution works correctly.
 ///
@@ -110,12 +116,13 @@ void main() {
     test('Verify client-side sorting behavior', () async {
       // Skip this test unless RUN_API_TESTS is true
       if (!RUN_API_TESTS) {
-        print('Skipping API test - set RUN_API_TESTS = true to run this test');
+        print('\n=== SERVER SORTING LIMITATION DOCUMENTATION ===');
+        print(SORTING_LIMITATION);
         return;
       }
 
       print('\n=== SERVER SORTING LIMITATION DOCUMENTATION ===');
-      print(ApiService.SORTING_LIMITATION);
+      print(SORTING_LIMITATION);
       print('\n=== TESTING CLIENT-SIDE SORTING CAPABILITIES ===');
 
       // Get memos with server-side sort by updateTime
@@ -210,7 +217,8 @@ void main() {
 
         // Descending order check (current time should be >= next time)
         expect(
-          currentTime.isAfter(nextTime) || currentTime.isAtSameMomentAs(nextTime),
+          currentTime.isAfter(nextTime) ||
+              currentTime.isAtSameMomentAs(nextTime),
           isTrue,
           reason:
               'Client-side sorting should properly sort by updateTime (DESCENDING - newest first) when pinned status is the same. Failed at index $i: ${currentMemo.id} (pinned=${currentMemo.pinned}, time=${currentTime.toIso8601String()}) vs ${nextMemo.id} (pinned=${nextMemo.pinned}, time=${nextTime.toIso8601String()})',
