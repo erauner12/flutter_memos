@@ -770,24 +770,26 @@ final updateMemoProvider = Provider.family<Future<Memo> Function(Memo), String>(
         // Update memo through API
         final result = await apiService.updateMemo(id, updatedMemo);
 
-      // --- Add Invalidation Here ---
-      // Refresh the main list after successful update
-      ref.invalidate(memosNotifierProvider);
-      // --- End Invalidation ---
-
-      // Also update any cache entries if we've implemented caching
+      // --- Update Cache and Invalidate ---
+      // Update the detail cache *before* invalidating the detail provider
         if (ref.exists(memoDetailCacheProvider)) {
           ref
               .read(memoDetailCacheProvider.notifier)
               .update((state) => {...state, id: result});
+        if (kDebugMode) {
+          print('[updateMemoProvider] Updated memoDetailCacheProvider for $id');
+        }
         }
 
-      // Also invalidate the specific memo detail provider to ensure freshness
+      // Refresh the main list after successful update
+      ref.invalidate(memosNotifierProvider);
+      // Invalidate the specific memo detail provider to ensure freshness if needed elsewhere
       ref.invalidate(memoDetailProvider(id));
+      // --- End Update Cache and Invalidate ---
 
       if (kDebugMode) {
         print(
-          '[updateMemoProvider] Memo $id updated successfully, invalidated list and detail providers.',
+          '[updateMemoProvider] Memo $id updated successfully, updated cache, invalidated list and detail providers.',
         );
       }
       return result;
@@ -798,6 +800,8 @@ final updateMemoProvider = Provider.family<Future<Memo> Function(Memo), String>(
       }
       // Optional: Revert optimistic update on error or refresh to ensure consistency
       // Consider refreshing on error to sync with server state
+      // Remove potentially stale item from cache on error? Or let refresh handle it.
+      // Let's keep invalidation to trigger refresh which ensures consistency.
       ref.invalidate(memosNotifierProvider);
       ref.invalidate(memoDetailProvider(id));
       rethrow;

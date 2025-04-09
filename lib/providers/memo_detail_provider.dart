@@ -19,9 +19,19 @@ final memoCommentsCacheProvider = StateProvider<Map<String, List<Comment>>>((ref
 ///
 /// OPTIMIZATION: This provider checks the cache first before making an API call
 final memoDetailProvider = FutureProvider.family<Memo, String>((ref, id) async {
+  // Check the cache first
+  final cache = ref.read(memoDetailCacheProvider);
+  if (cache.containsKey(id)) {
+    if (kDebugMode) {
+      print('[memoDetailProvider] Cache hit for memo $id');
+    }
+    // Return cached data directly, assuming it was recently updated if needed
+    return cache[id]!;
+  }
+
   if (kDebugMode) {
     // Updated log message
-    print('[memoDetailProvider] Fetching memo $id from API');
+    print('[memoDetailProvider] Cache miss for memo $id, fetching from API');
   }
 
   try {
@@ -35,7 +45,7 @@ final memoDetailProvider = FutureProvider.family<Memo, String>((ref, id) async {
       );
     }
 
-    // Update the cache (still useful for other potential reads or if populated by updateMemoProvider)
+    // Update the cache after successful API fetch
     ref.read(memoDetailCacheProvider.notifier).update((state) => {
       ...state,
       id: memo,
