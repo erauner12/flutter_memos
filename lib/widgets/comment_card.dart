@@ -558,8 +558,9 @@ class _CommentCardState extends ConsumerState<CommentCard> {
             ? CupertinoColors.systemBlue.resolveFrom(context)
             : CupertinoColors.label.resolveFrom(context);
 
+    // Use updateTime with fallback to createTime
     final dateTime = DateTime.fromMillisecondsSinceEpoch(
-      widget.comment.createTime,
+      widget.comment.updateTime ?? widget.comment.createTime,
     );
     final dateFormat = DateFormat('MMM d, yyyy h:mm a');
     final formattedDate = dateFormat.format(dateTime);
