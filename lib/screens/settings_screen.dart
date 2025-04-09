@@ -1,6 +1,5 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart'; // Import Material for SnackBar
 import 'package:flutter_memos/models/server_config.dart';
 import 'package:flutter_memos/providers/api_providers.dart';
 import 'package:flutter_memos/providers/server_config_provider.dart';
@@ -510,23 +509,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             // Use primary color for save action
                             color: CupertinoColors.activeBlue,
                             onPressed: () {
-                              final newKey =
-                                  _todoistApiKeyController
-                                      .text; // No need to trim here, notifier handles it
+                              final newKey = _todoistApiKeyController.text;
                               // Update the key using the provider notifier
                               ref
                                   .read(todoistApiKeyProvider.notifier)
                                   .set(newKey);
                               FocusScope.of(context).unfocus();
-                              // Show confirmation using SnackBar (requires Material ancestor or custom overlay)
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Todoist API Key updated'),
-                                  duration: Duration(seconds: 2),
-                                  behavior:
-                                      SnackBarBehavior
-                                          .floating, // Optional: looks better
-                                ),
+                              // Replace SnackBar with _showResultDialog
+                              _showResultDialog(
+                                'API Key Updated',
+                                'Todoist API key has been saved successfully.',
                               );
                             },
                             child: const Text(
