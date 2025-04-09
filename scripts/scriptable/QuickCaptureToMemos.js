@@ -236,18 +236,18 @@ async function createMemo(config, title) {
 /**
  * Adds a comment to an existing memo.
  * @param {{url: string, token: string}} config - Memos configuration.
- * @param {string} memoIdNumeric - The numeric ID of the memo.
+ * @param {string} memoId - The string ID of the memo (e.g., "aEoUB7vvdhqGRNKAcEkADq").
  * @param {string} commentText - The content of the comment.
  * @returns {Promise<object>} The API response for comment creation.
  * @throws {Error} If adding the comment fails.
  */
-async function addCommentToMemo(config, memoIdNumeric, commentText) {
-    // Endpoint expects the numeric memo ID
-    const endpoint = config.url.replace(/\/$/, '') + `/api/v1/memos/${memoIdNumeric}/comments`;
+async function addCommentToMemos(config, memoId, commentText) {
+    // Endpoint expects the string memo ID
+    const endpoint = config.url.replace(/\/$/, '') + `/api/v1/memos/${memoId}/comments`;
     const body = {
         content: commentText
     };
-    console.log(`Adding comment to memo ID: ${memoIdNumeric}`);
+    console.log(`Adding comment to memo ID: ${memoId}`);
     return await makeApiRequest(endpoint, "POST", config.token, body);
 }
 
@@ -258,7 +258,7 @@ async function addCommentToMemo(config, memoIdNumeric, commentText) {
     let config;
     let inputText;
     let createdMemo;
-    let memoIdNumeric;
+    let memoId; // Changed from memoIdNumeric
 
     try {
         // 1. Get Configuration
@@ -277,38 +277,50 @@ async function addCommentToMemo(config, memoIdNumeric, commentText) {
         const memoTitle = `Quick Capture - ${new Date().toLocaleString()}`;
         createdMemo = await createMemo(config, memoTitle);
 
-        // 4. Extract Memo ID (numeric part from "memos/123")
-        // Adjust based on actual API response structure if needed. Assumes response has a 'name' field.
+        // 4. Extract Memo ID (string part from "memos/abc...")
+        // Memos v1 uses string IDs, not numeric ones.
         if (!createdMemo || !createdMemo.name || !createdMemo.name.includes('/')) {
-             console.error("Failed to get valid memo ID from creation response.", createdMemo);
-             throw new Error("Could not determine the new memo's ID.");
+             console.error("Failed to get valid memo name from creation response.", createdMemo);
+             throw new Error("Could not determine the new memo's name/ID.");
         }
-        memoIdNumeric = createdMemo.name.split('/').pop();
-         if (!memoIdNumeric || isNaN(parseInt(memoIdNumeric, 10))) {
-             console.error(`Failed to extract numeric ID from memo name: ${createdMemo.name}`);
+        // Get the part after the last '/' which is the string ID
+        memoId = createdMemo.name.split('/').pop();
+         if (!memoId) { // Check if memoId is empty after split/pop
+             console.error(`Failed to extract ID from memo name: ${createdMemo.name}`);
              throw new Error(`Invalid memo name format received: ${createdMemo.name}`);
          }
-        console.log(`Memo created successfully with numeric ID: ${memoIdNumeric}`);
+        // Removed the isNaN check as the ID is expected to be a string
+        console.log(`Memo created successfully with ID: ${memoId}`);
 
-        // 5. Add Comment
-        await addCommentToMemo(config, memoIdNumeric, inputText);
+        // 5. Add Comment using the string memoId
+        await addCommentToMemos(config, memoId, inputText);
         console.log("Comment added successfully!");
 
         // 6. Success Feedback
-        if (!config.runsInWidget) { // Don't show alerts if running in a widget context
+        // Check if config exists and runsInWidget property is available and false
+        if (config && config.runsInWidget === false) {
             const successAlert = new Alert();
             successAlert.title = "Success";
             successAlert.message = "Memo and comment added to Memos.";
             await successAlert.presentAlert();
+        } else if (config && config.runsInWidget === undefined) {
+             // If runsInWidget is undefined (e.g., older Scriptable versions or direct run), show alert
+             console.log("runsInWidget property not found on config, showing success alert.");
+             const successAlert = new Alert();
+             successAlert.title = "Success";
+             successAlert.message = "Memo and comment added to Memos.";
+             await successAlert.presentAlert();
+        } else {
+             console.log("Running in widget context or config missing, skipping success alert.");
         }
 
     } catch (e) {
         console.error(`Script execution failed: ${e}`);
         // Provide user feedback via Alert, unless running in a widget
-        if (!config || !config.runsInWidget) {
+        // Check if config exists and runsInWidget property is available and false
+        if (config && config.runsInWidget === false) {
             const errorAlert = new Alert();
             errorAlert.title = "Error";
-            // Check if e.message is useful, otherwise provide a generic message
             const errorMessage = e.message || "An unknown error occurred.";
             errorAlert.message = `Failed to send to Memos: ${errorMessage}`;
             if (e.message && e.message.includes("401")) {
@@ -317,6 +329,21 @@ async function addCommentToMemo(config, memoIdNumeric, commentText) {
                  errorAlert.message += "\n\nCheck if your Memos URL is correct and the server is reachable.";
             }
             await errorAlert.presentAlert();
+        } else if (config && config.runsInWidget === undefined) {
+             // If runsInWidget is undefined, show error alert
+             console.log("runsInWidget property not found on config, showing error alert.");
+             const errorAlert = new Alert();
+             errorAlert.title = "Error";
+             const errorMessage = e.message || "An unknown error occurred.";
+             errorAlert.message = `Failed to send to Memos: ${errorMessage}`;
+              if (e.message && e.message.includes("401")) {
+                 errorAlert.message += "\n\nCheck if your Access Token is correct and has not expired.";
+             } else if (e.message && (e.message.includes("ENOTFOUND") || e.message.includes("Could not connect"))) {
+                 errorAlert.message += "\n\nCheck if your Memos URL is correct and the server is reachable.";
+             }
+             await errorAlert.presentAlert();
+        } else {
+             console.log("Running in widget context or config missing, skipping error alert.");
         }
     } finally {
         console.log("Script finished.");
