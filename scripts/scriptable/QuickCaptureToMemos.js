@@ -35,21 +35,39 @@ async function presentWebViewForm(htmlContent, fullscreen = false, preferredSize
       // *** End of added line ***
 
       // Now that the WebView is visible, evaluate the JS that sets up the completion callback.
+      // Now that the WebView is visible, evaluate the JS that sets up the completion callback.
       // Scriptable waits for the global completion() function to be called from the presented WebView.
-      // Scriptable waits for the global completion() function to be called.
-      // The value passed to completion() becomes the resolved value of this promise.
       const result = await wv.evaluateJavaScript(
         `
-            // Make completion function globally available for the HTML's JS
+            // Define the completion function globally for the HTML's JS
+            let scriptableCompletion; // Store the callback
+
+            // This promise will be resolved when the HTML calls completion()
+            const promise = new Promise((resolve) => {
+                scriptableCompletion = resolve;
+            });
+
+            // Make completion globally available
             window.completion = (data) => {
-                // This function is called by the HTML's JS form submission logic
                 console.log("WebView completion function called with data.");
-                // Scriptable's evaluateJavaScript promise resolves with 'data'
+                scriptableCompletion(data); // Resolve the promise Scriptable awaits
             };
-            console.log("WebView loaded, completion function defined globally.");
-            // No need to return anything here; Scriptable waits for completion() call.
+
+            // Check if the initialization function exists in the HTML and call it
+            if (typeof initializeForm === 'function') {
+                console.log("Calling initializeForm() from evaluateJavaScript.");
+                initializeForm();
+            } else {
+                console.error("initializeForm function not found in HTML script.");
+                // Optionally alert the user or handle this error
+            }
+
+            console.log("WebView loaded, completion function defined, form initialized (if function found).");
+
+            // Return the promise Scriptable will wait for
+            promise;
             `,
-        true // useCallback = true
+        true // useCallback = true - Scriptable waits for the promise resolved by scriptableCompletion
       );
 
       console.log("WebView form submitted or closed.");
@@ -134,53 +152,64 @@ function generateConfigFormHtml(existingUrl) {
         </form>
 
         <script>
-            const form = document.getElementById('configForm');
-            const urlInput = document.getElementById('memosUrl');
-            const tokenInput = document.getElementById('accessToken');
-            const openaiInput = document.getElementById('openaiKey');
-            const urlError = document.getElementById('urlError');
-            const tokenError = document.getElementById('tokenError');
+            // Wrap setup logic in a function
+            function initializeForm() {
+                const form = document.getElementById('configForm');
+                const urlInput = document.getElementById('memosUrl');
+                const tokenInput = document.getElementById('accessToken');
+                const openaiInput = document.getElementById('openaiKey');
+                const urlError = document.getElementById('urlError');
+                const tokenError = document.getElementById('tokenError');
 
-            form.addEventListener('submit', (event) => {
-                event.preventDefault(); // Prevent default form submission
-                urlError.style.display = 'none';
-                tokenError.style.display = 'none';
-                let isValid = true;
-
-                const url = urlInput.value.trim();
-                const token = tokenInput.value.trim(); // Password fields don't need trim usually, but good practice
-                const openaiApiKey = openaiInput.value.trim(); // Same here
-
-                if (!url) {
-                    urlError.textContent = 'Memos URL is required.';
-                    urlError.style.display = 'block';
-                    isValid = false;
-                } else if (!url.toLowerCase().startsWith('http://') && !url.toLowerCase().startsWith('https://')) {
-                    urlError.textContent = 'URL must start with http:// or https://';
-                    urlError.style.display = 'block';
-                    isValid = false;
+                if (!form || !urlInput || !tokenInput || !openaiInput || !urlError || !tokenError) {
+                    console.error("Config form elements not found during initialization.");
+                    alert("Error initializing config form elements.");
+                    return;
                 }
 
-                if (!token) {
-                    tokenError.textContent = 'Access Token is required.';
-                    tokenError.style.display = 'block';
-                    isValid = false;
-                }
+                form.addEventListener('submit', (event) => {
+                    event.preventDefault(); // Prevent default form submission
+                    urlError.style.display = 'none';
+                    tokenError.style.display = 'none';
+                    let isValid = true;
 
-                if (isValid) {
-                    // Call the completion function provided by Scriptable's evaluateJavaScript
-                    if (typeof completion === 'function') {
-                        completion({
-                            url: url,
-                            token: token,
-                            openaiApiKey: openaiApiKey || null // Return null if empty
-                        });
-                    } else {
-                        console.error('completion function not available');
-                        // Optionally display an error in the HTML
+                    const url = urlInput.value.trim();
+                    const token = tokenInput.value.trim();
+                    const openaiApiKey = openaiInput.value.trim();
+
+                    if (!url) {
+                        urlError.textContent = 'Memos URL is required.';
+                        urlError.style.display = 'block';
+                        isValid = false;
+                    } else if (!url.toLowerCase().startsWith('http://') && !url.toLowerCase().startsWith('https://')) {
+                        urlError.textContent = 'URL must start with http:// or https://';
+                        urlError.style.display = 'block';
+                        isValid = false;
                     }
-                }
-            });
+
+                    if (!token) {
+                        tokenError.textContent = 'Access Token is required.';
+                        tokenError.style.display = 'block';
+                        isValid = false;
+                    }
+
+                    if (isValid) {
+                        // Call the completion function provided by Scriptable's evaluateJavaScript
+                        if (typeof completion === 'function') {
+                            completion({
+                                url: url,
+                                token: token,
+                                openaiApiKey: openaiApiKey || null // Return null if empty
+                            });
+                        } else {
+                            console.error('CRITICAL: completion function unexpectedly not available!');
+                            alert('Error: Cannot submit config form due to internal issue.');
+                        }
+                    }
+                });
+                console.log("Config form initialized.");
+            }
+             // Do NOT call initializeForm() here directly anymore.
         </script>
     </body>
     </html>
@@ -238,33 +267,49 @@ function generateInputFormHtml(prefillText = "", showAiOption = false) {
         </form>
 
         <script>
-            const form = document.getElementById('inputForm');
-            const contentInput = document.getElementById('memoContent');
-            const useAiCheckbox = document.getElementById('useAi');
+            // Wrap setup logic in a function to be called by evaluateJavaScript
+            function initializeForm() {
+                const form = document.getElementById('inputForm');
+                const contentInput = document.getElementById('memoContent');
+                const useAiCheckbox = document.getElementById('useAi');
 
-            form.addEventListener('submit', (event) => {
-                event.preventDefault();
-                const content = contentInput.value.trim();
-                const processWithAi = useAiCheckbox ? useAiCheckbox.checked : false;
-
-                if (content) {
-                     if (typeof completion === 'function') {
-                        completion({
-                            text: content,
-                            useAi: processWithAi
-                        });
-                    } else {
-                         console.error('completion function not available');
-                         alert('Error: Cannot submit form.');
-                    }
-                } else {
-                    alert("Please enter some content for the memo.");
+                if (!form || !contentInput) {
+                    console.error("Form or content input not found during initialization.");
+                    alert("Error initializing form elements.");
+                    return;
                 }
-            });
 
-             window.addEventListener('load', () => {
-                contentInput.focus();
-             });
+                form.addEventListener('submit', (event) => {
+                    event.preventDefault();
+                    const content = contentInput.value.trim();
+                    const processWithAi = useAiCheckbox ? useAiCheckbox.checked : false;
+
+                    if (content) {
+                         // completion is guaranteed to exist here because initializeForm
+                         // is called *after* completion is defined by evaluateJavaScript
+                         if (typeof completion === 'function') {
+                            completion({
+                                text: content,
+                                useAi: processWithAi
+                            });
+                        } else {
+                             // This case should ideally not happen now
+                             console.error('CRITICAL: completion function unexpectedly not available!');
+                             alert('Error: Cannot submit form due to internal issue.');
+                        }
+                    } else {
+                        alert("Please enter some content for the memo.");
+                    }
+                });
+
+                 // Auto-focus the text area
+                 contentInput.focus();
+                 console.log("Input form initialized and focused.");
+            }
+
+             // Do NOT call initializeForm() here directly anymore.
+             // It will be called by the evaluateJavaScript in presentWebViewForm.
+             // Remove or comment out: window.addEventListener('load', initializeForm);
         </script>
     </body>
     </html>
@@ -317,17 +362,31 @@ function generateAiConfirmHtml(originalText, processedText) {
         </div>
 
         <script>
-            document.getElementById('useProcessed').addEventListener('click', () => {
-                 if (typeof completion === 'function') {
-                    completion({ useProcessed: true });
-                 } else { console.error('completion function not available'); }
-            });
+            // Wrap setup logic in a function
+            function initializeForm() {
+                const useProcessedButton = document.getElementById('useProcessed');
+                const useOriginalButton = document.getElementById('useOriginal');
 
-            document.getElementById('useOriginal').addEventListener('click', () => {
-                 if (typeof completion === 'function') {
-                    completion({ useProcessed: false });
-                 } else { console.error('completion function not available'); }
-            });
+                if (!useProcessedButton || !useOriginalButton) {
+                     console.error("AI confirm form elements not found during initialization.");
+                     alert("Error initializing AI confirm form elements.");
+                     return;
+                }
+
+                useProcessedButton.addEventListener('click', () => {
+                     if (typeof completion === 'function') {
+                        completion({ useProcessed: true });
+                     } else { console.error('CRITICAL: completion function unexpectedly not available!'); alert('Error submitting choice.'); }
+                });
+
+                useOriginalButton.addEventListener('click', () => {
+                     if (typeof completion === 'function') {
+                        completion({ useProcessed: false });
+                     } else { console.error('CRITICAL: completion function unexpectedly not available!'); alert('Error submitting choice.'); }
+                });
+                console.log("AI Confirm form initialized.");
+            }
+             // Do NOT call initializeForm() here directly anymore.
         </script>
     </body>
     </html>
