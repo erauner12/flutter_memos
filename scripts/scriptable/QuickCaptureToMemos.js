@@ -394,113 +394,62 @@ async function getConfig() {
 // REMOVED the old promptForConfig function
 
 /**
- * Gets text input from Share Sheet, Pasteboard, manual entry, or dictation.
- * @returns {Promise<string|null>} The input text or null if cancelled/empty.
+ * Gets text input from Share Sheet, Pasteboard, or WebView form.
+ * @param {boolean} allowAiOption - Whether to include the AI processing option in the form.
+ * @returns {Promise<{text: string, useAi: boolean}|null>} Object with input text and AI choice, or null if cancelled/empty.
  */
-async function getInputText() {
-    console.log("Checking for input source...");
-    // 1. Check Share Sheet input (args.plainTexts)
-    if (args.plainTexts && args.plainTexts.length > 0) {
-      const sharedText = args.plainTexts.join("\n").trim();
-      if (sharedText) {
-        console.log("Using text from Share Sheet.");
-        return sharedText;
-      }
-    }
+async function getInputText(allowAiOption = false) {
+  // Added allowAiOption parameter
+  console.log("Checking for input source...");
+  let initialText = "";
 
-    // 2. Check Pasteboard
+  // 1. Check Share Sheet input (args.plainTexts)
+  if (args.plainTexts && args.plainTexts.length > 0) {
+    const sharedText = args.plainTexts.join("\n").trim();
+    if (sharedText) {
+      console.log("Using text from Share Sheet.");
+      initialText = sharedText;
+      // Proceed directly to WebView form with this text
+    }
+  }
+
+  // 2. Check Pasteboard (only if Share Sheet didn't provide text)
+  if (!initialText) {
     const clipboardText = Pasteboard.pasteString()?.trim();
     if (clipboardText) {
-      console.log("Found text on clipboard.");
-      const clipboardAlert = new Alert();
-      clipboardAlert.title = "Use Clipboard Content?";
-      clipboardAlert.message = `Clipboard contains:\n\n"${clipboardText.substring(
-        0,
-        100
-      )}${clipboardText.length > 100 ? "..." : ""}"`;
-      clipboardAlert.addAction("Use Clipboard");
-      clipboardAlert.addAction("Other Input"); // Changed from "Enter Manually"
-      clipboardAlert.addCancelAction("Cancel");
-
-      const choice = await clipboardAlert.presentAlert();
-      if (choice === 0) {
-        // Use Clipboard
-        console.log("Using text from clipboard.");
-        return clipboardText;
-      } else if (choice === -1) {
-        // Cancelled
-        console.log("Input cancelled by user.");
-        return null;
-      }
-      console.log(
-        "User chose not to use clipboard text, proceeding to other input options."
-      );
+      console.log("Found text on clipboard. Will pre-fill form.");
+      initialText = clipboardText;
+      // Note: We removed the alert asking *if* they want to use clipboard.
+      // We now pre-fill the form and let them edit/clear it.
     } else {
       console.log("Clipboard is empty or contains no text.");
     }
+  }
 
-    // 3. Choose Manual Entry or Dictation
-    console.log("Prompting for input method: Manual or Dictation.");
-    const inputMethodAlert = new Alert();
-    inputMethodAlert.title = "Input Method";
-    inputMethodAlert.message = "How would you like to enter the text?";
-    inputMethodAlert.addAction("Enter Manually");
-    inputMethodAlert.addAction("Use Dictation");
-    inputMethodAlert.addCancelAction("Cancel");
+  // 3. Present WebView form for input (manual entry or editing pre-filled text)
+  // Dictation is handled by the keyboard's mic button within the text area.
+  console.log("Presenting WebView form for text input.");
+  const inputHtml = generateInputFormHtml(initialText, allowAiOption);
+  // Present non-fullscreen by default, adjust if needed
+  const formData = await presentWebViewForm(inputHtml, false);
 
-    const methodChoice = await inputMethodAlert.presentAlert();
+  // Check if the form was cancelled (returned null) or didn't return expected data
+  if (
+    !formData ||
+    typeof formData.text === "undefined" ||
+    typeof formData.useAi === "undefined"
+  ) {
+    console.log("Input cancelled or form did not return expected data.");
+    return null;
+  }
+  // Also check if text is empty after trimming
+  if (formData.text.trim() === "") {
+    console.log("No text entered.");
+    return null;
+  }
 
-    if (methodChoice === 0) {
-      // Enter Manually
-      console.log("Prompting for manual text entry.");
-      const manualAlert = new Alert();
-      manualAlert.title = "Enter Text for Memo Comment";
-      manualAlert.addTextField("Comment Text", "");
-      manualAlert.addAction("Add");
-      manualAlert.addCancelAction("Cancel");
-
-      const manualChoice = await manualAlert.presentAlert();
-      if (manualChoice === -1) {
-        // Cancelled
-        console.log("Manual input cancelled.");
-        return null;
-      }
-
-      const manualText = manualAlert.textFieldValue(0)?.trim();
-      if (!manualText) {
-        console.log("No text entered manually.");
-        return null;
-      }
-      console.log("Using manually entered text.");
-      return manualText;
-    } else if (methodChoice === 1) {
-      // Use Dictation
-      console.log("Starting dictation...");
-      try {
-        // You can specify locale e.g., Dictation.start("en-US")
-        const dictatedText = await Dictation.start();
-        const trimmedText = dictatedText?.trim();
-        if (!trimmedText) {
-          console.log("Dictation resulted in empty text.");
-          return null;
-        }
-        console.log("Using dictated text.");
-        return trimmedText;
-      } catch (e) {
-        console.error(`Dictation failed: ${e}`);
-        // Show an error alert to the user
-        const dictationErrorAlert = new Alert();
-        dictationErrorAlert.title = "Dictation Error";
-        dictationErrorAlert.message = `Could not get text from dictation: ${e.message}`;
-        dictationErrorAlert.addAction("OK");
-        await dictationErrorAlert.presentAlert();
-        return null;
-      }
-    } else {
-      // Cancelled input method choice
-      console.log("Input method selection cancelled.");
-      return null;
-    }
+  console.log(`Input received. Use AI: ${formData.useAi}`);
+  return { text: formData.text.trim(), useAi: formData.useAi }; // Return object with trimmed text
 }
 
 /**
