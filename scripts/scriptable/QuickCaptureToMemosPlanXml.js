@@ -29,91 +29,29 @@ function escapeHtml(unsafe) { /* ... (keep existing) ... */
       .replace(/'/g, "&#039;");
 }
 
-/**
- * Presents an HTML form in a WebView, handling interactive actions.
- * Handles dictation target based on focused element.
- * @param {string} htmlContent - The HTML string to display.
- * @param {boolean} [fullscreen=false] - Whether to present fullscreen.
- * @returns {Promise<any|null>} The data from the 'submit' action, or null if dismissed/error.
- */
-async function presentWebViewForm(htmlContent, fullscreen = false) {
-    console.log("Configuring interactive WebView form...");
-    const wv = new WebView();
-    let isPresented = false;
-
+/** Presents an HTML form in a WebView */
+async function presentWebViewForm(htmlContent, fullscreen = false) { /* ... (keep existing - stable) ... */
+    console.log("Configuring interactive WebView form..."); const wv = new WebView(); let isPresented = false;
     try {
         console.log("Loading HTML..."); await wv.loadHTML(htmlContent); console.log("HTML loaded.");
         if (!isPresented) { console.log(`Presenting WebView (fullscreen: ${fullscreen})...`); wv.present(fullscreen).catch(e => { console.error("Error during initial presentation:", e); }); isPresented = true; console.log("WebView presentation initiated."); await new Promise(resolve => Timer.schedule(100, false, resolve)); }
-
         while (true) {
-            console.log("WebView Loop: Setting up listener...");
-            const listenerScript = `
-                if (typeof initializeForm === 'function' && !window.formInitialized) {
-                    console.log("Calling initializeForm()...");
-                    try { initializeForm(); window.formInitialized = true; }
-                    catch (initErr) { console.error("Error executing initializeForm():", initErr); if (typeof completion === 'function') completion({ error: "Form init failed", details: initErr.message }); else console.error("CRITICAL: completion unavailable."); }
-                } else if (!window.formInitialized && typeof initializeForm !== 'function') {
-                    console.error("initializeForm not found."); if (typeof completion === 'function') completion({ error: "Init function missing" }); else console.error("CRITICAL: completion unavailable."); window.formInitialized = true;
-                }
-                console.log("Listener active...");
-            `;
+            console.log("WebView Loop: Setting up listener..."); const listenerScript = ` if (typeof initializeForm === 'function' && !window.formInitialized) { console.log("Calling initializeForm()..."); try { initializeForm(); window.formInitialized = true; } catch (initErr) { console.error("Error executing initializeForm():", initErr); if (typeof completion === 'function') { completion({ error: "Form init failed", details: initErr.message }); } else { console.error("CRITICAL: completion unavailable."); } } } else if (!window.formInitialized && typeof initializeForm !== 'function') { console.error("initializeForm not found."); if (typeof completion === 'function') { completion({ error: "Init function missing" }); } else { console.error("CRITICAL: completion unavailable."); } window.formInitialized = true; } console.log("Listener active..."); `;
             let result;
-            try {
-                console.log("WebView Loop: Waiting for evaluateJavaScript...");
-                result = await wv.evaluateJavaScript(listenerScript, true);
-                console.log("WebView Loop: evaluateJavaScript resolved:", result);
-            } catch (e) {
-                console.log(`WebView Loop: evaluateJavaScript caught error: ${e}`);
-                console.log("Assuming dismissal or critical JS failure.");
-                return null;
-            }
-
+            try { console.log("WebView Loop: Waiting for evaluateJavaScript..."); result = await wv.evaluateJavaScript(listenerScript, true); console.log("WebView Loop: evaluateJavaScript resolved:", result); }
+            catch (e) { console.log(`WebView Loop: evaluateJavaScript caught error: ${e}`); console.log("Assuming dismissal or critical JS failure."); return null; }
             if (result?.error) { console.error(`WebView Loop: Error from JS: ${result.error}`, result.details || ""); /* Optionally alert */ }
             else if (result?.action) {
                 switch (result.action) {
                     case "submit": console.log("WebView Loop: Received 'submit'. Returning data:", result.data); return result.data;
-                    case "paste":
-                        console.log("WebView Loop: Received 'paste'.");
-                        const clipboardText = Pasteboard.pasteString() || "";
-                        // Determine active element before pasting
-                        const pasteTargetId = await wv.evaluateJavaScript('window.activeTextAreaId || "memoContent"', false);
-                        console.log(`Pasting to target: ${pasteTargetId}`);
-                        try {
-                            // Call updateSpecificTextArea with target ID
-                            await wv.evaluateJavaScript(`updateSpecificTextArea(${JSON.stringify(pasteTargetId)}, ${JSON.stringify(clipboardText)})`, false);
-                            console.log("Sent paste data.");
-                        } catch (evalError) { console.error("Error sending paste data:", evalError); }
-                        break; // Continue loop
-                    case "dictate":
-                        console.log("WebView Loop: Received 'dictate'.");
-                        let dictateTargetId = 'memoContent'; // Default target
-                        try {
-                            // Get active element ID *before* starting dictation
-                            dictateTargetId = await wv.evaluateJavaScript('window.activeTextAreaId || "memoContent"', false);
-                            console.log(`Dictation target element ID: ${dictateTargetId}`);
-
-                            const dictatedText = await Dictation.start();
-                            if (dictatedText) {
-                                // Call updateSpecificTextArea with target ID
-                                await wv.evaluateJavaScript(`updateSpecificTextArea(${JSON.stringify(dictateTargetId)}, ${JSON.stringify(dictatedText)})`, false);
-                                console.log("Sent dictate data to target.");
-                            } else { console.log("Dictation returned no text."); }
-                        } catch (dictationError) {
-                            console.error(`Dictation or targeting failed: ${dictationError}`);
-                            try { await wv.evaluateJavaScript(`alert('Dictation failed: ${escapeHtml(dictationError.message)}')`, false); }
-                            catch (alertError) {
-                                console.error("Failed to show dictation error alert:", alertError);
-                                let fallbackAlert = new Alert(); fallbackAlert.title = "Dictation Error"; fallbackAlert.message = `Dictation failed: ${dictationError.message}`; await fallbackAlert.presentAlert();
-                            }
-                        }
-                        break; // Continue loop
+                    case "paste": console.log("WebView Loop: Received 'paste'."); const clipboardText = Pasteboard.pasteString() || ""; const pasteTargetId = await wv.evaluateJavaScript('window.activeTextAreaId || "memoContent"', false); console.log(`Pasting to target: ${pasteTargetId}`); try { await wv.evaluateJavaScript(`updateSpecificTextArea(${JSON.stringify(pasteTargetId)}, ${JSON.stringify(clipboardText)})`, false); console.log("Sent paste data."); } catch (evalError) { console.error("Error sending paste data:", evalError); } break;
+                    case "dictate": console.log("WebView Loop: Received 'dictate'."); let dictateTargetId = 'memoContent'; try { dictateTargetId = await wv.evaluateJavaScript('window.activeTextAreaId || "memoContent"', false); console.log(`Dictation target element ID: ${dictateTargetId}`); const dictatedText = await Dictation.start(); if (dictatedText) { await wv.evaluateJavaScript(`updateSpecificTextArea(${JSON.stringify(dictateTargetId)}, ${JSON.stringify(dictatedText)})`, false); console.log("Sent dictate data to target."); } else { console.log("Dictation returned no text."); } } catch (dictationError) { console.error(`Dictation or targeting failed: ${dictationError}`); try { await wv.evaluateJavaScript(`alert('Dictation failed: ${escapeHtml(dictationError.message)}')`, false); } catch (alertError) { console.error("Failed to show dictation error alert:", alertError); let fallbackAlert = new Alert(); fallbackAlert.title = "Dictation Error"; fallbackAlert.message = `Dictation failed: ${dictationError.message}`; await fallbackAlert.presentAlert(); } } break;
                     default: console.warn(`WebView Loop: Unknown action: ${result.action}`); break;
                 }
             } else { console.warn("WebView Loop: Unexpected result:", result); }
         }
     } catch (e) { console.error(`Error during interactive WebView operation: ${e}`); return null; }
 }
-
 
 /** Generates HTML for Memos configuration */
 function generateConfigFormHtml(existingUrl, existingToken, existingOpenAIKey) { /* ... (keep existing - stable) ... */
@@ -123,7 +61,7 @@ function generateConfigFormHtml(existingUrl, existingToken, existingOpenAIKey) {
 
 /**
  * Generates HTML for the main text input form with Compose field and Common Options.
- * Includes focus tracking for dictation/paste.
+ * Includes focus tracking and cursor insertion logic.
  * @param {string} [prefillText=''] - Text to pre-fill the main content textarea.
  * @returns {string} HTML content for the input form.
  */
@@ -182,25 +120,49 @@ function generateInputFormHtml(prefillText = "") {
         // Track focused element for dictation/paste
         window.activeTextAreaId = 'memoContent'; // Default
 
-        // Updated function to target specific textarea
-        function updateSpecificTextArea(targetId, text) {
+        // Function to insert text at cursor position
+        function updateSpecificTextArea(targetId, textToInsert) {
             const textarea = document.getElementById(targetId);
-            if (textarea && text != null) {
+            if (textarea && textToInsert != null) {
+                const start = textarea.selectionStart;
+                const end = textarea.selectionEnd;
                 const currentText = textarea.value;
-                // Append text with a space if there's existing content
-                textarea.value = currentText ? currentText + " " + text : text;
-                textarea.focus(); // Keep focus on the target
-                console.log(\`Text area '\${targetId}' updated.\`);
+                const before = currentText.substring(0, start);
+                const after = currentText.substring(end, currentText.length);
+
+                // Insert the text (with spaces if inserting between words)
+                let textWithSpacing = textToInsert;
+                // Add leading space if not at start and previous char isn't space/newline
+                if (start > 0 && !/\\s/.test(before.slice(-1))) {
+                    textWithSpacing = " " + textWithSpacing;
+                }
+                 // Add trailing space if not at end and next char isn't space/newline
+                if (end < currentText.length && !/\\s/.test(after.charAt(0))) {
+                     textWithSpacing += " ";
+                }
+
+                textarea.value = before + textWithSpacing + after;
+
+                // Set cursor position after inserted text
+                const newCursorPos = start + textWithSpacing.length;
+                textarea.selectionStart = newCursorPos;
+                textarea.selectionEnd = newCursorPos;
+
+                textarea.focus(); // Keep focus
+                console.log(\`Text inserted into '\${targetId}' at position \${start}.\`);
+
+                // Trigger input event for frameworks if needed (optional)
+                // textarea.dispatchEvent(new Event('input', { bubbles: true }));
+
             } else {
                 console.error(\`Could not find text area with ID '\${targetId}' or text was null.\`);
             }
         }
 
-        // Legacy function for compatibility if needed, defaults to memoContent
+        // Legacy function (not really needed now but safe to keep)
         function updateTextArea(text) {
              updateSpecificTextArea('memoContent', text);
         }
-
 
         function initializeForm(){try{const t=document.getElementById("inputForm"),e=document.getElementById("memoContent"),o=document.getElementById("composeInstructions"),n=document.getElementById("useAi"),c=document.getElementById("pasteButton"),l=document.getElementById("dictateButton");if(!t||!e||!o||!n||!c||!l)return console.error("Required form elements not found."),alert("Error initializing form elements."),void(typeof completion=="function"&&completion({error:"Initialization failed: Elements missing"}));t.addEventListener("submit",t=>{t.preventDefault();const a=e.value.trim(),i=o.value.trim(),s=n.checked,r=[];document.querySelectorAll('input[name="commonOptions"]:checked').forEach(t=>{r.push(t.value)});a||i||r.length>0?typeof completion=="function"?completion({action:"submit",data:{text:a,compose:i,useAi:s,commonOptions:r}}):(console.error("CRITICAL: completion unavailable!"),alert("Error: Cannot submit form.")):alert("Please enter content, instructions, or select a common task.")}),c.addEventListener("click",()=>{console.log("Paste button clicked."),typeof completion=="function"?completion({action:"paste"}):(console.error("CRITICAL: completion unavailable!"),alert("Error: Cannot request paste."))}),l.addEventListener("click",()=>{console.log("Dictate button clicked."),typeof completion=="function"?completion({action:"dictate"}):(console.error("CRITICAL: completion unavailable!"),alert("Error: Cannot request dictation."))}),e.focus(),console.log("Input form initialized.")}catch(t){console.error("Error during input form initialization:",t),alert("A critical error occurred setting up the input form."),typeof completion=="function"&&completion({error:"Initialization crashed",details:t.message})}}
     </script></body></html>`;
@@ -209,7 +171,7 @@ function generateInputFormHtml(prefillText = "") {
 
 /**
  * Generates HTML to display the parsed AI plan for review, using proposals with diff styling.
- * FIX: Correctly inserts proposal content/original text.
+ * Removed placeholder comments.
  * @param {object} parsedPlanData - The structured plan object from parseAiXmlResponse.
  * @param {string} originalContent - The original user input text.
  * @returns {string} HTML content string.
@@ -226,7 +188,7 @@ function generatePlanReviewHtml(parsedPlanData, originalContent = "") {
         .proposal-header { background-color: #f0f0f0; padding: 8px 12px; border-bottom: 1px solid #ccc; display: flex; align-items: center; justify-content: space-between; }
         .proposal-title { font-weight: bold; }
         .proposal-include { display: flex; align-items: center; gap: 5px; font-size: 0.9em; }
-        .proposal-content-area { padding: 10px 12px; } /* Renamed from proposal-content */
+        .proposal-content-area { padding: 10px 12px; }
         .proposal-description { font-style: italic; color: #555; margin-bottom: 8px; font-size: 0.9em; }
         .text-block { margin-bottom: 5px; }
         .text-label { font-size: 0.8em; color: #666; display: block; margin-bottom: 2px; }
@@ -250,37 +212,17 @@ function generatePlanReviewHtml(parsedPlanData, originalContent = "") {
     if (parsedPlanData?.proposals?.length > 0) {
         parsedPlanData.proposals.forEach((proposal, index) => {
             const proposalId = proposal.id || `prop-${index}`;
-            const isChecked = proposal.action !== 'delete'; // Default checked unless deleting
-
-            // --- FIX: Build the inner HTML for the proposal content area ---
+            const isChecked = proposal.action !== 'delete';
             let innerProposalContent = "";
-            if (proposal.description) {
-                innerProposalContent += `<div class="proposal-description">${escapeHtml(proposal.description)}</div>`;
-            }
-            if (proposal.original && ['replace', 'delete', 'keep'].includes(proposal.action)) {
-                 innerProposalContent += `<div class="text-block"><span class="text-label">Original${proposal.action === 'delete' ? ' (Deleted)' : (proposal.action === 'keep' ? ' (Kept)' : '')}:</span><div class="text-content original">${escapeHtml(proposal.original)}</div></div>`;
-            }
-            if (proposal.content && ['add', 'replace', 'keep'].includes(proposal.action)) {
-                 const label = proposal.action === 'replace' ? 'Proposed:' : (proposal.action === 'keep' ? 'Kept:' : 'Added:');
-                 const contentClass = proposal.action === 'keep' ? 'text-content kept' : 'text-content added';
-                 innerProposalContent += `<div class="text-block"><span class="text-label">${label}</span><div class="${contentClass}">${escapeHtml(proposal.content)}</div></div>`;
-            } else if (proposal.action === 'add' && proposal.content) {
-                 innerProposalContent += `<div class="text-block"><span class="text-label">Added:</span><div class="text-content added">${escapeHtml(proposal.content)}</div></div>`;
-            }
-            // --- End FIX ---
+            if (proposal.description) { innerProposalContent += `<div class="proposal-description">${escapeHtml(proposal.description)}</div>`; }
+            if (proposal.original && ['replace', 'delete', 'keep'].includes(proposal.action)) { innerProposalContent += `<div class="text-block"><span class="text-label">Original${proposal.action === 'delete' ? ' (Deleted)' : (proposal.action === 'keep' ? ' (Kept)' : '')}:</span><div class="text-content original">${escapeHtml(proposal.original)}</div></div>`; }
+            if (proposal.content && ['add', 'replace', 'keep'].includes(proposal.action)) { const label = proposal.action === 'replace' ? 'Proposed:' : (proposal.action === 'keep' ? 'Kept:' : 'Added:'); const contentClass = proposal.action === 'keep' ? 'text-content kept' : 'text-content added'; innerProposalContent += `<div class="text-block"><span class="text-label">${label}</span><div class="${contentClass}">${escapeHtml(proposal.content)}</div></div>`; }
+            else if (proposal.action === 'add' && proposal.content) { innerProposalContent += `<div class="text-block"><span class="text-label">Added:</span><div class="text-content added">${escapeHtml(proposal.content)}</div></div>`; }
 
             proposalsHtml += `
             <div class="proposal-block">
-              <div class="proposal-header">
-                <span class="proposal-title">Proposal ${index + 1} (${escapeHtml(proposal.action || 'suggest')})</span>
-                <div class="proposal-include">
-                  <input type="checkbox" class="proposal-toggle" id="${proposalId}" name="${proposalId}" data-proposal-id="${proposalId}" ${isChecked ? 'checked' : ''}>
-                  <label for="${proposalId}">Include</label>
-                </div>
-              </div>
-              <div class="proposal-content-area"> {/* Use the generated inner content */}
-                  ${innerProposalContent}
-              </div>
+              <div class="proposal-header"> <span class="proposal-title">Proposal ${index + 1} (${escapeHtml(proposal.action || 'suggest')})</span> <div class="proposal-include"> <input type="checkbox" class="proposal-toggle" id="${proposalId}" name="${proposalId}" data-proposal-id="${proposalId}" ${isChecked ? 'checked' : ''}> <label for="${proposalId}">Include</label> </div> </div>
+              <div class="proposal-content-area"> ${innerProposalContent} </div>
             </div>`;
         });
     } else { /* ... (keep existing error/warning handling) ... */
@@ -291,11 +233,11 @@ function generatePlanReviewHtml(parsedPlanData, originalContent = "") {
     const chatNameHtml = parsedPlanData.chatName && !parsedPlanData.chatName?.includes("Error") && !parsedPlanData.chatName?.includes("Warning") ? `<h3>${escapeHtml(parsedPlanData.chatName)}</h3>` : (parsedPlanData.chatName ? `<h3 style="color: ${parsedPlanData.chatName.includes('Error') ? 'red' : 'orange'};">${escapeHtml(parsedPlanData.chatName)}</h3>` : "");
     const disableSubmit = parsedPlanData.chatName === "AI Plan Error";
 
-    // Remove the erroneous comment from the final HTML
+    // Removed the placeholder comments
     return `
     <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Review AI Generated Plan</title><style>${css}</style></head>
     <body><h2>Review AI Generated Plan</h2>${chatNameHtml}
-    ${originalContentHtml} {/* Display original content section */}
+    ${originalContentHtml}
     <p>Review the proposals generated by the AI. Uncheck proposals you wish to exclude.</p>
     ${planDescriptionHtml}
     <form id="reviewForm">
@@ -380,7 +322,7 @@ async function addCommentToMemo(config, memoId, commentText) { /* ... (keep exis
     const commonOptions = inputData.commonOptions;
     finalText = originalContent; // Default
 
-    console.log("Original Content Input:", originalContent); // Log initial input
+    console.log("Original Content Input:", originalContent);
     console.log("Compose Instructions Input:", composeInstructions);
     console.log("Common Options Input:", commonOptions);
 
@@ -399,7 +341,7 @@ async function addCommentToMemo(config, memoId, commentText) { /* ... (keep exis
             let parsedPlan = null;
             try {
                 processingAlert = new Alert(); processingAlert.title = "Generating AI Plan..."; processingAlert.message = "Please wait."; processingAlert.present();
-                const rawXml = await getAiPlanAsXml(config.openaiApiKey, originalContent, composeInstructions, commonOptions); // Pass commonOptions
+                const rawXml = await getAiPlanAsXml(config.openaiApiKey, originalContent, composeInstructions, commonOptions);
                 if (processingAlert?.dismiss) { try { processingAlert.dismiss(); } catch (e) { /* ignore */ } } processingAlert = null;
                 parsedPlan = parseAiXmlResponse(rawXml);
 
@@ -412,7 +354,7 @@ async function addCommentToMemo(config, memoId, commentText) { /* ... (keep exis
                 }
 
                 console.log("AI plan ready for review. Asking via WebView.");
-                const reviewHtml = generatePlanReviewHtml(parsedPlan, originalContent); // Pass originalContent
+                const reviewHtml = generatePlanReviewHtml(parsedPlan, originalContent);
                 const reviewResult = await presentWebViewForm(reviewHtml, true);
 
                 if (!reviewResult || !reviewResult.includedProposalIds) {
