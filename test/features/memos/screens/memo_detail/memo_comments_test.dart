@@ -7,7 +7,9 @@ import 'package:flutter_memos/providers/filter_providers.dart';
 import 'package:flutter_memos/providers/ui_providers.dart' as ui_providers;
 import 'package:flutter_memos/screens/memo_detail/memo_comments.dart';
 import 'package:flutter_memos/screens/memo_detail/memo_detail_providers.dart';
-import 'package:flutter_memos/services/api_service.dart';
+import 'package:flutter_memos/services/api_service.dart' as api_service;
+// Remove the direct import of ApiService if it causes ambiguity
+// import 'package:flutter_memos/services/api_service.dart';
 import 'package:flutter_memos/widgets/comment_card.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_slidable/flutter_slidable.dart'; // Keep if Slidable is used
@@ -16,7 +18,7 @@ import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
 
 // Generate nice mock for ApiService
-@GenerateNiceMocks([MockSpec<ApiService>()])
+@GenerateNiceMocks([MockSpec<api_service.ApiService>()])
 // Import the generated mocks file
 import 'memo_comments_test.mocks.dart';
 

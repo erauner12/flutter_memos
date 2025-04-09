@@ -150,13 +150,31 @@ void main() {
     // Now pump and settle to allow the post-frame callback to execute and reset the highlight
     await tester.pumpAndSettle();
 
-    // Get the container again AFTER the reset pump and verify it's no longer highlighted
-    final containerAfterCallback = tester.widget<Container>(containerFinder);
+    // Re-find the container and its element AFTER the reset pump
+    final containerFinderAfterCallback = find.descendant(
+      of: find.byType(CommentCard),
+      matching: find.byType(Container),
+    );
+    expect(
+      containerFinderAfterCallback,
+      findsOneWidget,
+    ); // Ensure it still exists
+    final containerAfterCallback = tester.widget<Container>(
+      containerFinderAfterCallback,
+    );
+    final elementAfterCallback = tester.element(
+      containerFinderAfterCallback,
+    ); // Get the element context again
+    final themeAfterCallback = CupertinoTheme.of(
+      elementAfterCallback,
+    ); // Use the new context
+
     final decorationAfterCallback =
         containerAfterCallback.decoration as BoxDecoration?;
     final borderAfterCallback = decorationAfterCallback?.border as Border?;
     final defaultBackgroundColor =
-        theme.scaffoldBackgroundColor; // Use theme default
+        themeAfterCallback
+            .scaffoldBackgroundColor; // Use theme default from the new context
 
     // Assert background color is back to default (or null if transparent)
     expect(
@@ -166,7 +184,7 @@ void main() {
       // If it inherits, it might be the scaffold background.
       anyOf(isNull, equals(defaultBackgroundColor)),
       reason:
-          'Container background color should reset to default (Theme: ${theme.brightness})',
+          'Container background color should reset to default (Theme: ${themeAfterCallback.brightness})',
     );
 
     // Assert border is reset (no border or width 0)

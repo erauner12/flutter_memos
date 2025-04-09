@@ -7,7 +7,8 @@ import 'package:flutter_memos/screens/edit_memo/edit_memo_form.dart';
 import 'package:flutter_memos/screens/edit_memo/edit_memo_providers.dart';
 import 'package:flutter_memos/screens/memo_detail/memo_content.dart';
 import 'package:flutter_memos/screens/memo_detail/memo_detail_providers.dart';
-import 'package:flutter_memos/services/api_service.dart'; // Import the actual service
+import 'package:flutter_memos/services/api_service.dart'
+    as api_service; // Import with alias
 import 'package:flutter_memos/services/url_launcher_service.dart';
 import 'package:flutter_memos/widgets/comment_card.dart';
 import 'package:flutter_memos/widgets/memo_card.dart';
@@ -24,7 +25,7 @@ import '../../../services/url_launcher_service_test.mocks.dart'; // Correct path
 import 'markdown_rendering_test.mocks.dart';
 
 // Annotation to generate nice mock for ApiService only
-@GenerateNiceMocks([MockSpec<ApiService>()])
+@GenerateNiceMocks([MockSpec<api_service.ApiService>()])
 
 void main() {
   // Declare mocks at the top level

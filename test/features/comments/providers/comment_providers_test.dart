@@ -5,7 +5,9 @@ import 'package:flutter_memos/models/memo.dart';
 import 'package:flutter_memos/models/memo_relation.dart';
 import 'package:flutter_memos/providers/api_providers.dart';
 import 'package:flutter_memos/providers/comment_providers.dart' as comment_providers;
-import 'package:flutter_memos/services/api_service.dart'; // Import the actual service
+import 'package:flutter_memos/services/api_service.dart' as api_service;
+// Remove the direct import of ApiService if it causes ambiguity
+// import 'package:flutter_memos/services/api_service.dart'; // Import the actual service
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/annotations.dart'; // Add Mockito annotation import
@@ -17,7 +19,7 @@ import 'comment_providers_test.mocks.dart';
 
 
 // Annotation to generate nice mock for ApiService
-@GenerateNiceMocks([MockSpec<ApiService>()])
+@GenerateNiceMocks([MockSpec<api_service.ApiService>()])
 void main() {
   late MockApiService mockApiService; // Use the generated MockApiService
   late ProviderContainer container;
@@ -48,19 +50,20 @@ void main() {
           direction: anyNamed('direction'),
           pageSize: anyNamed('pageSize'),
           pageToken: anyNamed('pageToken'),
-          tags: anyNamed('tags'),
-          visibility: anyNamed('visibility'),
-          contentSearch: anyNamed('contentSearch'),
-          createdAfter: anyNamed('createdAfter'),
-          createdBefore: anyNamed('createdBefore'),
-          updatedAfter: anyNamed('updatedAfter'),
-          updatedBefore: anyNamed('updatedBefore'),
-          timeExpression: anyNamed('timeExpression'),
-          useUpdateTimeForExpression: anyNamed('useUpdateTimeForExpression'),
+          // Remove deprecated filter params if they cause issues
+          // tags: anyNamed('tags'),
+          // visibility: anyNamed('visibility'),
+          // contentSearch: anyNamed('contentSearch'),
+          // createdAfter: anyNamed('createdAfter'),
+          // createdBefore: anyNamed('createdBefore'),
+          // updatedAfter: anyNamed('updatedAfter'),
+          // updatedBefore: anyNamed('updatedBefore'),
+          // timeExpression: anyNamed('timeExpression'),
+          // useUpdateTimeForExpression: anyNamed('useUpdateTimeForExpression'),
         ),
       ).thenAnswer((invocation) async {
         // Return empty list for any listMemos call
-        return PaginatedMemoResponse(
+        return api_service.PaginatedMemoResponse(
           memos: List.from(createdMemos.values),
           nextPageToken: null,
         );

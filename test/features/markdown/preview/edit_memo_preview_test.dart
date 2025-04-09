@@ -4,7 +4,7 @@ import 'package:flutter_memos/models/memo.dart';
 import 'package:flutter_memos/providers/api_providers.dart';
 import 'package:flutter_memos/screens/edit_memo/edit_memo_form.dart';
 import 'package:flutter_memos/screens/edit_memo/edit_memo_providers.dart'; // Add this import
-import 'package:flutter_memos/services/api_service.dart';
+import 'package:flutter_memos/services/api_service.dart' as api_service;
 import 'package:flutter_memos/services/url_launcher_service.dart'; // Import url launcher service
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -17,7 +17,7 @@ import '../../../services/url_launcher_service_test.mocks.dart'; // Correct path
 import 'edit_memo_preview_test.mocks.dart';
 
 // Ensure ApiService is mocked if needed by EditMemoForm tests
-@GenerateNiceMocks([MockSpec<ApiService>()])
+@GenerateNiceMocks([MockSpec<api_service.ApiService>()])
 void main() {
   group('EditMemoForm Markdown Preview Tests', () {
     late MockApiService mockApiService;

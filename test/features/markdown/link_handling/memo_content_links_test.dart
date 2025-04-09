@@ -5,7 +5,8 @@ import 'package:flutter_memos/models/memo.dart';
 import 'package:flutter_memos/providers/api_providers.dart'; // Import api provider
 import 'package:flutter_memos/screens/memo_detail/memo_content.dart';
 import 'package:flutter_memos/screens/memo_detail/memo_detail_providers.dart';
-import 'package:flutter_memos/services/api_service.dart'; // Add this import for ApiService
+import 'package:flutter_memos/services/api_service.dart'
+    as api_service; // Import for ApiService with prefix
 import 'package:flutter_memos/services/url_launcher_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -18,7 +19,10 @@ import '../../../helpers/test_debug.dart'; // Go up two levels to reach test/hel
 import 'memo_content_links_test.mocks.dart';
 
 // Generate mocks for services used in this test file
-@GenerateNiceMocks([MockSpec<ApiService>(), MockSpec<UrlLauncherService>()])
+@GenerateNiceMocks([
+  MockSpec<api_service.ApiService>(),
+  MockSpec<UrlLauncherService>(),
+])
 
 void main() {
   group('MemoContent Link Handling Tests (Cupertino)', () {

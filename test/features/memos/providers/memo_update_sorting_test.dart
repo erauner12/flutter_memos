@@ -1,9 +1,9 @@
 import 'package:flutter/foundation.dart'; // Import for kDebugMode
 import 'package:flutter_memos/models/memo.dart';
-import 'package:flutter_memos/providers/api_providers.dart';
+import 'package:flutter_memos/providers/api_providers.dart'; // Keep this import for the provider
 import 'package:flutter_memos/providers/memo_providers.dart';
 import 'package:flutter_memos/screens/edit_memo/edit_memo_providers.dart';
-import 'package:flutter_memos/services/api_service.dart'; // Import ApiService
+import 'package:flutter_memos/services/api_service.dart' as api_service;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/annotations.dart'; // Add Mockito annotation import
@@ -13,7 +13,7 @@ import 'package:mockito/mockito.dart'; // Add Mockito import
 import 'memo_update_sorting_test.mocks.dart';
 
 // Annotation to generate nice mock for ApiService
-@GenerateNiceMocks([MockSpec<ApiService>()])
+@GenerateNiceMocks([MockSpec<api_service.ApiService>()])
 // Mock Notifier extending the actual Notifier
 class MockMemosNotifier extends MemosNotifier {
   // Update to use the non-deprecated Ref type
@@ -30,8 +30,9 @@ class MockMemosNotifier extends MemosNotifier {
     if (kDebugMode) {
       print('[MockMemosNotifier] Refresh called, fetching from mock API');
     }
-    
+
     // Simulate refresh by calling the mock API service again
+    // Use the provider from api_providers.dart
     final apiService = ref.read(apiServiceProvider) as MockApiService;
     // Use the mocked API service response for refresh, explicitly using null pageToken
     final response = await apiService.listMemos(
@@ -46,7 +47,7 @@ class MockMemosNotifier extends MemosNotifier {
       nextPageToken: response.nextPageToken,
       totalLoaded: response.memos.length,
     );
-    
+
     if (kDebugMode) {
       print(
         '[MockMemosNotifier] Refresh completed with ${response.memos.length} memos',
@@ -143,19 +144,23 @@ void main() {
           direction: anyNamed('direction'),
           pageSize: anyNamed('pageSize'),
           pageToken: anyNamed('pageToken'), // initial call has null page token
-          tags: anyNamed('tags'),
-          visibility: anyNamed('visibility'),
-          contentSearch: anyNamed('contentSearch'),
-          createdAfter: anyNamed('createdAfter'),
-          createdBefore: anyNamed('createdBefore'),
-          updatedAfter: anyNamed('updatedAfter'),
-          updatedBefore: anyNamed('updatedBefore'),
-          timeExpression: anyNamed('timeExpression'),
-          useUpdateTimeForExpression: anyNamed('useUpdateTimeForExpression'),
+          // Remove deprecated filter params if they cause issues
+          // tags: anyNamed('tags'),
+          // visibility: anyNamed('visibility'),
+          // contentSearch: anyNamed('contentSearch'),
+          // createdAfter: anyNamed('createdAfter'),
+          // createdBefore: anyNamed('createdBefore'),
+          // updatedAfter: anyNamed('updatedAfter'),
+          // updatedBefore: anyNamed('updatedBefore'),
+          // timeExpression: anyNamed('timeExpression'),
+          // useUpdateTimeForExpression: anyNamed('useUpdateTimeForExpression'),
         ),
       ).thenAnswer(
         (_) async =>
-            PaginatedMemoResponse(memos: initialMemos, nextPageToken: null),
+            api_service.PaginatedMemoResponse(
+          memos: initialMemos,
+          nextPageToken: null,
+        ),
       );
 
       // 2. updateMemo call response (used by saveEntityProvider)
@@ -180,7 +185,7 @@ void main() {
               () => throw Exception('Test setup error: Updated memo not found')
         );
       });
-      
+
       // 3. listMemos call *after* update (used by notifier's refresh)
       // This simulates the server list response containing the epoch createTime
       when(
@@ -192,24 +197,26 @@ void main() {
           direction: anyNamed('direction'),
           pageSize: anyNamed('pageSize'),
           pageToken: null, // Make this match specifically for refresh
-          tags: anyNamed('tags'),
-          visibility: anyNamed('visibility'),
-          contentSearch: anyNamed('contentSearch'),
-          createdAfter: anyNamed('createdAfter'),
-          createdBefore: anyNamed('createdBefore'),
-          updatedAfter: anyNamed('updatedAfter'),
-          updatedBefore: anyNamed('updatedBefore'),
-          timeExpression: anyNamed('timeExpression'),
-          useUpdateTimeForExpression: anyNamed('useUpdateTimeForExpression'),
+          // Remove deprecated filter params if they cause issues
+          // tags: anyNamed('tags'),
+          // visibility: anyNamed('visibility'),
+          // contentSearch: anyNamed('contentSearch'),
+          // createdAfter: anyNamed('createdAfter'),
+          // createdBefore: anyNamed('createdBefore'),
+          // updatedAfter: anyNamed('updatedAfter'),
+          // updatedBefore: anyNamed('updatedBefore'),
+          // timeExpression: anyNamed('timeExpression'),
+          // useUpdateTimeForExpression: anyNamed('useUpdateTimeForExpression'),
         ),
       ).thenAnswer(
-        (_) async => PaginatedMemoResponse(
+        (_) async => api_service.PaginatedMemoResponse(
           memos: memosFromServerAfterUpdate,
           nextPageToken: null,
         ),
       );
       // --- End Mock Setup ---
 
+      // Use the provider from api_providers.dart
       container = ProviderContainer(
         overrides: [
           apiServiceProvider.overrideWithValue(mockApiService),

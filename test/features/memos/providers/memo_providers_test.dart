@@ -142,8 +142,9 @@ void main() {
           filters.filterKeyProvider.overrideWith(
             (ref) => 'inbox',
           ), // Default filter
-          filters.timeFilterProvider.overrideWith((ref) => 'all'),
-          filters.statusFilterProvider.overrideWith((ref) => 'all'),
+          // Remove overrides for providers that no longer exist
+          // filters.timeFilterProvider.overrideWith((ref) => 'all'),
+          // filters.statusFilterProvider.overrideWith((ref) => 'all'),
           hiddenMemoIdsProvider.overrideWith((ref) => {}),
           filters.hidePinnedProvider.overrideWith((ref) => false),
         ],

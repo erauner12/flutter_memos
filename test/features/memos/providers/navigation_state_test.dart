@@ -1,8 +1,10 @@
 import 'package:flutter_memos/models/memo.dart';
-import 'package:flutter_memos/providers/api_providers.dart';
+import 'package:flutter_memos/providers/api_providers.dart'; // Keep this import for the provider
 import 'package:flutter_memos/providers/memo_providers.dart';
 import 'package:flutter_memos/providers/ui_providers.dart' as ui_providers;
-import 'package:flutter_memos/services/api_service.dart';
+import 'package:flutter_memos/services/api_service.dart' as api_service;
+// Remove the direct import of ApiService if it causes ambiguity
+// import 'package:flutter_memos/services/api_service.dart';
 import 'package:flutter_memos/utils/memo_utils.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -13,7 +15,7 @@ import 'package:mockito/mockito.dart';
 import 'navigation_state_test.mocks.dart'; // Updated relative import
 
 // Generate nice mocks for ApiService
-@GenerateNiceMocks([MockSpec<ApiService>()])
+@GenerateNiceMocks([MockSpec<api_service.ApiService>()])
 void main() {
   late MockApiService mockApiService;
   late ProviderContainer container;
@@ -54,15 +56,16 @@ void main() {
       direction: anyNamed('direction'),
       pageSize: anyNamed('pageSize'),
         pageToken: null, // Specifically for refresh (first page)
-      tags: anyNamed('tags'),
-      visibility: anyNamed('visibility'),
-      contentSearch: anyNamed('contentSearch'),
-      createdAfter: anyNamed('createdAfter'),
-      createdBefore: anyNamed('createdBefore'),
-      updatedAfter: anyNamed('updatedAfter'),
-      updatedBefore: anyNamed('updatedBefore'),
-      timeExpression: anyNamed('timeExpression'),
-      useUpdateTimeForExpression: anyNamed('useUpdateTimeForExpression'),
+        // Remove deprecated filter params if they cause issues
+        // tags: anyNamed('tags'),
+        // visibility: anyNamed('visibility'),
+        // contentSearch: anyNamed('contentSearch'),
+        // createdAfter: anyNamed('createdAfter'),
+        // createdBefore: anyNamed('createdBefore'),
+        // updatedAfter: anyNamed('updatedAfter'),
+        // updatedBefore: anyNamed('updatedBefore'),
+        // timeExpression: anyNamed('timeExpression'),
+        // useUpdateTimeForExpression: anyNamed('useUpdateTimeForExpression'),
       ),
     ).thenAnswer((_) async {
       // Return empty for refresh calls to isolate optimistic update tests

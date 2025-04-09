@@ -2,10 +2,12 @@ import 'package:flutter/cupertino.dart'; // Import Cupertino
 import 'package:flutter/services.dart';
 import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/models/memo.dart';
-import 'package:flutter_memos/providers/api_providers.dart';
+import 'package:flutter_memos/providers/api_providers.dart'; // Keep this import for the provider
 import 'package:flutter_memos/screens/memo_detail/memo_content.dart';
 import 'package:flutter_memos/screens/memo_detail/memo_detail_screen.dart';
-import 'package:flutter_memos/services/api_service.dart';
+import 'package:flutter_memos/services/api_service.dart' as api_service;
+// Remove the direct import of ApiService if it causes ambiguity
+// import 'package:flutter_memos/services/api_service.dart';
 import 'package:flutter_memos/services/url_launcher_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -16,7 +18,7 @@ import 'package:mockito/mockito.dart';
 // Corrected path to the mock file in the services directory
 import '../../../services/url_launcher_service_test.mocks.dart';
 // Generate nice mock for ApiService
-@GenerateNiceMocks([MockSpec<ApiService>()])
+@GenerateNiceMocks([MockSpec<api_service.ApiService>()])
 // This import will work after running build_runner
 import 'memo_detail_screen_test.mocks.dart';
 
@@ -125,6 +127,7 @@ void main() {
       WidgetTester tester,
     ) async {
       // Create a mock with a simplified test
+      // Use the provider from api_providers.dart
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
@@ -161,6 +164,7 @@ void main() {
       WidgetTester tester,
     ) async {
       // This test is simplified since focus behavior is difficult to reliably test
+      // Use the provider from api_providers.dart
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
@@ -197,6 +201,7 @@ void main() {
   testWidgets('MemoDetailScreen displays memo content', (
     WidgetTester tester,
   ) async {
+    // Use the provider from api_providers.dart
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
