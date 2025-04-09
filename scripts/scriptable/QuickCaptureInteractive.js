@@ -24,7 +24,6 @@ function escapeHtml(unsafe) {
     .replace(/'/g, "&#039;");
 }
 
-
 /**
  * Presents an HTML form in a WebView, handling interactive actions (paste, dictate)
  * before waiting for final submission or dismissal.
@@ -46,7 +45,9 @@ async function presentWebViewForm(htmlContent, fullscreen = false) {
 
     // Loop to handle interactions until submit or dismissal
     while (true) {
-      console.log("WebView Loop: Setting up listener for next action/submit...");
+      console.log(
+        "WebView Loop: Setting up listener for next action/submit..."
+      );
 
       // JavaScript to initialize the form (if not already done) and listen
       const listenerScript = `
@@ -71,175 +72,169 @@ async function presentWebViewForm(htmlContent, fullscreen = false) {
       const presentPromise = new Promise((resolve, reject) => {
         // Only present *once* if it hasn't been presented yet.
         if (!wv.isPresented) {
-           console.log(`Presenting WebView (fullscreen: ${fullscreen})...`);
-           wv.present(fullscreen).then(() => {
-               console.log("WebView dismissal detected by present().then().");
-               wv.isPresented = false; // Mark as dismissed
-               reject(new Error("WebView dismissed manually"));
-           }).catch(reject);
-           wv.isPresented = true; // Mark as presented
+          console.log(`Presenting WebView (fullscreen: ${fullscreen})...`);
+          wv.present(fullscreen)
+            .then(() => {
+              // This .then() resolves when the user manually dismisses the WebView.
+              console.log("WebView dismissal detected by present().then().");
+              wv.isPresented = false; // Mark as dismissed
+              reject(new Error("WebView dismissed manually"));
+            })
+            .catch(reject); // Catch errors during the initial presentation itself
+          wv.isPresented = true; // Mark as presented
         } else {
-           // If already presented, this promise essentially waits indefinitely,
-           // relying on evaluatePromise or a dismissal error to break the race.
-           // We create a promise that never resolves on its own but can be rejected
-           // if an external event (like dismissal) occurs. Scriptable's internal
-           // handling of dismissal might trigger rejection here.
-           // This ensures Promise.race still works correctly on subsequent loops.
-           const waitPromise = new Promise((res, rej) => { /* never resolves */ });
-           // We rely on the fact that if the WV is dismissed, the evaluatePromise
-           // might also reject or the overall script context might change.
-           // The original present().then() handles the initial dismissal detection.
-           resolve(waitPromise); // Resolve with the non-resolving promise
+          // If already presented, this promise essentially waits indefinitely.
+          // We rely on evaluatePromise resolving or an error occurring.
+          // Resolve with a promise that never settles on its own.
+          resolve(new Promise(() => {}));
         }
       });
 
-
       let result;
       try {
-          console.log("WebView Loop: Waiting for Promise.race (action/submit vs dismissal)...");
-          // presentPromise here either starts presentation or waits indefinitely if already presented
-          result = await Promise.race([evaluatePromise, presentPromise]);
-          console.log("WebView Loop: Promise.race resolved with:", result);
+        console.log(
+          "WebView Loop: Waiting for Promise.race (action/submit vs dismissal)..."
+        );
+        result = await Promise.race([evaluatePromise, presentPromise]);
+        console.log("WebView Loop: Promise.race resolved with:", result);
       } catch (e) {
-          // This catches dismissal from presentPromise rejection (primarily on first presentation)
-          // or potentially errors during evaluateJavaScript if the view was closed abruptly.
-          if (e.message === "WebView dismissed manually") {
-              console.log("WebView Loop: Caught manual dismissal. Exiting loop.");
-              return null; // User dismissed the form
-          } else {
-              console.error(`WebView Loop: Error during Promise.race: ${e}`);
-              // Attempt to dismiss if it seems like it might still be presented
-              if (wv.isPresented) {
-                  try { await wv.dismiss(); wv.isPresented = false; } catch (dismissErr) { console.warn("Error dismissing WV on race error:", dismissErr); }
-              }
-              throw e; // Re-throw other errors
-          }
+        // This catches dismissal from presentPromise rejection (primarily on first presentation)
+        if (e.message === "WebView dismissed manually") {
+          console.log("WebView Loop: Caught manual dismissal. Exiting loop.");
+          return null; // User dismissed the form
+        } else {
+          console.error(`WebView Loop: Error during Promise.race: ${e}`);
+          // No wv.dismiss() to call here
+          throw e; // Re-throw other errors
+        }
       }
 
       // --- Handle the result from evaluatePromise ---
       if (result && result.error) {
-          console.error(`WebView Loop: Error received from JS: ${result.error}`, result.details || '');
-          // Show alert for JS errors
-          let errorAlert = new Alert();
-          errorAlert.title = "WebView Form Error";
-          errorAlert.message = `An error occurred in the form: ${result.error}\n${result.details || ''}`;
-          await errorAlert.presentAlert();
-           if (wv.isPresented) {
-               try { await wv.dismiss(); wv.isPresented = false; } catch (dismissErr) { console.warn("Error dismissing WV on JS error:", dismissErr); }
-           }
-          return null; // Exit on JS error
+        console.error(
+          `WebView Loop: Error received from JS: ${result.error}`,
+          result.details || ""
+        );
+        // Show alert for JS errors
+        let errorAlert = new Alert();
+        errorAlert.title = "WebView Form Error";
+        errorAlert.message = `An error occurred in the form: ${result.error}\n${
+          result.details || ""
+        }`;
+        await errorAlert.presentAlert();
+        // No wv.dismiss() to call here
+        return null; // Exit on JS error
       } else if (result && result.action) {
-          switch (result.action) {
-              case 'submit':
-                  console.log("WebView Loop: Received 'submit' action. Returning data:", result.data);
-                  // Scriptable should auto-dismiss on completion, but check just in case
-                  if (wv.isPresented) {
-                     try { await wv.dismiss(); wv.isPresented = false; } catch (dismissErr) { console.warn("Error dismissing WV after submit:", dismissErr); }
-                  }
-                  return result.data; // Final submission data
+        switch (result.action) {
+          case "submit":
+            console.log(
+              "WebView Loop: Received 'submit' action. Returning data:",
+              result.data
+            );
+            // Scriptable should auto-dismiss on completion. No wv.dismiss() needed.
+            return result.data; // Final submission data
 
-              case 'paste':
-                  console.log("WebView Loop: Received 'paste' action. Getting clipboard...");
-                  const clipboardText = Pasteboard.pasteString() || ""; // Get clipboard content
-                  console.log(`Clipboard content length: ${clipboardText.length}`);
-                  // Send text back to the WebView's updateTextArea function
-                  // Use JSON.stringify to correctly escape the text for JS
-                  try {
-                    await wv.evaluateJavaScript(`updateTextArea(${JSON.stringify(clipboardText)})`, false);
-                    console.log("WebView Loop: Sent clipboard text back to JS. Continuing loop.");
-                  } catch (evalError) {
-                     console.error("WebView Loop: Error sending paste data back to JS:", evalError);
-                     // Handle error - maybe alert user?
-                  }
-                  // Continue loop to wait for next action/submit
-                  break; // Go to next iteration of the while loop
+          case "paste":
+            console.log(
+              "WebView Loop: Received 'paste' action. Getting clipboard..."
+            );
+            const clipboardText = Pasteboard.pasteString() || ""; // Get clipboard content
+            console.log(`Clipboard content length: ${clipboardText.length}`);
+            // Send text back to the WebView's updateTextArea function
+            try {
+              await wv.evaluateJavaScript(
+                `updateTextArea(${JSON.stringify(clipboardText)})`,
+                false
+              );
+              console.log(
+                "WebView Loop: Sent clipboard text back to JS. Continuing loop."
+              );
+            } catch (evalError) {
+              console.error(
+                "WebView Loop: Error sending paste data back to JS:",
+                evalError
+              );
+              // Handle error - maybe alert user?
+            }
+            // Continue loop to wait for next action/submit
+            break; // Go to next iteration of the while loop
 
-              case 'dictate':
-                  console.log("WebView Loop: Received 'dictate' action. Starting dictation...");
-                  try {
-                      // Temporarily dismiss the WebView to allow Dictation UI
-                      if (wv.isPresented) {
-                          console.log("Temporarily dismissing WebView for Dictation...");
-                          await wv.dismiss();
-                          wv.isPresented = false; // Mark as not presented
-                          await new Promise(resolve => setTimeout(resolve, 300)); // Small delay
-                      }
+          case "dictate":
+            console.log(
+              "WebView Loop: Received 'dictate' action. Starting dictation..."
+            );
+            try {
+              // REMOVED: Attempt to dismiss WebView - wv.dismiss() is invalid
+              // Start dictation directly. It will overlay the WebView.
+              const dictatedText = await Dictation.start();
+              console.log(
+                `Dictation result length: ${
+                  dictatedText ? dictatedText.length : "null"
+                }`
+              );
 
-                      const dictatedText = await Dictation.start();
-                      console.log(`Dictation result length: ${dictatedText ? dictatedText.length : 'null'}`);
+              // REMOVED: Logic to re-present WebView - it was never dismissed.
+              // Send dictated text back to the *existing* WebView instance
+              if (dictatedText) {
+                await wv.evaluateJavaScript(
+                  `updateTextArea(${JSON.stringify(dictatedText)})`,
+                  false
+                );
+                console.log(
+                  "WebView Loop: Sent dictated text back to JS. Continuing loop."
+                );
+              } else {
+                console.log("WebView Loop: Dictation returned no text.");
+              }
+            } catch (dictationError) {
+              console.error(
+                `WebView Loop: Dictation failed: ${dictationError}`
+              );
+              // Show alert within the still-present WebView
+              try {
+                await wv.evaluateJavaScript(
+                  `alert('Dictation failed: ${escapeHtml(
+                    dictationError.message
+                  )}')`,
+                  false
+                );
+              } catch (alertError) {
+                console.error(
+                  "Failed to show dictation error alert in WebView:",
+                  alertError
+                );
+                // Fallback Scriptable alert if WebView alert fails
+                let fallbackAlert = new Alert();
+                fallbackAlert.title = "Dictation Error";
+                fallbackAlert.message = `Dictation failed: ${dictationError.message}`;
+                await fallbackAlert.presentAlert();
+              }
+            }
+            // Continue loop to wait for next action/submit
+            break; // Go to next iteration of the while loop
 
-                      // Re-present the WebView before sending text back
-                      console.log("Re-presenting WebView after Dictation...");
-                      // Need to reload HTML or state might be lost? Test this.
-                      // Let's try without reloading first.
-                      // await wv.loadHTML(htmlContent); // Re-load might be necessary
-                      await wv.present(fullscreen);
-                      wv.isPresented = true;
-                      await new Promise(resolve => setTimeout(resolve, 500)); // Delay for WebView to potentially re-render
-
-                      // Re-initialize JS listeners after re-presenting
-                       await wv.evaluateJavaScript(`
-                           window.formInitialized = false; // Force re-init
-                           if (typeof initializeForm === 'function') {
-                               initializeForm();
-                               window.formInitialized = true;
-                               console.log('Re-initialized form after dictation re-present.');
-                           } else { console.error('initializeForm not found after re-presenting.'); }
-                       `, false);
-
-
-                      if (dictatedText) {
-                          // Send dictated text back to the WebView
-                          await wv.evaluateJavaScript(`updateTextArea(${JSON.stringify(dictatedText)})`, false);
-                          console.log("WebView Loop: Sent dictated text back to JS. Continuing loop.");
-                      } else {
-                          console.log("WebView Loop: Dictation returned no text.");
-                      }
-                  } catch (dictationError) {
-                      console.error(`WebView Loop: Dictation failed: ${dictationError}`);
-                      // Re-present WV if it was dismissed and dictation failed
-                      if (!wv.isPresented) {
-                          try {
-                              await wv.present(fullscreen);
-                              wv.isPresented = true;
-                               await wv.evaluateJavaScript(`alert('Dictation failed: ${escapeHtml(dictationError.message)}')`, false);
-                          } catch (representError) {
-                              console.error("Failed to re-present WebView after dictation error:", representError);
-                          }
-                      } else {
-                           // If still presented, just show alert
-                           try {
-                              await wv.evaluateJavaScript(`alert('Dictation failed: ${escapeHtml(dictationError.message)}')`, false);
-                           } catch (alertError) { console.error("Failed to show dictation error alert:", alertError); }
-                      }
-                  }
-                  // Continue loop to wait for next action/submit
-                  break; // Go to next iteration of the while loop
-
-              default:
-                  console.warn(`WebView Loop: Received unknown action: ${result.action}`);
-                  // Continue loop
-                  break;
-          }
+          default:
+            console.warn(
+              `WebView Loop: Received unknown action: ${result.action}`
+            );
+            // Continue loop
+            break;
+        }
       } else {
-          // Should not happen if evaluatePromise resolved without error/action, but handle defensively
-          console.warn("WebView Loop: evaluatePromise resolved with unexpected result:", result);
-          // Continue loop
+        // Should not happen if evaluatePromise resolved without error/action, but handle defensively
+        console.warn(
+          "WebView Loop: evaluatePromise resolved with unexpected result:",
+          result
+        );
+        // Continue loop
       }
-
     } // End while loop
-
   } catch (e) {
-      // Catch errors from initial loadHTML or unexpected errors in the loop/race
-      console.error(`Error during interactive WebView operation: ${e}`);
-      // Ensure WebView is dismissed if an error occurs and it's still presented
-      if (wv.isPresented) {
-         try { await wv.dismiss(); wv.isPresented = false; } catch (dismissErr) { console.warn("Error dismissing WV on failure:", dismissErr); }
-      }
-      return null; // Return null on error
+    console.error(`Error during interactive WebView operation: ${e}`);
+    // No wv.dismiss() to call here
+    return null; // Return null on error
   }
 }
-
 
 /**
  * Generates HTML for the Memos configuration form.
@@ -522,7 +517,6 @@ function generateInputFormHtml(prefillText = "", showAiOption = false) {
     `;
 }
 
-
 /**
  * Generates HTML to confirm using AI-processed text.
  * @param {string} originalText - The original input text.
@@ -683,7 +677,6 @@ async function getConfig() {
   return { url, token, openaiApiKey };
 }
 
-
 /**
  * Gets text input from Share Sheet or WebView form.
  * Allows user to paste from clipboard or dictate via buttons within the form.
@@ -702,8 +695,8 @@ async function getInputText(allowAiOption = false) {
       initialText = sharedText;
     }
   } else {
-      console.log("No Share Sheet input found.");
-      // Automatic clipboard check is removed. User must use the button.
+    console.log("No Share Sheet input found.");
+    // Automatic clipboard check is removed. User must use the button.
   }
 
   // 2. Present WebView form for input (manual entry, paste, dictation, or editing pre-filled text)
@@ -730,7 +723,6 @@ async function getInputText(allowAiOption = false) {
   console.log(`Input received. Use AI: ${formData.useAi}`);
   return { text: formData.text.trim(), useAi: formData.useAi }; // Return object with trimmed text
 }
-
 
 /**
  * Makes an authenticated request to the Memos API.
@@ -850,21 +842,36 @@ async function processTextWithOpenAI(apiKey, text) {
     const responseJson = await request.loadJSON();
 
     if (!responseJson || responseJson.error) {
-      const errorMessage = responseJson?.error?.message || "Unknown OpenAI API error structure";
-      console.error("OpenAI API Error in response:", responseJson?.error || responseJson);
+      const errorMessage =
+        responseJson?.error?.message || "Unknown OpenAI API error structure";
+      console.error(
+        "OpenAI API Error in response:",
+        responseJson?.error || responseJson
+      );
       throw new Error(`OpenAI API Error: ${errorMessage}`);
     }
-    if (!responseJson.choices || responseJson.choices.length === 0 || !responseJson.choices[0].text) {
-      console.error("OpenAI response missing expected choices or text:", responseJson);
+    if (
+      !responseJson.choices ||
+      responseJson.choices.length === 0 ||
+      !responseJson.choices[0].text
+    ) {
+      console.error(
+        "OpenAI response missing expected choices or text:",
+        responseJson
+      );
       throw new Error("OpenAI response did not contain the expected text.");
     }
 
     const processedText = responseJson.choices[0].text.trim();
-    console.log("OpenAI processing successful. Result length:", processedText.length);
+    console.log(
+      "OpenAI processing successful. Result length:",
+      processedText.length
+    );
     return processedText;
   } catch (e) {
     console.error(`OpenAI Request Failed: ${e}`);
-    let detailedMessage = e.message || "An unknown error occurred during the OpenAI request.";
+    let detailedMessage =
+      e.message || "An unknown error occurred during the OpenAI request.";
     if (request.response && request.response.statusCode) {
       detailedMessage += ` (Status Code: ${request.response.statusCode})`;
     }
@@ -881,7 +888,8 @@ async function processTextWithOpenAI(apiKey, text) {
  * @throws {Error} If adding the comment fails.
  */
 async function addCommentToMemo(config, memoId, commentText) {
-  const endpoint = config.url.replace(/\/$/, "") + `/api/v1/memos/${memoId}/comments`;
+  const endpoint =
+    config.url.replace(/\/$/, "") + `/api/v1/memos/${memoId}/comments`;
   const body = { content: commentText };
   console.log(`Adding comment to memo ID: ${memoId}`);
   return await makeApiRequest(endpoint, "POST", config.token, body);
@@ -897,7 +905,8 @@ async function addCommentToMemo(config, memoId, commentText) {
     console.log("Reset configuration argument detected.");
     const confirmAlert = new Alert();
     confirmAlert.title = "Reset Configuration?";
-    confirmAlert.message = "Are you sure you want to remove the saved Memos URL, Access Token, and OpenAI Key?";
+    confirmAlert.message =
+      "Are you sure you want to remove the saved Memos URL, Access Token, and OpenAI Key?";
     confirmAlert.addAction("Reset");
     confirmAlert.addCancelAction("Cancel");
     const confirmation = await confirmAlert.presentAlert();
@@ -905,15 +914,20 @@ async function addCommentToMemo(config, memoId, commentText) {
       console.log("Removing configuration from Keychain...");
       Keychain.remove(KEYCHAIN_URL_KEY);
       Keychain.remove(KEYCHAIN_TOKEN_KEY);
-      if (Keychain.contains(KEYCHAIN_OPENAI_KEY)) Keychain.remove(KEYCHAIN_OPENAI_KEY);
+      if (Keychain.contains(KEYCHAIN_OPENAI_KEY))
+        Keychain.remove(KEYCHAIN_OPENAI_KEY);
       console.log("Configuration removed.");
       const successAlert = new Alert();
       successAlert.title = "Configuration Reset";
-      successAlert.message = "Configuration removed. Run the script again to reconfigure.";
+      successAlert.message =
+        "Configuration removed. Run the script again to reconfigure.";
       await successAlert.presentAlert();
-      Script.complete(); return;
+      Script.complete();
+      return;
     } else {
-      console.log("Configuration reset cancelled."); Script.complete(); return;
+      console.log("Configuration reset cancelled.");
+      Script.complete();
+      return;
     }
   }
   // --- End Configuration Reset Logic ---
@@ -933,7 +947,8 @@ async function addCommentToMemo(config, memoId, commentText) {
 
     if (!inputData) {
       console.log("No input text provided or cancelled. Exiting.");
-      Script.complete(); return;
+      Script.complete();
+      return;
     }
 
     originalInputText = inputData.text;
@@ -942,7 +957,11 @@ async function addCommentToMemo(config, memoId, commentText) {
 
     const MIN_LENGTH_FOR_AI = 20;
 
-    if (processWithAi && config.openaiApiKey && originalInputText.trim().length >= MIN_LENGTH_FOR_AI) {
+    if (
+      processWithAi &&
+      config.openaiApiKey &&
+      originalInputText.trim().length >= MIN_LENGTH_FOR_AI
+    ) {
       console.log("User opted for AI processing. Calling OpenAI...");
       let processingAlert = null;
       try {
@@ -951,35 +970,55 @@ async function addCommentToMemo(config, memoId, commentText) {
         processingAlert.message = "Please wait.";
         processingAlert.present(); // Show non-blocking alert
 
-        const processedResult = await processTextWithOpenAI(config.openaiApiKey, originalInputText);
+        const processedResult = await processTextWithOpenAI(
+          config.openaiApiKey,
+          originalInputText
+        );
 
-        if (processingAlert && typeof processingAlert.dismiss === 'function') {
-           try { processingAlert.dismiss(); } catch (dismissError) { console.warn("Could not dismiss processing alert:", dismissError); }
+        if (processingAlert && typeof processingAlert.dismiss === "function") {
+          try {
+            processingAlert.dismiss();
+          } catch (dismissError) {
+            console.warn("Could not dismiss processing alert:", dismissError);
+          }
         }
         processingAlert = null; // Clear reference
 
-        console.log("AI processing successful. Asking for confirmation via WebView.");
-        const confirmHtml = generateAiConfirmHtml(originalInputText, processedResult);
+        console.log(
+          "AI processing successful. Asking for confirmation via WebView."
+        );
+        const confirmHtml = generateAiConfirmHtml(
+          originalInputText,
+          processedResult
+        );
         const confirmResult = await presentWebViewForm(confirmHtml, false); // Use presentWebViewForm
 
         // Check the structure returned by presentWebViewForm for AI confirm
-        if (confirmResult && typeof confirmResult.useProcessed !== 'undefined') {
-            if (confirmResult.useProcessed === true) {
-                finalText = processedResult;
-                console.log("User confirmed using AI processed text via WebView.");
-            } else {
-                finalText = originalInputText;
-                console.log("User chose to revert to original text via WebView.");
-            }
+        if (
+          confirmResult &&
+          typeof confirmResult.useProcessed !== "undefined"
+        ) {
+          if (confirmResult.useProcessed === true) {
+            finalText = processedResult;
+            console.log("User confirmed using AI processed text via WebView.");
+          } else {
+            finalText = originalInputText;
+            console.log("User chose to revert to original text via WebView.");
+          }
         } else {
-             finalText = originalInputText;
-             console.log("AI confirmation cancelled or failed. Reverting to original text.");
+          finalText = originalInputText;
+          console.log(
+            "AI confirmation cancelled or failed. Reverting to original text."
+          );
         }
-
       } catch (aiError) {
         console.error(`AI Processing Failed: ${aiError}`);
-        if (processingAlert && typeof processingAlert.dismiss === 'function') {
-           try { processingAlert.dismiss(); } catch (dismissError) { console.warn("Could not dismiss processing alert:", dismissError); }
+        if (processingAlert && typeof processingAlert.dismiss === "function") {
+          try {
+            processingAlert.dismiss();
+          } catch (dismissError) {
+            console.warn("Could not dismiss processing alert:", dismissError);
+          }
         }
 
         const aiErrorAlert = new Alert();
@@ -989,18 +1028,30 @@ async function addCommentToMemo(config, memoId, commentText) {
         aiErrorAlert.addCancelAction("Cancel Script");
         const errorChoice = await aiErrorAlert.presentAlert();
 
-        if (errorChoice === -1) { // Cancelled
+        if (errorChoice === -1) {
+          // Cancelled
           console.log("Script cancelled due to AI processing error.");
-          Script.complete(); return;
+          Script.complete();
+          return;
         }
         finalText = originalInputText; // Use original on error confirmation
         console.log("Proceeding with original text after AI error.");
       }
     } else {
       // Log reasons for skipping AI
-      if (!config.openaiApiKey) console.log("No OpenAI API Key configured. Skipping AI.");
-      else if (!processWithAi) console.log("User did not select AI processing.");
-      else if (config.openaiApiKey && originalInputText.trim().length < MIN_LENGTH_FOR_AI) console.log(`Text length (${originalInputText.trim().length}) < min (${MIN_LENGTH_FOR_AI}). Skipping AI.`);
+      if (!config.openaiApiKey)
+        console.log("No OpenAI API Key configured. Skipping AI.");
+      else if (!processWithAi)
+        console.log("User did not select AI processing.");
+      else if (
+        config.openaiApiKey &&
+        originalInputText.trim().length < MIN_LENGTH_FOR_AI
+      )
+        console.log(
+          `Text length (${
+            originalInputText.trim().length
+          }) < min (${MIN_LENGTH_FOR_AI}). Skipping AI.`
+        );
       finalText = originalInputText;
     }
 
@@ -1008,7 +1059,10 @@ async function addCommentToMemo(config, memoId, commentText) {
     createdMemo = await createMemo(config, memoTitle);
 
     if (!createdMemo || !createdMemo.name || !createdMemo.name.includes("/")) {
-      console.error("Failed to get valid memo name from creation response.", createdMemo);
+      console.error(
+        "Failed to get valid memo name from creation response.",
+        createdMemo
+      );
       throw new Error("Could not determine the new memo's name/ID.");
     }
     // Extract ID from name like "memos/101" -> "101"
@@ -1023,7 +1077,9 @@ async function addCommentToMemo(config, memoId, commentText) {
     console.log("Comment added successfully!");
 
     // Show success alert only if not running in widget context
-    let showAlerts = !(typeof args.runsInWidget === "boolean" && args.runsInWidget);
+    let showAlerts = !(
+      typeof args.runsInWidget === "boolean" && args.runsInWidget
+    );
     if (showAlerts) {
       const successAlert = new Alert();
       successAlert.title = "Success";
@@ -1033,13 +1089,14 @@ async function addCommentToMemo(config, memoId, commentText) {
       }
       await successAlert.presentAlert();
     } else {
-        console.log("Running in widget context, skipping success alert.");
+      console.log("Running in widget context, skipping success alert.");
     }
-
   } catch (e) {
     console.error(`Script execution failed: ${e}`);
     // Show error alert only if not running in widget context
-    let showAlerts = !(typeof args.runsInWidget === "boolean" && args.runsInWidget);
+    let showAlerts = !(
+      typeof args.runsInWidget === "boolean" && args.runsInWidget
+    );
     if (showAlerts) {
       const errorAlert = new Alert();
       errorAlert.title = "Error";
@@ -1048,18 +1105,30 @@ async function addCommentToMemo(config, memoId, commentText) {
       // Add specific hints based on error message
       if (e.message) {
         if (e.message.includes("401")) {
-          errorAlert.message += e.message.toLowerCase().includes("openai") ? "\n\nCheck OpenAI Key/Account." : "\n\nCheck Memos Token.";
-        } else if (e.message.includes("404") && e.message.toLowerCase().includes("memos")) {
+          errorAlert.message += e.message.toLowerCase().includes("openai")
+            ? "\n\nCheck OpenAI Key/Account."
+            : "\n\nCheck Memos Token.";
+        } else if (
+          e.message.includes("404") &&
+          e.message.toLowerCase().includes("memos")
+        ) {
           errorAlert.message += "\n\nCheck Memos URL Path.";
-        } else if (e.message.includes("ENOTFOUND") || e.message.includes("Could not connect") || e.message.includes("timed out")) {
+        } else if (
+          e.message.includes("ENOTFOUND") ||
+          e.message.includes("Could not connect") ||
+          e.message.includes("timed out")
+        ) {
           errorAlert.message += "\n\nCheck Network/URL Reachability.";
-        } else if (e.message.toLowerCase().includes("openai") && e.message.toLowerCase().includes("quota")) {
+        } else if (
+          e.message.toLowerCase().includes("openai") &&
+          e.message.toLowerCase().includes("quota")
+        ) {
           errorAlert.message += "\n\nCheck OpenAI Quota.";
         }
       }
       await errorAlert.presentAlert();
     } else {
-        console.log("Running in widget context, skipping error alert.");
+      console.log("Running in widget context, skipping error alert.");
     }
   } finally {
     console.log("Script finished.");
