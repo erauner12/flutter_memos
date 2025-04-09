@@ -29,7 +29,13 @@ async function presentWebViewForm(htmlContent, fullscreen = false, preferredSize
       // We need an instance to load HTML and then evaluate JS.
       await wv.loadHTML(htmlContent);
 
-      // Use evaluateJavaScript with useCallback=true.
+      // *** Add this line to actually display the WebView ***
+      console.log(`Presenting WebView (fullscreen: ${fullscreen})...`);
+      await wv.present(fullscreen);
+      // *** End of added line ***
+
+      // Now that the WebView is visible, evaluate the JS that sets up the completion callback.
+      // Scriptable waits for the global completion() function to be called from the presented WebView.
       // Scriptable waits for the global completion() function to be called.
       // The value passed to completion() becomes the resolved value of this promise.
       const result = await wv.evaluateJavaScript(
