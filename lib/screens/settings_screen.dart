@@ -516,7 +516,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                               // Update the key using the provider notifier
                               ref
                                   .read(todoistApiKeyProvider.notifier)
-                                  .updateApiKey(newKey);
+                                  .set(newKey);
                               FocusScope.of(context).unfocus();
                               // Show confirmation using SnackBar (requires Material ancestor or custom overlay)
                               ScaffoldMessenger.of(context).showSnackBar(
