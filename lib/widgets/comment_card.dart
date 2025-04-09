@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart'; // Add Material import
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_memos/models/comment.dart';
@@ -70,7 +71,7 @@ class _CommentCardState extends ConsumerState<CommentCard> {
       return;
     }
 
-    // 2. Parse content
+    // 2. Parse content for pre-population
     final fullContent = comment.content.trim();
     if (fullContent.isEmpty) {
       _showDialog(
@@ -81,21 +82,32 @@ class _CommentCardState extends ConsumerState<CommentCard> {
       return;
     }
 
-    String taskContent;
-    String? taskDescription;
+    String initialTitle;
+    String initialDescription;
     final newlineIndex = fullContent.indexOf('\n');
 
     if (newlineIndex != -1) {
-      taskContent = fullContent.substring(0, newlineIndex).trim();
-      taskDescription = fullContent.substring(newlineIndex + 1).trim();
-      if (taskDescription.isEmpty) {
-        taskDescription = null; // Ensure empty description is null
-      }
+      initialTitle = fullContent.substring(0, newlineIndex).trim();
+      initialDescription = fullContent;
     } else {
-      taskContent = fullContent;
-      taskDescription = null;
+      initialTitle = fullContent;
+      initialDescription = fullContent;
     }
 
+    // 3. Show form dialog
+    if (!mounted) return;
+    final result = await _showTodoistTaskForm(
+      initialTitle: initialTitle,
+      initialDescription: initialDescription,
+    );
+    
+    // If user cancelled, result will be null
+    if (result == null) return;
+    
+    // 4. Extract form values
+    final taskContent = result['title'] as String;
+    final taskDescription = result['description'] as String;
+    
     if (taskContent.isEmpty) {
       _showDialog(
         'Empty Title',
@@ -105,10 +117,10 @@ class _CommentCardState extends ConsumerState<CommentCard> {
       return;
     }
 
-    // 3. Show loading
+    // 5. Show loading
     setState(() => _isSendingToTodoist = true);
 
-    // 4. Call API
+    // 6. Call API
     try {
       if (kDebugMode) {
         print(
@@ -125,10 +137,10 @@ class _CommentCardState extends ConsumerState<CommentCard> {
         print('[Todoist Send] Success! Task ID: ${createdTask.id}');
       }
 
-      // 5. Show Success using dialog
+      // 7. Show Success using dialog
       _showDialog(
         'Success',
-        'Sent to Todoist: "${createdTask.content ?? 'Task'}"',
+        'Sent to Todoist: "${createdTask.content ?? "Task"}"',
       );
     } on todoist.ApiException catch (e) {
       if (kDebugMode) {
@@ -136,7 +148,7 @@ class _CommentCardState extends ConsumerState<CommentCard> {
       }
       _showDialog(
         'Todoist Error',
-        'Failed to create task.\n\nAPI Error ${e.code}: ${e.message ?? 'Unknown error'}',
+        'Failed to create task.\n\nAPI Error ${e.code}: ${e.message ?? "Unknown error"}',
         isError: true,
       );
     } catch (e) {
@@ -157,6 +169,116 @@ class _CommentCardState extends ConsumerState<CommentCard> {
   }
 
 
+  Future<Map<String, String>?> _showTodoistTaskForm({
+    required String initialTitle,
+    required String initialDescription,
+  }) async {
+    // Create controllers for the form fields
+    final titleController = TextEditingController(text: initialTitle);
+    final descriptionController = TextEditingController(text: initialDescription);
+    
+    // Create focus nodes for field navigation
+    final titleFocusNode = FocusNode();
+    final descriptionFocusNode = FocusNode();
+    
+    try {
+      // Show dialog and wait for result
+      return await showCupertinoDialog<Map<String, String>>(
+        context: context,
+        builder: (context) {
+          return CupertinoAlertDialog(
+            title: const Text('Create Todoist Task'),
+            content: Material(
+              // Need Material widget for TextField scrolling behavior
+              color: CupertinoColors.systemBackground.resolveFrom(context),
+              borderRadius: BorderRadius.circular(13.0),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const SizedBox(height: 12),
+                    // Title field - single line
+                    CupertinoTextField(
+                      controller: titleController,
+                      focusNode: titleFocusNode,
+                      placeholder: 'Task title',
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+                      clearButtonMode: OverlayVisibilityMode.editing,
+                      textInputAction: TextInputAction.next,
+                      onSubmitted: (_) {
+                        // Move to description field when done
+                        titleFocusNode.unfocus();
+                        descriptionFocusNode.requestFocus();
+                      },
+                      decoration: BoxDecoration(
+                        color: CupertinoColors.systemGrey6.resolveFrom(context),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: CupertinoColors.systemGrey4.resolveFrom(context),
+                          width: 0.5,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    // Description field - multi-line, scrollable
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(
+                        maxHeight: 200, // Prevent dialog from being too tall
+                      ),
+                      child: SingleChildScrollView(
+                        child: CupertinoTextField(
+                          controller: descriptionController,
+                          focusNode: descriptionFocusNode,
+                          placeholder: 'Task description',
+                          padding: const EdgeInsets.all(8),
+                          maxLines: null, // Allow multiple lines
+                          minLines: 5, // Show at least 5 lines
+                          textInputAction: TextInputAction.newline,
+                          decoration: BoxDecoration(
+                            color: CupertinoColors.systemGrey6.resolveFrom(context),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: CupertinoColors.systemGrey4.resolveFrom(context),
+                              width: 0.5,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              CupertinoDialogAction(
+                onPressed: () => Navigator.of(context).pop(), // Cancel
+                child: const Text('Cancel'),
+              ),
+              CupertinoDialogAction(
+                isDefaultAction: true,
+                onPressed: () {
+                  Navigator.of(context).pop({
+                    'title': titleController.text.trim(),
+                    'description': descriptionController.text.trim(),
+                  });
+                },
+                child: const Text('Create Task'),
+              ),
+            ],
+          );
+        },
+      );
+    } finally {
+      // Clean up controllers and focus nodes
+      titleController.dispose();
+      descriptionController.dispose();
+      titleFocusNode.dispose();
+      descriptionFocusNode.dispose();
+    }
+  }
   void _showContextMenu(BuildContext context) {
     final fullId = '${widget.memoId}/${widget.comment.id}';
 
@@ -514,8 +636,9 @@ class _CommentCardState extends ConsumerState<CommentCard> {
                                         child,
                                         loadingProgress,
                                       ) {
-                                        if (loadingProgress == null)
+                                        if (loadingProgress == null) {
                                           return child;
+                                        }
                                         return Container(
                                           width: 50,
                                           height: 50,
