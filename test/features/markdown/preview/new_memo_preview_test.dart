@@ -100,7 +100,7 @@ void main() {
               child: SizedBox(
                 width: 800,
                 height: 600,
-                child: SingleChildScrollView(child: NewMemoForm()),
+                child: NewMemoForm(), // Directly use NewMemoForm
               ),
             ),
           ),
@@ -114,19 +114,23 @@ void main() {
       await tester.pumpAndSettle();
 
       // Tap the help button with some extra pumps to ensure it's visible
+      // Use ensureVisible to handle cases where the button might be slightly off-screen initially
+      // within the SizedBox constraints, although less likely now without the extra scroll view.
       await tester.ensureVisible(find.text('Markdown Help'));
-      await tester.pumpAndSettle();
+      await tester.pumpAndSettle(); // Allow time for scrolling if needed
       await tester.tap(find.text('Markdown Help'));
-      await tester.pumpAndSettle();
+      await tester.pumpAndSettle(); // Wait for state update and rebuild
 
       // Help should now be visible
       expect(find.text('Markdown Syntax Guide'), findsOneWidget);
-    
+
       // Check for some help content
+      // Use ensureVisible again for robustness
       await tester.ensureVisible(find.text('Heading 1'));
+      await tester.pumpAndSettle();
       expect(find.text('Heading 1'), findsOneWidget);
       expect(find.text('Bold text'), findsOneWidget);
-    
+
       // Now find and tap the hide help button
       await tester.ensureVisible(find.text('Hide Help'));
       await tester.pumpAndSettle();
