@@ -6,9 +6,11 @@ import 'package:flutter_memos/models/memo_relation.dart';
 import 'package:flutter_memos/providers/memo_providers.dart';
 import 'package:flutter_memos/screens/memo_detail/memo_detail_providers.dart'
     show memoCommentsProvider;
+import 'package:flutter_memos/services/api_service.dart'; // Import ApiService
+import 'package:flutter_memos/services/minimal_openai_service.dart'; // Import MinimalOpenAiService
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'api_providers.dart';
+import 'api_providers.dart' as api_p;
 
 /// Provider for the list of hidden comment IDs (local state only)
 final hiddenCommentIdsProvider = StateProvider<Set<String>>((ref) => {});
@@ -16,7 +18,7 @@ final hiddenCommentIdsProvider = StateProvider<Set<String>>((ref) => {});
 /// Provider for archiving a comment
 final archiveCommentProvider = Provider.family<Future<void> Function(), String>((ref, id) {
   return () async {
-    final apiService = ref.read(apiServiceProvider);
+      final apiService = ref.read(api_p.apiServiceProvider);
     
     try {
         // Extract memoId from combined ID (format: "memoId/commentId")
@@ -55,7 +57,7 @@ final archiveCommentProvider = Provider.family<Future<void> Function(), String>(
 /// Provider for deleting a comment
 final deleteCommentProvider = Provider.family<Future<void> Function(), String>((ref, id) {
   return () async {
-    final apiService = ref.read(apiServiceProvider);
+    final apiService = ref.read(api_p.apiServiceProvider);
     
     try {
       // Extract parts from the combined ID (format: "memoId/commentId")
@@ -86,7 +88,7 @@ final deleteCommentProvider = Provider.family<Future<void> Function(), String>((
 /// Provider for toggling the pin state of a comment
 final togglePinCommentProvider = Provider.family<Future<void> Function(), String>((ref, id) {
   return () async {
-    final apiService = ref.read(apiServiceProvider);
+        final apiService = ref.read(api_p.apiServiceProvider);
 
     try {
           // Extract memoId from combined ID (format: "memoId/commentId")
@@ -131,7 +133,7 @@ final convertCommentToMemoProvider = Provider.family<
   String
 >((ref, id) {
   return () async {
-    final apiService = ref.read(apiServiceProvider);
+    final apiService = ref.read(api_p.apiServiceProvider);
     
     try {
       // Extract parts from the combined ID (format: "memoId/commentId")
@@ -251,7 +253,7 @@ final createCommentProvider = Provider.family<
       );
     }
 
-    final apiService = ref.read(apiServiceProvider);
+    final apiService = ref.read(api_p.apiServiceProvider);
     List<V1Resource>? uploadedResources;
 
     try {
@@ -329,7 +331,7 @@ final updateCommentProvider = Provider<
   Future<Comment> Function(String memoId, String commentId, String newContent)
 >((ref) {
   return (String memoId, String commentId, String newContent) async {
-    final apiService = ref.read(apiServiceProvider);
+    final apiService = ref.read(api_p.apiServiceProvider);
     if (kDebugMode) {
       print(
         '[updateCommentProvider] Updating comment $commentId for memo $memoId',
@@ -392,9 +394,9 @@ final fixCommentGrammarProvider = FutureProvider.family<void, String>((
   }
 
   // Get required services
-  final ApiService memosApiService = ref.read(apiServiceProvider);
+  final ApiService memosApiService = ref.read(api_p.apiServiceProvider);
   final MinimalOpenAiService openaiApiService = ref.read(
-    openaiApiServiceProvider,
+    api_p.openaiApiServiceProvider,
   );
 
   // Check if OpenAI service is configured
@@ -409,8 +411,9 @@ final fixCommentGrammarProvider = FutureProvider.family<void, String>((
 
   try {
     // 1. Fetch the current comment content
-    if (kDebugMode)
+    if (kDebugMode) {
       print('[fixCommentGrammarProvider] Fetching comment content...');
+    }
     final Comment currentComment = await memosApiService.getMemoComment(
       commentId,
     );
