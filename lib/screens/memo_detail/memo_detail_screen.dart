@@ -1,4 +1,6 @@
 import 'package:flutter/cupertino.dart'; // Import Cupertino
+import 'package:flutter/foundation.dart'; // Import for kDebugMode
+import 'package:flutter/services.dart'; // Import for HapticFeedback
 import 'package:flutter_memos/providers/memo_providers.dart' as memo_providers;
 import 'package:flutter_memos/providers/ui_providers.dart';
 import 'package:flutter_memos/utils/keyboard_navigation.dart';
@@ -24,10 +26,14 @@ class _MemoDetailScreenState extends ConsumerState<MemoDetailScreen>
   final FocusNode _screenFocusNode = FocusNode(
     debugLabel: 'MemoDetailScreenFocus',
   );
+  // Add ScrollController
+  late ScrollController _scrollController;
 
   @override
   void initState() {
     super.initState();
+    // Initialize ScrollController
+    _scrollController = ScrollController();
     // Request focus after the widget is built
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _screenFocusNode.requestFocus();
@@ -37,8 +43,58 @@ class _MemoDetailScreenState extends ConsumerState<MemoDetailScreen>
   @override
   void dispose() {
     _screenFocusNode.dispose();
+    _scrollController.dispose(); // Dispose ScrollController
     super.dispose();
   }
+
+  // --- Add Refresh Logic ---
+  Future<void> _onRefresh() async {
+    if (kDebugMode) {
+      print('[MemoDetailScreen] Pull-to-refresh triggered.');
+    }
+    HapticFeedback.mediumImpact();
+    // Invalidate the providers to trigger a refetch
+    ref.invalidate(memoDetailProvider(widget.memoId));
+    ref.invalidate(memoCommentsProvider(widget.memoId));
+    // No need to manually await, FutureProvider handles the loading state
+  }
+
+  // --- Add Refresh Indicator Builder ---
+  // (This builder provides a standard Cupertino activity indicator during refresh)
+  Widget _buildRefreshIndicator(
+    BuildContext context,
+    RefreshIndicatorMode refreshState,
+    double pulledExtent,
+    double refreshTriggerPullDistance,
+    double refreshIndicatorExtent,
+  ) {
+    final double opacity = (pulledExtent / refreshTriggerPullDistance).clamp(
+      0.0,
+      1.0,
+    );
+    return Center(
+      child: Stack(
+        clipBehavior:
+            Clip.none, // Allow indicator to show outside bounds slightly
+        alignment: Alignment.center,
+        children: <Widget>[
+          Positioned(
+            top: 16.0, // Adjust position as needed
+            child: Opacity(
+              opacity:
+                  (refreshState == RefreshIndicatorMode.drag) ? opacity : 1.0,
+              child:
+                  (refreshState == RefreshIndicatorMode.refresh ||
+                          refreshState == RefreshIndicatorMode.armed)
+                      ? const CupertinoActivityIndicator(radius: 14.0)
+                      : const SizedBox.shrink(), // Show indicator only when refreshing or armed
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+  // --- End Refresh Logic ---
 
   @override
   Widget build(BuildContext context) {
@@ -168,32 +224,44 @@ class _MemoDetailScreenState extends ConsumerState<MemoDetailScreen>
 
     return memoAsync.when(
       data: (memo) {
+        // --- Use CustomScrollView with Refresh Control ---
         return CupertinoScrollbar(
+          controller: _scrollController, // Pass controller
           thumbVisibility: true,
           thickness: 6.0,
           radius: const Radius.circular(3.0),
-          child: SingleChildScrollView(
-            child: Column(
-              children: [
-                // Memo content section
-                MemoContent(memo: memo, memoId: widget.memoId),
-
-                // Divider between content and comments
-                // Replace Divider with Container
-                Container(
+          child: CustomScrollView(
+            controller: _scrollController, // Pass controller
+            physics:
+                const AlwaysScrollableScrollPhysics(), // Ensure scrolling is always possible for refresh
+            slivers: [
+              CupertinoSliverRefreshControl(
+                onRefresh: _onRefresh,
+                builder: _buildRefreshIndicator,
+              ),
+              // Memo content section wrapped in SliverToBoxAdapter
+              SliverToBoxAdapter(
+                child: MemoContent(memo: memo, memoId: widget.memoId),
+              ),
+              // Divider wrapped in SliverToBoxAdapter
+              SliverToBoxAdapter(
+                child: Container(
                   height: 0.5,
                   color: CupertinoColors.separator.resolveFrom(context),
                   margin: const EdgeInsets.symmetric(
                     vertical: 8.0,
-                  ), // Add margin if needed
+                    horizontal: 16.0, // Add horizontal margin for consistency
+                  ),
                 ),
-
-                // Comments section
-                MemoComments(memoId: widget.memoId),
-              ],
-            ),
+              ),
+              // Comments section wrapped in SliverToBoxAdapter
+              SliverToBoxAdapter(child: MemoComments(memoId: widget.memoId)),
+              // Add some bottom padding within the scroll view
+              const SliverPadding(padding: EdgeInsets.only(bottom: 20)),
+            ],
           ),
         );
+        // --- End CustomScrollView ---
       },
       // Replace CircularProgressIndicator with CupertinoActivityIndicator
       loading: () => const Center(child: CupertinoActivityIndicator()),
@@ -209,4 +277,4 @@ class _MemoDetailScreenState extends ConsumerState<MemoDetailScreen>
           ),
     );
   }
-}
+} // End of _MemoDetailScreenState class
