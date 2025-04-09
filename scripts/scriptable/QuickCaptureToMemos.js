@@ -19,64 +19,101 @@ const KEYCHAIN_OPENAI_KEY = "openai_api_key"; // Added for OpenAI
  * @returns {Promise<any|null>} The data passed to the completion() function from JS, or null if dismissed.
  * @throws {Error} If WebView presentation or JS evaluation fails unexpectedly.
  */
+/**
+ * Presents an HTML form in a WebView and waits for submission or dismissal.
+ * The HTML should contain JavaScript that calls `completion(result)`
+ * where `result` is the data to be returned (e.g., a JSON object).
+ * @param {string} htmlContent - The HTML string to display.
+ * @param {boolean} [fullscreen=false] - Whether to present fullscreen.
+ * @param {Size} [preferredSize=null] - Preferred size (currently unused but kept for potential future use).
+ * @returns {Promise<any|null>} The data passed to the completion() function from JS, or null if dismissed manually or on error.
+ */
 async function presentWebViewForm(
   htmlContent,
   fullscreen = false,
-  preferredSize = null
+  preferredSize = null // Parameter kept, though not used in current logic
 ) {
-  console.log("Presenting WebView form...");
+  console.log("Configuring WebView form...");
+  const wv = new WebView();
+  // Optional: Set up shouldAllowRequest if needed
+
   try {
-    const wv = new WebView();
-    // Optional: Set up shouldAllowRequest if needed to restrict navigation/resources
-
-    // Note: The static methods like WebView.loadHTML present immediately.
-    // We need an instance to load HTML and then evaluate JS.
+    // 1. Load the HTML content first
+    console.log("Loading HTML into WebView instance...");
     await wv.loadHTML(htmlContent);
+    console.log("HTML loaded.");
 
-    // *** Add this line to actually display the WebView ***
-    console.log(`Presenting WebView (fullscreen: ${fullscreen})...`);
-    await wv.present(fullscreen);
-    // *** End of added line ***
-
-    // Now that the WebView is visible, evaluate the JS that sets up the completion callback.
-    // Now that the WebView is visible, evaluate the JS that sets up the completion callback.
-    // Scriptable waits for the global completion() function to be called from the presented WebView.
-    const result = await wv.evaluateJavaScript(
+    // 2. Start evaluateJavaScript listener (waits for completion() call)
+    console.log("Setting up JavaScript listener (evaluateJavaScript)...");
+    const evaluatePromise = wv.evaluateJavaScript(
       `
-            // Define the global completion function that Scriptable awaits
-            // when useCallback is true.
-            // window.completion = (data) => { /* Scriptable handles this implicitly */ };
+            // Scriptable implicitly defines 'completion(result)' when useCallback is true.
+            // We just need to ensure our HTML's JS calls it.
 
             // Check if the initialization function exists in the HTML and call it
             if (typeof initializeForm === 'function') {
                 console.log("Calling initializeForm() from evaluateJavaScript.");
-                initializeForm();
+                initializeForm(); // Sets up the form's submit listener etc.
             } else {
                 console.error("initializeForm function not found in HTML script.");
-                // Optionally alert the user or handle this error
+                // If init fails, call completion with an error to unblock the script
+                if (typeof completion === 'function') {
+                   completion({ error: "Initialization function missing in HTML" });
+                } else {
+                   // Should not happen if useCallback is true, but log just in case
+                   console.error("CRITICAL: completion function not available during init check.");
+                }
             }
-
-            console.log("WebView loaded, completion function hook setup, form initialized (if function found).");
-
-            // No explicit promise return needed here. Scriptable handles it.
+            console.log("JavaScript listener setup complete. Waiting for user interaction or dismissal...");
+            // No explicit return value needed here; Scriptable waits for completion().
             `,
-      true // useCallback = true: Scriptable waits for global completion() to be called.
+      true // useCallback = true: Waits for completion()
     );
 
-    console.log("WebView form submitted or closed.");
-    // Note: If the user closes the WebView manually without the JS calling completion,
-    // Scriptable might throw an error or return undefined/null depending on version/context.
-    // Robust error handling might be needed here based on observed behavior.
-    // For now, assume completion() is called or it returns null/undefined on dismissal.
-    return result; // This is the data passed to completion() in the HTML's JS
+    // 3. Create a promise that handles presentation and manual dismissal
+    console.log(`Preparing to present WebView (fullscreen: ${fullscreen})...`);
+    const presentPromise = new Promise((resolve, reject) => {
+      // present() returns a promise that resolves when the view is dismissed.
+      wv.present(fullscreen)
+        .then(() => {
+          // This 'then' block executes *only* when the WebView is dismissed by the user
+          // or potentially by Scriptable closing it after completion().
+          // We use it to detect *manual* dismissal before completion() is called.
+          // If completion() was called, evaluatePromise would have already resolved.
+          console.log("WebView dismissal detected by present().then().");
+          // Reject this promise to signal manual dismissal in Promise.race
+          reject(new Error("WebView dismissed manually"));
+        })
+        .catch(reject); // Catch potential errors during presentation itself
+    });
+
+    // 4. Wait for the first promise to settle
+    console.log(
+      "Waiting for form submission (completion()) or manual dismissal..."
+    );
+    const result = await Promise.race([evaluatePromise, presentPromise]);
+
+    // If we get here, evaluatePromise resolved successfully before dismissal
+    console.log("Form submitted via completion(). Result:", result);
+    // It seems Scriptable automatically dismisses the WebView when completion() is called
+    // if it was presented via an instance's present() method.
+    return result;
   } catch (e) {
-    console.error(`WebView presentation/evaluation failed: ${e}`);
-    // Decide how to handle errors - rethrow, return null, show an alert?
-    // Returning null might be consistent with cancellation.
-    // Let's re-throw for now, as cancellation might be indistinguishable from errors otherwise.
-    // Or, check error message for specific cancellation types if possible.
-    // For simplicity, returning null on error.
-    return null;
+    // This catch block handles errors from loadHTML, evaluateJavaScript setup,
+    // presentation errors, or the rejection from presentPromise (manual dismissal).
+    if (e.message === "WebView dismissed manually") {
+      console.log("WebView was dismissed manually by the user.");
+      return null; // Return null specifically for manual dismissal
+    } else {
+      // Log other types of errors
+      console.error(`Error during WebView operation: ${e}`);
+      // Optionally show an alert for unexpected errors
+      // let alert = new Alert();
+      // alert.title = "WebView Error";
+      // alert.message = \`An unexpected error occurred: \${e.message}\`;
+      // await alert.present();
+      return null; // Return null for other errors as well for consistency
+    }
   }
 }
 
