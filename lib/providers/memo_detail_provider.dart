@@ -19,66 +19,41 @@ final memoCommentsCacheProvider = StateProvider<Map<String, List<Comment>>>((ref
 ///
 /// OPTIMIZATION: This provider checks the cache first before making an API call
 final memoDetailProvider = FutureProvider.family<Memo, String>((ref, id) async {
-  // Check the cache first
-  final cache = ref.read(memoDetailCacheProvider);
-  if (cache.containsKey(id)) {
-    if (kDebugMode) {
-      print('[memoDetailProvider] Cache hit for memo $id');
-    }
-    
-    // Check if the cached memo is fresh enough (less than 10 seconds old)
-    final now = DateTime.now().millisecondsSinceEpoch;
-    final memo = cache[id]!;
-    final updateTimeStr = memo.updateTime;
-
-    // If we have a recent update time, use the cached value
-    if (updateTimeStr != null) {
-      try {
-        final cacheTime = DateTime.parse(updateTimeStr).millisecondsSinceEpoch;
-        if (now - cacheTime < 10000) {
-          // 10 seconds
-          return memo;
-        }
-      } catch (e) {
-        // Parse error, fall through to refetch
-      }
-    }
-  }
-  
   if (kDebugMode) {
-    print('[memoDetailProvider] Cache miss for memo $id, fetching from API');
+    // Updated log message
+    print('[memoDetailProvider] Fetching memo $id from API');
   }
-  
+
   try {
     // Fetch from API
     final apiService = ref.read(apiServiceProvider);
     final memo = await apiService.getMemo(id);
-    
+
     if (kDebugMode) {
       print(
         '[memoDetailProvider] Successfully fetched memo $id with update time: ${memo.updateTime}',
       );
     }
-    
-    // Update the cache
+
+    // Update the cache (still useful for other potential reads or if populated by updateMemoProvider)
     ref.read(memoDetailCacheProvider.notifier).update((state) => {
       ...state,
       id: memo,
     });
-    
+
     return memo;
   } catch (e, stackTrace) {
     // Record the error
     final errorHandler = ref.read(errorHandlerProvider);
     final errorType = ref.read(categorizeErrorProvider)(e);
-    
+
     errorHandler(
       'Failed to load memo: ${e.toString()}',
       type: errorType,
       stackTrace: stackTrace,
       source: 'memoDetailProvider',
     );
-    
+
     rethrow;
   }
 }, name: 'memoDetail');
@@ -95,35 +70,35 @@ final memoCommentsProvider = FutureProvider.family<List<Comment>, String>((ref, 
     }
     return cache[memoId]!;
   }
-  
+
   if (kDebugMode) {
     print('[memoCommentsProvider] Cache miss for memo comments $memoId, fetching from API');
   }
-  
+
   try {
     // Fetch from API
     final apiService = ref.read(apiServiceProvider);
     final comments = await apiService.listMemoComments(memoId);
-    
+
     // Update the cache
     ref.read(memoCommentsCacheProvider.notifier).update((state) => {
       ...state,
       memoId: comments,
     });
-    
+
     return comments;
   } catch (e, stackTrace) {
     // Record the error
     final errorHandler = ref.read(errorHandlerProvider);
     final errorType = ref.read(categorizeErrorProvider)(e);
-    
+
     errorHandler(
       'Failed to load comments: ${e.toString()}',
       type: errorType,
       stackTrace: stackTrace,
       source: 'memoCommentsProvider',
     );
-    
+
     rethrow;
   }
 }, name: 'memoComments');
@@ -136,7 +111,7 @@ final addCommentProvider = Provider.family<Future<Comment> Function(Comment), St
     if (kDebugMode) {
       print('[addCommentProvider] Adding comment to memo $memoId');
     }
-    
+
     // Generate a temporary ID for optimistic updates
     final tempId = 'temp-${DateTime.now().millisecondsSinceEpoch}';
     final optimisticComment = Comment(
@@ -145,7 +120,7 @@ final addCommentProvider = Provider.family<Future<Comment> Function(Comment), St
       creatorId: comment.creatorId ?? '1',
       createTime: DateTime.now().millisecondsSinceEpoch,
     );
-    
+
     // Add to cache immediately (optimistic update)
     ref.read(memoCommentsCacheProvider.notifier).update((state) {
       final currentComments = state[memoId] ?? [];
@@ -154,12 +129,12 @@ final addCommentProvider = Provider.family<Future<Comment> Function(Comment), St
         memoId: [...currentComments, optimisticComment],
       };
     });
-    
+
     try {
       // Make the API call
       final apiService = ref.read(apiServiceProvider);
       final newComment = await apiService.createMemoComment(memoId, comment);
-      
+
       // Update the cache with the real comment
       ref.read(memoCommentsCacheProvider.notifier).update((state) {
         final currentComments = state[memoId] ?? [];
@@ -170,10 +145,10 @@ final addCommentProvider = Provider.family<Future<Comment> Function(Comment), St
           ).toList(),
         };
       });
-      
+
       // Invalidate the provider to refresh the UI
       ref.invalidate(memoCommentsProvider(memoId));
-      
+
       return newComment;
     } catch (e, stackTrace) {
       // Remove the optimistic comment on failure
@@ -184,18 +159,18 @@ final addCommentProvider = Provider.family<Future<Comment> Function(Comment), St
           memoId: currentComments.where((c) => c.id != tempId).toList(),
         };
       });
-      
+
       // Record the error
       final errorHandler = ref.read(errorHandlerProvider);
       final errorType = ref.read(categorizeErrorProvider)(e);
-      
+
       errorHandler(
         'Failed to add comment: ${e.toString()}',
         type: errorType,
         stackTrace: stackTrace,
         source: 'addCommentProvider',
       );
-      
+
       rethrow;
     }
   };
@@ -207,7 +182,7 @@ final clearMemoCachesProvider = Provider<void Function()>((ref) {
     if (kDebugMode) {
       print('[clearMemoCachesProvider] Clearing all memo caches');
     }
-    
+
     ref.read(memoDetailCacheProvider.notifier).state = {};
     ref.read(memoCommentsCacheProvider.notifier).state = {};
   };
