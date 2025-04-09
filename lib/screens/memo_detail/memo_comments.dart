@@ -26,7 +26,7 @@ class MemoComments extends ConsumerWidget {
                 .where((c) => !hiddenCommentIds.contains('$memoId/${c.id}'))
                 .toList();
 
-        // Sort comments to show pinned first, then oldest to newest for chronological reading
+        // Always sort comments to ensure proper order after pin/unpin operations
         CommentUtils.sortByPinnedThenOldestFirst(visibleComments);
 
         if (visibleComments.isEmpty) {
@@ -54,13 +54,14 @@ class MemoComments extends ConsumerWidget {
             final isSelected =
                 !isMultiSelectMode && index == selectedCommentIndex;
 
-            // Use the imported CommentCard
             return Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16.0),
               child: CommentCard(
                 comment: comment,
                 memoId: memoId,
                 isSelected: isSelected,
+                // Adding a key based on comment ID and pin status to force rebuild when pin status changes
+                key: ValueKey('${comment.id}_${comment.pinned}'),
               ),
             );
           },
@@ -88,5 +89,3 @@ class MemoComments extends ConsumerWidget {
     );
   }
 }
-
-// Remove the local CommentCard and _CommentCardState definitions previously added here.

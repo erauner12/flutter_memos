@@ -19,29 +19,29 @@ final hiddenCommentIdsProvider = StateProvider<Set<String>>((ref) => {});
 final archiveCommentProvider = Provider.family<Future<void> Function(), String>((ref, id) {
   return () async {
       final apiService = ref.read(api_p.apiServiceProvider);
-    
+  
     try {
         // Extract memoId from combined ID (format: "memoId/commentId")
         final parts = id.split('/');
         final String memoId = parts.isNotEmpty ? parts[0] : '';
-      
+    
       // Get the comment
       final comment = await apiService.getMemoComment(id);
-      
+    
       // Update the comment to archived state
       final updatedComment = comment.copyWith(
         pinned: false,
         state: CommentState.archived,
       );
-      
+    
       // Save the updated comment
       await apiService.updateMemoComment(id, updatedComment);
-      
+    
         // Refresh comments for this memo
       if (memoId.isNotEmpty) {
         ref.invalidate(memoCommentsProvider(memoId));
       }
-      
+    
       if (kDebugMode) {
         print('[archiveCommentProvider] Comment archived: $id');
       }
@@ -58,21 +58,21 @@ final archiveCommentProvider = Provider.family<Future<void> Function(), String>(
 final deleteCommentProvider = Provider.family<Future<void> Function(), String>((ref, id) {
   return () async {
     final apiService = ref.read(api_p.apiServiceProvider);
-    
+  
     try {
       // Extract parts from the combined ID (format: "memoId/commentId")
       final parts = id.split('/');
       final memoId = parts.isNotEmpty ? parts.first : '';
       final commentId = parts.length > 1 ? parts.last : id;
-      
+    
       // Delete the comment
       await apiService.deleteMemoComment(memoId, commentId);
-      
+    
       // Refresh comments for this memo
       if (memoId.isNotEmpty) {
         ref.invalidate(memoCommentsProvider(memoId));
       }
-      
+    
       if (kDebugMode) {
         print('[deleteCommentProvider] Comment deleted: $id');
       }
@@ -88,12 +88,12 @@ final deleteCommentProvider = Provider.family<Future<void> Function(), String>((
 /// Provider for toggling the pin state of a comment
 final togglePinCommentProvider = Provider.family<Future<void> Function(), String>((ref, id) {
   return () async {
-        final apiService = ref.read(api_p.apiServiceProvider);
+    final apiService = ref.read(api_p.apiServiceProvider);
 
     try {
-          // Extract memoId from combined ID (format: "memoId/commentId")
-          final parts = id.split('/');
-          final String memoId = parts.isNotEmpty ? parts[0] : '';
+      // Extract memoId from combined ID (format: "memoId/commentId")
+      final parts = id.split('/');
+      final String memoId = parts.isNotEmpty ? parts[0] : '';
       
       // Get the comment
       final comment = await apiService.getMemoComment(id);
@@ -104,9 +104,14 @@ final togglePinCommentProvider = Provider.family<Future<void> Function(), String
       // Update through API
       await apiService.updateMemoComment(id, updatedComment);
       
-          // Refresh comments for this memo
+      // Invalidate the comments list to ensure UI refreshes
       if (memoId.isNotEmpty) {
+        // Invalidate comments list - this will trigger a rebuild with the updated sort order
         ref.invalidate(memoCommentsProvider(memoId));
+        
+        // We don't need to invalidate the memo detail provider directly
+        // The line below was causing an error since apiServiceProvider doesn't have a notifier property
+        // ref.invalidate(ref.read(api_p.apiServiceProvider.notifier).memoDetailProvider(memoId));
       }
       
       if (kDebugMode) {
@@ -228,7 +233,6 @@ final toggleHideCommentProvider = Provider.family<void Function(), String>((ref,
 });
 
 /// Provider for creating a comment for a memo, potentially with an attachment
-/// Provider for creating a comment for a memo, potentially with an attachment
 final createCommentProvider = Provider.family<
   Future<Comment> Function(
     Comment comment, {
@@ -318,7 +322,7 @@ final createCommentProvider = Provider.family<
       // Add stackTrace
       if (kDebugMode) {
         print(
-          '[createCommentProvider] Error creating comment for memo $memoId: $e\n$stackTrace', // Log stacktrace
+          '[createCommentProvider] Error creating comment for memo $memoId: $e\n$stackTrace',
         );
       }
       rethrow; // Rethrow the error to be handled by the caller UI
