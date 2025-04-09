@@ -194,8 +194,8 @@ function generateConfigFormHtml(existingUrl) {
  * @param {boolean} [showAiOption=false] - Whether to show the AI processing checkbox.
  * @returns {string} HTML content for the input form.
  */
-function generateInputFormHtml(prefillText = '', showAiOption = false) {
-    const css = `
+function generateInputFormHtml(prefillText = "", showAiOption = false) {
+  const css = `
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 15px; display: flex; flex-direction: column; height: 95vh; background-color: #f8f8f8; color: #333; }
         textarea { flex-grow: 1; width: 95%; padding: 10px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 8px; font-size: 16px; resize: none; }
         button { padding: 12px 20px; background-color: #007aff; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; width: 100%; margin-top: auto; }
@@ -208,16 +208,19 @@ function generateInputFormHtml(prefillText = '', showAiOption = false) {
         form { display: flex; flex-direction: column; flex-grow: 1; }
     `;
 
-    const escapedPrefill = escapeHtml(prefillText);
-    const clipboardNotice = prefillText ? '<div class="clipboard-notice">Text pre-filled from clipboard.</div>' : '';
-    const aiCheckboxHtml = showAiOption ? `
+  const clipboardNotice = prefillText
+    ? '<div class="clipboard-notice">Text pre-filled from clipboard.</div>'
+    : "";
+  const aiCheckboxHtml = showAiOption
+    ? `
         <div class="options">
             <input type="checkbox" id="useAi" name="useAi">
             <label for="useAi">Process with AI (Fix Grammar & Summarize)</label>
         </div>
-    ` : '';
+    `
+    : "";
 
-    return `
+  return `
     <!DOCTYPE html>
     <html>
     <head>
@@ -229,7 +232,7 @@ function generateInputFormHtml(prefillText = '', showAiOption = false) {
         <h2>Enter Memo Content</h2>
         ${clipboardNotice}
         <form id="inputForm">
-            <textarea id="memoContent" name="memoContent" placeholder="Type or paste your memo content here... (Use keyboard dictation if needed)" required>${escapedPrefill}</textarea>
+            <textarea id="memoContent" name="memoContent" placeholder="Type or paste your memo content here... (Use keyboard dictation if needed)" required>${prefillText}</textarea>
             ${aiCheckboxHtml}
             <button type="submit">Add Memo</button>
         </form>
@@ -268,7 +271,6 @@ function generateInputFormHtml(prefillText = '', showAiOption = false) {
     `;
 }
 
-
 /**
  * Generates HTML to confirm using AI-processed text.
  * @param {string} originalText - The original input text.
@@ -276,7 +278,7 @@ function generateInputFormHtml(prefillText = '', showAiOption = false) {
  * @returns {string} HTML content for the AI confirmation view.
  */
 function generateAiConfirmHtml(originalText, processedText) {
-    const css = `
+  const css = `
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 15px; background-color: #f8f8f8; color: #333; }
         .text-container { border: 1px solid #ccc; border-radius: 8px; padding: 10px; margin-bottom: 15px; background-color: white; max-height: 200px; overflow-y: auto; white-space: pre-wrap; font-size: 14px; }
         button { padding: 12px 15px; background-color: #007aff; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; margin-right: 10px; margin-top: 10px; }
@@ -288,10 +290,10 @@ function generateAiConfirmHtml(originalText, processedText) {
         .button-group { margin-top: 15px; }
     `;
 
-    const escapedProcessed = escapeHtml(processedText);
-    const escapedOriginal = escapeHtml(originalText);
+  const escapedProcessed = escapeHtml(processedText);
+  const escapedOriginal = escapeHtml(originalText);
 
-    return `
+  return `
     <!DOCTYPE html>
     <html>
     <head>
@@ -332,7 +334,6 @@ function generateAiConfirmHtml(originalText, processedText) {
     `;
 }
 
-
 /**
  * Retrieves Memos configuration (URL, Token, OpenAI Key) from Keychain.
  * Prompts the user using a WebView form if configuration is missing.
@@ -340,59 +341,71 @@ function generateAiConfirmHtml(originalText, processedText) {
  * @throws {Error} If configuration cannot be obtained and user cancels/fails prompt.
  */
 async function getConfig() {
-    console.log("Attempting to retrieve configuration from Keychain...");
-    let url = Keychain.contains(KEYCHAIN_URL_KEY) ? Keychain.get(KEYCHAIN_URL_KEY) : null;
-    let token = Keychain.contains(KEYCHAIN_TOKEN_KEY) ? Keychain.get(KEYCHAIN_TOKEN_KEY) : null;
-    let openaiApiKey = Keychain.contains(KEYCHAIN_OPENAI_KEY) ? Keychain.get(KEYCHAIN_OPENAI_KEY) : null;
+  console.log("Attempting to retrieve configuration from Keychain...");
+  let url = Keychain.contains(KEYCHAIN_URL_KEY)
+    ? Keychain.get(KEYCHAIN_URL_KEY)
+    : null;
+  let token = Keychain.contains(KEYCHAIN_TOKEN_KEY)
+    ? Keychain.get(KEYCHAIN_TOKEN_KEY)
+    : null;
+  let openaiApiKey = Keychain.contains(KEYCHAIN_OPENAI_KEY)
+    ? Keychain.get(KEYCHAIN_OPENAI_KEY)
+    : null;
 
-    // Basic validation for stored URL before proceeding
-    if (url && !url.toLowerCase().startsWith("http")) {
-         console.warn(`Invalid URL format stored: ${url}. Clearing and prompting.`);
-         Keychain.remove(KEYCHAIN_URL_KEY);
-         url = null;
+  // Basic validation for stored URL before proceeding
+  if (url && !url.toLowerCase().startsWith("http")) {
+    console.warn(`Invalid URL format stored: ${url}. Clearing and prompting.`);
+    Keychain.remove(KEYCHAIN_URL_KEY);
+    url = null;
+  }
+  // Clean up potentially empty stored OpenAI key
+  if (openaiApiKey !== null && openaiApiKey.trim() === "") {
+    openaiApiKey = null;
+    if (Keychain.contains(KEYCHAIN_OPENAI_KEY)) {
+      Keychain.remove(KEYCHAIN_OPENAI_KEY);
     }
-    // Clean up potentially empty stored OpenAI key
-    if (openaiApiKey !== null && openaiApiKey.trim() === "") {
-        openaiApiKey = null;
-        if (Keychain.contains(KEYCHAIN_OPENAI_KEY)) {
-             Keychain.remove(KEYCHAIN_OPENAI_KEY);
-        }
+  }
+
+  // Prompt if Memos URL or Token is missing.
+  if (!url || !token) {
+    console.log(
+      "Memos configuration missing or incomplete. Prompting user via WebView."
+    );
+    const configHtml = generateConfigFormHtml(url);
+    const formData = await presentWebViewForm(configHtml, false);
+
+    if (!formData || !formData.url || !formData.token) {
+      console.log(
+        "Configuration prompt cancelled or failed (WebView returned null or incomplete data)."
+      );
+      throw new Error(
+        "Configuration cancelled or failed. Memos URL and Token are required."
+      );
     }
 
-    // Prompt if Memos URL or Token is missing.
-    if (!url || !token) {
-        console.log("Memos configuration missing or incomplete. Prompting user via WebView.");
-        const configHtml = generateConfigFormHtml(url);
-        const formData = await presentWebViewForm(configHtml, false);
+    url = formData.url;
+    token = formData.token;
+    openaiApiKey = formData.openaiApiKey;
 
-        if (!formData || !formData.url || !formData.token) {
-            console.log("Configuration prompt cancelled or failed (WebView returned null or incomplete data).");
-            throw new Error("Configuration cancelled or failed. Memos URL and Token are required.");
-        }
+    console.log("Saving configuration to Keychain...");
+    Keychain.set(KEYCHAIN_URL_KEY, url);
+    Keychain.set(KEYCHAIN_TOKEN_KEY, token);
 
-        url = formData.url;
-        token = formData.token;
-        openaiApiKey = formData.openaiApiKey;
-
-        console.log("Saving configuration to Keychain...");
-        Keychain.set(KEYCHAIN_URL_KEY, url);
-        Keychain.set(KEYCHAIN_TOKEN_KEY, token);
-
-        if (openaiApiKey) {
-            console.log("Saving OpenAI API Key.");
-            Keychain.set(KEYCHAIN_OPENAI_KEY, openaiApiKey);
-        } else {
-            console.log("No OpenAI API Key provided, removing any existing key.");
-            if (Keychain.contains(KEYCHAIN_OPENAI_KEY)) {
-                Keychain.remove(KEYCHAIN_OPENAI_KEY);
-            }
-        }
-        console.log("Configuration saved.");
+    if (openaiApiKey) {
+      console.log("Saving OpenAI API Key.");
+      Keychain.set(KEYCHAIN_OPENAI_KEY, openaiApiKey);
     } else {
-        console.log("Configuration retrieved successfully from Keychain.");
+      console.log("No OpenAI API Key provided, removing any existing key.");
+      if (Keychain.contains(KEYCHAIN_OPENAI_KEY)) {
+        Keychain.remove(KEYCHAIN_OPENAI_KEY);
+      }
     }
+    console.log("Configuration saved.");
+  } else {
+    console.log("Configuration retrieved successfully from Keychain.");
+  }
 
-    return { url, token, openaiApiKey };
+  return { url, token, openaiApiKey };
 }
 
 // REMOVED the old promptForConfig function
@@ -466,60 +479,60 @@ async function getInputText(allowAiOption = false) {
  * @throws {Error} If the API request fails or returns a non-2xx status code.
  */
 async function makeApiRequest(url, method, token, body = null) {
-    console.log(`Making API request: ${method} ${url}`);
-    const req = new Request(url);
-    req.method = method;
-    req.headers = {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    };
-    req.timeoutInterval = 30; // 30 seconds timeout
-    req.allowInsecureRequest = false; // Enforce HTTPS unless explicitly http://
+  console.log(`Making API request: ${method} ${url}`);
+  const req = new Request(url);
+  req.method = method;
+  req.headers = {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${token}`,
+  };
+  req.timeoutInterval = 30; // 30 seconds timeout
+  req.allowInsecureRequest = false; // Enforce HTTPS unless explicitly http://
 
-    if (body) {
-      req.body = JSON.stringify(body);
-      console.log(`Request body: ${req.body}`);
+  if (body) {
+    req.body = JSON.stringify(body);
+    console.log(`Request body: ${req.body}`);
+  }
+
+  try {
+    // Use loadJSON for GET, loadString for POST/PATCH/DELETE to handle potential non-JSON success responses
+    let responseData;
+    let statusCode;
+    let responseText = "";
+
+    if (method.toUpperCase() === "GET") {
+      responseData = await req.loadJSON();
+      statusCode = req.response.statusCode;
+    } else {
+      // For POST/etc., load as string first to check for empty responses on success
+      responseText = await req.loadString();
+      statusCode = req.response.statusCode;
+      // Try to parse as JSON if responseText is not empty
+      responseData = responseText ? JSON.parse(responseText) : {};
     }
 
-    try {
-      // Use loadJSON for GET, loadString for POST/PATCH/DELETE to handle potential non-JSON success responses
-      let responseData;
-      let statusCode;
-      let responseText = "";
-
-      if (method.toUpperCase() === "GET") {
-        responseData = await req.loadJSON();
-        statusCode = req.response.statusCode;
-      } else {
-        // For POST/etc., load as string first to check for empty responses on success
-        responseText = await req.loadString();
-        statusCode = req.response.statusCode;
-        // Try to parse as JSON if responseText is not empty
-        responseData = responseText ? JSON.parse(responseText) : {};
-      }
-
-      console.log(`API Response Status Code: ${statusCode}`);
-      if (statusCode < 200 || statusCode >= 300) {
-        console.error(`API Error Response Text: ${responseText}`);
-        throw new Error(
-          `API Error ${statusCode}: ${responseText || "Unknown error"}`
-        );
-      }
-
-      console.log("API request successful.");
-      // console.log(`API Response Data: ${JSON.stringify(responseData)}`); // Potentially verbose
-      return responseData;
-    } catch (e) {
-      console.error(`API Request Failed: ${method} ${url} - ${e}`);
-      // Check if the error is from JSON parsing or the request itself
-      if (e instanceof SyntaxError) {
-        throw new Error(
-          `API Error: Failed to parse JSON response. Status: ${req.response?.statusCode}. Response: ${responseText}`
-        );
-      } else {
-        throw e; // Re-throw original network or status code error
-      }
+    console.log(`API Response Status Code: ${statusCode}`);
+    if (statusCode < 200 || statusCode >= 300) {
+      console.error(`API Error Response Text: ${responseText}`);
+      throw new Error(
+        `API Error ${statusCode}: ${responseText || "Unknown error"}`
+      );
     }
+
+    console.log("API request successful.");
+    // console.log(`API Response Data: ${JSON.stringify(responseData)}`); // Potentially verbose
+    return responseData;
+  } catch (e) {
+    console.error(`API Request Failed: ${method} ${url} - ${e}`);
+    // Check if the error is from JSON parsing or the request itself
+    if (e instanceof SyntaxError) {
+      throw new Error(
+        `API Error: Failed to parse JSON response. Status: ${req.response?.statusCode}. Response: ${responseText}`
+      );
+    } else {
+      throw e; // Re-throw original network or status code error
+    }
+  }
 }
 
 /**
@@ -547,73 +560,73 @@ async function createMemo(config, title) {
  * @throws {Error} If the API request fails or returns an error.
  */
 async function processTextWithOpenAI(apiKey, text) {
-    console.log("Processing text with OpenAI...");
-    const endpoint = "https://api.openai.com/v1/completions";
-    // Simple prompt combining correction and summarization request
-    const prompt = `Correct the grammar and spelling of the following text, then provide a concise summary (max 3 sentences):\n\n"${text}"\n\nCorrected and Summarized Text:`;
-    const model = "gpt-3.5-turbo-instruct"; // Or another suitable completions model like 'text-davinci-003' if available/preferred
+  console.log("Processing text with OpenAI...");
+  const endpoint = "https://api.openai.com/v1/completions";
+  // Simple prompt combining correction and summarization request
+  const prompt = `Correct the grammar and spelling of the following text, then provide a concise summary (max 3 sentences):\n\n"${text}"\n\nCorrected and Summarized Text:`;
+  const model = "gpt-3.5-turbo-instruct"; // Or another suitable completions model like 'text-davinci-003' if available/preferred
 
-    const request = new Request(endpoint);
-    request.method = "POST";
-    request.headers = {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    };
-    request.body = JSON.stringify({
-      model: model,
-      prompt: prompt,
-      // Estimate tokens needed: prompt length + text length + buffer for summary/correction + model overhead
-      max_tokens: Math.max(150, Math.ceil(text.length * 1.2 + 100)), // Generous buffer
-      temperature: 0.5, // Balance creativity and determinism
-      n: 1, // We only need one completion
-      stop: null, // Let the model decide when to stop
-    });
-    request.timeoutInterval = 60; // Increase timeout for potentially longer AI processing
-    request.allowInsecureRequest = false; // Ensure HTTPS
+  const request = new Request(endpoint);
+  request.method = "POST";
+  request.headers = {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${apiKey}`,
+  };
+  request.body = JSON.stringify({
+    model: model,
+    prompt: prompt,
+    // Estimate tokens needed: prompt length + text length + buffer for summary/correction + model overhead
+    max_tokens: Math.max(150, Math.ceil(text.length * 1.2 + 100)), // Generous buffer
+    temperature: 0.5, // Balance creativity and determinism
+    n: 1, // We only need one completion
+    stop: null, // Let the model decide when to stop
+  });
+  request.timeoutInterval = 60; // Increase timeout for potentially longer AI processing
+  request.allowInsecureRequest = false; // Ensure HTTPS
 
-    try {
-      console.log(`Sending request to OpenAI (${model})...`);
-      // Use loadJSON which handles JSON parsing and throws on non-2xx status codes
-      const responseJson = await request.loadJSON();
+  try {
+    console.log(`Sending request to OpenAI (${model})...`);
+    // Use loadJSON which handles JSON parsing and throws on non-2xx status codes
+    const responseJson = await request.loadJSON();
 
-      // loadJSON already checks for non-2xx status, but we double-check response structure
-      if (!responseJson || responseJson.error) {
-        const errorMessage =
-          responseJson?.error?.message || "Unknown OpenAI API error structure";
-        console.error(
-          "OpenAI API Error in response:",
-          responseJson?.error || responseJson
-        );
-        throw new Error(`OpenAI API Error: ${errorMessage}`);
-      }
-
-      if (
-        !responseJson.choices ||
-        responseJson.choices.length === 0 ||
-        !responseJson.choices[0].text
-      ) {
-        console.error(
-          "OpenAI response missing expected choices or text:",
-          responseJson
-        );
-        throw new Error("OpenAI response did not contain the expected text.");
-      }
-
-      const processedText = responseJson.choices[0].text.trim();
-      console.log(
-        "OpenAI processing successful. Result length:",
-        processedText.length
+    // loadJSON already checks for non-2xx status, but we double-check response structure
+    if (!responseJson || responseJson.error) {
+      const errorMessage =
+        responseJson?.error?.message || "Unknown OpenAI API error structure";
+      console.error(
+        "OpenAI API Error in response:",
+        responseJson?.error || responseJson
       );
-      return processedText;
-    } catch (e) {
-      console.error(`OpenAI Request Failed: ${e}`);
-      let detailedMessage =
-        e.message || "An unknown error occurred during the OpenAI request.";
-      if (request.response && request.response.statusCode) {
-        detailedMessage += ` (Status Code: ${request.response.statusCode})`;
-      }
-      throw new Error(`OpenAI Processing Failed: ${detailedMessage}`);
+      throw new Error(`OpenAI API Error: ${errorMessage}`);
     }
+
+    if (
+      !responseJson.choices ||
+      responseJson.choices.length === 0 ||
+      !responseJson.choices[0].text
+    ) {
+      console.error(
+        "OpenAI response missing expected choices or text:",
+        responseJson
+      );
+      throw new Error("OpenAI response did not contain the expected text.");
+    }
+
+    const processedText = responseJson.choices[0].text.trim();
+    console.log(
+      "OpenAI processing successful. Result length:",
+      processedText.length
+    );
+    return processedText;
+  } catch (e) {
+    console.error(`OpenAI Request Failed: ${e}`);
+    let detailedMessage =
+      e.message || "An unknown error occurred during the OpenAI request.";
+    if (request.response && request.response.statusCode) {
+      detailedMessage += ` (Status Code: ${request.response.statusCode})`;
+    }
+    throw new Error(`OpenAI Processing Failed: ${detailedMessage}`);
+  }
 }
 
 /**
