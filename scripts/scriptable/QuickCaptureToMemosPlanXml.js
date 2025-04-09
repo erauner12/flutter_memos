@@ -17,11 +17,11 @@ const KEYCHAIN_OPENAI_KEY = "openai_api_key"; // Used for OpenAI
 function escapeHtml(unsafe) {
   if (typeof unsafe !== "string") return "";
   return unsafe
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
+    .replace(/&/g, "&")
+    .replace(/</g, "<")
+    .replace(/>/g, ">")
+    .replace(/"/g, """)
+    .replace(/'/g, "'");
 }
 
 /**
@@ -51,17 +51,29 @@ async function presentWebViewForm(htmlContent, fullscreen = false) {
 
       // JavaScript to initialize the form (if not already done) and listen
       const listenerScript = `
+        // Ensure form initialization happens only once
         if (typeof initializeForm === 'function' && !window.formInitialized) {
             console.log("Calling initializeForm() from listenerScript.");
-            initializeForm();
-            window.formInitialized = true; // Prevent re-initialization
-        } else if (!window.formInitialized) {
+            try {
+                initializeForm();
+                window.formInitialized = true; // Mark as initialized
+            } catch (initErr) {
+                 console.error("Error executing initializeForm():", initErr);
+                 if (typeof completion === 'function') {
+                    completion({ error: "Form initialization script failed", details: initErr.message });
+                 } else {
+                    console.error("CRITICAL: completion function not available during init error.");
+                 }
+            }
+        } else if (!window.formInitialized && typeof initializeForm !== 'function') {
              console.error("initializeForm function not found in HTML script.");
              if (typeof completion === 'function') {
                 completion({ error: "Initialization function missing in HTML" });
              } else {
                 console.error("CRITICAL: completion function not available during init check.");
              }
+             // Mark as initialized even if missing to prevent repeated errors
+             window.formInitialized = true;
         }
         // Scriptable waits for completion() call via useCallback: true
         console.log("Listener active. Waiting for completion() call (paste, dictate, submit, or error)...");
@@ -85,8 +97,7 @@ async function presentWebViewForm(htmlContent, fullscreen = false) {
         } else {
           // If already presented, this promise essentially waits indefinitely.
           // We rely on evaluatePromise resolving or an error occurring.
-          // Resolve with a promise that never settles on its own.
-          resolve(new Promise(() => {}));
+          resolve(new Promise(() => {})); // A promise that never resolves on its own
         }
       });
 
@@ -95,16 +106,16 @@ async function presentWebViewForm(htmlContent, fullscreen = false) {
         console.log(
           "WebView Loop: Waiting for Promise.race (action/submit vs dismissal)..."
         );
+        // Wait for either the JS completion() call or the user dismissing the view
         result = await Promise.race([evaluatePromise, presentPromise]);
         console.log("WebView Loop: Promise.race resolved with:", result);
       } catch (e) {
-        // This catches dismissal from presentPromise rejection (primarily on first presentation)
+        // This catches dismissal from presentPromise rejection
         if (e.message === "WebView dismissed manually") {
           console.log("WebView Loop: Caught manual dismissal. Exiting loop.");
           return null; // User dismissed the form
         } else {
           console.error(`WebView Loop: Error during Promise.race: ${e}`);
-          // No wv.dismiss() to call here
           throw e; // Re-throw other errors
         }
       }
@@ -122,7 +133,6 @@ async function presentWebViewForm(htmlContent, fullscreen = false) {
           result.details || ""
         }`;
         await errorAlert.presentAlert();
-        // No wv.dismiss() to call here
         return null; // Exit on JS error
       } else if (result && result.action) {
         switch (result.action) {
@@ -131,7 +141,7 @@ async function presentWebViewForm(htmlContent, fullscreen = false) {
               "WebView Loop: Received 'submit' action. Returning data:",
               result.data
             );
-            // Scriptable should auto-dismiss on completion. No wv.dismiss() needed.
+            // Scriptable should auto-dismiss on completion.
             return result.data; // Final submission data
 
           case "paste":
@@ -144,7 +154,7 @@ async function presentWebViewForm(htmlContent, fullscreen = false) {
             try {
               await wv.evaluateJavaScript(
                 `updateTextArea(${JSON.stringify(clipboardText)})`,
-                false
+                false // Don't wait for completion here
               );
               console.log(
                 "WebView Loop: Sent clipboard text back to JS. Continuing loop."
@@ -154,7 +164,7 @@ async function presentWebViewForm(htmlContent, fullscreen = false) {
                 "WebView Loop: Error sending paste data back to JS:",
                 evalError
               );
-              // Handle error - maybe alert user?
+              // Optionally alert the user here
             }
             // Continue loop to wait for next action/submit
             break; // Go to next iteration of the while loop
@@ -176,7 +186,7 @@ async function presentWebViewForm(htmlContent, fullscreen = false) {
               if (dictatedText) {
                 await wv.evaluateJavaScript(
                   `updateTextArea(${JSON.stringify(dictatedText)})`,
-                  false
+                  false // Don't wait for completion here
                 );
                 console.log(
                   "WebView Loop: Sent dictated text back to JS. Continuing loop."
@@ -188,7 +198,7 @@ async function presentWebViewForm(htmlContent, fullscreen = false) {
               console.error(
                 `WebView Loop: Dictation failed: ${dictationError}`
               );
-              // Show alert within the still-present WebView
+              // Show alert within the still-present WebView if possible
               try {
                 await wv.evaluateJavaScript(
                   `alert('Dictation failed: ${escapeHtml(
@@ -229,7 +239,13 @@ async function presentWebViewForm(htmlContent, fullscreen = false) {
     } // End while loop
   } catch (e) {
     console.error(`Error during interactive WebView operation: ${e}`);
-    // No wv.dismiss() to call here
+    // Ensure WebView is dismissed if an error occurs before returning
+    // Note: Scriptable often handles dismissal on script completion/error,
+    // but explicit dismissal might be needed in some complex error scenarios.
+    // However, calling dismiss() on an unpresented WV throws error. Check isPresented.
+    // if (wv.isPresented) {
+    //   await wv.dismiss(); // Consider if needed, might be redundant
+    // }
     return null; // Return null on error
   }
 }
@@ -237,9 +253,11 @@ async function presentWebViewForm(htmlContent, fullscreen = false) {
 /**
  * Generates HTML for the Memos configuration form.
  * @param {string|null} existingUrl - Pre-fill URL if available.
+ * @param {string|null} existingToken - Pre-fill Token if available (masked).
+ * @param {string|null} existingOpenAIKey - Pre-fill OpenAI Key if available (masked).
  * @returns {string} HTML content for the configuration form.
  */
-function generateConfigFormHtml(existingUrl) {
+function generateConfigFormHtml(existingUrl, existingToken, existingOpenAIKey) {
   // Basic CSS for better appearance
   const css = `
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 15px; background-color: #f8f8f8; color: #333; }
@@ -250,10 +268,14 @@ function generateConfigFormHtml(existingUrl) {
         .error { color: red; font-size: 0.9em; margin-top: -10px; margin-bottom: 10px; }
         h2 { margin-top: 0; color: #111; }
         p { color: #555; }
+        .info { font-size: 0.9em; color: #666; margin-bottom: 15px; }
     `;
 
-  // Pre-fill URL if provided
+  // Pre-fill values if provided
   const urlValue = existingUrl ? `value="${escapeHtml(existingUrl)}"` : "";
+  // Don't pre-fill passwords directly for security, maybe show placeholder if exists
+  const tokenPlaceholder = existingToken ? `placeholder="Exists (Enter new to change)"` : `placeholder="Enter Memos Token"`;
+  const openaiKeyPlaceholder = existingOpenAIKey ? `placeholder="Exists (Enter new to change)"` : `placeholder="Enter OpenAI Key (Optional)"`;
 
   return `
     <!DOCTYPE html>
@@ -266,23 +288,23 @@ function generateConfigFormHtml(existingUrl) {
     <body>
         <h2>Memos Configuration</h2>
         <p>Enter your Memos instance URL, Access Token (OpenAPI), and optionally your OpenAI API Key.</p>
+        <div class="info">Existing tokens/keys are not shown. Enter a new value only if you need to change it. Leave blank to keep the existing value (if any).</div>
         <form id="configForm">
             <label for="memosUrl">Memos URL:</label>
             <input type="text" id="memosUrl" name="memosUrl" ${urlValue} required placeholder="https://your-memos.com">
             <div id="urlError" class="error" style="display: none;"></div>
 
             <label for="accessToken">Access Token:</label>
-            <input type="password" id="accessToken" name="accessToken" required placeholder="Enter Memos Token">
+            <input type="password" id="accessToken" name="accessToken" ${tokenPlaceholder} >
             <div id="tokenError" class="error" style="display: none;"></div>
 
             <label for="openaiKey">OpenAI API Key (Optional):</label>
-            <input type="password" id="openaiKey" name="openaiKey" placeholder="Enter OpenAI Key (Optional)">
+            <input type="password" id="openaiKey" name="openaiKey" ${openaiKeyPlaceholder}>
 
             <button type="submit">Save Configuration</button>
         </form>
 
         <script>
-        // Wrap setup logic in a function
         function initializeForm() {
             try {
                 const form = document.getElementById('configForm');
@@ -306,9 +328,11 @@ function generateConfigFormHtml(existingUrl) {
                     let isValid = true;
 
                     const url = urlInput.value.trim();
-                    const token = tokenInput.value.trim();
-                    const openaiApiKey = openaiInput.value.trim();
+                    // Get potentially new values, will be empty strings if user didn't type anything
+                    const newToken = tokenInput.value.trim();
+                    const newOpenaiApiKey = openaiInput.value.trim();
 
+                    // URL validation
                     if (!url) {
                         urlError.textContent = 'Memos URL is required.';
                         urlError.style.display = 'block';
@@ -319,22 +343,22 @@ function generateConfigFormHtml(existingUrl) {
                         isValid = false;
                     }
 
-                    if (!token) {
-                        tokenError.textContent = 'Access Token is required.';
-                        tokenError.style.display = 'block';
-                        isValid = false;
-                    }
+                    // Token validation: Only require if *no* token exists yet OR if user entered a new one.
+                    // This logic needs the existing token status, which isn't easily available here.
+                    // Simplification: We'll handle saving logic in the main script. Just pass values back.
+                    // We *do* need to ensure *some* token will exist after this save.
+                    // Let's pass back whether the fields were touched.
 
                     if (isValid) {
-                        // Call the completion function provided by Scriptable's evaluateJavaScript
                         if (typeof completion === 'function') {
-                            // Use 'submit' action for consistency
                             completion({
                                 action: 'submit',
                                 data: {
                                     url: url,
-                                    token: token,
-                                    openaiApiKey: openaiApiKey || null // Return null if empty
+                                    // Pass back the *new* values entered by the user.
+                                    // The calling function will decide whether to update Keychain.
+                                    token: newToken || null, // Send null if empty string
+                                    openaiApiKey: newOpenaiApiKey || null // Send null if empty string
                                 }
                             });
                         } else {
@@ -350,16 +374,16 @@ function generateConfigFormHtml(existingUrl) {
                 if (typeof completion === 'function') completion({ error: "Initialization crashed", details: initError.message });
             }
         }
-         // Do NOT call initializeForm() here directly. Called by presentWebViewForm.
-    </script>
-</body>
-</html>
-`;
+        // Do NOT call initializeForm() here directly. Called by presentWebViewForm.
+        </script>
+    </body>
+    </html>
+    `;
 }
 
 /**
- * Generates HTML for the main text input form, including Paste and Dictate buttons.
- * @param {string} [prefillText=''] - Text to pre-fill the textarea (e.g., from Share Sheet).
+ * Generates HTML for the main text input form.
+ * @param {string} [prefillText=''] - Text to pre-fill the textarea.
  * @param {boolean} [showAiOption=false] - Whether to show the AI processing checkbox.
  * @returns {string} HTML content for the input form.
  */
@@ -383,6 +407,7 @@ function generateInputFormHtml(prefillText = "", showAiOption = false) {
   const shareSheetNotice = prefillText
     ? '<div class="clipboard-notice">Text pre-filled from Share Sheet.</div>'
     : "";
+  // Only include the checkbox HTML if showAiOption is true
   const aiCheckboxHtml = showAiOption
     ? `
         <div class="options">
@@ -390,9 +415,8 @@ function generateInputFormHtml(prefillText = "", showAiOption = false) {
             <label for="useAi">Process with AI (Generate Plan)</label>
         </div>
     `
-    : "";
+    : ""; // Otherwise, include nothing
 
-  // Escape prefillText for safe insertion into textarea
   const escapedPrefillText = escapeHtml(prefillText);
 
   return `
@@ -414,7 +438,8 @@ function generateInputFormHtml(prefillText = "", showAiOption = false) {
                 <button type="button" id="dictateButton">Start Dictation</button>
             </div>
 
-            ${aiCheckboxHtml}
+            ${aiCheckboxHtml} {/* This will be empty if showAiOption is false */}
+
             <button type="submit">Add Memo</button>
         </form>
 
@@ -422,8 +447,7 @@ function generateInputFormHtml(prefillText = "", showAiOption = false) {
             // Function called by Scriptable to update the text area
             function updateTextArea(text) {
                 const contentInput = document.getElementById('memoContent');
-                if (contentInput && text != null) { // Check if text is not null/undefined
-                    // Append text with a space if there's existing content
+                if (contentInput && text != null) {
                     const currentText = contentInput.value;
                     contentInput.value = currentText ? currentText + " " + text : text;
                     contentInput.focus(); // Keep focus
@@ -438,10 +462,12 @@ function generateInputFormHtml(prefillText = "", showAiOption = false) {
                 try {
                     const form = document.getElementById('inputForm');
                     const contentInput = document.getElementById('memoContent');
-                    const useAiCheckbox = document.getElementById('useAi'); // Might be null
+                    // IMPORTANT: useAiCheckbox might NOT exist if showAiOption was false
+                    const useAiCheckbox = document.getElementById('useAi');
                     const pasteButton = document.getElementById('pasteButton');
                     const dictateButton = document.getElementById('dictateButton');
 
+                    // Check only required elements
                     if (!form || !contentInput || !pasteButton || !dictateButton) {
                         console.error("Required form elements not found during initialization.");
                         alert("Error initializing form elements.");
@@ -449,20 +475,20 @@ function generateInputFormHtml(prefillText = "", showAiOption = false) {
                         return;
                     }
 
-                    // Submit Handler (Final action)
+                    // Submit Handler
                     form.addEventListener('submit', (event) => {
                         event.preventDefault();
                         const content = contentInput.value.trim();
+                        // Default to false if checkbox doesn't exist
                         const processWithAi = useAiCheckbox ? useAiCheckbox.checked : false;
 
                         if (content) {
                              if (typeof completion === 'function') {
-                                // Send final data with 'submit' action
                                 completion({
-                                    action: 'submit', // Indicate final submission
+                                    action: 'submit',
                                     data: {
                                         text: content,
-                                        useAi: processWithAi
+                                        useAi: processWithAi // Will be false if checkbox wasn't shown
                                     }
                                 });
                             } else {
@@ -474,30 +500,29 @@ function generateInputFormHtml(prefillText = "", showAiOption = false) {
                         }
                     });
 
-                    // Paste Button Handler (Intermediate action)
+                    // Paste Button Handler
                     pasteButton.addEventListener('click', () => {
                         console.log("Paste button clicked.");
                         if (typeof completion === 'function') {
-                            completion({ action: 'paste' }); // Signal paste request
+                            completion({ action: 'paste' });
                         } else {
                             console.error('CRITICAL: completion function unexpectedly not available for paste!');
                             alert('Error: Cannot request paste due to internal issue.');
                         }
                     });
 
-                    // Dictate Button Handler (Intermediate action)
+                    // Dictate Button Handler
                     dictateButton.addEventListener('click', () => {
                         console.log("Dictate button clicked.");
                         if (typeof completion === 'function') {
-                            completion({ action: 'dictate' }); // Signal dictation request
+                            completion({ action: 'dictate' });
                         } else {
                             console.error('CRITICAL: completion function unexpectedly not available for dictate!');
                             alert('Error: Cannot request dictation due to internal issue.');
                         }
                     });
 
-                     // Auto-focus the text area on initial load
-                     contentInput.focus();
+                     contentInput.focus(); // Auto-focus
                      console.log("Input form initialized with Paste/Dictate listeners and focused.");
 
                 } catch (initError) {
@@ -506,9 +531,7 @@ function generateInputFormHtml(prefillText = "", showAiOption = false) {
                     if (typeof completion === 'function') completion({ error: "Initialization crashed", details: initError.message });
                 }
             }
-
              // Do NOT call initializeForm() here directly.
-             // It will be called by the evaluateJavaScript in presentWebViewForm.
         </script>
     </body>
     </html>
@@ -521,9 +544,11 @@ function generateInputFormHtml(prefillText = "", showAiOption = false) {
  * @returns {string} HTML content string.
  */
 function generatePlanReviewHtml(parsedPlanData) {
-  const css = `
+  // (Keep the existing generatePlanReviewHtml function content as it was correct)
+  // ... (same CSS and HTML generation logic as in your provided script) ...
+   const css = `
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 15px; background-color: #f8f8f8; color: #333; }
-        .plan-description { margin-bottom: 20px; padding: 10px; background-color: #eef; border-radius: 5px; border: 1px solid #dde; }
+        .plan-description { margin-bottom: 20px; padding: 10px; background-color: #eef; border-radius: 5px; border: 1px solid #dde; white-space: pre-wrap; }
         .file-block { margin-bottom: 15px; border: 1px solid #ccc; border-radius: 8px; background-color: white; overflow: hidden; }
         .file-header { background-color: #f0f0f0; padding: 8px 12px; border-bottom: 1px solid #ccc; font-weight: bold; }
         .file-path { font-family: monospace; font-size: 0.9em; }
@@ -578,6 +603,10 @@ function generatePlanReviewHtml(parsedPlanData) {
           if (file.action === "delete") {
             changesHtml += `<pre class="code-block delete">(File to be deleted)</pre>`;
           }
+           // Display complexity if present
+          if (change.complexity !== null && change.complexity !== undefined) {
+             changesHtml += `<div><strong>Complexity:</strong> ${escapeHtml(String(change.complexity))}</div>`;
+          }
           changesHtml += `</div>`; // Close change-block
         });
       } else {
@@ -603,10 +632,15 @@ function generatePlanReviewHtml(parsedPlanData) {
   }
 
   const planDescriptionHtml = parsedPlanData.planText
-    ? `<div class="plan-description"><strong>Plan:</strong> ${escapeHtml(
+    ? `<div class="plan-description"><strong>Plan:</strong>\n${escapeHtml( // Added newline for pre-wrap
         parsedPlanData.planText
       )}</div>`
     : "<p>No overall plan description provided.</p>";
+
+   const chatNameHtml = parsedPlanData.chatName
+    ? `<h3>${escapeHtml(parsedPlanData.chatName)}</h3>`
+    : "";
+
 
   return `
     <!DOCTYPE html>
@@ -618,6 +652,7 @@ function generatePlanReviewHtml(parsedPlanData) {
     </head>
     <body>
         <h2>Review AI Generated Plan</h2>
+        ${chatNameHtml}
         <p>Review the plan generated by the AI. Choose whether to use this plan for the memo comment.</p>
 
         ${planDescriptionHtml}
@@ -629,7 +664,6 @@ function generatePlanReviewHtml(parsedPlanData) {
         </div>
 
         <script>
-            // Wrap setup logic in a function
             function initializeForm() {
                 try {
                     const usePlanButton = document.getElementById('usePlan');
@@ -644,13 +678,13 @@ function generatePlanReviewHtml(parsedPlanData) {
 
                     usePlanButton.addEventListener('click', () => {
                          if (typeof completion === 'function') {
-                            completion({ action: 'submit', data: { confirmedPlan: true } }); // Use submit action
+                            completion({ action: 'submit', data: { confirmedPlan: true } });
                          } else { console.error('CRITICAL: completion function unexpectedly not available!'); alert('Error submitting choice.'); }
                     });
 
                     useOriginalButton.addEventListener('click', () => {
                          if (typeof completion === 'function') {
-                            completion({ action: 'submit', data: { confirmedPlan: false } }); // Use submit action
+                            completion({ action: 'submit', data: { confirmedPlan: false } });
                          } else { console.error('CRITICAL: completion function unexpectedly not available!'); alert('Error submitting choice.'); }
                     });
                     console.log("AI Plan Review form initialized.");
@@ -660,7 +694,7 @@ function generatePlanReviewHtml(parsedPlanData) {
                     if (typeof completion === 'function') completion({ error: "Initialization crashed", details: initError.message });
                 }
             }
-             // Do NOT call initializeForm() here directly. Called by presentWebViewForm.
+             // Do NOT call initializeForm() here directly.
         </script>
     </body>
     </html>
@@ -669,91 +703,143 @@ function generatePlanReviewHtml(parsedPlanData) {
 
 /**
  * Retrieves Memos configuration (URL, Token, OpenAI Key) from Keychain.
- * Prompts the user using a WebView form if configuration is missing.
+ * Prompts the user using a WebView form if Memos URL or Token is missing,
+ * or if explicitly requested via resetConfig.
+ * @param {boolean} forcePrompt - If true, always show the config form.
  * @returns {Promise<{url: string, token: string, openaiApiKey: string|null}|null>} Configuration object, or null if cancelled/failed.
  * @throws {Error} If configuration cannot be obtained and user cancels/fails prompt.
  */
-async function getConfig() {
+async function getConfig(forcePrompt = false) {
   console.log("Attempting to retrieve configuration from Keychain...");
   let url = Keychain.contains(KEYCHAIN_URL_KEY)
     ? Keychain.get(KEYCHAIN_URL_KEY)
     : null;
+  console.log(`Retrieved Memos URL: ${url ? 'Exists' : 'Not Found'}`);
+
   let token = Keychain.contains(KEYCHAIN_TOKEN_KEY)
     ? Keychain.get(KEYCHAIN_TOKEN_KEY)
     : null;
+   console.log(`Retrieved Memos Token: ${token ? 'Exists' : 'Not Found'}`);
+
   let openaiApiKey = Keychain.contains(KEYCHAIN_OPENAI_KEY)
     ? Keychain.get(KEYCHAIN_OPENAI_KEY)
     : null;
+  // Add detailed logging for OpenAI key retrieval
+  console.log(`Retrieved OpenAI Key from Keychain: ${openaiApiKey ? `Exists (Length: ${openaiApiKey.length})` : 'Not Found or Empty'}`);
 
-  // Basic validation for stored URL before proceeding
+  // --- Validation and Cleanup ---
+  let needsSave = false; // Flag if changes require saving back to Keychain
+
+  // Validate URL format
   if (url && !url.toLowerCase().startsWith("http")) {
-    console.warn(`Invalid URL format stored: ${url}. Clearing and prompting.`);
+    console.warn(`Invalid URL format stored: ${url}. Clearing.`);
     Keychain.remove(KEYCHAIN_URL_KEY);
     url = null;
+    needsSave = true; // Need to prompt or fail
   }
+
   // Clean up potentially empty stored OpenAI key
   if (openaiApiKey !== null && openaiApiKey.trim() === "") {
-    openaiApiKey = null;
-    if (Keychain.contains(KEYCHAIN_OPENAI_KEY)) {
-      Keychain.remove(KEYCHAIN_OPENAI_KEY);
-    }
+     console.warn("Stored OpenAI Key was empty string. Clearing.");
+     openaiApiKey = null;
+     if (Keychain.contains(KEYCHAIN_OPENAI_KEY)) {
+       Keychain.remove(KEYCHAIN_OPENAI_KEY);
+     }
+     // No need to set needsSave=true here, as missing key is handled below
   }
+   console.log(`OpenAI Key after cleanup: ${openaiApiKey ? 'Exists' : 'null'}`);
 
-  // Prompt if Memos URL or Token is missing.
-  if (!url || !token) {
+
+  // --- Prompting Logic ---
+  // Prompt if Memos URL or Token is missing OR if forcePrompt is true.
+  if (forcePrompt || !url || !token) {
     console.log(
-      "Memos configuration missing or incomplete. Prompting user via WebView."
+      `Configuration prompt needed. Reason: ${forcePrompt ? 'Forced' : (!url ? 'Memos URL missing' : 'Memos Token missing')}`
     );
-    const configHtml = generateConfigFormHtml(url);
-    // Use presentWebViewForm to handle the config form submission
+
+    // Pass existing values to the form generator
+    const configHtml = generateConfigFormHtml(url, token, openaiApiKey);
     const result = await presentWebViewForm(configHtml, false);
 
-    // Check if the result contains the expected data structure
-    if (!result || !result.url || !result.token) {
-      console.log(
-        "Configuration prompt cancelled or failed (WebView returned null or incomplete data)."
-      );
-      throw new Error(
-        "Configuration cancelled or failed. Memos URL and Token are required."
-      );
+    if (!result) {
+      console.log("Configuration prompt cancelled by user.");
+      throw new Error("Configuration cancelled. Memos URL and Token are required.");
     }
 
-    url = result.url;
-    token = result.token;
-    openaiApiKey = result.openaiApiKey; // Already handles null case
+    // --- Process Form Results ---
+    const newUrl = result.url; // URL is always required from form
+    const newToken = result.token; // Might be null if user left blank
+    const newOpenaiApiKey = result.openaiApiKey; // Might be null if user left blank
 
-    console.log("Saving configuration to Keychain...");
+    // Validate URL from form
+    if (!newUrl || (!newUrl.toLowerCase().startsWith('http://') && !newUrl.toLowerCase().startsWith('https://'))) {
+        throw new Error("Invalid Memos URL provided in form.");
+    }
+    url = newUrl; // Update URL
     Keychain.set(KEYCHAIN_URL_KEY, url);
-    Keychain.set(KEYCHAIN_TOKEN_KEY, token);
+    console.log("Saved Memos URL.");
+    needsSave = false; // Reset flag as we just saved
 
-    if (openaiApiKey) {
-      console.log("Saving OpenAI API Key.");
-      Keychain.set(KEYCHAIN_OPENAI_KEY, openaiApiKey);
+    // Update Token only if a *new* value was provided
+    if (newToken) {
+        token = newToken;
+        Keychain.set(KEYCHAIN_TOKEN_KEY, token);
+        console.log("Saved new Memos Token.");
+    } else if (!token) {
+        // If no new token was provided AND no token existed before, it's an error.
+        throw new Error("Memos Access Token is required but was not provided.");
     } else {
-      console.log("No OpenAI API Key provided, removing any existing key.");
-      if (Keychain.contains(KEYCHAIN_OPENAI_KEY)) {
-        Keychain.remove(KEYCHAIN_OPENAI_KEY);
-      }
+         console.log("Memos Token field left blank, keeping existing token.");
     }
-    console.log("Configuration saved.");
+
+    // Update OpenAI Key: Save if new value provided, remove if blanked, keep if existed & left blank
+    if (newOpenaiApiKey) {
+        openaiApiKey = newOpenaiApiKey;
+        Keychain.set(KEYCHAIN_OPENAI_KEY, openaiApiKey);
+        console.log("Saved new OpenAI API Key.");
+    } else if (openaiApiKey && !newOpenaiApiKey) {
+        // User explicitly cleared the field (submitted null/empty) while a key existed
+        console.log("OpenAI Key field left blank, removing existing key.");
+        openaiApiKey = null;
+        if (Keychain.contains(KEYCHAIN_OPENAI_KEY)) {
+            Keychain.remove(KEYCHAIN_OPENAI_KEY);
+        }
+    } else if (!openaiApiKey && !newOpenaiApiKey) {
+         console.log("No OpenAI API Key provided or previously saved.");
+         openaiApiKey = null; // Ensure it's null
+    } else {
+        // Key existed, user left blank -> keep existing (openaiApiKey already holds it)
+         console.log("OpenAI Key field left blank, keeping existing key.");
+    }
+
+    console.log("Configuration processing complete.");
+
   } else {
-    console.log("Configuration retrieved successfully from Keychain.");
+    console.log("Configuration retrieved successfully from Keychain without prompt.");
+    // If we performed cleanup earlier but didn't prompt, save might still be needed
+    // (Though current cleanup logic doesn't require this path)
+    // if (needsSave) { /* ... potentially save cleaned values ... */ }
   }
 
+  // Final check: Ensure we have URL and Token before returning
+  if (!url || !token) {
+      throw new Error("Configuration incomplete: Missing Memos URL or Token after processing.");
+  }
+
+  console.log(`FINAL Config Check - URL: ${!!url}, Token: ${!!token}, OpenAI Key: ${!!openaiApiKey}`);
   return { url, token, openaiApiKey };
 }
 
+
 /**
  * Gets text input from Share Sheet or WebView form.
- * Allows user to paste from clipboard or dictate via buttons within the form.
  * @param {boolean} allowAiOption - Whether to include the AI processing option in the form.
  * @returns {Promise<{text: string, useAi: boolean}|null>} Object with input text and AI choice, or null if cancelled/empty.
  */
 async function getInputText(allowAiOption = false) {
   console.log("Checking for input source...");
-  let initialText = ""; // Start with empty text by default
+  let initialText = "";
 
-  // 1. Check Share Sheet input (args.plainTexts) - Keep this pre-fill logic
   if (args.plainTexts && args.plainTexts.length > 0) {
     const sharedText = args.plainTexts.join("\n").trim();
     if (sharedText) {
@@ -762,98 +848,112 @@ async function getInputText(allowAiOption = false) {
     }
   } else {
     console.log("No Share Sheet input found.");
-    // Automatic clipboard check is removed. User must use the button.
   }
 
-  // 2. Present WebView form for input (manual entry, paste, dictation, or editing pre-filled text)
-  console.log("Presenting WebView form for text input.");
+  console.log(`Presenting WebView form for text input. Show AI Option: ${allowAiOption}`);
   const inputHtml = generateInputFormHtml(initialText, allowAiOption);
-  // presentWebViewForm will now handle paste/dictation interactions
   const formData = await presentWebViewForm(inputHtml, false);
 
-  // Check if the form was cancelled (returned null) or didn't return expected data
-  if (
-    !formData ||
-    typeof formData.text === "undefined" ||
-    typeof formData.useAi === "undefined"
-  ) {
+  if (!formData || typeof formData.text === "undefined" || typeof formData.useAi === "undefined") {
     console.log("Input cancelled or form did not return expected data.");
     return null;
   }
-  // Also check if text is empty after trimming
   if (formData.text.trim() === "") {
     console.log("No text entered.");
     return null;
   }
 
-  console.log(`Input received. Use AI: ${formData.useAi}`);
-  return { text: formData.text.trim(), useAi: formData.useAi }; // Return object with trimmed text
+  console.log(`Input received. Use AI checkbox state: ${formData.useAi}`);
+  // Ensure useAi is false if the option wasn't allowed/shown
+  const finalUseAi = allowAiOption ? formData.useAi : false;
+  console.log(`Final 'useAi' decision: ${finalUseAi}`);
+
+  return { text: formData.text.trim(), useAi: finalUseAi };
 }
 
 /**
- * Makes an authenticated request to the Memos API.
+ * Makes an authenticated request to an API (Memos or OpenAI).
  * @param {string} url - The full API endpoint URL.
  * @param {string} method - HTTP method (e.g., "GET", "POST").
- * @param {string} token - The Memos Access Token.
+ * @param {object} headers - Request headers object.
  * @param {object|null} body - The request body object (will be JSON.stringify'd).
- * @returns {Promise<object>} The JSON response from the API.
+ * @param {number} [timeout=60] - Timeout in seconds.
+ * @param {string} [serviceName="API"] - Name for logging (e.g., "Memos", "OpenAI").
+ * @returns {Promise<any>} The JSON response or raw string response.
  * @throws {Error} If the API request fails or returns a non-2xx status code.
  */
-async function makeApiRequest(url, method, token, body = null) {
-  console.log(`Making API request: ${method} ${url}`);
+async function makeApiRequest(url, method, headers, body = null, timeout = 60, serviceName = "API") {
+  console.log(`Making ${serviceName} request: ${method} ${url}`);
   const req = new Request(url);
   req.method = method;
-  req.headers = {
-    "Content-Type": "application/json",
-    Authorization: `Bearer ${token}`,
-  };
-  req.timeoutInterval = 30; // 30 seconds timeout
-  req.allowInsecureRequest = false; // Enforce HTTPS unless explicitly http://
+  req.headers = headers;
+  req.timeoutInterval = timeout;
+  req.allowInsecureRequest = url.startsWith("http://"); // Allow insecure for http only
 
   if (body) {
     req.body = JSON.stringify(body);
-    console.log(`Request body: ${req.body}`);
+    // Avoid logging potentially sensitive bodies like OpenAI requests fully
+    console.log(`${serviceName} Request body: ${body.content ? `{"content": "[CENSORED, Length: ${body.content.length}]", ...}` : (body.messages ? `{"messages": "[CENSORED]", ...}`: JSON.stringify(body).substring(0, 100) + "...")}`);
   }
 
   try {
-    // Use loadJSON for GET, loadString for POST/PATCH/DELETE to handle potential non-JSON success responses
     let responseData;
     let statusCode;
     let responseText = "";
 
-    if (method.toUpperCase() === "GET") {
-      responseData = await req.loadJSON();
-      statusCode = req.response.statusCode;
-    } else {
-      // For POST/etc., load as string first to check for empty responses on success
+    // Determine if we expect JSON based on Content-Type or common practice
+    const expectJson = headers["Content-Type"]?.includes("json") || headers["Accept"]?.includes("json");
+
+    if (expectJson && method.toUpperCase() !== 'GET') { // POST/etc expecting JSON
+        responseData = await req.loadJSON();
+        statusCode = req.response.statusCode;
+        responseText = JSON.stringify(responseData); // For error logging if needed
+    } else if (method.toUpperCase() === 'GET') { // GET usually expects JSON
+         responseData = await req.loadJSON();
+         statusCode = req.response.statusCode;
+    }
+     else { // Load as string for non-GET or non-JSON expecting requests
       responseText = await req.loadString();
       statusCode = req.response.statusCode;
-      // Try to parse as JSON if responseText is not empty
-      responseData = responseText ? JSON.parse(responseText) : {};
+      // Try to parse as JSON if responseText is not empty and looks like JSON
+       try {
+           responseData = responseText && responseText.trim().startsWith('{') ? JSON.parse(responseText) : responseText;
+       } catch (parseError) {
+           console.warn(`${serviceName} response was not valid JSON, returning as string.`);
+           responseData = responseText; // Return raw string if parsing fails
+       }
     }
 
-    console.log(`API Response Status Code: ${statusCode}`);
+    console.log(`${serviceName} Response Status Code: ${statusCode}`);
     if (statusCode < 200 || statusCode >= 300) {
-      console.error(`API Error Response Text: ${responseText}`);
-      throw new Error(
-        `API Error ${statusCode}: ${responseText || "Unknown error"}`
-      );
+      console.error(`${serviceName} Error Response Text: ${responseText}`);
+      // Try to extract a message from JSON error response
+      let errorMessage = responseText;
+      if (typeof responseData === 'object' && responseData !== null) {
+          errorMessage = responseData.error?.message || responseData.message || JSON.stringify(responseData);
+      }
+      throw new Error(`${serviceName} Error ${statusCode}: ${errorMessage || "Unknown error"}`);
     }
 
-    console.log("API request successful.");
-    return responseData;
+    console.log(`${serviceName} request successful.`);
+    return responseData; // Return parsed JSON or raw string
   } catch (e) {
-    console.error(`API Request Failed: ${method} ${url} - ${e}`);
+    // Don't re-wrap errors we already threw
+    if (e.message.startsWith(`${serviceName} Error`)) {
+        throw e;
+    }
+    console.error(`${serviceName} Request Failed: ${method} ${url} - ${e}`);
     // Check if the error is from JSON parsing or the request itself
     if (e instanceof SyntaxError) {
       throw new Error(
-        `API Error: Failed to parse JSON response. Status: ${req.response?.statusCode}. Response: ${responseText}`
+        `${serviceName} Error: Failed to parse JSON response. Status: ${req.response?.statusCode}. Response: ${responseText}`
       );
     } else {
-      throw e; // Re-throw original network or status code error
+      throw new Error(`${serviceName} Request Failed: ${e.message || e}`); // Re-throw original network or status code error
     }
   }
 }
+
 
 /**
  * Creates a new memo in Memos.
@@ -863,13 +963,17 @@ async function makeApiRequest(url, method, token, body = null) {
  * @throws {Error} If memo creation fails.
  */
 async function createMemo(config, title) {
-  const endpoint = config.url.replace(/\/$/, "") + "/api/v1/memos"; // Ensure no double slash
+  const endpoint = config.url.replace(/\/$/, "") + "/api/v1/memos";
+  const headers = {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${config.token}`,
+  };
   const body = {
     content: title,
     visibility: "PRIVATE", // Or make configurable: "PUBLIC", "PROTECTED"
   };
   console.log(`Creating memo with title: "${title}"`);
-  return await makeApiRequest(endpoint, "POST", config.token, body);
+  return await makeApiRequest(endpoint, "POST", headers, body, 30, "Memos");
 }
 
 /**
@@ -882,10 +986,9 @@ async function createMemo(config, title) {
 async function getAiPlanAsXml(apiKey, userRequest) {
   console.log("Requesting XML plan from OpenAI...");
   const endpoint = "https://api.openai.com/v1/chat/completions";
-  // Use a recommended model for chat completions and instruction following
-  const model = "gpt-4o"; // Or "gpt-3.5-turbo" or "gpt-4-turbo"
+  const model = "gpt-4o"; // Or "gpt-3.5-turbo", "gpt-4-turbo"
 
-  // Define the XML formatting instructions (as provided in the prompt)
+  // Define the XML formatting instructions (Keep the existing instructions)
   const xmlFormattingInstructions = `
 ### Role
 - You are a **code editing assistant**: You can fulfill edit requests and chat with the user about code or other questions. Provide complete instructions or code lines when replying with xml formatting.
@@ -1032,7 +1135,6 @@ Remove an obsolete file.
 10. The final output must apply cleanly with no leftover syntax errors.
 `;
 
-  // Construct the prompt for the Chat Completions API
   const messages = [
     {
       role: "system",
@@ -1049,36 +1151,23 @@ ${userRequest}`,
     },
   ];
 
-  const request = new Request(endpoint);
-  request.method = "POST";
-  request.headers = {
+  const headers = {
     "Content-Type": "application/json",
     Authorization: `Bearer ${apiKey}`,
   };
-  request.body = JSON.stringify({
+  const body = {
     model: model,
     messages: messages,
-    max_tokens: 3000, // Adjust as needed, can be large for complex plans
-    temperature: 0.3, // Lower temperature for more deterministic output
+    max_tokens: 3500, // Increased slightly
+    temperature: 0.3,
     n: 1,
     stop: null,
-  });
-  request.timeoutInterval = 90; // Increase timeout for potentially longer generation
-  request.allowInsecureRequest = false;
+  };
 
   try {
-    console.log(`Sending request to OpenAI Chat Completions (${model})...`);
-    const responseJson = await request.loadJSON();
+    const responseJson = await makeApiRequest(endpoint, "POST", headers, body, 90, "OpenAI"); // Use generalized function
 
-    if (!responseJson || responseJson.error) {
-      const errorMessage =
-        responseJson?.error?.message || "Unknown OpenAI API error structure";
-      console.error(
-        "OpenAI API Error in response:",
-        responseJson?.error || responseJson
-      );
-      throw new Error(`OpenAI API Error: ${errorMessage}`);
-    }
+    // Response from makeApiRequest should already be parsed JSON
     if (
       !responseJson.choices ||
       responseJson.choices.length === 0 ||
@@ -1102,18 +1191,14 @@ ${userRequest}`,
     // Basic check if it looks like XML
     if (!xmlContent.startsWith("<") || !xmlContent.endsWith(">")) {
       console.warn("OpenAI response doesn't look like XML:", xmlContent);
-      // Decide whether to throw an error or try parsing anyway
+      // Consider throwing error if strict XML is required
       // throw new Error("OpenAI response did not appear to be valid XML.");
     }
     return xmlContent;
   } catch (e) {
-    console.error(`OpenAI Request Failed: ${e}`);
-    let detailedMessage =
-      e.message || "An unknown error occurred during the OpenAI request.";
-    if (request.response && request.response.statusCode) {
-      detailedMessage += ` (Status Code: ${request.response.statusCode})`;
-    }
-    throw new Error(`OpenAI Plan Generation Failed: ${detailedMessage}`);
+     // Catch errors specifically from OpenAI request
+     console.error(`OpenAI Plan Generation Failed: ${e}`);
+     throw new Error(`OpenAI Plan Generation Failed: ${e.message}`); // Re-throw with specific context
   }
 }
 
@@ -1123,7 +1208,14 @@ ${userRequest}`,
  * @returns {object|null} Structured plan object or null on parsing error.
  */
 function parseAiXmlResponse(xmlString) {
-  console.log("Parsing AI XML response...");
+  // (Keep the existing parseAiXmlResponse function content as it was correct)
+  // ... (same XMLParser logic as in your provided script) ...
+   console.log("Parsing AI XML response...");
+  // Add a check for empty input string
+  if (!xmlString || typeof xmlString !== 'string' || xmlString.trim() === '') {
+      console.error("Cannot parse empty or invalid XML string.");
+      return null;
+  }
   try {
     const parser = new XMLParser(xmlString);
     let parsedData = { chatName: "", planText: "", files: [] };
@@ -1131,7 +1223,7 @@ function parseAiXmlResponse(xmlString) {
     let currentChange = null;
     let currentTag = null;
     let accumulatedChars = "";
-    let parseError = false;
+    let parseError = null; // Store error details
 
     parser.didStartElement = (name, attrs) => {
       currentTag = name.toLowerCase();
@@ -1148,17 +1240,21 @@ function parseAiXmlResponse(xmlString) {
           description: "",
           content: "",
           complexity: null, // Initialize complexity
-          search: "", // Initialize search (though not explicitly in the provided XML spec, good to handle)
+          search: "", // Initialize search
         };
       }
     };
 
     parser.foundCharacters = (chars) => {
-      accumulatedChars += chars;
+      // Only accumulate if we are inside a relevant tag
+      if (currentTag) {
+          accumulatedChars += chars;
+      }
     };
 
     parser.didEndElement = (name) => {
       const tagName = name.toLowerCase();
+      // Trim only when assigning final value
       const trimmedChars = accumulatedChars.trim();
       // console.log(`End Element: ${name}, Chars: "${trimmedChars}"`);
 
@@ -1168,7 +1264,12 @@ function parseAiXmlResponse(xmlString) {
         parsedData.planText = trimmedChars;
       } else if (tagName === "file") {
         if (currentFile) {
-          parsedData.files.push(currentFile);
+          // Ensure file has path and action before adding
+          if (currentFile.path && currentFile.action) {
+             parsedData.files.push(currentFile);
+          } else {
+             console.warn("Skipping file element missing path or action:", currentFile);
+          }
           currentFile = null;
         }
       } else if (tagName === "change") {
@@ -1197,19 +1298,24 @@ function parseAiXmlResponse(xmlString) {
             .trim();
         }
       }
-      currentTag = null; // Reset current tag context
-      accumulatedChars = ""; // Reset chars after processing
+      // Reset context AFTER processing the closing tag
+      currentTag = null;
+      accumulatedChars = "";
     };
 
     parser.parseErrorOccurred = (line, column, message) => {
-      console.error(`XML Parse Error at ${line}:${column}: ${message}`);
-      parseError = true;
+      parseError = `XML Parse Error at ${line}:${column}: ${message}`;
+      console.error(parseError);
+      // Stop parsing immediately on fatal error
+      return; // Or throw new Error(parseError); if you want parsing to halt execution flow
     };
 
     const success = parser.parse();
 
     if (!success || parseError) {
-      console.error("XML parsing failed.");
+      console.error("XML parsing failed.", parseError || "");
+      // Optionally throw the error to be caught by the caller
+      // throw new Error(parseError || "XML parsing failed.");
       return null;
     }
 
@@ -1228,7 +1334,9 @@ function parseAiXmlResponse(xmlString) {
  * @returns {string} Formatted string representation of the plan.
  */
 function formatPlanForMemo(parsedPlanData) {
-  if (!parsedPlanData) return "Error: Could not format plan.";
+  // (Keep the existing formatPlanForMemo function content as it was correct)
+  // ... (same Markdown generation logic as in your provided script) ...
+    if (!parsedPlanData) return "Error: Could not format plan (null data).";
 
   let output = "";
 
@@ -1255,7 +1363,7 @@ function formatPlanForMemo(parsedPlanData) {
           if (change.description) {
             output += `  *Description:* ${change.description}\n`;
           }
-          if (change.complexity !== null) {
+          if (change.complexity !== null && change.complexity !== undefined) {
             output += `  *Complexity:* ${change.complexity}\n`;
           }
           if (
@@ -1294,9 +1402,13 @@ function formatPlanForMemo(parsedPlanData) {
 async function addCommentToMemo(config, memoId, commentText) {
   const endpoint =
     config.url.replace(/\/$/, "") + `/api/v1/memos/${memoId}/comments`;
+   const headers = {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${config.token}`,
+  };
   const body = { content: commentText };
   console.log(`Adding comment to memo ID: ${memoId}`);
-  return await makeApiRequest(endpoint, "POST", config.token, body);
+  return await makeApiRequest(endpoint, "POST", headers, body, 30, "Memos");
 }
 
 // --- Main Execution ---
@@ -1305,6 +1417,7 @@ async function addCommentToMemo(config, memoId, commentText) {
   console.log(
     "Starting Interactive Quick Capture (with AI Plan) to Memos script..."
   );
+  let forceConfigPrompt = false; // Flag to force showing the config screen
 
   // --- Configuration Reset Logic ---
   if (args.queryParameters && args.queryParameters.resetConfig === "true") {
@@ -1312,27 +1425,25 @@ async function addCommentToMemo(config, memoId, commentText) {
     const confirmAlert = new Alert();
     confirmAlert.title = "Reset Configuration?";
     confirmAlert.message =
-      "Are you sure you want to remove the saved Memos URL, Access Token, and OpenAI Key?";
+      "Are you sure you want to remove the saved Memos URL, Access Token, and OpenAI Key? You will be prompted to re-enter them.";
     confirmAlert.addAction("Reset");
     confirmAlert.addCancelAction("Cancel");
     const confirmation = await confirmAlert.presentAlert();
     if (confirmation === 0) {
       console.log("Removing configuration from Keychain...");
-      Keychain.remove(KEYCHAIN_URL_KEY);
-      Keychain.remove(KEYCHAIN_TOKEN_KEY);
-      if (Keychain.contains(KEYCHAIN_OPENAI_KEY))
-        Keychain.remove(KEYCHAIN_OPENAI_KEY);
+      if (Keychain.contains(KEYCHAIN_URL_KEY)) Keychain.remove(KEYCHAIN_URL_KEY);
+      if (Keychain.contains(KEYCHAIN_TOKEN_KEY)) Keychain.remove(KEYCHAIN_TOKEN_KEY);
+      if (Keychain.contains(KEYCHAIN_OPENAI_KEY)) Keychain.remove(KEYCHAIN_OPENAI_KEY);
       console.log("Configuration removed.");
-      const successAlert = new Alert();
-      successAlert.title = "Configuration Reset";
-      successAlert.message =
-        "Configuration removed. Run the script again to reconfigure.";
-      await successAlert.presentAlert();
-      Script.complete();
-      return;
+      forceConfigPrompt = true; // Force the prompt after resetting
+      // Optional: Show a success alert for reset
+      // const successAlert = new Alert();
+      // successAlert.title = "Configuration Reset";
+      // successAlert.message = "Configuration removed. Please re-enter details.";
+      // await successAlert.presentAlert();
     } else {
       console.log("Configuration reset cancelled.");
-      Script.complete();
+      Script.complete(); // Exit if reset is cancelled
       return;
     }
   }
@@ -1347,10 +1458,16 @@ async function addCommentToMemo(config, memoId, commentText) {
   let planUsed = false; // Track if the AI plan was used
 
   try {
-    config = await getConfig();
+    // Get config, forcing prompt if reset was performed
+    config = await getConfig(forceConfigPrompt);
+    console.log("Configuration obtained:", config ? `URL: ${!!config.url}, Token: ${!!config.token}, OpenAI Key: ${!!config.openaiApiKey}` : "Failed");
 
-    const canShowAiOption = !!config.openaiApiKey;
-    inputData = await getInputText(canShowAiOption);
+    // Explicitly check if a valid OpenAI key string exists in the config object
+    const hasValidOpenAIKey = typeof config.openaiApiKey === 'string' && config.openaiApiKey.trim().length > 0;
+    console.log(`Has valid OpenAI Key for showing option? ${hasValidOpenAIKey}`);
+
+    // Pass the result of the check to getInputText
+    inputData = await getInputText(hasValidOpenAIKey);
 
     if (!inputData) {
       console.log("No input text provided or cancelled. Exiting.");
@@ -1359,12 +1476,16 @@ async function addCommentToMemo(config, memoId, commentText) {
     }
 
     originalInputText = inputData.text;
+    // Use the 'useAi' value returned from getInputText, which respects whether the option was shown
     let processWithAi = inputData.useAi;
     finalText = originalInputText; // Default to original text
 
+    console.log(`User wants to process with AI: ${processWithAi}`);
+
     // --- AI Plan Generation Flow ---
-    if (processWithAi && config.openaiApiKey) {
-      console.log("User opted for AI processing. Requesting XML plan...");
+    // Check both the user's choice AND if we actually have a key
+    if (processWithAi && hasValidOpenAIKey) {
+      console.log("Proceeding with AI plan generation...");
       let processingAlert = null;
       try {
         processingAlert = new Alert();
@@ -1373,32 +1494,27 @@ async function addCommentToMemo(config, memoId, commentText) {
         processingAlert.present(); // Show non-blocking alert
 
         const rawXml = await getAiPlanAsXml(
-          config.openaiApiKey,
+          config.openaiApiKey, // We know this is valid here
           originalInputText
         );
 
+        // Dismiss alert *before* parsing, as parsing can be quick
+        if (processingAlert && typeof processingAlert.dismiss === "function") {
+          try { processingAlert.dismiss(); } catch (e) { console.warn("Could not dismiss processing alert:", e); }
+        }
+        processingAlert = null;
+
         const parsedPlan = parseAiXmlResponse(rawXml);
 
-        if (processingAlert && typeof processingAlert.dismiss === "function") {
-          try {
-            processingAlert.dismiss();
-          } catch (e) {
-            console.warn("Could not dismiss processing alert:", e);
-          }
-        }
-        processingAlert = null; // Clear reference
-
         if (!parsedPlan) {
-          throw new Error("Failed to parse the AI-generated XML plan.");
+          // Throw error if parsing failed (parseAiXmlResponse returns null)
+          throw new Error("Failed to parse the AI-generated XML plan. The response might not be valid XML.");
         }
 
-        console.log(
-          "AI plan parsed successfully. Asking for review via WebView."
-        );
+        console.log("AI plan parsed successfully. Asking for review via WebView.");
         const reviewHtml = generatePlanReviewHtml(parsedPlan);
-        const reviewResult = await presentWebViewForm(reviewHtml, false); // Use presentWebViewForm
+        const reviewResult = await presentWebViewForm(reviewHtml, true); // Present fullscreen for review
 
-        // Check the structure returned by presentWebViewForm for plan review
         if (reviewResult && typeof reviewResult.confirmedPlan !== "undefined") {
           if (reviewResult.confirmedPlan === true) {
             finalText = formatPlanForMemo(parsedPlan); // Format the plan for saving
@@ -1410,19 +1526,14 @@ async function addCommentToMemo(config, memoId, commentText) {
           }
         } else {
           finalText = originalInputText; // Revert on cancellation or error
-          console.log(
-            "AI plan review cancelled or failed. Reverting to original text."
-          );
+          console.log("AI plan review cancelled or failed. Reverting to original text.");
         }
       } catch (aiError) {
+         // Ensure alert is dismissed if error occurred during API call or parsing
+         if (processingAlert && typeof processingAlert.dismiss === "function") {
+           try { processingAlert.dismiss(); } catch (e) { console.warn("Could not dismiss processing alert:", e); }
+         }
         console.error(`AI Plan Generation/Processing Failed: ${aiError}`);
-        if (processingAlert && typeof processingAlert.dismiss === "function") {
-          try {
-            processingAlert.dismiss();
-          } catch (e) {
-            console.warn("Could not dismiss processing alert:", e);
-          }
-        }
 
         const aiErrorAlert = new Alert();
         aiErrorAlert.title = "AI Plan Error";
@@ -1431,8 +1542,7 @@ async function addCommentToMemo(config, memoId, commentText) {
         aiErrorAlert.addCancelAction("Cancel Script");
         const errorChoice = await aiErrorAlert.presentAlert();
 
-        if (errorChoice === -1) {
-          // Cancelled
+        if (errorChoice === -1) { // Cancelled
           console.log("Script cancelled due to AI plan processing error.");
           Script.complete();
           return;
@@ -1442,40 +1552,35 @@ async function addCommentToMemo(config, memoId, commentText) {
       }
     } else {
       // Log reasons for skipping AI plan generation
-      if (!config.openaiApiKey)
-        console.log("No OpenAI API Key configured. Skipping AI plan.");
-      else if (!processWithAi)
-        console.log("User did not select AI processing.");
+      if (!hasValidOpenAIKey) {
+          console.log("Skipping AI plan: No valid OpenAI API Key configured.");
+      } else if (!processWithAi) {
+          console.log("Skipping AI plan: User did not select AI processing checkbox.");
+      }
       finalText = originalInputText; // Ensure final text is set if AI wasn't used
     }
     // --- End AI Plan Generation Flow ---
 
     // --- Memos Creation ---
+    console.log("Proceeding to create Memos entry...");
     const memoTitle = `Quick Capture - ${new Date().toLocaleString()}`;
     createdMemo = await createMemo(config, memoTitle);
 
-    if (!createdMemo || !createdMemo.name || !createdMemo.name.includes("/")) {
-      console.error(
-        "Failed to get valid memo name from creation response.",
-        createdMemo
-      );
-      throw new Error("Could not determine the new memo's name/ID.");
-    }
-    // Extract ID from name like "memos/101" -> "101"
-    memoId = createdMemo.name.split("/").pop();
-    if (!memoId) {
-      console.error(`Failed to extract ID from memo name: ${createdMemo.name}`);
-      throw new Error(`Invalid memo name format received: ${createdMemo.name}`);
+    // Extract ID from name like "memos/101" -> "101" or the newer format "memos/users/1/memos/101" -> "101"
+    const nameParts = createdMemo?.name?.split('/');
+    memoId = nameParts ? nameParts[nameParts.length - 1] : null;
+
+    if (!memoId || !/^\d+$/.test(memoId)) { // Check if memoId is numeric after extraction
+      console.error("Failed to get valid numeric memo ID from creation response.", createdMemo);
+      throw new Error(`Could not determine the new memo's numeric ID from name: ${createdMemo?.name}`);
     }
     console.log(`Memo created successfully with ID: ${memoId}`);
 
     await addCommentToMemo(config, memoId, finalText);
     console.log("Comment added successfully!");
 
-    // Show success alert only if not running in widget context
-    let showAlerts = !(
-      typeof args.runsInWidget === "boolean" && args.runsInWidget
-    );
+    // --- Success Alert ---
+    let showAlerts = !(typeof args.runsInWidget === "boolean" && args.runsInWidget);
     if (showAlerts) {
       const successAlert = new Alert();
       successAlert.title = "Success";
@@ -1487,12 +1592,11 @@ async function addCommentToMemo(config, memoId, commentText) {
     } else {
       console.log("Running in widget context, skipping success alert.");
     }
+
   } catch (e) {
     console.error(`Script execution failed: ${e}`);
-    // Show error alert only if not running in widget context
-    let showAlerts = !(
-      typeof args.runsInWidget === "boolean" && args.runsInWidget
-    );
+    // --- Error Alert ---
+    let showAlerts = !(typeof args.runsInWidget === "boolean" && args.runsInWidget);
     if (showAlerts) {
       const errorAlert = new Alert();
       errorAlert.title = "Error";
@@ -1500,29 +1604,21 @@ async function addCommentToMemo(config, memoId, commentText) {
       errorAlert.message = `Script failed: ${errorMessage}`;
       // Add specific hints based on error message
       if (e.message) {
-        if (e.message.includes("401")) {
-          errorAlert.message += e.message.toLowerCase().includes("openai")
-            ? "\n\nCheck OpenAI Key/Account."
-            : "\n\nCheck Memos Token.";
-        } else if (
-          e.message.includes("404") &&
-          e.message.toLowerCase().includes("memos")
-        ) {
-          errorAlert.message += "\n\nCheck Memos URL Path.";
-        } else if (
-          e.message.includes("ENOTFOUND") ||
-          e.message.includes("Could not connect") ||
-          e.message.includes("timed out")
-        ) {
-          errorAlert.message += "\n\nCheck Network/URL Reachability.";
-        } else if (
-          e.message.toLowerCase().includes("openai") &&
-          e.message.toLowerCase().includes("quota")
-        ) {
-          errorAlert.message += "\n\nCheck OpenAI Quota.";
-        } else if (e.message.toLowerCase().includes("xml parse error")) {
-          errorAlert.message += "\n\nAI response was not valid XML.";
-        }
+         if (e.message.includes("401")) {
+           errorAlert.message += e.message.toLowerCase().includes("openai")
+             ? "\n\nCheck OpenAI Key/Account."
+             : "\n\nCheck Memos Token.";
+         } else if (e.message.includes("404") && e.message.toLowerCase().includes("memos")) {
+           errorAlert.message += "\n\nCheck Memos URL Path.";
+         } else if (e.message.includes("ENOTFOUND") || e.message.includes("Could not connect") || e.message.includes("timed out")) {
+           errorAlert.message += "\n\nCheck Network/URL Reachability.";
+         } else if (e.message.toLowerCase().includes("openai") && e.message.toLowerCase().includes("quota")) {
+           errorAlert.message += "\n\nCheck OpenAI Quota.";
+         } else if (e.message.toLowerCase().includes("xml parse error") || e.message.toLowerCase().includes("valid xml")) {
+           errorAlert.message += "\n\nAI response was not valid XML.";
+         } else if (e.message.includes("Configuration incomplete") || e.message.includes("Configuration cancelled")) {
+            errorAlert.message += "\n\nPlease ensure Memos URL and Token are configured correctly.";
+         }
       }
       await errorAlert.presentAlert();
     } else {
