@@ -1,26 +1,32 @@
-import 'package:flutter/cupertino.dart'; // Import Cupertino
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_memos/models/comment.dart';
-import 'package:flutter_memos/providers/api_providers.dart'; // Import apiServiceProvider
+import 'package:flutter_memos/providers/api_providers.dart';
 import 'package:flutter_memos/providers/comment_providers.dart';
 import 'package:flutter_memos/providers/ui_providers.dart';
+import 'package:flutter_memos/todoist_api/lib/api.dart'
+    as todoist; // For error types
 import 'package:flutter_memos/utils/url_helper.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:intl/intl.dart';
 
+// Convert to ConsumerStatefulWidget
 class CommentCard extends ConsumerStatefulWidget {
   final Comment comment;
-  final String memoId;
+  final String memoId; // Keep memoId if needed for context/actions
   final bool isSelected;
+  final bool isEditing; // Keep editing state if used elsewhere
 
+  // Remove actions parameter, actions are now internal to this widget
   const CommentCard({
     super.key,
     required this.comment,
     required this.memoId,
     this.isSelected = false,
+    this.isEditing = false,
   });
 
   @override
@@ -29,21 +35,141 @@ class CommentCard extends ConsumerStatefulWidget {
 
 class _CommentCardState extends ConsumerState<CommentCard> {
   bool _isDeleting = false;
+  bool _isSendingToTodoist = false; // State for Todoist loading indicator
+
+  // Helper to show dialogs safely after async gaps
+  void _showDialog(String title, String content, {bool isError = false}) {
+    if (!mounted) return; // Check mounted BEFORE using context
+    showCupertinoDialog(
+      context: context,
+      builder:
+          (context) => CupertinoAlertDialog(
+            title: Text(title),
+            content: Text(content),
+            actions: [
+              CupertinoDialogAction(
+                isDefaultAction: true,
+                child: const Text('OK'),
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+            ],
+          ),
+    );
+  }
+
+  Future<void> _sendCommentToTodoist(Comment comment) async {
+    final todoistService = ref.read(todoistApiServiceProvider);
+
+    // 1. Check if configured
+    if (!todoistService.isConfigured) {
+      _showDialog(
+        'Todoist Not Configured',
+        'Please add your Todoist API key in Settings > Integrations.',
+        isError: true,
+      );
+      return;
+    }
+
+    // 2. Parse content
+    final fullContent = comment.content.trim();
+    if (fullContent.isEmpty) {
+      _showDialog(
+        'Empty Comment',
+        'Cannot send empty comment to Todoist',
+        isError: true,
+      );
+      return;
+    }
+
+    String taskContent;
+    String? taskDescription;
+    final newlineIndex = fullContent.indexOf('\n');
+
+    if (newlineIndex != -1) {
+      taskContent = fullContent.substring(0, newlineIndex).trim();
+      taskDescription = fullContent.substring(newlineIndex + 1).trim();
+      if (taskDescription.isEmpty) {
+        taskDescription = null; // Ensure empty description is null
+      }
+    } else {
+      taskContent = fullContent;
+      taskDescription = null;
+    }
+
+    if (taskContent.isEmpty) {
+      _showDialog(
+        'Empty Title',
+        'Cannot create Todoist task with empty title',
+        isError: true,
+      );
+      return;
+    }
+
+    // 3. Show loading
+    setState(() => _isSendingToTodoist = true);
+
+    // 4. Call API
+    try {
+      if (kDebugMode) {
+        print(
+          '[Todoist Send] Creating task: "$taskContent" / Desc: "$taskDescription"',
+        );
+      }
+      final createdTask = await todoistService.createTask(
+        content: taskContent,
+        description: taskDescription,
+        // Add other default parameters if desired (e.g., projectId, labels)
+      );
+
+      if (kDebugMode) {
+        print('[Todoist Send] Success! Task ID: ${createdTask.id}');
+      }
+
+      // 5. Show Success using dialog
+      _showDialog(
+        'Success',
+        'Sent to Todoist: "${createdTask.content ?? 'Task'}"',
+      );
+    } on todoist.ApiException catch (e) {
+      if (kDebugMode) {
+        print('[Todoist Send] API Error: ${e.message} (Code: ${e.code})');
+      }
+      _showDialog(
+        'Todoist Error',
+        'Failed to create task.\n\nAPI Error ${e.code}: ${e.message ?? 'Unknown error'}',
+        isError: true,
+      );
+    } catch (e) {
+      if (kDebugMode) {
+        print('[Todoist Send] General Error: $e');
+      }
+      _showDialog(
+        'Error',
+        'An unexpected error occurred: ${e.toString()}',
+        isError: true,
+      );
+    } finally {
+      // Hide loading
+      if (mounted) {
+        setState(() => _isSendingToTodoist = false);
+      }
+    }
+  }
+
 
   void _showContextMenu(BuildContext context) {
     final fullId = '${widget.memoId}/${widget.comment.id}';
 
-    // Replace showModalBottomSheet with showCupertinoModalPopup
     showCupertinoModalPopup<void>(
       context: context,
-      builder: (BuildContext context) => CupertinoActionSheet( // Use CupertinoActionSheet
-        title: const Text('Comment Actions'), // Optional title
-        actions: <CupertinoActionSheetAction>[
-          // Replicate actions using CupertinoActionSheetAction
+      builder:
+          (BuildContext context) => CupertinoActionSheet(
+            title: const Text('Comment Actions'),
+            actions: <CupertinoActionSheetAction>[
           CupertinoActionSheetAction(
             child: const Text('Edit'),
             onPressed: () {
-              Navigator.pop(context); // Close sheet first
+                  Navigator.pop(context);
               Navigator.pushNamed(
                 context,
                 '/edit-entity',
@@ -58,20 +184,20 @@ class _CommentCardState extends ConsumerState<CommentCard> {
               _onTogglePin(context);
             },
           ),
+              // Add Send to Todoist action here
+              CupertinoActionSheetAction(
+                child: const Text('Send to Todoist'),
+                onPressed: () {
+                  Navigator.pop(context);
+                  _sendCommentToTodoist(widget.comment);
+                },
+              ),
           CupertinoActionSheetAction(
             child: const Text('Copy Content'),
             onPressed: () async {
               Navigator.pop(context);
               await Clipboard.setData(ClipboardData(text: widget.comment.content));
-              if (!mounted) return;
-              showCupertinoDialog(
-                context: context,
-                builder: (context) => CupertinoAlertDialog(
-                  title: const Text('Copied'),
-                  content: const Text('Comment copied to clipboard.'),
-                  actions: [ CupertinoDialogAction(isDefaultAction: true, child: const Text('OK'), onPressed: () => Navigator.pop(context)) ],
-                ),
-              );
+                  _showDialog('Copied', 'Comment copied to clipboard.');
             },
           ),
           CupertinoActionSheetAction(
@@ -80,15 +206,7 @@ class _CommentCardState extends ConsumerState<CommentCard> {
               Navigator.pop(context);
               final url = 'flutter-memos://comment/${widget.memoId}/${widget.comment.id}';
               await Clipboard.setData(ClipboardData(text: url));
-               if (!mounted) return;
-              showCupertinoDialog(
-                context: context,
-                builder: (context) => CupertinoAlertDialog(
-                  title: const Text('Copied'),
-                  content: const Text('Comment link copied to clipboard.'),
-                  actions: [ CupertinoDialogAction(isDefaultAction: true, child: const Text('OK'), onPressed: () => Navigator.pop(context)) ],
-                ),
-              );
+                  _showDialog('Copied', 'Comment link copied to clipboard.');
             },
           ),
            CupertinoActionSheetAction(
@@ -117,7 +235,7 @@ class _CommentCardState extends ConsumerState<CommentCard> {
             child: const Text('Delete'),
             onPressed: () {
               Navigator.pop(context);
-              _onDelete(context); // Assumes onDelete handles confirmation
+                  _onDelete(context);
             },
           ),
         ],
@@ -136,36 +254,21 @@ class _CommentCardState extends ConsumerState<CommentCard> {
     final fullId = '${widget.memoId}/${widget.comment.id}';
     try {
       await ref.read(togglePinCommentProvider(fullId))();
-      if (!mounted) return;
-      
-      // Confirmation removed - UI update is sufficient
-      // ScaffoldMessenger.of(context).showSnackBar(...);
-
     } catch (e) {
-      if (!mounted) return;
-      // Replace SnackBar with CupertinoAlertDialog
-      showCupertinoDialog(
-        context: context,
-        builder: (context) => CupertinoAlertDialog(
-          title: const Text('Error'),
-          content: Text('Failed to toggle pin: $e'),
-          actions: [ CupertinoDialogAction(isDefaultAction: true, child: const Text('OK'), onPressed: () => Navigator.pop(context)) ],
-        ),
-      );
+      _showDialog('Error', 'Failed to toggle pin: $e', isError: true);
     }
   }
 
   Future<void> _onDelete(BuildContext context) async {
-    // Replace showDialog with showCupertinoDialog
     final confirmed = await showCupertinoDialog<bool>(
       context: context,
-      builder: (ctx) => CupertinoAlertDialog( // Use CupertinoAlertDialog
+      builder:
+          (ctx) => CupertinoAlertDialog(
             title: const Text('Delete Comment'),
             content: const Text(
               'Are you sure you want to delete this comment?',
             ),
             actions: [
-              // Replace TextButton with CupertinoDialogAction
               CupertinoDialogAction(
                 isDefaultAction: true,
                 onPressed: () => Navigator.of(ctx).pop(false),
@@ -190,46 +293,23 @@ class _CommentCardState extends ConsumerState<CommentCard> {
 
     try {
       await ref.read(deleteCommentProvider(fullId))();
-
-      // Confirmation removed - UI update is sufficient
-      // if (!mounted) return;
-      // ScaffoldMessenger.of(context).showSnackBar(...);
-
     } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _isDeleting = false;
-      });
-      // Replace SnackBar with CupertinoAlertDialog
-      showCupertinoDialog(
-        context: context,
-        builder: (context) => CupertinoAlertDialog(
-          title: const Text('Error'),
-          content: Text('Failed to delete comment: $e'),
-          actions: [ CupertinoDialogAction(isDefaultAction: true, child: const Text('OK'), onPressed: () => Navigator.pop(context)) ],
-        ),
-      );
+      if (mounted) {
+        setState(() {
+          _isDeleting = false;
+        }); // Reset deleting state on error
+      }
+      _showDialog('Error', 'Failed to delete comment: $e', isError: true);
     }
+    // No need to set _isDeleting back to false on success, as the widget will be removed
   }
 
   void _onArchive(BuildContext context) async {
     final fullId = '${widget.memoId}/${widget.comment.id}';
     try {
       await ref.read(archiveCommentProvider(fullId))();
-      // Confirmation removed - UI update is sufficient
-      // if (!mounted) return;
-      // ScaffoldMessenger.of(context).showSnackBar(...);
     } catch (e) {
-      if (!mounted) return;
-      // Replace SnackBar with CupertinoAlertDialog
-       showCupertinoDialog(
-        context: context,
-        builder: (context) => CupertinoAlertDialog(
-          title: const Text('Error'),
-          content: Text('Failed to archive comment: $e'),
-          actions: [ CupertinoDialogAction(isDefaultAction: true, child: const Text('OK'), onPressed: () => Navigator.pop(context)) ],
-        ),
-      );
+      _showDialog('Error', 'Failed to archive comment: $e', isError: true);
     }
   }
 
@@ -238,19 +318,11 @@ class _CommentCardState extends ConsumerState<CommentCard> {
     try {
       final convertFunction = ref.read(convertCommentToMemoProvider(fullId));
       await convertFunction();
-      // Confirmation removed - UI update is sufficient
-      // if (!mounted) return;
-      // ScaffoldMessenger.of(context).showSnackBar(...);
     } catch (e) {
-      if (!mounted) return;
-      // Replace SnackBar with CupertinoAlertDialog
-      showCupertinoDialog(
-        context: context,
-        builder: (context) => CupertinoAlertDialog(
-          title: const Text('Error'),
-          content: Text('Failed to convert comment to memo: $e'),
-          actions: [ CupertinoDialogAction(isDefaultAction: true, child: const Text('OK'), onPressed: () => Navigator.pop(context)) ],
-        ),
+      _showDialog(
+        'Error',
+        'Failed to convert comment to memo: $e',
+        isError: true,
       );
     }
   }
@@ -258,8 +330,6 @@ class _CommentCardState extends ConsumerState<CommentCard> {
   void _onHide(BuildContext context) {
     final fullId = '${widget.memoId}/${widget.comment.id}';
     ref.read(toggleHideCommentProvider(fullId))();
-    // Confirmation removed - UI update is sufficient
-    // ScaffoldMessenger.of(context).showSnackBar(...);
   }
 
   void _toggleMultiSelection() {
@@ -276,27 +346,15 @@ class _CommentCardState extends ConsumerState<CommentCard> {
 
     ref.read(selectedCommentIdsForMultiSelectProvider.notifier).state =
         currentSelection;
-
-    if (kDebugMode) {
-      print('[CommentCard] Multi-selection toggled for comment ID: ${widget.comment.id}');
-      print('[CommentCard] Current selection: ${currentSelection.join(', ')}');
-    }
   }
 
   @override
   Widget build(BuildContext context) {
-    // Use CupertinoTheme for brightness check
     final isDarkMode = CupertinoTheme.of(context).brightness == Brightness.dark;
     final textColor =
         widget.comment.pinned
-            ? CupertinoColors.systemBlue.resolveFrom(
-              context,
-            ) // Use Cupertino color
-            : (isDarkMode
-                ? CupertinoColors.white
-                : CupertinoColors.label.resolveFrom(
-                  context,
-                )); // Use Cupertino colors
+            ? CupertinoColors.systemBlue.resolveFrom(context)
+            : CupertinoColors.label.resolveFrom(context);
 
     final dateTime = DateTime.fromMillisecondsSinceEpoch(
       widget.comment.createTime,
@@ -308,26 +366,16 @@ class _CommentCardState extends ConsumerState<CommentCard> {
     final fullId = '${widget.memoId}/${widget.comment.id}';
     final isMultiSelected = selectedIds.contains(fullId);
 
-    // Determine if the card should be highlighted
     final highlightedCommentId = ref.watch(highlightedCommentIdProvider);
     final bool isHighlighted = highlightedCommentId == widget.comment.id;
 
-    // Add debug prints
-    if (kDebugMode) {
-      print('[CommentCard build] Comment ID: ${widget.comment.id}');
-      print('[CommentCard build] Highlighted ID from provider: $highlightedCommentId');
-      print('[CommentCard build] isHighlighted: $isHighlighted');
-    }
-
-    // Define card style variables
     Color cardBackgroundColor;
     BorderSide cardBorderStyle;
 
-    // Determine card style based on selection and highlight state
     if (isHighlighted) {
       cardBackgroundColor = isDarkMode
-          ? CupertinoColors.systemTeal.darkColor.withAlpha(100) // Adjusted alpha
-          : CupertinoColors.systemTeal.color.withAlpha(50); // Adjusted alpha
+              ? CupertinoColors.systemTeal.darkColor.withAlpha(100)
+              : CupertinoColors.systemTeal.color.withAlpha(50);
       cardBorderStyle = BorderSide(
         color: isDarkMode
             ? CupertinoColors.systemTeal.darkColor
@@ -345,24 +393,11 @@ class _CommentCardState extends ConsumerState<CommentCard> {
       cardBorderStyle = BorderSide.none;
     }
 
-    // Add debug prints for final style
-    if (kDebugMode) {
-      print('[CommentCard build] Final cardColor: $cardBackgroundColor');
-      print('[CommentCard build] Final cardBorder: $cardBorderStyle');
-    }
-
-    // Reset highlight state after build if it was highlighted
     if (isHighlighted) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted &&
             ref.read(highlightedCommentIdProvider) == widget.comment.id) {
-          if (kDebugMode) {
-            print(
-              '[CommentCard] Resetting highlight for comment ${widget.comment.id}',
-            );
-          }
           ref.read(highlightedCommentIdProvider.notifier).state = null;
-
           Scrollable.ensureVisible(
             context,
             duration: const Duration(milliseconds: 300),
@@ -378,8 +413,7 @@ class _CommentCardState extends ConsumerState<CommentCard> {
 
     final apiService = ref.watch(apiServiceProvider);
     final baseUrl = apiService.apiBaseUrl;
-    
-    // Define card key
+
     final cardKey =
         isHighlighted
             ? Key('highlighted-comment-card-${widget.comment.id}')
@@ -387,7 +421,6 @@ class _CommentCardState extends ConsumerState<CommentCard> {
                 ? Key('selected-comment-card-${widget.comment.id}')
                 : null);
 
-    // Replace Card with Container
     Widget commentCardWidget = Container(
       key: cardKey,
       margin: const EdgeInsets.symmetric(vertical: 6.0, horizontal: 0),
@@ -395,27 +428,21 @@ class _CommentCardState extends ConsumerState<CommentCard> {
         color: cardBackgroundColor,
         borderRadius: BorderRadius.circular(8),
         border: Border.fromBorderSide(cardBorderStyle),
-         // Add subtle shadow for light mode if desired
         boxShadow: !isDarkMode && !widget.isSelected && !isHighlighted ? [
           BoxShadow(
-                    color: CupertinoColors.black.withAlpha(
-                      25,
-                    ), // Replace withOpacity with withAlpha
+                    color: CupertinoColors.black.withAlpha(25),
             blurRadius: 4,
             offset: const Offset(0, 1),
           )
         ] : null,
       ),
-      // Replace InkWell with GestureDetector
       child: GestureDetector(
         onLongPress: isMultiSelectMode ? () => _toggleMultiSelection() : () => _showContextMenu(context),
         onTap: isMultiSelectMode ? () => _toggleMultiSelection() : null,
-        // Add these lines to ignore vertical drags and set behavior
         onVerticalDragStart: null,
         onVerticalDragUpdate: null,
         onVerticalDragEnd: null,
-        behavior:
-            HitTestBehavior.opaque, // Ensure taps are still captured correctly
+        behavior: HitTestBehavior.opaque,
         child: Padding(
           padding: const EdgeInsets.all(12.0),
           child: Column(
@@ -472,7 +499,6 @@ class _CommentCardState extends ConsumerState<CommentCard> {
                                 );
                                 final imageUrl =
                                     '$baseUrl/o/r/$resourceName/$encodedFilename';
-
                                 return ConstrainedBox(
                                   constraints: const BoxConstraints(
                                     maxWidth: 200,
@@ -494,12 +520,12 @@ class _CommentCardState extends ConsumerState<CommentCard> {
                                           width: 50,
                                           height: 50,
                                           alignment: Alignment.center,
-                                          color: CupertinoColors.systemGrey5.resolveFrom(context), // Use Cupertino color
-                                          // Replace CircularProgressIndicator with CupertinoActivityIndicator
-                                          child: const CupertinoActivityIndicator(
-                                            radius: 10, // Adjust size
-                                            // Value cannot be directly set for CupertinoActivityIndicator
-                                          ),
+                                          color: CupertinoColors.systemGrey5
+                                              .resolveFrom(context),
+                                          child:
+                                              const CupertinoActivityIndicator(
+                                                radius: 10,
+                                              ),
                                         );
                                       },
                                       errorBuilder: (
@@ -510,9 +536,11 @@ class _CommentCardState extends ConsumerState<CommentCard> {
                                         return Container(
                                           width: 50,
                                           height: 50,
-                                          color: CupertinoColors.systemGrey5.resolveFrom(context), // Use Cupertino color
+                                          color: CupertinoColors.systemGrey5
+                                              .resolveFrom(context),
                                           child: const Icon(
-                                            CupertinoIcons.exclamationmark_circle, // Use Cupertino icon
+                                            CupertinoIcons
+                                                .exclamationmark_circle,
                                             color: CupertinoColors.systemGrey,
                                           ),
                                         );
@@ -538,16 +566,53 @@ class _CommentCardState extends ConsumerState<CommentCard> {
                     formattedDate,
                     style: TextStyle(
                       fontSize: 12,
-                      color: CupertinoColors.secondaryLabel.resolveFrom(context), // Use Cupertino color
+                      color: CupertinoColors.secondaryLabel.resolveFrom(
+                        context,
+                      ),
                       fontStyle: FontStyle.italic,
                     ),
                   ),
-                  if (widget.comment.pinned)
-                    Icon( // Use Cupertino icon
-                      CupertinoIcons.pin_fill,
-                      size: 16,
-                      color: CupertinoColors.systemBlue.resolveFrom(context), // Use Cupertino color
-                    ),
+                  // Combine internal actions (pin) with external actions (Todoist)
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (widget.comment.pinned)
+                        Padding(
+                          padding: const EdgeInsets.only(
+                            right: 8.0,
+                          ), // Add padding if needed
+                          child: Icon(
+                            CupertinoIcons.pin_fill,
+                            size: 16,
+                            color: CupertinoColors.systemBlue.resolveFrom(
+                              context,
+                            ),
+                          ),
+                        ),
+                      // Add the Todoist button logic here
+                      if (_isSendingToTodoist)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 4.0),
+                          child: CupertinoActivityIndicator(
+                            radius: 9,
+                          ), // Smaller radius
+                        )
+                      else
+                        CupertinoButton(
+                          padding: const EdgeInsets.all(4),
+                          minSize: 0,
+                          child: Icon(
+                            CupertinoIcons.paperplane,
+                            size: 18,
+                            color: CupertinoColors.secondaryLabel.resolveFrom(
+                              context,
+                            ),
+                          ),
+                          onPressed:
+                              () => _sendCommentToTodoist(widget.comment),
+                        ),
+                    ],
+                  )
                 ],
               ),
             ],
@@ -557,27 +622,14 @@ class _CommentCardState extends ConsumerState<CommentCard> {
     );
 
     if (isMultiSelectMode) {
-      if (isMultiSelected) {
-        commentCardWidget = Container(
-          decoration: BoxDecoration(
-            border: Border.all(
-              color: CupertinoTheme.of(context).primaryColor, // Use Cupertino theme color
-              width: 2,
-            ),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: commentCardWidget,
-        );
-      }
-
+      // Wrap with Row for checkbox in multi-select mode
       return Padding(
         padding: const EdgeInsets.only(bottom: 12.0),
         child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start, // Align checkbox with top of card
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Replace Checkbox with CupertinoCheckbox
             Padding(
-              padding: const EdgeInsets.only(top: 12.0, right: 8.0), // Adjust padding
+              padding: const EdgeInsets.only(top: 12.0, right: 8.0),
               child: CupertinoCheckbox(
                 value: isMultiSelected,
                 onChanged: (value) => _toggleMultiSelection(),
@@ -588,59 +640,60 @@ class _CommentCardState extends ConsumerState<CommentCard> {
           ],
         ),
       );
+    } else {
+      // Wrap with Slidable for normal mode
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 12.0),
+        child: Slidable(
+          key: Key('slidable-comment-${widget.comment.id}'),
+          startActionPane: ActionPane(
+            motion: const DrawerMotion(),
+            children: [
+              SlidableAction(
+                onPressed: (_) => _onTogglePin(context),
+                backgroundColor: CupertinoColors.systemBlue,
+                foregroundColor: CupertinoColors.white,
+                icon:
+                    widget.comment.pinned
+                        ? CupertinoIcons.pin_slash_fill
+                        : CupertinoIcons.pin_fill,
+                label: widget.comment.pinned ? 'Unpin' : 'Pin',
+                autoClose: true,
+              ),
+              SlidableAction(
+                onPressed: (_) => _onConvertToMemo(context),
+                backgroundColor: CupertinoColors.systemTeal,
+                foregroundColor: CupertinoColors.white,
+                icon: CupertinoIcons.doc_text_fill,
+                label: 'To Memo',
+                autoClose: true,
+              ),
+            ],
+          ),
+          endActionPane: ActionPane(
+            motion: const DrawerMotion(),
+            children: [
+              SlidableAction(
+                onPressed: (_) => _onDelete(context),
+                backgroundColor: CupertinoColors.destructiveRed,
+                foregroundColor: CupertinoColors.white,
+                icon: CupertinoIcons.delete,
+                label: 'Delete',
+                autoClose: true,
+              ),
+              SlidableAction(
+                onPressed: (_) => _onArchive(context),
+                backgroundColor: CupertinoColors.systemPurple,
+                foregroundColor: CupertinoColors.white,
+                icon: CupertinoIcons.archivebox_fill,
+                label: 'Archive',
+                autoClose: true,
+              ),
+            ],
+          ),
+          child: commentCardWidget,
+        ),
+      );
     }
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12.0),
-      child: Slidable(
-        key: Key('slidable-comment-${widget.comment.id}'),
-        startActionPane: ActionPane(
-          motion: const DrawerMotion(),
-          children: [
-            SlidableAction(
-              onPressed: (_) => _onTogglePin(context),
-              backgroundColor: CupertinoColors.systemBlue, // Use Cupertino color
-              foregroundColor: CupertinoColors.white,
-              icon:
-                  widget.comment.pinned
-                      ? CupertinoIcons.pin_slash_fill // Use Cupertino icon
-                      : CupertinoIcons.pin_fill, // Use Cupertino icon
-              label: widget.comment.pinned ? 'Unpin' : 'Pin',
-              autoClose: true,
-            ),
-            SlidableAction(
-              onPressed: (_) => _onConvertToMemo(context),
-              backgroundColor: CupertinoColors.systemTeal, // Use Cupertino color
-              foregroundColor: CupertinoColors.white,
-              icon: CupertinoIcons.doc_text_fill, // Use Cupertino icon
-              label: 'To Memo',
-              autoClose: true,
-            ),
-          ],
-        ),
-        endActionPane: ActionPane(
-          motion: const DrawerMotion(),
-          children: [
-            SlidableAction(
-              onPressed: (_) => _onDelete(context),
-              backgroundColor: CupertinoColors.destructiveRed, // Use Cupertino color
-              foregroundColor: CupertinoColors.white,
-              icon: CupertinoIcons.delete, // Use Cupertino icon
-              label: 'Delete',
-              autoClose: true,
-            ),
-            SlidableAction(
-              onPressed: (_) => _onArchive(context),
-              backgroundColor: CupertinoColors.systemPurple, // Use Cupertino color
-              foregroundColor: CupertinoColors.white,
-              icon: CupertinoIcons.archivebox_fill, // Use Cupertino icon
-              label: 'Archive',
-              autoClose: true,
-            ),
-          ],
-        ),
-        child: commentCardWidget,
-      ),
-    );
   }
 }
