@@ -732,9 +732,10 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
           case SubmitAction.appendToMemo:
           case SubmitAction.prependToMemo: // Combine logic for append/prepend memo
             if (parentMemo != null) {
+              // Ensure newline is added between existing and new content
               final updatedContent = (currentAction == SubmitAction.appendToMemo)
-                  ? "${parentMemo.content}\n$currentContent"
-                  : "$currentContent\n${parentMemo.content}";
+                      ? "${parentMemo.content}\n$currentContent" // Add newline before new content
+                      : "$currentContent\n${parentMemo.content}"; // Add newline after new content
               final updatedMemoData = parentMemo.copyWith(content: updatedContent);
 
               // Call updateMemoProvider and store the result
@@ -750,15 +751,19 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
                     print('[CaptureUtility] Manually updated memoDetailCacheProvider for $memoId');
                   }
                }
-               // Explicitly refresh the detail provider AFTER updating cache
-              // Store refresh result to prevent unused_result warning
-              final _ = ref.refresh(memoDetailProvider(memoId));
-               // Explicitly refresh the list provider
-              final __ = ref.refresh(memo_providers.memosNotifierProvider);
+              // Explicitly refresh the detail provider AFTER updating cache and AWAIT its completion
+              await ref.refresh(
+                memoDetailProvider(memoId).future,
+              ); // Await the future
+              // Explicitly refresh the list provider (no need to await this one for immediate detail update)
+              ref.refresh(memo_providers.memosNotifierProvider);
                if (kDebugMode) {
-                 print('[CaptureUtility] Explicitly refreshed memoDetailProvider and memosNotifierProvider for $memoId');
+                print(
+                  '[CaptureUtility] Explicitly refreshed (and awaited detail) providers for $memoId',
+                );
                }
               // --- End manual update and refresh ---
+
             } else {
               throw Exception(
                 "Cannot ${currentAction == SubmitAction.appendToMemo ? 'append' : 'prepend'}: Parent memo not loaded or available.",
