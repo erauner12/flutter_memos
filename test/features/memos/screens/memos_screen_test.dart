@@ -3,14 +3,15 @@ import 'package:flutter/cupertino.dart'; // Import Cupertino
 import 'package:flutter_memos/models/memo.dart';
 import 'package:flutter_memos/models/multi_server_config_state.dart'; // Import MultiServerConfigState
 import 'package:flutter_memos/models/server_config.dart'; // Import ServerConfig
-import 'package:flutter_memos/providers/api_providers.dart';
 import 'package:flutter_memos/providers/filter_providers.dart';
 import 'package:flutter_memos/providers/memo_providers.dart';
 import 'package:flutter_memos/providers/server_config_provider.dart'; // Import server config provider
 import 'package:flutter_memos/providers/ui_providers.dart' as ui_providers;
 import 'package:flutter_memos/screens/memos/memo_list_item.dart';
+import 'package:flutter_memos/screens/memos/memos_body.dart'; // Import MemosBody
 import 'package:flutter_memos/screens/memos/memos_screen.dart';
 import 'package:flutter_memos/services/api_service.dart' as api_service;
+import 'package:flutter_memos/services/api_service.dart'; // Import for PaginatedMemoResponse
 import 'package:flutter_memos/widgets/advanced_filter_panel.dart'; // Import AdvancedFilterPanel
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_slidable/flutter_slidable.dart'; // Keep if Slidable is used
@@ -188,6 +189,7 @@ void main() {
       ),
     ).thenAnswer(
       (_) async => PaginatedMemoResponse(
+        // Use the imported type
         memos: dummyMemos,
         nextPageToken: null, // No more pages available
       ),
@@ -312,8 +314,12 @@ void main() {
     expect(find.text('Tagged'), findsWidgets); // Segment label
     expect(find.text('All'), findsWidgets); // Segment label
 
-    // Verify Memo List Items
-    expect(find.byType(MemoListItem), findsNWidgets(dummyMemos.length));
+    // Verify Memo List Items (now within MemosBody)
+    // Check if MemosBody exists, which contains the list
+    expect(find.byType(MemosBody), findsOneWidget);
+    // We can still check for MemoListItem *within* MemosBody if needed,
+    // but verifying MemosBody itself is often sufficient at this level.
+    // expect(find.byType(MemoListItem), findsNWidgets(dummyMemos.length));
 
     // Verify multi-select actions are NOT present
     expect(

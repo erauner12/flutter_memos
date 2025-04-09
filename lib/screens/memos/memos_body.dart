@@ -6,15 +6,19 @@ import 'package:flutter_memos/providers/memo_providers.dart';
 import 'package:flutter_memos/providers/ui_providers.dart'
     as ui_providers; // Add import
 import 'package:flutter_memos/screens/memos/memo_list_item.dart';
+import 'package:flutter_memos/screens/memos/memos_empty_state.dart'; // Import MemosEmptyState
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 // Assuming MemosBody is a ConsumerWidget or ConsumerStatefulWidget
 class MemosBody extends ConsumerStatefulWidget {
   // Add the callback as an optional named parameter
   final void Function(String memoId)? onMoveMemoToServer;
+  // Add the scrollController property
+  final ScrollController scrollController;
 
   const MemosBody({
     super.key,
+    required this.scrollController, // Make it required
     this.onMoveMemoToServer, // Add to constructor
   });
 
@@ -23,13 +27,14 @@ class MemosBody extends ConsumerStatefulWidget {
 }
 
 class _MemosBodyState extends ConsumerState<MemosBody> {
-  final ScrollController _scrollController = ScrollController();
+  // REMOVE: final ScrollController _scrollController = ScrollController();
   // Remove RefreshIndicator key as it's no longer needed
 
   @override
   void initState() {
     super.initState();
-    _scrollController.addListener(_onScroll);
+    // Use the controller from the widget
+    widget.scrollController.addListener(_onScroll);
     // Ensure the first memo is selected after initial load/refresh
     WidgetsBinding.instance.addPostFrameCallback(
       (_) => _ensureInitialSelection(),
@@ -59,14 +64,16 @@ class _MemosBodyState extends ConsumerState<MemosBody> {
 
   @override
   void dispose() {
-    _scrollController.removeListener(_onScroll);
-    _scrollController.dispose();
+    // Remove listener from the widget's controller
+    widget.scrollController.removeListener(_onScroll);
+    // DO NOT dispose the controller here: _scrollController.dispose();
     super.dispose();
   }
 
   void _onScroll() {
-    if (_scrollController.position.pixels >=
-        _scrollController.position.maxScrollExtent - 200) {
+    // Use widget's controller
+    if (widget.scrollController.position.pixels >=
+        widget.scrollController.position.maxScrollExtent - 200) {
       // Trigger load more slightly before reaching the end
       final notifier = ref.read(memosNotifierProvider.notifier);
       // Check if we can load more before calling
@@ -166,29 +173,23 @@ class _MemosBodyState extends ConsumerState<MemosBody> {
 
     // Empty State (or No Search Results)
     if (visibleMemos.isEmpty) {
-      return Center(
-        child: Text(
-          hasSearchResults
-              ? 'No memos found matching your filters.'
-              : 'No memos found matching your search.',
-          style: TextStyle(
-            color: CupertinoColors.secondaryLabel.resolveFrom(context),
-          ),
-        ),
-      );
+      // Delegate to MemosEmptyState widget
+      return MemosEmptyState(onRefresh: _onRefresh);
     }
 
     // In the build method, wrap the ScrollConfiguration with CupertinoScrollbar
     // Data State (List View)
     return CupertinoScrollbar(
-      controller: _scrollController,
+      // Use widget's controller
+      controller: widget.scrollController,
       thumbVisibility: true,
       thickness: 6.0,
       radius: const Radius.circular(3.0),
       child: ScrollConfiguration(
         behavior: const CupertinoScrollBehavior(),
         child: CustomScrollView(
-          controller: _scrollController,
+          // Use widget's controller
+          controller: widget.scrollController,
           slivers: [
             // Existing slivers...
             CupertinoSliverRefreshControl(

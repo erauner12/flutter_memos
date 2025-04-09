@@ -12,30 +12,18 @@ class MemosEmptyState extends ConsumerWidget {
     this.onRefresh,
   });
 
-  // Helper method to apply status filter and clear hidden memos
-  void _applyStatusFilter(String filterOption, WidgetRef ref) {
-    ref.read(statusFilterProvider.notifier).state = filterOption;
+  // Helper method to apply filter preset and clear hidden memos
+  void _applyFilterPreset(String presetKey, WidgetRef ref) {
+    ref.read(quickFilterPresetProvider.notifier).state = presetKey;
     ref.read(hiddenMemoIdsProvider.notifier).state = {}; // Clear hidden memos
-    // Save preferences (assuming filterPreferencesProvider exists and is adapted)
-    // final timeFilter = ref.read(timeFilterProvider);
-    // ref.read(filterPreferencesProvider)(timeFilter, filterOption);
-  }
-
-  // Helper method to apply time filter and clear hidden memos
-  void _applyTimeFilter(String filterOption, WidgetRef ref) {
-    ref.read(timeFilterProvider.notifier).state = filterOption;
-    ref.read(hiddenMemoIdsProvider.notifier).state = {}; // Clear hidden memos
-    // Save preferences (assuming filterPreferencesProvider exists and is adapted)
-    // final statusFilter = ref.read(statusFilterProvider);
-    // ref.read(filterPreferencesProvider)(filterOption, statusFilter);
+    // Save preferences using the new provider
+    ref.read(filterPreferencesProvider)(presetKey);
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final timeFilterOption = ref.watch(timeFilterProvider);
-    final statusFilterOption = ref.watch(statusFilterProvider);
-    final bool hasActiveFilters =
-        timeFilterOption != 'all' || statusFilterOption != 'all';
+    final currentPresetKey = ref.watch(quickFilterPresetProvider);
+    final bool hasActiveFilters = currentPresetKey != 'all';
 
     // Use CupertinoTheme for styling
     final theme = CupertinoTheme.of(context);
@@ -111,14 +99,14 @@ class MemosEmptyState extends ConsumerWidget {
                   ],
                 ),
                 const SizedBox(height: 8),
-                // Display active status filter and clear button
-                if (statusFilterOption != 'all')
+                // Display active filter preset and clear button
+                if (currentPresetKey != 'all')
                   Padding(
                     padding: const EdgeInsets.only(left: 28.0, bottom: 4.0),
                     child: Row(
                       children: [
                         Text(
-                          '• Status: $statusFilterOption',
+                          '• Filter: ${quickFilterPresets[currentPresetKey]?.label ?? currentPresetKey}',
                           style: TextStyle(color: filterInfoTextColor),
                         ),
                         const Spacer(),
@@ -128,36 +116,7 @@ class MemosEmptyState extends ConsumerWidget {
                             vertical: 0,
                           ),
                           minSize: 24,
-                          onPressed: () => _applyStatusFilter('all', ref),
-                          child: Text(
-                            'Clear',
-                            style: TextStyle(
-                              color: clearButtonColor,
-                              fontSize: 14,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                // Display active time filter and clear button
-                if (timeFilterOption != 'all')
-                  Padding(
-                    padding: const EdgeInsets.only(left: 28.0, bottom: 4.0),
-                    child: Row(
-                      children: [
-                        Text(
-                          '• Time: $timeFilterOption',
-                          style: TextStyle(color: filterInfoTextColor),
-                        ),
-                        const Spacer(),
-                        CupertinoButton(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 0,
-                          ),
-                          minSize: 24,
-                          onPressed: () => _applyTimeFilter('all', ref),
+                          onPressed: () => _applyFilterPreset('all', ref),
                           child: Text(
                             'Clear',
                             style: TextStyle(
@@ -178,10 +137,7 @@ class MemosEmptyState extends ConsumerWidget {
                       vertical: 4,
                     ),
                     minSize: 30,
-                    onPressed: () {
-                      _applyStatusFilter('all', ref);
-                      _applyTimeFilter('all', ref);
-                    },
+                    onPressed: () => _applyFilterPreset('all', ref),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -214,7 +170,9 @@ class MemosEmptyState extends ConsumerWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Icon(
-                  CupertinoIcons.square_list, // Default icon
+                  quickFilterPresets[currentPresetKey]?.icon ??
+                      CupertinoIcons
+                          .square_list, // Use preset icon if available
                   size: 64,
                   color: iconColor,
                 ),

@@ -27,6 +27,8 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
   // ScrollController and RefreshIndicatorKey are now managed within MemosBody
   final FocusNode _focusNode =
       FocusNode(); // Keep FocusNode for the screen level
+  // Add the ScrollController here
+  final ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
@@ -43,6 +45,7 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
   @override
   void dispose() {
     _focusNode.dispose(); // Dispose the focus node
+    _scrollController.dispose(); // Dispose the scroll controller
     super.dispose(); // Must call super
   }
 
@@ -308,7 +311,28 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
                 // Add Server Switcher to leading
                 leading: _buildServerSwitcherButton(),
                 // Update middle text to show current quick filter preset label
-                middle: Text(currentPresetLabel),
+                // Wrap the middle Text with GestureDetector
+                middle: GestureDetector(
+                  onTap: () {
+                    // Check if the controller is attached to a scroll view
+                    if (_scrollController.hasClients) {
+                      _scrollController.animateTo(
+                        0.0, // Scroll to the top
+                        duration: const Duration(
+                          milliseconds: 300,
+                        ), // Adjust duration as needed
+                        curve: Curves.easeOut, // Adjust curve as needed
+                      );
+                    }
+                  },
+                  // Make sure the tap area covers the text, add some padding if needed
+                  child: Container(
+                    // Optional: Add padding for a larger tap area if the text is small
+                    // padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+                    color: CupertinoColors.transparent, // Ensure it's tappable
+                    child: Text(currentPresetLabel),
+                  ),
+                ),
                 // Combine actions into the trailing widget
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -319,9 +343,9 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
                       minSize: 0,
                       onPressed:
                           () =>
-                            ref.read(
-                              ui_providers.toggleMemoMultiSelectModeProvider,
-                            )(),
+                              ref.read(
+                                ui_providers.toggleMemoMultiSelectModeProvider,
+                              )(),
                       child: const Icon(
                         CupertinoIcons.checkmark_seal,
                       ), // Example icon
@@ -372,14 +396,12 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
                   ), // Reduced bottom padding
                   child: _buildSearchBar(), // Build the search bar widget
                 ),
-
               // Add Quick Filter Segmented Control if not in multi-select mode
               if (!isMultiSelectMode)
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 8.0),
                   child: _buildQuickFilterControl(),
                 ),
-
               // Main list of memos
               Expanded(child: _buildMemosList(memosState, visibleMemos)),
             ],
@@ -414,7 +436,6 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
                   Icon(
                     preset.icon,
                     size: 18, // Adjust icon size
-                    // Color will be handled by the segmented control state
                   ),
                 if (preset.icon != null)
                   const SizedBox(width: 4), // Spacing between icon and text
@@ -425,12 +446,10 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
     };
 
     return SizedBox(
-      // Constrain width if needed
       width: double.infinity,
       child: CupertinoSlidingSegmentedControl<String>(
-        // Set groupValue to null if 'custom' is selected, otherwise use the key
         groupValue: selectedPresetKey == 'custom' ? null : selectedPresetKey,
-        thumbColor: theme.primaryColor, // Use theme color for thumb
+        thumbColor: theme.primaryColor,
         backgroundColor: CupertinoColors.secondarySystemFill.resolveFrom(
           context,
         ),
@@ -439,15 +458,10 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
             if (kDebugMode) {
               print('[MemosScreen] Quick filter selected: $newPresetKey');
             }
-            // Update the preset provider
             ref.read(quickFilterPresetProvider.notifier).state = newPresetKey;
-            // Clear any raw filter from the advanced panel if a quick preset is chosen
             if (ref.read(rawCelFilterProvider).isNotEmpty) {
               ref.read(rawCelFilterProvider.notifier).state = '';
             }
-            // Trigger a refresh (MemosNotifier should react to combinedFilterProvider change)
-            // ref.read(memosNotifierProvider.notifier).refresh(); // Usually not needed if notifier watches combinedFilterProvider
-            // Save preference
             ref.read(filterPreferencesProvider)(newPresetKey);
           }
         },
@@ -457,31 +471,19 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
   }
 
   void _showAdvancedFilterPanel(BuildContext context) {
-    // Show the advanced filter panel using showCupertinoModalPopup
     showCupertinoModalPopup(
       context: context,
-      // Make the background dismissible
       barrierDismissible: true,
       builder: (BuildContext context) {
-        // Use the AdvancedFilterPanel widget directly
         return DraggableScrollableSheet(
-          initialChildSize: 0.8, // Start at 80% height
-          minChildSize: 0.4, // Minimum height when dragging down
-          maxChildSize: 0.9, // Maximum height
+          initialChildSize: 0.8,
+          minChildSize: 0.4,
+          maxChildSize: 0.9,
           expand: false,
           builder: (_, scrollController) {
-            // Pass the scroll controller to the panel if it needs it
-            // For now, we wrap the panel itself
             return AdvancedFilterPanel(onClose: () => Navigator.pop(context));
           },
         );
-        /* // Previous implementation without DraggableScrollableSheet
-        return SizedBox(
-          // Set height to 80% of screen height
-          height: MediaQuery.of(context).size.height * 0.8,
-          child: AdvancedFilterPanel(onClose: () => Navigator.pop(context)),
-        );
-        */
       },
     );
   }
@@ -496,16 +498,16 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
     final truncatedName = serverName.length > 15 ? '${serverName.substring(0, 12)}...' : serverName;
 
     return CupertinoButton(
-      padding: const EdgeInsets.only(left: 8.0), // Adjust padding as needed
+      padding: const EdgeInsets.only(left: 8.0),
       onPressed: () => _showServerSelectionSheet(context, ref),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(CupertinoIcons.square_stack_3d_down_right, size: 20), // Example icon
+          const Icon(CupertinoIcons.square_stack_3d_down_right, size: 20),
           const SizedBox(width: 4),
           Text(
             truncatedName,
-            style: const TextStyle(fontSize: 14), // Adjust style as needed
+            style: const TextStyle(fontSize: 14),
             overflow: TextOverflow.ellipsis,
           ),
           const Icon(CupertinoIcons.chevron_down, size: 14),
@@ -522,7 +524,6 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
     final notifier = ref.read(multiServerConfigProvider.notifier);
 
     if (servers.isEmpty) {
-      // Optionally show a message or navigate to settings
       showCupertinoDialog(
         context: context,
         builder: (context) => CupertinoAlertDialog(
@@ -532,8 +533,7 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
             CupertinoDialogAction(
               child: const Text('Settings'),
               onPressed: () {
-                Navigator.pop(context); // Close dialog
-                    // Ensure settings route exists and is handled correctly
+                    Navigator.pop(context);
                 Navigator.of(context, rootNavigator: true).pushNamed('/settings');
               },
             ),
@@ -555,14 +555,13 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
         actions: servers.map((server) {
           final bool isActive = server.id == activeServerId;
           return CupertinoActionSheetAction(
-            isDefaultAction: isActive, // Highlight the active server
+                    isDefaultAction: isActive,
             onPressed: () {
               if (!isActive) {
                 if (kDebugMode) {
                   print('[MemosScreen] Setting active server to: ${server.name ?? server.id}');
                 }
-                notifier.setActiveServer(server.id);
-                        // Explicitly invalidate the memos notifier to trigger a refresh
+                        notifier.setActiveServer(server.id);
                         ref.invalidate(memosNotifierProvider);
                         if (kDebugMode) {
                           print(
@@ -570,7 +569,7 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
                           );
                         }
               }
-              Navigator.pop(context); // Close the action sheet
+                      Navigator.pop(context);
             },
             child: Text(server.name ?? server.serverUrl),
           );
@@ -593,39 +592,24 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
     );
     controller.selection = TextSelection.fromPosition(
       TextPosition(offset: controller.text.length),
-    ); // Place cursor at the end
+    );
 
-    // Use CupertinoSearchTextField for a native look
     return CupertinoSearchTextField(
       controller: controller,
       placeholder: 'Search memos...',
-      // Style based on theme
       style: TextStyle(color: CupertinoColors.label.resolveFrom(context)),
       decoration: BoxDecoration(
         color: CupertinoColors.systemFill.resolveFrom(context),
         borderRadius: BorderRadius.circular(10.0),
       ),
-      // prefixIcon and suffixIcon are built-in
       onChanged: (value) {
-        // Update the search query provider as user types
         ref.read(searchQueryProvider.notifier).state = value;
-
-        // If value is non-empty and we have local search disabled, we might want
-        // to trigger a server search after debouncing
         final isLocalSearch = ref.read(localSearchEnabledProvider);
         if (!isLocalSearch && value.isNotEmpty) {
-          // In a real app, you'd add debouncing logic here
-          // For now, we'll refresh immediately when local search is disabled
-          // MemosNotifier should react to combinedFilterProvider change if search is part of it
-          // Or trigger refresh explicitly if search is handled separately
           ref.read(memosNotifierProvider.notifier).refresh();
-        } else if (isLocalSearch) {
-          // If local search is enabled, no server refresh needed on text change
-          // The filtering happens client-side via filteredMemosProvider
         }
       },
       onSubmitted: (value) {
-        // Trigger server search on submit if local search is disabled
         final isLocalSearch = ref.read(localSearchEnabledProvider);
         if (!isLocalSearch) {
           ref.read(memosNotifierProvider.notifier).refresh();
@@ -642,7 +626,6 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
       );
     }
 
-    // 1. Get available servers
     final multiServerState = ref.read(multiServerConfigProvider);
     final servers = multiServerState.servers;
     final activeServerId = multiServerState.activeServerId;
@@ -656,9 +639,8 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
     }
 
     if (availableTargetServers.isEmpty) {
-      // Show dialog: No other servers available
       showCupertinoDialog(
-        context: context, // Use context from the State class
+        context: context,
         builder:
             (ctx) => CupertinoAlertDialog(
               title: const Text('No Other Servers'),
@@ -677,9 +659,8 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
       return;
     }
 
-    // 2. Show CupertinoActionSheet to select target server
     showCupertinoModalPopup<ServerConfig>(
-      context: context, // Use context from the State class
+      context: context,
       builder:
           (sheetContext) => CupertinoActionSheet(
             title: const Text('Move Memo To...'),
@@ -694,10 +675,7 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
                               '[MemosScreen] Selected target server: ${server.name ?? server.id}',
                             );
                           }
-                          Navigator.pop(
-                            sheetContext,
-                            server,
-                          ); // Return selected server
+                          Navigator.pop(sheetContext, server);
                         },
                       ),
                     )
@@ -709,7 +687,6 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
           ),
     ).then((selectedServer) {
       if (selectedServer != null) {
-        // 3. Call the moveMemoProvider if a server was selected
         if (kDebugMode) {
           print(
             '[MemosScreen] Calling moveMemoProvider for memo $memoId to server ${selectedServer.id}',
@@ -719,18 +696,15 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
           memoId: memoId,
           targetServer: selectedServer,
         );
-        // Consider showing a loading indicator here
         ref
             .read(moveMemoProvider(moveParams))()
             .then((_) {
               if (kDebugMode) {
                 print('[MemosScreen] Move successful for memo $memoId');
               }
-              // Optional: Show success feedback
               if (mounted) {
-                // Check mounted after async operation
                 showCupertinoDialog(
-                  context: context, // Use context from the State class
+                  context: context,
                   builder:
                       (ctx) => CupertinoAlertDialog(
                         title: const Text('Move Successful'),
@@ -749,20 +723,16 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
               }
             })
             .catchError((error, stackTrace) {
-              // Include stackTrace for better debugging
               if (kDebugMode) {
                 print('[MemosScreen] Move failed for memo $memoId: $error');
-                print(stackTrace); // Print stack trace
+                print(stackTrace);
               }
-              // Show error dialog
               if (mounted) {
-                // Check mounted after async operation
                 showCupertinoDialog(
-                  context: context, // Use context from the State class
+                  context: context,
                   builder:
                       (ctx) => CupertinoAlertDialog(
                         title: const Text('Move Failed'),
-                        // Provide a more user-friendly error message
                         content: Text(
                           'Could not move memo. Error: ${error.toString()}',
                         ),
@@ -787,7 +757,9 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
 
   // Simplified _buildMemosList to delegate to MemosBody (remains unchanged)
   Widget _buildMemosList(MemosState memosState, List<Memo> visibleMemos) {
+    // Pass the scroll controller down
     return MemosBody(
+      scrollController: _scrollController,
       onMoveMemoToServer: _handleMoveMemoToServer,
     );
   }
