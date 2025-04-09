@@ -7,7 +7,7 @@
 import 'package:flutter/cupertino.dart'; // Import Cupertino
 import 'package:flutter_memos/main.dart';
 import 'package:flutter_memos/models/memo.dart';
-import 'package:flutter_memos/providers/api_providers.dart';
+import 'package:flutter_memos/providers/api_providers.dart' as providers;
 import 'package:flutter_memos/services/api_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -77,7 +77,9 @@ void main() {
     // Build our app and trigger a frame
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [apiServiceProvider.overrideWithValue(mockApiService)],
+        overrides: [
+          providers.apiServiceProvider.overrideWithValue(mockApiService),
+        ],
         child: const MyApp(),
       ),
     );
