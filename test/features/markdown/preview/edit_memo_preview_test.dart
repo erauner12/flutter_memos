@@ -57,10 +57,15 @@ void main() {
             home: CupertinoPageScaffold(
               // Use CupertinoPageScaffold
               // Use the new constructor signature
-              child: EditMemoForm(
-                entityId: 'test-id',
-                entityType: 'memo',
-                entity: memo, // Add the required entity parameter
+              // Wrap in SizedBox to provide constraints
+              child: SizedBox(
+                width: 800,
+                height: 600,
+                child: EditMemoForm(
+                  entityId: 'test-id',
+                  entityType: 'memo',
+                  entity: memo, // Add the required entity parameter
+                ),
               ),
             ),
           ),
@@ -126,10 +131,15 @@ void main() {
             home: CupertinoPageScaffold(
               // Use CupertinoPageScaffold
               // Use the new constructor signature
-              child: EditMemoForm(
-                entityId: 'test-id',
-                entityType: 'memo',
-                entity: memo, // Add the required entity parameter
+              // Wrap in SizedBox to provide constraints
+              child: SizedBox(
+                width: 800,
+                height: 600,
+                child: EditMemoForm(
+                  entityId: 'test-id',
+                  entityType: 'memo',
+                  entity: memo, // Add the required entity parameter
+                ),
               ),
             ),
           ),
@@ -200,10 +210,15 @@ void main() {
             home: CupertinoPageScaffold(
               // Use CupertinoPageScaffold
               // Use the new constructor signature
-              child: EditMemoForm(
-                entityId: 'test-id',
-                entityType: 'memo',
-                entity: memo, // Add the required entity parameter
+              // Wrap in SizedBox to provide constraints
+              child: SizedBox(
+                width: 800,
+                height: 600,
+                child: EditMemoForm(
+                  entityId: 'test-id',
+                  entityType: 'memo',
+                  entity: memo, // Add the required entity parameter
+                ),
               ),
             ),
           ),

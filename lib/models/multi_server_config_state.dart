@@ -18,12 +18,13 @@ class MultiServerConfigState {
 
   MultiServerConfigState copyWith({
     List<ServerConfig>? servers,
-    String? activeServerId,
+    ValueGetter<String?>? activeServerId, // Use ValueGetter for nullable reset
     ValueGetter<String?>? defaultServerId, // Use ValueGetter for nullable reset
   }) {
     return MultiServerConfigState(
       servers: servers ?? this.servers,
-      activeServerId: activeServerId ?? this.activeServerId,
+      activeServerId:
+          activeServerId != null ? activeServerId() : this.activeServerId,
       defaultServerId: defaultServerId != null ? defaultServerId() : this.defaultServerId,
     );
   }
