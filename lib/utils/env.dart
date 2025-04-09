@@ -16,4 +16,10 @@ class Env {
     'MEMOS_API_KEY',
     defaultValue: '', // Provide a default value if needed, or handle absence
   );
+
+  // Todoist API configuration
+  static const String todoistApiKey = String.fromEnvironment(
+    'TODOIST_API_KEY',
+    defaultValue: '', // Add your Todoist API token here for development
+  );
 }

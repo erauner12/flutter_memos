@@ -1,8 +1,9 @@
 import 'package:flutter/foundation.dart';
-import 'package:flutter_memos/providers/server_config_provider.dart'; // Import server config provider
+import 'package:flutter_memos/providers/server_config_provider.dart';
 import 'package:flutter_memos/services/api_service.dart';
+import 'package:flutter_memos/services/todoist_api_service.dart'; // Add this import
+import 'package:flutter_memos/utils/env.dart'; // For Todoist API key
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-// Removed import 'package:flutter_memos/utils/env.dart';
 
 /// OPTIMIZATION: Provider for API service configuration
 /// This allows changing API configuration at runtime
@@ -165,5 +166,86 @@ Future<void> _checkApiHealth(Ref ref) async {
     if (ref.read(apiStatusProvider) == 'checking') {
       ref.read(apiStatusProvider.notifier).state = 'unavailable';
     }
+  }
+}
+
+/// Provider for Todoist API service
+final todoistApiServiceProvider = Provider<TodoistApiService>((ref) {
+  // Configuration from apiConfigProvider if needed
+  final config = ref.watch(apiConfigProvider);
+
+  // Create and configure the Todoist API service
+  final todoistApiService = TodoistApiService();
+  TodoistApiService.verboseLogging = config['verboseLogging'] ?? true;
+
+  // Get the API token (in a real app, this should come from secure storage)
+  final todoistToken = Env.todoistApiKey;
+
+  if (todoistToken.isEmpty) {
+    if (kDebugMode) {
+      print(
+        '[todoistApiServiceProvider] Warning: No Todoist API token configured.',
+      );
+    }
+    // Return unconfigured service, which will fail if used
+  } else {
+    todoistApiService.configureService(authToken: todoistToken);
+    if (kDebugMode) {
+      print(
+        '[todoistApiServiceProvider] Todoist API service configured successfully.',
+      );
+    }
+  }
+
+  // Add cleanup if needed
+  ref.onDispose(() {
+    if (kDebugMode) {
+      print(
+        '[todoistApiServiceProvider] Disposing Todoist API service provider',
+      );
+    }
+  });
+
+  return todoistApiService;
+}, name: 'todoistApiService');
+
+/// Provider for Todoist API service status (available, unavailable, etc.)
+final todoistApiStatusProvider = StateProvider<String>((ref) {
+  return 'unknown';
+}, name: 'todoistApiStatus');
+
+/// Provider that checks Todoist API health periodically
+final todoistApiHealthCheckerProvider = Provider<void>((ref) {
+  // Initial check
+  _checkTodoistApiHealth(ref);
+
+  // TODO: Set up periodic health check
+
+  ref.onDispose(() {
+    // Cancel any timers or other resources
+  });
+
+  return;
+}, name: 'todoistApiHealthChecker');
+
+// Helper function to check Todoist API health
+Future<void> _checkTodoistApiHealth(Ref ref) async {
+  // Set status to checking
+  ref.read(todoistApiStatusProvider.notifier).state = 'checking';
+
+  try {
+    final todoistApiService = ref.read(todoistApiServiceProvider);
+    final isHealthy = await todoistApiService.checkHealth();
+
+    if (isHealthy) {
+      ref.read(todoistApiStatusProvider.notifier).state = 'available';
+    } else {
+      ref.read(todoistApiStatusProvider.notifier).state = 'unavailable';
+    }
+  } catch (e) {
+    if (kDebugMode) {
+      print('[todoistApiHealthChecker] Error checking health: $e');
+    }
+    ref.read(todoistApiStatusProvider.notifier).state = 'error';
   }
 }
