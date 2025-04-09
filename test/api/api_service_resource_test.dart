@@ -83,19 +83,19 @@ void main() {
 
       // Attempt to delete the uploaded resource if its ID is known
       // NOTE: This requires a deleteResource method in ApiService, which might not exist.
-      // If it doesn't exist, this part can be commented out.
-      /*
       if (uploadedResourceId != null) {
         try {
           // Assuming a deleteResource method exists in ResourceServiceApi and is exposed via ApiService
           // await apiService.deleteResource(uploadedResourceId!);
-          print('[Test Cleanup] Deleted uploaded resource: $uploadedResourceId');
+          print(
+            '[Test Cleanup] Attempted to delete resource (if API exists): $uploadedResourceId',
+          );
         } catch (e) {
           print('[Test Cleanup] Warning: Failed to delete resource $uploadedResourceId: $e');
           // Depending on the API, resource deletion might fail if it's attached to a comment.
         }
       }
-      */
+
 
       // Delete the temporary memo
       try {

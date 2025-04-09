@@ -1,14 +1,19 @@
-import 'dart:convert';
+import 'dart:convert'; // For jsonEncode/Decode
 
-import 'package:collection/collection.dart'; // For DeepCollectionEquality
-import 'package:flutter/foundation.dart';
+import 'package:collection/collection.dart'; // For listEquals
+import 'package:flutter/foundation.dart'; // For ValueGetter
 import 'package:flutter_memos/models/server_config.dart';
+
+// Sentinel value to differentiate between 'not passed' and 'passed as null'
+const _notPassedSentinel = Object();
 
 @immutable
 class MultiServerConfigState {
   final List<ServerConfig> servers;
-  final String? activeServerId; // ID of the currently active server
-  final String? defaultServerId; // ID of the server to activate on startup
+  final String?
+  activeServerId; // ID of the server currently active in the UI (ephemeral)
+  final String?
+  defaultServerId; // ID of the server to activate on startup (persistent)
 
   const MultiServerConfigState({
     this.servers = const [],
@@ -16,47 +21,55 @@ class MultiServerConfigState {
     this.defaultServerId,
   });
 
+  // copyWith method for easier state updates
   MultiServerConfigState copyWith({
     List<ServerConfig>? servers,
-    ValueGetter<String?>? activeServerId, // Use ValueGetter for nullable reset
-    ValueGetter<String?>? defaultServerId, // Use ValueGetter for nullable reset
+    // Use sentinel to detect if activeServerId was explicitly passed, even as null
+    Object? activeServerId = _notPassedSentinel,
+    ValueGetter<String?>? defaultServerId, // Keep ValueGetter for default
   }) {
     return MultiServerConfigState(
       servers: servers ?? this.servers,
+      // If sentinel is passed (meaning argument omitted), keep current value.
+      // Otherwise, use the passed value (which could be null).
       activeServerId:
-          activeServerId != null ? activeServerId() : this.activeServerId,
+          activeServerId == _notPassedSentinel
+              ? this.activeServerId
+              : activeServerId as String?,
+      // If defaultServerId getter is passed, call it to get the value (could be null).
+      // Otherwise, keep the current value.
       defaultServerId: defaultServerId != null ? defaultServerId() : this.defaultServerId,
     );
   }
 
-  Map<String, dynamic> toJson() {
-    return {
-      'servers': servers.map((x) => x.toJson()).toList(),
-      'activeServerId': activeServerId, // Note: activeServerId is usually not persisted
-      'defaultServerId': defaultServerId,
-    };
-  }
+  // Serialization methods
+  Map<String, dynamic> toJson() => {
+    'servers': servers.map((s) => s.toJson()).toList(),
+    'defaultServerId': defaultServerId,
+    // activeServerId is intentionally NOT serialized
+  };
 
-  factory MultiServerConfigState.fromJson(Map<String, dynamic> map) {
+  factory MultiServerConfigState.fromJson(Map<String, dynamic> json) {
     return MultiServerConfigState(
-      servers: List<ServerConfig>.from(
-        (map['servers'] as List<dynamic>? ?? [])
-            .map((x) => ServerConfig.fromJson(x as Map<String, dynamic>)),
-      ),
-      // activeServerId is typically set on load based on defaultServerId
-      activeServerId: null, // Do not load activeServerId from storage
-      defaultServerId: map['defaultServerId'] as String?,
+      servers:
+          (json['servers'] as List<dynamic>?)
+              ?.map((s) => ServerConfig.fromJson(s as Map<String, dynamic>))
+              .toList() ??
+          const [],
+      defaultServerId: json['defaultServerId'] as String?,
+      // activeServerId is not loaded from JSON
+      activeServerId:
+          null, // Ensure activeServerId is null when loading from JSON
     );
   }
 
-  String toJsonString() => json.encode(toJson());
+  // Helper methods for JSON string conversion
+  String toJsonString() => jsonEncode(toJson());
 
-  factory MultiServerConfigState.fromJsonString(String source) =>
-      MultiServerConfigState.fromJson(json.decode(source) as Map<String, dynamic>);
-
-  @override
-  String toString() =>
-      'MultiServerConfigState(servers: $servers, activeServerId: $activeServerId, defaultServerId: $defaultServerId)';
+  factory MultiServerConfigState.fromJsonString(String jsonString) =>
+      MultiServerConfigState.fromJson(
+        jsonDecode(jsonString) as Map<String, dynamic>,
+      );
 
   @override
   bool operator ==(Object other) {
@@ -75,9 +88,14 @@ class MultiServerConfigState {
         activeServerId,
         defaultServerId,
       );
+
+  @override
+  String toString() {
+    return 'MultiServerConfigState(servers: ${servers.length}, active: $activeServerId, default: $defaultServerId)';
+  }
 }
 
-// Helper extension for ValueGetter usage in copyWith
+// Helper extension for ValueGetter usage in copyWith (still needed for defaultServerId)
 extension ValueGetterExtension<T> on T {
   ValueGetter<T> call() => () => this;
 }
