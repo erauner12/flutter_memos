@@ -133,17 +133,18 @@ async function getInputText() {
     console.log("Prompting for manual text entry.");
     const manualAlert = new Alert();
     manualAlert.title = "Enter Text for Memo Comment";
-    manualAlert.addTextView("", ""); // Use TextView for multi-line input
+    manualAlert.addTextField("Comment Text", "");
     manualAlert.addAction("Add");
     manualAlert.addCancelAction("Cancel");
 
     const manualChoice = await manualAlert.presentAlert();
-    if (manualChoice === -1) { // Cancelled
-        console.log("Manual input cancelled.");
-        return null;
+    if (manualChoice === -1) {
+      // Cancelled
+      console.log("Manual input cancelled.");
+      return null;
     }
 
-    const manualText = manualAlert.textViewValue(0)?.trim();
+    const manualText = manualAlert.textFieldValue(0)?.trim();
      if (!manualText) {
          console.log("No text entered manually.");
          return null;
@@ -241,20 +242,52 @@ async function createMemo(config, title) {
  * @returns {Promise<object>} The API response for comment creation.
  * @throws {Error} If adding the comment fails.
  */
-async function addCommentToMemos(config, memoId, commentText) {
-    // Endpoint expects the string memo ID
-    const endpoint = config.url.replace(/\/$/, '') + `/api/v1/memos/${memoId}/comments`;
-    const body = {
-        content: commentText
-    };
-    console.log(`Adding comment to memo ID: ${memoId}`);
-    return await makeApiRequest(endpoint, "POST", config.token, body);
+async function addCommentToMemo(config, memoId, commentText) {
+  // Endpoint expects the string memo ID
+  const endpoint =
+    config.url.replace(/\/$/, "") + `/api/v1/memos/${memoId}/comments`;
+  const body = {
+    content: commentText,
+  };
+  console.log(`Adding comment to memo ID: ${memoId}`);
+  return await makeApiRequest(endpoint, "POST", config.token, body);
 }
 
 // --- Main Execution ---
 
 (async () => {
     console.log("Starting Quick Capture to Memos script...");
+
+    // --- Configuration Reset Logic ---
+    if (args.queryParameters && args.queryParameters.resetConfig === 'true') {
+        console.log("Reset configuration argument detected.");
+        const confirmAlert = new Alert();
+        confirmAlert.title = "Reset Configuration?";
+        confirmAlert.message = "Are you sure you want to remove the saved Memos URL and Access Token?";
+        confirmAlert.addAction("Reset");
+        confirmAlert.addCancelAction("Cancel");
+
+        const confirmation = await confirmAlert.presentAlert();
+        if (confirmation === 0) { // Reset confirmed
+            console.log("Removing configuration from Keychain...");
+            Keychain.remove(KEYCHAIN_URL_KEY);
+            Keychain.remove(KEYCHAIN_TOKEN_KEY);
+            console.log("Configuration removed.");
+
+            const successAlert = new Alert();
+            successAlert.title = "Configuration Reset";
+            successAlert.message = "Memos URL and Access Token have been removed. Please run the script again to reconfigure.";
+            await successAlert.presentAlert();
+            Script.complete();
+            return; // Exit script after reset
+        } else {
+            console.log("Configuration reset cancelled by user.");
+            Script.complete();
+            return; // Exit script if reset is cancelled
+        }
+    }
+    // --- End Configuration Reset Logic ---
+
     let config;
     let inputText;
     let createdMemo;
@@ -293,57 +326,64 @@ async function addCommentToMemos(config, memoId, commentText) {
         console.log(`Memo created successfully with ID: ${memoId}`);
 
         // 5. Add Comment using the string memoId
-        await addCommentToMemos(config, memoId, inputText);
+        await addCommentToMemo(config, memoId, inputText);
         console.log("Comment added successfully!");
 
         // 6. Success Feedback
         // Check if config exists and runsInWidget property is available and false
-        if (config && config.runsInWidget === false) {
-            const successAlert = new Alert();
-            successAlert.title = "Success";
-            successAlert.message = "Memo and comment added to Memos.";
-            await successAlert.presentAlert();
-        } else if (config && config.runsInWidget === undefined) {
-             // If runsInWidget is undefined (e.g., older Scriptable versions or direct run), show alert
-             console.log("runsInWidget property not found on config, showing success alert.");
-             const successAlert = new Alert();
-             successAlert.title = "Success";
-             successAlert.message = "Memo and comment added to Memos.";
-             await successAlert.presentAlert();
+        let showAlerts = true; // Default to showing alerts
+        if (typeof config.runsInWidget === "boolean") {
+          showAlerts = !config.runsInWidget;
         } else {
-             console.log("Running in widget context or config missing, skipping success alert.");
+          console.log(
+            "runsInWidget property not found or not boolean, assuming not in widget."
+          );
+        }
+
+        if (showAlerts) {
+          const successAlert = new Alert();
+          successAlert.title = "Success";
+          successAlert.message = "Memo and comment added to Memos.";
+          await successAlert.presentAlert();
+        } else {
+          console.log(
+            "Running in widget context or config missing, skipping success alert."
+          );
         }
 
     } catch (e) {
         console.error(`Script execution failed: ${e}`);
         // Provide user feedback via Alert, unless running in a widget
-        // Check if config exists and runsInWidget property is available and false
-        if (config && config.runsInWidget === false) {
-            const errorAlert = new Alert();
-            errorAlert.title = "Error";
-            const errorMessage = e.message || "An unknown error occurred.";
-            errorAlert.message = `Failed to send to Memos: ${errorMessage}`;
-            if (e.message && e.message.includes("401")) {
-                 errorAlert.message += "\n\nCheck if your Access Token is correct and has not expired.";
-            } else if (e.message && (e.message.includes("ENOTFOUND") || e.message.includes("Could not connect"))) {
-                 errorAlert.message += "\n\nCheck if your Memos URL is correct and the server is reachable.";
-            }
-            await errorAlert.presentAlert();
-        } else if (config && config.runsInWidget === undefined) {
-             // If runsInWidget is undefined, show error alert
-             console.log("runsInWidget property not found on config, showing error alert.");
-             const errorAlert = new Alert();
-             errorAlert.title = "Error";
-             const errorMessage = e.message || "An unknown error occurred.";
-             errorAlert.message = `Failed to send to Memos: ${errorMessage}`;
-              if (e.message && e.message.includes("401")) {
-                 errorAlert.message += "\n\nCheck if your Access Token is correct and has not expired.";
-             } else if (e.message && (e.message.includes("ENOTFOUND") || e.message.includes("Could not connect"))) {
-                 errorAlert.message += "\n\nCheck if your Memos URL is correct and the server is reachable.";
-             }
-             await errorAlert.presentAlert();
+        let showAlerts = true; // Default to showing alerts
+        if (config && typeof config.runsInWidget === "boolean") {
+          showAlerts = !config.runsInWidget;
         } else {
-             console.log("Running in widget context or config missing, skipping error alert.");
+          console.log(
+            "runsInWidget property not found or not boolean, assuming not in widget for error."
+          );
+        }
+
+        if (showAlerts) {
+          const errorAlert = new Alert();
+          errorAlert.title = "Error";
+          const errorMessage = e.message || "An unknown error occurred.";
+          errorAlert.message = `Failed to send to Memos: ${errorMessage}`;
+          if (e.message && e.message.includes("401")) {
+            errorAlert.message +=
+              "\n\nCheck if your Access Token is correct and has not expired.";
+          } else if (
+            e.message &&
+            (e.message.includes("ENOTFOUND") ||
+              e.message.includes("Could not connect"))
+          ) {
+            errorAlert.message +=
+              "\n\nCheck if your Memos URL is correct and the server is reachable.";
+          }
+          await errorAlert.presentAlert();
+        } else {
+          console.log(
+            "Running in widget context or config missing, skipping error alert."
+          );
         }
     } finally {
         console.log("Script finished.");
