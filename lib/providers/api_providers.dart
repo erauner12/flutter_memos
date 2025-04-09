@@ -1,8 +1,10 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_memos/providers/server_config_provider.dart';
+// Remove Env import if no longer needed elsewhere, otherwise keep it
+// import 'package:flutter_memos/utils/env.dart';
+import 'package:flutter_memos/providers/settings_provider.dart'; // Import the new provider
 import 'package:flutter_memos/services/api_service.dart';
 import 'package:flutter_memos/services/todoist_api_service.dart'; // Add this import
-import 'package:flutter_memos/utils/env.dart'; // For Todoist API key
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// OPTIMIZATION: Provider for API service configuration
@@ -181,18 +183,20 @@ Future<void> _checkApiHealth(Ref ref) async {
 final todoistApiServiceProvider = Provider<TodoistApiService>((ref) {
   // Configuration from apiConfigProvider if needed
   final config = ref.watch(apiConfigProvider);
+  // Watch the persisted API key from settings_provider
+  final todoistToken = ref.watch(todoistApiKeyProvider);
 
   // Create and configure the Todoist API service
   final todoistApiService = TodoistApiService();
   TodoistApiService.verboseLogging = config['verboseLogging'] ?? true;
 
-  // Get the API token (in a real app, this should come from secure storage)
-  final todoistToken = Env.todoistApiKey;
+  // Get the API token from the provider
+  // final todoistToken = Env.todoistApiKey; // Old way - remove or comment out
 
   if (todoistToken.isEmpty) {
     if (kDebugMode) {
       print(
-        '[todoistApiServiceProvider] Warning: No Todoist API token configured.',
+        '[todoistApiServiceProvider] Warning: No Todoist API token configured via provider.',
       );
     }
     // Return unconfigured service, which will fail if used
@@ -202,7 +206,7 @@ final todoistApiServiceProvider = Provider<TodoistApiService>((ref) {
     todoistApiService.configureService(authToken: todoistToken);
     if (kDebugMode) {
       print(
-        '[todoistApiServiceProvider] Todoist API service configured successfully.',
+        '[todoistApiServiceProvider] Todoist API service configured successfully via provider.',
       );
     }
   }
@@ -221,8 +225,9 @@ final todoistApiServiceProvider = Provider<TodoistApiService>((ref) {
 
 /// Provider for Todoist API service status (available, unavailable, etc.)
 final todoistApiStatusProvider = StateProvider<String>((ref) {
-  // Initial state depends on whether the token is configured
-  final token = Env.todoistApiKey;
+  // Initial state depends on whether the token is configured via the provider
+  // final token = Env.todoistApiKey; // Old way - remove or comment out
+  final token = ref.watch(todoistApiKeyProvider); // Watch the key provider
   return token.isEmpty ? 'unconfigured' : 'unknown';
 }, name: 'todoistApiStatus');
 
@@ -243,12 +248,15 @@ final todoistApiHealthCheckerProvider = Provider<void>((ref) {
 
 // Helper function to check Todoist API health
 Future<void> _checkTodoistApiHealth(Ref ref) async {
-  // Get the service instance. The provider itself handles configuration.
+  // Get the service instance. The provider itself handles configuration based on todoistApiKeyProvider.
   final todoistApiService = ref.read(todoistApiServiceProvider);
 
-  // If the service isn't configured (no token), set status and return.
+  // If the service isn't configured (no token from the provider), set status and return.
   if (!todoistApiService.isConfigured) {
-    ref.read(todoistApiStatusProvider.notifier).state = 'unconfigured';
+    // Check current state before setting to avoid unnecessary updates if already unconfigured
+    if (ref.read(todoistApiStatusProvider) != 'unconfigured') {
+      ref.read(todoistApiStatusProvider.notifier).state = 'unconfigured';
+    }
     return;
   }
 
@@ -264,18 +272,18 @@ Future<void> _checkTodoistApiHealth(Ref ref) async {
     final isHealthy = await todoistApiService.checkHealth();
 
     // Check if the status is still 'checking' before updating
-    // This prevents race conditions if the check takes time
+    // This prevents race conditions if the check takes time or the key changes
     if (ref.read(todoistApiStatusProvider) == 'checking') {
       if (isHealthy) {
         ref.read(todoistApiStatusProvider.notifier).state = 'available';
       } else {
-        // If checkHealth returns false, it means the API call failed
+        // If checkHealth returns false, it means the API call failed (e.g., bad token)
         ref.read(todoistApiStatusProvider.notifier).state = 'unavailable';
       }
     }
 
   } catch (e) {
-    // Catch any exceptions during the health check
+    // Catch any exceptions during the health check (e.g., network error)
     if (kDebugMode) {
       print('[todoistApiHealthChecker] Error checking health: $e');
     }

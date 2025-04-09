@@ -1,8 +1,10 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart'; // Import Material for SnackBar
 import 'package:flutter_memos/models/server_config.dart';
 import 'package:flutter_memos/providers/api_providers.dart';
 import 'package:flutter_memos/providers/server_config_provider.dart';
+import 'package:flutter_memos/providers/settings_provider.dart'; // Import settings provider
 import 'package:flutter_memos/screens/add_edit_server_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -15,27 +17,35 @@ class SettingsScreen extends ConsumerStatefulWidget {
 }
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
-  // Remove old state variables
-  // final _serverUrlController = TextEditingController();
-  // final _authTokenController = TextEditingController();
-  // bool _hasChanges = false;
-  // ServerConfig? _initialConfig;
-  // String? _serverUrlError;
-  // String? _tokenError;
-
   // Keep loading/testing state if needed for actions
   bool _isTestingConnection =
-      false; // Specific state for testing the active connection
+      false; // Specific state for testing the active Memos connection
+
+  // Add state for Todoist configuration
+  final _todoistApiKeyController = TextEditingController();
+  bool _isTestingTodoistConnection = false;
+  // String _currentTodoistApiKey = ''; // Can be read directly from provider when needed
 
   @override
   void initState() {
     super.initState();
-    // No need to initialize form values anymore
+    // No need to initialize Memos form values anymore
+
+    // Initialize Todoist controller after the first frame ensures provider is ready
+    // Use addPostFrameCallback to read the provider after the build phase
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      // Check if mounted before accessing ref
+      if (mounted) {
+        final initialApiKey = ref.read(todoistApiKeyProvider);
+        _todoistApiKeyController.text = initialApiKey;
+      }
+    });
   }
 
   @override
   void dispose() {
     // Dispose removed controllers
+    _todoistApiKeyController.dispose(); // Dispose the new controller
     super.dispose();
   }
 
@@ -110,6 +120,70 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         setState(() {
           _isTestingConnection = false;
         });
+      }
+    }
+  }
+
+  Future<void> _testTodoistConnection() async {
+    FocusScope.of(context).unfocus();
+    // Read the service which is configured by the provider watching the key
+    final todoistService = ref.read(todoistApiServiceProvider);
+    final currentKey = ref.read(
+      todoistApiKeyProvider,
+    ); // Read current key state directly
+
+    if (currentKey.isEmpty) {
+      _showResultDialog(
+        'API Key Missing',
+        'Please enter and save your Todoist API key first.',
+        isError: true,
+      );
+      return;
+    }
+
+    // Check if the service instance believes it's configured.
+    // This depends on whether the provider passed a non-empty key during its build.
+    if (!todoistService.isConfigured) {
+      _showResultDialog(
+        'Service Not Configured',
+        'Todoist service is not configured, likely due to an empty key. Please save the key.',
+        isError: true,
+      );
+      return;
+    }
+
+    setState(() => _isTestingTodoistConnection = true);
+
+    try {
+      // Use the checkHealth method from the service
+      final isHealthy = await todoistService.checkHealth();
+      if (mounted) {
+        if (isHealthy) {
+          _showResultDialog('Success', 'Todoist connection successful!');
+        } else {
+          // checkHealth returning false usually means an API error occurred (e.g., invalid token)
+          _showResultDialog(
+            'Connection Failed',
+            'Could not connect to Todoist. Please verify your API key.',
+            isError: true,
+          );
+        }
+      }
+    } catch (e) {
+      // Catch other errors (like network issues)
+      if (kDebugMode) {
+        print("[SettingsScreen] Test Todoist Connection Error: \$e");
+      }
+      if (mounted) {
+        _showResultDialog(
+          'Error',
+          'An error occurred while testing the connection:\n\${e.toString()}',
+          isError: true,
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isTestingTodoistConnection = false);
       }
     }
   }
@@ -397,6 +471,100 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ),
               ),
 
+              // --- Add Todoist Integration Section ---
+              CupertinoListSection.insetGrouped(
+                header: const Text('INTEGRATIONS'),
+                children: [
+                  CupertinoListTile(
+                    // Use padding to avoid default list tile padding affecting layout
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 15.0,
+                      vertical: 10.0,
+                    ),
+                    title: const Text('Todoist API Key'),
+                    subtitle: Padding(
+                      padding: const EdgeInsets.only(top: 8.0),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: CupertinoTextField(
+                              controller: _todoistApiKeyController,
+                              placeholder: 'Enter Todoist API token',
+                              obscureText: true,
+                              padding: const EdgeInsets.symmetric(
+                                vertical: 10.0,
+                                horizontal: 12.0,
+                              ),
+                              decoration: BoxDecoration(
+                                color: CupertinoColors.tertiarySystemFill
+                                    .resolveFrom(context),
+                                borderRadius: BorderRadius.circular(8.0),
+                              ),
+                              // Clear button might be useful
+                              clearButtonMode: OverlayVisibilityMode.editing,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          CupertinoButton(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            // Use primary color for save action
+                            color: CupertinoColors.activeBlue,
+                            onPressed: () {
+                              final newKey =
+                                  _todoistApiKeyController
+                                      .text; // No need to trim here, notifier handles it
+                              // Update the key using the provider notifier
+                              ref
+                                  .read(todoistApiKeyProvider.notifier)
+                                  .updateApiKey(newKey);
+                              FocusScope.of(context).unfocus();
+                              // Show confirmation using SnackBar (requires Material ancestor or custom overlay)
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Todoist API Key updated'),
+                                  duration: Duration(seconds: 2),
+                                  behavior:
+                                      SnackBarBehavior
+                                          .floating, // Optional: looks better
+                                ),
+                              );
+                            },
+                            child: const Text(
+                              'Save',
+                              style: TextStyle(color: CupertinoColors.white),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  // Test Todoist Connection Button as a separate tile
+                  CupertinoListTile(
+                    title: Center(
+                      // Center the button within the tile
+                      child: CupertinoButton(
+                        onPressed:
+                            _isTestingTodoistConnection
+                                ? null
+                                : _testTodoistConnection,
+                        child:
+                            _isTestingTodoistConnection
+                                ? const CupertinoActivityIndicator()
+                                : const Row(
+                                  mainAxisSize:
+                                      MainAxisSize.min, // Keep row compact
+                                  children: [
+                                    Icon(CupertinoIcons.link),
+                                    SizedBox(width: 8),
+                                    Text('Test Todoist Connection'),
+                                  ],
+                                ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              // --- End Todoist Integration Section ---
               // Help Text Section
               Padding(
                 padding: const EdgeInsets.symmetric(
