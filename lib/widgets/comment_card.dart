@@ -1,6 +1,7 @@
+import 'dart:math';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart'; // Add Material import
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_memos/models/comment.dart';
@@ -186,75 +187,98 @@ class _CommentCardState extends ConsumerState<CommentCard> {
       return await showCupertinoDialog<Map<String, String>>(
         context: context,
         builder: (context) {
+          // Get the available height for the dialog content
+          final availableHeight = MediaQuery.of(context).size.height * 0.7;
+          
           return CupertinoAlertDialog(
             title: const Text('Create Todoist Task'),
-            content: Material(
-              // Need Material widget for TextField scrolling behavior
-              color: CupertinoColors.systemBackground.resolveFrom(context),
-              borderRadius: BorderRadius.circular(13.0),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const SizedBox(height: 12),
-                    // Title field - single line
-                    CupertinoTextField(
-                      controller: titleController,
-                      focusNode: titleFocusNode,
-                      placeholder: 'Task title',
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-                      clearButtonMode: OverlayVisibilityMode.editing,
-                      textInputAction: TextInputAction.next,
-                      onSubmitted: (_) {
-                        // Move to description field when done
-                        titleFocusNode.unfocus();
-                        descriptionFocusNode.requestFocus();
-                      },
+            content: SizedBox(
+              // Constrain height to prevent overflow
+              width: double.maxFinite,
+              height: min(availableHeight, 350),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const SizedBox(height: 16),
+
+                  // Title label
+                  Padding(
+                    padding: const EdgeInsets.only(left: 4, bottom: 4),
+                    child: Text(
+                      'Task Title',
+                      style: TextStyle(
+                        color: CupertinoColors.label.resolveFrom(context),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+
+                  // Title field - single line with Cupertino styling
+                  CupertinoTextField(
+                    controller: titleController,
+                    focusNode: titleFocusNode,
+                    placeholder: 'Enter task title',
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 12,
+                    ),
+                    clearButtonMode: OverlayVisibilityMode.editing,
+                    textInputAction: TextInputAction.next,
+                    style: TextStyle(
+                      color: CupertinoColors.label.resolveFrom(context),
+                    ),
+                    onSubmitted: (_) {
+                      titleFocusNode.unfocus();
+                      descriptionFocusNode.requestFocus();
+                    },
+                    decoration: BoxDecoration(
+                      color: CupertinoColors.systemFill.resolveFrom(context),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // Description label
+                  Padding(
+                    padding: const EdgeInsets.only(left: 4, bottom: 4),
+                    child: Text(
+                      'Task Description',
+                      style: TextStyle(
+                        color: CupertinoColors.label.resolveFrom(context),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                  
+                  // Description field - multi-line, scrollable with Cupertino styling
+                  Expanded(
+                    child: CupertinoTextField(
+                      controller: descriptionController,
+                      focusNode: descriptionFocusNode,
+                      placeholder: 'Enter task description',
+                      padding: const EdgeInsets.all(10),
+                      maxLines: null,
+                      textInputAction: TextInputAction.newline,
+                      keyboardType: TextInputType.multiline,
+                      style: TextStyle(
+                        color: CupertinoColors.label.resolveFrom(context),
+                      ),
                       decoration: BoxDecoration(
-                        color: CupertinoColors.systemGrey6.resolveFrom(context),
+                        color: CupertinoColors.systemFill.resolveFrom(context),
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color: CupertinoColors.systemGrey4.resolveFrom(context),
-                          width: 0.5,
-                        ),
                       ),
                     ),
-                    const SizedBox(height: 12),
-                    // Description field - multi-line, scrollable
-                    ConstrainedBox(
-                      constraints: const BoxConstraints(
-                        maxHeight: 200, // Prevent dialog from being too tall
-                      ),
-                      child: SingleChildScrollView(
-                        child: CupertinoTextField(
-                          controller: descriptionController,
-                          focusNode: descriptionFocusNode,
-                          placeholder: 'Task description',
-                          padding: const EdgeInsets.all(8),
-                          maxLines: null, // Allow multiple lines
-                          minLines: 5, // Show at least 5 lines
-                          textInputAction: TextInputAction.newline,
-                          decoration: BoxDecoration(
-                            color: CupertinoColors.systemGrey6.resolveFrom(context),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                              color: CupertinoColors.systemGrey4.resolveFrom(context),
-                              width: 0.5,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
             actions: [
               CupertinoDialogAction(
-                onPressed: () => Navigator.of(context).pop(), // Cancel
+                onPressed: () => Navigator.of(context).pop(),
                 child: const Text('Cancel'),
               ),
               CupertinoDialogAction(
