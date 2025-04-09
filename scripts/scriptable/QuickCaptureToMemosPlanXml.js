@@ -5,7 +5,7 @@
 // Configuration Keys
 const KEYCHAIN_URL_KEY = "memos_instance_url";
 const KEYCHAIN_TOKEN_KEY = "memos_access_token";
-const KEYCHAIN_OPENAI_KEY = "openai_api_key"; // Used for OpenAI
+const KEYCHAIN_OPENAI_KEY = "openai_api_key";
 
 // --- Helper Functions ---
 
@@ -16,17 +16,16 @@ function escapeHtml(unsafe) { /* ... (keep existing) ... */
       .replace(/&/g, "&")
       .replace(/</g, "<")
       .replace(/>/g, ">")
-      .replace(/"/g, "&quot;")
+      .replace(/"/g, '"')
       .replace(/'/g, "'");
 }
 
 /** Presents an HTML form in a WebView */
-async function presentWebViewForm(htmlContent, fullscreen = false) { /* ... (keep existing from previous version) ... */
-    console.log("Configuring interactive WebView form...");
-    const wv = new WebView(); let isPresented = false;
+async function presentWebViewForm(htmlContent, fullscreen = false) { /* ... (keep existing - seems stable now) ... */
+    console.log("Configuring interactive WebView form..."); const wv = new WebView(); let isPresented = false;
     try {
-        console.log("Loading HTML into WebView instance..."); await wv.loadHTML(htmlContent); console.log("HTML loaded.");
-        if (!isPresented) { console.log(`Presenting WebView initially (fullscreen: ${fullscreen})...`); wv.present(fullscreen).catch(e => { console.error("Error during initial WebView presentation:", e); }); isPresented = true; console.log("WebView presentation initiated."); await new Promise(resolve => Timer.schedule(100, false, resolve)); }
+        console.log("Loading HTML..."); await wv.loadHTML(htmlContent); console.log("HTML loaded.");
+        if (!isPresented) { console.log(`Presenting WebView (fullscreen: ${fullscreen})...`); wv.present(fullscreen).catch(e => { console.error("Error during initial presentation:", e); }); isPresented = true; console.log("WebView presentation initiated."); await new Promise(resolve => Timer.schedule(100, false, resolve)); }
         while (true) {
             console.log("WebView Loop: Setting up listener..."); const listenerScript = ` if (typeof initializeForm === 'function' && !window.formInitialized) { console.log("Calling initializeForm()..."); try { initializeForm(); window.formInitialized = true; } catch (initErr) { console.error("Error executing initializeForm():", initErr); if (typeof completion === 'function') { completion({ error: "Form init failed", details: initErr.message }); } else { console.error("CRITICAL: completion unavailable."); } } } else if (!window.formInitialized && typeof initializeForm !== 'function') { console.error("initializeForm not found."); if (typeof completion === 'function') { completion({ error: "Init function missing" }); } else { console.error("CRITICAL: completion unavailable."); } window.formInitialized = true; } console.log("Listener active..."); `;
             let result;
@@ -47,20 +46,68 @@ async function presentWebViewForm(htmlContent, fullscreen = false) { /* ... (kee
 
 /** Generates HTML for Memos configuration */
 function generateConfigFormHtml(existingUrl, existingToken, existingOpenAIKey) { /* ... (keep existing) ... */
-    const css = ` body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 15px; background-color: #f8f8f8; color: #333; } label { display: block; margin-bottom: 5px; font-weight: bold; } input[type=text], input[type=password] { width: 95%; padding: 10px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 5px; font-size: 16px; } button { padding: 12px 20px; background-color: #007aff; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; width: 100%; margin-top: 10px; } button:hover { background-color: #0056b3; } .error { color: red; font-size: 0.9em; margin-top: -10px; margin-bottom: 10px; } h2 { margin-top: 0; color: #111; } p { color: #555; } .info { font-size: 0.9em; color: #666; margin-bottom: 15px; } `;
-    const urlValue = existingUrl ? `value="${escapeHtml(existingUrl)}"` : ""; const tokenPlaceholder = existingToken ? `placeholder="Exists (Enter new to change)"` : `placeholder="Enter Memos Token"`; const openaiKeyPlaceholder = existingOpenAIKey ? `placeholder="Exists (Enter new to change)"` : `placeholder="Enter OpenAI Key"`;
+    const css = ` body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 15px; background-color: #f8f8f8; color: #333; } label { display: block; margin-bottom: 5px; font-weight: bold; } input[type=text], input[type=password] { width: 95%; padding: 10px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 5px; font-size: 16px; } button { padding: 12px 20px; background-color: #007aff; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; width: 100%; margin-top: 10px; } button:hover { background-color: #0056b3; } .error { color: red; font-size: 0.9em; margin-top: -10px; margin-bottom: 10px; } h2 { margin-top: 0; color: #111; } p { color: #555; } .info { font-size: 0.9em; color: #666; margin-bottom: 15px; } `; const urlValue = existingUrl ? `value="${escapeHtml(existingUrl)}"` : ""; const tokenPlaceholder = existingToken ? `placeholder="Exists (Enter new to change)"` : `placeholder="Enter Memos Token"`; const openaiKeyPlaceholder = existingOpenAIKey ? `placeholder="Exists (Enter new to change)"` : `placeholder="Enter OpenAI Key"`;
     return ` <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Memos Configuration</title><style>${css}</style></head> <body><h2>Memos Configuration</h2><p>Enter your Memos instance URL, Access Token (OpenAPI), and your OpenAI API Key.</p> <div class="info">Existing tokens/keys are not shown. Enter a new value only if you need to change it. Leave blank to keep the existing value (if any).</div> <form id="configForm"><label for="memosUrl">Memos URL:</label><input type="text" id="memosUrl" name="memosUrl" ${urlValue} required placeholder="https://your-memos.com"><div id="urlError" class="error" style="display: none;"></div> <label for="accessToken">Access Token:</label><input type="password" id="accessToken" name="accessToken" ${tokenPlaceholder} ><div id="tokenError" class="error" style="display: none;"></div> <label for="openaiKey">OpenAI API Key:</label><input type="password" id="openaiKey" name="openaiKey" ${openaiKeyPlaceholder}><div id="openaiError" class="error" style="display: none;"></div> <button type="submit">Save Configuration</button></form> <script> function initializeForm() { try { const form=document.getElementById('configForm'),urlInput=document.getElementById('memosUrl'),tokenInput=document.getElementById('accessToken'),openaiInput=document.getElementById('openaiKey'),urlError=document.getElementById('urlError'),tokenError=document.getElementById('tokenError'),openaiError=document.getElementById('openaiError'); if(!form||!urlInput||!tokenInput||!openaiInput||!urlError||!tokenError||!openaiError){console.error("Config form elements not found.");alert("Error initializing config form elements.");if(typeof completion==='function')completion({error:"Initialization failed: Elements missing"});return;} form.addEventListener('submit',(event)=>{ event.preventDefault();urlError.style.display='none';tokenError.style.display='none';openaiError.style.display='none';let isValid=true;const url=urlInput.value.trim(),newToken=tokenInput.value.trim(),newOpenaiApiKey=openaiInput.value.trim();if(!url){urlError.textContent='Memos URL is required.';urlError.style.display='block';isValid=false;}else if(!url.toLowerCase().startsWith('http://')&&!url.toLowerCase().startsWith('https://')){urlError.textContent='URL must start with http:// or https://';urlError.style.display='block';isValid=false;} if(isValid){if(typeof completion==='function'){completion({action:'submit',data:{url:url,token:newToken||null,openaiApiKey:newOpenaiApiKey||null}});}else{console.error('CRITICAL: completion function unavailable!');alert('Error: Cannot submit config form.');}} }); console.log("Config form initialized."); } catch (initError) { console.error("Error during config form initialization:", initError); alert("A critical error occurred setting up the configuration form."); if(typeof completion==='function')completion({error:"Initialization crashed",details:initError.message}); } } </script></body></html>`;
 }
 
-/** Generates HTML for the main text input form (AI checkbox ALWAYS shown) */
-function generateInputFormHtml(prefillText = "") { /* ... (keep existing) ... */
-    const css = ` body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 15px; display: flex; flex-direction: column; height: 95vh; background-color: #f8f8f8; color: #333; } textarea { flex-grow: 1; width: 95%; padding: 10px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 8px; font-size: 16px; resize: none; } .button-bar { display: flex; gap: 10px; margin-bottom: 15px; } .button-bar button { flex-grow: 1; padding: 10px 15px; background-color: #e0e0e0; color: #333; border: 1px solid #ccc; border-radius: 8px; cursor: pointer; font-size: 14px; } .button-bar button:hover { background-color: #d0d0d0; } button[type=submit] { padding: 12px 20px; background-color: #007aff; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; width: 100%; margin-top: auto; } button[type=submit]:hover { background-color: #0056b3; } .options { margin-bottom: 15px; display: flex; align-items: center; } label[for=useAi] { margin-left: 8px; font-weight: normal; } input[type=checkbox] { width: 18px; height: 18px; } h2 { margin-top: 0; color: #111; } .clipboard-notice { font-size: 0.9em; color: #666; margin-bottom: 10px; } form { display: flex; flex-direction: column; flex-grow: 1; } `;
-    const shareSheetNotice = prefillText ? `<div class="clipboard-notice">Text pre-filled from Share Sheet.</div>` : ""; const aiCheckboxHtml = `<div class="options"><input type="checkbox" id="useAi" name="useAi"><label for="useAi">Process with AI (Generate Plan)</label></div>`; const escapedPrefillText = escapeHtml(prefillText);
-    return ` <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"><title>Enter Memo Content</title><style>${css}</style></head> <body><h2>Enter Memo Content</h2>${shareSheetNotice}<form id="inputForm"> <textarea id="memoContent" name="memoContent" placeholder="Type, paste, or dictate your memo content here..." required>${escapedPrefillText}</textarea> <div class="button-bar"><button type="button" id="pasteButton">Paste from Clipboard</button><button type="button" id="dictateButton">Start Dictation</button></div> ${aiCheckboxHtml} <button type="submit">Add Memo</button></form> <script> function updateTextArea(text){const t=document.getElementById('memoContent');if(t&&null!=text){const e=t.value;t.value=e?e+" "+text:text,t.focus(),console.log("Text area updated.")}else console.error("Could not find text area or text was null.")} function initializeForm(){try{const t=document.getElementById("inputForm"),e=document.getElementById("memoContent"),o=document.getElementById("useAi"),n=document.getElementById("pasteButton"),c=document.getElementById("dictateButton");if(!t||!e||!o||!n||!c)return console.error("Required form elements not found."),alert("Error initializing form elements."),void(typeof completion=="function"&&completion({error:"Initialization failed: Elements missing"}));t.addEventListener("submit",t=>{t.preventDefault();const n=e.value.trim(),c=o.checked;n?typeof completion=="function"?completion({action:"submit",data:{text:n,useAi:c}}):(console.error("CRITICAL: completion function unavailable!"),alert("Error: Cannot submit form.")):alert("Please enter some content.")}),n.addEventListener("click",()=>{console.log("Paste button clicked."),typeof completion=="function"?completion({action:"paste"}):(console.error("CRITICAL: completion function unavailable!"),alert("Error: Cannot request paste."))}),c.addEventListener("click",()=>{console.log("Dictate button clicked."),typeof completion=="function"?completion({action:"dictate"}):(console.error("CRITICAL: completion function unavailable!"),alert("Error: Cannot request dictation."))}),e.focus(),console.log("Input form initialized.")}catch(t){console.error("Error during input form initialization:",t),alert("A critical error occurred setting up the input form."),typeof completion=="function"&&completion({error:"Initialization crashed",details:t.message})}} </script></body></html>`;
+/**
+ * Generates HTML for the main text input form with Compose field.
+ * @param {string} [prefillText=''] - Text to pre-fill the main content textarea.
+ * @returns {string} HTML content for the input form.
+ */
+function generateInputFormHtml(prefillText = "") {
+    const css = `
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 15px; display: flex; flex-direction: column; height: 95vh; background-color: #f8f8f8; color: #333; }
+        textarea { width: 95%; padding: 10px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 8px; font-size: 16px; resize: none; }
+        #memoContent { flex-grow: 1; } /* Main content takes most space */
+        #composeInstructions { height: 80px; } /* Fixed height for instructions */
+        label { display: block; margin-bottom: 5px; font-weight: bold; font-size: 0.9em; color: #555; }
+        .button-bar { display: flex; gap: 10px; margin-bottom: 15px; }
+        .button-bar button { flex-grow: 1; padding: 10px 15px; background-color: #e0e0e0; color: #333; border: 1px solid #ccc; border-radius: 8px; cursor: pointer; font-size: 14px; }
+        .button-bar button:hover { background-color: #d0d0d0; }
+        button[type=submit] { padding: 12px 20px; background-color: #007aff; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; width: 100%; margin-top: auto; }
+        button[type=submit]:hover { background-color: #0056b3; }
+        .options { margin-bottom: 15px; display: flex; align-items: center; }
+        label[for=useAi] { margin-left: 8px; font-weight: normal; }
+        input[type=checkbox] { width: 18px; height: 18px; }
+        h2 { margin-top: 0; color: #111; }
+        .clipboard-notice { font-size: 0.9em; color: #666; margin-bottom: 10px; }
+        form { display: flex; flex-direction: column; flex-grow: 1; }
+    `;
+
+    const shareSheetNotice = prefillText ? `<div class="clipboard-notice">Text pre-filled from Share Sheet.</div>` : "";
+    // AI Checkbox is always included and checked by default
+    const aiCheckboxHtml = `
+        <div class="options">
+            <input type="checkbox" id="useAi" name="useAi" checked>
+            <label for="useAi">Process with AI</label>
+        </div>
+    `;
+    const escapedPrefillText = escapeHtml(prefillText);
+
+    return `
+    <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"><title>Enter Memo Content</title><style>${css}</style></head>
+    <body><h2>Enter Memo Content</h2>${shareSheetNotice}
+    <form id="inputForm">
+        <label for="memoContent">Content:</label>
+        <textarea id="memoContent" name="memoContent" placeholder="Type, paste, or dictate content here..." required>${escapedPrefillText}</textarea>
+
+        <label for="composeInstructions">Compose Instructions (Optional):</label>
+        <textarea id="composeInstructions" name="composeInstructions" placeholder="e.g., Summarize, make this more formal, create a list..."></textarea>
+
+        <div class="button-bar"><button type="button" id="pasteButton">Paste to Content</button><button type="button" id="dictateButton">Dictate to Content</button></div>
+        ${aiCheckboxHtml}
+        <button type="submit">Add Memo</button>
+    </form>
+    <script>
+    function updateTextArea(text){const t=document.getElementById('memoContent');if(t&&null!=text){const e=t.value;t.value=e?e+" "+text:text,t.focus(),console.log("Content area updated.")}else console.error("Could not find content area or text was null.")}
+    function initializeForm(){try{const t=document.getElementById("inputForm"),e=document.getElementById("memoContent"),o=document.getElementById("composeInstructions"),n=document.getElementById("useAi"),c=document.getElementById("pasteButton"),l=document.getElementById("dictateButton");if(!t||!e||!o||!n||!c||!l)return console.error("Required form elements not found."),alert("Error initializing form elements."),void(typeof completion=="function"&&completion({error:"Initialization failed: Elements missing"}));t.addEventListener("submit",t=>{t.preventDefault();const c=e.value.trim(),l=o.value.trim(),a=n.checked;c||l?typeof completion=="function"?completion({action:"submit",data:{text:c,compose:l,useAi:a}}):(console.error("CRITICAL: completion unavailable!"),alert("Error: Cannot submit form.")):alert("Please enter content or instructions.")}),c.addEventListener("click",()=>{console.log("Paste button clicked."),typeof completion=="function"?completion({action:"paste"}):(console.error("CRITICAL: completion unavailable!"),alert("Error: Cannot request paste."))}),l.addEventListener("click",()=>{console.log("Dictate button clicked."),typeof completion=="function"?completion({action:"dictate"}):(console.error("CRITICAL: completion unavailable!"),alert("Error: Cannot request dictation."))}),e.focus(),console.log("Input form initialized.")}catch(t){console.error("Error during input form initialization:",t),alert("A critical error occurred setting up the input form."),typeof completion=="function"&&completion({error:"Initialization crashed",details:t.message})}}
+    </script></body></html>`;
 }
 
+
 /**
- * Generates HTML to display the parsed AI plan for review, using proposals.
+ * Generates HTML to display the parsed AI plan for review, using proposals with diff styling.
  * @param {object} parsedPlanData - The structured plan object from parseAiXmlResponse.
  * @returns {string} HTML content string.
  */
@@ -74,27 +121,31 @@ function generatePlanReviewHtml(parsedPlanData) {
         .proposal-include { display: flex; align-items: center; gap: 5px; font-size: 0.9em; }
         .proposal-content { padding: 10px 12px; }
         .proposal-description { font-style: italic; color: #555; margin-bottom: 8px; font-size: 0.9em; }
-        .text-content { white-space: pre-wrap; word-wrap: break-word; font-size: 0.95em; }
-        .text-content.original { background-color: #fff9c4; padding: 5px; border-radius: 3px; margin-bottom: 5px; border: 1px dashed #eee; } /* Light yellow for original */
-        .text-content.added { background-color: #e8f5e9; padding: 5px; border-radius: 3px; border: 1px dashed #c8e6c9; } /* Light green for added */
-        .text-content.deleted { background-color: #ffebee; padding: 5px; border-radius: 3px; text-decoration: line-through; color: #777; border: 1px dashed #ffcdd2; } /* Light red for deleted */
+        .text-block { margin-bottom: 5px; } /* Container for label + content */
+        .text-label { font-size: 0.8em; color: #666; display: block; margin-bottom: 2px; }
+        .text-content { white-space: pre-wrap; word-wrap: break-word; font-size: 0.95em; padding: 5px 8px; border-radius: 4px; border: 1px solid #eee; }
+        .text-content.original { background-color: #ffebee; border-color: #ffcdd2; text-decoration: line-through; color: #d32f2f; } /* Reddish for original/deleted */
+        .text-content.added { background-color: #e8f5e9; border-color: #c8e6c9; color: #2e7d32; } /* Greenish for added/content */
+        .text-content.kept { background-color: #f5f5f5; border-color: #e0e0e0; } /* Neutral for kept */
         button[type=submit] { padding: 12px 20px; background-color: #007aff; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; width: 100%; margin-top: 20px; }
         button[type=submit]:hover { background-color: #0056b3; }
         h2, h3 { margin-top: 0; color: #111; }
         p { color: #555; }
-        form { margin-top: 10px; } /* Add margin to form */
+        form { margin-top: 10px; }
     `;
 
     let proposalsHtml = "";
     if (parsedPlanData?.proposals?.length > 0) {
         parsedPlanData.proposals.forEach((proposal, index) => {
-            const proposalId = proposal.id || `prop-${index}`; // Ensure an ID
+            const proposalId = proposal.id || `prop-${index}`;
+            // Default checked unless action is 'delete'
+            const isChecked = proposal.action !== 'delete';
             proposalsHtml += `
             <div class="proposal-block">
               <div class="proposal-header">
                 <span class="proposal-title">Proposal ${index + 1} (${escapeHtml(proposal.action || 'suggest')})</span>
                 <div class="proposal-include">
-                  <input type="checkbox" class="proposal-toggle" id="${proposalId}" name="${proposalId}" data-proposal-id="${proposalId}" checked>
+                  <input type="checkbox" class="proposal-toggle" id="${proposalId}" name="${proposalId}" data-proposal-id="${proposalId}" ${isChecked ? 'checked' : ''}>
                   <label for="${proposalId}">Include</label>
                 </div>
               </div>
@@ -103,38 +154,35 @@ function generatePlanReviewHtml(parsedPlanData) {
             if (proposal.description) {
                 proposalsHtml += `<div class="proposal-description">${escapeHtml(proposal.description)}</div>`;
             }
-            if (proposal.original) {
-                proposalsHtml += `<div><small>Original:</small><div class="text-content original">${escapeHtml(proposal.original)}</div></div>`;
+
+            // Display Original (for replace/delete/keep)
+            if (proposal.original && ['replace', 'delete', 'keep'].includes(proposal.action)) {
+                 proposalsHtml += `<div class="text-block"><span class="text-label">Original${proposal.action === 'delete' ? ' (Deleted)' : (proposal.action === 'keep' ? ' (Kept)' : '')}:</span><div class="text-content original">${escapeHtml(proposal.original)}</div></div>`;
             }
-            if (proposal.content) {
-                 // Apply different style based on action
-                 let contentClass = "text-content";
-                 if (proposal.action === 'add') contentClass += ' added';
-                 if (proposal.action === 'delete') contentClass += ' deleted';
-                 // If action is replace, maybe show both original and content distinctly? For now, just show content.
-                proposalsHtml += `<div><small>${proposal.original ? 'Proposed:' : 'Content:'}</small><div class="${contentClass}">${escapeHtml(proposal.content)}</div></div>`;
+            // Display Content (for add/replace/keep)
+            if (proposal.content && ['add', 'replace', 'keep'].includes(proposal.action)) {
+                 const label = proposal.action === 'replace' ? 'Proposed:' : (proposal.action === 'keep' ? 'Kept:' : 'Added:');
+                 const contentClass = proposal.action === 'keep' ? 'text-content kept' : 'text-content added';
+                 proposalsHtml += `<div class="text-block"><span class="text-label">${label}</span><div class="${contentClass}">${escapeHtml(proposal.content)}</div></div>`;
+            } else if (proposal.action === 'add' && proposal.content) {
+                 // Handle simple add without original
+                 proposalsHtml += `<div class="text-block"><span class="text-label">Added:</span><div class="text-content added">${escapeHtml(proposal.content)}</div></div>`;
             }
-            proposalsHtml += `</div></div>`; // Close content and block
+
+            proposalsHtml += `</div></div>`;
         });
     } else {
-        // Handle the case where the plan itself is an error message
-        if (parsedPlanData.chatName === "AI Plan Error") {
-             proposalsHtml = `<p style="color: red;">${escapeHtml(parsedPlanData.planText)}</p>`;
+        if (parsedPlanData.chatName === "AI Plan Error" || parsedPlanData.chatName === "AI Plan Warning") {
+             proposalsHtml = `<p style="color: red;">${escapeHtml(parsedPlanData.planText || "Unknown error.")}</p>`;
         } else {
              proposalsHtml = "<p>No specific proposals found in the plan.</p>";
         }
     }
 
-    const planDescriptionHtml = parsedPlanData.planText && parsedPlanData.chatName !== "AI Plan Error"
-        ? `<div class="plan-description"><strong>Plan:</strong>\n${escapeHtml(parsedPlanData.planText)}</div>`
-        : ""; // Don't show generic "No description" if it's an error plan
-
-    const chatNameHtml = parsedPlanData.chatName && parsedPlanData.chatName !== "AI Plan Error"
-        ? `<h3>${escapeHtml(parsedPlanData.chatName)}</h3>`
-        : (parsedPlanData.chatName === "AI Plan Error" ? `<h3 style="color: red;">${escapeHtml(parsedPlanData.chatName)}</h3>` : "");
-
-
-    // Determine if we should disable the submit button (e.g., if it's an error plan)
+    const planDescriptionHtml = parsedPlanData.planText && !parsedPlanData.chatName?.includes("Error") && !parsedPlanData.chatName?.includes("Warning")
+        ? `<div class="plan-description"><strong>Plan:</strong>\n${escapeHtml(parsedPlanData.planText)}</div>` : "";
+    const chatNameHtml = parsedPlanData.chatName && !parsedPlanData.chatName?.includes("Error") && !parsedPlanData.chatName?.includes("Warning")
+        ? `<h3>${escapeHtml(parsedPlanData.chatName)}</h3>` : (parsedPlanData.chatName ? `<h3 style="color: ${parsedPlanData.chatName.includes('Error') ? 'red' : 'orange'};">${escapeHtml(parsedPlanData.chatName)}</h3>` : "");
     const disableSubmit = parsedPlanData.chatName === "AI Plan Error";
 
     return `
@@ -158,8 +206,8 @@ async function getConfig(forcePrompt = false) { /* ... (keep existing) ... */
 }
 
 /** Gets text input from Share Sheet or WebView form */
-async function getInputText() { /* ... (keep existing) ... */
-    console.log("Checking for input source..."); let initialText = ""; if (args.plainTexts?.length > 0) { const sharedText = args.plainTexts.join("\n").trim(); if (sharedText) { console.log("Using text from Share Sheet."); initialText = sharedText; } } else { console.log("No Share Sheet input found."); } console.log(`Presenting WebView form for text input (AI checkbox always shown).`); const inputHtml = generateInputFormHtml(initialText); const formData = await presentWebViewForm(inputHtml, false); if (!formData || typeof formData.text === "undefined" || typeof formData.useAi === "undefined") { console.log("Input cancelled or form did not return expected data."); return null; } if (formData.text.trim() === "") { console.log("No text entered."); return null; } console.log(`Input received. Text length: ${formData.text.trim().length}, Use AI checkbox state: ${formData.useAi}`); return { text: formData.text.trim(), useAi: formData.useAi };
+async function getInputText() { /* ... (keep existing - returns { text, compose, useAi }) ... */
+    console.log("Checking for input source..."); let initialText = ""; if (args.plainTexts?.length > 0) { const sharedText = args.plainTexts.join("\n").trim(); if (sharedText) { console.log("Using text from Share Sheet."); initialText = sharedText; } } else { console.log("No Share Sheet input found."); } console.log(`Presenting WebView form for text input (AI checkbox always shown).`); const inputHtml = generateInputFormHtml(initialText); const formData = await presentWebViewForm(inputHtml, false); if (!formData || typeof formData.text === "undefined" || typeof formData.compose === "undefined" || typeof formData.useAi === "undefined") { console.log("Input cancelled or form did not return expected data."); return null; } if (formData.text.trim() === "" && formData.compose.trim() === "") { console.log("No text or instructions entered."); return null; } console.log(`Input received. Text length: ${formData.text.trim().length}, Compose length: ${formData.compose.trim().length}, Use AI checkbox state: ${formData.useAi}`); return { text: formData.text.trim(), compose: formData.compose.trim(), useAi: formData.useAi };
 }
 
 /** Makes an authenticated request to an API */
@@ -172,24 +220,27 @@ async function createMemo(config, title) { /* ... (keep existing) ... */
     const endpoint = config.url.replace(/\/$/, "") + "/api/v1/memos"; const headers = { "Content-Type": "application/json", Authorization: `Bearer ${config.token}` }; const body = { content: title, visibility: "PRIVATE" }; console.log(`Creating memo with title: "${title}"`); return await makeApiRequest(endpoint, "POST", headers, body, 30, "Memos");
 }
 
-/**
- * Requests a plan from OpenAI using the new proposal-based XML format.
- * @param {string} apiKey - OpenAI API Key.
- * @param {string} userRequest - The user's input/request for the AI.
- * @returns {Promise<string>} Raw XML string response from OpenAI.
- * @throws {Error} If the API request fails or returns an error.
- */
-async function getAiPlanAsXml(apiKey, userRequest) {
+/** Requests a plan from OpenAI using the proposal-based XML format */
+async function getAiPlanAsXml(apiKey, originalContent, userInstructions) {
     console.log("Requesting XML plan (proposal format) from OpenAI...");
     const endpoint = "https://api.openai.com/v1/chat/completions";
-    const model = "gpt-4o"; // Or "gpt-4-turbo"
+    const model = "gpt-4o";
 
     // NEW XML Formatting Instructions for Proposals
     const proposalXmlInstructions = `
 ### Role
-- You are an assistant that processes user text and proposes structured modifications or additions.
+- You are an assistant that processes user text and proposes structured modifications or additions based on user instructions.
 - Your *entire response* MUST be valid XML using the tags defined below.
-- Start directly with '<plan>' or '<proposals>'. Do NOT include ANY text outside the XML structure.
+- Start directly with '<proposals>'. Do NOT include ANY text outside the XML structure.
+
+### Input Interpretation
+- **Original Content**: The base text provided by the user.
+- **User Instructions**: Specific directions on how to modify or generate text.
+
+### Behavior Rules
+1.  **Content + Instructions**: Modify the 'Original Content' according to 'User Instructions'. Break changes into logical proposals (replace, add, delete).
+2.  **Instructions Only**: Generate new content based *only* on 'User Instructions'. Use 'add' proposals.
+3.  **Content Only**: Assume default instructions: "Fix grammar, spelling, and improve clarity". Modify the 'Original Content' accordingly using proposals.
 
 ### XML Structure
 <proposals>
@@ -198,109 +249,77 @@ async function getAiPlanAsXml(apiKey, userRequest) {
     <description>Optional brief explanation of this proposal.</description>
     <original>
 ===
-Optional: The original text this proposal replaces or modifies. Use === markers.
+REQUIRED for 'replace' and 'delete'. The exact original text this proposal affects. Use === markers.
 ===
     </original>
     <content>
 ===
-The proposed text content. Use === markers. For delete actions, this can be empty or contain a note.
+REQUIRED for 'add', 'replace', 'keep'. The proposed text content. Use === markers. Empty for 'delete'.
 ===
     </content>
-  </proposal>
-  <proposal id="unique_id_2" ...>
-    ...
   </proposal>
   ...
 </proposals>
 
-### Tag Explanations
-- **<proposals>**: Root element.
-- **<plan>**: Optional. A high-level description of the overall goal or changes.
-- **<proposal>**: Represents one distinct section or change.
-    - **id**: A unique identifier for this proposal (e.g., "prop-1", "item-apple"). REQUIRED.
-    - **type**: The semantic type of the content (e.g., "paragraph", "list_item", "heading", "sentence"). REQUIRED.
-    - **action**: What to do with this proposal ("add", "replace", "delete", "keep"). REQUIRED. "keep" means include the original text as-is.
-- **<description>**: Optional. Explanation for this specific proposal.
-- **<original>**: Optional. The text being replaced or modified. Use for context with "replace" or "delete". MUST be wrapped in === markers.
-- **<content>**: The actual text content proposed. MUST be wrapped in === markers. Can be empty for "delete".
+### Tag Explanations & Requirements
+- **<proposals>**: Root element. REQUIRED.
+- **<plan>**: Optional summary.
+- **<proposal>**: Represents one distinct section/change. REQUIRED if changes are made.
+    - **id**: Unique identifier (e.g., "prop-1", "item-apple"). REQUIRED.
+    - **type**: Semantic type (e.g., "paragraph", "list_item", "heading", "sentence"). REQUIRED.
+    - **action**: "add", "replace", "delete", "keep". REQUIRED.
+- **<description>**: Optional explanation.
+- **<original>**: REQUIRED for 'replace'/'delete'. Wrap text with ===.
+- **<content>**: REQUIRED for 'add'/'replace'/'keep'. Wrap text with ===. Empty for 'delete'.
 
-### Examples
-
-**Example 1: Shopping List**
-User Request: "create me a shopping list with apples, orange, and banasnas inside of it"
-AI Response:
-<proposals>
-  <plan>Create a shopping list with the requested items.</plan>
-  <proposal id="item-apples" type="list_item" action="add">
-    <content>
-===
-Apples
-===
-    </content>
-  </proposal>
-  <proposal id="item-orange" type="list_item" action="add">
-    <content>
-===
-Orange
-===
-    </content>
-  </proposal>
-  <proposal id="item-bananas" type="list_item" action="add">
-    <content>
-===
-Bananas
-===
-    </content>
-  </proposal>
-</proposals>
-
-**Example 2: Correcting a Sentence**
-User Request: "Fix this: the quik brown fox jumpd over the lasy dog"
-AI Response:
-<proposals>
-  <plan>Correct spelling and grammar in the sentence.</plan>
-  <proposal id="sent-1-replace" type="sentence" action="replace">
-    <description>Corrected spelling and grammar.</description>
-    <original>
-===
-the quik brown fox jumpd over the lasy dog
-===
-    </original>
-    <content>
-===
-The quick brown fox jumped over the lazy dog.
-===
-    </content>
-  </proposal>
-</proposals>
+### Examples (Illustrative)
+- **Shopping List (Instructions Only):** User Instructions: "apples, oranges, bananas". Result: 3 proposals with action="add", type="list_item".
+- **Fix Sentence (Content Only):** Original Content: "the quik fox". Result: 1 proposal action="replace", type="sentence", with <original> and corrected <content>.
+- **Summarize (Content + Instructions):** Original Content: [long text]. User Instructions: "Summarize this". Result: 1 proposal action="replace", type="paragraph", with original text and summarized content.
 
 ### Final Instructions
-- Adhere strictly to the XML format.
-- Provide meaningful 'id', 'type', and 'action' attributes.
-- Use === markers correctly around <original> and <content> text.
-- Break down the user's request into logical <proposal> blocks.
-- Respond ONLY with the XML structure. No extra text before or after.
+- Adhere strictly to the XML format. Respond ONLY with XML.
+- Use appropriate actions ('add', 'replace', 'delete', 'keep').
+- Provide required tags (<original> for replace/delete, <content> for add/replace/keep).
+- Use === markers correctly.
+- Break down changes logically.
 `;
+
+    // Construct the user message based on provided inputs
+    let userPrompt = "Generate proposals in the specified XML format based on the following:\n\n";
+    if (originalContent) {
+        userPrompt += `**Original Content:**\n${originalContent}\n\n`;
+    }
+    if (userInstructions) {
+        userPrompt += `**User Instructions:**\n${userInstructions}\n\n`;
+    }
+    if (!originalContent && !userInstructions) {
+         userPrompt += "**User Instructions:**\nCreate a short example note.\n\n"; // Handle empty case
+    }
+     if (originalContent && !userInstructions) {
+         userPrompt += `**User Instructions:**\n(Default: Fix grammar, spelling, and improve clarity of the Original Content.)\n\n`;
+     }
+
 
     const messages = [
         { role: "system", content: proposalXmlInstructions },
-        { role: "user", content: `Generate proposals in the specified XML format for the following text/request:\n\n${userRequest}` },
+        { role: "user", content: userPrompt },
     ];
     const headers = { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` };
-    const body = { model: model, messages: messages, max_tokens: 3000, temperature: 0.3, n: 1, stop: null };
+    const body = { model: model, messages: messages, max_tokens: 3000, temperature: 0.4, n: 1, stop: null }; // Slightly higher temp might help creativity
 
     try {
-        const responseJson = await makeApiRequest(endpoint, "POST", headers, body, 90, "OpenAI");
+        const responseJson = await makeApiRequest(endpoint, "POST", headers, body, 120, "OpenAI"); // Increased timeout
         if (!responseJson.choices?.[0]?.message?.content) { throw new Error("OpenAI response missing content."); }
         let xmlContent = responseJson.choices[0].message.content.trim();
         console.log("OpenAI raw response received. Length:", xmlContent.length);
-        console.log("Raw OpenAI XML Response:\n" + xmlContent); // Log the raw response
+        console.log("Raw OpenAI XML Response:\n---\n" + xmlContent + "\n---"); // Log raw response clearly
 
         // Strip potential markdown fences
         if (xmlContent.startsWith("```xml")) { xmlContent = xmlContent.substring(6).replace(/```$/, "").trim(); console.log("Stripped markdown fences."); }
 
-        if (!xmlContent.startsWith("<") || !xmlContent.endsWith(">")) { console.warn("OpenAI response may not be valid XML:", xmlContent); }
-        else { console.log("OpenAI response looks like XML."); }
+        if (!xmlContent.startsWith("<proposals>")) { console.warn("OpenAI response may not start with <proposals>:", xmlContent.substring(0,100)); }
+        else { console.log("OpenAI response looks like valid proposal XML."); }
         return xmlContent;
     } catch (e) {
         console.error(`OpenAI Plan Generation Failed: ${e}`);
@@ -309,161 +328,15 @@ The quick brown fox jumped over the lazy dog.
 }
 
 
-/**
- * Parses the AI-generated XML plan (proposal format) into a JavaScript object.
- * @param {string} xmlString - The raw XML string from OpenAI.
- * @returns {object|null} Structured plan object or null on parsing error.
- */
-function parseAiXmlResponse(xmlString) {
-    console.log("Parsing AI XML response (proposal format)...");
-    if (!xmlString || typeof xmlString !== 'string' || xmlString.trim() === '') { console.error("Cannot parse empty or invalid XML string."); return null; }
-    try {
-        const parser = new XMLParser(xmlString);
-        // Adjusted structure: planText is optional, proposals is the main array
-        let parsedData = { planText: null, proposals: [] };
-        let currentProposal = null;
-        let currentTag = null;
-        let accumulatedChars = "";
-        let parseError = null;
-
-        parser.didStartElement = (name, attrs) => {
-            currentTag = name.toLowerCase();
-            accumulatedChars = "";
-            // console.log(`Start Element: ${name}, Attrs: ${JSON.stringify(attrs)}`);
-            if (currentTag === "proposal") {
-                currentProposal = {
-                    id: attrs.id || `prop-${Date.now()}-${Math.random()}`, // Generate fallback ID
-                    type: attrs.type || "unknown",
-                    action: attrs.action || "suggest",
-                    description: null,
-                    original: null,
-                    content: null,
-                };
-            }
-        };
-
-        parser.foundCharacters = (chars) => { if (currentTag) { accumulatedChars += chars; } };
-
-        parser.didEndElement = (name) => {
-            const tagName = name.toLowerCase();
-            const trimmedChars = accumulatedChars.trim();
-            // console.log(`End Element: ${name}, Chars: "${trimmedChars}"`);
-
-            if (tagName === "plan") {
-                parsedData.planText = trimmedChars;
-            } else if (tagName === "proposal") {
-                if (currentProposal) {
-                    // Basic validation: ensure content exists unless action is delete/keep?
-                    // if (currentProposal.action !== 'delete' && currentProposal.action !== 'keep' && !currentProposal.content) {
-                    //     console.warn("Proposal missing content for action:", currentProposal.action, currentProposal.id);
-                    // }
-                    parsedData.proposals.push(currentProposal);
-                    currentProposal = null;
-                }
-            } else if (currentProposal) { // Handle tags within <proposal>
-                if (tagName === "description") { currentProposal.description = trimmedChars; }
-                else if (tagName === "original") { currentProposal.original = trimmedChars.replace(/^===\s*|\s*===$/g, "").trim(); }
-                else if (tagName === "content") { currentProposal.content = trimmedChars.replace(/^===\s*|\s*===$/g, "").trim(); }
-            }
-            currentTag = null; accumulatedChars = "";
-        };
-
-        parser.parseErrorOccurred = (line, column, message) => { parseError = `XML Parse Error at ${line}:${column}: ${message}`; console.error(parseError); return; };
-
-        const success = parser.parse();
-        if (!success || parseError) { console.error("XML parsing failed.", parseError || ""); return null; }
-
-        // Add check: If parsing succeeded but no proposals were found, maybe return null or specific error object?
-        if (parsedData.proposals.length === 0 && !parsedData.planText) {
-             console.warn("XML parsed successfully, but no <plan> or <proposal> tags were found.");
-             // Return a default error object instead of null?
-             return {
-                 chatName: "Parsing Issue", // Use chatName for error indication
-                 planText: "Warning: The AI response was parsed, but contained no recognizable plan or proposals.",
-                 proposals: []
-             };
-        }
-
-        console.log("XML parsing successful (proposal format).");
-        // console.log("Parsed Data:", JSON.stringify(parsedData, null, 2));
-        return parsedData;
-    } catch (e) { console.error(`Error during XML parsing setup or execution: ${e}`); return null; }
+/** Parses the AI-generated XML plan (proposal format) */
+function parseAiXmlResponse(xmlString) { /* ... (keep existing - seems stable now) ... */
+    console.log("Parsing AI XML response (proposal format)..."); if (!xmlString || typeof xmlString !== 'string' || xmlString.trim() === '') { console.error("Cannot parse empty or invalid XML string."); return null; } try { const parser = new XMLParser(xmlString); let parsedData = { planText: null, proposals: [] }; let currentProposal = null; let currentTag = null; let accumulatedChars = ""; let parseError = null; parser.didStartElement = (name, attrs) => { currentTag = name.toLowerCase(); accumulatedChars = ""; if (currentTag === "proposal") { currentProposal = { id: attrs.id || `prop-${Date.now()}-${Math.random()}`, type: attrs.type || "unknown", action: attrs.action || "suggest", description: null, original: null, content: null, }; } }; parser.foundCharacters = (chars) => { if (currentTag) { accumulatedChars += chars; } }; parser.didEndElement = (name) => { const tagName = name.toLowerCase(); const trimmedChars = accumulatedChars.trim(); if (tagName === "plan") { parsedData.planText = trimmedChars; } else if (tagName === "proposal") { if (currentProposal) { parsedData.proposals.push(currentProposal); currentProposal = null; } } else if (currentProposal) { if (tagName === "description") { currentProposal.description = trimmedChars; } else if (tagName === "original") { currentProposal.original = trimmedChars.replace(/^===\s*|\s*===$/g, "").trim(); } else if (tagName === "content") { currentProposal.content = trimmedChars.replace(/^===\s*|\s*===$/g, "").trim(); } } currentTag = null; accumulatedChars = ""; }; parser.parseErrorOccurred = (line, column, message) => { parseError = `XML Parse Error at ${line}:${column}: ${message}`; console.error(parseError); return; }; const success = parser.parse(); if (!success || parseError) { console.error("XML parsing failed.", parseError || ""); return null; } if (parsedData.proposals.length === 0 && !parsedData.planText) { console.warn("XML parsed successfully, but no <plan> or <proposal> tags were found."); return { chatName: "Parsing Issue", planText: "Warning: AI response parsed, but contained no plan or proposals.", proposals: [] }; } console.log("XML parsing successful (proposal format)."); return parsedData; } catch (e) { console.error(`Error during XML parsing setup or execution: ${e}`); return null; }
 }
 
-
-/**
- * Constructs the final memo text based on selected proposals.
- * @param {object} parsedPlanData - The structured plan object containing proposals.
- * @param {string[]} includedProposalIds - Array of IDs for proposals to include.
- * @returns {string} Formatted final memo text string.
- */
-function constructFinalMemoText(parsedPlanData, includedProposalIds) {
-    if (!parsedPlanData || !parsedPlanData.proposals || !Array.isArray(includedProposalIds)) {
-        console.error("Invalid input for constructing final memo text.");
-        return "Error: Could not construct final memo text.";
-    }
-
-    let outputLines = [];
-    let currentListType = null; // Track if we are in a list
-
-    parsedPlanData.proposals.forEach(proposal => {
-        // Check if this proposal should be included
-        if (includedProposalIds.includes(proposal.id)) {
-            let textToUse = "";
-            if (proposal.action === 'delete') {
-                // Skip deleted items entirely
-                return;
-            } else if (proposal.action === 'keep') {
-                textToUse = proposal.original || ""; // Use original if keeping
-            } else {
-                // Use content for 'add', 'replace', or default 'suggest'
-                textToUse = proposal.content || "";
-            }
-
-            // Handle list formatting
-            if (proposal.type === 'list_item') {
-                if (currentListType !== 'list_item') {
-                    // Starting a new list (or switching to list)
-                    // Add a newline before starting list if previous item wasn't list
-                    if (outputLines.length > 0 && currentListType !== null) {
-                         outputLines.push(""); // Add blank line separator
-                    }
-                    currentListType = 'list_item';
-                }
-                // Add list marker (e.g., bullet point)
-                outputLines.push(`- ${textToUse.trim()}`);
-            } else {
-                // Not a list item
-                if (currentListType === 'list_item') {
-                    // Ending a list
-                    outputLines.push(""); // Add blank line separator
-                }
-                currentListType = proposal.type; // Track current type
-                // Add paragraph/heading/etc. as is (trimming might be too aggressive for code blocks)
-                outputLines.push(textToUse);
-                 // Add extra newline after headings?
-                 if (proposal.type === 'heading') {
-                     outputLines.push("");
-                 }
-            }
-        } else {
-             // If proposal is *not* included, check if we need to end a list
-             if (currentListType === 'list_item' && proposal.type === 'list_item') {
-                 // We were in a list, but skipped an item. Continue list logic doesn't apply here.
-                 // We might need more complex logic if skipping items should break the list.
-                 // For now, just reset list type if a non-list item follows.
-             }
-        }
-         // Reset list type if the *next* item isn't a list item (handled in the 'else' block above)
-         if (proposal.type !== 'list_item') {
-             currentListType = null;
-         }
-
-    });
-
-    return outputLines.join("\n").trim();
+/** Constructs the final memo text based on selected proposals */
+function constructFinalMemoText(parsedPlanData, includedProposalIds) { /* ... (keep existing - seems stable now) ... */
+    if (!parsedPlanData || !parsedPlanData.proposals || !Array.isArray(includedProposalIds)) { console.error("Invalid input for constructing final memo text."); return "Error: Could not construct final memo text."; } let outputLines = []; let currentListType = null; parsedPlanData.proposals.forEach(proposal => { if (includedProposalIds.includes(proposal.id)) { let textToUse = ""; if (proposal.action === 'delete') { return; } else if (proposal.action === 'keep') { textToUse = proposal.original || proposal.content || ""; } else { textToUse = proposal.content || ""; } if (proposal.type === 'list_item') { if (currentListType !== 'list_item') { if (outputLines.length > 0 && currentListType !== null) { outputLines.push(""); } currentListType = 'list_item'; } outputLines.push(`- ${textToUse.trim()}`); } else { if (currentListType === 'list_item') { outputLines.push(""); } currentListType = proposal.type; outputLines.push(textToUse); if (proposal.type === 'heading') { outputLines.push(""); } } } if (proposal.type !== 'list_item') { currentListType = null; } }); return outputLines.join("\n").trim();
 }
-
 
 /** Adds a comment to an existing memo */
 async function addCommentToMemo(config, memoId, commentText) { /* ... (keep existing) ... */
@@ -473,35 +346,35 @@ async function addCommentToMemo(config, memoId, commentText) { /* ... (keep exis
 // --- Main Execution ---
 
 (async () => {
-  console.log("Starting Interactive Quick Capture (with AI Plan) to Memos script...");
+  console.log("Starting Script...");
   let forceConfigPrompt = false;
 
-  // --- Configuration Reset Logic ---
+  // --- Config Reset ---
   if (args.queryParameters?.resetConfig === "true") { /* ... (keep existing) ... */
     console.log("Reset configuration argument detected."); const confirmAlert = new Alert(); confirmAlert.title = "Reset Configuration?"; confirmAlert.message = "Are you sure you want to remove the saved Memos URL, Access Token, and OpenAI Key? You will be prompted to re-enter them."; confirmAlert.addAction("Reset"); confirmAlert.addCancelAction("Cancel"); const confirmation = await confirmAlert.presentAlert(); if (confirmation === 0) { console.log("Removing configuration from Keychain..."); if (Keychain.contains(KEYCHAIN_URL_KEY)) Keychain.remove(KEYCHAIN_URL_KEY); if (Keychain.contains(KEYCHAIN_TOKEN_KEY)) Keychain.remove(KEYCHAIN_TOKEN_KEY); if (Keychain.contains(KEYCHAIN_OPENAI_KEY)) Keychain.remove(KEYCHAIN_OPENAI_KEY); console.log("Configuration removed."); forceConfigPrompt = true; } else { console.log("Configuration reset cancelled."); Script.complete(); return; }
   }
 
   let config;
-  let inputData; // { text, useAi }
+  let inputData; // { text, compose, useAi }
   let createdMemo;
   let memoId;
   let finalText;
-  let planUsed = false; // Renamed from proposalUsed for clarity
+  let planUsed = false;
 
   try {
     config = await getConfig(forceConfigPrompt);
-    console.log("Initial configuration obtained.");
+    console.log("Initial config obtained.");
 
-    inputData = await getInputText(); // Gets { text, useAi }
+    inputData = await getInputText(); // Gets { text, compose, useAi }
+    if (!inputData) { console.log("No input or cancelled. Exiting."); Script.complete(); return; }
 
-    if (!inputData) { console.log("No input text or cancelled. Exiting."); Script.complete(); return; }
+    const originalContent = inputData.text;
+    const composeInstructions = inputData.compose;
+    finalText = originalContent; // Default
 
-    const originalInputText = inputData.text;
-    finalText = originalInputText; // Default
-
-    // --- AI Plan Generation Flow ---
+    // --- AI Plan Flow ---
     if (inputData.useAi) {
-        console.log("User checked 'Process with AI'. Checking Key...");
+        console.log("User wants AI processing. Checking Key...");
         let hasValidOpenAIKey = typeof config.openaiApiKey === 'string' && config.openaiApiKey.trim().length > 0;
 
         if (!hasValidOpenAIKey) { /* ... (keep existing key prompt logic) ... */
@@ -514,56 +387,66 @@ async function addCommentToMemo(config, memoId, commentText) { /* ... (keep exis
             let parsedPlan = null;
             try {
                 processingAlert = new Alert(); processingAlert.title = "Generating AI Plan..."; processingAlert.message = "Please wait."; processingAlert.present();
-                const rawXml = await getAiPlanAsXml(config.openaiApiKey, originalInputText);
-                if (processingAlert?.dismiss) { try { processingAlert.dismiss(); } catch (e) { /* ignore */ } } processingAlert = null;
 
+                // Pass both content and instructions
+                const rawXml = await getAiPlanAsXml(config.openaiApiKey, originalContent, composeInstructions);
+
+                if (processingAlert?.dismiss) { try { processingAlert.dismiss(); } catch (e) { /* ignore */ } } processingAlert = null;
                 parsedPlan = parseAiXmlResponse(rawXml);
 
                 if (!parsedPlan) {
                     console.warn("Failed to parse AI response. Creating default error plan.");
                     parsedPlan = { chatName: "AI Plan Error", planText: "Error: AI response could not be parsed as valid XML.", proposals: [] };
                 } else if (parsedPlan.proposals.length === 0 && !parsedPlan.planText) {
-                     // Handle case where parsing succeeded but found nothing meaningful
                      console.warn("AI response parsed but contained no plan or proposals.");
                      parsedPlan = { chatName: "AI Plan Warning", planText: "Warning: AI response parsed successfully but contained no actionable proposals.", proposals: [] };
                 }
-
 
                 console.log("AI plan ready for review. Asking via WebView.");
                 const reviewHtml = generatePlanReviewHtml(parsedPlan);
                 const reviewResult = await presentWebViewForm(reviewHtml, true); // reviewResult = { includedProposalIds: [...] }
 
-                // Check if review was cancelled or failed
                 if (!reviewResult || !reviewResult.includedProposalIds) {
-                     console.log("Plan review cancelled or failed. Reverting to original text.");
-                     // finalText remains originalInputText
+                     console.log("Plan review cancelled or failed. Using original text.");
+                     finalText = originalContent; // Ensure original is used
                 } else {
-                    // Construct final text ONLY if it wasn't an error plan shown
                     if (parsedPlan.chatName !== "AI Plan Error" && parsedPlan.chatName !== "AI Plan Warning") {
                         finalText = constructFinalMemoText(parsedPlan, reviewResult.includedProposalIds);
-                        planUsed = true; // Mark that a valid plan was potentially used
+                        planUsed = true;
                         console.log("User finalized choices from AI proposals.");
                     } else {
-                         console.log("Review screen showed an error/warning. Reverting to original text.");
-                         // finalText remains originalInputText
+                         console.log("Review screen showed error/warning. Using original text.");
+                         finalText = originalContent; // Ensure original is used
                     }
                 }
 
-            } catch (aiError) { /* ... (keep existing AI error handling) ... */
-                if (processingAlert?.dismiss) { try { processingAlert.dismiss(); } catch (e) { /* ignore */ } } console.error(`AI Plan Generation/Processing Failed: ${aiError}`); const aiErrorAlert = new Alert(); aiErrorAlert.title = "AI Plan Error"; aiErrorAlert.message = `Failed to generate or process AI plan:\n${aiError.message}\n\nUse original text instead?`; aiErrorAlert.addAction("Use Original"); aiErrorAlert.addCancelAction("Cancel Script"); const errorChoice = await aiErrorAlert.presentAlert(); if (errorChoice === -1) { console.log("Script cancelled due to AI plan processing error."); Script.complete(); return; } console.log("Proceeding with original text after AI error.");
+            } catch (aiError) { /* ... (keep existing AI error handling, ensure finalText = originalContent) ... */
+                if (processingAlert?.dismiss) { try { processingAlert.dismiss(); } catch (e) { /* ignore */ } } console.error(`AI Plan Generation/Processing Failed: ${aiError}`); const aiErrorAlert = new Alert(); aiErrorAlert.title = "AI Plan Error"; aiErrorAlert.message = `Failed to generate or process AI plan:\n${aiError.message}\n\nUse original text instead?`; aiErrorAlert.addAction("Use Original"); aiErrorAlert.addCancelAction("Cancel Script"); const errorChoice = await aiErrorAlert.presentAlert(); if (errorChoice === -1) { console.log("Script cancelled due to AI plan processing error."); Script.complete(); return; } console.log("Proceeding with original text after AI error."); finalText = originalContent;
             }
-        } else { console.log("Skipping AI processing: No valid OpenAI Key."); }
-    } else { console.log("User did not select 'Process with AI'."); }
-    // --- End AI Plan Generation Flow ---
+        } else { console.log("Skipping AI processing: No valid OpenAI Key."); finalText = originalContent; }
+    } else { console.log("User did not select 'Process with AI'."); finalText = originalContent; }
+    // --- End AI Plan Flow ---
 
     // --- Memos Creation ---
     console.log("Proceeding to create Memos entry...");
+    // Use original content as title if final text is very different or empty? Or keep simple title?
+    // Let's keep the simple title for now.
     const memoTitle = `Quick Capture - ${new Date().toLocaleString()}`;
     createdMemo = await createMemo(config, memoTitle);
 
     const nameParts = createdMemo?.name?.split('/'); memoId = nameParts ? nameParts[nameParts.length - 1] : null;
     if (!memoId || typeof memoId !== 'string' || memoId.trim() === '') { console.error("Failed to get valid memo ID string.", createdMemo); throw new Error(`Could not determine memo ID string from name: ${createdMemo?.name}`); }
     console.log(`Memo created successfully with ID: ${memoId}`);
+
+    // Ensure finalText has a value before sending
+    if (typeof finalText !== 'string' || finalText.trim() === '') {
+        console.warn("Final text is empty after processing. Sending original content instead.");
+        finalText = originalContent;
+        // If original is also empty, maybe send a placeholder?
+        if (finalText.trim() === '') {
+             finalText = "(Empty Note)";
+        }
+    }
 
     await addCommentToMemo(config, memoId, finalText);
     console.log("Comment added successfully!");
