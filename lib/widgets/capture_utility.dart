@@ -705,7 +705,9 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
                 updatedMemo,
               );
             } else {
-              throw Exception("Cannot append: Parent memo not loaded.");
+              throw Exception(
+                "Cannot append: Parent memo not loaded or available.",
+              );
             }
             break;
           case SubmitAction.prependToMemo:
@@ -717,7 +719,9 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
                 updatedMemo,
               );
             } else {
-              throw Exception("Cannot prepend: Parent memo not loaded.");
+              throw Exception(
+                "Cannot prepend: Parent memo not loaded or available.",
+              );
             }
             break;
         }
@@ -1110,9 +1114,20 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
     );
     final bool hasAttachment = _selectedFileData != null;
 
+    // --- Watch parent memo state ---
+    final parentMemoAsyncValue =
+        widget.mode == CaptureMode.addComment && widget.memoId != null
+            ? ref.watch(memoDetailProvider(widget.memoId!))
+            : const AsyncValue.data(
+              null,
+            ); // Default to null if not in comment mode
+    final bool isParentMemoLoaded =
+        parentMemoAsyncValue.hasValue && parentMemoAsyncValue.value != null;
+    // --- End watch parent memo state ---
+
     final bool canAppendPrependComment = hasComments && !hasAttachment;
-    final bool canAppendPrependMemo =
-        !hasAttachment; // Can always append/prepend memo if no attachment
+    // Update canAppendPrependMemo to check if parent memo is loaded
+    final bool canAppendPrependMemo = isParentMemoLoaded && !hasAttachment;
     // --- Define segmentedControlChildren INSIDE build ---
     final Map<SubmitAction, Widget> segmentedControlChildren = {
       SubmitAction.newComment: const Padding(
