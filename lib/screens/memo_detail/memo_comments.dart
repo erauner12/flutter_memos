@@ -10,7 +10,7 @@ import 'package:flutter_memos/screens/memo_detail/memo_detail_providers.dart';
 import 'package:flutter_memos/todoist_api/lib/api.dart'
     as todoist; // For error types
 import 'package:flutter_memos/widgets/comment_card.dart'
-    as BaseCard; // Use alias to avoid name clash
+    as base_card; // Use correct alias
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class MemoComments extends ConsumerWidget {
@@ -133,6 +133,7 @@ class _CommentCardState extends ConsumerState<CommentCard> {
     );
   }
 
+
   Future<void> _sendCommentToTodoist(Comment comment) async {
     final todoistService = ref.read(todoistApiServiceProvider);
     // final scaffoldMessenger = ScaffoldMessenger.of(context); // Removed - using dialogs
@@ -182,6 +183,7 @@ class _CommentCardState extends ConsumerState<CommentCard> {
       return;
     }
 
+
     // 3. Show loading
     setState(() => _isSendingToTodoist = true);
 
@@ -207,6 +209,8 @@ class _CommentCardState extends ConsumerState<CommentCard> {
         'Success',
         'Sent to Todoist: "${createdTask.content ?? 'Task'}"',
       );
+
+
     } on todoist.ApiException catch (e) {
       if (kDebugMode) {
         print('[Todoist Send] API Error: ${e.message} (Code: ${e.code})');
@@ -216,6 +220,7 @@ class _CommentCardState extends ConsumerState<CommentCard> {
         'Failed to create task.\n\nAPI Error ${e.code}: ${e.message ?? 'Unknown error'}',
         isError: true,
       );
+
     } catch (e) {
       if (kDebugMode) {
         print('[Todoist Send] General Error: $e');
@@ -225,6 +230,7 @@ class _CommentCardState extends ConsumerState<CommentCard> {
         'An unexpected error occurred: ${e.toString()}',
         isError: true,
       );
+
     } finally {
       // Hide loading
       if (mounted) {
@@ -233,15 +239,17 @@ class _CommentCardState extends ConsumerState<CommentCard> {
     }
   }
 
+
   @override
   Widget build(BuildContext context) {
-    // Use the imported BaseCommentCard for layout and common features
-    return BaseCard.CommentCard(
+    // Use the imported base_card.CommentCard for layout and common features
+    return base_card.CommentCard(
+      // Use the correct alias
       comment: widget.comment,
       memoId: widget.memoId,
       isSelected: widget.isSelected,
       actions: [
-        // Add the action button here
+        // Pass the action button to the 'actions' parameter
         if (_isSendingToTodoist)
           const CupertinoActivityIndicator(radius: 10)
         else
@@ -255,8 +263,7 @@ class _CommentCardState extends ConsumerState<CommentCard> {
             ),
             onPressed: () => _sendCommentToTodoist(widget.comment),
           ),
-        // Add other existing actions like edit/delete here...
-        // Example: Assuming BaseCommentCard handles edit/delete internally or via callbacks
+        // Add other existing actions like edit/delete here if BaseCommentCard supports them
       ],
       // Pass other necessary parameters to BaseCommentCard if needed
     );
