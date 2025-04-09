@@ -49,7 +49,6 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
     super.dispose(); // Must call super
   }
 
-
   // Build the CupertinoNavigationBar when in multi-select mode
   CupertinoNavigationBar _buildMultiSelectNavBar(int selectedCount) {
     return CupertinoNavigationBar(
@@ -150,7 +149,6 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
     );
   }
 
-
   // Add keyboard navigation methods
   void _selectNextMemo() {
     final memos = ref.read(filteredMemosProvider);
@@ -223,10 +221,7 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
         Navigator.of(
           context,
           rootNavigator: true,
-        ).pushNamed(
-          '/memo-detail',
-          arguments: {'memoId': selectedId},
-        );
+        ).pushNamed('/memo-detail', arguments: {'memoId': selectedId});
       }
     }
   }
@@ -494,8 +489,12 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
   // Method to build the server switcher button (remains unchanged)
   Widget _buildServerSwitcherButton() {
     final activeServer = ref.watch(activeServerConfigProvider);
-    final serverName = activeServer?.name ?? activeServer?.serverUrl ?? 'No Server';
-    final truncatedName = serverName.length > 15 ? '${serverName.substring(0, 12)}...' : serverName;
+    final serverName =
+        activeServer?.name ?? activeServer?.serverUrl ?? 'No Server';
+    final truncatedName =
+        serverName.length > 15
+            ? '${serverName.substring(0, 12)}...'
+            : serverName;
 
     return CupertinoButton(
       padding: const EdgeInsets.only(left: 8.0),
@@ -526,41 +525,51 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
     if (servers.isEmpty) {
       showCupertinoDialog(
         context: context,
-        builder: (context) => CupertinoAlertDialog(
-          title: const Text('No Servers'),
-          content: const Text('Please add a server configuration in Settings.'),
-          actions: [
-            CupertinoDialogAction(
-              child: const Text('Settings'),
-              onPressed: () {
+        builder:
+            (context) => CupertinoAlertDialog(
+              title: const Text('No Servers'),
+              content: const Text(
+                'Please add a server configuration in Settings.',
+              ),
+              actions: [
+                CupertinoDialogAction(
+                  child: const Text('Settings'),
+                  onPressed: () {
                     Navigator.pop(context);
-                Navigator.of(context, rootNavigator: true).pushNamed('/settings');
-              },
+                    Navigator.of(
+                      context,
+                      rootNavigator: true,
+                    ).pushNamed('/settings');
+                  },
+                ),
+                CupertinoDialogAction(
+                  isDefaultAction: true,
+                  child: const Text('OK'),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ],
             ),
-            CupertinoDialogAction(
-              isDefaultAction: true,
-              child: const Text('OK'),
-              onPressed: () => Navigator.pop(context),
-            ),
-          ],
-        ),
       );
       return;
     }
 
     showCupertinoModalPopup<void>(
       context: context,
-      builder: (BuildContext context) => CupertinoActionSheet(
-        title: const Text('Switch Active Server'),
-        actions: servers.map((server) {
-          final bool isActive = server.id == activeServerId;
-          return CupertinoActionSheetAction(
+      builder:
+          (BuildContext context) => CupertinoActionSheet(
+            title: const Text('Switch Active Server'),
+            actions:
+                servers.map((server) {
+                  final bool isActive = server.id == activeServerId;
+                  return CupertinoActionSheetAction(
                     isDefaultAction: isActive,
-            onPressed: () {
-              if (!isActive) {
-                if (kDebugMode) {
-                  print('[MemosScreen] Setting active server to: ${server.name ?? server.id}');
-                }
+                    onPressed: () {
+                      if (!isActive) {
+                        if (kDebugMode) {
+                          print(
+                            '[MemosScreen] Setting active server to: ${server.name ?? server.id}',
+                          );
+                        }
                         notifier.setActiveServer(server.id);
                         ref.invalidate(memosNotifierProvider);
                         if (kDebugMode) {
@@ -568,19 +577,19 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
                             '[MemosScreen] Invalidated memosNotifierProvider after server switch.',
                           );
                         }
-              }
+                      }
                       Navigator.pop(context);
-            },
-            child: Text(server.name ?? server.serverUrl),
-          );
-        }).toList(),
-        cancelButton: CupertinoActionSheetAction(
-          child: const Text('Cancel'),
-          onPressed: () {
-            Navigator.pop(context);
-          },
-        ),
-      ),
+                    },
+                    child: Text(server.name ?? server.serverUrl),
+                  );
+                }).toList(),
+            cancelButton: CupertinoActionSheetAction(
+              child: const Text('Cancel'),
+              onPressed: () {
+                Navigator.pop(context);
+              },
+            ),
+          ),
     );
   }
 

@@ -247,8 +247,7 @@ void main() {
   });
 
   // Test 1: Standard UI
-  testWidgets(
-      'MemosScreen displays standard UI elements initially', (
+  testWidgets('MemosScreen displays standard UI elements initially', (
     WidgetTester tester,
   ) async {
     // Arrange
@@ -259,8 +258,7 @@ void main() {
 
     // Act & Assert
     // Verify NavigationBar
-    expect(find.byType(CupertinoNavigationBar), findsOneWidget,
-    );
+    expect(find.byType(CupertinoNavigationBar), findsOneWidget);
     // Verify Title (based on initial 'inbox' preset)
     expect(
       find.descendant(
@@ -324,16 +322,41 @@ void main() {
     // Verify multi-select actions are NOT present
     expect(
       find.widgetWithIcon(CupertinoButton, CupertinoIcons.clear),
-      findsNothing,
+      findsNothing, // Cancel button should not be present
     );
-    expect(find.textContaining('Selected'), findsNothing);
+    expect(find.textContaining('Selected'), findsNothing); // Multi-select title
+
+    // Verify standard trailing buttons ARE present within the NavBar
+    final navBarFinder = find.byType(CupertinoNavigationBar);
     expect(
-      find.widgetWithIcon(CupertinoButton, CupertinoIcons.delete),
-      findsNothing,
+      find.descendant(
+        of: navBarFinder,
+        matching: find.widgetWithIcon(
+          CupertinoButton,
+          CupertinoIcons.checkmark_seal,
+        ),
+      ),
+      findsOneWidget,
+      reason: 'Multi-select toggle button should be present',
     );
     expect(
-      find.widgetWithIcon(CupertinoButton, CupertinoIcons.archivebox),
-      findsNothing,
+      find.descendant(
+        of: navBarFinder,
+        matching: find.widgetWithIcon(
+          CupertinoButton,
+          CupertinoIcons.tuningfork,
+        ),
+      ),
+      findsOneWidget,
+      reason: 'Advanced filter button should be present',
+    );
+    expect(
+      find.descendant(
+        of: navBarFinder,
+        matching: find.widgetWithIcon(CupertinoButton, CupertinoIcons.add),
+      ),
+      findsOneWidget,
+      reason: 'Add memo button should be present',
     );
     // Verify no Checkboxes/Switches are present within list items
     expect(
@@ -535,8 +558,16 @@ void main() {
       isEmpty, // Selection cleared
     );
 
-    // Verify NavigationBar reverts
-    expect(find.text('Inbox'), findsOneWidget); // Title back to preset label
+    // Verify NavigationBar reverts - Find title specifically within NavBar
+    final navBarFinder = find.byType(CupertinoNavigationBar);
+    expect(
+      find.descendant(
+        of: navBarFinder,
+        matching: find.text('Inbox'), // Find title within NavBar
+      ),
+      findsOneWidget,
+      reason: 'Title should revert to preset label',
+    );
     expect(
       find.widgetWithIcon(
         CupertinoButton,
@@ -619,7 +650,15 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(container.read(quickFilterPresetProvider), 'inbox'); // Initial state
-    expect(find.text('Inbox'), findsOneWidget); // Initial title
+    final navBarFinder = find.byType(CupertinoNavigationBar);
+    expect(
+      find.descendant(
+        of: navBarFinder,
+        matching: find.text('Inbox'), // Find title within NavBar
+      ),
+      findsOneWidget,
+      reason: 'Initial title should be Inbox',
+    );
 
     // Act: Tap the 'Today' segment
     // Finding specific segments can be tricky. We'll find the text within the control.
@@ -633,7 +672,15 @@ void main() {
 
     // Assert: Provider updated and title changed
     expect(container.read(quickFilterPresetProvider), 'today');
-    expect(find.text('Today'), findsOneWidget); // Title updated
+    // Verify Title specifically within NavBar
+    expect(
+      find.descendant(
+        of: navBarFinder, // Use the same finder from above
+        matching: find.text('Today'), // Find title within NavBar
+      ),
+      findsOneWidget,
+      reason: 'Title should update to Today',
+    );
 
     // Act: Tap the 'All' segment
     final allSegmentFinder = find.descendant(
@@ -646,7 +693,15 @@ void main() {
 
     // Assert: Provider updated and title changed
     expect(container.read(quickFilterPresetProvider), 'all');
-    expect(find.text('All'), findsOneWidget); // Title updated
+    // Verify Title specifically within NavBar
+    expect(
+      find.descendant(
+        of: navBarFinder, // Use the same finder from above
+        matching: find.text('All'), // Find title within NavBar
+      ),
+      findsOneWidget,
+      reason: 'Title should update to All',
+    );
   });
 
   // Test 7: Open Advanced Filter Panel
