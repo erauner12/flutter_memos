@@ -1,41 +1,103 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-const String _todoistApiKeyPrefKey = 'todoistApiKey';
+/// Keys for SharedPreferences storage
+class PreferenceKeys {
+  static const String todoistApiKey = 'todoist_api_key';
+  // Add other preference keys as needed
+}
 
-// Provider to manage the Todoist API Key state
-final todoistApiKeyProvider = StateNotifierProvider<TodoistApiKeyNotifier, String>((ref) {
-  // Consider providing SharedPreferences instance via another provider for better testability
-  return TodoistApiKeyNotifier();
-});
+/// Provider for the Todoist API key with persistence using SharedPreferences
+final todoistApiKeyProvider =
+    StateNotifierProvider<PersistentStringNotifier, String>(
+      (ref) => PersistentStringNotifier(
+        '', // default empty value
+        PreferenceKeys.todoistApiKey, // storage key
+      ),
+      name: 'todoistApiKey',
+    );
 
-class TodoistApiKeyNotifier extends StateNotifier<String> {
-  TodoistApiKeyNotifier() : super('') {
-    _loadApiKey(); // Load initial value asynchronously
+/// A StateNotifier that persists string values to SharedPreferences
+class PersistentStringNotifier extends StateNotifier<String> {
+  final String preferenceKey;
+  bool _initialized = false;
+
+  PersistentStringNotifier(super.initialState, this.preferenceKey) {
+    _loadFromPreferences();
   }
 
-  SharedPreferences? _prefs;
+  Future<void> _loadFromPreferences() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final storedValue = prefs.getString(preferenceKey);
+      
+      if (storedValue != null && storedValue != state) {
+        state = storedValue;
+      }
 
-  // Initialize SharedPreferences instance
-  Future<void> _initPrefs() async {
-    _prefs ??= await SharedPreferences.getInstance();
+      _initialized = true;
+      if (kDebugMode) {
+        print(
+          '[PersistentStringNotifier] Loaded value for $preferenceKey: ${storedValue?.isNotEmpty == true ? "present" : "empty"}',
+        );
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print(
+          '[PersistentStringNotifier] Error loading preference $preferenceKey: $e',
+        );
+      }
+      _initialized = true; // Still mark as initialized to prevent blocking
+    }
   }
 
-  // Load the API key from SharedPreferences
-  Future<void> _loadApiKey() async {
-    await _initPrefs();
-    // Set the state with the loaded key or default to empty string
-    state = _prefs?.getString(_todoistApiKeyPrefKey) ?? '';
+  Future<bool> set(String value) async {
+    if (!_initialized) {
+      if (kDebugMode) {
+        print(
+          '[PersistentStringNotifier] Warning: Setting value before initialization completed',
+        );
+      }
+      // Wait for initialization if possible
+      int attempts = 0;
+      while (!_initialized && attempts < 5) {
+        await Future.delayed(const Duration(milliseconds: 100));
+        attempts++;
+      }
+    }
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final success = await prefs.setString(preferenceKey, value);
+
+      if (success) {
+        state = value;
+        if (kDebugMode) {
+          print(
+            '[PersistentStringNotifier] Saved value for $preferenceKey: ${value.isNotEmpty ? "new value" : "empty"}',
+          );
+        }
+      } else {
+        if (kDebugMode) {
+          print(
+            '[PersistentStringNotifier] Failed to save value for $preferenceKey',
+          );
+        }
+      }
+      
+      return success;
+    } catch (e) {
+      if (kDebugMode) {
+        print(
+          '[PersistentStringNotifier] Error saving preference $preferenceKey: $e',
+        );
+      }
+      return false;
+    }
   }
 
-  // Update the API key in both state and SharedPreferences
-  Future<void> updateApiKey(String newKey) async {
-    final trimmedKey = newKey.trim(); // Trim whitespace
-    if (state == trimmedKey) return; // No change needed
-
-    await _initPrefs();
-    await _prefs?.setString(_todoistApiKeyPrefKey, trimmedKey);
-    state = trimmedKey; // Update the state
-    // The todoistApiServiceProvider watching this provider will automatically rebuild.
+  Future<bool> clear() async {
+    return set('');
   }
 }
