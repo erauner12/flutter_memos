@@ -22,38 +22,36 @@ const KEYCHAIN_OPENAI_KEY = "openai_api_key"; // Added for OpenAI
 async function presentWebViewForm(htmlContent, fullscreen = false, preferredSize = null) {
     console.log("Presenting WebView form...");
     try {
-        const wv = new WebView();
-        // Optional: Set up shouldAllowRequest if needed to restrict navigation/resources
+      const wv = new WebView();
+      // Optional: Set up shouldAllowRequest if needed to restrict navigation/resources
 
-        // Note: The static methods like WebView.loadHTML present immediately.
-        // We need an instance to load HTML and then evaluate JS.
-        await wv.loadHTML(htmlContent);
+      // Note: The static methods like WebView.loadHTML present immediately.
+      // We need an instance to load HTML and then evaluate JS.
+      await wv.loadHTML(htmlContent);
 
-        // Use evaluateJavaScript with useCallback=true to wait for completion()
-        // The JS inside the HTML *must* call completion(data) to return a value.
-        const result = await wv.evaluateJavaScript(
-            `
-            // Define a promise that resolves when completion() is called.
-            new Promise(resolve => {
-                // Make completion function globally available for the HTML's JS
-                window.completion = (data) => {
-                    console.log("WebView completion function called.");
-                    resolve(data); // Resolve the promise with the submitted data
-                };
-                // Optional: Add any initial setup JS needed immediately after load
-                console.log("WebView loaded, completion function ready.");
-            });
+      // Use evaluateJavaScript with useCallback=true.
+      // Scriptable waits for the global completion() function to be called.
+      // The value passed to completion() becomes the resolved value of this promise.
+      const result = await wv.evaluateJavaScript(
+        `
+            // Make completion function globally available for the HTML's JS
+            window.completion = (data) => {
+                // This function is called by the HTML's JS form submission logic
+                console.log("WebView completion function called with data.");
+                // Scriptable's evaluateJavaScript promise resolves with 'data'
+            };
+            console.log("WebView loaded, completion function defined globally.");
+            // No need to return anything here; Scriptable waits for completion() call.
             `,
-            true // useCallback = true
-        );
+        true // useCallback = true
+      );
 
-        console.log("WebView form submitted or closed.");
-        // Note: If the user closes the WebView manually without the JS calling completion,
-        // Scriptable might throw an error or return undefined/null depending on version/context.
-        // Robust error handling might be needed here based on observed behavior.
-        // For now, assume completion() is called or it returns null/undefined on dismissal.
-        return result; // This is the data passed to completion() in the HTML's JS
-
+      console.log("WebView form submitted or closed.");
+      // Note: If the user closes the WebView manually without the JS calling completion,
+      // Scriptable might throw an error or return undefined/null depending on version/context.
+      // Robust error handling might be needed here based on observed behavior.
+      // For now, assume completion() is called or it returns null/undefined on dismissal.
+      return result; // This is the data passed to completion() in the HTML's JS
     } catch (e) {
         console.error(`WebView presentation/evaluation failed: ${e}`);
         // Decide how to handle errors - rethrow, return null, show an alert?
