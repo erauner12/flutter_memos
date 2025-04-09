@@ -24,8 +24,28 @@ void main() {
   group('API Server Tests - Sorting Behavior', () {
     late ApiService apiService;
 
-    setUp(() {
+    setUp(() async {
+      // Make setUp async if loading env vars
+      // TODO: Load test server URL and API Key from environment variables or config
+      // Example using placeholder variables:
+      const baseUrl = String.fromEnvironment(
+        'MEMOS_TEST_API_BASE_URL',
+        defaultValue: '',
+      );
+      const apiKey = String.fromEnvironment(
+        'MEMOS_TEST_API_KEY',
+        defaultValue: '',
+      );
+
+      if (baseUrl.isEmpty || apiKey.isEmpty) {
+        print(
+          'WARNING: Sorting API test environment variables not set. Skipping tests in this group.',
+        );
+      }
+
       apiService = ApiService();
+      // Configure the service *before* any tests run
+      apiService.configureService(baseUrl: baseUrl, authToken: apiKey);
       ApiService.verboseLogging = true;
       // Make sure snake_case conversion is enabled for API requests
     });
@@ -114,10 +134,17 @@ void main() {
     });
 
     test('Verify client-side sorting behavior', () async {
-      // Skip this test unless RUN_API_TESTS is true
-      if (!RUN_API_TESTS) {
+      // Skip this test unless RUN_API_TESTS is true AND config is present
+      const baseUrl = String.fromEnvironment(
+        'MEMOS_TEST_API_BASE_URL',
+        defaultValue: '',
+      );
+      if (!RUN_API_TESTS || baseUrl.isEmpty) {
         print('\n=== SERVER SORTING LIMITATION DOCUMENTATION ===');
         print(SORTING_LIMITATION);
+        print(
+          'Skipping API test - set RUN_API_TESTS = true and env vars to run',
+        );
         return;
       }
 
@@ -252,9 +279,15 @@ void main() {
     });
 
     test('Compare snake_case vs camelCase API sorting', () async {
-      // Skip this test unless RUN_API_TESTS is true
-      if (!RUN_API_TESTS) {
-        print('Skipping API test - set RUN_API_TESTS = true to run this test');
+      // Skip this test unless RUN_API_TESTS is true AND config is present
+      const baseUrl = String.fromEnvironment(
+        'MEMOS_TEST_API_BASE_URL',
+        defaultValue: '',
+      );
+      if (!RUN_API_TESTS || baseUrl.isEmpty) {
+        print(
+          'Skipping API test - set RUN_API_TESTS = true and env vars to run',
+        );
         return;
       }
 

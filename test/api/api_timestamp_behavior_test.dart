@@ -1,5 +1,4 @@
 import 'package:flutter_memos/api/lib/api.dart';
-import 'package:flutter_memos/utils/env.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 // Set to true to run these tests against a live server
@@ -10,11 +9,38 @@ void main() {
     late MemoServiceApi memoApi;
     String? testMemoId; // To store the ID for cleanup
 
-    setUpAll(() {
+    setUpAll(() async {
+      // Make async if loading env vars
+      // TODO: Load test server URL and API Key from environment variables or config
+      // Example using placeholder variables:
+      const baseUrl = String.fromEnvironment(
+        'MEMOS_TEST_API_BASE_URL',
+        defaultValue: '',
+      );
+      const apiKey = String.fromEnvironment(
+        'MEMOS_TEST_API_KEY',
+        defaultValue: '',
+      );
+
+      if (baseUrl.isEmpty || apiKey.isEmpty) {
+        print(
+          'WARNING: Timestamp API test environment variables not set. Skipping tests in this group.',
+        );
+        // Set a flag or handle skipping in tests if config is missing
+        // For now, we'll let it proceed and potentially fail if RUN_TIMESTAMP_API_TESTS is true
+      }
+
+      // Extract server root from the full API base URL (e.g., http://host:port/api/v1 -> http://host:port)
+      final serverRoot = baseUrl.replaceAll(
+        RegExp(r'/api/v.*$'),
+        '',
+      ); // Remove /api/v... from the end
+      print('[Test Setup] Using server root for ApiClient: $serverRoot');
+
       // Initialize the raw API client once for all tests in this group
       final apiClient = ApiClient(
-        basePath: Env.apiBaseUrl.replaceAll('/api/v1/memos', ''), // Ensure correct base path
-        authentication: HttpBearerAuth()..accessToken = Env.memosApiKey,
+        basePath: serverRoot, // Use the extracted server root
+        authentication: HttpBearerAuth()..accessToken = apiKey,
       );
       memoApi = MemoServiceApi(apiClient);
     });
@@ -48,8 +74,14 @@ void main() {
     });
 
     test('Test 1: Verify server returns incorrect createTime on update', () async {
-      if (!RUN_TIMESTAMP_API_TESTS) {
-        print('Skipping timestamp API test 1');
+      const baseUrl = String.fromEnvironment(
+        'MEMOS_TEST_API_BASE_URL',
+        defaultValue: '',
+      );
+      if (!RUN_TIMESTAMP_API_TESTS || baseUrl.isEmpty) {
+        print(
+          'Skipping timestamp API test 1 - RUN_TIMESTAMP_API_TESTS is false or env vars missing',
+        );
         return;
       }
 
@@ -127,8 +159,14 @@ void main() {
     });
 
     test('Test 2: Verify client-side fix corrects the createTime', () async {
-      if (!RUN_TIMESTAMP_API_TESTS) {
-        print('Skipping timestamp API test 2');
+      const baseUrl = String.fromEnvironment(
+        'MEMOS_TEST_API_BASE_URL',
+        defaultValue: '',
+      );
+      if (!RUN_TIMESTAMP_API_TESTS || baseUrl.isEmpty) {
+        print(
+          'Skipping timestamp API test 2 - RUN_TIMESTAMP_API_TESTS is false or env vars missing',
+        );
         return;
       }
 
@@ -211,8 +249,14 @@ void main() {
     });
 
     test('Test 3: Demonstrate failure without client-side createTime fix', () async {
-      if (!RUN_TIMESTAMP_API_TESTS) {
-        print('Skipping timestamp API test 3');
+      const baseUrl = String.fromEnvironment(
+        'MEMOS_TEST_API_BASE_URL',
+        defaultValue: '',
+      );
+      if (!RUN_TIMESTAMP_API_TESTS || baseUrl.isEmpty) {
+        print(
+          'Skipping timestamp API test 3 - RUN_TIMESTAMP_API_TESTS is false or env vars missing',
+        );
         return;
       }
 
@@ -302,8 +346,14 @@ void main() {
     });
 
     test('Test 4: Attempt to send createTime/updateTime in update payload', () async {
-      if (!RUN_TIMESTAMP_API_TESTS) {
-        print('Skipping timestamp API test 4');
+      const baseUrl = String.fromEnvironment(
+        'MEMOS_TEST_API_BASE_URL',
+        defaultValue: '',
+      );
+      if (!RUN_TIMESTAMP_API_TESTS || baseUrl.isEmpty) {
+        print(
+          'Skipping timestamp API test 4 - RUN_TIMESTAMP_API_TESTS is false or env vars missing',
+        );
         return;
       }
 

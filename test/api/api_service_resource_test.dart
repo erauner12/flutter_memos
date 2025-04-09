@@ -4,7 +4,6 @@ import 'package:flutter_memos/api/lib/api.dart'; // For V1Resource
 import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/models/memo.dart';
 import 'package:flutter_memos/services/api_service.dart';
-import 'package:flutter_memos/utils/env.dart'; // To potentially load credentials
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/annotations.dart';
 // Generate nice mock for ApiService
@@ -14,24 +13,34 @@ void main() {
     late ApiService apiService;
     String? testMemoId; // To store the ID of the memo created for testing
     String? createdCommentId; // To store the ID of the comment created
-    String? uploadedResourceId; // To store the ID of the uploaded resource
 
     setUpAll(() async {
+      // Make setUpAll async
       // --- IMPORTANT ---
       // Configure ApiService with your ACTUAL test server URL and API Key
-      // You might load these from environment variables or a config file
+      // Load these from environment variables or a config file
       // Ensure Env.apiBaseUrl and Env.memosApiKey are correctly set for your test environment
-      final baseUrl = Env.apiBaseUrl; // Replace with your test server URL if needed
-      final apiKey = Env.memosApiKey; // Replace with your test API key if needed
+      // Example using placeholder variables:
+      const baseUrl = String.fromEnvironment(
+        'MEMOS_TEST_API_BASE_URL',
+        defaultValue: '',
+      );
+      const apiKey = String.fromEnvironment(
+        'MEMOS_TEST_API_KEY',
+        defaultValue: '',
+      );
 
       if (baseUrl.isEmpty || apiKey.isEmpty) {
+        // Throw or skip based on desired behavior
         throw Exception(
-          'Test server URL or API Key is not configured. Set Env.apiBaseUrl and Env.memosApiKey.',
+          'Test server URL or API Key is not configured. Set MEMOS_TEST_API_BASE_URL and MEMOS_TEST_API_KEY environment variables.',
         );
       }
 
       apiService = ApiService(); // Get the singleton instance
+      // Configure the service *before* creating the test memo
       apiService.configureService(baseUrl: baseUrl, authToken: apiKey);
+      ApiService.verboseLogging = true; // Optional
 
       // Create a temporary memo for attaching comments
       try {

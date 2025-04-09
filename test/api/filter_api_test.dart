@@ -13,19 +13,41 @@ void main() {
   group('Filter Expression API Tests', () {
     late ApiService apiService;
 
-    setUp(() {
+    setUp(() async {
+      // Make setUp async if loading env vars
+      // TODO: Load test server URL and API Key from environment variables or config
+      // Example using placeholder variables:
+      const baseUrl = String.fromEnvironment(
+        'MEMOS_TEST_API_BASE_URL',
+        defaultValue: '',
+      );
+      const apiKey = String.fromEnvironment(
+        'MEMOS_TEST_API_KEY',
+        defaultValue: '',
+      );
+
+      if (baseUrl.isEmpty || apiKey.isEmpty) {
+        print(
+          'WARNING: Filter API test environment variables not set. Skipping tests in this group.',
+        );
+      }
+
       apiService = ApiService();
-      // Configure your test server details here if needed, e.g.,
-      // apiService.configureServer('YOUR_TEST_SERVER_URL', 'YOUR_TEST_AUTH_TOKEN');
+      // Configure the service *before* any tests run
+      apiService.configureService(baseUrl: baseUrl, authToken: apiKey);
       ApiService.verboseLogging = true;
       // ApiService.useFilterExpressions = true; // This flag is likely removed/obsolete
     });
 
     test('Basic filter expressions work with the API', () async {
-      // Skip this test unless RUN_FILTER_API_TESTS is true
-      if (!RUN_FILTER_API_TESTS) {
+      // Skip this test unless RUN_FILTER_API_TESTS is true AND config is present
+      const baseUrl = String.fromEnvironment(
+        'MEMOS_TEST_API_BASE_URL',
+        defaultValue: '',
+      );
+      if (!RUN_FILTER_API_TESTS || baseUrl.isEmpty) {
         print(
-          'Skipping filter API test - set RUN_FILTER_API_TESTS = true to run this test',
+          'Skipping filter API test - RUN_FILTER_API_TESTS is false or env vars missing',
         );
         return;
       }
@@ -98,10 +120,14 @@ void main() {
     }, skip: !RUN_FILTER_API_TESTS); // Add skip condition directly to test
 
     test('Time-based filter expressions work with the API', () async {
-      // Skip this test unless RUN_FILTER_API_TESTS is true
-      if (!RUN_FILTER_API_TESTS) {
+        // Skip this test unless RUN_FILTER_API_TESTS is true AND config is present
+        const baseUrl = String.fromEnvironment(
+          'MEMOS_TEST_API_BASE_URL',
+          defaultValue: '',
+        );
+        if (!RUN_FILTER_API_TESTS || baseUrl.isEmpty) {
           print(
-            'Skipping filter API test - set RUN_FILTER_API_TESTS = true to run this test',
+            'Skipping filter API test - RUN_FILTER_API_TESTS is false or env vars missing',
           );
         return;
       }
@@ -170,10 +196,14 @@ void main() {
     ); // Add skip condition directly to test
 
     test('Combined filter expressions work with the API', () async {
-      // Skip this test unless RUN_FILTER_API_TESTS is true
-      if (!RUN_FILTER_API_TESTS) {
+      // Skip this test unless RUN_FILTER_API_TESTS is true AND config is present
+      const baseUrl = String.fromEnvironment(
+        'MEMOS_TEST_API_BASE_URL',
+        defaultValue: '',
+      );
+      if (!RUN_FILTER_API_TESTS || baseUrl.isEmpty) {
         print(
-          'Skipping filter API test - set RUN_FILTER_API_TESTS = true to run this test',
+          'Skipping filter API test - RUN_FILTER_API_TESTS is false or env vars missing',
         );
         return;
       }
@@ -236,10 +266,14 @@ void main() {
 
     // This test remains largely the same as it already used the 'filter' parameter
     test('Raw CEL filter expressions work with the API', () async {
-      // Skip this test unless RUN_FILTER_API_TESTS is true
-      if (!RUN_FILTER_API_TESTS) {
+      // Skip this test unless RUN_FILTER_API_TESTS is true AND config is present
+      const baseUrl = String.fromEnvironment(
+        'MEMOS_TEST_API_BASE_URL',
+        defaultValue: '',
+      );
+      if (!RUN_FILTER_API_TESTS || baseUrl.isEmpty) {
         print(
-          'Skipping filter API test - set RUN_FILTER_API_TESTS = true to run this test',
+          'Skipping filter API test - RUN_FILTER_API_TESTS is false or env vars missing',
         );
         return;
       }

@@ -179,10 +179,8 @@ void main() {
     // Assert background color is back to default (or null if transparent)
     expect(
       decorationAfterCallback?.color,
-      // Default might be null or a specific color depending on CommentCard impl.
-      // Adjust this expectation based on the actual default background.
-      // If it inherits, it might be the scaffold background.
-      anyOf(isNull, equals(defaultBackgroundColor)),
+      // Default should now match the scaffold background color from the fix
+      equals(defaultBackgroundColor),
       reason:
           'Container background color should reset to default (Theme: ${themeAfterCallback.brightness})',
     );

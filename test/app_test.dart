@@ -25,9 +25,13 @@ void main() {
   setUp(() {
     // Initialize the mock API service
     mockApiService = MockApiService();
-    
+
     // Add stub for apiBaseUrl property
     when(mockApiService.apiBaseUrl).thenReturn('http://test-url.com');
+
+    // Add placeholder stub for getWorkspaceProfile (assuming it might be called)
+    // Replace V1WorkspaceProfile() with actual default data if needed
+    // when(mockApiService.getWorkspaceProfile()).thenAnswer((_) async => V1WorkspaceProfile());
 
     // Create test memos
     testMemos = [
