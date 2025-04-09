@@ -323,3 +323,59 @@ final createCommentProvider = Provider.family<
     }
   };
 });
+
+/// Provider for updating a comment's content
+final updateCommentProvider = Provider<
+  Future<Comment> Function(String memoId, String commentId, String newContent)
+>((ref) {
+  return (String memoId, String commentId, String newContent) async {
+    final apiService = ref.read(apiServiceProvider);
+    if (kDebugMode) {
+      print(
+        '[updateCommentProvider] Updating comment $commentId for memo $memoId',
+      );
+    }
+
+    try {
+      // 1. Get the existing comment to preserve other properties
+      // Use the combined ID format if necessary for getMemoComment
+      // The API service's getMemoComment should handle the combined ID format if needed.
+      // We pass the simple comment ID to updateMemoComment later.
+      final existingComment = await apiService.getMemoComment(commentId);
+
+      // 2. Create the updated comment object with new content
+      final updatedCommentData = existingComment.copyWith(
+        content: newContent,
+        // updateTime will be set by the API or copyWith if needed
+      );
+
+      // 3. Call the API service to update the comment
+      // Pass the simple commentId (without memoId prefix) to updateMemoComment
+      final resultComment = await apiService.updateMemoComment(
+        commentId, // Pass the actual comment ID
+        updatedCommentData,
+      );
+
+      // 4. Invalidate the comments list for the specific memo to refresh UI
+      // Use the correct provider from memo_detail_providers.dart
+      ref.invalidate(memoCommentsProvider(memoId));
+
+      if (kDebugMode) {
+        print(
+          '[updateCommentProvider] Comment $commentId updated successfully.',
+        );
+      }
+      return resultComment;
+
+    } catch (e, stackTrace) {
+      if (kDebugMode) {
+        print(
+          '[updateCommentProvider] Error updating comment $commentId: $e\n$stackTrace',
+        );
+      }
+      // Consider invalidating on error too, or let the caller handle UI feedback
+      // ref.invalidate(memoCommentsProvider(memoId));
+      rethrow; // Rethrow to allow UI error handling
+    }
+  };
+});

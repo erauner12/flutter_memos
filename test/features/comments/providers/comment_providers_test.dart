@@ -681,5 +681,82 @@ void main() {
         // verify(mockApiService.updateMemo(memo.id, any)).called(1);
       },
     );
+    // --- Tests for updateCommentProvider ---
+    group('updateCommentProvider Tests', () {
+      test('Successfully updates comment content', () async {
+        // Arrange
+        final memo = await mockApiService.createMemo(Memo(id: 'memo-update', content: 'Memo for update test'));
+        final originalComment = await mockApiService.createMemoComment(
+          memo.id,
+          Comment(id: 'comment-to-update', content: 'Original Content', createTime: DateTime.now().millisecondsSinceEpoch),
+        );
+        final newContent = 'Updated Content';
+        // Use the simple comment ID for getMemoComment stubbing as well, assuming API service handles it
+        final commentIdToGet = originalComment.id;
+
+        // Stub getMemoComment to return the original comment using simple ID
+        when(mockApiService.getMemoComment(commentIdToGet)).thenAnswer((_) async => originalComment);
+
+        // Stub updateMemoComment to return the updated comment
+        when(mockApiService.updateMemoComment(originalComment.id, any)).thenAnswer((invocation) async {
+          final updatedData = invocation.positionalArguments[1] as Comment;
+          return originalComment.copyWith(
+            content: updatedData.content, // Use content from payload
+            updateTime: DateTime.now().millisecondsSinceEpoch,
+          );
+        });
+
+        // Act
+        final updateFunction = container.read(comment_providers.updateCommentProvider);
+        final result = await updateFunction(memo.id, originalComment.id, newContent);
+
+        // Assert
+        // Verify getMemoComment was called to fetch original data with simple ID
+        verify(mockApiService.getMemoComment(commentIdToGet)).called(1);
+
+        // Verify updateMemoComment was called with correct ID and payload
+        final verification = verify(mockApiService.updateMemoComment(
+          argThat(equals(originalComment.id)), // Verify simple ID passed
+          captureAny,
+        ));
+        verification.called(1);
+        final capturedPayload = verification.captured.single as Comment;
+        expect(capturedPayload.content, equals(newContent)); // Check content in payload
+        expect(capturedPayload.id, equals(originalComment.id)); // Ensure ID is preserved in payload
+
+        // Verify the result returned by the provider
+        expect(result.id, equals(originalComment.id));
+        expect(result.content, equals(newContent)); // Check content in result
+
+        // Optionally: Verify invalidation (harder to test directly)
+      });
+
+      test('Throws exception on API error during update', () async {
+        // Arrange
+        final memoId = 'memo-update-fail';
+        final commentId = 'comment-update-fail';
+        final newContent = 'This will fail';
+        // Use simple comment ID for stubbing
+        final commentIdToGet = commentId;
+        final apiError = Exception('API Update Failed');
+
+        // Stub getMemoComment (needed before update attempt)
+        when(mockApiService.getMemoComment(commentIdToGet)).thenAnswer((_) async => Comment(id: commentId, content: 'fail', createTime: 0));
+        // Stub updateMemoComment to throw
+        when(mockApiService.updateMemoComment(commentId, any)).thenThrow(apiError);
+
+        // Act & Assert
+        final updateFunction = container.read(comment_providers.updateCommentProvider);
+        expect(
+          () => updateFunction(memoId, commentId, newContent),
+          throwsA(predicate((e) => e == apiError)), // Check for the specific error
+        );
+
+        // Verify API calls
+        verify(mockApiService.getMemoComment(commentIdToGet)).called(1);
+        verify(mockApiService.updateMemoComment(commentId, any)).called(1);
+      });
+    });
+    // --- End tests for updateCommentProvider ---
   });
 }

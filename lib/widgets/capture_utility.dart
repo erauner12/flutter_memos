@@ -10,9 +10,22 @@ import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/models/memo.dart';
 import 'package:flutter_memos/providers/comment_providers.dart'
     as comment_providers;
-import 'package:flutter_memos/providers/memo_providers.dart' as memo_providers;
+import 'package:flutter_memos/providers/memo_detail_provider.dart'
+    show memoDetailProvider; // Import for memoDetailProvider
+import 'package:flutter_memos/providers/memo_providers.dart'
+    as memo_providers;
 import 'package:flutter_memos/providers/ui_providers.dart' as ui_providers;
+import 'package:flutter_memos/screens/memo_detail/memo_detail_providers.dart'
+    show memoCommentsProvider; // Add this import
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+enum SubmitAction {
+  newComment,
+  appendToLastComment,
+  prependToLastComment,
+  appendToMemo,
+  prependToMemo,
+}
 
 enum CaptureMode { createMemo, addComment }
 
@@ -58,7 +71,6 @@ class CaptureUtility extends ConsumerStatefulWidget {
 
 class _CaptureUtilityState extends ConsumerState<CaptureUtility>
     with SingleTickerProviderStateMixin {
-
   // Method definition added inside the state class
   void setFileDataForTest(
     Uint8List fileData,
@@ -75,6 +87,12 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
       _selectedFilename = filename;
       _selectedContentType = contentType;
 
+      // Reset submit action if an attachment is added
+      if (_submitAction != SubmitAction.newComment) {
+        _submitAction = SubmitAction.newComment;
+        // Optionally show a notification here
+      }
+
       if (!_isExpanded) {
         _expand();
       }
@@ -87,6 +105,9 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
   Uint8List? _selectedFileData;
   String? _selectedFilename;
   String? _selectedContentType;
+
+  // Update state variable type and default value
+  SubmitAction _submitAction = SubmitAction.newComment;
 
   late AnimationController _animationController;
   bool _isDragging = false;
@@ -109,15 +130,16 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
       lowerBound: 0.0,
       upperBound: 1.0,
     )..addListener(() {
-        if (!_isDragging && _animationController.isAnimating) {
-          setState(() {
-            _currentHeight = lerpDouble(
-                  _collapsedHeight,
-                  _expandedHeight,
-                  _animationController.value,
-                )!;
-          });
-        }
+      if (!_isDragging && _animationController.isAnimating) {
+        setState(() {
+          _currentHeight =
+              lerpDouble(
+                _collapsedHeight,
+                _expandedHeight,
+                _animationController.value,
+              )!;
+        });
+      }
     });
     _currentHeight = _collapsedHeight;
   }
@@ -127,6 +149,8 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
     super.didChangeDependencies();
     _updateHeights(context);
   }
+
+
 
   @override
   void dispose() {
@@ -154,7 +178,8 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
         if (!_isExpanded) {
           _currentHeight = _collapsedHeight;
         } else {
-           _currentHeight = lerpDouble(
+          _currentHeight =
+              lerpDouble(
                 _collapsedHeight,
                 _expandedHeight,
                 _animationController.value,
@@ -260,17 +285,19 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
         clipboardTextData!.text!.isNotEmpty) {
       final currentText = _textController.text;
       final cursorPosition = _textController.selection.baseOffset;
-      final newText = cursorPosition >= 0
-          ? currentText.replaceRange(
-              cursorPosition,
-              _textController.selection.extentOffset,
-              clipboardTextData.text!,
-            )
-          : currentText + clipboardTextData.text!;
+      final newText =
+          cursorPosition >= 0
+              ? currentText.replaceRange(
+                cursorPosition,
+                _textController.selection.extentOffset,
+                clipboardTextData.text!,
+              )
+              : currentText + clipboardTextData.text!;
       _textController.value = TextEditingValue(
         text: newText,
         selection: TextSelection.collapsed(
-          offset: (cursorPosition >= 0 ? cursorPosition : currentText.length) +
+          offset:
+              (cursorPosition >= 0 ? cursorPosition : currentText.length) +
               clipboardTextData.text!.length,
         ),
       );
@@ -280,19 +307,20 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
     if (_selectedFileData != null && mounted) {
       showCupertinoDialog(
         context: context,
-        builder: (context) => CupertinoAlertDialog(
-          title: const Text('Attachment Exists'),
-          content: const Text(
-            'Please remove the current attachment before pasting new content.',
-          ),
-          actions: [
-            CupertinoDialogAction(
-              isDefaultAction: true,
-              child: const Text('OK'),
-              onPressed: () => Navigator.of(context).pop(),
+        builder:
+            (context) => CupertinoAlertDialog(
+              title: const Text('Attachment Exists'),
+              content: const Text(
+                'Please remove the current attachment before pasting new content.',
+              ),
+              actions: [
+                CupertinoDialogAction(
+                  isDefaultAction: true,
+                  child: const Text('OK'),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+              ],
             ),
-          ],
-        ),
       );
     }
   }
@@ -302,17 +330,18 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
     if (content.isEmpty && mounted) {
       showCupertinoDialog(
         context: context,
-        builder: (context) => CupertinoAlertDialog(
-          title: const Text('Nothing to Copy'),
-          content: const Text('The text field is empty.'),
-          actions: [
-            CupertinoDialogAction(
-              isDefaultAction: true,
-              child: const Text('OK'),
-              onPressed: () => Navigator.of(context).pop(),
+        builder:
+            (context) => CupertinoAlertDialog(
+              title: const Text('Nothing to Copy'),
+              content: const Text('The text field is empty.'),
+              actions: [
+                CupertinoDialogAction(
+                  isDefaultAction: true,
+                  child: const Text('OK'),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+              ],
             ),
-          ],
-        ),
       );
       return;
     }
@@ -321,17 +350,18 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
     if (mounted) {
       showCupertinoDialog(
         context: context,
-        builder: (context) => CupertinoAlertDialog(
-          title: const Text('Copied'),
-          content: const Text('Content copied to clipboard.'),
-          actions: [
-            CupertinoDialogAction(
-              isDefaultAction: true,
-              child: const Text('OK'),
-              onPressed: () => Navigator.of(context).pop(),
+        builder:
+            (context) => CupertinoAlertDialog(
+              title: const Text('Copied'),
+              content: const Text('Content copied to clipboard.'),
+              actions: [
+                CupertinoDialogAction(
+                  isDefaultAction: true,
+                  child: const Text('OK'),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+              ],
             ),
-          ],
-        ),
       );
     }
   }
@@ -348,17 +378,20 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
     } else if (mounted) {
       showCupertinoDialog(
         context: context,
-        builder: (context) => CupertinoAlertDialog(
-          title: const Text('Clipboard Empty'),
-          content: const Text('Cannot replace content, clipboard is empty.'),
-          actions: [
-            CupertinoDialogAction(
-              isDefaultAction: true,
-              child: const Text('OK'),
-              onPressed: () => Navigator.of(context).pop(),
+        builder:
+            (context) => CupertinoAlertDialog(
+              title: const Text('Clipboard Empty'),
+              content: const Text(
+                'Cannot replace content, clipboard is empty.',
+              ),
+              actions: [
+                CupertinoDialogAction(
+                  isDefaultAction: true,
+                  child: const Text('OK'),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+              ],
             ),
-          ],
-        ),
       );
     }
   }
@@ -372,27 +405,28 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
   void _showOverwriteDialog() {
     showCupertinoDialog(
       context: context,
-      builder: (context) => CupertinoAlertDialog(
-        title: const Text('Overwrite Content'),
-        content: const Text(
-          'Replace all current content with clipboard content?',
-        ),
-        actions: [
-          CupertinoDialogAction(
-            isDefaultAction: true,
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+      builder:
+          (context) => CupertinoAlertDialog(
+            title: const Text('Overwrite Content'),
+            content: const Text(
+              'Replace all current content with clipboard content?',
+            ),
+            actions: [
+              CupertinoDialogAction(
+                isDefaultAction: true,
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              CupertinoDialogAction(
+                isDestructiveAction: true,
+                onPressed: () {
+                  Navigator.pop(context);
+                  _handleOverwriteAll();
+                },
+                child: const Text('Replace'),
+              ),
+            ],
           ),
-          CupertinoDialogAction(
-            isDestructiveAction: true,
-            onPressed: () {
-              Navigator.pop(context);
-              _handleOverwriteAll();
-            },
-            child: const Text('Replace'),
-          ),
-        ],
-      ),
     );
   }
 
@@ -400,42 +434,44 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
     if (_textController.text.isEmpty && mounted) {
       showCupertinoDialog(
         context: context,
-        builder: (context) => CupertinoAlertDialog(
-          title: const Text('Already Empty'),
-          content: const Text('The text field is already empty.'),
-          actions: [
-            CupertinoDialogAction(
-              isDefaultAction: true,
-              child: const Text('OK'),
-              onPressed: () => Navigator.of(context).pop(),
+        builder:
+            (context) => CupertinoAlertDialog(
+              title: const Text('Already Empty'),
+              content: const Text('The text field is already empty.'),
+              actions: [
+                CupertinoDialogAction(
+                  isDefaultAction: true,
+                  child: const Text('OK'),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+              ],
             ),
-          ],
-        ),
       );
       return;
     }
 
     showCupertinoDialog(
       context: context,
-      builder: (context) => CupertinoAlertDialog(
-        title: const Text('Remove All Content'),
-        content: const Text('Are you sure you want to clear all content?'),
-        actions: [
-          CupertinoDialogAction(
-            isDefaultAction: true,
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+      builder:
+          (context) => CupertinoAlertDialog(
+            title: const Text('Remove All Content'),
+            content: const Text('Are you sure you want to clear all content?'),
+            actions: [
+              CupertinoDialogAction(
+                isDefaultAction: true,
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              CupertinoDialogAction(
+                isDestructiveAction: true,
+                onPressed: () {
+                  _handleRemoveAll();
+                  Navigator.pop(context);
+                },
+                child: const Text('Clear All'),
+              ),
+            ],
           ),
-          CupertinoDialogAction(
-            isDestructiveAction: true,
-            onPressed: () {
-              _handleRemoveAll();
-              Navigator.pop(context);
-            },
-            child: const Text('Clear All'),
-          ),
-        ],
-      ),
     );
   }
 
@@ -464,25 +500,27 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
           if (mounted) {
             showCupertinoDialog(
               context: context,
-              builder: (context) => CupertinoAlertDialog(
-                title: const Text('File Too Large'),
-                content: const Text('Maximum file size is 10MB.'),
-                actions: [
-                  CupertinoDialogAction(
-                    isDefaultAction: true,
-                    child: const Text('OK'),
-                    onPressed: () => Navigator.of(context).pop(),
+              builder:
+                  (context) => CupertinoAlertDialog(
+                    title: const Text('File Too Large'),
+                    content: const Text('Maximum file size is 10MB.'),
+                    actions: [
+                      CupertinoDialogAction(
+                        isDefaultAction: true,
+                        child: const Text('OK'),
+                        onPressed: () => Navigator.of(context).pop(),
+                      ),
+                    ],
                   ),
-                ],
-              ),
             );
           }
           return;
         }
 
-        final guessedContentType = file.extension != null
-            ? _guessContentTypeFromExtension(file.extension!)
-            : 'application/octet-stream';
+        final guessedContentType =
+            file.extension != null
+                ? _guessContentTypeFromExtension(file.extension!)
+                : 'application/octet-stream';
         if (kDebugMode) {
           print(
             '[CaptureUtility._pickFile] Guessed content type: $guessedContentType',
@@ -493,6 +531,11 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
           _selectedFileData = file.bytes;
           _selectedFilename = file.name;
           _selectedContentType = guessedContentType;
+          // Reset submit action if an attachment is added
+          if (_submitAction != SubmitAction.newComment) {
+            _submitAction = SubmitAction.newComment;
+            // Optionally show a notification here
+          }
         });
         if (!_isExpanded) _expand();
       }
@@ -503,17 +546,18 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
       if (mounted) {
         showCupertinoDialog(
           context: context,
-          builder: (context) => CupertinoAlertDialog(
-            title: const Text('Error Picking File'),
-            content: Text(e.toString()),
-            actions: [
-              CupertinoDialogAction(
-                isDefaultAction: true,
-                child: const Text('OK'),
-                onPressed: () => Navigator.of(context).pop(),
+          builder:
+              (context) => CupertinoAlertDialog(
+                title: const Text('Error Picking File'),
+                content: Text(e.toString()),
+                actions: [
+                  CupertinoDialogAction(
+                    isDefaultAction: true,
+                    child: const Text('OK'),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ],
               ),
-            ],
-          ),
         );
       }
     }
@@ -553,52 +597,164 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
 
   Future<void> _handleSubmit() async {
     final content = _textController.text.trim();
+    final hasAttachment = _selectedFileData != null;
+
     if (kDebugMode) {
       print(
-        '[CaptureUtility._handleSubmit] Submitting: content_empty=${content.isEmpty}, filename=$_selectedFilename, contentType=$_selectedContentType, data_length=${_selectedFileData?.length}',
+        '[CaptureUtility._handleSubmit] Submitting: mode=${widget.mode}, action=$_submitAction, content_empty=${content.isEmpty}, filename=$_selectedFilename, contentType=$_selectedContentType, data_length=${_selectedFileData?.length}',
       );
     }
-    if (content.isEmpty && _selectedFileData == null) return;
+    // Allow submission even if content is empty for append/prepend actions
+    if (content.isEmpty &&
+        _selectedFileData == null &&
+        _submitAction == SubmitAction.newComment) {
+      if (kDebugMode) {
+        print(
+          '[CaptureUtility._handleSubmit] Aborting: No content or attachment for new comment.',
+        );
+      }
+      return;
+    }
+    if (content.isEmpty &&
+        (_submitAction == SubmitAction.appendToLastComment ||
+            _submitAction == SubmitAction.prependToLastComment ||
+            _submitAction == SubmitAction.appendToMemo ||
+            _submitAction == SubmitAction.prependToMemo)) {
+      if (kDebugMode) {
+        print(
+          '[CaptureUtility._handleSubmit] Aborting: No content provided for append/prepend action.',
+        );
+      }
+      return;
+    }
 
-    setState(() { _isSubmitting = true; });
+    setState(() {
+      _isSubmitting = true;
+    });
 
     try {
       if (widget.mode == CaptureMode.createMemo) {
+        // Create Memo logic (remains unchanged, attachments handled separately if needed)
         await _createMemo(content);
-      } else if (widget.mode == CaptureMode.addComment && widget.memoId != null) {
-        await _addComment(
-          content,
-          widget.memoId!,
-          fileBytes: _selectedFileData,
-          filename: _selectedFilename,
-          contentType: _selectedContentType,
+      } else if (widget.mode == CaptureMode.addComment &&
+          widget.memoId != null) {
+        // Add Comment logic (expanded)
+        final memoId = widget.memoId!;
+        final currentContent =
+            _textController.text.trim(); // Content from text field
+
+        // Fetch necessary data within the handler
+        final commentsAsync = ref.read(memoCommentsProvider(memoId));
+        final comments = commentsAsync.valueOrNull ?? [];
+        // Sort comments by createTime to reliably get the last one
+        comments.sort((a, b) => a.createTime.compareTo(b.createTime));
+        final lastComment = comments.isNotEmpty ? comments.last : null;
+
+        // FIX: Remove memo_providers. prefix here, call directly as imported via 'show'
+        final memoAsync = ref.read(
+          memoDetailProvider(memoId),
         );
+        final parentMemo = memoAsync.valueOrNull; // Use valueOrNull for safety
+
+        // Determine action based on _submitAction and attachment presence
+        final currentAction =
+            hasAttachment ? SubmitAction.newComment : _submitAction;
+
+        switch (currentAction) {
+          case SubmitAction.newComment:
+            await _addComment(
+              currentContent,
+              memoId,
+              fileBytes: _selectedFileData,
+              filename: _selectedFilename,
+              contentType: _selectedContentType,
+            );
+            break;
+          case SubmitAction.appendToLastComment:
+            if (lastComment != null) {
+              final updatedContent = "${lastComment.content}\n$currentContent";
+              // Call updateCommentProvider (assuming it exists and takes these args)
+              await ref.read(comment_providers.updateCommentProvider)(
+                memoId,
+                lastComment.id,
+                updatedContent,
+              );
+            } else {
+              throw Exception("Cannot append: No last comment found.");
+            }
+            break;
+          case SubmitAction.prependToLastComment:
+            if (lastComment != null) {
+              final updatedContent = "$currentContent\n${lastComment.content}";
+              // Call updateCommentProvider
+              await ref.read(comment_providers.updateCommentProvider)(
+                memoId,
+                lastComment.id,
+                updatedContent,
+              );
+            } else {
+              throw Exception("Cannot prepend: No last comment found.");
+            }
+            break;
+          case SubmitAction.appendToMemo:
+            if (parentMemo != null) {
+              final updatedContent = "${parentMemo.content}\n$currentContent";
+              final updatedMemo = parentMemo.copyWith(content: updatedContent);
+              // Call updateMemoProvider
+              await ref.read(memo_providers.updateMemoProvider(memoId))(
+                updatedMemo,
+              );
+            } else {
+              throw Exception("Cannot append: Parent memo not loaded.");
+            }
+            break;
+          case SubmitAction.prependToMemo:
+            if (parentMemo != null) {
+              final updatedContent = "$currentContent\n${parentMemo.content}";
+              final updatedMemo = parentMemo.copyWith(content: updatedContent);
+              // Call updateMemoProvider
+              await ref.read(memo_providers.updateMemoProvider(memoId))(
+                updatedMemo,
+              );
+            } else {
+              throw Exception("Cannot prepend: Parent memo not loaded.");
+            }
+            break;
+        }
       }
 
+      // Reset state after ANY successful submission
       if (mounted) {
         setState(() {
           _textController.clear();
-          _removeAttachment();
+          _removeAttachment(); // Clear attachment regardless of action
+          _submitAction = SubmitAction.newComment; // Reset action
           _isSubmitting = false;
         });
         _collapse();
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      if (kDebugMode) {
+        print('[CaptureUtility._handleSubmit] Error: $e\n$stackTrace');
+      }
       if (mounted) {
-        setState(() { _isSubmitting = false; });
+        setState(() {
+          _isSubmitting = false;
+        });
         showCupertinoDialog(
           context: context,
-          builder: (context) => CupertinoAlertDialog(
-            title: const Text('Submission Error'),
-            content: Text('Failed to submit: ${e.toString()}'),
-            actions: [
-              CupertinoDialogAction(
-                isDefaultAction: true,
-                child: const Text('OK'),
-                onPressed: () => Navigator.of(context).pop(),
+          builder:
+              (context) => CupertinoAlertDialog(
+                title: const Text('Submission Error'),
+                content: Text('Failed to submit: ${e.toString()}'),
+                actions: [
+                  CupertinoDialogAction(
+                    isDefaultAction: true,
+                    child: const Text('OK'),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ],
               ),
-            ],
-          ),
         );
       }
     }
@@ -655,49 +811,50 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
   }
 
   void _showOverflowActionSheet() {
-     showCupertinoModalPopup<void>(
+    showCupertinoModalPopup<void>(
       context: context,
-      builder: (BuildContext context) => CupertinoActionSheet(
-        title: const Text('More Options'),
-        actions: <CupertinoActionSheetAction>[
-          CupertinoActionSheetAction(
-            child: const Text('Paste'),
-            onPressed: () {
-              Navigator.pop(context);
-              _handlePaste();
-            },
+      builder:
+          (BuildContext context) => CupertinoActionSheet(
+            title: const Text('More Options'),
+            actions: <CupertinoActionSheetAction>[
+              CupertinoActionSheetAction(
+                child: const Text('Paste'),
+                onPressed: () {
+                  Navigator.pop(context);
+                  _handlePaste();
+                },
+              ),
+              CupertinoActionSheetAction(
+                child: const Text('Copy All'),
+                onPressed: () {
+                  Navigator.pop(context);
+                  _handleCopyAll();
+                },
+              ),
+              CupertinoActionSheetAction(
+                child: const Text('Overwrite All'),
+                onPressed: () {
+                  Navigator.pop(context);
+                  _showOverwriteDialog();
+                },
+              ),
+              CupertinoActionSheetAction(
+                isDestructiveAction: true,
+                child: const Text('Remove All'),
+                onPressed: () {
+                  Navigator.pop(context);
+                  _showRemoveAllDialog();
+                },
+              ),
+            ],
+            cancelButton: CupertinoActionSheetAction(
+              isDefaultAction: true,
+              onPressed: () {
+                Navigator.pop(context);
+              },
+              child: const Text('Cancel'),
+            ),
           ),
-          CupertinoActionSheetAction(
-            child: const Text('Copy All'),
-            onPressed: () {
-              Navigator.pop(context);
-              _handleCopyAll();
-            },
-          ),
-          CupertinoActionSheetAction(
-            child: const Text('Overwrite All'),
-            onPressed: () {
-              Navigator.pop(context);
-              _showOverwriteDialog();
-            },
-          ),
-          CupertinoActionSheetAction(
-            isDestructiveAction: true,
-            child: const Text('Remove All'),
-            onPressed: () {
-              Navigator.pop(context);
-              _showRemoveAllDialog();
-            },
-          ),
-        ],
-        cancelButton: CupertinoActionSheetAction(
-          isDefaultAction: true,
-          onPressed: () {
-            Navigator.pop(context);
-          },
-          child: const Text('Cancel'),
-        ),
-      ),
     );
   }
 
@@ -745,10 +902,16 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
         if (_selectedFileData != null) ...[
           Padding(
             padding: const EdgeInsets.only(
-              top: 8.0, bottom: 4.0, left: 4.0, right: 4.0,
+              top: 8.0,
+              bottom: 4.0,
+              left: 4.0,
+              right: 4.0,
             ),
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 8.0,
+                vertical: 4.0,
+              ),
               decoration: BoxDecoration(
                 color: CupertinoColors.systemGrey5.resolveFrom(context),
                 borderRadius: BorderRadius.circular(8.0),
@@ -760,16 +923,23 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
                       borderRadius: BorderRadius.circular(4.0),
                       child: Image.memory(
                         _selectedFileData!,
-                        width: 30, height: 30, fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) =>
-                            const Icon(CupertinoIcons.exclamationmark_circle, size: 30),
+                        width: 30,
+                        height: 30,
+                        fit: BoxFit.cover,
+                        errorBuilder:
+                            (context, error, stackTrace) => const Icon(
+                              CupertinoIcons.exclamationmark_circle,
+                              size: 30,
+                            ),
                       ),
                     )
                   else
                     Icon(
                       CupertinoIcons.doc_fill,
                       size: 24,
-                      color: CupertinoColors.secondaryLabel.resolveFrom(context),
+                      color: CupertinoColors.secondaryLabel.resolveFrom(
+                        context,
+                      ),
                     ),
                   const SizedBox(width: 8),
                   Expanded(
@@ -789,7 +959,9 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
                     child: Icon(
                       CupertinoIcons.clear_circled_solid,
                       size: 18,
-                      color: CupertinoColors.secondaryLabel.resolveFrom(context),
+                      color: CupertinoColors.secondaryLabel.resolveFrom(
+                        context,
+                      ),
                     ),
                   ),
                 ],
@@ -812,7 +984,9 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
                     child: Icon(
                       CupertinoIcons.ellipsis_circle,
                       size: 20,
-                      color: CupertinoColors.secondaryLabel.resolveFrom(context),
+                      color: CupertinoColors.secondaryLabel.resolveFrom(
+                        context,
+                      ),
                     ),
                   ),
                   CupertinoButton(
@@ -822,7 +996,9 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
                     child: Icon(
                       CupertinoIcons.paperclip,
                       size: 20,
-                      color: CupertinoColors.secondaryLabel.resolveFrom(context),
+                      color: CupertinoColors.secondaryLabel.resolveFrom(
+                        context,
+                      ),
                     ),
                   ),
                 ],
@@ -830,19 +1006,25 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
               CupertinoButton(
                 padding: const EdgeInsets.all(10.0),
                 borderRadius: BorderRadius.circular(24),
-                color: _isSubmitting
-                    ? CupertinoTheme.of(context).primaryColor.withAlpha(179)
-                    : CupertinoTheme.of(context).primaryColor,
+                color:
+                    _isSubmitting
+                        ? CupertinoTheme.of(context).primaryColor.withAlpha(179)
+                        : CupertinoTheme.of(context).primaryColor,
                 onPressed: _isSubmitting ? null : _handleSubmit,
                 child: SizedBox(
                   width: 20,
                   height: 20,
-                  child: _isSubmitting
-                      ? const CupertinoActivityIndicator(
-                          color: CupertinoColors.white, radius: 10)
-                      : const Icon(
-                          CupertinoIcons.arrow_up,
-                          color: CupertinoColors.white, size: 20),
+                  child:
+                      _isSubmitting
+                          ? const CupertinoActivityIndicator(
+                            color: CupertinoColors.white,
+                            radius: 10,
+                          )
+                          : const Icon(
+                            CupertinoIcons.arrow_up,
+                            color: CupertinoColors.white,
+                            size: 20,
+                          ),
                 ),
               ),
             ],
@@ -887,20 +1069,88 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
     final keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
     final edgeInsets = MediaQuery.of(context).padding;
 
-    ref.listen<bool>(ui_providers.captureUtilityToggleProvider, (previous, current) {
+    ref.listen<bool>(ui_providers.captureUtilityToggleProvider, (
+      previous,
+      current,
+    ) {
       if (previous != current && mounted) {
         if (kDebugMode) {
-          print('[CaptureUtility] Received toggle signal. Current state expanded: $_isExpanded');
+          print(
+            '[CaptureUtility] Received toggle signal. Current state expanded: $_isExpanded',
+          );
         }
         _toggleExpansionState();
       }
     });
 
-    final hintText = widget.hintText ?? (widget.mode == CaptureMode.createMemo ? 'Type or paste memo content...' : 'Add a comment...');
+    final hintText =
+        widget.hintText ??
+        (widget.mode == CaptureMode.createMemo
+            ? 'Type or paste memo content...'
+            : 'Add a comment...');
     final buttonText =
         widget.buttonText ??
         (widget.mode == CaptureMode.createMemo ? 'Add Memo' : 'Add Comment');
-    final placeholderText = widget.mode == CaptureMode.createMemo ? 'Capture something...' : 'Add a comment...';
+    final placeholderText =
+        widget.mode == CaptureMode.createMemo
+            ? 'Capture something...'
+            : 'Add a comment...';
+
+    // Determine conditions for enabling/disabling segmented control options
+    // Use memoCommentsProvider from memo_detail_providers.dart
+    final commentsAsync =
+        widget.mode == CaptureMode.addComment && widget.memoId != null
+            ? ref.watch(memoCommentsProvider(widget.memoId!))
+            : const AsyncValue.data(
+              <Comment>[],
+            ); // Default to empty if not in comment mode
+    final bool hasComments = commentsAsync.maybeWhen(
+      data: (comments) => comments.isNotEmpty,
+      orElse: () => false,
+    );
+    final bool hasAttachment = _selectedFileData != null;
+
+    final bool canAppendPrependComment = hasComments && !hasAttachment;
+    final bool canAppendPrependMemo =
+        !hasAttachment; // Can always append/prepend memo if no attachment
+    // --- Define segmentedControlChildren INSIDE build ---
+    final Map<SubmitAction, Widget> segmentedControlChildren = {
+      SubmitAction.newComment: const Padding(
+        padding: EdgeInsets.symmetric(horizontal: 6),
+        child: Text('New 💬'),
+      ),
+      SubmitAction.appendToLastComment: Opacity(
+        opacity: canAppendPrependComment ? 1.0 : 0.5,
+        child: const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 6),
+          child: Text('Append 💬'),
+        ),
+      ),
+      SubmitAction.prependToLastComment: Opacity(
+        opacity: canAppendPrependComment ? 1.0 : 0.5,
+        child: const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 6),
+          child: Text('Prepend 💬'),
+        ),
+      ),
+      SubmitAction.appendToMemo: Opacity(
+        opacity: canAppendPrependMemo ? 1.0 : 0.5,
+        child: const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 6),
+          child: Text('Append 📝'),
+        ),
+      ),
+      SubmitAction.prependToMemo: Opacity(
+        opacity: canAppendPrependMemo ? 1.0 : 0.5,
+        child: const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 6),
+          child: Text('Prepend 📝'),
+        ),
+      ),
+    };
+
+    // Recalculate heights based on context
+    _updateHeights(context);
 
     double containerWidth;
     if (size.width > 1400) {
@@ -908,16 +1158,20 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
     } else if (size.width > 800) {
       containerWidth = math.max(size.width * 0.7, 500);
     } else {
-      final availableWidth = size.width - edgeInsets.left - edgeInsets.right - 32;
+      final availableWidth =
+          size.width - edgeInsets.left - edgeInsets.right - 32;
       containerWidth = availableWidth > 0 ? availableWidth : size.width * 0.85;
     }
     containerWidth = math.max(containerWidth, 320);
 
     final frameHeight = _currentHeight.clamp(_collapsedHeight, _expandedHeight);
-    final bool showExpandedContent = _isExpanded || _animationController.value > 0.1;
+    final bool showExpandedContent =
+        _isExpanded || _animationController.value > 0.1;
 
-    final backgroundColor = isDarkMode ? const Color(0xFF232323) : const Color(0xFFF0F0F0);
-    final borderColor = isDarkMode ? CupertinoColors.systemGrey3 : CupertinoColors.systemGrey4;
+    final backgroundColor =
+        isDarkMode ? const Color(0xFF232323) : const Color(0xFFF0F0F0);
+    final borderColor =
+        isDarkMode ? CupertinoColors.systemGrey3 : CupertinoColors.systemGrey4;
 
     return SafeArea(
       bottom: true,
@@ -937,21 +1191,28 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
             decoration: BoxDecoration(
               color: backgroundColor,
               borderRadius: BorderRadius.circular(36),
-              border: Border.all(color: borderColor.resolveFrom(context), width: 0.5),
+              border: Border.all(
+                color: borderColor.resolveFrom(context),
+                width: 0.5,
+              ),
               boxShadow: [
                 BoxShadow(
                   // Use withAlpha instead of deprecated withOpacity
                   color: CupertinoColors.black.withAlpha(
                     isDarkMode ? 77 : 26,
                   ), // Approx 0.3 / 0.1 opacity
-                  blurRadius: 15, spreadRadius: 0, offset: const Offset(0, 3),
+                  blurRadius: 15,
+                  spreadRadius: 0,
+                  offset: const Offset(0, 3),
                 ),
                 BoxShadow(
                   // Use withAlpha instead of deprecated withOpacity
                   color: CupertinoColors.black.withAlpha(
                     13,
                   ), // Approx 0.05 opacity
-                  blurRadius: 1, spreadRadius: 0, offset: const Offset(0, 1),
+                  blurRadius: 1,
+                  spreadRadius: 0,
+                  offset: const Offset(0, 1),
                 ),
               ],
             ),
@@ -961,8 +1222,10 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
                 mainAxisSize: MainAxisSize.max,
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  Container( // Drag handle
-                    width: 32, height: 4,
+                  Container(
+                    // Drag handle
+                    width: 32,
+                    height: 4,
                     margin: const EdgeInsets.only(top: 8, bottom: 4),
                     decoration: BoxDecoration(
                       color: CupertinoColors.inactiveGray,
@@ -972,12 +1235,87 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
                   Expanded(
                     child: Padding(
                       padding: EdgeInsets.symmetric(
-                        horizontal: MediaQuery.of(context).size.width > 1200 ? 36 : 24,
-                        vertical: MediaQuery.of(context).size.width > 1200 ? 12 : 8,
+                        horizontal:
+                            MediaQuery.of(context).size.width > 1200 ? 36 : 24,
+                        vertical:
+                            MediaQuery.of(context).size.width > 1200 ? 12 : 8,
                       ),
-                      child: showExpandedContent
-                          ? _buildExpandedContent(hintText, buttonText)
-                          : _buildCollapsedContent(placeholderText),
+                      child:
+                          showExpandedContent
+                              ? Column(
+                                children: [
+                                  if (widget.mode == CaptureMode.addComment &&
+                                      showExpandedContent)
+                                    Padding(
+                                      padding: const EdgeInsets.only(
+                                        bottom: 8.0,
+                                      ),
+                                      child: SizedBox(
+                                        width: double.infinity,
+                                        child: CupertinoSegmentedControl<
+                                          SubmitAction
+                                        >(
+                                          children: segmentedControlChildren,
+                                          groupValue: _submitAction,
+                                          onValueChanged: (
+                                            SubmitAction newValue,
+                                          ) {
+                                            bool allowed = false;
+                                            switch (newValue) {
+                                              case SubmitAction.newComment:
+                                                allowed = true;
+                                                break;
+                                              case SubmitAction
+                                                  .appendToLastComment:
+                                              case SubmitAction
+                                                  .prependToLastComment:
+                                                allowed =
+                                                    canAppendPrependComment;
+                                                break;
+                                              case SubmitAction.appendToMemo:
+                                              case SubmitAction.prependToMemo:
+                                                allowed = canAppendPrependMemo;
+                                                break;
+                                            }
+                                            if (allowed) {
+                                              setState(() {
+                                                _submitAction = newValue;
+                                              });
+                                            } else {
+                                              if (kDebugMode) {
+                                                print(
+                                                  "[CaptureUtility] Action '$newValue' disallowed.",
+                                                );
+                                              }
+                                            }
+                                          },
+                                          borderColor: CupertinoColors
+                                              .systemGrey
+                                              .resolveFrom(context),
+                                          selectedColor:
+                                              CupertinoTheme.of(
+                                                context,
+                                              ).primaryColor,
+                                          unselectedColor:
+                                              CupertinoColors
+                                                  .transparent, // Use CupertinoColors
+                                          pressedColor: CupertinoTheme.of(
+                                            context,
+                                          ).primaryColor.withAlpha(
+                                            51,
+                                          ), // Use withAlpha (~20%)
+                                        ),
+                                      ),
+                                    ),
+                                  Expanded(
+                                    child: _buildExpandedContent(
+                                      hintText,
+                                      buttonText,
+                                    ),
+                                  ),
+                                ],
+                              )
+                              : _buildCollapsedContent(placeholderText),
                     ),
                   ),
                 ],
