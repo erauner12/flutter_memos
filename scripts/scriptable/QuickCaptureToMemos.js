@@ -43,19 +43,9 @@ async function presentWebViewForm(
     // Scriptable waits for the global completion() function to be called from the presented WebView.
     const result = await wv.evaluateJavaScript(
       `
-            // Define the completion function globally for the HTML's JS
-            let scriptableCompletion; // Store the callback
-
-            // This promise will be resolved when the HTML calls completion()
-            const promise = new Promise((resolve) => {
-                scriptableCompletion = resolve;
-            });
-
-            // Make completion globally available
-            window.completion = (data) => {
-                console.log("WebView completion function called with data.");
-                scriptableCompletion(data); // Resolve the promise Scriptable awaits
-            };
+            // Define the global completion function that Scriptable awaits
+            // when useCallback is true.
+            // window.completion = (data) => { /* Scriptable handles this implicitly */ };
 
             // Check if the initialization function exists in the HTML and call it
             if (typeof initializeForm === 'function') {
@@ -66,12 +56,11 @@ async function presentWebViewForm(
                 // Optionally alert the user or handle this error
             }
 
-            console.log("WebView loaded, completion function defined, form initialized (if function found).");
+            console.log("WebView loaded, completion function hook setup, form initialized (if function found).");
 
-            // Return the promise Scriptable will wait for
-            promise;
+            // No explicit promise return needed here. Scriptable handles it.
             `,
-      true // useCallback = true - Scriptable waits for the promise resolved by scriptableCompletion
+      true // useCallback = true: Scriptable waits for global completion() to be called.
     );
 
     console.log("WebView form submitted or closed.");
