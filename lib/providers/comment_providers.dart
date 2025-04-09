@@ -379,3 +379,103 @@ final updateCommentProvider = Provider<
     }
   };
 });
+
+/// Provider to fix grammar of a comment using OpenAI
+final fixCommentGrammarProvider = FutureProvider.family<void, String>((
+  ref,
+  commentId,
+) async {
+  if (kDebugMode) {
+    print(
+      '[fixCommentGrammarProvider] Starting grammar fix for comment: $commentId',
+    );
+  }
+
+  // Get required services
+  final ApiService memosApiService = ref.read(apiServiceProvider);
+  final MinimalOpenAiService openaiApiService = ref.read(
+    openaiApiServiceProvider,
+  );
+
+  // Check if OpenAI service is configured
+  if (!openaiApiService.isConfigured) {
+    if (kDebugMode) {
+      print(
+        '[fixCommentGrammarProvider] OpenAI service not configured. Aborting.',
+      );
+    }
+    throw Exception('OpenAI API key is not configured in settings.');
+  }
+
+  try {
+    // 1. Fetch the current comment content
+    if (kDebugMode)
+      print('[fixCommentGrammarProvider] Fetching comment content...');
+    final Comment currentComment = await memosApiService.getMemoComment(
+      commentId,
+    );
+    final String originalContent = currentComment.content;
+
+    if (originalContent.trim().isEmpty) {
+      if (kDebugMode) {
+        print(
+          '[fixCommentGrammarProvider] Comment content is empty. Skipping.',
+        );
+      }
+      return; // Nothing to fix
+    }
+
+    // 2. Call OpenAI service to fix grammar
+    if (kDebugMode) print('[fixCommentGrammarProvider] Calling OpenAI API...');
+    final String correctedContent = await openaiApiService.fixGrammar(
+      originalContent,
+    );
+
+    // 3. Check if content actually changed
+    if (correctedContent == originalContent ||
+        correctedContent.trim().isEmpty) {
+      if (kDebugMode) {
+        print(
+          '[fixCommentGrammarProvider] Content unchanged or correction empty. No update needed.',
+        );
+      }
+      // Optionally show a message to the user that no changes were made
+      return;
+    }
+
+    if (kDebugMode) {
+      print(
+        '[fixCommentGrammarProvider] Content corrected. Updating comment...',
+      );
+    }
+
+    // 4. Update the comment using Memos API
+    final Comment updatedCommentData = currentComment.copyWith(
+      content: correctedContent,
+    );
+    await memosApiService.updateMemoComment(commentId, updatedCommentData);
+
+    // 5. Invalidate the comments list for the specific memo to refresh UI
+    // Extract memoId from combined ID (format: "memoId/commentId")
+    final parts = commentId.split('/');
+    final String memoId = parts.isNotEmpty ? parts[0] : '';
+    if (memoId.isNotEmpty) {
+      ref.invalidate(memoCommentsProvider(memoId));
+    }
+
+    if (kDebugMode) {
+      print(
+        '[fixCommentGrammarProvider] Comment $commentId updated successfully with corrected grammar.',
+      );
+    }
+  } catch (e, stackTrace) {
+    if (kDebugMode) {
+      print(
+        '[fixCommentGrammarProvider] Error fixing grammar for comment $commentId: $e',
+      );
+      print(stackTrace);
+    }
+    // Rethrow the error so the UI layer can catch it and display a message
+    rethrow;
+  }
+});

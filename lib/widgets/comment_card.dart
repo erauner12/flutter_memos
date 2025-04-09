@@ -38,6 +38,7 @@ class CommentCard extends ConsumerStatefulWidget {
 class _CommentCardState extends ConsumerState<CommentCard> {
   bool _isDeleting = false;
   bool _isSendingToTodoist = false; // State for Todoist loading indicator
+  bool _isFixingGrammar = false; // State for grammar fix loading indicator
 
   // Helper to show dialogs safely after async gaps
   void _showDialog(String title, String content, {bool isError = false}) {
@@ -169,6 +170,35 @@ class _CommentCardState extends ConsumerState<CommentCard> {
     }
   }
 
+
+  Future<void> _fixGrammar(BuildContext context) async {
+    final fullId = '${widget.memoId}/${widget.comment.id}';
+
+    if (mounted) {
+      setState(() {
+        _isFixingGrammar = true;
+      });
+    }
+
+    try {
+      // Call the provider to fix grammar
+      await ref.read(fixCommentGrammarProvider(fullId).future);
+
+      if (mounted) {
+        _showDialog('Success', 'Grammar corrected successfully!');
+      }
+    } catch (e) {
+      if (mounted) {
+        _showDialog('Error', 'Failed to fix grammar: $e', isError: true);
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isFixingGrammar = false;
+        });
+      }
+    }
+  }
 
   Future<Map<String, String>?> _showTodoistTaskForm({
     required String initialTitle,
@@ -330,6 +360,32 @@ class _CommentCardState extends ConsumerState<CommentCard> {
               _onTogglePin(context);
             },
           ),
+              // Fix Grammar option
+              CupertinoActionSheetAction(
+                // Disable button while processing
+                isDefaultAction:
+                    !_isFixingGrammar, // Make it default if not loading
+                onPressed:
+                    _isFixingGrammar
+                        ? () {} // Empty callback when disabled
+                        : () {
+                          Navigator.pop(context); // Close the action sheet
+                          _fixGrammar(
+                            context,
+                          ); // Call the grammar fixing method
+                        },
+                child:
+                    _isFixingGrammar
+                        ? const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            CupertinoActivityIndicator(radius: 10),
+                            SizedBox(width: 10),
+                            Text('Fixing Grammar...'),
+                          ],
+                        )
+                        : const Text('Fix Grammar (AI)'),
+              ),
               // Add Send to Todoist action here
               CupertinoActionSheetAction(
                 child: const Text('Send to Todoist'),
