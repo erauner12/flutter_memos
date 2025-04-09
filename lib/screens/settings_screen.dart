@@ -16,35 +16,37 @@ class SettingsScreen extends ConsumerStatefulWidget {
 }
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
-  // Keep loading/testing state if needed for actions
-  bool _isTestingConnection =
-      false; // Specific state for testing the active Memos connection
+  // Memos server state
+  bool _isTestingConnection = false;
 
-  // Add state for Todoist configuration
+  // Todoist state
   final _todoistApiKeyController = TextEditingController();
   bool _isTestingTodoistConnection = false;
-  // String _currentTodoistApiKey = ''; // Can be read directly from provider when needed
+
+  // OpenAI state
+  final _openaiApiKeyController = TextEditingController();
+  bool _isTestingOpenAiConnection = false;
 
   @override
   void initState() {
     super.initState();
-    // No need to initialize Memos form values anymore
 
-    // Initialize Todoist controller after the first frame ensures provider is ready
-    // Use addPostFrameCallback to read the provider after the build phase
+    // Initialize controllers after the first frame ensures providers are ready
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      // Check if mounted before accessing ref
       if (mounted) {
-        final initialApiKey = ref.read(todoistApiKeyProvider);
-        _todoistApiKeyController.text = initialApiKey;
+        final initialTodoistKey = ref.read(todoistApiKeyProvider);
+        _todoistApiKeyController.text = initialTodoistKey;
+
+        final initialOpenAiKey = ref.read(openAiApiKeyProvider);
+        _openaiApiKeyController.text = initialOpenAiKey;
       }
     });
   }
 
   @override
   void dispose() {
-    // Dispose removed controllers
-    _todoistApiKeyController.dispose(); // Dispose the new controller
+    _todoistApiKeyController.dispose();
+    _openaiApiKeyController.dispose(); // Dispose the new controller
     super.dispose();
   }
 
@@ -67,7 +69,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
-  // Adapt _testConnection to test the *active* server
+  // Test Memos connection
   Future<void> _testConnection() async {
     FocusScope.of(context).unfocus();
     final activeConfig = ref.read(activeServerConfigProvider);
@@ -75,61 +77,42 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     if (activeConfig == null) {
       _showResultDialog(
         'No Active Server',
-        'Please select or add a server configuration first.',
+        'Please select or add a Memos server configuration first.',
         isError: true,
       );
       return;
     }
 
-    setState(() {
-      _isTestingConnection = true;
-    });
-
-    // Use the apiServiceProvider which is already configured for the active server
+    setState(() => _isTestingConnection = true);
     final apiService = ref.read(apiServiceProvider);
 
     try {
-      // Use a lightweight API call
-      await apiService.listMemos(
-        pageSize: 1,
-        parent: 'users/1',
-      ); // Or another suitable endpoint
-
+      await apiService.listMemos(pageSize: 1, parent: 'users/-');
       if (mounted) {
         _showResultDialog(
           'Success',
-          'Connection to "${activeConfig.name ?? activeConfig.serverUrl}" successful!',
+          'Connection to Memos server "${activeConfig.name ?? activeConfig.serverUrl}" successful!',
         );
       }
     } catch (e) {
-      if (kDebugMode) {
-        print(
-          "[SettingsScreen] Test Connection Error for ${activeConfig.id}: $e",
-        );
-      }
+      if (kDebugMode) print("[SettingsScreen] Test Memos Connection Error: $e");
       if (mounted) {
         _showResultDialog(
           'Connection Failed',
-          'Could not connect to "${activeConfig.name ?? activeConfig.serverUrl}".\n\nError: ${e.toString()}',
+          'Could not connect to Memos server "${activeConfig.name ?? activeConfig.serverUrl}".\n\nError: ${e.toString()}',
           isError: true,
         );
       }
     } finally {
-      if (mounted) {
-        setState(() {
-          _isTestingConnection = false;
-        });
-      }
+      if (mounted) setState(() => _isTestingConnection = false);
     }
   }
 
+  // Test Todoist connection
   Future<void> _testTodoistConnection() async {
     FocusScope.of(context).unfocus();
-    // Read the service which is configured by the provider watching the key
     final todoistService = ref.read(todoistApiServiceProvider);
-    final currentKey = ref.read(
-      todoistApiKeyProvider,
-    ); // Read current key state directly
+    final currentKey = ref.read(todoistApiKeyProvider);
 
     if (currentKey.isEmpty) {
       _showResultDialog(
@@ -139,13 +122,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       );
       return;
     }
-
-    // Check if the service instance believes it's configured.
-    // This depends on whether the provider passed a non-empty key during its build.
     if (!todoistService.isConfigured) {
       _showResultDialog(
         'Service Not Configured',
-        'Todoist service is not configured, likely due to an empty key. Please save the key.',
+        'Todoist service is not configured. Please save the key.',
         isError: true,
       );
       return;
@@ -154,13 +134,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     setState(() => _isTestingTodoistConnection = true);
 
     try {
-      // Use the checkHealth method from the service
       final isHealthy = await todoistService.checkHealth();
       if (mounted) {
         if (isHealthy) {
           _showResultDialog('Success', 'Todoist connection successful!');
         } else {
-          // checkHealth returning false usually means an API error occurred (e.g., invalid token)
           _showResultDialog(
             'Connection Failed',
             'Could not connect to Todoist. Please verify your API key.',
@@ -169,23 +147,75 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         }
       }
     } catch (e) {
-      // Catch other errors (like network issues)
       if (kDebugMode) {
-        print("[SettingsScreen] Test Todoist Connection Error: \$e");
+        print("[SettingsScreen] Test Todoist Connection Error: $e");
       }
       if (mounted) {
         _showResultDialog(
           'Error',
-          'An error occurred while testing the connection:\n\${e.toString()}',
+          'An error occurred while testing the Todoist connection:\n${e.toString()}',
           isError: true,
         );
       }
     } finally {
-      if (mounted) {
-        setState(() => _isTestingTodoistConnection = false);
-      }
+      if (mounted) setState(() => _isTestingTodoistConnection = false);
     }
   }
+
+  // Test OpenAI connection
+  Future<void> _testOpenAiConnection() async {
+    FocusScope.of(context).unfocus();
+    final openaiService = ref.read(openaiApiServiceProvider);
+    final currentKey = ref.read(openAiApiKeyProvider);
+
+    if (currentKey.isEmpty) {
+      _showResultDialog(
+        'API Key Missing',
+        'Please enter and save your OpenAI API key first.',
+        isError: true,
+      );
+      return;
+    }
+    if (!openaiService.isConfigured) {
+      _showResultDialog(
+        'Service Not Configured',
+        'OpenAI service is not configured. Please save the key.',
+        isError: true,
+      );
+      return;
+    }
+
+    setState(() => _isTestingOpenAiConnection = true);
+
+    try {
+      final isHealthy = await openaiService.checkHealth();
+      if (mounted) {
+        if (isHealthy) {
+          _showResultDialog('Success', 'OpenAI connection successful!');
+        } else {
+          _showResultDialog(
+            'Connection Failed',
+            'Could not connect to OpenAI. Please verify your API key.',
+            isError: true,
+          );
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print("[SettingsScreen] Test OpenAI Connection Error: $e");
+      }
+      if (mounted) {
+        _showResultDialog(
+          'Error',
+          'An error occurred while testing the OpenAI connection:\n${e.toString()}',
+          isError: true,
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isTestingOpenAiConnection = false);
+    }
+  }
+
 
   void _showServerActions(
     BuildContext context,
@@ -199,7 +229,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       builder:
           (BuildContext context) => CupertinoActionSheet(
             title: Text(server.name ?? server.serverUrl),
-            // message: const Text('Select an action'),
             actions: <CupertinoActionSheetAction>[
               CupertinoActionSheetAction(
                 child: const Text('Edit'),
@@ -214,37 +243,37 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   );
                 },
               ),
-              if (!isActive) // Only show if not already active
+              if (!isActive)
                 CupertinoActionSheetAction(
                   child: const Text('Set Active'),
                   onPressed: () {
                     notifier.setActiveServer(server.id);
-                    Navigator.pop(context); // Close the action sheet
+                    Navigator.pop(context);
                   },
                 ),
-              if (!isDefault) // Only show if not already default
+              if (!isDefault)
                 CupertinoActionSheetAction(
                   child: const Text('Set Default'),
                   onPressed: () {
                     notifier.setDefaultServer(server.id);
-                    Navigator.pop(context); // Close the action sheet
+                    Navigator.pop(context);
                   },
                 ),
-              if (isDefault) // Option to unset default
+              if (isDefault)
                 CupertinoActionSheetAction(
                   child: const Text('Unset Default'),
                   onPressed: () {
-                    notifier.setDefaultServer(null); // Set default to null
-                    Navigator.pop(context); // Close the action sheet
+                    notifier.setDefaultServer(null);
+                    Navigator.pop(context);
                   },
                 ),
               CupertinoActionSheetAction(
                 isDestructiveAction: true,
                 child: const Text('Delete'),
                 onPressed: () async {
-                  Navigator.pop(context); // Close the action sheet first
+                  Navigator.pop(context); // Close action sheet
                   final confirmed = await showCupertinoDialog<bool>(
-                    context: context, // Use the original context
+                    context: context,
                     builder:
                         (context) => CupertinoAlertDialog(
                           title: const Text('Delete Server?'),
@@ -279,9 +308,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ],
             cancelButton: CupertinoActionSheetAction(
               child: const Text('Cancel'),
-              onPressed: () {
-                Navigator.pop(context);
-              },
+              onPressed: () => Navigator.pop(context),
             ),
           ),
     );
@@ -289,7 +316,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Watch the multi-server state
     final multiServerState = ref.watch(multiServerConfigProvider);
     final servers = multiServerState.servers;
     final activeServerId = multiServerState.activeServerId;
@@ -304,19 +330,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         navigationBar: CupertinoNavigationBar(
           middle: Text(widget.isInitialSetup ? 'Server Setup' : 'Settings'),
           automaticallyImplyLeading: automaticallyImplyLeading,
-          transitionBetweenRoutes: false, // Add this line
-          // Replace Save with Add button
+          transitionBetweenRoutes: false,
           trailing: CupertinoButton(
             padding: EdgeInsets.zero,
             onPressed: () {
-              // Navigate to AddEditServerScreen for adding a new server
               Navigator.of(context).push(
                 CupertinoPageRoute(
                   builder: (context) => const AddEditServerScreen(),
                 ),
               );
-              // print("Navigate to Add Server Screen");
-              // _showResultDialog("Not Implemented", "Adding servers will be implemented next.");
             },
             child: const Icon(CupertinoIcons.add),
           ),
@@ -361,7 +383,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
               // Server List Section
               CupertinoListSection.insetGrouped(
-                header: const Text('CONFIGURED SERVERS'),
+                header: const Text('MEMOS SERVERS'),
                 footer:
                     servers.isEmpty
                         ? const Padding(
@@ -412,37 +434,30 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                 color: CupertinoColors.systemYellow,
                               ),
                             ),
-                          // TODO: Replace with CupertinoContextMenu or similar for actions
                           CupertinoButton(
                             padding: EdgeInsets.zero,
                             minSize: 0,
                             child: const Icon(CupertinoIcons.ellipsis),
-                            onPressed: () {
-                              _showServerActions(
-                                context,
-                                server,
-                                notifier,
-                                isActive,
-                                isDefault,
-                              );
-                              // print("Show actions for server: ${server.id}");
-                              //  _showResultDialog("Not Implemented", "Server actions (Edit, Delete, etc.) will be implemented next.");
-                            },
+                            onPressed:
+                                () => _showServerActions(
+                                  context,
+                                  server,
+                                  notifier,
+                                  isActive,
+                                  isDefault,
+                                ),
                           ),
                         ],
                       ),
                       onTap: () {
-                        // Set server active on tap
-                        if (!isActive) {
-                          notifier.setActiveServer(server.id);
-                        }
+                        if (!isActive) notifier.setActiveServer(server.id);
                       },
                     );
                   }),
                 ],
               ),
 
-              // Test Connection Button (tests the *active* server)
+              // Test Memos Connection Button
               Padding(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 16.0,
@@ -464,18 +479,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             children: [
                               Icon(CupertinoIcons.link),
                               SizedBox(width: 8),
-                              Text('Test Active Connection'),
+                              Text('Test Active Memos Connection'),
                             ],
                           ),
                 ),
               ),
 
-              // --- Add Todoist Integration Section ---
+              // --- Integrations Section ---
               CupertinoListSection.insetGrouped(
                 header: const Text('INTEGRATIONS'),
                 children: [
+                  // Todoist Integration Tile
                   CupertinoListTile(
-                    // Use padding to avoid default list tile padding affecting layout
                     padding: const EdgeInsets.symmetric(
                       horizontal: 15.0,
                       vertical: 10.0,
@@ -499,26 +514,22 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                     .resolveFrom(context),
                                 borderRadius: BorderRadius.circular(8.0),
                               ),
-                              // Clear button might be useful
                               clearButtonMode: OverlayVisibilityMode.editing,
                             ),
                           ),
                           const SizedBox(width: 8),
                           CupertinoButton(
                             padding: const EdgeInsets.symmetric(horizontal: 16),
-                            // Use primary color for save action
                             color: CupertinoColors.activeBlue,
                             onPressed: () {
                               final newKey = _todoistApiKeyController.text;
-                              // Update the key using the provider notifier
                               ref
                                   .read(todoistApiKeyProvider.notifier)
                                   .set(newKey);
                               FocusScope.of(context).unfocus();
-                              // Replace SnackBar with _showResultDialog
                               _showResultDialog(
                                 'API Key Updated',
-                                'Todoist API key has been saved successfully.',
+                                'Todoist API key has been saved.',
                               );
                             },
                             child: const Text(
@@ -530,10 +541,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       ),
                     ),
                   ),
-                  // Test Todoist Connection Button as a separate tile
+                  // Test Todoist Connection Tile
                   CupertinoListTile(
                     title: Center(
-                      // Center the button within the tile
                       child: CupertinoButton(
                         onPressed:
                             _isTestingTodoistConnection
@@ -543,8 +553,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             _isTestingTodoistConnection
                                 ? const CupertinoActivityIndicator()
                                 : const Row(
-                                  mainAxisSize:
-                                      MainAxisSize.min, // Keep row compact
+                                  mainAxisSize: MainAxisSize.min,
                                   children: [
                                     Icon(CupertinoIcons.link),
                                     SizedBox(width: 8),
@@ -554,9 +563,87 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       ),
                     ),
                   ),
+
+                  // OpenAI Integration Tile
+                  CupertinoListTile(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 15.0,
+                      vertical: 10.0,
+                    ),
+                    title: const Text('OpenAI API Key'),
+                    subtitle: Padding(
+                      padding: const EdgeInsets.only(top: 8.0),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: CupertinoTextField(
+                              controller:
+                                  _openaiApiKeyController, // Use OpenAI controller
+                              placeholder: 'Enter OpenAI API key (sk-...)',
+                              obscureText: true,
+                              padding: const EdgeInsets.symmetric(
+                                vertical: 10.0,
+                                horizontal: 12.0,
+                              ),
+                              decoration: BoxDecoration(
+                                color: CupertinoColors.tertiarySystemFill
+                                    .resolveFrom(context),
+                                borderRadius: BorderRadius.circular(8.0),
+                              ),
+                              clearButtonMode: OverlayVisibilityMode.editing,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          CupertinoButton(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            color: CupertinoColors.activeBlue,
+                            onPressed: () {
+                              final newKey = _openaiApiKeyController.text;
+                              // Use OpenAI provider notifier
+                              ref
+                                  .read(openAiApiKeyProvider.notifier)
+                                  .set(newKey);
+                              FocusScope.of(context).unfocus();
+                              _showResultDialog(
+                                'API Key Updated',
+                                'OpenAI API key has been saved.',
+                              );
+                            },
+                            child: const Text(
+                              'Save',
+                              style: TextStyle(color: CupertinoColors.white),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  // Test OpenAI Connection Tile
+                  CupertinoListTile(
+                    title: Center(
+                      child: CupertinoButton(
+                        onPressed:
+                            _isTestingOpenAiConnection
+                                ? null
+                                : _testOpenAiConnection, // Use OpenAI test function
+                        child:
+                            _isTestingOpenAiConnection // Use OpenAI loading state
+                                ? const CupertinoActivityIndicator()
+                                : const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(CupertinoIcons.link),
+                                    SizedBox(width: 8),
+                                    Text('Test OpenAI Connection'),
+                                  ],
+                                ),
+                      ),
+                    ),
+                  ),
                 ],
               ),
-              // --- End Todoist Integration Section ---
+              // --- End Integrations Section ---
+
               // Help Text Section
               Padding(
                 padding: const EdgeInsets.symmetric(
@@ -588,9 +675,26 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       ),
                       SizedBox(height: 8),
                       Text(
-                        'Tap a server to make it active for the current session.\n'
-                        'Use the "..." menu to Edit, Delete, or set a server as Default (used on app startup).\n\n'
-                        'The authentication token (Access Token) can be created in your Memos server under Settings > My Account.',
+                        'Tap a server to make it active.\nUse "..." to Edit, Delete, or set a Default server.\n\nThe Memos authentication token (Access Token) is under Settings > My Account on your server.',
+                        style: TextStyle(fontSize: 14),
+                      ),
+                      SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Icon(CupertinoIcons.info_circle, size: 18),
+                          SizedBox(width: 6),
+                          Text(
+                            'Integrations',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: 8),
+                      Text(
+                        'API keys for integrations like Todoist and OpenAI are stored locally on your device.',
                         style: TextStyle(fontSize: 14),
                       ),
                     ],

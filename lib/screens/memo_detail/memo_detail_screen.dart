@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart'; // Import Cupertino
 import 'package:flutter/foundation.dart'; // Import for kDebugMode
+import 'package:flutter/material.dart'; // Import Material for ScaffoldMessenger
 import 'package:flutter/services.dart'; // Import for HapticFeedback
 import 'package:flutter_memos/providers/memo_providers.dart' as memo_providers;
 import 'package:flutter_memos/providers/ui_providers.dart';
@@ -10,6 +11,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'memo_comments.dart';
 import 'memo_content.dart';
 import 'memo_detail_providers.dart';
+
+// Provider to track loading state specifically for the "Fix Grammar" action
+final _isFixingGrammarProvider = StateProvider<bool>((ref) => false);
 
 class MemoDetailScreen extends ConsumerStatefulWidget {
   final String memoId;
@@ -22,45 +26,41 @@ class MemoDetailScreen extends ConsumerStatefulWidget {
 
 class _MemoDetailScreenState extends ConsumerState<MemoDetailScreen>
     with KeyboardNavigationMixin<MemoDetailScreen> {
-  // Create a focus node to manage focus for the entire screen
   final FocusNode _screenFocusNode = FocusNode(
     debugLabel: 'MemoDetailScreenFocus',
   );
-  // Add ScrollController
   late ScrollController _scrollController;
 
   @override
   void initState() {
     super.initState();
-    // Initialize ScrollController
     _scrollController = ScrollController();
-    // Request focus after the widget is built
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _screenFocusNode.requestFocus();
+      // Check mounted before accessing ref or focus node
+      if (mounted) {
+        _screenFocusNode.requestFocus();
+      }
     });
   }
 
   @override
   void dispose() {
     _screenFocusNode.dispose();
-    _scrollController.dispose(); // Dispose ScrollController
+    _scrollController.dispose();
     super.dispose();
   }
 
-  // --- Add Refresh Logic ---
   Future<void> _onRefresh() async {
-    if (kDebugMode) {
-      print('[MemoDetailScreen] Pull-to-refresh triggered.');
-    }
+    if (kDebugMode) print('[MemoDetailScreen] Pull-to-refresh triggered.');
     HapticFeedback.mediumImpact();
-    // Invalidate the providers to trigger a refetch
+    // Invalidate providers to refetch data
+    // Check mounted before accessing ref
+    if (!mounted) return;
     ref.invalidate(memoDetailProvider(widget.memoId));
     ref.invalidate(memoCommentsProvider(widget.memoId));
     // No need to manually await, FutureProvider handles the loading state
   }
 
-  // --- Add Refresh Indicator Builder ---
-  // (This builder provides a standard Cupertino activity indicator during refresh)
   Widget _buildRefreshIndicator(
     BuildContext context,
     RefreshIndicatorMode refreshState,
@@ -74,8 +74,7 @@ class _MemoDetailScreenState extends ConsumerState<MemoDetailScreen>
     );
     return Center(
       child: Stack(
-        clipBehavior:
-            Clip.none, // Allow indicator to show outside bounds slightly
+        clipBehavior: Clip.none,
         alignment: Alignment.center,
         children: <Widget>[
           Positioned(
@@ -94,8 +93,239 @@ class _MemoDetailScreenState extends ConsumerState<MemoDetailScreen>
       ),
     );
   }
-  // --- End Refresh Logic ---
 
+  // --- Action Sheet Logic ---
+  void _showActions() {
+    // Check mounted before accessing ref or context
+    if (!mounted) return;
+    // Read loading state for Fix Grammar
+    final isFixingGrammar = ref.read(_isFixingGrammarProvider);
+
+    showCupertinoModalPopup<void>(
+      context: context, // Use the current context safely here
+      builder:
+          (BuildContext popupContext) => CupertinoActionSheet(
+            // Use popupContext inside builder
+            title: const Text('Memo Actions'),
+            actions: <CupertinoActionSheetAction>[
+              CupertinoActionSheetAction(
+                child: const Text('Edit Memo'),
+                onPressed: () {
+                  Navigator.pop(
+                    popupContext,
+                  ); // Close the action sheet using popupContext
+                  // Use rootNavigator: true for potentially pushing over the sheet
+                  Navigator.of(context, rootNavigator: true)
+                      .pushNamed(
+                        '/edit-entity',
+                        arguments: {
+                          'entityType': 'memo',
+                          'entityId': widget.memoId,
+                        },
+                      )
+                      .then((_) {
+                        // Check mounted before interacting with ref after await gap
+                        if (!mounted) return;
+                        // Refresh detail data after editing
+                        ref.invalidate(memoDetailProvider(widget.memoId));
+                        ref.invalidate(memoCommentsProvider(widget.memoId));
+                        // Ensure memo is not hidden after edit
+                        ref
+                            .read(memo_providers.hiddenMemoIdsProvider.notifier)
+                            .update(
+                              (state) =>
+                                  state.contains(widget.memoId)
+                                      ? (state..remove(widget.memoId))
+                                      : state,
+                            );
+                      });
+                },
+              ),
+              CupertinoActionSheetAction(
+                // Disable button while processing
+                isDefaultAction:
+                    !isFixingGrammar, // Make it default if not loading
+                onPressed:
+                    isFixingGrammar
+                        ? () {} // Empty callback when disabled
+                        : () {
+                          // This lambda matches VoidCallback
+                          Navigator.pop(popupContext); // Close the action sheet
+                          _fixGrammar(); // Call the async function, don't await here
+                        },
+                child:
+                    isFixingGrammar
+                        ? const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            CupertinoActivityIndicator(radius: 10),
+                            SizedBox(width: 10),
+                            Text('Fixing Grammar...'),
+                          ],
+                        )
+                        : const Text('Fix Grammar (AI)'),
+              ),
+              // Example: Delete Action
+              CupertinoActionSheetAction(
+                isDestructiveAction: true,
+                child: const Text('Delete Memo'),
+                onPressed: () async {
+                  // Capture context before first await
+                  final sheetContext = popupContext; // Use popupContext
+                  Navigator.pop(sheetContext); // Close action sheet
+
+                  // Capture context for dialog
+                  final dialogContext =
+                      context; // Use original context for dialog
+                  final confirmed = await showCupertinoDialog<bool>(
+                    context: dialogContext, // Use captured context for dialog
+                    builder:
+                        (context) => CupertinoAlertDialog(
+                          title: const Text('Delete Memo?'),
+                          content: const Text(
+                            'Are you sure you want to permanently delete this memo and its comments?',
+                          ),
+                          actions: [
+                            CupertinoDialogAction(
+                              child: const Text('Cancel'),
+                              onPressed: () => Navigator.of(context).pop(false),
+                            ),
+                            CupertinoDialogAction(
+                              isDestructiveAction: true,
+                              child: const Text('Delete'),
+                              onPressed: () => Navigator.of(context).pop(true),
+                            ),
+                          ],
+                        ),
+                  );
+
+                  // Check mounted after await before using context or ref
+                  if (confirmed == true) {
+                    if (!mounted) return; // Check mounted before try block
+                    try {
+                      // Call delete provider
+                      await ref.read(
+                        memo_providers.deleteMemoProvider(widget.memoId),
+                      )();
+                      // Pop back to previous screen after successful deletion
+                      // Check mounted *again* before this context use
+                      if (!mounted) return;
+                      Navigator.of(
+                        context,
+                      ).pop(); // Pop the detail screen itself
+                    } catch (e) {
+                      // Show error if deletion fails
+                      // Check mounted *again* before this context use
+                      if (!mounted) return;
+                      _showErrorSnackbar('Failed to delete memo: $e');
+                    }
+                  }
+                },
+              ),
+            ],
+            cancelButton: CupertinoActionSheetAction(
+              child: const Text('Cancel'),
+              onPressed: () {
+                Navigator.pop(popupContext); // Use popupContext
+              },
+            ),
+      ),
+    );
+  }
+
+  // --- Fix Grammar Handler ---
+  Future<void> _fixGrammar() async {
+    // Check mounted before interacting with ref
+    if (!mounted) return;
+    // Set loading state
+    ref.read(_isFixingGrammarProvider.notifier).state = true;
+    HapticFeedback.mediumImpact();
+
+    try {
+      // Call the provider
+      // Check mounted before interacting with ref
+      if (!mounted) return;
+      await ref.read(
+        memo_providers.fixMemoGrammarProvider(widget.memoId).future,
+      );
+      // Show success message (optional)
+      if (mounted) _showSuccessSnackbar('Grammar corrected successfully!');
+
+    } catch (e) {
+      // Show error message
+      if (mounted) _showErrorSnackbar('Failed to fix grammar: $e');
+      if (kDebugMode) print('[MemoDetailScreen] Fix Grammar Error: $e');
+    } finally {
+      // Reset loading state only if the widget is still mounted
+      if (mounted) {
+        ref.read(_isFixingGrammarProvider.notifier).state = false;
+      }
+    }
+  }
+
+  // --- Snackbar Helpers (using Material ScaffoldMessenger) ---
+  void _showErrorSnackbar(String message) {
+    // Check mounted before accessing context
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.redAccent,
+      ),
+    );
+  }
+
+  void _showSuccessSnackbar(String message) {
+    // Check mounted before accessing context
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.green,
+      ),
+    );
+  }
+  // --- End Snackbar Helpers ---
+
+  // --- Keyboard Navigation Helpers ---
+  void _selectNextComment() {
+    // Check mounted before accessing ref
+    if (!mounted) return;
+    final commentsAsync = ref.read(memoCommentsProvider(widget.memoId));
+    commentsAsync.whenData((comments) {
+      if (comments.isEmpty) return;
+      // Check mounted before accessing ref inside callback
+      if (!mounted) return;
+      final currentIndex = ref.read(selectedCommentIndexProvider);
+      final nextIndex = getNextIndex(currentIndex, comments.length);
+      if (nextIndex != currentIndex) {
+        // Check mounted before accessing ref notifier
+        if (!mounted) return;
+        ref.read(selectedCommentIndexProvider.notifier).state = nextIndex;
+      }
+    });
+  }
+
+  void _selectPreviousComment() {
+    // Check mounted before accessing ref
+    if (!mounted) return;
+    final commentsAsync = ref.read(memoCommentsProvider(widget.memoId));
+    commentsAsync.whenData((comments) {
+      if (comments.isEmpty) return;
+      // Check mounted before accessing ref inside callback
+      if (!mounted) return;
+      final currentIndex = ref.read(selectedCommentIndexProvider);
+      final prevIndex = getPreviousIndex(currentIndex, comments.length);
+      if (prevIndex != currentIndex) {
+        // Check mounted before accessing ref notifier
+        if (!mounted) return;
+        ref.read(selectedCommentIndexProvider.notifier).state = prevIndex;
+      }
+    });
+  }
+  // --- End Keyboard Navigation Helpers ---
+
+  // --- Build Method ---
   @override
   Widget build(BuildContext context) {
     return Focus(
@@ -105,62 +335,36 @@ class _MemoDetailScreenState extends ConsumerState<MemoDetailScreen>
       skipTraversal: false,
       includeSemantics: true,
       onKeyEvent: (FocusNode node, KeyEvent event) {
-        // Use the shared keyboard navigation handler
+        // Check mounted before accessing ref
+        if (!mounted) return KeyEventResult.ignored;
         return handleKeyEvent(
           event,
           ref,
-          onUp: () => _selectPreviousComment(),
-          onDown: () => _selectNextComment(),
+          onUp: _selectPreviousComment,
+          onDown: _selectNextComment,
           onBack: () => Navigator.of(context).pop(),
           onEscape: () {
-            // Clear any text input focus and return focus to screen
             FocusManager.instance.primaryFocus?.unfocus();
             _screenFocusNode.requestFocus();
           },
         );
       },
       child: GestureDetector(
-        // Ensure tapping anywhere gives focus back to the screen
         onTap: () => _screenFocusNode.requestFocus(),
         behavior: HitTestBehavior.translucent,
         child: CupertinoPageScaffold(
           navigationBar: CupertinoNavigationBar(
             middle: const Text('Memo Detail'),
-            transitionBetweenRoutes: false, // Disable default hero animation
+            transitionBetweenRoutes: false,
+            // Use a button that opens the action sheet
             trailing: CupertinoButton(
-              // Replace IconButton with CupertinoButton
               padding: EdgeInsets.zero,
-              child: const Icon(CupertinoIcons.pencil), // Use Cupertino icon
-              onPressed: () {
-                Navigator.of(context, rootNavigator: true)
-                    .pushNamed(
-                  '/edit-entity', // Use the generic route
-                  arguments: {
-                    'entityType': 'memo',
-                    'entityId': widget.memoId,
-                  }, // Specify type and ID
-                ).then((_) {
-                  // Refresh only the detail data, not the entire memos list
-                  ref.invalidate(memoDetailProvider(widget.memoId));
-                  ref.invalidate(memoCommentsProvider(widget.memoId));
-
-                  // Ensure memo is not hidden
-                  ref
-                      .read(memo_providers.hiddenMemoIdsProvider.notifier)
-                      .update(
-                        (state) =>
-                            state.contains(widget.memoId)
-                                ? (state..remove(widget.memoId))
-                                : state,
-                      );
-                });
-              },
+              onPressed: _showActions, // Call the action sheet method
+              child: const Icon(CupertinoIcons.ellipsis_vertical),
             ),
           ),
           child: Column(
-            // Column as the child of CupertinoPageScaffold
             children: [
-              // Content area (expandable)
               Expanded(child: _buildBody()),
               // Fixed bottom area for CaptureUtility
               CaptureUtility(
@@ -175,51 +379,12 @@ class _MemoDetailScreenState extends ConsumerState<MemoDetailScreen>
       ),
     );
   }
+  // --- End Build Method ---
 
-  // Helper methods for keyboard navigation
-  void _selectNextComment() {
-    // Get the current list of comments
-    final commentsAsync = ref.read(memoCommentsProvider(widget.memoId));
-
-    commentsAsync.whenData((comments) {
-      if (comments.isEmpty) return;
-
-      // Get the current selection
-      final currentIndex = ref.read(selectedCommentIndexProvider);
-
-      // Calculate next index using helper from mixin
-      final nextIndex = getNextIndex(currentIndex, comments.length);
-
-      // Only update if the index actually changed, to avoid unnecessary rebuilds
-      if (nextIndex != currentIndex) {
-        // Update the selection
-        ref.read(selectedCommentIndexProvider.notifier).state = nextIndex;
-      }
-    });
-  }
-
-  void _selectPreviousComment() {
-    // Get the current list of comments
-    final commentsAsync = ref.read(memoCommentsProvider(widget.memoId));
-
-    commentsAsync.whenData((comments) {
-      if (comments.isEmpty) return;
-
-      // Get the current selection
-      final currentIndex = ref.read(selectedCommentIndexProvider);
-
-      // Calculate previous index using helper from mixin
-      final prevIndex = getPreviousIndex(currentIndex, comments.length);
-
-      // Only update if the index actually changed, to avoid unnecessary rebuilds
-      if (prevIndex != currentIndex) {
-        // Update the selection
-        ref.read(selectedCommentIndexProvider.notifier).state = prevIndex;
-      }
-    });
-  }
-
+  // --- Build Body Helper ---
   Widget _buildBody() {
+    // Check mounted before accessing ref
+    if (!mounted) return const Center(child: CupertinoActivityIndicator());
     final memoAsync = ref.watch(memoDetailProvider(widget.memoId));
 
     return memoAsync.when(
@@ -247,10 +412,14 @@ class _MemoDetailScreenState extends ConsumerState<MemoDetailScreen>
               SliverToBoxAdapter(
                 child: Container(
                   height: 0.5,
-                  color: CupertinoColors.separator.resolveFrom(context),
+                  // Check mounted before accessing context
+                  color:
+                      mounted
+                          ? CupertinoColors.separator.resolveFrom(context)
+                          : CupertinoColors.separator,
                   margin: const EdgeInsets.symmetric(
                     vertical: 8.0,
-                    horizontal: 16.0, // Add horizontal margin for consistency
+                    horizontal: 16.0,
                   ),
                 ),
               ),
@@ -268,13 +437,17 @@ class _MemoDetailScreenState extends ConsumerState<MemoDetailScreen>
       error:
           (error, _) => Center(
             child: Text(
-              'Error: $error',
-              // Use Cupertino color for error text
+              'Error loading memo: $error',
+              // Check mounted before accessing context
               style: TextStyle(
-                color: CupertinoColors.systemRed.resolveFrom(context),
+                color:
+                    mounted
+                        ? CupertinoColors.systemRed.resolveFrom(context)
+                        : CupertinoColors.systemRed,
               ),
             ),
           ),
     );
   }
-} // End of _MemoDetailScreenState class
+  // --- End Build Body Helper ---
+}

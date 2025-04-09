@@ -2,11 +2,14 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_memos/models/comment.dart'; // Import Comment model
 import 'package:flutter_memos/models/memo.dart';
 import 'package:flutter_memos/models/server_config.dart'; // Import ServerConfig
-import 'package:flutter_memos/providers/api_providers.dart';
+import 'package:flutter_memos/providers/api_providers.dart'
+    as api_p; // Added alias
 import 'package:flutter_memos/providers/filter_providers.dart';
 import 'package:flutter_memos/providers/memo_detail_provider.dart'; // <-- Add this import
 import 'package:flutter_memos/providers/server_config_provider.dart'; // Import server config provider
 import 'package:flutter_memos/providers/ui_providers.dart' as ui_providers;
+import 'package:flutter_memos/services/api_service.dart'; // Import ApiService for type hint
+import 'package:flutter_memos/services/openai_api_service.dart'; // Import OpenAI service
 import 'package:flutter_memos/utils/filter_builder.dart';
 import 'package:flutter_memos/utils/memo_utils.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -107,7 +110,7 @@ class MoveMemoParams {
   int get hashCode => memoId.hashCode ^ targetServer.hashCode;
 }
 
-  
+
 // Removed MemoSortMode enum and memoSortModeProvider
 // We now exclusively sort by updateTime due to server inconsistencies 
 // with createTime after updates.
@@ -133,7 +136,7 @@ class MemosNotifier extends StateNotifier<MemosState> {
   MemosNotifier(this._ref, {bool skipInitialFetchForTesting = false})
     : _skipInitialFetchForTesting = skipInitialFetchForTesting,
       super(const MemosState(isLoading: true)) {
-    _ref.read(apiServiceProvider);
+    _ref.read(api_p.apiServiceProvider); // Use alias
     _initialize();
   }
 
@@ -145,17 +148,17 @@ class MemosNotifier extends StateNotifier<MemosState> {
       }
       return;
     }
-  
+
     // Listen to providers that should trigger a full refresh
     _ref.listen(
-      apiServiceProvider,
+      api_p.apiServiceProvider, // Use alias
       (_, __) => refresh(),
     ); // Add listener for API service changes
     _ref.listen(combinedFilterProvider, (_, __) => refresh());
     _ref.listen(filterKeyProvider, (_, __) => refresh());
     // REMOVED: Listener for statusFilterProvider
     // REMOVED: Listener for timeFilterProvider
-  
+
     // Fetch initial data
     fetchInitialPage();
   }
@@ -163,7 +166,9 @@ class MemosNotifier extends StateNotifier<MemosState> {
   // Modified _fetchPage with raw API logging and conditional client-side filtering
   Future<void> _fetchPage({String? pageToken}) async {
     // Read apiService inside the method where it's used
-    final apiService = _ref.read(apiServiceProvider); // Read the service here
+    final apiService = _ref.read(
+      api_p.apiServiceProvider,
+    ); // Read the service here (Use alias)
     // Read current filters INSIDE the fetch method to get latest values
     final combinedFilter = _ref.read(combinedFilterProvider);
     final filterKey = _ref.read(filterKeyProvider);
@@ -174,30 +179,31 @@ class MemosNotifier extends StateNotifier<MemosState> {
     } else if (filterKey == 'archive') {
       stateFilter = 'ARCHIVED';
     }
-  
+
     // Check if a raw CEL filter is being used
     final rawCelFilter = _ref.read(rawCelFilterProvider);
     bool usingRawFilter = rawCelFilter.isNotEmpty;
-  
+
     // Apply filter logic for category/visibility based on filterKey
     // Only if not using raw filter (raw filter takes precedence)
     String? finalFilter = combinedFilter.isNotEmpty ? combinedFilter : null;
-  
+
     // If using a normal filterKey tag and not using raw filter, add tag condition
     if (!usingRawFilter &&
         filterKey != 'all' &&
         filterKey != 'inbox' &&
         filterKey != 'archive') {
       // If filter is null, set it to the tag filter, otherwise append to existing filter
-      final tagFilter = 'tag in ["$filterKey"]';
+      final tagFilter =
+          'tag == "$filterKey"'; // Adjusted for potential CEL syntax
       finalFilter =
           finalFilter == null
               ? tagFilter
               : FilterBuilder.and([finalFilter, tagFilter]);
     }
-  
+
     // REMOVED: Reading statusFilterProvider
-  
+
     if (kDebugMode) {
       print(
         '[MemosNotifier] Fetching page with filter: $finalFilter, state: $stateFilter, pageToken: ${pageToken ?? "null"}',
@@ -209,7 +215,7 @@ class MemosNotifier extends StateNotifier<MemosState> {
         '[MemosNotifier] Current state: ${state.memos.length} memos, isLoading=${state.isLoading}, isLoadingMore=${state.isLoadingMore}, hasReachedEnd=${state.hasReachedEnd}',
       );
     }
-  
+
     try {
       // Use the local apiService variable here
       final response = await apiService.listMemos(
@@ -222,7 +228,7 @@ class MemosNotifier extends StateNotifier<MemosState> {
         pageSize: _pageSize,
         pageToken: pageToken,
       );
-  
+
       // *** ADDED LOGGING ***
       if (kDebugMode) {
         print(
@@ -235,27 +241,27 @@ class MemosNotifier extends StateNotifier<MemosState> {
         }
       }
       // *** END ADDED LOGGING ***
-  
+
       // Sort client-side by updateTime and pinned status
       MemoUtils.sortByPinnedThenUpdateTime(response.memos);
-  
+
       var newMemos = response.memos;
       final nextPageToken = response.nextPageToken;
-  
+
       // REMOVED: Client-side untagged filter logic based on statusFilterProvider
       // This filtering should now be handled by the server via combinedFilterProvider
       // or specific presets like FilterPresets.untaggedFilter().
-  
+
       // Determine if we've reached the end
       final hasReachedEnd =
           nextPageToken == null || nextPageToken.isEmpty || newMemos.isEmpty;
-  
+
       // Update total loaded count
       final newTotalLoaded =
           (pageToken == null)
               ? newMemos.length
               : state.totalLoaded + newMemos.length;
-  
+
       if (kDebugMode) {
         print(
           '[MemosNotifier] Fetched ${newMemos.length} new memos (after potential client filter)',
@@ -264,7 +270,7 @@ class MemosNotifier extends StateNotifier<MemosState> {
         print('[MemosNotifier] hasReachedEnd: $hasReachedEnd');
         print('[MemosNotifier] totalLoaded: $newTotalLoaded');
       }
-  
+
       // De-duplicate memos if we somehow received duplicate IDs
       final List<Memo> resultMemos;
       if (pageToken == null) {
@@ -285,7 +291,7 @@ class MemosNotifier extends StateNotifier<MemosState> {
         resultMemos = mergedMemos.values.toList();
         MemoUtils.sortMemos(resultMemos, 'updateTime');
       }
-  
+
       state = state.copyWith(
         memos: resultMemos,
         nextPageToken: nextPageToken,
@@ -328,16 +334,16 @@ class MemosNotifier extends StateNotifier<MemosState> {
       }
       return;
     }
-    
+
     if (kDebugMode) {
       print(
         '[MemosNotifier] Fetching more memos with token: ${state.nextPageToken}',
       );
     }
-    
+
     // Set loading more flag and clear any errors
     state = state.copyWith(isLoadingMore: true, clearError: true);
-    
+
     // Fetch the next page using the stored token
     await _fetchPage(pageToken: state.nextPageToken);
   }
@@ -355,10 +361,10 @@ class MemosNotifier extends StateNotifier<MemosState> {
     final updatedMemos = state.memos.map((memo) {
       return memo.id == updatedMemo.id ? updatedMemo : memo;
     }).toList();
-    
+
     // Re-sort to maintain correct order
     MemoUtils.sortByPinnedThenUpdateTime(updatedMemos);
-    
+
     state = state.copyWith(
       memos: updatedMemos,
     );
@@ -386,7 +392,7 @@ class MemosNotifier extends StateNotifier<MemosState> {
     if (updatedMemos.length < initialLength) {
       state = state.copyWith(memos: updatedMemos);
     }
-    
+
     // Update selection if needed (handled by UI components watching the provider)
   }
 
@@ -411,32 +417,32 @@ class MemosNotifier extends StateNotifier<MemosState> {
       }
       return memo;
     }).toList();
-    
+
     // Re-sort to ensure pinned items appear at top
     MemoUtils.sortByPinnedThenUpdateTime(updatedMemos);
-    
+
     state = state.copyWith(memos: updatedMemos);
   }
 
   // Bump a memo's timestamp optimistically
   void bumpMemoOptimistically(String memoId) {
     final memoIndex = state.memos.indexWhere((memo) => memo.id == memoId);
-    
+
     if (memoIndex != -1) {
       final memoToBump = state.memos[memoIndex];
-      
+
       // Create updated memo with current time
       final updatedMemo = memoToBump.copyWith(
         updateTime: DateTime.now().toIso8601String(),
       );
-      
+
       // Create a new list with the updated memo
       final updatedMemos = List<Memo>.from(state.memos);
       updatedMemos[memoIndex] = updatedMemo;
-      
+
       // Re-sort the list to ensure correct order
       MemoUtils.sortByPinnedThenUpdateTime(updatedMemos);
-      
+
       // Update the state
       state = state.copyWith(memos: updatedMemos);
     }
@@ -561,7 +567,7 @@ final hasSearchResultsProvider = Provider<bool>((ref) {
 /// Provider for archiving a memo
 final archiveMemoProvider = Provider.family<Future<void> Function(), String>((ref, id) {
   return () async {
-    final apiService = ref.read(apiServiceProvider);
+    final apiService = ref.read(api_p.apiServiceProvider); // Use alias
 
     // --- Selection Update Logic (Downward Preference) ---
     final currentSelectedId = ref.read(ui_providers.selectedMemoIdProvider);
@@ -614,7 +620,7 @@ final archiveMemoProvider = Provider.family<Future<void> Function(), String>((re
 
       // Save the updated memo
       await apiService.updateMemo(id, updatedMemo);
-      
+
       // Refresh is removed on success. Optimistic update handles UI change.
       // Refresh only happens on error now.
       // await ref.read(memosNotifierProvider.notifier).refresh();
@@ -622,10 +628,10 @@ final archiveMemoProvider = Provider.family<Future<void> Function(), String>((re
       if (kDebugMode) {
         print('[archiveMemoProvider] Error archiving memo: $e');
       }
-      
+
       // Refresh on error to ensure data consistency
       await ref.read(memosNotifierProvider.notifier).refresh();
-      
+
       rethrow;
     }
   };
@@ -641,7 +647,7 @@ final deleteMemoProvider = Provider.family<Future<void> Function(), String>((
       print('[deleteMemoProvider] Deleting memo: $id');
     }
 
-    final apiService = ref.read(apiServiceProvider);
+    final apiService = ref.read(api_p.apiServiceProvider); // Use alias
 
     // --- Selection Update Logic (Downward Preference) ---
     final currentSelectedId = ref.read(ui_providers.selectedMemoIdProvider);
@@ -720,7 +726,7 @@ final bumpMemoProvider = Provider.family<Future<void> Function(), String>((
     if (kDebugMode) {
       print('[bumpMemoProvider] Bumping memo: $id');
     }
-    final apiService = ref.read(apiServiceProvider);
+    final apiService = ref.read(api_p.apiServiceProvider); // Use alias
 
     // Apply optimistic update first
     ref.read(memosNotifierProvider.notifier).bumpMemoOptimistically(id);
@@ -744,10 +750,10 @@ final bumpMemoProvider = Provider.family<Future<void> Function(), String>((
         print('[bumpMemoProvider] Error bumping memo $id: $e');
         print(stackTrace);
       }
-      
+
       // Refresh on error to ensure data consistency
       await ref.read(memosNotifierProvider.notifier).refresh();
-      
+
       rethrow;
     }
   };
@@ -761,7 +767,7 @@ final updateMemoProvider = Provider.family<Future<Memo> Function(Memo), String>(
         print('[updateMemoProvider] Updating memo: $id');
       }
 
-      final apiService = ref.read(apiServiceProvider);
+    final apiService = ref.read(api_p.apiServiceProvider); // Use alias
 
     // Optional: Optimistic UI update (already handled by notifier methods if called from elsewhere)
       // ref.read(memosNotifierProvider.notifier).updateMemoOptimistically(updatedMemo);
@@ -786,6 +792,14 @@ final updateMemoProvider = Provider.family<Future<Memo> Function(Memo), String>(
       // // Invalidate the specific memo detail provider to ensure freshness if needed elsewhere
       // ref.invalidate(memoDetailProvider(id));
       // --- END REMOVAL ---
+
+      // Instead of invalidating everything, update the specific memo in the notifier
+      ref.read(memosNotifierProvider.notifier).updateMemoOptimistically(result);
+      // And update the detail cache
+      ref
+          .read(memoDetailCacheProvider.notifier)
+          .update((state) => {...state, id: result});
+
 
       if (kDebugMode) {
         print(
@@ -818,7 +832,7 @@ final togglePinMemoProvider = Provider.family<Future<Memo> Function(), String>((
       print('[togglePinMemoProvider] Toggling pin state for memo: $id');
     }
 
-    final apiService = ref.read(apiServiceProvider);
+    final apiService = ref.read(api_p.apiServiceProvider); // Use alias
 
     // Apply optimistic update first
     ref.read(memosNotifierProvider.notifier).togglePinOptimistically(id);
@@ -838,16 +852,21 @@ final togglePinMemoProvider = Provider.family<Future<Memo> Function(), String>((
       // Update through API
       final result = await apiService.updateMemo(id, updatedMemo);
 
+      // Update detail cache after successful API call
+      ref
+          .read(memoDetailCacheProvider.notifier)
+          .update((state) => {...state, id: result});
+
       return result;
     } catch (e, stackTrace) {
       if (kDebugMode) {
         print('[togglePinMemoProvider] Error toggling pin state for memo: $id');
         print(stackTrace);
       }
-      
+
       // Refresh on error to ensure data consistency
       await ref.read(memosNotifierProvider.notifier).refresh();
-      
+
       rethrow;
     }
   };
@@ -861,7 +880,7 @@ final moveMemoProvider = Provider.family<
   return () async {
     final memoId = params.memoId;
     final targetServer = params.targetServer;
-    final apiService = ref.read(apiServiceProvider);
+    final apiService = ref.read(api_p.apiServiceProvider); // Use alias
     final notifier = ref.read(memosNotifierProvider.notifier);
     // Get the source server config (which is the currently active one)
     final sourceServer = ref.read(activeServerConfigProvider);
@@ -1074,7 +1093,7 @@ final batchMemoOperationsProvider = Provider<
       );
     }
 
-    final apiService = ref.read(apiServiceProvider);
+    final apiService = ref.read(api_p.apiServiceProvider); // Use alias
 
     try {
       switch (operation) {
@@ -1181,7 +1200,7 @@ final prefetchMemoDetailsProvider = Provider<
       print('[prefetchMemoDetailsProvider] Prefetching ${ids.length} memos');
     }
 
-    final apiService = ref.read(apiServiceProvider);
+    final apiService = ref.read(api_p.apiServiceProvider); // Use alias
     final cache = ref.read(memoDetailCacheProvider);
 
     // Filter out already cached memos
@@ -1227,7 +1246,7 @@ final prefetchMemoDetailsProvider = Provider<
 
 /// Create memo provider - returns a function to create a new memo
 final createMemoProvider = Provider<Future<void> Function(Memo)>((ref) {
-  final apiService = ref.watch(apiServiceProvider);
+  final apiService = ref.watch(api_p.apiServiceProvider); // Use alias
 
   return (Memo memo) async {
     // Call the API service to create the memo
@@ -1237,4 +1256,107 @@ final createMemoProvider = Provider<Future<void> Function(Memo)>((ref) {
     // This is more effective than invalidateSelf() which would only refresh the function provider
     ref.invalidate(memosNotifierProvider);
   };
+});
+
+
+/// Provider to fix grammar of a memo using OpenAI
+final fixMemoGrammarProvider = FutureProvider.family<void, String>((
+  ref,
+  memoId,
+) async {
+  if (kDebugMode) {
+    print('[fixMemoGrammarProvider] Starting grammar fix for memo: $memoId');
+  }
+
+  // Get required services
+  final ApiService memosApiService = ref.read(
+    api_p.apiServiceProvider,
+  ); // Use alias
+  final OpenaiApiService openaiApiService = ref.read(
+    api_p.openaiApiServiceProvider,
+  );
+
+  // Check if OpenAI service is configured
+  if (!openaiApiService.isConfigured) {
+    if (kDebugMode) {
+      print(
+        '[fixMemoGrammarProvider] OpenAI service not configured. Aborting.',
+      );
+    }
+    throw Exception('OpenAI API key is not configured in settings.');
+  }
+
+  try {
+    // 1. Fetch the current memo content from Memos API
+    if (kDebugMode) print('[fixMemoGrammarProvider] Fetching memo content...');
+    final Memo currentMemo = await memosApiService.getMemo(memoId);
+    final String originalContent = currentMemo.content;
+
+    if (originalContent.trim().isEmpty) {
+      if (kDebugMode) {
+        print('[fixMemoGrammarProvider] Memo content is empty. Skipping.');
+      }
+      return; // Nothing to fix
+    }
+
+    // 2. Call OpenAI service to fix grammar
+    if (kDebugMode) print('[fixMemoGrammarProvider] Calling OpenAI API...');
+    final String correctedContent = await openaiApiService.fixGrammar(
+      originalContent,
+    );
+
+    // 3. Check if content actually changed
+    if (correctedContent == originalContent ||
+        correctedContent.trim().isEmpty) {
+      if (kDebugMode) {
+        print(
+          '[fixMemoGrammarProvider] Content unchanged or correction empty. No update needed.',
+        );
+      }
+      // Optionally show a message to the user that no changes were made
+      return;
+    }
+
+    if (kDebugMode) {
+      print('[fixMemoGrammarProvider] Content corrected. Updating memo...');
+    }
+
+    // 4. Update the memo using Memos API (updateMemo requires the full object)
+    final Memo updatedMemoData = currentMemo.copyWith(
+      content: correctedContent,
+    );
+    final Memo resultMemo = await memosApiService.updateMemo(
+      memoId,
+      updatedMemoData,
+    );
+
+    // 5. Update UI optimistically and refresh caches/providers
+    // Update the memo in the main list notifier
+    ref
+        .read(memosNotifierProvider.notifier)
+        .updateMemoOptimistically(resultMemo);
+    // Update the detail cache
+    ref
+        .read(memoDetailCacheProvider.notifier)
+        .update((state) => {...state, memoId: resultMemo});
+    // Invalidate the specific detail provider to ensure it shows the latest data if navigated back
+    ref.invalidate(memoDetailProvider(memoId));
+    // Invalidate comments provider? Unlikely to change, but maybe for consistency.
+    // ref.invalidate(memoCommentsProvider(memoId));
+
+    if (kDebugMode) {
+      print(
+        '[fixMemoGrammarProvider] Memo $memoId updated successfully with corrected grammar.',
+      );
+    }
+  } catch (e, stackTrace) {
+    if (kDebugMode) {
+      print(
+        '[fixMemoGrammarProvider] Error fixing grammar for memo $memoId: $e',
+      );
+      print(stackTrace);
+    }
+    // Rethrow the error so the UI layer can catch it and display a message
+    rethrow;
+  }
 });

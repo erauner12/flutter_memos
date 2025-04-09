@@ -4,6 +4,7 @@ import 'package:flutter_memos/providers/server_config_provider.dart';
 // import 'package:flutter_memos/utils/env.dart';
 import 'package:flutter_memos/providers/settings_provider.dart'; // Import the new provider
 import 'package:flutter_memos/services/api_service.dart';
+import 'package:flutter_memos/services/openai_api_service.dart'; // Import OpenAI service
 import 'package:flutter_memos/services/todoist_api_service.dart'; // Add this import
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -179,6 +180,8 @@ Future<void> _checkApiHealth(Ref ref) async {
   }
 }
 
+// --- Todoist API Providers ---
+
 /// Provider for Todoist API service
 final todoistApiServiceProvider = Provider<TodoistApiService>((ref) {
   // Configuration from apiConfigProvider if needed
@@ -189,9 +192,6 @@ final todoistApiServiceProvider = Provider<TodoistApiService>((ref) {
   // Create and configure the Todoist API service
   final todoistApiService = TodoistApiService();
   TodoistApiService.verboseLogging = config['verboseLogging'] ?? true;
-
-  // Get the API token from the provider
-  // final todoistToken = Env.todoistApiKey; // Old way - remove or comment out
 
   if (todoistToken.isEmpty) {
     if (kDebugMode) {
@@ -226,7 +226,6 @@ final todoistApiServiceProvider = Provider<TodoistApiService>((ref) {
 /// Provider for Todoist API service status (available, unavailable, etc.)
 final todoistApiStatusProvider = StateProvider<String>((ref) {
   // Initial state depends on whether the token is configured via the provider
-  // final token = Env.todoistApiKey; // Old way - remove or comment out
   final token = ref.watch(todoistApiKeyProvider); // Watch the key provider
   return token.isEmpty ? 'unconfigured' : 'unknown';
 }, name: 'todoistApiStatus');
@@ -234,6 +233,8 @@ final todoistApiStatusProvider = StateProvider<String>((ref) {
 
 /// Provider that checks Todoist API health periodically
 final todoistApiHealthCheckerProvider = Provider<void>((ref) {
+  // Rerun health check when the API key changes
+  ref.watch(todoistApiKeyProvider);
   // Initial check
   _checkTodoistApiHealth(ref);
 
@@ -289,6 +290,115 @@ Future<void> _checkTodoistApiHealth(Ref ref) async {
     }
     if (ref.read(todoistApiStatusProvider) == 'checking') {
       ref.read(todoistApiStatusProvider.notifier).state =
+          'error'; // Or 'unavailable'
+    }
+  }
+}
+
+
+// --- OpenAI API Providers ---
+
+/// Provider for OpenAI API service
+final openaiApiServiceProvider = Provider<OpenaiApiService>((ref) {
+  // Configuration from apiConfigProvider if needed
+  final config = ref.watch(apiConfigProvider);
+  // Watch the persisted API key from settings_provider
+  final openaiToken = ref.watch(openAiApiKeyProvider);
+
+  // Get the singleton instance
+  final openaiApiService = OpenaiApiService();
+  OpenaiApiService.verboseLogging = config['verboseLogging'] ?? true;
+
+  if (openaiToken.isEmpty) {
+    if (kDebugMode) {
+      print(
+        '[openaiApiServiceProvider] Warning: No OpenAI API token configured via provider.',
+      );
+    }
+    // Configure with empty token (service handles initialization state)
+    openaiApiService.configureService(authToken: '');
+  } else {
+    openaiApiService.configureService(authToken: openaiToken);
+    if (kDebugMode) {
+      print(
+        '[openaiApiServiceProvider] OpenAI API service configured successfully via provider.',
+      );
+    }
+  }
+
+  // Add cleanup if needed
+  ref.onDispose(() {
+    if (kDebugMode) {
+      print(
+        '[openaiApiServiceProvider] Disposing OpenAI API service provider (singleton instance persists)',
+      );
+    }
+  });
+
+  return openaiApiService;
+}, name: 'openaiApiService');
+
+/// Provider for OpenAI API service status (available, unavailable, etc.)
+final openaiApiStatusProvider = StateProvider<String>((ref) {
+  // Initial state depends on whether the token is configured via the provider
+  final token = ref.watch(openAiApiKeyProvider); // Watch the key provider
+  return token.isEmpty ? 'unconfigured' : 'unknown';
+}, name: 'openaiApiStatus');
+
+/// Provider that checks OpenAI API health periodically
+final openaiApiHealthCheckerProvider = Provider<void>((ref) {
+  // Rerun health check when the API key changes
+  ref.watch(openAiApiKeyProvider);
+  // Initial check
+  _checkOpenAiApiHealth(ref);
+
+  // TODO: Set up periodic health check
+
+  ref.onDispose(() {
+    // Cancel any timers or other resources
+  });
+
+  return;
+}, name: 'openaiApiHealthChecker');
+
+// Helper function to check OpenAI API health
+Future<void> _checkOpenAiApiHealth(Ref ref) async {
+  // Get the service instance. Configuration is handled by the provider watching the key.
+  final openaiApiService = ref.read(openaiApiServiceProvider);
+
+  // If the service isn't configured (no token), set status and return.
+  if (!openaiApiService.isConfigured) {
+    if (ref.read(openaiApiStatusProvider) != 'unconfigured') {
+      ref.read(openaiApiStatusProvider.notifier).state = 'unconfigured';
+    }
+    return;
+  }
+
+  // Set status to checking
+  final currentStatus = ref.read(openaiApiStatusProvider);
+  if (currentStatus == 'checking') return; // Already checking
+  ref.read(openaiApiStatusProvider.notifier).state = 'checking';
+
+  try {
+    // Call the health check method on the service instance
+    final isHealthy = await openaiApiService.checkHealth();
+
+    // Check if the status is still 'checking' before updating
+    if (ref.read(openaiApiStatusProvider) == 'checking') {
+      if (isHealthy) {
+        ref.read(openaiApiStatusProvider.notifier).state = 'available';
+      } else {
+        // If checkHealth returns false, it likely means an API error (e.g., bad token)
+        ref.read(openaiApiStatusProvider.notifier).state = 'unavailable';
+      }
+    }
+  } catch (e) {
+    // Catch any exceptions during the health check (e.g., network error)
+    if (kDebugMode) {
+      print('[openaiApiHealthChecker] Error checking health: $e');
+    }
+    if (ref.read(openaiApiStatusProvider) == 'checking') {
+      ref.read(openaiApiStatusProvider.notifier).state =
           'error'; // Or 'unavailable'
     }
   }

@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// Keys for SharedPreferences storage
 class PreferenceKeys {
   static const String todoistApiKey = 'todoist_api_key';
+  static const String openAiApiKey = 'openai_api_key'; // Added OpenAI key
   // Add other preference keys as needed
 }
 
@@ -17,6 +18,17 @@ final todoistApiKeyProvider =
       ),
       name: 'todoistApiKey',
     );
+
+/// Provider for the OpenAI API key with persistence using SharedPreferences
+final openAiApiKeyProvider =
+    StateNotifierProvider<PersistentStringNotifier, String>(
+      (ref) => PersistentStringNotifier(
+        '', // default empty value
+        PreferenceKeys.openAiApiKey, // storage key for OpenAI
+      ),
+      name: 'openAiApiKey', // Provider name
+    );
+
 
 /// A StateNotifier that persists string values to SharedPreferences
 class PersistentStringNotifier extends StateNotifier<String> {
@@ -31,7 +43,7 @@ class PersistentStringNotifier extends StateNotifier<String> {
     try {
       final prefs = await SharedPreferences.getInstance();
       final storedValue = prefs.getString(preferenceKey);
-      
+
       if (storedValue != null && storedValue != state) {
         state = storedValue;
       }
@@ -56,7 +68,7 @@ class PersistentStringNotifier extends StateNotifier<String> {
     if (!_initialized) {
       if (kDebugMode) {
         print(
-          '[PersistentStringNotifier] Warning: Setting value before initialization completed',
+          '[PersistentStringNotifier] Warning: Setting value before initialization completed for $preferenceKey',
         );
       }
       // Wait for initialization if possible
@@ -65,6 +77,12 @@ class PersistentStringNotifier extends StateNotifier<String> {
         await Future.delayed(const Duration(milliseconds: 100));
         attempts++;
       }
+      if (!_initialized) {
+        print(
+          '[PersistentStringNotifier] Error: Initialization timed out for $preferenceKey. Cannot save value.',
+        );
+        return false;
+      }
     }
 
     try {
@@ -72,7 +90,10 @@ class PersistentStringNotifier extends StateNotifier<String> {
       final success = await prefs.setString(preferenceKey, value);
 
       if (success) {
-        state = value;
+        // Only update state if the value actually changed to avoid unnecessary rebuilds
+        if (state != value) {
+          state = value;
+        }
         if (kDebugMode) {
           print(
             '[PersistentStringNotifier] Saved value for $preferenceKey: ${value.isNotEmpty ? "new value" : "empty"}',
@@ -85,7 +106,7 @@ class PersistentStringNotifier extends StateNotifier<String> {
           );
         }
       }
-      
+
       return success;
     } catch (e) {
       if (kDebugMode) {
