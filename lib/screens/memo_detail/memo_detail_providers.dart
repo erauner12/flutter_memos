@@ -18,10 +18,10 @@ final memoCommentsProvider = FutureProvider.family<List<Comment>, String>((
   final apiService = ref.watch(apiServiceProvider);
   final comments = await apiService.listMemoComments(memoId);
 
-  // Sort comments with pinned first, then by time
-  CommentUtils.sortByPinnedThenCreateTime(comments);
+  // Sort comments with pinned first, then by *update* time
+  CommentUtils.sortByPinnedThenUpdateTime(
+    comments,
+  ); // <-- Apply requested change
 
   return comments;
 });
-
-// addCommentProvider has been removed as it's now replaced by createCommentProvider in comment_providers.dart

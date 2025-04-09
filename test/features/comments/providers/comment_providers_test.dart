@@ -5,9 +5,8 @@ import 'package:flutter_memos/models/memo.dart';
 import 'package:flutter_memos/models/memo_relation.dart';
 import 'package:flutter_memos/providers/api_providers.dart';
 import 'package:flutter_memos/providers/comment_providers.dart' as comment_providers;
+import 'package:flutter_memos/screens/memo_detail/memo_detail_providers.dart'; // <-- Add this import
 import 'package:flutter_memos/services/api_service.dart' as api_service;
-// Remove the direct import of ApiService if it causes ambiguity
-// import 'package:flutter_memos/services/api_service.dart'; // Import the actual service
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/annotations.dart'; // Add Mockito annotation import
@@ -747,8 +746,9 @@ void main() {
 
         // Act & Assert
         final updateFunction = container.read(comment_providers.updateCommentProvider);
-        expect(
-          () => updateFunction(memoId, commentId, newContent),
+        // Use await expectLater for async throws
+        await expectLater(
+          updateFunction(memoId, commentId, newContent),
           throwsA(predicate((e) => e == apiError)), // Check for the specific error
         );
 
@@ -758,5 +758,107 @@ void main() {
       });
     });
     // --- End tests for updateCommentProvider ---
+
+    test(
+      'updateCommentProvider updates content and triggers resort by updateTime',
+      () async {
+        // Arrange
+        final memo = await mockApiService.createMemo(
+          Memo(id: 'memo-sort-test', content: 'Memo for sort test'),
+        );
+        final nowMillis = DateTime.now().millisecondsSinceEpoch;
+        final comment1 = await mockApiService.createMemoComment(
+          memo.id,
+          Comment(
+            id: 'comment-sort-1',
+            content: 'Older Comment',
+            createTime: nowMillis - 2000,
+            updateTime: nowMillis - 2000,
+          ),
+        );
+        final comment2 = await mockApiService.createMemoComment(
+          memo.id,
+          Comment(
+            id: 'comment-sort-2',
+            content: 'Newer Comment',
+            createTime: nowMillis - 1000,
+            updateTime: nowMillis - 1000,
+          ),
+        );
+
+        // Initial list fetch (simulate memoCommentsProvider)
+        // Return the list pre-sorted as the provider would sort it
+        when(
+          mockApiService.listMemoComments(memo.id),
+        ).thenAnswer(
+          (_) async => [comment2, comment1],
+        ); // <-- Return sorted list [newer, older]
+        var initialComments = await container.read(
+          memoCommentsProvider(memo.id).future,
+        );
+        // REMOVED Manual sort: The provider should have already sorted it.
+        expect(
+          initialComments.first.id,
+          equals(comment2.id),
+          reason:
+              "Initially, comment2 should be first because the provider sorts by update time",
+        );
+
+        // Stub getMemoComment for the update operation
+        when(
+          mockApiService.getMemoComment(comment1.id),
+        ).thenAnswer((_) async => comment1);
+
+        // Stub updateMemoComment to return the updated comment with a new timestamp
+        final updatedContent = "Older Comment - Updated";
+        final updatedTimestamp =
+            DateTime.now()
+                .millisecondsSinceEpoch; // Newer than comment2's updateTime
+        when(mockApiService.updateMemoComment(comment1.id, any)).thenAnswer((
+          invocation,
+        ) async {
+          return comment1.copyWith(
+            content: updatedContent,
+            updateTime: updatedTimestamp, // Set the new update time
+          );
+        });
+
+        // Stub listMemoComments *again* for the refresh triggered by updateCommentProvider
+        // This time, the list should contain the *updated* comment1
+        final updatedComment1 = comment1.copyWith(
+          content: updatedContent,
+          updateTime: updatedTimestamp,
+        );
+        when(
+          mockApiService.listMemoComments(memo.id),
+        ).thenAnswer((_) async => [updatedComment1, comment2]);
+
+        // Act: Update the older comment (comment1)
+        final updateFunction = container.read(
+          comment_providers.updateCommentProvider,
+        );
+        await updateFunction(memo.id, comment1.id, updatedContent);
+
+        // Assert: Fetch the comments again via the provider (which should have been invalidated and refetched)
+        // Need to explicitly invalidate and wait for the provider if the test setup doesn't handle it automatically
+        container.invalidate(memoCommentsProvider(memo.id));
+        await container.pump(); // Allow time for the provider to rebuild
+
+        final finalComments = await container.read(
+          memoCommentsProvider(memo.id).future,
+        );
+
+        // Verify the sorting: The updated comment (originally comment1) should now be first
+        // The provider itself applies the sorting (sortByPinnedThenUpdateTime)
+        expect(
+          finalComments.first.id,
+          equals(comment1.id),
+          reason:
+              "After update, comment1 should be first due to newer updateTime",
+        );
+        expect(finalComments.first.content, equals(updatedContent));
+        expect(finalComments.last.id, equals(comment2.id));
+      },
+    );
   });
 }

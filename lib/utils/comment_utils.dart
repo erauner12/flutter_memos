@@ -26,4 +26,20 @@ class CommentUtils {
       return a.createTime.compareTo(b.createTime);
     });
   }
+
+  /// Sort comments by pinned status first, then by update time (newest first)
+  static void sortByPinnedThenUpdateTime(List<Comment> comments) {
+    comments.sort((a, b) {
+      // 1) Pinned comments first
+      if (a.pinned && !b.pinned) return -1;
+      if (!a.pinned && b.pinned) return 1;
+
+      // 2) Then compare update time (newest first)
+      // Treat null updateTime as older than non-null
+      final updateTimeA =
+          a.updateTime ?? 0; // Use 0 or a very small number for null
+      final updateTimeB = b.updateTime ?? 0;
+      return updateTimeB.compareTo(updateTimeA);
+    });
+  }
 }

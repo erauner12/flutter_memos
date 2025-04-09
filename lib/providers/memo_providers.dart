@@ -4,6 +4,7 @@ import 'package:flutter_memos/models/memo.dart';
 import 'package:flutter_memos/models/server_config.dart'; // Import ServerConfig
 import 'package:flutter_memos/providers/api_providers.dart';
 import 'package:flutter_memos/providers/filter_providers.dart';
+import 'package:flutter_memos/providers/memo_detail_provider.dart'; // <-- Add this import
 import 'package:flutter_memos/providers/server_config_provider.dart'; // Import server config provider
 import 'package:flutter_memos/providers/ui_providers.dart' as ui_providers;
 import 'package:flutter_memos/utils/filter_builder.dart';
@@ -762,15 +763,17 @@ final updateMemoProvider = Provider.family<Future<Memo> Function(Memo), String>(
 
       final apiService = ref.read(apiServiceProvider);
 
-      // Optional: Optimistic UI update
+    // Optional: Optimistic UI update (already handled by notifier methods if called from elsewhere)
       // ref.read(memosNotifierProvider.notifier).updateMemoOptimistically(updatedMemo);
 
     try {
         // Update memo through API
         final result = await apiService.updateMemo(id, updatedMemo);
 
-      // Refresh is removed on success. Optimistic/cache updates handle UI change.
-      // await ref.read(memosNotifierProvider.notifier).refresh(); // New way
+      // --- Add Invalidation Here ---
+      // Refresh the main list after successful update
+      ref.invalidate(memosNotifierProvider);
+      // --- End Invalidation ---
 
       // Also update any cache entries if we've implemented caching
         if (ref.exists(memoDetailCacheProvider)) {
@@ -779,14 +782,24 @@ final updateMemoProvider = Provider.family<Future<Memo> Function(Memo), String>(
               .update((state) => {...state, id: result});
         }
 
+      // Also invalidate the specific memo detail provider to ensure freshness
+      ref.invalidate(memoDetailProvider(id));
+
+      if (kDebugMode) {
+        print(
+          '[updateMemoProvider] Memo $id updated successfully, invalidated list and detail providers.',
+        );
+      }
       return result;
     } catch (e, stackTrace) {
       if (kDebugMode) {
         print('[updateMemoProvider] Error updating memo: $e');
         print(stackTrace);
       }
-      // Optional: Revert optimistic update on error
-      // ref.read(memosNotifierProvider.notifier).refresh();
+      // Optional: Revert optimistic update on error or refresh to ensure consistency
+      // Consider refreshing on error to sync with server state
+      ref.invalidate(memosNotifierProvider);
+      ref.invalidate(memoDetailProvider(id));
       rethrow;
     }
   };
