@@ -9,7 +9,7 @@ import 'package:flutter_memos/providers/memo_detail_provider.dart'; // <-- Add t
 import 'package:flutter_memos/providers/server_config_provider.dart'; // Import server config provider
 import 'package:flutter_memos/providers/ui_providers.dart' as ui_providers;
 import 'package:flutter_memos/services/api_service.dart'; // Import ApiService for type hint
-import 'package:flutter_memos/services/openai_api_service.dart'; // Import OpenAI service
+import 'package:flutter_memos/services/minimal_openai_service.dart'; // Import minimal OpenAI service
 import 'package:flutter_memos/utils/filter_builder.dart';
 import 'package:flutter_memos/utils/memo_utils.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -1272,7 +1272,7 @@ final fixMemoGrammarProvider = FutureProvider.family<void, String>((
   final ApiService memosApiService = ref.read(
     api_p.apiServiceProvider,
   ); // Use alias
-  final OpenaiApiService openaiApiService = ref.read(
+  final MinimalOpenAiService openaiApiService = ref.read(
     api_p.openaiApiServiceProvider,
   );
 
@@ -1341,8 +1341,6 @@ final fixMemoGrammarProvider = FutureProvider.family<void, String>((
         .update((state) => {...state, memoId: resultMemo});
     // Invalidate the specific detail provider to ensure it shows the latest data if navigated back
     ref.invalidate(memoDetailProvider(memoId));
-    // Invalidate comments provider? Unlikely to change, but maybe for consistency.
-    // ref.invalidate(memoCommentsProvider(memoId));
 
     if (kDebugMode) {
       print(

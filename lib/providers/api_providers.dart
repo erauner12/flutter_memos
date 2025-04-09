@@ -4,7 +4,8 @@ import 'package:flutter_memos/providers/server_config_provider.dart';
 // import 'package:flutter_memos/utils/env.dart';
 import 'package:flutter_memos/providers/settings_provider.dart'; // Import the new provider
 import 'package:flutter_memos/services/api_service.dart';
-import 'package:flutter_memos/services/openai_api_service.dart'; // Import OpenAI service
+// import 'package:flutter_memos/services/openai_api_service.dart'; // Remove this import
+import 'package:flutter_memos/services/minimal_openai_service.dart'; // Add minimal OpenAI service
 import 'package:flutter_memos/services/todoist_api_service.dart'; // Add this import
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -299,15 +300,15 @@ Future<void> _checkTodoistApiHealth(Ref ref) async {
 // --- OpenAI API Providers ---
 
 /// Provider for OpenAI API service
-final openaiApiServiceProvider = Provider<OpenaiApiService>((ref) {
+final openaiApiServiceProvider = Provider<MinimalOpenAiService>((ref) {
   // Configuration from apiConfigProvider if needed
   final config = ref.watch(apiConfigProvider);
   // Watch the persisted API key from settings_provider
   final openaiToken = ref.watch(openAiApiKeyProvider);
 
   // Get the singleton instance
-  final openaiApiService = OpenaiApiService();
-  OpenaiApiService.verboseLogging = config['verboseLogging'] ?? true;
+  final openaiApiService = MinimalOpenAiService();
+  MinimalOpenAiService.verboseLogging = config['verboseLogging'] ?? true;
 
   if (openaiToken.isEmpty) {
     if (kDebugMode) {
@@ -333,6 +334,8 @@ final openaiApiServiceProvider = Provider<OpenaiApiService>((ref) {
         '[openaiApiServiceProvider] Disposing OpenAI API service provider (singleton instance persists)',
       );
     }
+    // Optionally close the client when provider is disposed
+    // openaiApiService.dispose();
   });
 
   return openaiApiService;
