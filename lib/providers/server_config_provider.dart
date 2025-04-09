@@ -178,22 +178,54 @@ class MultiServerConfigNotifier extends StateNotifier<MultiServerConfigState> {
 
   /// Remove a server configuration by ID
   Future<bool> removeServer(String serverId) async {
+    final initialServerCount = state.servers.length;
     final newServers = state.servers.where((s) => s.id != serverId).toList();
-    if (newServers.length == state.servers.length) {
+    if (newServers.length == initialServerCount) {
+      if (kDebugMode) {
+        print(
+          '[MultiServerConfigNotifier] Attempted to remove non-existent server ID: $serverId',
+        );
+      }
       return false; // Server ID not found
     }
 
     String? newDefaultId = state.defaultServerId;
     String? newActiveId = state.activeServerId;
 
-    // If the removed server was the default, clear default or pick the first remaining
-    if (state.defaultServerId == serverId) {
-      newDefaultId = newServers.firstOrNull?.id;
-    }
+    // Check if the list is now empty
+    if (newServers.isEmpty) {
+      if (kDebugMode) {
+        print(
+          '[MultiServerConfigNotifier] Removed the last server. Resetting active and default IDs.',
+        );
+      }
+      newDefaultId = null;
+      newActiveId = null;
+    } else {
+      // If the removed server was the default, clear default or pick the first remaining
+      if (state.defaultServerId == serverId) {
+        newDefaultId =
+            newServers.first.id; // Pick the first remaining as new default
+        if (kDebugMode) {
+          print(
+            '[MultiServerConfigNotifier] Removed default server $serverId. Setting new default to $newDefaultId.',
+          );
+        }
+      }
 
-    // If the removed server was active, clear active or pick the new default/first remaining
-    if (state.activeServerId == serverId) {
-      newActiveId = newDefaultId ?? newServers.firstOrNull?.id;
+      // If the removed server was active, set active to the new default (or first if default was also removed)
+      if (state.activeServerId == serverId) {
+        newActiveId =
+            newDefaultId ??
+            newServers
+                .first
+                .id; // Fallback to first if newDefaultId is somehow null
+        if (kDebugMode) {
+          print(
+            '[MultiServerConfigNotifier] Removed active server $serverId. Setting new active to $newActiveId.',
+          );
+        }
+      }
     }
 
     final newState = state.copyWith(
@@ -260,12 +292,26 @@ final activeServerConfigProvider = Provider<ServerConfig?>((ref) {
   final multiConfigState = ref.watch(multiServerConfigProvider);
   final activeId = multiConfigState.activeServerId;
 
+  // Explicitly return null if no active server ID is set
   if (activeId == null) {
+    if (kDebugMode) {
+      print(
+        '[activeServerConfigProvider] No active server ID set, returning null.',
+      );
+    }
     return null;
   }
 
   // Use firstWhereOrNull for safety
-  return multiConfigState.servers.firstWhereOrNull((s) => s.id == activeId);
+  final activeServer = multiConfigState.servers.firstWhereOrNull(
+    (s) => s.id == activeId,
+  );
+  if (activeServer == null && kDebugMode) {
+    print(
+      '[activeServerConfigProvider] Warning: Active server ID $activeId not found in the list.',
+    );
+  }
+  return activeServer;
 }, name: 'activeServerConfig');
 
 

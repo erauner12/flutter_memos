@@ -172,17 +172,18 @@ void main() {
     final decorationAfterCallback =
         containerAfterCallback.decoration as BoxDecoration?;
     final borderAfterCallback = decorationAfterCallback?.border as Border?;
-    final defaultBackgroundColor =
-        themeAfterCallback
-            .scaffoldBackgroundColor; // Use theme default from the new context
+    // Use secondarySystemGroupedBackground as the expected default
+    final expectedDefaultColor = CupertinoColors
+        .secondarySystemGroupedBackground
+        .resolveFrom(elementAfterCallback);
 
     // Assert background color is back to default (or null if transparent)
     expect(
-      decorationAfterCallback?.color,
-      // Default should now match the scaffold background color from the fix
-      equals(defaultBackgroundColor),
+      decorationAfterCallback?.color?.value,
+      // Default should now match the secondary system grouped background color
+      equals(expectedDefaultColor.value), // Compare resolved color values
       reason:
-          'Container background color should reset to default (Theme: ${themeAfterCallback.brightness})',
+          'Container background color should reset to secondarySystemGroupedBackground (Theme: ${themeAfterCallback.brightness})',
     );
 
     // Assert border is reset (no border or width 0)

@@ -10,15 +10,57 @@ const bool RUN_INTEGRATION_TESTS = true;
 void main() {
   group('API Integration Tests', () {
     late ApiService apiService;
-    
+
+    // Use setUpAll to configure the service once
+    setUpAll(() async {
+      // Check environment variables FIRST
+      const baseUrl = String.fromEnvironment(
+        'MEMOS_TEST_API_BASE_URL',
+        defaultValue: '',
+      );
+      const apiKey = String.fromEnvironment(
+        'MEMOS_TEST_API_KEY',
+        defaultValue: '',
+      );
+
+      if (RUN_INTEGRATION_TESTS) {
+        if (baseUrl.isEmpty || apiKey.isEmpty) {
+          print(
+            'WARNING: Integration test environment variables not set (MEMOS_TEST_API_BASE_URL, MEMOS_TEST_API_KEY). Skipping configuration.',
+          );
+          // Instantiate to avoid null errors in tearDown/tests if they somehow run
+          apiService = ApiService();
+        } else {
+          // Only configure if running tests AND vars are set
+          apiService = ApiService(); // Instantiate here
+          print('Configuring ApiService for integration tests: $baseUrl');
+          apiService.configureService(baseUrl: baseUrl, authToken: apiKey);
+          ApiService.verboseLogging = true; // Optional
+        }
+      } else {
+        // Instantiate even if skipping for potential tearDown logic
+        apiService = ApiService();
+        print('RUN_INTEGRATION_TESTS is false. Skipping API configuration.');
+      }
+    });
+
     setUp(() {
-      apiService = ApiService();
+      // No need to instantiate apiService here anymore, it's done in setUpAll
+      // Add checks here if needed, e.g., ensure service is configured if RUN_INTEGRATION_TESTS is true
+      if (RUN_INTEGRATION_TESTS && apiService.apiBaseUrl.isEmpty) {
+        // This indicates env vars were missing, tests will likely fail or be skipped.
+        print(
+          "Warning: ApiService not configured in setUp, integration tests might fail.",
+        );
+      }
     });
     
     test('Create, retrieve, update, and delete memo', () async {
-      // Skip unless integration tests are enabled
-      if (!RUN_INTEGRATION_TESTS) {
-        print('Skipping integration test - set RUN_INTEGRATION_TESTS = true to run');
+      // Skip unless integration tests are enabled AND configured
+      if (!RUN_INTEGRATION_TESTS || apiService.apiBaseUrl.isEmpty) {
+        print(
+          'Skipping integration test - RUN_INTEGRATION_TESTS is false or ApiService not configured.',
+        );
         return;
       }
       
@@ -105,9 +147,11 @@ void main() {
     });
     
     test('List memos with different sort parameters', () async {
-      // Skip unless integration tests are enabled
-      if (!RUN_INTEGRATION_TESTS) {
-        print('Skipping integration test - set RUN_INTEGRATION_TESTS = true to run');
+      // Skip unless integration tests are enabled AND configured
+      if (!RUN_INTEGRATION_TESTS || apiService.apiBaseUrl.isEmpty) {
+        print(
+          'Skipping integration test - RUN_INTEGRATION_TESTS is false or ApiService not configured.',
+        );
         return;
       }
       
@@ -154,10 +198,10 @@ void main() {
     });
 
     test('Create, retrieve, update, and delete comment', () async {
-      // Skip unless integration tests are enabled
-      if (!RUN_INTEGRATION_TESTS) {
+      // Skip unless integration tests are enabled AND configured
+      if (!RUN_INTEGRATION_TESTS || apiService.apiBaseUrl.isEmpty) {
         print(
-          'Skipping integration test - set RUN_INTEGRATION_TESTS = true to run',
+          'Skipping integration test - RUN_INTEGRATION_TESTS is false or ApiService not configured.',
         );
         return;
       }
@@ -247,10 +291,10 @@ void main() {
     });
 
     test('Comment with special states and attributes', () async {
-      // Skip unless integration tests are enabled
-      if (!RUN_INTEGRATION_TESTS) {
+      // Skip unless integration tests are enabled AND configured
+      if (!RUN_INTEGRATION_TESTS || apiService.apiBaseUrl.isEmpty) {
         print(
-          'Skipping integration test - set RUN_INTEGRATION_TESTS = true to run',
+          'Skipping integration test - RUN_INTEGRATION_TESTS is false or ApiService not configured.',
         );
         return;
       }

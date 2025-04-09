@@ -471,8 +471,9 @@ class _NewMemoFormState extends ConsumerState<NewMemoForm>
                         width: 0.5,
                       ),
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    child: ListView(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
                       children: [
                         const Text(
                           'Markdown Syntax Guide',

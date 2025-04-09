@@ -51,9 +51,11 @@ void main() {
     });
 
     test('Server respects sort parameters', () async {
-      // Skip this test unless RUN_API_TESTS is true
-      if (!RUN_API_TESTS) {
-        print('Skipping API test - set RUN_API_TESTS = true to run this test');
+      // Skip this test unless RUN_API_TESTS is true AND service is configured
+      if (!RUN_API_TESTS || apiService.apiBaseUrl.isEmpty) {
+        print(
+          'Skipping API test - RUN_API_TESTS is false or ApiService not configured.',
+        );
         return;
       }
 
@@ -135,15 +137,15 @@ void main() {
 
     test('Verify client-side sorting behavior', () async {
       // Skip this test unless RUN_API_TESTS is true AND config is present
-      const baseUrl = String.fromEnvironment(
+      const String.fromEnvironment(
         'MEMOS_TEST_API_BASE_URL',
         defaultValue: '',
-      );
-      if (!RUN_API_TESTS || baseUrl.isEmpty) {
+      ); // Keep check for documentation printout
+      if (!RUN_API_TESTS || apiService.apiBaseUrl.isEmpty) {
         print('\n=== SERVER SORTING LIMITATION DOCUMENTATION ===');
         print(SORTING_LIMITATION);
         print(
-          'Skipping API test - set RUN_API_TESTS = true and env vars to run',
+          'Skipping API test - RUN_API_TESTS is false or ApiService not configured.',
         );
         return;
       }
@@ -280,13 +282,10 @@ void main() {
 
     test('Compare snake_case vs camelCase API sorting', () async {
       // Skip this test unless RUN_API_TESTS is true AND config is present
-      const baseUrl = String.fromEnvironment(
-        'MEMOS_TEST_API_BASE_URL',
-        defaultValue: '',
-      );
-      if (!RUN_API_TESTS || baseUrl.isEmpty) {
+      // Skip this test unless RUN_API_TESTS is true AND service is configured
+      if (!RUN_API_TESTS || apiService.apiBaseUrl.isEmpty) {
         print(
-          'Skipping API test - set RUN_API_TESTS = true and env vars to run',
+          'Skipping API test - RUN_API_TESTS is false or ApiService not configured.',
         );
         return;
       }
