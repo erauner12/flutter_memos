@@ -196,6 +196,12 @@ function generatePlanReviewHtml(parsedPlanData, originalContent = "") {
         .text-content.original { background-color: #ffebee; border-color: #ffcdd2; text-decoration: line-through; color: #d32f2f; }
         .text-content.added { background-color: #e8f5e9; border-color: #c8e6c9; color: #2e7d32; }
         .text-content.kept { background-color: #f5f5f5; border-color: #e0e0e0; }
+        
+        /* Preview Area Styles */
+        #preview-section { margin-top: 25px; padding-top: 15px; border-top: 1px solid #ddd; }
+        #preview-section label { font-weight: bold; font-size: 1em; color: #333; margin-bottom: 8px; display: block; }
+        #finalPreview { width: 95%; height: 150px; padding: 10px; border: 1px solid #ccc; border-radius: 8px; font-size: 0.95em; background-color: #fff; resize: none; white-space: pre-wrap; word-wrap: break-word; }
+        
         button[type=submit] { padding: 12px 20px; background-color: #007aff; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; width: 100%; margin-top: 20px; }
         button[type=submit]:hover { background-color: #0056b3; }
         h2, h3 { margin-top: 0; color: #111; }
@@ -203,37 +209,113 @@ function generatePlanReviewHtml(parsedPlanData, originalContent = "") {
         form { margin-top: 10px; }
     `;
 
-    const originalContentHtml = originalContent ? `
+    const originalContentHtml = originalContent
+      ? `
         <div class="original-content-section">
-            <details> <summary>Show Original Input</summary> <div class="original-content-text">${escapeHtml(originalContent)}</div> </details>
-        </div>` : "";
+            <details> <summary>Show Original Input</summary> <div class="original-content-text">${escapeHtml(
+              originalContent
+            )}</div> </details>
+        </div>`
+      : "";
 
     let proposalsHtml = "";
     if (parsedPlanData?.proposals?.length > 0) {
-        parsedPlanData.proposals.forEach((proposal, index) => {
-            const proposalId = proposal.id || `prop-${index}`;
-            const isChecked = proposal.action !== 'delete';
-            let innerProposalContent = "";
-            if (proposal.description) { innerProposalContent += `<div class="proposal-description">${escapeHtml(proposal.description)}</div>`; }
-            if (proposal.original && ['replace', 'delete', 'keep'].includes(proposal.action)) { innerProposalContent += `<div class="text-block"><span class="text-label">Original${proposal.action === 'delete' ? ' (Deleted)' : (proposal.action === 'keep' ? ' (Kept)' : '')}:</span><div class="text-content original">${escapeHtml(proposal.original)}</div></div>`; }
-            if (proposal.content && ['add', 'replace', 'keep'].includes(proposal.action)) { const label = proposal.action === 'replace' ? 'Proposed:' : (proposal.action === 'keep' ? 'Kept:' : 'Added:'); const contentClass = proposal.action === 'keep' ? 'text-content kept' : 'text-content added'; innerProposalContent += `<div class="text-block"><span class="text-label">${label}</span><div class="${contentClass}">${escapeHtml(proposal.content)}</div></div>`; }
-            else if (proposal.action === 'add' && proposal.content) { innerProposalContent += `<div class="text-block"><span class="text-label">Added:</span><div class="text-content added">${escapeHtml(proposal.content)}</div></div>`; }
+      parsedPlanData.proposals.forEach((proposal, index) => {
+        const proposalId = proposal.id || `prop-${index}`;
+        const isChecked = proposal.action !== "delete";
+        let innerProposalContent = "";
+        if (proposal.description) {
+          innerProposalContent += `<div class="proposal-description">${escapeHtml(
+            proposal.description
+          )}</div>`;
+        }
+        if (
+          proposal.original &&
+          ["replace", "delete", "keep"].includes(proposal.action)
+        ) {
+          innerProposalContent += `<div class="text-block"><span class="text-label">Original${
+            proposal.action === "delete"
+              ? " (Deleted)"
+              : proposal.action === "keep"
+              ? " (Kept)"
+              : ""
+          }:</span><div class="text-content original">${escapeHtml(
+            proposal.original
+          )}</div></div>`;
+        }
+        if (
+          proposal.content &&
+          ["add", "replace", "keep"].includes(proposal.action)
+        ) {
+          const label =
+            proposal.action === "replace"
+              ? "Proposed:"
+              : proposal.action === "keep"
+              ? "Kept:"
+              : "Added:";
+          const contentClass =
+            proposal.action === "keep"
+              ? "text-content kept"
+              : "text-content added";
+          innerProposalContent += `<div class="text-block"><span class="text-label">${label}</span><div class="${contentClass}">${escapeHtml(
+            proposal.content
+          )}</div></div>`;
+        } else if (proposal.action === "add" && proposal.content) {
+          innerProposalContent += `<div class="text-block"><span class="text-label">Added:</span><div class="text-content added">${escapeHtml(
+            proposal.content
+          )}</div></div>`;
+        }
 
-            proposalsHtml += `
+        proposalsHtml += `
             <div class="proposal-block">
-              <div class="proposal-header"> <span class="proposal-title">Proposal ${index + 1} (${escapeHtml(proposal.action || 'suggest')})</span> <div class="proposal-include"> <input type="checkbox" class="proposal-toggle" id="${proposalId}" name="${proposalId}" data-proposal-id="${proposalId}" ${isChecked ? 'checked' : ''}> <label for="${proposalId}">Include</label> </div> </div>
+              <div class="proposal-header"> <span class="proposal-title">Proposal ${
+                index + 1
+              } (${escapeHtml(
+          proposal.action || "suggest"
+        )})</span> <div class="proposal-include"> <input type="checkbox" class="proposal-toggle" id="${proposalId}" name="${proposalId}" data-proposal-id="${proposalId}" ${
+          isChecked ? "checked" : ""
+        }> <label for="${proposalId}">Include</label> </div> </div>
               <div class="proposal-content-area"> ${innerProposalContent} </div>
             </div>`;
-        });
-    } else { /* ... (keep existing error/warning handling) ... */
-        if (parsedPlanData.chatName === "AI Plan Error" || parsedPlanData.chatName === "AI Plan Warning") { proposalsHtml = `<p style="color: red;">${escapeHtml(parsedPlanData.planText || "Unknown error.")}</p>`; } else { proposalsHtml = "<p>No specific proposals found in the plan.</p>"; }
+      });
+    } else {
+      if (
+        parsedPlanData.chatName === "AI Plan Error" ||
+        parsedPlanData.chatName === "AI Plan Warning"
+      ) {
+        proposalsHtml = `<p style="color: red;">${escapeHtml(
+          parsedPlanData.planText || "Unknown error."
+        )}</p>`;
+      } else {
+        proposalsHtml = "<p>No specific proposals found in the plan.</p>";
+      }
     }
 
-    const planDescriptionHtml = parsedPlanData.planText && !parsedPlanData.chatName?.includes("Error") && !parsedPlanData.chatName?.includes("Warning") ? `<div class="plan-description"><strong>Plan:</strong>\n${escapeHtml(parsedPlanData.planText)}</div>` : "";
-    const chatNameHtml = parsedPlanData.chatName && !parsedPlanData.chatName?.includes("Error") && !parsedPlanData.chatName?.includes("Warning") ? `<h3>${escapeHtml(parsedPlanData.chatName)}</h3>` : (parsedPlanData.chatName ? `<h3 style="color: ${parsedPlanData.chatName.includes('Error') ? 'red' : 'orange'};">${escapeHtml(parsedPlanData.chatName)}</h3>` : "");
+    const planDescriptionHtml =
+      parsedPlanData.planText &&
+      !parsedPlanData.chatName?.includes("Error") &&
+      !parsedPlanData.chatName?.includes("Warning")
+        ? `<div class="plan-description"><strong>Plan:</strong>\n${escapeHtml(
+            parsedPlanData.planText
+          )}</div>`
+        : "";
+    const chatNameHtml =
+      parsedPlanData.chatName &&
+      !parsedPlanData.chatName?.includes("Error") &&
+      !parsedPlanData.chatName?.includes("Warning")
+        ? `<h3>${escapeHtml(parsedPlanData.chatName)}</h3>`
+        : parsedPlanData.chatName
+        ? `<h3 style="color: ${
+            parsedPlanData.chatName.includes("Error") ? "red" : "orange"
+          };">${escapeHtml(parsedPlanData.chatName)}</h3>`
+        : "";
     const disableSubmit = parsedPlanData.chatName === "AI Plan Error";
 
-    // Removed the placeholder comments
+    // Embed plan data for JS use
+    const embeddedPlanData = JSON.stringify(
+      parsedPlanData || { proposals: [] }
+    );
+
     return `
     <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Review AI Generated Plan</title><style>${css}</style></head>
     <body><h2>Review AI Generated Plan</h2>${chatNameHtml}
@@ -242,10 +324,98 @@ function generatePlanReviewHtml(parsedPlanData, originalContent = "") {
     ${planDescriptionHtml}
     <form id="reviewForm">
         ${proposalsHtml}
-        <button type="submit" ${disableSubmit ? 'disabled style="background-color: #aaa;"' : ''}>Finalize Memo</button>
+        
+        <!-- Live Preview Section -->
+        <div id="preview-section">
+            <label for="finalPreview">Live Preview:</label>
+            <textarea id="finalPreview" readonly placeholder="Preview will appear here..."></textarea>
+        </div>
+        
+        <button type="submit" ${
+          disableSubmit ? 'disabled style="background-color: #aaa;"' : ""
+        }>Finalize Memo</button>
     </form>
     <script>
-    function initializeForm(){try{const e=document.getElementById("reviewForm");if(!e)return console.error("Review form not found."),alert("Error initializing review form."),void(typeof completion=="function"&&completion({error:"Initialization failed: Form missing"}));e.addEventListener("submit",e=>{e.preventDefault();const t=document.querySelectorAll(".proposal-toggle"),o=[];t.forEach(e=>{e.checked&&o.push(e.dataset.proposalId)});console.log("Included proposal IDs:",o),typeof completion=="function"?completion({action:"submit",data:{includedProposalIds:o}}):(console.error("CRITICAL: completion unavailable!"),alert("Error submitting choices."))}),console.log("AI Plan Review form initialized.")}catch(e){console.error("Error during review init:",e),alert("A critical error occurred setting up review form."),typeof completion=="function"&&completion({error:"Initialization crashed",details:e.message})}}
+        // Embed the plan data
+        const planData = ${embeddedPlanData};
+
+        // Function to build preview text (mirrors Scriptable's constructFinalMemoText)
+        function buildPreviewText(proposals, includedIds) {
+            if (!proposals || !Array.isArray(includedIds)) return "";
+            let outputLines = [];
+            let currentListType = null;
+            proposals.forEach(proposal => {
+                if (includedIds.includes(proposal.id)) {
+                    let textToUse = "";
+                    if (proposal.action === 'delete') return; // Skip deleted
+                    textToUse = (proposal.action === 'keep' ? proposal.original : proposal.content) || "";
+
+                    if (proposal.type === 'list_item') {
+                        if (currentListType !== 'list_item') {
+                            if (outputLines.length > 0 && currentListType !== null) outputLines.push("");
+                            currentListType = 'list_item';
+                        }
+                        outputLines.push(\`- \${textToUse.trim()}\`);
+                    } else {
+                        if (currentListType === 'list_item') outputLines.push("");
+                        currentListType = proposal.type;
+                        outputLines.push(textToUse);
+                        if (proposal.type === 'heading') outputLines.push("");
+                    }
+                }
+                if (proposal.type !== 'list_item') { currentListType = null; }
+            });
+            return outputLines.join("\\n").trim();
+        }
+
+        // Function to update the preview textarea
+        function updatePreview() {
+            const previewArea = document.getElementById('finalPreview');
+            const checkboxes = document.querySelectorAll(".proposal-toggle");
+            const includedIds = [];
+            checkboxes.forEach(cb => {
+                if (cb.checked) {
+                    includedIds.push(cb.dataset.proposalId);
+                }
+            });
+            console.log("Updating preview with IDs:", includedIds);
+            const previewText = buildPreviewText(planData.proposals, includedIds);
+            previewArea.value = previewText;
+        }
+
+        function initializeForm(){
+            try {
+                const form = document.getElementById("reviewForm");
+                const checkboxes = document.querySelectorAll(".proposal-toggle");
+
+                if (!form) { throw new Error("Review form not found."); }
+
+                // Attach change listeners to checkboxes
+                checkboxes.forEach(checkbox => {
+                    checkbox.addEventListener('change', updatePreview);
+                });
+
+                // Form submission handler
+                form.addEventListener("submit", e => {
+                    e.preventDefault();
+                    const includedIds = [];
+                    checkboxes.forEach(cb => { if (cb.checked) includedIds.push(cb.dataset.proposalId); });
+                    console.log("Final Included proposal IDs:", includedIds);
+                    if (typeof completion === "function") {
+                        completion({ action: "submit", data: { includedProposalIds: includedIds } });
+                    } else { console.error("CRITICAL: completion unavailable!"); alert("Error submitting choices."); }
+                });
+
+                // Initial preview update
+                updatePreview();
+
+                console.log("AI Plan Review form initialized with preview.");
+            } catch(e) {
+                console.error("Error during review init:", e);
+                alert("A critical error occurred setting up review form.");
+                if (typeof completion === "function") completion({ error: "Initialization crashed", details: e.message });
+            }
+        }
     </script></body></html>`;
 }
 
