@@ -601,7 +601,16 @@ final loadServerConfigProvider = FutureProvider<void>((ref) async {
         '[loadServerConfigProvider] Error initializing OpenAI provider: $e',
       );
   }
-
+  try {
+    await ref.read(openAiModelIdProvider.notifier).init(); // Add this line
+    if (kDebugMode)
+      print('[loadServerConfigProvider] OpenAI Model ID load triggered.');
+  } catch (e) {
+    if (kDebugMode)
+      print(
+        '[loadServerConfigProvider] Error initializing OpenAI Model ID provider: $e',
+      );
+  }
   try {
     await ref.read(cloudKitServiceProvider).initialize();
     if (kDebugMode)

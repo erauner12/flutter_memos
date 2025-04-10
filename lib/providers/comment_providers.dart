@@ -11,6 +11,7 @@ import 'package:flutter_memos/services/minimal_openai_service.dart'; // Import M
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'api_providers.dart' as api_p;
+import 'settings_provider.dart' as settings_p; // Add import alias for settings
 
 /// Provider for the list of hidden comment IDs (local state only)
 final hiddenCommentIdsProvider = StateProvider<Set<String>>((ref) => {});
@@ -398,10 +399,11 @@ final fixCommentGrammarProvider = FutureProvider.family<void, String>((
   }
 
   // Get required services
-  final ApiService memosApiService = ref.read(api_p.apiServiceProvider);
   final MinimalOpenAiService openaiApiService = ref.read(
     api_p.openaiApiServiceProvider,
   );
+  // Read the selected model ID from the new provider using the correct alias
+  final String selectedModelId = ref.read(settings_p.openAiModelIdProvider);
 
   // Check if OpenAI service is configured
   if (!openaiApiService.isConfigured) {
@@ -418,7 +420,9 @@ final fixCommentGrammarProvider = FutureProvider.family<void, String>((
     if (kDebugMode) {
       print('[fixCommentGrammarProvider] Fetching comment content...');
     }
-    final Comment currentComment = await memosApiService.getMemoComment(
+    // Use the correct service variable name
+    final ApiService apiService = ref.read(api_p.apiServiceProvider);
+    final Comment currentComment = await apiService.getMemoComment(
       commentId,
     );
     final String originalContent = currentComment.content;
@@ -432,10 +436,16 @@ final fixCommentGrammarProvider = FutureProvider.family<void, String>((
       return; // Nothing to fix
     }
 
-    // 2. Call OpenAI service to fix grammar
-    if (kDebugMode) print('[fixCommentGrammarProvider] Calling OpenAI API...');
+    // 2. Call OpenAI service to fix grammar, passing the model ID
+    if (kDebugMode) {
+      // Add curly braces
+      print(
+        '[fixCommentGrammarProvider] Calling OpenAI API with model $selectedModelId...',
+      );
+    } // Add curly braces
     final String correctedContent = await openaiApiService.fixGrammar(
       originalContent,
+      modelId: selectedModelId, // Pass the selected model
     );
 
     // 3. Check if content actually changed
@@ -460,7 +470,8 @@ final fixCommentGrammarProvider = FutureProvider.family<void, String>((
     final Comment updatedCommentData = currentComment.copyWith(
       content: correctedContent,
     );
-    await memosApiService.updateMemoComment(commentId, updatedCommentData);
+    // Use the correct service variable name
+    await apiService.updateMemoComment(commentId, updatedCommentData);
 
     // 5. Invalidate the comments list for the specific memo to refresh UI
     // Extract memoId from combined ID (format: "memoId/commentId")

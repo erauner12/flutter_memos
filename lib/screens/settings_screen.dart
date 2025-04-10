@@ -26,6 +26,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   // OpenAI state
   final _openaiApiKeyController = TextEditingController();
   bool _isTestingOpenAiConnection = false;
+  // Add state for model loading
+  bool _isLoadingModels = false;
+  List<String> _availableModels = [];
+  String? _modelLoadError;
 
   @override
   void initState() {
@@ -40,6 +44,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         final initialOpenAiKey = ref.read(openAiApiKeyProvider);
         _openaiApiKeyController.text = initialOpenAiKey;
       }
+      // Fetch models after initial setup
+      _fetchModels();
     });
   }
 
@@ -48,6 +54,48 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     _todoistApiKeyController.dispose();
     _openaiApiKeyController.dispose(); // Dispose the new controller
     super.dispose();
+  }
+
+  // Method to fetch models
+  Future<void> _fetchModels() async {
+    if (!mounted) return;
+    setState(() {
+      _isLoadingModels = true;
+      _modelLoadError = null;
+      _availableModels = []; // Clear previous models
+    });
+
+    final openaiService = ref.read(openaiApiServiceProvider);
+    // Check API key provider directly as service config might lag
+    final apiKey = ref.read(openAiApiKeyProvider);
+
+    if (apiKey.isEmpty) {
+      setState(() {
+        _isLoadingModels = false;
+        _modelLoadError = 'OpenAI API Key not configured.';
+      });
+      return;
+    }
+    // Ensure service is configured with the latest key before fetching
+    // This might be slightly redundant if the provider already configured it, but safer.
+    openaiService.configureService(authToken: apiKey);
+
+    try {
+      final models = await openaiService.listCompletionModels();
+      if (mounted) {
+        setState(() {
+          _availableModels = models;
+          _isLoadingModels = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoadingModels = false;
+          _modelLoadError = 'Failed to load models: ${e.toString()}';
+        });
+      }
+    }
   }
 
   void _showResultDialog(String title, String content, {bool isError = false}) {
@@ -95,11 +143,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         );
       }
     } catch (e) {
-      if (kDebugMode) print("[SettingsScreen] Test Memos Connection Error: $e");
+      if (kDebugMode)
+        print("[SettingsScreen] Test Memos Connection Error: \$e");
       if (mounted) {
         _showResultDialog(
           'Connection Failed',
-          'Could not connect to Memos server "${activeConfig.name ?? activeConfig.serverUrl}".\n\nError: ${e.toString()}',
+          'Could not connect to Memos server "${activeConfig.name ?? activeConfig.serverUrl}".\n\nError: \${e.toString()}',
           isError: true,
         );
       }
@@ -148,12 +197,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       }
     } catch (e) {
       if (kDebugMode) {
-        print("[SettingsScreen] Test Todoist Connection Error: $e");
+        print("[SettingsScreen] Test Todoist Connection Error: \$e");
       }
       if (mounted) {
         _showResultDialog(
           'Error',
-          'An error occurred while testing the Todoist connection:\n${e.toString()}',
+          'An error occurred while testing the Todoist connection:\n\${e.toString()}',
           isError: true,
         );
       }
@@ -202,12 +251,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       }
     } catch (e) {
       if (kDebugMode) {
-        print("[SettingsScreen] Test OpenAI Connection Error: $e");
+        print("[SettingsScreen] Test OpenAI Connection Error: \$e");
       }
       if (mounted) {
         _showResultDialog(
           'Error',
-          'An error occurred while testing the OpenAI connection:\n${e.toString()}',
+          'An error occurred while testing the OpenAI connection:\n\${e.toString()}',
           isError: true,
         );
       }
@@ -215,7 +264,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       if (mounted) setState(() => _isTestingOpenAiConnection = false);
     }
   }
-
 
   void _showServerActions(
     BuildContext context,
@@ -277,8 +325,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     builder:
                         (context) => CupertinoAlertDialog(
                           title: const Text('Delete Server?'),
-                          content: Text(
-                            'Are you sure you want to delete "${server.name ?? server.serverUrl}"?',
+                          content: const Text(
+                            'Are you sure you want to delete "\${server.name ?? server.serverUrl}"?',
                           ),
                           actions: [
                             CupertinoDialogAction(
@@ -311,6 +359,103 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               onPressed: () => Navigator.pop(context),
             ),
           ),
+    );
+  }
+
+  // Method to show the model picker
+  void _showModelPicker(BuildContext context) {
+    final currentModel = ref.read(openAiModelIdProvider);
+    int initialItem = _availableModels.indexOf(currentModel);
+    if (initialItem < 0) initialItem = 0; // Default to first if not found
+
+    String selectedValue =
+        _availableModels.isNotEmpty ? _availableModels[initialItem] : '';
+
+    showCupertinoModalPopup<void>(
+      context: context,
+      builder: (BuildContext context) {
+        return SafeArea(
+          top: false,
+          child: Container(
+            height: 250,
+            color: CupertinoColors.systemBackground.resolveFrom(context),
+            child: Column(
+              children: [
+                Container(
+                  decoration: BoxDecoration(
+                    color: CupertinoColors.secondarySystemBackground
+                        .resolveFrom(context),
+                    border: Border(
+                      bottom: BorderSide(
+                        color: CupertinoColors.separator.resolveFrom(context),
+                        width: 0.0,
+                      ),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      CupertinoButton(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16.0,
+                          vertical: 10.0,
+                        ),
+                        child: const Text('Cancel'),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                      CupertinoButton(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16.0,
+                          vertical: 10.0,
+                        ),
+                        child: const Text('Done'),
+                        onPressed: () {
+                          if (selectedValue.isNotEmpty &&
+                              selectedValue != currentModel) {
+                            ref
+                                .read(openAiModelIdProvider.notifier)
+                                .set(selectedValue);
+                            if (kDebugMode)
+                              print('Selected OpenAI Model: \$selectedValue');
+                          }
+                          Navigator.pop(context);
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: CupertinoPicker(
+                    scrollController: FixedExtentScrollController(
+                      initialItem: initialItem,
+                    ),
+                    itemExtent: 32.0,
+                    backgroundColor: CupertinoColors.systemBackground
+                        .resolveFrom(context),
+                    onSelectedItemChanged: (int index) {
+                      selectedValue = _availableModels[index];
+                    },
+                    children:
+                        _availableModels
+                            .map(
+                              (modelId) => Center(
+                                child: Text(
+                                  modelId,
+                                  style:
+                                      CupertinoTheme.of(
+                                        context,
+                                      ).textTheme.textStyle,
+                                ),
+                              ),
+                            )
+                            .toList(),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -591,23 +736,36 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                 borderRadius: BorderRadius.circular(8.0),
                               ),
                               clearButtonMode: OverlayVisibilityMode.editing,
+                              // Trigger model fetch when API key might have changed
+                              onSubmitted: (_) => _fetchModels(),
+                              onChanged: (value) {
+                                // Optional: Debounce or delay fetch if needed
+                              },
                             ),
                           ),
                           const SizedBox(width: 8),
                           CupertinoButton(
                             padding: const EdgeInsets.symmetric(horizontal: 16),
                             color: CupertinoColors.activeBlue,
-                            onPressed: () {
+                            onPressed: () async {
                               final newKey = _openaiApiKeyController.text;
-                              // Use OpenAI provider notifier
-                              ref
+                              final success = await ref
                                   .read(openAiApiKeyProvider.notifier)
                                   .set(newKey);
                               FocusScope.of(context).unfocus();
-                              _showResultDialog(
-                                'API Key Updated',
-                                'OpenAI API key has been saved.',
-                              );
+                              if (success) {
+                                _showResultDialog(
+                                  'API Key Updated',
+                                  'OpenAI API key has been saved.',
+                                );
+                                _fetchModels();
+                              } else {
+                                _showResultDialog(
+                                  'Error',
+                                  'Failed to save OpenAI API key.',
+                                  isError: true,
+                                );
+                              }
                             },
                             child: const Text(
                               'Save',
@@ -625,9 +783,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         onPressed:
                             _isTestingOpenAiConnection
                                 ? null
-                                : _testOpenAiConnection, // Use OpenAI test function
+                                : _testOpenAiConnection,
                         child:
-                            _isTestingOpenAiConnection // Use OpenAI loading state
+                            _isTestingOpenAiConnection
                                 ? const CupertinoActivityIndicator()
                                 : const Row(
                                   mainAxisSize: MainAxisSize.min,
@@ -639,6 +797,55 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                 ),
                       ),
                     ),
+                  ),
+                  // OpenAI Model Selection Tile
+                  CupertinoListTile(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 15.0,
+                      vertical: 10.0,
+                    ),
+                    title: const Text('OpenAI Model (Grammar Fix)'),
+                    additionalInfo:
+                        _isLoadingModels
+                            ? const CupertinoActivityIndicator(radius: 10)
+                            : (_modelLoadError != null ||
+                                _availableModels.isEmpty)
+                            ? CupertinoButton(
+                              padding: EdgeInsets.zero,
+                              minSize: 0,
+                              onPressed: _fetchModels,
+                              child: const Icon(
+                                CupertinoIcons.refresh,
+                                color: CupertinoColors.systemRed,
+                                size: 20,
+                              ),
+                            )
+                            : null,
+                    trailing: const CupertinoListTileChevron(),
+                    subtitle: Text(
+                      _isLoadingModels
+                          ? 'Loading models...'
+                          : _modelLoadError != null
+                          ? _modelLoadError!
+                          : ref.watch(openAiModelIdProvider).isNotEmpty
+                          ? ref.watch(openAiModelIdProvider)
+                          : 'Select Model',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color:
+                            _modelLoadError != null
+                                ? CupertinoColors.systemRed.resolveFrom(context)
+                                : CupertinoColors.secondaryLabel.resolveFrom(
+                                  context,
+                                ),
+                      ),
+                    ),
+                    onTap:
+                        _isLoadingModels || _availableModels.isEmpty
+                            ? null
+                            : () => _showModelPicker(context),
                   ),
                 ],
               ),

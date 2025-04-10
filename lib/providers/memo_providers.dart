@@ -14,6 +14,8 @@ import 'package:flutter_memos/utils/filter_builder.dart';
 import 'package:flutter_memos/utils/memo_utils.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'settings_provider.dart' as settings_p; // Add import alias for settings
+
 // State class to hold pagination data
 @immutable // Optional but good practice
 class MemosState {
@@ -701,7 +703,6 @@ final deleteMemoProvider = Provider.family<Future<void> Function(), String>((
       ref
           .read(hiddenMemoIdsProvider.notifier)
           .update((state) => state.contains(id) ? (state..remove(id)) : state);
-
     } catch (e, stackTrace) {
       if (kDebugMode) {
         print('[deleteMemoProvider] Error deleting memo $id: $e');
@@ -760,28 +761,28 @@ final bumpMemoProvider = Provider.family<Future<void> Function(), String>((
 }, name: 'bumpMemo');
 
 /// OPTIMIZATION: Provider for updating a memo with optimistic updates
-final updateMemoProvider = Provider.family<Future<Memo> Function(Memo), String>(
-  (ref, id) {
-    return (Memo updatedMemo) async {
-      if (kDebugMode) {
-        print('[updateMemoProvider] Updating memo: $id');
-      }
+final updateMemoProvider = Provider.family<
+  Future<Memo> Function(Memo),
+  String
+>((ref, id) {
+  return (Memo updatedMemo) async {
+    if (kDebugMode) {
+      print('[updateMemoProvider] Updating memo: $id');
+    }
 
     final apiService = ref.read(api_p.apiServiceProvider); // Use alias
 
     // Optional: Optimistic UI update (already handled by notifier methods if called from elsewhere)
-      // ref.read(memosNotifierProvider.notifier).updateMemoOptimistically(updatedMemo);
+    // ref.read(memosNotifierProvider.notifier).updateMemoOptimistically(updatedMemo);
 
     try {
-        // Update memo through API
-        final result = await apiService.updateMemo(id, updatedMemo);
+      // Update memo through API
+      final result = await apiService.updateMemo(id, updatedMemo);
 
       // --- REMOVE CACHE UPDATE AND INVALIDATIONS ---
       // // Update the detail cache *before* invalidating the detail provider
       // if (ref.exists(memoDetailCacheProvider)) {
-      //   ref
-      //       .read(memoDetailCacheProvider.notifier)
-      //       .update((state) => {...state, id: result});
+      //   ref.read(memoDetailCacheProvider.notifier).update((state) => {...state, id: result});
       //   if (kDebugMode) {
       //     print('[updateMemoProvider] Updated memoDetailCacheProvider for $id');
       //   }
@@ -800,10 +801,8 @@ final updateMemoProvider = Provider.family<Future<Memo> Function(Memo), String>(
           .read(memoDetailCacheProvider.notifier)
           .update((state) => {...state, id: result});
 
-
       if (kDebugMode) {
-        print(
-            '[updateMemoProvider] Memo $id updated successfully via API.');
+        print('[updateMemoProvider] Memo $id updated successfully via API.');
       }
       return result; // Return the result
     } catch (e, stackTrace) {
@@ -814,7 +813,6 @@ final updateMemoProvider = Provider.family<Future<Memo> Function(Memo), String>(
       // Optional: Revert optimistic update on error or refresh to ensure consistency
       // Consider refreshing on error to sync with server state
       // Remove potentially stale item from cache on error? Or let refresh handle it.
-      // Let's keep invalidation to trigger refresh which ensures consistency.
       ref.invalidate(memosNotifierProvider);
       ref.invalidate(memoDetailProvider(id));
       rethrow;
@@ -1258,7 +1256,6 @@ final createMemoProvider = Provider<Future<void> Function(Memo)>((ref) {
   };
 });
 
-
 /// Provider to fix grammar of a memo using OpenAI
 final fixMemoGrammarProvider = FutureProvider.family<void, String>((
   ref,
@@ -1275,6 +1272,8 @@ final fixMemoGrammarProvider = FutureProvider.family<void, String>((
   final MinimalOpenAiService openaiApiService = ref.read(
     api_p.openaiApiServiceProvider,
   );
+  // Read the selected model ID from the new provider using the correct alias
+  final String selectedModelId = ref.read(settings_p.openAiModelIdProvider);
 
   // Check if OpenAI service is configured
   if (!openaiApiService.isConfigured) {
@@ -1299,10 +1298,15 @@ final fixMemoGrammarProvider = FutureProvider.family<void, String>((
       return; // Nothing to fix
     }
 
-    // 2. Call OpenAI service to fix grammar
-    if (kDebugMode) print('[fixMemoGrammarProvider] Calling OpenAI API...');
+    // 2. Call OpenAI service to fix grammar, passing the model ID
+    if (kDebugMode) {
+      print(
+        '[fixMemoGrammarProvider] Calling OpenAI API with model: $selectedModelId...',
+      );
+    }
     final String correctedContent = await openaiApiService.fixGrammar(
       originalContent,
+      modelId: selectedModelId, // Pass the selected model
     );
 
     // 3. Check if content actually changed
