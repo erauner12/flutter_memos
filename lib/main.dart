@@ -9,10 +9,8 @@ import 'package:flutter_localizations/flutter_localizations.dart'; // Import loc
 import 'package:flutter_memos/providers/server_config_provider.dart';
 import 'package:flutter_memos/providers/theme_provider.dart';
 import 'package:flutter_memos/providers/ui_providers.dart'; // Import for UI providers including highlightedCommentIdProvider
-import 'package:flutter_memos/screens/chat_screen.dart';
 import 'package:flutter_memos/screens/edit_memo/edit_memo_screen.dart';
 import 'package:flutter_memos/screens/home_screen.dart';
-import 'package:flutter_memos/screens/mcp_screen.dart';
 import 'package:flutter_memos/screens/memo_detail/memo_detail_screen.dart';
 import 'package:flutter_memos/screens/memos/memos_screen.dart';
 import 'package:flutter_memos/screens/new_memo/new_memo_screen.dart'; // Import NewMemoScreen
@@ -374,8 +372,6 @@ class _MyAppState extends ConsumerState<MyApp> {
                       (context) =>
                           const HomeScreen(),
                   '/memos': (context) => const MemosScreen(),
-                  '/chat': (context) => const ChatScreen(),
-                  '/mcp': (context) => const McpScreen(),
                   '/new-memo':
                       (context) => const NewMemoScreen(), // Add this route
                   '/memo-detail': (context) {
