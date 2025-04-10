@@ -44,10 +44,16 @@ class PersistentStringNotifier extends StateNotifier<String> {
   final Ref _ref; // Add ref
   final String preferenceKey; // Used for SecureStorage key AND CloudKit key
   late final CloudKitService _cloudKitService; // Add service instance
-  final _secureStorage =
-      const FlutterSecureStorage(); // Add secure storage instance
+  // Make _secureStorage non-final to allow replacement in tests
+  FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
   bool _initialized = false;
   bool _cloudKitChecked = false; // Flag to prevent redundant CloudKit checks
+
+  // Add visible for testing setter
+  @visibleForTesting
+  set debugSecureStorage(FlutterSecureStorage storage) {
+    _secureStorage = storage;
+  }
 
   // Update constructor - REMOVE _loadValue() call
   PersistentStringNotifier(this._ref, super.initialState, this.preferenceKey) {

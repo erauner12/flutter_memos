@@ -32,7 +32,7 @@ class MockMultiServerConfigNotifier
   MockMultiServerConfigNotifier(super.initialState);
 
   @override
-  Future<void> loadFromPreferences() async {
+  Future<void> loadConfiguration() async {
     // Do nothing, state is already set
     return Future.value();
   }

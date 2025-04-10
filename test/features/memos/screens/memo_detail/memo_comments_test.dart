@@ -58,7 +58,12 @@ Widget buildTestableWidget(Widget child, ProviderContainer container) {
 
 void main() {
   const testMemoId = 'test-memo-1';
-  final dummyComments = createDummyComments(3); // Create 3 dummy comments
+  // Generate dummy comments
+  final initialDummyComments = createDummyComments(3);
+  // **Explicitly sort the list like the widget likely does (newest first)**
+  final sortedDummyComments = List<Comment>.from(initialDummyComments)
+    ..sort((a, b) => b.createTime.compareTo(a.createTime));
+
   late ProviderContainer container; // Declare container
   late MockApiService mockApiService;
 
@@ -72,13 +77,15 @@ void main() {
     // Create stub responses for the mock API service
     when(
       mockApiService.listMemoComments(any),
-    ).thenAnswer((_) async => dummyComments);
+      // Use the pre-sorted list here
+    ).thenAnswer((_) async => sortedDummyComments);
 
     container = ProviderContainer(
       overrides: [
         // Override the comments provider for the specific memoId
+        // Provide the pre-sorted list directly
         memoCommentsProvider(testMemoId).overrideWith(
-          (ref) => Future.value(dummyComments), // Provide initial data directly
+          (ref) => Future.value(sortedDummyComments),
         ),
         // Ensure UI providers start in a known state
         ui_providers.commentMultiSelectModeProvider.overrideWith(
@@ -162,7 +169,7 @@ void main() {
         ), // Changed from CupertinoSwitch
       );
       expect(multiSelectWidgetFinder,
-      findsNWidgets(dummyComments.length),
+        findsNWidgets(sortedDummyComments.length),
     );
 
     // Verify Slidable is gone
@@ -175,7 +182,7 @@ void main() {
     );
   });
 
-  testWidgets(
+testWidgets(
     'MemoComments selects/deselects comment via Checkbox/Switch tap',
     (WidgetTester tester) async {
     // Arrange
@@ -188,78 +195,41 @@ void main() {
     container.read(ui_providers.commentMultiSelectModeProvider.notifier).state = true;
     await tester.pumpAndSettle();
 
-      // Find the first multi-select widget (Assuming Checkbox)
-      final firstMultiSelectWidgetFinder = find.descendant(
-      of: find.byType(CommentCard).first,
-        matching: find.byType(
-          CupertinoCheckbox,
-        ), // Changed from CupertinoSwitch
-    );
-      expect(firstMultiSelectWidgetFinder, findsOneWidget);
+      // The first item in the sorted list is comment_0
+      final targetCommentId = sortedDummyComments[0].id;
+      final expectedCombinedId = '$testMemoId/$targetCommentId';
+      expect(targetCommentId, 'comment_0'); // Verify it's comment_0
 
-    final expectedCommentId = '$testMemoId/${dummyComments[0].id}';
-
-      // Act: Tap the first widget to select
-      await tester.tap(firstMultiSelectWidgetFinder);
-    await tester.pumpAndSettle();
-
-    // Assert: Selection state updated
-    // Use the container created in setUp
-    expect(
-      container.read(ui_providers.selectedCommentIdsForMultiSelectProvider),
-      contains(expectedCommentId),
-    );
-    expect(
-      container
-          .read(ui_providers.selectedCommentIdsForMultiSelectProvider)
-          .length,
-      1,
-    );
-
-      // Act: Tap the first widget again to deselect
-      await tester.tap(firstMultiSelectWidgetFinder);
-    await tester.pumpAndSettle();
-
-    // Assert: Selection state updated
-    // Use the container created in setUp
-    expect(
-      container.read(ui_providers.selectedCommentIdsForMultiSelectProvider),
-      isNot(contains(expectedCommentId)),
-    );
-    expect(
-      container.read(ui_providers.selectedCommentIdsForMultiSelectProvider),
-      isEmpty,
-    );
-  });
-
-  testWidgets('MemoComments selects/deselects comment via item tap in multi-select mode', (WidgetTester tester) async {
-    // Arrange
-      await tester.pumpWidget(
-        buildTestableWidget(const MemoComments(memoId: testMemoId), container),
+      // Find the specific CommentCard for comment_0
+      final targetCardFinder = find.byWidgetPredicate(
+        (widget) =>
+            widget is CommentCard && widget.comment.id == targetCommentId,
       );
-      await tester.pumpAndSettle();
+      expect(
+        targetCardFinder,
+        findsOneWidget,
+        reason: 'Could not find CommentCard for comment_0',
+      );
 
-    // Enter multi-select mode
-    container.read(ui_providers.commentMultiSelectModeProvider.notifier).state = true;
-    await tester.pumpAndSettle();
-
-    // Find the first CommentCard
-    final firstItemFinder = find.byType(CommentCard).first;
-    final expectedCommentId = '$testMemoId/${dummyComments[0].id}';
-
-      // Act: Tap the checkbox within the first item to select
-      final firstCheckboxFinder = find.descendant(
-        of: firstItemFinder,
+      // Find the checkbox within that specific card
+      final targetCheckboxFinder = find.descendant(
+        of: targetCardFinder,
         matching: find.byType(CupertinoCheckbox),
       );
-      expect(firstCheckboxFinder, findsOneWidget);
-      await tester.tap(firstCheckboxFinder);
-    await tester.pumpAndSettle();
+      expect(
+        targetCheckboxFinder,
+        findsOneWidget,
+        reason: 'Could not find Checkbox in CommentCard for comment_0',
+      );
+
+      // Act: Tap the target checkbox to select
+      await tester.tap(targetCheckboxFinder);
+      await tester.pumpAndSettle();
 
       // Assert: Selection state updated
       expect(
         container.read(ui_providers.selectedCommentIdsForMultiSelectProvider),
-        contains(expectedCommentId),
+        contains(expectedCombinedId), // Check for the combined ID
       );
       expect(
         container
@@ -268,40 +238,110 @@ void main() {
         1,
       );
 
-      // Act: Tap the checkbox within the first item again to deselect
-      final secondCheckboxFinder = find.descendant(
-        of: firstItemFinder,
-        matching: find.byType(CupertinoCheckbox),
-      );
-      expect(secondCheckboxFinder, findsOneWidget);
-      await tester.tap(secondCheckboxFinder);
-    await tester.pumpAndSettle();
+      // Act: Tap the target checkbox again to deselect
+      await tester.tap(targetCheckboxFinder);
+      await tester.pumpAndSettle();
 
       // Assert: Selection state updated
       expect(
         container.read(ui_providers.selectedCommentIdsForMultiSelectProvider),
-        isNot(contains(expectedCommentId)),
+        isNot(contains(expectedCombinedId)),
       );
       expect(
         container.read(ui_providers.selectedCommentIdsForMultiSelectProvider),
         isEmpty,
       );
-  });
+    },
+  );
 
-  testWidgets(
+testWidgets(
+    'MemoComments selects/deselects comment via item tap in multi-select mode',
+    (WidgetTester tester) async {
+      // Arrange
+      await tester.pumpWidget(
+        buildTestableWidget(const MemoComments(memoId: testMemoId), container),
+      );
+      await tester.pumpAndSettle();
+
+      // Enter multi-select mode
+      container
+          .read(ui_providers.commentMultiSelectModeProvider.notifier)
+          .state = true;
+      await tester.pumpAndSettle();
+
+      // The first item in the sorted list is comment_0
+      final targetCommentId = sortedDummyComments[0].id;
+      final expectedCombinedId = '$testMemoId/$targetCommentId';
+      expect(targetCommentId, 'comment_0'); // Verify it's comment_0
+
+      // Find the specific CommentCard for comment_0
+      final targetCardFinder = find.byWidgetPredicate(
+        (widget) =>
+            widget is CommentCard && widget.comment.id == targetCommentId,
+      );
+      expect(
+        targetCardFinder,
+        findsOneWidget,
+        reason: 'Could not find CommentCard for comment_0',
+      );
+
+      // Find the checkbox within that specific card
+      final targetCheckboxFinder = find.descendant(
+        of: targetCardFinder,
+        matching: find.byType(CupertinoCheckbox),
+      );
+      expect(
+        targetCheckboxFinder,
+        findsOneWidget,
+        reason: 'Could not find Checkbox in CommentCard for comment_0',
+      );
+
+      // Act: Tap the checkbox within the target item to select
+      await tester.tap(targetCheckboxFinder); // Tap the checkbox directly
+      await tester.pumpAndSettle();
+
+      // Assert: Selection state updated
+      expect(
+        container.read(ui_providers.selectedCommentIdsForMultiSelectProvider),
+        contains(expectedCombinedId), // Check for the combined ID
+      );
+      expect(
+        container
+            .read(ui_providers.selectedCommentIdsForMultiSelectProvider)
+            .length,
+        1,
+      );
+
+      // Act: Tap the checkbox within the target item again to deselect
+      await tester.tap(targetCheckboxFinder); // Tap the checkbox directly
+      await tester.pumpAndSettle();
+
+      // Assert: Selection state updated
+      expect(
+        container.read(ui_providers.selectedCommentIdsForMultiSelectProvider),
+        isNot(contains(expectedCombinedId)),
+      );
+      expect(
+        container.read(ui_providers.selectedCommentIdsForMultiSelectProvider),
+        isEmpty,
+      );
+    },
+  );
+
+testWidgets(
     'MemoComments exits multi-select mode and hides checkboxes/switches',
-    (
-    WidgetTester tester,
-  ) async {
-    // Arrange
-    await tester.pumpWidget(
-      buildTestableWidget(const MemoComments(memoId: testMemoId), container),
-    );
-    await tester.pumpAndSettle();
+    (WidgetTester tester) async {
+      // Arrange
+      await tester.pumpWidget(
+        buildTestableWidget(const MemoComments(memoId: testMemoId), container),
+      );
+      await tester.pumpAndSettle();
 
       // Enter multi-select mode and select an item via checkbox
-    container.read(ui_providers.commentMultiSelectModeProvider.notifier).state = true;
-    await tester.pumpAndSettle();
+      container
+          .read(ui_providers.commentMultiSelectModeProvider.notifier)
+          .state = true;
+      await tester.pumpAndSettle();
 
       final firstCheckboxFinder = find.descendant(
         of: find.byType(CommentCard).first,
@@ -309,33 +349,43 @@ void main() {
       );
       expect(firstCheckboxFinder, findsOneWidget);
       await tester.tap(firstCheckboxFinder);
-    await tester.pumpAndSettle();
+      await tester.pumpAndSettle();
 
-    expect(container.read(ui_providers.commentMultiSelectModeProvider), isTrue);
+      expect(
+        container.read(ui_providers.commentMultiSelectModeProvider),
+        isTrue,
+      );
       // Now this assertion should pass
-    expect(container.read(ui_providers.selectedCommentIdsForMultiSelectProvider), isNotEmpty);
+      expect(
+        container.read(ui_providers.selectedCommentIdsForMultiSelectProvider),
+        isNotEmpty,
+      );
 
-    // Act: Simulate exiting multi-select mode
-    container.read(ui_providers.commentMultiSelectModeProvider.notifier).state = false;
+      // Act: Simulate exiting multi-select mode
+      container
+          .read(ui_providers.commentMultiSelectModeProvider.notifier)
+          .state = false;
 
-    // Exiting mode should also clear selections (handled by the toggle provider logic)
-    container.read(ui_providers.selectedCommentIdsForMultiSelectProvider.notifier).state = {};
-    await tester.pumpAndSettle();
+      // Exiting mode should also clear selections (handled by the toggle provider logic)
+      container
+          .read(ui_providers.selectedCommentIdsForMultiSelectProvider.notifier)
+          .state = {};
+      await tester.pumpAndSettle();
 
-    // Assert: Exited multi-select mode
-    expect(
-      container.read(ui_providers.commentMultiSelectModeProvider),
-      isFalse,
-    );
-    expect(
-      container.read(ui_providers.selectedCommentIdsForMultiSelectProvider),
-      isEmpty,
-    );
+      // Assert: Exited multi-select mode
+      expect(
+        container.read(ui_providers.commentMultiSelectModeProvider),
+        isFalse,
+      );
+      expect(
+        container.read(ui_providers.selectedCommentIdsForMultiSelectProvider),
+        isEmpty,
+      );
 
       // Verify Checkboxes/Switches are gone
       expect(
-      find.descendant(
-        of: find.byType(CommentCard),
+        find.descendant(
+          of: find.byType(CommentCard),
           matching: find.byType(
             CupertinoCheckbox,
           ), // Check for CupertinoCheckbox first
@@ -352,13 +402,14 @@ void main() {
       );
 
 
-    // Verify Slidable is back
-    expect(
-      find.descendant(
-        of: find.byType(CommentCard),
-        matching: find.byType(Slidable),
-      ),
-      findsWidgets,
-    );
-  });
+      // Verify Slidable is back
+      expect(
+        find.descendant(
+          of: find.byType(CommentCard),
+          matching: find.byType(Slidable),
+        ),
+        findsWidgets,
+      );
+    },
+  );
 }

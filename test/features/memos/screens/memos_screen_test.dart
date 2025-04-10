@@ -100,15 +100,20 @@ Widget buildTestableWidget(Widget child, ProviderContainer container) {
 
 // Mock Notifier for MultiServerConfigState that extends the real one
 class MockMultiServerConfigNotifier extends MultiServerConfigNotifier {
-  MockMultiServerConfigNotifier(MultiServerConfigState initialState) : super() {
+  // Add Ref parameter and pass it to super
+  MockMultiServerConfigNotifier(
+    super.ref,
+    MultiServerConfigState initialState,
+  ) {
     // Manually set the initial state after calling the super constructor
     state = initialState;
   }
 
   // Override methods only if their behavior needs to be mocked for the test
   @override
-  Future<void> loadFromPreferences() async {
-    // No-op for mock
+  Future<void> loadConfiguration() async {
+    // Match the new method name
+    // No-op for mock during load, state is set in constructor
   }
 
   @override
@@ -176,20 +181,9 @@ void main() {
         direction: anyNamed('direction'),
         pageSize: anyNamed('pageSize'),
         pageToken: anyNamed('pageToken'),
-        // Remove deprecated parameters
-        // tags: anyNamed('tags'),
-        // visibility: anyNamed('visibility'),
-        // contentSearch: anyNamed('contentSearch'),
-        // createdAfter: anyNamed('createdAfter'),
-        // createdBefore: anyNamed('createdBefore'),
-        // updatedAfter: anyNamed('updatedAfter'),
-        // updatedBefore: anyNamed('updatedBefore'),
-        // timeExpression: anyNamed('timeExpression'),
-        // useUpdateTimeForExpression: anyNamed('useUpdateTimeForExpression'),
       ),
     ).thenAnswer(
       (_) async => PaginatedMemoResponse(
-        // Use the imported type
         memos: dummyMemos,
         nextPageToken: null, // No more pages available
       ),
@@ -218,8 +212,9 @@ void main() {
           (ref) => MockMemosNotifier(ref, initialMemoState),
         ),
         // Override multi-server config provider with an instance of the mock notifier
+        // Pass the ref to the mock constructor
         multiServerConfigProvider.overrideWith(
-          (ref) => MockMultiServerConfigNotifier(initialMultiServerState),
+          (ref) => MockMultiServerConfigNotifier(ref, initialMultiServerState),
         ),
         // Override active server config (derived from multiServerConfigProvider)
         // No need to override activeServerConfigProvider directly if multiServerConfigProvider is mocked correctly
@@ -313,12 +308,8 @@ void main() {
     expect(find.text('All'), findsWidgets); // Segment label
 
     // Verify Memo List Items (now within MemosBody)
-    // Verify Memo List Items (now within MemosBody)
     // Check if MemosBody exists, which contains the list
     expect(find.byType(MemosBody), findsOneWidget);
-    // We can still check for MemoListItem *within* MemosBody if needed,
-    // but verifying MemosBody itself is often sufficient at this level.
-    // expect(find.byType(MemoListItem), findsNWidgets(dummyMemos.length));
 
     // Verify multi-select actions are NOT present
     expect(
@@ -330,7 +321,7 @@ void main() {
     // Verify standard trailing buttons ARE present within the NavBar (using the existing navBarFinder)
     expect(
       find.descendant(
-        of: navBarFinder, // Use the navBarFinder defined earlier in the test
+        of: navBarFinder,
         matching: find.widgetWithIcon(
           CupertinoButton,
           CupertinoIcons.checkmark_seal,
@@ -341,7 +332,7 @@ void main() {
     );
     expect(
       find.descendant(
-        of: navBarFinder, // Use the navBarFinder defined earlier in the test
+        of: navBarFinder,
         matching: find.widgetWithIcon(
           CupertinoButton,
           CupertinoIcons.tuningfork,
@@ -352,7 +343,7 @@ void main() {
     );
     expect(
       find.descendant(
-        of: navBarFinder, // Use the navBarFinder defined earlier in the test
+        of: navBarFinder,
         matching: find.widgetWithIcon(CupertinoButton, CupertinoIcons.add),
       ),
       findsOneWidget,
@@ -415,42 +406,42 @@ void main() {
       find.widgetWithIcon(
         CupertinoButton,
         CupertinoIcons.clear,
-      ), // Cancel button
+      ),
       findsOneWidget,
     );
-    expect(find.text('0 Selected'), findsOneWidget); // Title
+    expect(find.text('0 Selected'), findsOneWidget);
     expect(
       find.widgetWithIcon(
         CupertinoButton,
         CupertinoIcons.delete,
-      ), // Delete action
+      ),
       findsOneWidget,
     );
     expect(
       find.widgetWithIcon(
         CupertinoButton,
         CupertinoIcons.archivebox,
-      ), // Archive action
+      ),
       findsOneWidget,
     );
     // Verify standard title and trailing buttons are gone
-    expect(find.text('Inbox'), findsNothing); // Original title
+    expect(find.text('Inbox'), findsNothing);
     expect(
       find.widgetWithIcon(
         CupertinoButton,
         CupertinoIcons.checkmark_seal,
-      ), // Select button
+      ),
       findsNothing,
     );
     expect(
       find.widgetWithIcon(
         CupertinoButton,
         CupertinoIcons.tuningfork,
-      ), // Advanced filter button
+      ),
       findsNothing,
     );
     expect(
-      find.widgetWithIcon(CupertinoButton, CupertinoIcons.add), // Add button
+      find.widgetWithIcon(CupertinoButton, CupertinoIcons.add),
       findsNothing,
     );
     // Verify Search Bar and Filter Control are hidden
@@ -504,7 +495,7 @@ void main() {
       container.read(ui_providers.selectedMemoIdsForMultiSelectProvider).length,
       1,
     );
-    expect(find.text('1 Selected'), findsOneWidget); // Title updates
+    expect(find.text('1 Selected'), findsOneWidget);
 
     // Act: Tap the first checkbox again
     await tester.tap(firstCheckboxFinder);
@@ -515,7 +506,7 @@ void main() {
       container.read(ui_providers.selectedMemoIdsForMultiSelectProvider),
       isEmpty,
     );
-    expect(find.text('0 Selected'), findsOneWidget); // Title updates
+    expect(find.text('0 Selected'), findsOneWidget);
   });
 
   // Test 4: Exit Multi-Select Mode
@@ -556,49 +547,42 @@ void main() {
     expect(container.read(ui_providers.memoMultiSelectModeProvider), isFalse);
     expect(
       container.read(ui_providers.selectedMemoIdsForMultiSelectProvider),
-      isEmpty, // Selection cleared
+      isEmpty,
     );
 
     // Verify NavigationBar reverts - Use the existing navBarFinder
     expect(
       find.descendant(
         of: navBarFinder,
-        matching: find.text('Inbox'), // Find title within NavBar
+        matching: find.text('Inbox'),
       ),
       findsOneWidget,
       reason: 'Title should revert to preset label',
     );
     expect(
       find.descendant(
-        // Check within NavBar
         of: navBarFinder,
         matching: find.widgetWithIcon(
           CupertinoButton,
           CupertinoIcons.checkmark_seal,
         ),
-      ), // Select button back
+      ),
       findsOneWidget,
     );
     expect(
       find.descendant(
-        // Check within NavBar
         of: navBarFinder,
-        matching: find.widgetWithIcon(CupertinoButton, CupertinoIcons.clear,
-        ),
-      ), // Cancel button gone
+        matching: find.widgetWithIcon(CupertinoButton, CupertinoIcons.clear),
+      ),
       findsNothing,
     );
     expect(
       find.descendant(
-        // Check within NavBar
         of: navBarFinder,
         matching: find.textContaining('Selected'),
       ),
       findsNothing,
-    ); // Multi-select title gone
-
-    // Verify Search Bar and Filter Control are visible again
-    expect(find.byType(CupertinoSearchTextField), findsOneWidget);
+    );
 
     // Verify Search Bar and Filter Control are visible again
     expect(find.byType(CupertinoSearchTextField), findsOneWidget);
@@ -640,17 +624,17 @@ void main() {
     expect(
       find.textContaining('Mock Server 1'),
       findsOneWidget,
-    ); // Initial server
+    );
 
     await tester.tap(serverSwitcherButtonFinder);
-    await tester.pumpAndSettle(); // Allow action sheet animation
+    await tester.pumpAndSettle();
 
     // Assert: Action sheet appears
     expect(find.byType(CupertinoActionSheet), findsOneWidget);
-    expect(find.text('Switch Active Server'), findsOneWidget); // Title
-    expect(find.text('Mock Server 1'), findsWidgets); // Option 1
-    expect(find.text('Mock Server 2'), findsWidgets); // Option 2
-    expect(find.text('Cancel'), findsOneWidget); // Cancel button
+    expect(find.text('Switch Active Server'), findsOneWidget);
+    expect(find.text('Mock Server 1'), findsWidgets);
+    expect(find.text('Mock Server 2'), findsWidgets);
+    expect(find.text('Cancel'), findsOneWidget);
   });
 
   // Test 6: Quick Filter Control Interaction
@@ -662,23 +646,20 @@ void main() {
       buildTestableWidget(const MemosScreen(), container),
     );
     await tester.pumpAndSettle();
-    expect(container.read(quickFilterPresetProvider), 'inbox'); // Initial state
+    expect(container.read(quickFilterPresetProvider), 'inbox');
 
     // Verify Initial Title specifically within NavBar
-    final navBarFinder = find.byType(
-      CupertinoNavigationBar,
-    ); // Define navBarFinder here
+    final navBarFinder = find.byType(CupertinoNavigationBar);
     expect(
       find.descendant(
         of: navBarFinder,
-        matching: find.text('Inbox'), // Find title within NavBar
+        matching: find.text('Inbox'),
       ),
       findsOneWidget,
       reason: 'Initial title should be Inbox',
     );
 
-    // Act: Tap the 'Today' segment
-    // Finding specific segments can be tricky. We'll find the text within the control.
+    // Act: Tap the \'Today\' segment
     final todaySegmentFinder = find.descendant(
       of: find.byType(CupertinoSlidingSegmentedControl<String>),
       matching: find.text('Today'),
@@ -689,17 +670,15 @@ void main() {
 
     // Assert: Provider updated and title changed
     expect(container.read(quickFilterPresetProvider), 'today');
-    // Verify Title specifically within NavBar
     expect(
       find.descendant(
-        of: navBarFinder, // Use the same finder from above
-        matching: find.text('Today'), // Find title within NavBar
+        of: navBarFinder, matching: find.text('Today'),
       ),
       findsOneWidget,
       reason: 'Title should update to Today',
     );
 
-    // Act: Tap the 'All' segment
+    // Act: Tap the \'All\' segment
     final allSegmentFinder = find.descendant(
       of: find.byType(CupertinoSlidingSegmentedControl<String>),
       matching: find.text('All'),
@@ -710,11 +689,9 @@ void main() {
 
     // Assert: Provider updated and title changed
     expect(container.read(quickFilterPresetProvider), 'all');
-    // Verify Title specifically within NavBar
     expect(
       find.descendant(
-        of: navBarFinder, // Use the same finder from above
-        matching: find.text('All'), // Find title within NavBar
+        of: navBarFinder, matching: find.text('All'),
       ),
       findsOneWidget,
       reason: 'Title should update to All',
@@ -739,11 +716,10 @@ void main() {
     );
     expect(advancedFilterButtonFinder, findsOneWidget);
     await tester.tap(advancedFilterButtonFinder);
-    await tester.pumpAndSettle(); // Allow modal animation
+    await tester.pumpAndSettle();
 
     // Assert: AdvancedFilterPanel is displayed
-    // Finding modal popups can require looking for content within them.
     expect(find.byType(AdvancedFilterPanel), findsOneWidget);
-    expect(find.text('Advanced Filter'), findsOneWidget); // Panel title
+    expect(find.text('Advanced Filter'), findsOneWidget);
   });
 }

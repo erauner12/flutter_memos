@@ -167,6 +167,22 @@ class MultiServerConfigNotifier extends StateNotifier<MultiServerConfigState> {
                 ? newDefaultId
                 : null;
 
+        // Check if the old default ID (read from prefs earlier) is now invalid
+        final oldDefaultIdFromPrefs = prefs.getString(
+          'defaultServerId',
+        ); // Re-read or use value read at start
+        if (oldDefaultIdFromPrefs != null &&
+            !cloudServers.any((s) => s.id == oldDefaultIdFromPrefs)) {
+          if (kDebugMode) {
+            print(
+              '[MultiServerConfigNotifier] Old default server ID $oldDefaultIdFromPrefs is no longer valid after CloudKit sync. Clearing from prefs.',
+            );
+          }
+          await prefs.remove(
+            'defaultServerId',
+          ); // Remove the invalid default ID
+        }
+
         String? newActiveId = effectiveNewDefaultId;
         if (newActiveId == null && cloudServers.isNotEmpty) {
           newActiveId = cloudServers.first.id;
