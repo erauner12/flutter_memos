@@ -7,6 +7,7 @@ import 'package:flutter/material.dart'
     show ThemeMode; // Keep Material import ONLY for ThemeMode enum
 import 'package:flutter_localizations/flutter_localizations.dart'; // Import localizations
 import 'package:flutter_memos/providers/server_config_provider.dart';
+import 'package:flutter_memos/providers/settings_provider.dart'; // Import settings providers
 import 'package:flutter_memos/providers/theme_provider.dart';
 import 'package:flutter_memos/providers/ui_providers.dart'; // Import for UI providers including highlightedCommentIdProvider
 import 'package:flutter_memos/screens/edit_memo/edit_memo_screen.dart';
@@ -18,6 +19,8 @@ import 'package:flutter_memos/utils/keyboard_shortcuts.dart'; // Import keyboard
 import 'package:flutter_memos/utils/provider_logger.dart';
 import 'package:flutter_memos/widgets/config_check_wrapper.dart'; // Import the new wrapper
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+// Add import for shared_preferences
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   runApp(
@@ -49,6 +52,8 @@ class _MyAppState extends ConsumerState<MyApp> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadInitialTheme();
       _loadServerConfig();
+      _loadMcpServerConfig(); // Call the new loading method
+      _initializePersistentNotifiers(); // Call method to initialize string notifiers
       // Replace uni_links initialization
       // _initUniLinks();
       // Initialize app_links handling
@@ -103,10 +108,59 @@ class _MyAppState extends ConsumerState<MyApp> {
       });
     }
   }
-  
 
+  // Add method to load MCP server config
+  void _loadMcpServerConfig() async {
+    // Make async
+    // Get SharedPreferences instance here
+    final prefs = await SharedPreferences.getInstance();
+    // Use the settings service provider to load the list
+    // Pass the prefs instance
+    ref
+        .read(settingsServiceProvider)
+        .loadMcpServerList(prefs) // Pass prefs here
+        .then((_) {
+          if (kDebugMode) {
+            print(
+              '[MyApp] MCP server configuration loaded via SettingsService.',
+            );
+          }
+        })
+        .catchError((e) {
+          if (kDebugMode) {
+            print('[MyApp] Error loading MCP server configuration: $e');
+          }
+          // Handle error if necessary
+        });
+  }
 
-  // Initialize deep link handling using app_links
+// New method to initialize all PersistentStringNotifiers
+  void _initializePersistentNotifiers() {
+    // Use Future.wait to initialize them concurrently, but wait for all
+    // This ensures they are ready before the UI might need them or try to save.
+    // Explicitly type the list as List<Future<void>>
+    Future.wait<void>([
+          ref.read(todoistApiKeyProvider.notifier).init(),
+          ref.read(openAiApiKeyProvider.notifier).init(),
+          ref.read(openAiModelIdProvider.notifier).init(),
+          ref.read(geminiApiKeyProvider.notifier).init(),
+        ])
+        .then((_) {
+          if (kDebugMode) {
+            print('[MyApp] All PersistentStringNotifiers initialized.');
+          }
+          // Optionally, trigger a rebuild or update a flag if needed,
+          // but often just having the providers updated is sufficient.
+        })
+        .catchError((e) {
+          if (kDebugMode) {
+            print('[MyApp] Error initializing PersistentStringNotifiers: $e');
+          }
+          // Handle initialization error if necessary
+        });
+  }
+
+// Initialize deep link handling using app_links
   Future<void> _initAppLinks() async {
     _appLinks = AppLinks(); // Initialize AppLinks
   
@@ -368,9 +422,7 @@ class _MyAppState extends ConsumerState<MyApp> {
                 routes: {
                   // Define explicit routes needed for navigation
                   // '/' route is implicitly handled by 'home' now.
-                  '/home':
-                      (context) =>
-                          const HomeScreen(),
+                  '/home': (context) => const HomeScreen(),
                   '/memos': (context) => const MemosScreen(),
                   '/new-memo':
                       (context) => const NewMemoScreen(), // Add this route
@@ -396,8 +448,7 @@ class _MyAppState extends ConsumerState<MyApp> {
                     );
                   } else if (settings.name == '/edit-entity') {
                     final args = settings.arguments as Map<String, dynamic>;
-                    final entityType =
-                        args['entityType'] as String? ?? 'memo';
+                    final entityType = args['entityType'] as String? ?? 'memo';
                     final entityId = args['entityId'] as String;
 
                     return CupertinoPageRoute(
@@ -422,12 +473,12 @@ class _MyAppState extends ConsumerState<MyApp> {
                         builder:
                             (context) => ProviderScope(
                               overrides: [
-                            highlightedCommentIdProvider.overrideWith(
-                              (ref) => commentIdToHighlight,
+                                highlightedCommentIdProvider.overrideWith(
+                                  (ref) => commentIdToHighlight,
+                                ),
+                              ],
+                              child: MemoDetailScreen(memoId: memoId),
                             ),
-                          ],
-                          child: MemoDetailScreen(memoId: memoId),
-                        ),
                         settings: settings, // Pass settings
                       );
                     }

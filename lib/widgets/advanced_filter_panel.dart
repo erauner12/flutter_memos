@@ -80,9 +80,9 @@ class _AdvancedFilterPanelState extends ConsumerState<AdvancedFilterPanel> {
       if (currentFilter.contains('visibility ==') ||
           currentFilter.contains('visibility in')) {
         _useVisibilityFilter = true;
-        if (currentFilter.contains('"PUBLIC"'))
+        if (currentFilter.contains('"PUBLIC"')) {
           _selectedVisibility = 'PUBLIC';
-        else if (currentFilter.contains('"PROTECTED"'))
+        } else if (currentFilter.contains('"PROTECTED"'))
           _selectedVisibility = 'PROTECTED';
         else if (currentFilter.contains('"PRIVATE"'))
           _selectedVisibility = 'PRIVATE';

@@ -92,16 +92,21 @@ final filterKeyProvider = StateProvider<String>(
   final presetKey = ref.watch(quickFilterPresetProvider);
   // Map preset keys to legacy filter keys if needed, otherwise return preset key
   // This mapping might need adjustment based on how MemosNotifier uses filterKey
-  if (presetKey == 'inbox')
+  if (presetKey == 'inbox') {
     return 'inbox'; // Assuming 'inbox' preset maps to 'inbox' key
-  if (presetKey == 'all')
+  }
+  if (presetKey == 'all') {
     return 'all'; // Assuming 'all' preset maps to 'all' key
-  if (presetKey == 'tagged')
+  }
+  if (presetKey == 'tagged') {
     return 'all'; // Example: Maybe 'tagged' should show 'all' states? Adjust as needed.
-  if (presetKey == 'today')
+  }
+  if (presetKey == 'today') {
     return 'all'; // Example: Maybe 'today' should show 'all' states? Adjust as needed.
-  if (presetKey == 'custom')
+  }
+  if (presetKey == 'custom') {
     return 'all'; // Custom filter likely applies to 'all' states
+  }
 
   // Fallback if presetKey doesn't match known legacy keys
   return presetKey;

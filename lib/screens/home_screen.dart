@@ -3,6 +3,8 @@ import 'package:flutter_memos/screens/memos/memos_screen.dart';
 import 'package:flutter_memos/screens/settings_screen.dart'; // Ensure this import is correct
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'chat_screen.dart';
+
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
@@ -18,6 +20,11 @@ class HomeScreen extends ConsumerWidget {
             icon: Icon(CupertinoIcons.home),
             label: 'Memos',
           ),
+          // Add the new Chat tab item
+          BottomNavigationBarItem(
+            icon: Icon(CupertinoIcons.chat_bubble),
+            label: 'Chat',
+          ),
           BottomNavigationBarItem(
             icon: Icon(CupertinoIcons.settings),
             label: 'Settings',
@@ -29,21 +36,31 @@ class HomeScreen extends ConsumerWidget {
           case 0:
             return CupertinoTabView(
               builder: (context) {
+                // MemosScreen likely needs its own Scaffold/NavBar if it manages its own title etc.
+                // Keep this structure for MemosScreen for now.
                 return const CupertinoPageScaffold(child: MemosScreen());
               },
             );
-          case 1:
+          case 1: // New index for Chat tab
             return CupertinoTabView(
               builder: (context) {
-                return const CupertinoPageScaffold(
-                  navigationBar: CupertinoNavigationBar(
-                    middle: Text('Settings'),
-                  ),
-                  child: SettingsScreen(isInitialSetup: false),
-                );
+                // Directly return ChatScreen within its own tab view context
+                return const ChatScreen();
+              },
+            );
+          case 2: // Updated index for Settings tab
+            // Simplify the Settings tab - remove nested Scaffold/NavBar
+            return CupertinoTabView(
+              builder: (context) {
+                // Directly return SettingsScreen. The CupertinoTabScaffold
+                // will provide the main navigation context if needed,
+                // or SettingsScreen can be designed to fit within the tab
+                // without its own specific NavBar.
+                return const SettingsScreen(isInitialSetup: false);
               },
             );
           default:
+            // Should not happen with 2 tabs, but good practice
             return const SizedBox.shrink();
         }
       },

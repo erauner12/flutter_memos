@@ -7,6 +7,8 @@ import 'package:flutter_cloud_kit/types/cloud_ket_record.dart'; // Keep this imp
 import 'package:flutter_cloud_kit/types/cloud_kit_account_status.dart';
 import 'package:flutter_cloud_kit/types/database_scope.dart';
 import 'package:flutter_memos/models/server_config.dart';
+// Import the synchronized package
+import 'package:synchronized/synchronized.dart';
 
 /// Service to interact with CloudKit for syncing data.
 class CloudKitService {
@@ -22,6 +24,8 @@ class CloudKitService {
   static const String _userSettingsRecordName = 'user_settings_singleton';
 
   final FlutterCloudKit _cloudKit;
+  // Add a lock specifically for the user settings singleton record operations
+  final _settingsLock = Lock();
 
   CloudKitService() : _cloudKit = FlutterCloudKit(containerId: _containerId);
 
@@ -156,7 +160,6 @@ class CloudKitService {
       // Remove unnecessary nullable type annotation '?'
       final CloudKitRecord ckRecord = await _cloudKit.getRecord(
         // Use correct class name CloudKitRecord
-        // Changed CloudKitRecord to CloudKetRecord
         scope: CloudKitDatabaseScope.private, // Use CloudKitDatabaseScope enum
         recordName: id,
       );
@@ -212,7 +215,6 @@ class CloudKitService {
       // getRecordsByType returns List<CloudKitRecord> (due to dependency typo in filename, but correct class name)
       final List<CloudKitRecord> ckRecords = await _cloudKit.getRecordsByType(
         // Use correct class name CloudKitRecord
-        // Changed CloudKitRecord to CloudKetRecord
         scope: CloudKitDatabaseScope.private, // Use CloudKitDatabaseScope enum
         recordType: _serverConfigRecordType,
       );
@@ -223,7 +225,6 @@ class CloudKitService {
         // Add detailed logging for each record
         for (final CloudKitRecord ckRecord in ckRecords) {
           // Use correct class name CloudKitRecord
-          // Changed CloudKitRecord to CloudKetRecord
           print(
             '[CloudKitService][Raw Record] recordName: ${ckRecord.recordName}, values: ${ckRecord.values}',
           );
@@ -249,68 +250,117 @@ class CloudKitService {
 
   /// Save or update a specific setting in the UserSettings record.
   Future<bool> saveSetting(String keyName, String value) async {
-    try {
-      // Fetch existing settings or start with an empty map
-      final CloudKitRecord? ckRecord =
-          // Use correct class name CloudKitRecord
-          await _fetchUserSettingsRecord(); // Changed CloudKitRecord to CloudKetRecord
-      // Ensure the map is mutable and correctly typed
-      // Use null-aware operator '?.' to access values only if ckRecord is not null
-      final Map<String, String> currentSettings =
-          ckRecord?.values.map((key, val) => MapEntry(key, val.toString())) ??
-          {}; // Ensure string map and handle null
+    // Wrap the entire operation in a synchronized block to prevent race conditions
+    // when multiple settings are saved concurrently for the same singleton record.
+    return _settingsLock.synchronized(() async {
+      CloudKitRecord? ckRecord; // Use correct class name CloudKitRecord
+      try {
+        // 1. Fetch existing settings record
+        ckRecord =
+            await _fetchUserSettingsRecord(); // Changed CloudKitRecord to CloudKetRecord
 
-      // Update the specific setting
-      currentSettings[keyName] = value;
+        // 2. Prepare the data map for saving
+        Map<String, String> dataToSave;
+        if (ckRecord != null) {
+          // Record exists: Create a mutable copy and update the key
+          dataToSave = Map<String, String>.from(
+            ckRecord.values.map((key, val) => MapEntry(key, val.toString())),
+          );
+          dataToSave[keyName] = value; // Add or update the specific key
+        } else {
+          // Record doesn't exist: Create a new map with only the current key/value
+          dataToSave = {keyName: value};
+        }
 
-      if (kDebugMode) {
-        // Be cautious logging sensitive values like API keys
-        print(
-          '[CloudKitService] Saving UserSettings with updated key "$keyName". Current keys: ${currentSettings.keys.join(', ')}',
+        if (kDebugMode) {
+          print(
+            '[CloudKitService] Preparing to save UserSettings with key "$keyName". Merged Data: $dataToSave',
+          );
+        }
+
+        // 3. *** If record exists, attempt to delete it first ***
+        // This delete-before-save strategy is needed because CloudKit's saveRecord
+        // might not perform an upsert reliably in all scenarios, especially with potential
+        // sync conflicts or delays. Deleting first ensures the subsequent save is an insert.
+        if (ckRecord != null) {
+          try {
+            if (kDebugMode) {
+              print(
+                '[CloudKitService] Deleting existing UserSettings record before saving...',
+              );
+            }
+            await _cloudKit.deleteRecord(
+              scope: CloudKitDatabaseScope.private,
+              recordName: _userSettingsRecordName,
+            );
+            if (kDebugMode) {
+              print(
+                '[CloudKitService] Successfully deleted existing UserSettings record.',
+              );
+            }
+          } catch (deleteError) {
+            // Log the deletion error but proceed to save anyway.
+            // The save might still succeed, or it might fail with the known error.
+            // If the delete failed because the record was already deleted by another concurrent operation,
+            // the subsequent save should succeed.
+            if (kDebugMode) {
+              print(
+                '[CloudKitService] Error deleting existing UserSettings record (proceeding to save): $deleteError',
+              );
+            }
+          }
+        }
+
+        // 4. Save the record (now attempting an insert)
+        if (kDebugMode) {
+          print(
+            '[CloudKitService] Saving UserSettings record (attempting insert)...',
+          );
+        }
+        await _cloudKit.saveRecord(
+          scope: CloudKitDatabaseScope.private,
+          recordType: _userSettingsRecordType,
+          recordName: _userSettingsRecordName, // Use fixed name
+          record: dataToSave, // Save the potentially merged map
         );
-      }
 
-      // Save the entire updated map back to the singleton record
-      await _cloudKit.saveRecord(
-        scope: CloudKitDatabaseScope.private,
-        recordType: _userSettingsRecordType,
-        recordName: _userSettingsRecordName, // Use fixed name
-        record: currentSettings, // Save the full map
-      );
-
-      if (kDebugMode) {
-        print('[CloudKitService] Saved UserSettings successfully.');
+        if (kDebugMode) {
+          print('[CloudKitService] Saved UserSettings successfully.');
+        }
+        return true;
+      } catch (e) {
+        if (kDebugMode) {
+          print(
+            '[CloudKitService] Error saving UserSettings for key "$keyName" (within synchronized block): $e',
+          );
+        }
+        return false;
       }
-      return true;
-    } catch (e) {
-      if (kDebugMode) {
-        print(
-          '[CloudKitService] Error saving UserSettings for key "$keyName": $e',
-        );
-      }
-      return false;
-    }
+    }); // End of synchronized block
   }
 
   /// Delete a ServerConfig from CloudKit by its ID.
   Future<bool> deleteServerConfig(String id) async {
+    // Add the function body here
     try {
       if (kDebugMode) {
-        print('[CloudKitService] Deleting ServerConfig (ID: $id) from CloudKit...');
+        print(
+          '[CloudKitService] Deleting ServerConfig (ID: $id) from CloudKit...',
+        );
       }
       await _cloudKit.deleteRecord(
-        scope: CloudKitDatabaseScope.private, // Use CloudKitDatabaseScope
+        scope: CloudKitDatabaseScope.private, // Use CloudKitDatabaseScope enum
         recordName: id,
       );
       if (kDebugMode) {
         print('[CloudKitService] Deleted ServerConfig (ID: $id) successfully.');
       }
-      return true;
+      return true; // Return true on success
     } catch (e) {
       if (kDebugMode) {
         print('[CloudKitService] Error deleting ServerConfig (ID: $id): $e');
       }
-      return false;
+      return false; // Return false on error
     }
-  }
-}
+  } // Ensure this closing brace is present
+} // Closing brace for the CloudKitService class

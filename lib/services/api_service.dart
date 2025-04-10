@@ -395,10 +395,11 @@ class ApiService {
     try {
       final memoApi = _getMemoApiForServer(targetServerOverride); // Use helper
       final formattedId = _formatResourceName(id, 'memos');
-      if (verboseLogging)
+      if (verboseLogging) {
         print(
           '[API getMemo] Getting memo $formattedId from server $serverIdForLog',
         );
+      }
 
       final apiMemo = await memoApi.memoServiceGetMemo(formattedId);
 
@@ -482,10 +483,11 @@ class ApiService {
     try {
       final memoApi = _getMemoApiForServer(targetServerOverride); // Use helper
       final formattedId = _formatResourceName(id, 'memos');
-      if (verboseLogging)
+      if (verboseLogging) {
         print(
           '[API updateMemo] Updating memo $formattedId on server $serverIdForLog',
         );
+      }
 
       // Use the createTime from the memo object passed in, which should be the original.
       final originalCreateTime = memo.createTime;
@@ -555,10 +557,11 @@ class ApiService {
     try {
       final memoApi = _getMemoApiForServer(targetServerOverride); // Use helper
       final formattedId = _formatResourceName(id, 'memos');
-      if (verboseLogging)
+      if (verboseLogging) {
         print(
           '[API deleteMemo] Deleting memo $formattedId from server $serverIdForLog',
         );
+      }
 
       final response = await memoApi.memoServiceDeleteMemoWithHttpInfo(
         formattedId,
@@ -566,10 +569,11 @@ class ApiService {
 
       // Check for success status codes
       if (response.statusCode >= 200 && response.statusCode < 300) {
-        if (verboseLogging)
+        if (verboseLogging) {
           print(
             '[API deleteMemo] Successfully deleted memo $id from server $serverIdForLog',
           );
+        }
         return;
       } else {
         // Handle error status codes
@@ -654,26 +658,29 @@ class ApiService {
     try {
       final memoApi = _getMemoApiForServer(targetServerOverride); // Use helper
       final formattedId = _formatResourceName(memoId, 'memos');
-      if (verboseLogging)
+      if (verboseLogging) {
         print(
           '[API listMemoComments] Listing comments for memo $formattedId from server $serverIdForLog',
         );
+      }
 
       final response = await memoApi.memoServiceListMemoComments(formattedId);
 
       if (response == null) {
-        if (verboseLogging)
+        if (verboseLogging) {
           print(
             '[API listMemoComments] No comments found for memo $memoId on server $serverIdForLog.',
           );
+        }
         return [];
       }
 
       final comments = _parseCommentsFromApiResponse(response);
-      if (verboseLogging)
+      if (verboseLogging) {
         print(
           '[API listMemoComments] Found ${comments.length} comments for memo $memoId on server $serverIdForLog.',
         );
+      }
       return comments;
     } catch (e) {
       print(

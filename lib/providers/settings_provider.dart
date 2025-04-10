@@ -1,4 +1,7 @@
+import 'dart:convert'; // For JSON encoding/decoding
+
 import 'package:flutter/foundation.dart';
+import 'package:flutter_memos/models/mcp_server_config.dart'; // Import the new model
 // Add Ref and CloudKitService imports
 import 'package:flutter_memos/providers/service_providers.dart';
 import 'package:flutter_memos/services/cloud_kit_service.dart';
@@ -13,14 +16,18 @@ class PreferenceKeys {
   static const String openAiApiKey = 'openai_api_key'; // Added OpenAI key
   static const String openAiModelId = 'openai_model_id'; // Add this key
   // Add other preference keys as needed
+
+  // New keys for Gemini and MCP
+  static const String geminiApiKey = 'gemini_api_key';
+  static const String mcpServerListKey =
+      'mcp_server_list'; // Added MCP list key
 }
 
 /// Provider for the Todoist API key with persistence using SharedPreferences
 final todoistApiKeyProvider =
     StateNotifierProvider<PersistentStringNotifier, String>(
       (ref) => PersistentStringNotifier(
-        // Pass ref
-        ref, // Pass ref
+        ref,
         '', // default empty value
         PreferenceKeys.todoistApiKey, // storage key
       ),
@@ -31,8 +38,7 @@ final todoistApiKeyProvider =
 final openAiApiKeyProvider =
     StateNotifierProvider<PersistentStringNotifier, String>(
       (ref) => PersistentStringNotifier(
-        // Pass ref
-        ref, // Pass ref
+        ref,
         '', // default empty value
         PreferenceKeys.openAiApiKey, // storage key for OpenAI
       ),
@@ -50,6 +56,25 @@ final openAiModelIdProvider =
       name: 'openAiModelIdProvider', // Provider name
     );
 
+// --- Start Gemini ---
+/// Provider for the Gemini API key with persistence
+final geminiApiKeyProvider =
+    StateNotifierProvider<PersistentStringNotifier, String>(
+      (ref) => PersistentStringNotifier(
+        ref,
+        '', // default empty value
+        PreferenceKeys.geminiApiKey, // storage key for Gemini
+      ),
+      name: 'geminiApiKeyProvider', // Provider name
+    );
+// --- End Gemini ---
+
+// --- Start MCP ---
+/// Provider holding the list of configured MCP servers.
+/// This list is loaded from SharedPreferences at startup (in main.dart)
+/// and saved back by the SettingsService.
+final mcpServerListProvider = StateProvider<List<McpServerConfig>>((ref) => [], name: 'mcpServerListProvider');
+// --- End MCP ---
 
 /// A StateNotifier that persists string values to SharedPreferences
 class PersistentStringNotifier extends StateNotifier<String> {
@@ -106,8 +131,6 @@ class PersistentStringNotifier extends StateNotifier<String> {
           '[PersistentStringNotifier] Error reading $preferenceKey from Secure Storage: $e',
         );
       }
-      // Potentially clear corrupted value? For now, just log.
-      // await _secureStorage.delete(key: preferenceKey);
     }
 
     // 2. If not in Secure Storage, check old SharedPreferences key for migration
@@ -159,9 +182,7 @@ class PersistentStringNotifier extends StateNotifier<String> {
             key: preferenceKey,
             value: cloudValue,
           ); // Update cache
-          // If we updated from CloudKit, migration from prefs is no longer needed for *this* value
           migrationNeededFromPrefs = false;
-          // Clean up prefs if it existed, as CloudKit is now the source
           if (oldPrefsValue != null) {
             await prefs.remove(preferenceKey);
             if (kDebugMode) {
@@ -171,7 +192,6 @@ class PersistentStringNotifier extends StateNotifier<String> {
             }
           }
         } else if (cloudValue == null && state.isNotEmpty) {
-          // Value exists locally (from secure storage or migrated prefs) but not in CloudKit -> Upload local value
           if (kDebugMode) {
             print(
               '[PersistentStringNotifier] Value for $preferenceKey exists locally but not in CloudKit. Uploading...',
@@ -184,40 +204,34 @@ class PersistentStringNotifier extends StateNotifier<String> {
           if (uploadSuccess &&
               migrationNeededFromPrefs &&
               oldPrefsValue != null) {
-            // If upload succeeded AND we were migrating, clean up prefs
             await prefs.remove(preferenceKey);
             if (kDebugMode) {
               print(
                 '[PersistentStringNotifier] Migration cleanup complete for $preferenceKey after successful upload.',
               );
             }
-            migrationNeededFromPrefs = false; // Mark migration as done
+            migrationNeededFromPrefs = false;
           }
         } else if (cloudValue != null &&
             migrationNeededFromPrefs &&
             oldPrefsValue != null &&
             cloudValue == oldPrefsValue) {
-          // CloudKit matched the migrated value. Just clean up prefs.
           await prefs.remove(preferenceKey);
           if (kDebugMode) {
             print(
               '[PersistentStringNotifier] CloudKit matched migrated value. Cleaned up SharedPreferences for $preferenceKey.',
             );
           }
-          migrationNeededFromPrefs = false; // Mark migration as done
+          migrationNeededFromPrefs = false;
         }
 
-        // Handle remaining migration case: If migration was needed but CloudKit check didn't resolve it
-        // (e.g., CloudKit failed, or CloudKit had no value and local state was empty)
         if (migrationNeededFromPrefs && oldPrefsValue != null) {
           if (kDebugMode) {
             print(
               '[PersistentStringNotifier] Performing migration cleanup for $preferenceKey (post-CloudKit check)...',
             );
           }
-          // Ensure value is in Secure Storage (might be redundant but safe)
           await _secureStorage.write(key: preferenceKey, value: oldPrefsValue);
-          // Remove from SharedPreferences
           await prefs.remove(preferenceKey);
           if (kDebugMode) {
             print(
@@ -232,7 +246,6 @@ class PersistentStringNotifier extends StateNotifier<String> {
             '[PersistentStringNotifier] Error during async CloudKit check for $preferenceKey: $e',
           );
         }
-        // Continue with cached value. If migration was needed, it will be retried on next launch.
       }
     } else {
       if (kDebugMode && _initialized) {
@@ -248,9 +261,7 @@ class PersistentStringNotifier extends StateNotifier<String> {
     }
   }
 
-
   Future<bool> set(String value) async {
-    // Initialization check - wait briefly if needed
     if (!_initialized) {
       if (kDebugMode) {
         print(
@@ -259,7 +270,6 @@ class PersistentStringNotifier extends StateNotifier<String> {
       }
       int attempts = 0;
       while (!_initialized && attempts < 10) {
-        // Increased wait time slightly
         await Future.delayed(const Duration(milliseconds: 100));
         attempts++;
       }
@@ -278,15 +288,8 @@ class PersistentStringNotifier extends StateNotifier<String> {
       }
     }
 
-    // --- Start Change ---
-    // Remove unused variables
-    // bool localStateUpdated = false;
-    // bool secureStorageUpdated = false;
-
-    // 1. Update local state (if changed and mounted)
     if (mounted && state != value) {
       state = value;
-      // localStateUpdated = true; // Removed
       if (kDebugMode) {
         print(
           '[PersistentStringNotifier] Updated local state for $preferenceKey.',
@@ -297,16 +300,13 @@ class PersistentStringNotifier extends StateNotifier<String> {
         '[PersistentStringNotifier] Warning: Attempted to set state on unmounted notifier for $preferenceKey',
       );
     } else if (mounted && state == value && kDebugMode) {
-      // Log if state didn't change, but still proceed to ensure storage consistency
       print(
         '[PersistentStringNotifier] Local state for $preferenceKey already matches. Ensuring storage consistency.',
       );
     }
 
-    // 2. Write to Secure Storage (PRIORITY)
     try {
       await _secureStorage.write(key: preferenceKey, value: value);
-      // secureStorageUpdated = true; // Removed
       if (kDebugMode) {
         print(
           '[PersistentStringNotifier] Updated Secure Storage for $preferenceKey.',
@@ -318,11 +318,9 @@ class PersistentStringNotifier extends StateNotifier<String> {
           '[PersistentStringNotifier] Error writing $preferenceKey to Secure Storage: $e',
         );
       }
-      // If secure storage fails, we should return false and not attempt CloudKit sync.
       return false;
     }
 
-    // 3. Attempt to save to CloudKit (AFTER successful local save)
     try {
       if (kDebugMode) {
         print(
@@ -345,7 +343,6 @@ class PersistentStringNotifier extends StateNotifier<String> {
             '[PersistentStringNotifier] Failed to sync value for $preferenceKey to CloudKit. Local value is saved.',
           );
         }
-        // Log failure, but local save succeeded, so return true.
       }
     } catch (e) {
       if (kDebugMode) {
@@ -353,12 +350,8 @@ class PersistentStringNotifier extends StateNotifier<String> {
           '[PersistentStringNotifier] Error syncing preference $preferenceKey to CloudKit: $e',
         );
       }
-      // Log failure, but local save succeeded, so return true.
     }
-
-    // Return true because local Secure Storage write was successful.
     return true;
-    // --- End Change ---
   }
 
   Future<bool> clear() async {
@@ -366,3 +359,156 @@ class PersistentStringNotifier extends StateNotifier<String> {
     return set('');
   }
 }
+
+// --- Settings Service ---
+
+/// Service class to interact with settings persistence (SharedPreferences, SecureStorage, CloudKit).
+/// Handles saving and loading various settings, including API keys and server lists.
+class SettingsService {
+  final Ref _ref;
+  SettingsService(this._ref);
+
+  // --- MCP List Methods ---
+
+  // Loads the list from storage and updates the provider. Should be called on startup.
+  Future<void> loadMcpServerList(SharedPreferences prefs) async {
+    try {
+      final serverListJson = prefs.getString(PreferenceKeys.mcpServerListKey);
+      if (serverListJson != null && serverListJson.isNotEmpty) {
+        final decodedList = jsonDecode(serverListJson) as List;
+        final servers =
+            decodedList
+                .map(
+                  (item) =>
+                      McpServerConfig.fromJson(item as Map<String, dynamic>),
+                )
+                .toList();
+        _ref.read(mcpServerListProvider.notifier).state = servers;
+        if (kDebugMode) {
+          print(
+            "[SettingsService] MCP Server list loaded. Count: \${servers.length}",
+          );
+        }
+      } else {
+        _ref.read(mcpServerListProvider.notifier).state = [];
+        if (kDebugMode) {
+          print("[SettingsService] No MCP Server list found in storage.");
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print("[SettingsService] Error loading/parsing MCP server list: $e");
+      }
+      _ref.read(mcpServerListProvider.notifier).state = [];
+    }
+  }
+
+  // Saves the entire list (including isActive states) to storage and updates the provider.
+  Future<void> saveMcpServerList(
+    SharedPreferences prefs,
+    List<McpServerConfig> servers,
+  ) async {
+    try {
+      final serverListJson = jsonEncode(
+        servers.map((s) => s.toJson()).toList(),
+      );
+      await prefs.setString(PreferenceKeys.mcpServerListKey, serverListJson);
+      _ref.read(mcpServerListProvider.notifier).state = servers;
+      if (kDebugMode) {
+        print(
+          "[SettingsService] MCP Server list saved. Count: \${servers.length}",
+        );
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print("[SettingsService] Error saving MCP server list: \$e");
+      }
+    }
+  }
+
+  // Method to toggle the isActive status of a specific server
+  Future<void> toggleMcpServerActive(String serverId, bool isActive) async {
+    final prefs = await SharedPreferences.getInstance();
+    final currentList = List<McpServerConfig>.from(
+      _ref.read(mcpServerListProvider),
+    );
+    final index = currentList.indexWhere((s) => s.id == serverId);
+    if (index != -1) {
+      currentList[index] = currentList[index].copyWith(isActive: isActive);
+      await saveMcpServerList(prefs, currentList);
+      if (kDebugMode) {
+        print(
+          "[SettingsService] Toggled MCP server '\$serverId' isActive to: \$isActive",
+        );
+      }
+    } else {
+      if (kDebugMode) {
+        print(
+          "[SettingsService] Error: Tried to toggle non-existent MCP server ID '\$serverId'.",
+        );
+      }
+    }
+  }
+
+  // --- Convenience methods for managing the MCP list ---
+  Future<bool> addMcpServer(McpServerConfig newServer) async {
+    final prefs = await SharedPreferences.getInstance();
+    final currentList = _ref.read(mcpServerListProvider);
+    // Ensure new servers added via UI start inactive unless explicitly set
+    final serverToAdd = newServer.copyWith(isActive: newServer.isActive);
+    await saveMcpServerList(prefs, [...currentList, serverToAdd]);
+    return true; // Indicate success
+  }
+
+  Future<bool> updateMcpServer(McpServerConfig updatedServer) async {
+    final prefs = await SharedPreferences.getInstance();
+    final currentList = _ref.read(mcpServerListProvider);
+    final index = currentList.indexWhere((s) => s.id == updatedServer.id);
+    if (index != -1) {
+      final newList = List<McpServerConfig>.from(currentList);
+      newList[index] = updatedServer;
+      await saveMcpServerList(prefs, newList);
+      return true; // Indicate success
+    } else {
+      if (kDebugMode) {
+        print(
+          "[SettingsService] Error: Tried to update non-existent MCP server ID '\${updatedServer.id}'.",
+        );
+      }
+      return false; // Indicate failure
+    }
+  }
+
+  Future<bool> deleteMcpServer(String serverId) async {
+    final prefs = await SharedPreferences.getInstance();
+    final currentList = _ref.read(mcpServerListProvider);
+    final newList = currentList.where((s) => s.id != serverId).toList();
+    if (newList.length < currentList.length) {
+      // Pass prefs and newList correctly
+      await saveMcpServerList(prefs, newList);
+      return true; // Indicate success
+    } else {
+      if (kDebugMode) {
+        print(
+          "[SettingsService] Error: Tried to delete non-existent MCP server ID '\$serverId'.",
+        );
+      }
+      return false; // Indicate failure (server not found)
+    }
+  }
+
+  // --- Other Settings Methods (Example: Show Code Blocks - if needed) ---
+  // Future<void> saveShowCodeBlocks(bool showCodeBlocks) async {
+  //   try {
+  //     await _prefs.setBool('showCodeBlocksKey', showCodeBlocks);
+  //     if (kDebugMode) print("[SettingsService] Show Code Blocks setting saved: \$showCodeBlocks");
+  //   } catch (e) {
+  //     if (kDebugMode) print("[SettingsService] Error saving Show Code Blocks setting: \$e");
+  //   }
+  // }
+}
+
+final settingsServiceProvider = Provider<SettingsService>((ref) {
+  final service = SettingsService(ref);
+  return service;
+});

@@ -1,10 +1,15 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
+// Import MCP related files
+import 'package:flutter_memos/models/mcp_server_config.dart';
 import 'package:flutter_memos/models/server_config.dart';
 import 'package:flutter_memos/providers/api_providers.dart';
 import 'package:flutter_memos/providers/server_config_provider.dart';
 import 'package:flutter_memos/providers/settings_provider.dart'; // Import settings provider
+import 'package:flutter_memos/screens/add_edit_mcp_server_screen.dart'; // Will be created next
 import 'package:flutter_memos/screens/add_edit_server_screen.dart';
+// Import MCP client provider (for status later)
+import 'package:flutter_memos/services/mcp_client_service.dart'; // Import the new service
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -31,6 +36,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   List<String> _availableModels = [];
   String? _modelLoadError;
 
+  // Gemini state
+  final _geminiApiKeyController = TextEditingController();
+
   @override
   void initState() {
     super.initState();
@@ -43,6 +51,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
         final initialOpenAiKey = ref.read(openAiApiKeyProvider);
         _openaiApiKeyController.text = initialOpenAiKey;
+
+        // Initialize Gemini controller
+        final initialGeminiKey = ref.read(geminiApiKeyProvider);
+        _geminiApiKeyController.text = initialGeminiKey;
       }
       // Fetch models after initial setup
       _fetchModels();
@@ -53,6 +65,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   void dispose() {
     _todoistApiKeyController.dispose();
     _openaiApiKeyController.dispose(); // Dispose the new controller
+    _geminiApiKeyController.dispose(); // Dispose Gemini controller
     super.dispose();
   }
 
@@ -77,7 +90,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       return;
     }
     // Ensure service is configured with the latest key before fetching
-    // This might be slightly redundant if the provider already configured it, but safer.
     openaiService.configureService(authToken: apiKey);
 
     try {
@@ -143,12 +155,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         );
       }
     } catch (e) {
-      if (kDebugMode)
+      if (kDebugMode) {
         print("[SettingsScreen] Test Memos Connection Error: \$e");
+      }
       if (mounted) {
         _showResultDialog(
           'Connection Failed',
-          'Could not connect to Memos server "${activeConfig.name ?? activeConfig.serverUrl}".\n\nError: \${e.toString()}',
+          'Could not connect to Memos server "${activeConfig.name ?? activeConfig.serverUrl}".\n\nError: ${e.toString()}',
           isError: true,
         );
       }
@@ -202,7 +215,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       if (mounted) {
         _showResultDialog(
           'Error',
-          'An error occurred while testing the Todoist connection:\n\${e.toString()}',
+          'An error occurred while testing the Todoist connection:\n${e.toString()}',
           isError: true,
         );
       }
@@ -256,7 +269,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       if (mounted) {
         _showResultDialog(
           'Error',
-          'An error occurred while testing the OpenAI connection:\n\${e.toString()}',
+          'An error occurred while testing the OpenAI connection:\n${e.toString()}',
           isError: true,
         );
       }
@@ -325,8 +338,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     builder:
                         (context) => CupertinoAlertDialog(
                           title: const Text('Delete Server?'),
-                          content: const Text(
-                            'Are you sure you want to delete "\${server.name ?? server.serverUrl}"?',
+                          content: Text(
+                            'Are you sure you want to delete "${server.name ?? server.serverUrl}"?',
                           ),
                           actions: [
                             CupertinoDialogAction(
@@ -415,8 +428,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             ref
                                 .read(openAiModelIdProvider.notifier)
                                 .set(selectedValue);
-                            if (kDebugMode)
-                              print('Selected OpenAI Model: \$selectedValue');
+                            if (kDebugMode) {
+                              print('Selected OpenAI Model: $selectedValue');
+                            }
                           }
                           Navigator.pop(context);
                         },
@@ -459,6 +473,181 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
+  // Helper method to build MCP server list tiles
+  List<Widget> _buildMcpServerListTiles(BuildContext context, WidgetRef ref) {
+    final mcpServers = ref.watch(mcpServerListProvider);
+    // Watch the MCP client state to get statuses and errors
+    final mcpClientState = ref.watch(mcpClientProvider);
+    final serverStatuses = mcpClientState.serverStatuses;
+    final serverErrors = mcpClientState.serverErrorMessages;
+
+    if (mcpServers.isEmpty) {
+      return [
+        const CupertinoListTile(
+          title: Text('No MCP servers added yet'),
+          subtitle: Text('Tap "+" in the navigation bar to add one'),
+        ),
+      ];
+    }
+
+    return mcpServers.map((server) {
+      // Get status and error for the current server
+      final status =
+          serverStatuses[server.id] ?? McpConnectionStatus.disconnected;
+      final error = serverErrors[server.id];
+      final bool userWantsActive = server.isActive;
+
+      // Build subtitle text including error message if present
+      String subtitleText = '${server.command} ${server.args}'.trim();
+      if (error != null && status == McpConnectionStatus.error) {
+        // Limit error message length for display
+        final displayError =
+            error.length > 100 ? '${error.substring(0, 97)}...' : error;
+        subtitleText += '\nError: $displayError';
+      }
+
+      return CupertinoListTile(
+        leading: _buildMcpStatusIcon(status, context),
+        title: Text(server.name),
+        subtitle: Text(
+          subtitleText,
+          maxLines: error != null ? 3 : 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: 12,
+            color:
+                status == McpConnectionStatus.error
+                    ? CupertinoColors.systemRed.resolveFrom(context)
+                    : CupertinoColors.secondaryLabel.resolveFrom(context),
+          ),
+        ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CupertinoSwitch(
+              value: userWantsActive,
+              onChanged: (bool value) {
+                ref
+                    .read(settingsServiceProvider)
+                    .toggleMcpServerActive(server.id, value);
+              },
+            ),
+            const SizedBox(width: 8),
+            CupertinoButton(
+              padding: EdgeInsets.zero,
+              minSize: 0,
+              child: const Icon(CupertinoIcons.ellipsis),
+              onPressed: () => _showMcpServerActions(context, ref, server),
+            ),
+          ],
+        ),
+      );
+    }).toList();
+  }
+
+  // Helper to build status icon based on McpConnectionStatus
+  Widget _buildMcpStatusIcon(McpConnectionStatus status, BuildContext context) {
+    switch (status) {
+      case McpConnectionStatus.connected:
+        return const Icon(
+          CupertinoIcons.check_mark_circled_solid,
+          color: CupertinoColors.activeGreen,
+          size: 22,
+        );
+      case McpConnectionStatus.connecting:
+        return const CupertinoActivityIndicator(radius: 11);
+      case McpConnectionStatus.error:
+        return Icon(
+          CupertinoIcons.xmark_octagon_fill,
+          color: CupertinoColors.systemRed.resolveFrom(context),
+          size: 22,
+        );
+      case McpConnectionStatus.disconnected:
+        return Icon(
+          CupertinoIcons.circle,
+          color: CupertinoColors.inactiveGray.resolveFrom(context),
+          size: 22,
+        );
+    }
+  }
+
+  // Method to show actions for an MCP server
+  void _showMcpServerActions(
+    BuildContext context,
+    WidgetRef ref,
+    McpServerConfig server,
+  ) {
+    showCupertinoModalPopup<void>(
+      context: context,
+      builder:
+          (BuildContext context) => CupertinoActionSheet(
+            title: Text(server.name),
+            message: Text('${server.command} ${server.args}'.trim()),
+            actions: <CupertinoActionSheetAction>[
+              CupertinoActionSheetAction(
+                child: const Text('Edit'),
+                onPressed: () {
+                  Navigator.pop(context); // Close the action sheet
+                  Navigator.of(context).push(
+                    CupertinoPageRoute(
+                      builder:
+                          (context) =>
+                              AddEditMcpServerScreen(serverToEdit: server),
+                    ),
+                  );
+                },
+              ),
+              // Add other actions if needed (e.g., Duplicate)
+            ],
+            cancelButton: CupertinoActionSheetAction(
+              isDestructiveAction: true,
+              child: const Text('Delete'),
+              onPressed: () async {
+                Navigator.pop(context); // Close action sheet
+                final confirmed = await showCupertinoDialog<bool>(
+                  context: context,
+                  builder:
+                      (context) => CupertinoAlertDialog(
+                        title: const Text('Delete MCP Server?'),
+                        content: Text(
+                          'Are you sure you want to delete "${server.name}"?',
+                        ),
+                        actions: [
+                          CupertinoDialogAction(
+                            child: const Text('Cancel'),
+                            onPressed: () => Navigator.of(context).pop(false),
+                          ),
+                          CupertinoDialogAction(
+                            isDestructiveAction: true,
+                            child: const Text('Delete'),
+                            onPressed: () => Navigator.of(context).pop(true),
+                          ),
+                        ],
+                      ),
+                );
+                if (confirmed == true) {
+                  final success = await ref
+                      .read(settingsServiceProvider)
+                      .deleteMcpServer(server.id);
+                  if (!success && mounted) {
+                    _showResultDialog(
+                      'Error',
+                      'Failed to delete MCP server.',
+                      isError: true,
+                    );
+                  } else if (success && mounted) {
+                    _showResultDialog(
+                      'Deleted',
+                      'MCP Server "${server.name}" deleted.',
+                    );
+                  }
+                }
+              },
+            ),
+          ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final multiServerState = ref.watch(multiServerConfigProvider);
@@ -476,16 +665,41 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           middle: Text(widget.isInitialSetup ? 'Server Setup' : 'Settings'),
           automaticallyImplyLeading: automaticallyImplyLeading,
           transitionBetweenRoutes: false,
-          trailing: CupertinoButton(
-            padding: EdgeInsets.zero,
-            onPressed: () {
-              Navigator.of(context).push(
-                CupertinoPageRoute(
-                  builder: (context) => const AddEditServerScreen(),
-                ),
-              );
-            },
-            child: const Icon(CupertinoIcons.add),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Button to add Memos server
+              CupertinoButton(
+                padding: EdgeInsets.zero,
+                onPressed: () {
+                  Navigator.of(context).push(
+                    CupertinoPageRoute(
+                      builder:
+                          (context) =>
+                              const AddEditServerScreen(), // Navigate to Memos add/edit
+                    ),
+                  );
+                },
+                child: const Icon(
+                  CupertinoIcons.add,
+                ), // Standard add icon for Memos
+              ),
+              const SizedBox(width: 8), // Spacing between buttons
+              // Button to add MCP server
+              CupertinoButton(
+                padding: EdgeInsets.zero,
+                onPressed: () {
+                  Navigator.of(context).push(
+                    CupertinoPageRoute(
+                      builder:
+                          (context) =>
+                              const AddEditMcpServerScreen(), // Navigate to MCP add/edit
+                    ),
+                  );
+                },
+                child: const Icon(CupertinoIcons.gear_alt_fill, size: 24),
+              ),
+            ],
           ),
         ),
         child: SafeArea(
@@ -525,7 +739,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     ),
                   ),
                 ),
-
               // Server List Section
               CupertinoListSection.insetGrouped(
                 header: const Text('MEMOS SERVERS'),
@@ -601,7 +814,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   }),
                 ],
               ),
-
               // Test Memos Connection Button
               Padding(
                 padding: const EdgeInsets.symmetric(
@@ -629,7 +841,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           ),
                 ),
               ),
-
               // --- Integrations Section ---
               CupertinoListSection.insetGrouped(
                 header: const Text('INTEGRATIONS'),
@@ -708,7 +919,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       ),
                     ),
                   ),
-
                   // OpenAI Integration Tile
                   CupertinoListTile(
                     padding: const EdgeInsets.symmetric(
@@ -722,8 +932,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         children: [
                           Expanded(
                             child: CupertinoTextField(
-                              controller:
-                                  _openaiApiKeyController, // Use OpenAI controller
+                              controller: _openaiApiKeyController,
                               placeholder: 'Enter OpenAI API key (sk-...)',
                               obscureText: true,
                               padding: const EdgeInsets.symmetric(
@@ -736,11 +945,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                 borderRadius: BorderRadius.circular(8.0),
                               ),
                               clearButtonMode: OverlayVisibilityMode.editing,
-                              // Trigger model fetch when API key might have changed
                               onSubmitted: (_) => _fetchModels(),
-                              onChanged: (value) {
-                                // Optional: Debounce or delay fetch if needed
-                              },
                             ),
                           ),
                           const SizedBox(width: 8),
@@ -847,10 +1052,134 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             ? null
                             : () => _showModelPicker(context),
                   ),
+                  // --- Start Gemini ---
+                  CupertinoListTile(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 15.0,
+                      vertical: 10.0,
+                    ),
+                    title: const Text('Gemini API Key'),
+                    subtitle: Padding(
+                      padding: const EdgeInsets.only(top: 8.0),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: CupertinoTextField(
+                              controller: _geminiApiKeyController,
+                              placeholder: 'Enter Gemini API key',
+                              obscureText: true,
+                              padding: const EdgeInsets.symmetric(
+                                vertical: 10.0,
+                                horizontal: 12.0,
+                              ),
+                              decoration: BoxDecoration(
+                                color: CupertinoColors.tertiarySystemFill
+                                    .resolveFrom(context),
+                                borderRadius: BorderRadius.circular(8.0),
+                              ),
+                              clearButtonMode: OverlayVisibilityMode.editing,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          CupertinoButton(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            color: CupertinoColors.activeBlue,
+                            onPressed: () async {
+                              final newKey =
+                                  _geminiApiKeyController.text.trim();
+                              if (newKey.isEmpty) {
+                                _showResultDialog(
+                                  'Error',
+                                  'Gemini API Key cannot be empty.',
+                                  isError: true,
+                                );
+                                return;
+                              }
+                              final success = await ref
+                                  .read(geminiApiKeyProvider.notifier)
+                                  .set(newKey);
+                              FocusScope.of(context).unfocus();
+                              if (success) {
+                                _showResultDialog(
+                                  'API Key Updated',
+                                  'Gemini API key has been saved.',
+                                );
+                              } else {
+                                _showResultDialog(
+                                  'Error',
+                                  'Failed to save Gemini API key.',
+                                  isError: true,
+                                );
+                              }
+                            },
+                            child: const Text(
+                              'Save',
+                              style: TextStyle(color: CupertinoColors.white),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  // --- End Gemini ---
                 ],
               ),
-              // --- End Integrations Section ---
-
+              // --- MCP Server Section ---
+              CupertinoListSection.insetGrouped(
+                header: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('MCP SERVERS'),
+                    CupertinoButton(
+                      padding: EdgeInsets.zero,
+                      minSize: 0,
+                      onPressed: () {
+                        // Trigger syncConnections from the MCP client notifier
+                        ref.read(mcpClientProvider.notifier).syncConnections();
+                        _showResultDialog(
+                          'Applying Changes',
+                          'Attempting to connect/disconnect MCP servers based on toggles.',
+                        );
+                      },
+                      child: Row(
+                        // Keep the Row for text and icon
+                        children: [
+                          // Apply the theme's actionTextStyle explicitly
+                          Text(
+                            'Apply Changes',
+                            style:
+                                CupertinoTheme.of(
+                                  context,
+                                ).textTheme.actionTextStyle,
+                          ),
+                          const SizedBox(width: 4),
+                          Icon(
+                            CupertinoIcons.refresh_circled,
+                            size: 18,
+                            // Optionally match the action text color if needed
+                            color:
+                                CupertinoTheme.of(
+                                  context,
+                                ).textTheme.actionTextStyle.color,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                footer: const Padding(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: 15.0,
+                    vertical: 4.0,
+                  ),
+                  child: Text(
+                    'Toggle servers to connect and press "Apply Changes". Use "..." for more options.',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                ),
+                children: _buildMcpServerListTiles(context, ref),
+              ),
+              // --- End MCP Server Section ---
               // Help Text Section
               Padding(
                 padding: const EdgeInsets.symmetric(
@@ -901,7 +1230,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       ),
                       SizedBox(height: 8),
                       Text(
-                        'API keys for integrations like Todoist and OpenAI are stored locally on your device.',
+                        'API keys for integrations like Todoist, OpenAI, and Gemini are stored locally on your device.',
                         style: TextStyle(fontSize: 14),
                       ),
                     ],
