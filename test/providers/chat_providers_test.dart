@@ -146,15 +146,11 @@ void main() {
       ],
     );
 
-    // Initialize PersistentStringNotifiers (needed by ChatNotifier constructor listener)
-    // We don't need to wait for the real init here as we override the value
-    // await container.read(geminiApiKeyProvider.notifier).init(); // init() is async, let's ensure the provider is read at least
+    // Initialization of PersistentStringNotifier is handled implicitly by Riverpod
+    // when the provider is first read. We don't need to explicitly call init()
+    // or read the provider in setUp when using overrides like this.
 
-    // Explicitly read the providers we'll interact with to ensure mocks are ready
-    container.read(geminiApiKeyProvider);
-    container.read(mcpClientProvider);
-    container.read(chatProvider); // Read the main provider too
-
+    // Remove explicit reads from setUp - let providers initialize lazily in tests.
 
   });
 
