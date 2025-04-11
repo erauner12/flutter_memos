@@ -920,7 +920,7 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
 
         final summaryTextPart = TextPart(summaryText);
 
-        // --- Step 9: Second Gemini Call (with function response AND summary text) ---
+        // --- Step 9: Second Gemini Call (with function response AND summary text as prompt) ---
         // History includes: original user query, model's function call request (isolated), our function response + summary
         final historyForSecondCall = [
           ...currentTurnHistory, // History up to and including the user query
@@ -936,7 +936,7 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
         ];
 
         debugPrint(
-          "MCP ProcessQuery: Making second Gemini call with history containing isolated FunctionCall, Text Summary, and FunctionResponse.",
+          "MCP ProcessQuery: Making second Gemini call with summary as prompt and history containing isolated FunctionCall, Text Summary, and FunctionResponse.",
         );
         // Log the history structure for debugging
         // debugPrint("MCP ProcessQuery: History for second call: \${historyForSecondCall.map((c) => c.toJson()).toList()}");
@@ -944,7 +944,7 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
         GenerateContentResponse finalResponse;
         try {
           finalResponse = await geminiService.generateContent(
-            "", // No new user prompt text, just process the tool result
+            summaryText, // <<< CHANGE HERE: Use summaryText as the prompt
             historyForSecondCall, // Pass the refined history
             tools: null, // No tools needed for the summary response
           );
