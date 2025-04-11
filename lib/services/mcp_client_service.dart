@@ -744,12 +744,6 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
 
     // --- Step 4: First Gemini Call (with tools) ---
     GenerateContentResponse firstResponse;
-    final userContentForHistory = Content.text(query);
-    final currentTurnHistory = [
-      ...history,
-      Content('user', userContentForHistory.parts),
-    ];
-
     try {
       firstResponse = await geminiService.generateContent(
         query,
@@ -889,64 +883,61 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
           simplifiedResultJson = {'result_text': toolResultString};
         }
 
-        final functionResponsePart = FunctionResponse(
-          toolName,
-          simplifiedResultJson, // Pass the SIMPLIFIED JSON map
-        );
-        debugPrint(
-          "MCP ProcessQuery: Constructed FunctionResponse with SIMPLIFIED JSON: \${jsonEncode(simplifiedResultJson)}",
-        );
-
         // --- Step 8.5: Construct explicit TextPart summary (KEEP AS IS) ---
         // This summary text is crucial and already contains detailed info like IDs
-        String summaryText = "Tool '\$toolName' executed.";
-        if (toolResultJson.containsKey('status') &&
-            toolResultJson['status'] == 'success') {
-          summaryText =
-              toolResultJson['message'] as String? ??
-              summaryText; // Use message if available
-          if (toolResultJson.containsKey('taskId')) {
-            summaryText += " Task ID is \${toolResultJson['taskId']}.";
-          } else if (toolName == 'get_todoist_tasks' &&
-              toolResultJson.containsKey('result_list')) {
-            final tasks = toolResultJson['result_list'] as List?;
-            if (tasks != null && tasks.isNotEmpty) {
-              final ids = tasks
-                  .map((t) => t is Map ? t['id'] : null)
-                  .where((element) => element != null)
-                  .join(', ');
-              if (ids.isNotEmpty) {
-                summaryText += " Found Task IDs: \$ids.";
-              } else {
-                summaryText +=
-                    " Found \${tasks.length} tasks, but couldn't extract IDs.";
-              }
-            } else if (tasks != null && tasks.isEmpty) {
-              summaryText =
-                  simplifiedResultJson['message'] as String? ??
-                  "Tool '\$toolName' executed successfully, but found no matching tasks.";
-            } else {
-              summaryText =
-                  toolResultJson['message'] as String? ??
-                  "Tool '\$toolName' executed successfully, result format unclear.";
+        String summaryText;
+        final status = simplifiedResultJson['status'] as String?;
+        final message = simplifiedResultJson['message'] as String?;
+        final taskId = simplifiedResultJson['taskId'] as String?;
+
+        if (status == 'success') {
+          summaryText = message ?? "Tool '\$toolName' executed successfully.";
+          if (toolName == 'create_todoist_task') {
+            // Use original content from args and taskId from simplified result
+            summaryText =
+                'Todoist task created successfully: "${toolArgs['content'] as String? ?? '[unknown content]'}"';
+            if (taskId != null) {
+              summaryText += " (ID: \$taskId)";
+            }
+            summaryText += ".";
+          } else if (toolName == 'update_todoist_task') {
+            // Use message and taskId from simplified result
+            summaryText = message ?? "Todoist task updated successfully";
+            if (taskId != null) {
+              summaryText += " (ID: \$taskId)";
+            }
+            summaryText += ".";
+          } else if (toolName == 'get_todoist_tasks') {
+            // Message already covers 0 or 1 task cases well.
+            // For multiple tasks, the message is "Found X matching tasks."
+            // We could add IDs here if needed, but let's keep it simple for now.
+            summaryText = message ?? "Tasks retrieved successfully.";
+            if (taskId != null) {
+              // This handles the single-task case
+              summaryText += " Task ID is \$taskId.";
+            }
+          } else {
+            // Generic success message for other tools
+            summaryText = message ?? "Tool '\$toolName' executed successfully.";
+            if (taskId != null) {
+              // Include taskId if present for any tool
+              summaryText += " ID: \$taskId.";
             }
           }
-        } else if (toolResultJson.containsKey('status') &&
-            toolResultJson['status'] == 'error') {
+        } else if (status == 'error') {
           summaryText =
-              "Tool '\$toolName' failed: \${toolResultJson['message'] ?? 'Unknown error'}";
-          if (toolResultJson.containsKey('taskId')) {
-            summaryText +=
-                " (Related to Task ID: \${toolResultJson['taskId']})";
+              "Tool '\$toolName' failed: \${message ?? 'Unknown error'}";
+          if (taskId != null) {
+            // Include taskId even on error if available
+            summaryText += " (Related to Task ID: \$taskId)";
           }
-        } else if (toolResultJson.containsKey('result_text')) {
-          // Fallback for non-JSON or simple text results
+        } else {
+          // Fallback for unexpected status or non-JSON results
           summaryText =
-              "Tool '\$toolName' executed. Result: \${toolResultJson['result_text']}";
-        } else if (toolResultJson.containsKey('result_raw')) {
-          // Fallback for completely non-text results
-          summaryText = "Tool '\$toolName' executed. Result format: Non-text.";
+              toolResultJson['result_text'] as String? ??
+              "Tool '\$toolName' executed. Result: \$toolResultString";
         }
+
         final summaryTextPart = TextPart(summaryText);
 
         // --- Step 9: Construct Final Response DIRECTLY (Skip Second Gemini Call) ---
@@ -971,7 +962,10 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
           toolResponseContent: Content('function', [
             // The function turn
             summaryTextPart, // Include summary text for history context
-            functionResponsePart, // Include the structured FunctionResponse
+            FunctionResponse(
+              toolName,
+              simplifiedResultJson, // Pass the SIMPLIFIED JSON map
+            ),
           ]),
           toolName: toolName,
           toolArgs: toolArgs,
