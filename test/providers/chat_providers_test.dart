@@ -179,7 +179,7 @@ void main() {
   ]);
   final mockFinalModelContent =
       Content('model', [
-    TextPart('OK. Task "buy milk created (ID: 12345).'),
+    TextPart('OK. Task "buy milk" created (ID: 12345).'), // Added closing "
   ]);
 
   final successfulMcpResult = McpProcessResult(
@@ -299,7 +299,7 @@ void main() {
         'OK. Task "buy milk" created (ID: 12345).',
       );
     expect(finalState.displayMessages.last.text,
-        'OK. Task "buy milk" created (ID: 12345).'); // Text from finalModelContent
+        'OK. Task "buy milk" created (ID: 12345).'); // Corrected expected text
 
     // Check chat history
     expect(finalState.chatHistory.length, 4); // User + ModelCall + ToolResponse + FinalModel
