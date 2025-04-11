@@ -564,7 +564,8 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
     final serversToConnect = desiredActiveServers.difference(
       currentlyConnectingOrConnected,
     );
-    final serversToDisconnect = currentlyConnectingOrConnected.difference(desiredActiveServers)
+    final serversToDisconnect = currentlyConnectingOrConnected
+        .difference(desiredActiveServers)
         .union(currentlyConnectingOrConnected.difference(knownServerIds));
     if (serversToConnect.isNotEmpty || serversToDisconnect.isNotEmpty) {
       debugPrint("Syncing MCP Connections:");
@@ -723,114 +724,32 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
       );
     }
 
-    // --- START TEMPORARY TEST CODE for create_todoist_task ---
-    final toolToCall = 'create_todoist_task';
-    final targetServerId = toolToServerIdMap[toolToCall];
-
+    // --- REMOVE TEMPORARY TEST CODE ---
+    // The temporary hardcoded 'create_todoist_task' test block has been removed.
+    // --- RESTORE ORIGINAL/FUTURE GEMINI LOGIC ---
+    // Placeholder for the actual logic that should run:
+    // 1. Get available tools from all connected clients (via toolToServerIdMap or similar)
+    // 2. Prepare the tools list for the Gemini model.
+    // 3. Call the Gemini model's generateContent method with the query, history, and tools.
+    // 4. Handle the response:
+    //    - If it contains a FunctionCall:
+    //        - Find the correct MCP client using toolToServerIdMap.
+    //        - Call the tool on that client using mcp.callTool.
+    //        - Send the FunctionResponse back to Gemini.
+    //        - Get the final text response from Gemini.
+    //    - If it's just a text response:
+    //        - Use that as the final result.
+    // 5. Construct and return the McpProcessResult.
     debugPrint(
-      "MCP ProcessQuery: Looked up '\$toolToCall' tool. Found Server ID: \$targetServerId. Current tool map: \$toolToServerIdMap",
+      "MCP ProcessQuery: Temporary test code removed. Gemini integration needed.",
     );
-
-    if (targetServerId == null) {
-      debugPrint(
-        "MCP ProcessQuery: '\$toolToCall' tool not found in map: \$toolToServerIdMap",
-      );
-      return McpProcessResult(
-        finalModelContent: Content('model', [
-          TextPart("MCP server connected, but '\$toolToCall' tool not found."),
-        ]),
-      );
-    }
-
-    final targetClient = state.activeClients[targetServerId];
-    final isClientConnected = targetClient?.isConnected ?? false;
-
-    debugPrint(
-      "MCP ProcessQuery: Checking target client for server '\$targetServerId'. Found: \${targetClient != null}, Connected: \$isClientConnected",
+    return McpProcessResult(
+      finalModelContent: Content('model', [
+        TextPart(
+          "MCP connected, but AI tool calling logic is not yet implemented.",
+        ),
+      ]),
     );
-
-    if (targetClient == null || !isClientConnected) {
-      debugPrint(
-        "MCP ProcessQuery: Client for '\$toolToCall' tool (Server \$targetServerId) is not connected or found.",
-      );
-      updateServerState(
-        targetServerId,
-        McpConnectionStatus.error,
-        errorMsg: "Client for '\$toolToCall' tool disconnected unexpectedly.",
-      );
-      return McpProcessResult(
-        finalModelContent: Content('model', [
-          TextPart(
-            "Error: Client for '\$toolToCall' tool (Server \$targetServerId) is not connected.",
-          ),
-        ]),
-        toolName: toolToCall,
-        sourceServerId: targetServerId,
-      );
-    }
-
-    debugPrint(
-      "MCP ProcessQuery: Routing '\$toolToCall' tool call to server \$targetServerId",
-    );
-
-    try {
-      // Define the arguments for the Todoist task here
-      final taskArgs = {
-        'content':
-            'Test Task from Flutter Memos: \$query', // Use user query in content
-        'description': 'Created via manual MCP test call.',
-        // 'project_id': 'YOUR_PROJECT_ID', // Optional: Add a specific project ID if needed
-        'labels': ['mcp_test', 'flutter'], // Optional: Add some labels
-        'priority': 4, // Optional: Set priority (as integer)
-        // 'due_string': 'tomorrow', // Optional: Set a due date
-      };
-
-      final params = mcp_dart.CallToolRequestParams(
-        name: toolToCall,
-        arguments: taskArgs,
-      );
-      final result = await targetClient.callTool(params);
-
-      final toolResponseText = result.content
-          .whereType<mcp_dart.TextContent>()
-          .map((c) => c.text)
-          .join('\n');
-
-      debugPrint(
-        "MCP ProcessQuery: Tool '\$toolToCall' executed on server \$targetServerId. Result: \$toolResponseText",
-      );
-
-      return McpProcessResult(
-        modelCallContent: null,
-        toolResponseContent: null,
-        finalModelContent: Content('model', [TextPart(toolResponseText)]),
-        toolName: toolToCall,
-        toolArgs: params.arguments,
-        toolResult: toolResponseText,
-        sourceServerId: targetServerId,
-      );
-    } catch (e) {
-      final errorMsg =
-          "Error executing tool '\$toolToCall' on server \$targetServerId: \$e";
-      debugPrint("MCP ProcessQuery: \$errorMsg");
-      updateServerState(
-        targetServerId,
-        McpConnectionStatus.error,
-        errorMsg: errorMsg,
-      );
-      return McpProcessResult(
-        finalModelContent: Content('model', [
-          TextPart("Error: \$errorMsg"),
-        ]),
-        toolName: toolToCall,
-        sourceServerId: targetServerId,
-      );
-    }
-    // --- END TEMPORARY TEST CODE ---
-
-    /* --- ORIGINAL/FUTURE GEMINI LOGIC WOULD GO HERE ---
-    // ... (Code to prepare tools for Gemini, call generateContent, handle FunctionCall, etc.)
-    */
   }
   
   // --- Cleanup ---
