@@ -163,10 +163,10 @@ void main() {
     // Create ProviderContainer with overrides using the *fake* notifier
     container = ProviderContainer(
       overrides: [
-        // Correctly override the notifier instance using .notifier.overrideWithValue
-        mcpClientProvider.notifier.overrideWithValue(
-          fakeMcpClientNotifier,
-        ), // Use .notifier.overrideWithValue
+        // Correctly override the StateNotifierProvider using overrideWith
+        mcpClientProvider.overrideWith(
+          (ref) => fakeMcpClientNotifier,
+        ), // Use overrideWith and return the instance
         geminiServiceProvider.overrideWithValue(mockGeminiService),
         geminiApiKeyProvider.overrideWith(
           (_) => MockPersistentStringNotifier(
