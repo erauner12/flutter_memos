@@ -916,91 +916,90 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
           // Default success message uses the simplified message if available
           summaryText = message ?? "Tool '\$toolName' executed successfully.";
           
-          // Specific overrides for tools where we want more detail
           if (toolName == 'create_todoist_task') {
             final taskContent =
                 toolArgs['content'] as String? ?? '[unknown content]';
-            // Construct the string directly with conditional ID
+            // Construct the string directly with conditional ID using ${taskId}
             if (taskId != null) {
               summaryText =
-                  'Todoist task created successfully: "\$taskContent" (ID: \$taskId).';
+                  'Todoist task created successfully: "$taskContent" (ID: $taskId).';
             } else {
               summaryText =
-                  'Todoist task created successfully: "\$taskContent".';
+                  'Todoist task created successfully: "$taskContent".';
             }
-            // *** ADD SPECIFIC LOG HERE ***
+            // Ensure log uses correct interpolation for the variable's value
             debugPrint(
-              "MCP ProcessQuery [create_todoist_task]: Constructed summaryText: \"\$summaryText\"",
+              "MCP ProcessQuery [create_todoist_task]: Constructed summaryText: \"$summaryText\"",
             );
-          
+
           } else if (toolName == 'update_todoist_task') {
-            // Construct the string directly with conditional ID
+            // Construct the string directly with conditional ID using ${taskId}
             if (taskId != null) {
-              summaryText = "Todoist task updated successfully (ID: \$taskId).";
+              summaryText = "Todoist task updated successfully (ID: $taskId).";
             } else {
               summaryText = "Todoist task updated successfully.";
             }
-            // *** ADD SPECIFIC LOG HERE ***
+            // Ensure log uses correct interpolation for the variable's value
             debugPrint(
-              "MCP ProcessQuery [update_todoist_task]: Constructed summaryText: \"\$summaryText\"",
+              "MCP ProcessQuery [update_todoist_task]: Constructed summaryText: \"$summaryText\"",
             );
-          
+
           } else if (toolName == 'get_todoist_tasks') {
             // Use the message generated during simplification ("Found X tasks." or "No tasks found.")
             summaryText = message ?? "Tasks retrieved successfully.";
             if (taskId != null) {
               // This case implies a single task was found by the server
-              summaryText +=
-                  " Task ID is \$taskId."; // Append ID if single task found
+              summaryText += " Task ID is $taskId.";
             }
-            // *** ADD SPECIFIC LOG HERE ***
+            // Ensure log uses correct interpolation for the variable's value
             debugPrint(
-              "MCP ProcessQuery [get_todoist_tasks]: Constructed summaryText: \"\$summaryText\"",
+              "MCP ProcessQuery [get_todoist_tasks]: Constructed summaryText: \"$summaryText\"",
             );
-          
+
           } else {
             // Generic success message for other tools, include ID if present
             if (taskId != null) {
-              summaryText += " ID: \$taskId."; // Append ID if present
+              summaryText += " ID: $taskId.";
             }
-            // *** ADD SPECIFIC LOG HERE ***
+            // Ensure log uses correct interpolation for the variable's value
             debugPrint(
-              "MCP ProcessQuery [generic success]: Constructed summaryText: \"\$summaryText\"",
+              "MCP ProcessQuery [generic success]: Constructed summaryText: \"$summaryText\"",
             );
           }
         } else if (status == 'error') {
-          // Construct error message directly with conditional ID
+          // Construct error message directly with conditional ID using ${taskId}
           if (taskId != null) {
             summaryText =
-                "Tool '\$toolName' failed: \${message ?? 'Unknown error'} (Related to Task ID: \$taskId)";
+                "Tool '\$toolName' failed: ${message ?? 'Unknown error'} (Related to Task ID: $taskId)";
           } else {
             summaryText =
-                "Tool '\$toolName' failed: \${message ?? 'Unknown error'}";
+                "Tool '\$toolName' failed: ${message ?? 'Unknown error'}";
           }
-          // *** ADD SPECIFIC LOG HERE ***
+          // Ensure log uses correct interpolation for the variable's value
           debugPrint(
-            "MCP ProcessQuery [error]: Constructed summaryText: \"\$summaryText\"",
+            "MCP ProcessQuery [error]: Constructed summaryText: \"$summaryText\"",
           );
         } else {
-          // Fallback for unexpected status or non-JSON results
+          // Fallback for unexpected status or non-JSON results using ${taskId}
           if (taskId != null) {
             summaryText =
                 toolResultJson['result_text'] as String? ??
-                "Tool '\$toolName' executed. Result: \$toolResultString (ID: \$taskId)";
+                "Tool '\$toolName' executed. Result: \$toolResultString (ID: $taskId)";
           } else {
             summaryText =
                 toolResultJson['result_text'] as String? ??
                 "Tool '\$toolName' executed. Result: \$toolResultString";
           }
-          // *** ADD SPECIFIC LOG HERE ***
+          // Ensure log uses correct interpolation for the variable's value
           debugPrint(
-            "MCP ProcessQuery [fallback]: Constructed summaryText: \"\$summaryText\"",
+            "MCP ProcessQuery [fallback]: Constructed summaryText: \"$summaryText\"",
           );
         }
 
         // This log remains to show the final value before returning
+        // Ensure log uses correct interpolation for the variable's value
         debugPrint(
-          "MCP ProcessQuery: Final response to UI (tool summary): \"\$summaryText\"",
+          "MCP ProcessQuery: Final response to UI (tool summary): \"$summaryText\"",
         );
 
         final summaryTextPart = TextPart(summaryText);
@@ -1013,7 +1012,7 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
         );
         // *** RE-VERIFY THIS LOG ***
         debugPrint(
-          "MCP ProcessQuery: Final response to UI (tool summary): \"\$summaryText\"",
+          "MCP ProcessQuery: Final response to UI (tool summary): \"$summaryText\"",
         );
 
         return McpProcessResult(
