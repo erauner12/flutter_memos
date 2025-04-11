@@ -124,7 +124,7 @@ class GoogleMcpClient {
   final mcp_dart.Client mcp;
   final GenerativeModel? model;
   // Change type to the correct Transport interface from mcp_dart
-  mcp_dart.Transport? _transport;
+  mcp_dart.StdioServerTransport? _transport;
   List<Tool> _tools = [];
   bool _isConnected = false;
   Function(String serverId, String errorMsg)? _onError;

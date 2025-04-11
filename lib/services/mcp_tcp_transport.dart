@@ -135,7 +135,7 @@ String serializeMessage(mcp_dart.JsonRpcMessage message) {
 
 /// Client transport for TCP: connects to a server over a TCP socket
 /// and communicates using newline-delimited JSON messages.
-class TcpClientTransport implements mcp_dart.Transport {
+class TcpClientTransport implements mcp_dart.StdioServerTransport {
   final String host;
   final int port;
   Socket? _socket;
