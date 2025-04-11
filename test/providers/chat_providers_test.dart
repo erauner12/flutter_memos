@@ -1,16 +1,16 @@
 import 'package:flutter_memos/models/chat_message.dart';
-import 'package:flutter_memos/models/chat_state.dart';
 import 'package:flutter_memos/models/mcp_server_config.dart'; // Needed for McpClientState setup
 import 'package:flutter_memos/providers/chat_providers.dart';
 import 'package:flutter_memos/providers/settings_provider.dart'; // For geminiApiKeyProvider override
 import 'package:flutter_memos/services/gemini_service.dart';
-import 'package:flutter_memos/services/mcp_client_service.dart';
+// Hide the provider from the service file to avoid conflict with the one in chat_providers.dart
+import 'package:flutter_memos/services/mcp_client_service.dart'
+    hide mcpClientProvider;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 // Generate mocks for dependencies
 @GenerateNiceMocks([
@@ -19,6 +19,33 @@ import 'package:shared_preferences/shared_preferences.dart';
   MockSpec<GeminiService>(),
 ])
 import 'chat_providers_test.mocks.dart';
+
+// Simple mock for the PersistentStringNotifier used by geminiApiKeyProvider
+class MockPersistentStringNotifier extends StateNotifier<String> {
+  MockPersistentStringNotifier(super.initialState);
+
+  Future<void> init() async {
+    // Mock init doesn't need to do anything
+  }
+  // No need to mock 'update' unless the test specifically requires verifying it
+}
+
+// Helper to create GenerateContentResponse for stream testing
+GenerateContentResponse generateContentResponse({String? text}) {
+  return GenerateContentResponse(
+    [
+      // Provide all required positional arguments for Candidate
+      Candidate(
+        Content('model', [if (text != null) TextPart(text)]),
+        FinishReason.stop, // finishReason
+        null, // safetyRatings
+        null, // citationMetadata
+        null, // tokenCount
+      ),
+    ],
+    null, // Prompt feedback can be null
+  );
+}
 
 void main() {
   // Mocks
@@ -62,10 +89,7 @@ void main() {
     mockMcpClientNotifier = MockMcpClientNotifier();
     mockGeminiService = MockGeminiService();
 
-    // Mock SharedPreferences for PersistentStringNotifier initialization
-    SharedPreferences.setMockInitialValues({
-      geminiApiKeyProviderKey: 'fake-gemini-key', // Ensure API key is set
-    });
+    // SharedPreferences mock is no longer needed here as we override the provider state/notifier
 
     // Set default stubbing for mocks
     when(mockMcpClientNotifier.state).thenReturn(defaultMcpState);
@@ -77,8 +101,10 @@ void main() {
         // Override providers with mocks
         mcpClientProvider.overrideWith((ref) => mockMcpClientNotifier),
         geminiServiceProvider.overrideWithValue(mockGeminiService),
-        // Ensure geminiApiKeyProvider has a value for the initial check in ChatNotifier
-        geminiApiKeyProvider.overrideWithValue('fake-gemini-key'),
+        // Override the StateNotifierProvider with our mock notifier instance
+        geminiApiKeyProvider.overrideWith(
+          (_) => MockPersistentStringNotifier('fake-gemini-key'),
+        ),
       ],
     );
 
@@ -130,7 +156,10 @@ void main() {
     // Check chat history
     expect(finalState.chatHistory.length, 4); // User + ModelCall + ToolResponse + FinalModel
     expect(finalState.chatHistory[0].role, 'user');
-    expect(finalState.chatHistory[0].parts.first.text, userQuery);
+      expect(
+        (finalState.chatHistory[0].parts.first as TextPart).text,
+        userQuery,
+      ); // Cast to TextPart
     expect(finalState.chatHistory[1], mockModelCallContent); // Check model call
     expect(finalState.chatHistory[2], mockToolResponseContent); // Check tool response
     expect(finalState.chatHistory[3], mockFinalModelContent); // Check final model summary
@@ -173,15 +202,10 @@ void main() {
      expect(finalState.chatHistory.length, 2); // User + Final Model
      expect(finalState.chatHistory[0].role, 'user');
      expect(finalState.chatHistory[1].role, 'model');
-     expect(finalState.chatHistory[1].parts.first.text, 'Hello there!');
+      expect(
+        (finalState.chatHistory[1].parts.first as TextPart).text,
+        'Hello there!',
+      ); // Cast to TextPart
    });
 
-
-  // Helper to create GenerateContentResponse for stream testing
-  GenerateContentResponse generateContentResponse({String? text}) {
-    return GenerateContentResponse(
-      [Candidate(Content('model', [if (text != null) TextPart(text)]), finishReason: FinishReason.stop)],
-      null, // Prompt feedback can be null
-    );
-  }
 }
