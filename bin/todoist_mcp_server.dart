@@ -173,6 +173,17 @@ void main() async {
         'type': 'string',
         'description': 'New ID of the user to assign the task to (optional).',
       },
+      'duration': {
+        'type': 'integer',
+        'description':
+            'A positive integer for the task duration, or null to unset. Requires duration_unit.',
+      },
+      'duration_unit': {
+        'type': 'string',
+        'description':
+            "The unit for the duration ('minute' or 'day'). Requires duration.",
+        'enum': ['minute', 'day'], // Specify allowed values
+      },
     },
     callback: _handleUpdateTodoistTask,
   );
@@ -451,6 +462,8 @@ Future<mcp_dart.CallToolResult> _handleUpdateTodoistTask({
   final dueDatetime = args?['due_datetime'] as String?;
   final dueLang = args?['due_lang'] as String?;
   final assigneeId = args?['assignee_id'] as String?;
+  final durationAmount = args?['duration'] as int?; // Parse duration amount
+  final durationUnit = args?['duration_unit'] as String?; // Parse duration unit
 
   // Construct Due object
   todoist.TaskDue? due;
@@ -476,6 +489,30 @@ Future<mcp_dart.CallToolResult> _handleUpdateTodoistTask({
     );
   }
 
+  // Construct Duration object
+  todoist.TaskDuration? duration;
+  if (durationAmount != null && durationUnit != null) {
+    if ((durationUnit == 'minute' || durationUnit == 'day') &&
+        durationAmount > 0) {
+      duration = todoist.TaskDuration(
+        durationObject: todoist.Duration(
+          amount: durationAmount,
+          unit: durationUnit,
+        ),
+      );
+    } else {
+      stderr.writeln(
+        '[TodoistServer] Warning: Invalid duration amount ($durationAmount) or unit ($durationUnit) provided for update. Ignoring duration.',
+      );
+    }
+  } else if (durationAmount != null || durationUnit != null) {
+    // Only one was provided, which is invalid
+    stderr.writeln(
+      '[TodoistServer] Warning: Both duration amount and unit must be provided for update. Ignoring duration.',
+    );
+  }
+
+
   // 4. Call Todoist API Update Method using the found ID
   try {
     stderr.writeln(
@@ -488,6 +525,7 @@ Future<mcp_dart.CallToolResult> _handleUpdateTodoistTask({
       labelIds: labels,
       priority: priorityStr,
       due: due,
+      duration: duration, // Pass the constructed duration object
       assigneeId: assigneeId,
     );
 
