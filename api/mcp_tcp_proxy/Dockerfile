@@ -3,6 +3,9 @@ FROM cirrusci/flutter:stable AS builder
 
 WORKDIR /app
 
+# Set frontend to noninteractive to avoid tzdata prompts
+ENV DEBIAN_FRONTEND=noninteractive
+
 # Update package lists, install/update certificates, force update, and clean up
 RUN apt-get update && \
     apt-get install -y --no-install-recommends ca-certificates curl dnsutils tzdata && \
