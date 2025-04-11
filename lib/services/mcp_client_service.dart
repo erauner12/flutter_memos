@@ -733,12 +733,14 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
       debugPrint(
         "MCP ProcessQuery: Gemini service not available or not initialized.",
       );
+      // Define errorMsg
       final errorMsg =
           geminiService?.initializationError ??
           "Gemini service is null or model is missing.";
       return McpProcessResult(
         finalModelContent: Content('model', [
-          TextPart("AI service is not available: \$errorMsg"),
+          // Use errorMsg here
+          TextPart("AI service is not available: $errorMsg"),
         ]),
       );
     }
@@ -841,19 +843,21 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
         toolResult = await targetClient.callTool(params);
 
         // --- Step 7: Process Tool Result ---
-        // Access the result content via 'contents' instead of 'result'
-        final textContent = toolResult.contents.firstWhereOrNull(
+        // Access the result content via 'content' (which is a list)
+        final textContent = toolResult.content.firstWhereOrNull(
           (c) => c is mcp_dart.TextContent,
         );
         if (textContent != null && textContent is mcp_dart.TextContent) {
           toolResultString = textContent.text;
           debugPrint(
-            "MCP ProcessQuery: Tool '\$toolName' executed successfully by server '\$targetServerId'. Result: \$toolResultString",
+            "MCP ProcessQuery: Tool '$toolName' executed successfully by server '$targetServerId'. Result: $toolResultString",
           );
         } else {
+          // Handle cases where result is not simple text (e.g., JSON)
+          // Serialize the whole result if no text part found
           toolResultString = jsonEncode(toolResult.toJson());
           debugPrint(
-            "MCP ProcessQuery: Tool '\$toolName' executed by server '\$targetServerId'. Result (non-text): \$toolResultString",
+            "MCP ProcessQuery: Tool '$toolName' executed by server '$targetServerId'. Result (non-text): $toolResultString",
           );
         }
 
@@ -866,12 +870,17 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
         );
 
         // --- Step 9: Second Gemini Call (with function response) ---
+        // Update history: Add the model's previous turn (including the function call)
+        // and the function response part.
         final historyForSecondCall = [
-          ...currentTurnHistory,
-          candidate!.content,
-          Content('function', [functionResponsePart]),
+          ...currentTurnHistory, // user query
+          candidate!.content, // model's response containing the function call
+          Content('function', [
+            functionResponsePart,
+          ]), // the result from the tool
         ];
 
+        // Declare finalResponse before the try block
         GenerateContentResponse finalResponse;
         try {
           finalResponse = await geminiService.generateContent(
