@@ -30,11 +30,16 @@ COPY --chown=appuser:appgroup pubspec.yaml pubspec.lock* ./
 # This overwrites pubspec files but maintains ownership
 COPY --chown=appuser:appgroup . .
 
-# Add git safe directory config globally as root BEFORE switching user.
-# Flutter might still invoke git internally in ways that require this.
+# Switch to the non-root user for pub get and compilation
+USER appuser
+
+# Add git safe directory config for the appuser.
 RUN git config --global --add safe.directory /sdks/flutter
 
-# Switch to the non-root user for pub get and compilation
+# Grant appuser ownership of the flutter sdk directory to avoid permission issues during pub get
+# This might be necessary if flutter tries to modify files within its own sdk dir
+USER root
+RUN chown -R appuser:appgroup /sdks/flutter
 USER appuser
 
 # Run pub get as the non-root user
