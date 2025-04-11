@@ -3,8 +3,10 @@ FROM dart:stable AS builder
 
 WORKDIR /app
 
-# Update certificate authorities first to prevent TLS errors during pub get
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
+# Update package lists, install/update certificates, and clean up in one step
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
 
 # Copy ALL source code first
 COPY . .
