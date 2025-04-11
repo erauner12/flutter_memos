@@ -840,12 +840,6 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
               toolResultJson = {
                 'result_list': decoded,
               };
-              if (toolName == 'get_todoist_tasks' && decoded.isNotEmpty) {
-                decoded
-                    .map((task) => task is Map ? task['id'] : null)
-                    .nonNulls
-                    .toList();
-              }
             } else {
               toolResultJson = {'result_text': toolResultString};
             }
@@ -865,16 +859,46 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
           );
         }
 
-        // --- Step 8: Construct FunctionResponse ---
+        // --- Step 8: Construct FunctionResponse with SIMPLIFIED JSON ---
+        Map<String, dynamic> simplifiedResultJson;
+        if (toolResultJson.containsKey('status')) {
+          if (toolResultJson['status'] == 'success') {
+            simplifiedResultJson = {'status': 'success'};
+            if (toolResultJson.containsKey('taskId')) {
+              simplifiedResultJson['taskId'] = toolResultJson['taskId'];
+            } else if (toolResultJson.containsKey('message')) {
+              // Include message for successes without specific IDs (e.g., get_tasks empty result)
+              simplifiedResultJson['message'] = toolResultJson['message'];
+            } else if (toolName == 'get_todoist_tasks' &&
+                toolResultJson.containsKey('result_list')) {
+              simplifiedResultJson['message'] =
+                  "Found \${(toolResultJson['result_list'] as List?)?.length ?? 0} tasks.";
+            }
+          } else {
+            // status == 'error' or other non-success
+            simplifiedResultJson = {
+              'status': toolResultJson['status'] ?? 'error',
+              'message': toolResultJson['message'] ?? 'Unknown error occurred.',
+            };
+            if (toolResultJson.containsKey('taskId')) {
+              simplifiedResultJson['taskId'] = toolResultJson['taskId'];
+            }
+          }
+        } else {
+          // Fallback if status is missing (shouldn't happen with current server logic)
+          simplifiedResultJson = {'result_text': toolResultString};
+        }
+
         final functionResponsePart = FunctionResponse(
           toolName,
-          toolResultJson, // Pass the parsed JSON map
+          simplifiedResultJson, // Pass the SIMPLIFIED JSON map
         );
         debugPrint(
-          "MCP ProcessQuery: Constructed FunctionResponse with JSON: \${jsonEncode(toolResultJson)}",
+          "MCP ProcessQuery: Constructed FunctionResponse with SIMPLIFIED JSON: \${jsonEncode(simplifiedResultJson)}",
         );
 
-        // --- Step 8.5: Construct explicit TextPart summary ---
+        // --- Step 8.5: Construct explicit TextPart summary (KEEP AS IS) ---
+        // This summary text is crucial and already contains detailed info like IDs
         String summaryText = "Tool '\$toolName' executed.";
         if (toolResultJson.containsKey('status') &&
             toolResultJson['status'] == 'success') {
@@ -889,8 +913,7 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
             if (tasks != null && tasks.isNotEmpty) {
               final ids = tasks
                   .map((t) => t is Map ? t['id'] : null)
-                  // ignore: deprecated_member_use
-                  .whereNotNull()
+                  .where((element) => element != null)
                   .join(', ');
               if (ids.isNotEmpty) {
                 summaryText += " Found Task IDs: \$ids.";
@@ -900,7 +923,12 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
               }
             } else if (tasks != null && tasks.isEmpty) {
               summaryText =
+                  simplifiedResultJson['message'] as String? ??
                   "Tool '\$toolName' executed successfully, but found no matching tasks.";
+            } else {
+              summaryText =
+                  toolResultJson['message'] as String? ??
+                  "Tool '\$toolName' executed successfully, result format unclear.";
             }
           }
         } else if (toolResultJson.containsKey('status') &&
@@ -915,20 +943,18 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
           // Fallback for non-JSON or simple text results
           summaryText =
               "Tool '\$toolName' executed. Result: \${toolResultJson['result_text']}";
+        } else if (toolResultJson.containsKey('result_raw')) {
+          // Fallback for completely non-text results
+          summaryText = "Tool '\$toolName' executed. Result format: Non-text.";
         }
-        // Add more specific summaries for other tools if needed
-
         final summaryTextPart = TextPart(summaryText);
 
-        // --- Step 9: Second Gemini Call (with function response AND summary text as prompt) ---
-        // History includes: original user query, model's function call request (isolated), our function response + summary
+        // --- Step 9: Second Gemini Call (KEEP AS IS - using summaryText as prompt) ---
         final historyForSecondCall = [
           ...currentTurnHistory, // History up to and including the user query
-          // Explicitly create the model turn containing ONLY the function call
           Content('model', [
             functionCallPart, // functionCallPart was extracted in Step 5
           ]),
-          // The function response turn, now including BOTH the summary text and the structured response
           Content('function', [
             summaryTextPart, // Add the explicit summary text first
             functionResponsePart, // Then add the structured FunctionResponse
@@ -938,43 +964,35 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
         debugPrint(
           "MCP ProcessQuery: Making second Gemini call with summary as prompt and history containing isolated FunctionCall, Text Summary, and FunctionResponse.",
         );
-        // Log the history structure for debugging
-        // debugPrint("MCP ProcessQuery: History for second call: \${historyForSecondCall.map((c) => c.toJson()).toList()}");
 
         GenerateContentResponse finalResponse;
         try {
           finalResponse = await geminiService.generateContent(
-            summaryText, // <<< CHANGE HERE: Use summaryText as the prompt
+            summaryText, // Use summaryText as the prompt
             historyForSecondCall, // Pass the refined history
             tools: null, // No tools needed for the summary response
           );
         } catch (e) {
-          // Log the specific error from Gemini
           debugPrint("Error calling Gemini generateContent: \$e");
           debugPrint("MCP ProcessQuery: Error during second Gemini call: \$e");
-          // Return an error result, including info about the successful tool call
           return McpProcessResult(
             finalModelContent: Content('model', [
               TextPart(
                 "Tool '\$toolName' executed successfully (\$summaryText), but encountered an error getting the final summary: \${e.toString()}",
               ),
             ]),
-            // Pass back the original model content that contained the call
             modelCallContent: candidate?.content,
-            // Include both parts in the tool response content for context
             toolResponseContent: Content('function', [
               summaryTextPart,
               functionResponsePart,
             ]),
             toolName: toolName,
             toolArgs: toolArgs,
-            toolResult:
-                toolResultString, // Keep raw string for potential display
+            toolResult: toolResultString,
             sourceServerId: targetServerId,
           );
         }
 
-        // --- Step 10: Process Final Response ---
         final finalContent =
             finalResponse.candidates.firstOrNull?.content ??
             Content('model', [
@@ -989,7 +1007,6 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
         return McpProcessResult(
           finalModelContent: finalContent,
           modelCallContent: candidate?.content,
-          // Include both parts in the tool response content for context
           toolResponseContent: Content('function', [
             summaryTextPart,
             functionResponsePart,
@@ -1003,7 +1020,6 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
         debugPrint(
           "MCP ProcessQuery: Error calling tool '\$toolName' on server '\$targetServerId': \$e",
         );
-        // Construct the function content even on error to show the attempt
         final failedFunctionCallContent =
             candidate?.content ??
             Content('model', [
@@ -1022,11 +1038,11 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
               "Sorry, I encountered an error while trying to execute the '\$toolName' tool: \${e.toString()}",
             ),
           ]),
-          modelCallContent: failedFunctionCallContent, // Show the call attempt
+          modelCallContent: failedFunctionCallContent,
           toolResponseContent: Content('function', [
             errorTextPart,
             errorResponsePart,
-          ]), // Show the error response
+          ]),
           toolName: toolName,
           toolArgs: toolArgs,
           sourceServerId: targetServerId,
