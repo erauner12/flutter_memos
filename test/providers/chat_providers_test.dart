@@ -1,8 +1,12 @@
 import 'package:flutter_memos/models/chat_message.dart';
 import 'package:flutter_memos/models/mcp_server_config.dart'; // Needed for McpClientState setup
 import 'package:flutter_memos/providers/chat_providers.dart';
-// Import specific key needed for mock setup
-import 'package:flutter_memos/providers/settings_provider.dart' show PersistentStringNotifier, geminiApiKeyProvider, geminiApiKeyProviderKey;
+// Import necessary symbols from settings_provider
+import 'package:flutter_memos/providers/settings_provider.dart'
+    show
+        PersistentStringNotifier,
+        geminiApiKeyProvider,
+        PreferenceKeys; // Import the class containing the keys
 import 'package:flutter_memos/services/gemini_service.dart';
 // Hide the provider from the service file to avoid conflict with the one in chat_providers.dart
 import 'package:flutter_memos/services/mcp_client_service.dart'
@@ -23,11 +27,14 @@ import 'chat_providers_test.mocks.dart';
 
 // Simple mock for the PersistentStringNotifier used by geminiApiKeyProvider
 // Implement the original notifier class to satisfy the type system for overrides.
-class MockPersistentStringNotifier extends StateNotifier<String> implements PersistentStringNotifier {
-  @override
-  final String key; // Add the key field required by the interface
+class MockPersistentStringNotifier extends StateNotifier<String>
+    implements PersistentStringNotifier {
+  // This field fulfills the interface requirement but doesn't need @override
+  // because the original class likely defines it as a final field directly, not a getter/setter.
+  final String key;
 
-  MockPersistentStringNotifier(this.key, String initialState) : super(initialState);
+  MockPersistentStringNotifier(this.key, String initialState)
+    : super(initialState);
 
   @override // init is part of the interface
   Future<void> init() async {
@@ -128,10 +135,11 @@ void main() {
         mcpClientProvider.overrideWith((ref) => mockMcpClientNotifier),
         geminiServiceProvider.overrideWithValue(mockGeminiService),
         // Override the StateNotifierProvider by providing a function that returns the mock notifier
-        // Pass the expected key and initial state to the mock constructor
+        // Pass the expected key (using PreferenceKeys) and initial state to the mock constructor
         geminiApiKeyProvider.overrideWith(
           (_) => MockPersistentStringNotifier(
-            geminiApiKeyProviderKey,
+            PreferenceKeys
+                .geminiApiKey, // Use the correct key from PreferenceKeys
             'fake-gemini-key',
           ),
         ),
