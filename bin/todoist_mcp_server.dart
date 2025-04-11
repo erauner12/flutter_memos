@@ -546,17 +546,13 @@ Future<mcp_dart.CallToolResult> _handleGetTodoistTasks({
         '[TodoistServer] Fetching specific task by ID: ${taskIdsToFetch.first}',
       );
       
-      // For task IDs, we need to fetch all tasks and filter manually
-      // or construct a filter that finds the specific task ID
-      final allTasks = await todoistService.getActiveTasks(
-        filter:
-            'id:${taskIdsToFetch.first}', // Try to use id filter if supported by Todoist
+      // Fetch the specific task(s) using the 'ids' parameter
+      tasks = await todoistService.getActiveTasks(
+        ids: taskIdsToFetch, // Use the dedicated 'ids' parameter
+        // filter parameter is omitted when using ids
       );
-      
-      // Filter to find the task with the exact ID
-      tasks =
-          // ignore: collection_methods_unrelated_type
-          allTasks.where((task) => taskIdsToFetch!.contains(task.id)).toList();
+      // No manual filtering needed here as the API call handles it.
+
     } else {
       // Use regular filter approach
       stderr.writeln(

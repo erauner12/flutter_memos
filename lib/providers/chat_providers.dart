@@ -161,13 +161,35 @@ class ChatNotifier extends StateNotifier<ChatState> {
             // toolResult: mcpResult.toolResult, // Example if needed
           );
 
-          // Update chat history (simplified for echo - just user + final model)
-          // A real implementation would add modelCallContent, toolResponseContent etc. if they existed
-          final finalHistory = [
+          // Update chat history including intermediate steps for context
+          final List<Content> finalHistory = [
             ...historyForMcp, // History before user message
             Content('user', [TextPart(text)]), // User message
-            mcpResult.finalModelContent, // Final response (the echo or error)
           ];
+          // Add model's function call request if it exists
+          if (mcpResult.modelCallContent != null) {
+            finalHistory.add(mcpResult.modelCallContent!);
+          }
+          // Add the tool's response if it exists
+          if (mcpResult.toolResponseContent != null) {
+            finalHistory.add(mcpResult.toolResponseContent!);
+          }
+          // Add the final model summary (already in finalModelContent)
+          // Ensure it has the 'model' role
+          if (mcpResult.finalModelContent.role != 'model') {
+            // This case shouldn't happen based on McpClientService logic, but safety check
+            final textParts =
+                mcpResult.finalModelContent.parts
+                    .whereType<TextPart>()
+                    .toList();
+            finalHistory.add(Content('model', textParts));
+            debugPrint(
+              "ChatNotifier Warning: finalModelContent from MCP had unexpected role: ${mcpResult.finalModelContent.role}",
+            );
+          } else {
+            finalHistory.add(mcpResult.finalModelContent);
+          }
+
 
           state = state.copyWith(
             displayMessages: messages,
