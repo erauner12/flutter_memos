@@ -544,7 +544,7 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
       debugPrint(
         "MCP [\$serverId]: Client already removed from state during cleanup.",
       );
-       // Ensure tool map is still rebuilt if the client might have been removed by error handler first
+      // Ensure tool map is still rebuilt if the client might have been removed by error handler first
       rebuildToolMap();
     }
   }
@@ -840,7 +840,9 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
         );
         toolResult = await targetClient.callTool(params);
 
-        final textContent = toolResult.result.firstWhereOrNull(
+        // --- Step 7: Process Tool Result ---
+        // Access the result content via 'contents' instead of 'result'
+        final textContent = toolResult.contents.firstWhereOrNull(
           (c) => c is mcp_dart.TextContent,
         );
         if (textContent != null && textContent is mcp_dart.TextContent) {
@@ -856,9 +858,11 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
         }
 
         // --- Step 8: Construct FunctionResponse ---
+        // Use positional arguments: FunctionResponse(name, response)
         final functionResponsePart = FunctionResponse(
-          name: toolName,
-          response: {'result': toolResultString},
+          toolName, {
+          'result': toolResultString,
+        },
         );
 
         // --- Step 9: Second Gemini Call (with function response) ---
@@ -904,7 +908,9 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
         return McpProcessResult(
           finalModelContent: finalContent,
           modelCallContent: candidate.content,
-          toolResponseContent: Content('function', [functionResponsePart]),
+          toolResponseContent: Content('function', [
+            FunctionResponse(toolName, {'result': toolResultString}),
+          ]),
           toolName: toolName,
           toolArgs: toolArgs,
           toolResult: toolResultString,
