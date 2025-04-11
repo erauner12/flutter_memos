@@ -716,12 +716,11 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
       debugPrint(
         "MCP ProcessQuery: Gemini service not available or not initialized.",
       );
-      final errorMessageForUser =
-          geminiService?.initializationError ??
-          "Gemini service is null or model is missing.";
       return McpProcessResult(
         finalModelContent: Content('model', [
-          TextPart("AI service is not available: $errorMessageForUser"),
+          TextPart(
+            "AI service is not available: \${geminiService?.initializationError ?? 'Gemini service is null or model is missing.'}",
+          ),
         ]),
       );
     }
@@ -869,28 +868,75 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
         // --- Step 8: Construct FunctionResponse ---
         final functionResponsePart = FunctionResponse(
           toolName,
-          toolResultJson,
+          toolResultJson, // Pass the parsed JSON map
         );
         debugPrint(
           "MCP ProcessQuery: Constructed FunctionResponse with JSON: \${jsonEncode(toolResultJson)}",
         );
 
-        // --- Step 9: Second Gemini Call (with function response) ---
-        // History includes: original user query, model's function call request (isolated), our function response
+        // --- Step 8.5: Construct explicit TextPart summary ---
+        String summaryText = "Tool '\$toolName' executed.";
+        if (toolResultJson.containsKey('status') &&
+            toolResultJson['status'] == 'success') {
+          summaryText =
+              toolResultJson['message'] as String? ??
+              summaryText; // Use message if available
+          if (toolResultJson.containsKey('taskId')) {
+            summaryText += " Task ID is \${toolResultJson['taskId']}.";
+          } else if (toolName == 'get_todoist_tasks' &&
+              toolResultJson.containsKey('result_list')) {
+            final tasks = toolResultJson['result_list'] as List?;
+            if (tasks != null && tasks.isNotEmpty) {
+              final ids = tasks
+                  .map((t) => t is Map ? t['id'] : null)
+                  // ignore: deprecated_member_use
+                  .whereNotNull()
+                  .join(', ');
+              if (ids.isNotEmpty) {
+                summaryText += " Found Task IDs: \$ids.";
+              } else {
+                summaryText +=
+                    " Found \${tasks.length} tasks, but couldn't extract IDs.";
+              }
+            } else if (tasks != null && tasks.isEmpty) {
+              summaryText =
+                  "Tool '\$toolName' executed successfully, but found no matching tasks.";
+            }
+          }
+        } else if (toolResultJson.containsKey('status') &&
+            toolResultJson['status'] == 'error') {
+          summaryText =
+              "Tool '\$toolName' failed: \${toolResultJson['message'] ?? 'Unknown error'}";
+          if (toolResultJson.containsKey('taskId')) {
+            summaryText +=
+                " (Related to Task ID: \${toolResultJson['taskId']})";
+          }
+        } else if (toolResultJson.containsKey('result_text')) {
+          // Fallback for non-JSON or simple text results
+          summaryText =
+              "Tool '\$toolName' executed. Result: \${toolResultJson['result_text']}";
+        }
+        // Add more specific summaries for other tools if needed
+
+        final summaryTextPart = TextPart(summaryText);
+
+        // --- Step 9: Second Gemini Call (with function response AND summary text) ---
+        // History includes: original user query, model's function call request (isolated), our function response + summary
         final historyForSecondCall = [
           ...currentTurnHistory, // History up to and including the user query
           // Explicitly create the model turn containing ONLY the function call
           Content('model', [
-            functionCallPart,
-          ]), // functionCallPart was extracted in Step 5
-          // The function response turn
+            functionCallPart, // functionCallPart was extracted in Step 5
+          ]),
+          // The function response turn, now including BOTH the summary text and the structured response
           Content('function', [
-            functionResponsePart, // functionResponsePart was constructed in Step 8
+            summaryTextPart, // Add the explicit summary text first
+            functionResponsePart, // Then add the structured FunctionResponse
           ]),
         ];
 
         debugPrint(
-          "MCP ProcessQuery: Making second Gemini call with history containing isolated FunctionCall and FunctionResponse.",
+          "MCP ProcessQuery: Making second Gemini call with history containing isolated FunctionCall, Text Summary, and FunctionResponse.",
         );
         // Log the history structure for debugging
         // debugPrint("MCP ProcessQuery: History for second call: \${historyForSecondCall.map((c) => c.toJson()).toList()}");
@@ -910,12 +956,16 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
           return McpProcessResult(
             finalModelContent: Content('model', [
               TextPart(
-                "Tool '\$toolName' executed successfully (Result: \${jsonEncode(toolResultJson)}), but encountered an error getting the final summary: \${e.toString()}",
+                "Tool '\$toolName' executed successfully (\$summaryText), but encountered an error getting the final summary: \${e.toString()}",
               ),
             ]),
-            // Pass back the original model content that contained the call, using null-aware access
+            // Pass back the original model content that contained the call
             modelCallContent: candidate?.content,
-            toolResponseContent: Content('function', [functionResponsePart]),
+            // Include both parts in the tool response content for context
+            toolResponseContent: Content('function', [
+              summaryTextPart,
+              functionResponsePart,
+            ]),
             toolName: toolName,
             toolArgs: toolArgs,
             toolResult:
@@ -929,7 +979,7 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
             finalResponse.candidates.firstOrNull?.content ??
             Content('model', [
               TextPart(
-                "Tool '\$toolName' executed. No final summary generated.",
+                "Tool '\$toolName' executed (\$summaryText). No final summary generated.",
               ),
             ]);
 
@@ -939,7 +989,11 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
         return McpProcessResult(
           finalModelContent: finalContent,
           modelCallContent: candidate?.content,
-          toolResponseContent: Content('function', [functionResponsePart]),
+          // Include both parts in the tool response content for context
+          toolResponseContent: Content('function', [
+            summaryTextPart,
+            functionResponsePart,
+          ]),
           toolName: toolName,
           toolArgs: toolArgs,
           toolResult: toolResultString,
@@ -949,12 +1003,30 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
         debugPrint(
           "MCP ProcessQuery: Error calling tool '\$toolName' on server '\$targetServerId': \$e",
         );
+        // Construct the function content even on error to show the attempt
+        final failedFunctionCallContent =
+            candidate?.content ??
+            Content('model', [
+              TextPart("Model attempted to call '\$toolName'"),
+            ]);
+        final errorResponsePart = FunctionResponse(toolName, {
+          'error': e.toString(),
+        });
+        final errorTextPart = TextPart(
+          "Failed to execute tool '\$toolName': \${e.toString()}",
+        );
+
         return McpProcessResult(
           finalModelContent: Content('model', [
             TextPart(
               "Sorry, I encountered an error while trying to execute the '\$toolName' tool: \${e.toString()}",
             ),
           ]),
+          modelCallContent: failedFunctionCallContent, // Show the call attempt
+          toolResponseContent: Content('function', [
+            errorTextPart,
+            errorResponsePart,
+          ]), // Show the error response
           toolName: toolName,
           toolArgs: toolArgs,
           sourceServerId: targetServerId,
