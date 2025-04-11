@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart'; // Import for kDebugMode
 import 'package:flutter_memos/todoist_api/lib/api.dart' as todoist;
 
 /// Service class for interacting with the Todoist API
@@ -22,7 +23,9 @@ class TodoistApiService {
   String _authToken = '';
 
   // Configuration and logging options
-  static bool verboseLogging = true;
+  // Disable verbose logging by default to avoid MCP stdio issues
+  static bool verboseLogging =
+      false; // Or use: static bool verboseLogging = kDebugMode;
   String get apiBaseUrl => _baseUrl;
 
   TodoistApiService._internal() {
@@ -34,7 +37,8 @@ class TodoistApiService {
   void configureService({required String authToken}) {
     if (_authToken == authToken && _authToken.isNotEmpty) {
       if (verboseLogging) {
-        print(
+        // Use debugPrint instead of print
+        debugPrint(
           '[TodoistApiService] Configuration unchanged.',
         );
       }
@@ -45,7 +49,8 @@ class TodoistApiService {
     _initializeClient(_authToken);
 
     if (verboseLogging) {
-      print(
+      // Use debugPrint instead of print
+      debugPrint(
         '[TodoistApiService] Configured with ${authToken.isNotEmpty ? 'valid' : 'empty'} token',
       );
     }
@@ -66,12 +71,14 @@ class TodoistApiService {
       _commentsApi = todoist.CommentsApi(_apiClient);
 
       if (verboseLogging) {
-        print(
+        // Use debugPrint instead of print
+        debugPrint(
           '[TodoistApiService] Client initialized successfully',
         );
       }
     } catch (e) {
-      print(
+      // Use debugPrint for errors
+      debugPrint(
         '[TodoistApiService] Error initializing client: $e',
       );
       throw Exception('Failed to initialize Todoist API client: $e');
@@ -90,7 +97,8 @@ class TodoistApiService {
     List<int>? ids,
   }) async {
     if (verboseLogging) {
-      print('[TodoistApiService] Getting active tasks');
+      // Use debugPrint instead of print
+      debugPrint('[TodoistApiService] Getting active tasks');
     }
 
     try {
@@ -104,7 +112,8 @@ class TodoistApiService {
       );
 
       if (verboseLogging) {
-        print(
+        // Use debugPrint instead of print
+        debugPrint(
           '[TodoistApiService] Retrieved ${tasks?.length ?? 0} tasks',
         );
       }
@@ -131,7 +140,8 @@ class TodoistApiService {
     String? assigneeId,
   }) async {
     if (verboseLogging) {
-      print(
+      // Use debugPrint instead of print
+      debugPrint(
         '[TodoistApiService] Creating task: $content',
       );
     }
@@ -153,7 +163,7 @@ class TodoistApiService {
       dueDate: due?.dueObject?.date.toIso8601String().substring(
         0,
         10,
-      ), // Format as YYYY-MM-DD
+      ), // Format as YYYY-MM-DD, handle potential null date
       dueDatetime: due?.dueObject?.datetime?.toIso8601String(),
       dueLang:
           due
@@ -172,7 +182,8 @@ class TodoistApiService {
       }
 
       if (verboseLogging) {
-        print(
+        // Use debugPrint instead of print
+        debugPrint(
           '[TodoistApiService] Task created successfully with ID: ${task.id}',
         );
       }
@@ -197,14 +208,15 @@ class TodoistApiService {
     String? assigneeId,
   }) async {
     if (verboseLogging) {
-      print('[TodoistApiService] Updating task: $id');
+      // Use debugPrint instead of print
+      debugPrint('[TodoistApiService] Updating task: $id');
     }
 
     // The generated UpdateTaskRequest model expects specific types.
     final request = todoist.UpdateTaskRequest(
       content: content,
       description: description,
-      labels: labelIds ?? [], // Provide default empty list
+      labels: labelIds ?? [], // Provide empty list if null
       priority:
           priority != null ? int.tryParse(priority) : null, // API expects int
       // Access nested properties from dueObject and durationObject
@@ -212,7 +224,7 @@ class TodoistApiService {
       dueDate: due?.dueObject?.date.toIso8601String().substring(
         0,
         10,
-      ), // Format as YYYY-MM-DD
+      ), // Format as YYYY-MM-DD, handle potential null date
       dueDatetime: due?.dueObject?.datetime?.toIso8601String(),
       dueLang:
           due
@@ -228,7 +240,8 @@ class TodoistApiService {
       await _tasksApi.updateTask(id, request);
 
       if (verboseLogging) {
-        print(
+        // Use debugPrint instead of print
+        debugPrint(
           '[TodoistApiService] Task updated successfully',
         );
       }
@@ -241,7 +254,8 @@ class TodoistApiService {
   /// Close (complete) a task
   Future<void> closeTask(String id) async {
     if (verboseLogging) {
-      print('[TodoistApiService] Closing task: $id');
+      // Use debugPrint instead of print
+      debugPrint('[TodoistApiService] Closing task: $id');
     }
 
     try {
@@ -253,7 +267,8 @@ class TodoistApiService {
       await _tasksApi.closeTask(taskIdInt);
 
       if (verboseLogging) {
-        print(
+        // Use debugPrint instead of print
+        debugPrint(
           '[TodoistApiService] Task closed successfully',
         );
       }
@@ -266,7 +281,8 @@ class TodoistApiService {
   /// Reopen a task
   Future<void> reopenTask(String id) async {
     if (verboseLogging) {
-      print('[TodoistApiService] Reopening task: $id');
+      // Use debugPrint instead of print
+      debugPrint('[TodoistApiService] Reopening task: $id');
     }
 
     try {
@@ -278,7 +294,8 @@ class TodoistApiService {
       await _tasksApi.reopenTask(taskIdInt);
 
       if (verboseLogging) {
-        print(
+        // Use debugPrint instead of print
+        debugPrint(
           '[TodoistApiService] Task reopened successfully',
         );
       }
@@ -291,7 +308,8 @@ class TodoistApiService {
   /// Delete a task
   Future<void> deleteTask(String id) async {
     if (verboseLogging) {
-      print('[TodoistApiService] Deleting task: $id');
+      // Use debugPrint instead of print
+      debugPrint('[TodoistApiService] Deleting task: $id');
     }
 
     try {
@@ -303,7 +321,8 @@ class TodoistApiService {
       await _tasksApi.deleteTask(taskIdInt);
 
       if (verboseLogging) {
-        print(
+        // Use debugPrint instead of print
+        debugPrint(
           '[TodoistApiService] Task deleted successfully',
         );
       }
@@ -318,14 +337,16 @@ class TodoistApiService {
   /// Get all projects
   Future<List<todoist.Project>> getAllProjects() async {
     if (verboseLogging) {
-      print('[TodoistApiService] Getting all projects');
+      // Use debugPrint instead of print
+      debugPrint('[TodoistApiService] Getting all projects');
     }
 
     try {
       final projects = await _projectsApi.getAllProjects();
 
       if (verboseLogging) {
-        print(
+        // Use debugPrint instead of print
+        debugPrint(
           '[TodoistApiService] Retrieved ${projects?.length ?? 0} projects',
         );
       }
@@ -340,7 +361,8 @@ class TodoistApiService {
   /// Get project by ID
   Future<todoist.Project> getProject(String id) async {
     if (verboseLogging) {
-      print('[TodoistApiService] Getting project: $id');
+      // Use debugPrint instead of print
+      debugPrint('[TodoistApiService] Getting project: $id');
     }
 
     try {
@@ -351,7 +373,8 @@ class TodoistApiService {
       }
 
       if (verboseLogging) {
-        print(
+        // Use debugPrint instead of print
+        debugPrint(
           '[TodoistApiService] Retrieved project: ${project.name}',
         );
       }
@@ -368,7 +391,8 @@ class TodoistApiService {
   /// Get all sections
   Future<List<todoist.Section>> getAllSections({String? projectId}) async {
     if (verboseLogging) {
-      print(
+      // Use debugPrint instead of print
+      debugPrint(
         '[TodoistApiService] Getting all sections${projectId != null ? ' for project $projectId' : ''}',
       );
     }
@@ -377,7 +401,8 @@ class TodoistApiService {
       final sections = await _sectionsApi.getAllSections(projectId: projectId);
 
       if (verboseLogging) {
-        print(
+        // Use debugPrint instead of print
+        debugPrint(
           '[TodoistApiService] Retrieved ${sections?.length ?? 0} sections',
         );
       }
@@ -394,7 +419,8 @@ class TodoistApiService {
   /// Get all personal labels
   Future<List<todoist.Label>> getAllPersonalLabels() async {
     if (verboseLogging) {
-      print(
+      // Use debugPrint instead of print
+      debugPrint(
         '[TodoistApiService] Getting all personal labels',
       );
     }
@@ -403,7 +429,8 @@ class TodoistApiService {
       final labels = await _labelsApi.getAllPersonalLabels();
 
       if (verboseLogging) {
-        print(
+        // Use debugPrint instead of print
+        debugPrint(
           '[TodoistApiService] Retrieved ${labels?.length ?? 0} labels',
         );
       }
@@ -420,7 +447,8 @@ class TodoistApiService {
   /// Get task comments
   Future<List<todoist.Comment>> getAllComments({String? taskId, String? projectId}) async {
     if (verboseLogging) {
-      print(
+      // Use debugPrint instead of print
+      debugPrint(
         '[TodoistApiService] Getting comments for ${taskId != null ? 'task $taskId' : 'project $projectId'}',
       );
     }
@@ -432,7 +460,8 @@ class TodoistApiService {
       );
 
       if (verboseLogging) {
-        print(
+        // Use debugPrint instead of print
+        debugPrint(
           '[TodoistApiService] Retrieved ${comments?.length ?? 0} comments',
         );
       }
@@ -452,7 +481,8 @@ class TodoistApiService {
     todoist.CreateCommentAttachmentParameter? attachment,
   }) async {
     if (verboseLogging) {
-      print('[TodoistApiService] Creating comment');
+      // Use debugPrint instead of print
+      debugPrint('[TodoistApiService] Creating comment');
     }
 
     // Corrected: Pass content as positional, others as named
@@ -469,7 +499,8 @@ class TodoistApiService {
       }
 
       if (verboseLogging) {
-        print(
+        // Use debugPrint instead of print
+        debugPrint(
           '[TodoistApiService] Comment created successfully with ID: ${comment.id}',
         );
       }
@@ -484,13 +515,14 @@ class TodoistApiService {
   // HELPER METHODS
 
   void _handleApiError(String context, dynamic error) {
+    // Use debugPrint for errors
     if (error is todoist.ApiException) {
-      print(
-        '$context: ${error.message} (Code: ${error.code})',
+      debugPrint(
+        '[TodoistApiService] API Error - $context: ${error.message} (Code: ${error.code})',
       );
       // Additional error handling logic could be added here
     } else {
-      print('$context: $error');
+      debugPrint('[TodoistApiService] Error - $context: $error');
     }
   }
 
@@ -507,7 +539,8 @@ class TodoistApiService {
       return true;
     } catch (e) {
       if (verboseLogging) {
-        print(
+        // Use debugPrint instead of print
+        debugPrint(
           '[TodoistApiService] Health check failed: $e',
         );
       }

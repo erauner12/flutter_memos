@@ -49,6 +49,45 @@ class GeminiService {
   bool get isInitialized => _isInitialized;
   String? get initializationError => _initializationError;
 
+  // Method to send message and get a single response
+  // Takes the latest prompt and the history *before* this prompt
+  Future<GenerateContentResponse> generateContent(
+    String prompt,
+    List<Content> history, {
+    List<Tool>? tools, // Optional tools parameter
+  }) async {
+    if (!_isInitialized || _model == null) {
+      throw Exception(
+        "Error: Gemini service not initialized. $_initializationError",
+      );
+    }
+
+    try {
+      // Construct the full history including the new user prompt
+      final userContent = Content.text(prompt);
+      final contentForApi = [
+        ...history, // History before this turn
+        Content('user', userContent.parts), // Current user prompt
+      ];
+
+      // Generate content using the non-streaming method
+      final response = await _model!.generateContent(
+        contentForApi,
+        tools: tools, // Pass tools if provided
+        // Optional: toolConfig for function calling mode
+        // toolConfig: ToolConfig(functionCallingConfig: FunctionCallingConfig(mode: FunctionCallingMode.auto)),
+      );
+      return response;
+    } catch (e) {
+      debugPrint("Error calling Gemini generateContent: $e");
+      // Rethrow a more specific exception or handle as needed
+      throw Exception(
+        "Error generating content with AI service: ${e.toString()}",
+      );
+    }
+  }
+
+
   // Method to send message and get a stream of responses
   // Takes the latest prompt and the history *before* this prompt
   Stream<GenerateContentResponse> sendMessageStream(
@@ -73,7 +112,15 @@ class GeminiService {
       ];
 
       // Generate content using the stream method
-      final stream = _model!.generateContentStream(contentForApi);
+      // NOTE: Function calling might behave differently with streaming.
+      // For this plan, we focus on generateContent for the core logic.
+      // If using streaming here, aggregation logic would be needed before checking FunctionCall.
+      final stream = _model!.generateContentStream(
+        contentForApi,
+        // Tools can also be passed to the streaming method if needed
+        // tools: tools,
+        // toolConfig: ToolConfig(functionCallingConfig: FunctionCallingConfig(mode: FunctionCallingMode.auto)),
+      );
       return stream;
     } catch (e) {
       if (kDebugMode) {

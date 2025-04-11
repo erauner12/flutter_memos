@@ -1,11 +1,12 @@
 import 'dart:async';
+import 'dart:convert'; // For jsonEncode/Decode if needed for tool results
 import 'dart:io'; // Needed for Platform.environment and ProcessStartMode
 
 import 'package:collection/collection.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_memos/models/mcp_server_config.dart';
 import 'package:flutter_memos/providers/settings_provider.dart'; // To get server list and Gemini key
-// import 'package:flutter_memos/services/gemini_service.dart'; // PHASE 3: To get Gemini model
+import 'package:flutter_memos/services/gemini_service.dart'; // Import GeminiService
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_generative_ai/google_generative_ai.dart'; // Import for Gemini types
 import 'package:mcp_dart/mcp_dart.dart'
@@ -646,8 +647,8 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
   void handleClientClose(String serverId) {
     debugPrint("MCP [\$serverId]: Received close callback.");
     if (state.serverStatuses[serverId] != McpConnectionStatus.error) {
-       // If not already in error, update status to disconnected which also removes client
-       updateServerState(serverId, McpConnectionStatus.disconnected);
+      // If not already in error, update status to disconnected which also removes client
+      updateServerState(serverId, McpConnectionStatus.disconnected);
       // updateServerState calls rebuildToolMap if client was removed
     } else {
       // If it was already in error state, just ensure the client reference is removed
@@ -712,9 +713,9 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
     String query,
     List<Content> history,
   ) async {
-    // *** ADD LOGGING HERE ***
     debugPrint("MCP ProcessQuery: Entered processQuery with query: '\$query'");
 
+    // --- Step 1: Check for active connections ---
     if (!state.hasActiveConnections) {
       debugPrint("MCP ProcessQuery: No active MCP connections.");
       return McpProcessResult(
@@ -724,34 +725,220 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
       );
     }
 
-    // --- REMOVE TEMPORARY TEST CODE ---
-    // The temporary hardcoded 'create_todoist_task' test block has been removed.
-    // --- RESTORE ORIGINAL/FUTURE GEMINI LOGIC ---
-    // Placeholder for the actual logic that should run:
-    // 1. Get available tools from all connected clients (via toolToServerIdMap or similar)
-    // 2. Prepare the tools list for the Gemini model.
-    // 3. Call the Gemini model's generateContent method with the query, history, and tools.
-    // 4. Handle the response:
-    //    - If it contains a FunctionCall:
-    //        - Find the correct MCP client using toolToServerIdMap.
-    //        - Call the tool on that client using mcp.callTool.
-    //        - Send the FunctionResponse back to Gemini.
-    //        - Get the final text response from Gemini.
-    //    - If it's just a text response:
-    //        - Use that as the final result.
-    // 5. Construct and return the McpProcessResult.
-    debugPrint(
-      "MCP ProcessQuery: Temporary test code removed. Gemini integration needed.",
+    // --- Step 2: Get Gemini Service ---
+    final geminiService = ref.read(geminiServiceProvider);
+    if (geminiService == null ||
+        !geminiService.isInitialized ||
+        geminiService.model == null) {
+      debugPrint(
+        "MCP ProcessQuery: Gemini service not available or not initialized.",
+      );
+      final errorMsg =
+          geminiService?.initializationError ??
+          "Gemini service is null or model is missing.";
+      return McpProcessResult(
+        finalModelContent: Content('model', [
+          TextPart("AI service is not available: \$errorMsg"),
+        ]),
+      );
+    }
+
+    // --- Step 3: Gather Tools from Connected Clients ---
+    final List<Tool> allAvailableTools =
+        state.activeClients.values
+            .where((client) => client.isConnected)
+            .expand((client) => client.availableTools)
+            .toList();
+
+    if (allAvailableTools.isEmpty) {
+      debugPrint(
+        "MCP ProcessQuery: No tools available from connected MCP servers. Proceeding without tools.",
+      );
+    } else {
+      debugPrint(
+        "MCP ProcessQuery: Passing \${allAvailableTools.length} tools to Gemini: \${allAvailableTools.map((t) => t.functionDeclarations?.firstOrNull?.name ?? 'unknown').join(', ')}",
+      );
+    }
+
+    // --- Step 4: First Gemini Call (with tools) ---
+    GenerateContentResponse firstResponse;
+    // Keep track of the content sent to the model for history management
+    final userContentForHistory = Content.text(query);
+    // History for the *current* turn starts with previous history + user query
+    final currentTurnHistory = [
+      ...history,
+      Content('user', userContentForHistory.parts),
+    ];
+
+    try {
+      // Use the non-streaming generateContent for the initial call
+      firstResponse = await geminiService.generateContent(
+        query,
+        history,
+        tools: allAvailableTools.isNotEmpty ? allAvailableTools : null,
+      );
+    } catch (e) {
+      debugPrint("MCP ProcessQuery: Error during first Gemini call: \$e");
+      return McpProcessResult(
+        finalModelContent: Content('model', [
+          TextPart("Error communicating with AI service: \${e.toString()}"),
+        ]),
+      );
+    }
+
+    // --- Step 5: Check for Function Call ---
+    final candidate = firstResponse.candidates.firstOrNull;
+    final functionCallPart = candidate?.content.parts.firstWhereOrNull(
+      (part) => part is FunctionCall,
     );
-    return McpProcessResult(
-      finalModelContent: Content('model', [
-        TextPart(
-          "MCP connected, but AI tool calling logic is not yet implemented.",
-        ),
-      ]),
-    );
+
+    if (functionCallPart != null && functionCallPart is FunctionCall) {
+      final functionCall = functionCallPart;
+      final toolName = functionCall.name;
+      final toolArgs = functionCall.args; // This is Map<String, Object?>
+
+      debugPrint(
+        "MCP ProcessQuery: Gemini requested Function Call: '\$toolName' with args: \$toolArgs",
+      );
+
+      // --- Step 6: Find and Execute Tool ---
+      final targetServerId = toolToServerIdMap[toolName];
+      if (targetServerId == null) {
+        debugPrint(
+          "MCP ProcessQuery: Error - Tool '\$toolName' requested by AI not found in tool map.",
+        );
+        return McpProcessResult(
+          finalModelContent: Content('model', [
+            TextPart(
+              "Sorry, I found a tool called '\$toolName' but couldn't locate the server providing it.",
+            ),
+          ]),
+        );
+      }
+
+      final targetClient = state.activeClients[targetServerId];
+      if (targetClient == null || !targetClient.isConnected) {
+        debugPrint(
+          "MCP ProcessQuery: Error - Client for server '\$targetServerId' (tool '\$toolName') not found or not connected.",
+        );
+        return McpProcessResult(
+          finalModelContent: Content('model', [
+            TextPart(
+              "Sorry, the server responsible for the '\$toolName' tool is currently unavailable.",
+            ),
+          ]),
+        );
+      }
+
+      mcp_dart.CallToolResult toolResult;
+      String toolResultString = '';
+
+      try {
+        final params = mcp_dart.CallToolRequestParams(
+          name: toolName,
+          arguments: toolArgs.map((key, value) => MapEntry(key, value)),
+        );
+        toolResult = await targetClient.callTool(params);
+
+        final textContent = toolResult.result.firstWhereOrNull(
+          (c) => c is mcp_dart.TextContent,
+        );
+        if (textContent != null && textContent is mcp_dart.TextContent) {
+          toolResultString = textContent.text;
+          debugPrint(
+            "MCP ProcessQuery: Tool '\$toolName' executed successfully by server '\$targetServerId'. Result: \$toolResultString",
+          );
+        } else {
+          toolResultString = jsonEncode(toolResult.toJson());
+          debugPrint(
+            "MCP ProcessQuery: Tool '\$toolName' executed by server '\$targetServerId'. Result (non-text): \$toolResultString",
+          );
+        }
+
+        // --- Step 8: Construct FunctionResponse ---
+        final functionResponsePart = FunctionResponse(
+          name: toolName,
+          response: {'result': toolResultString},
+        );
+
+        // --- Step 9: Second Gemini Call (with function response) ---
+        final historyForSecondCall = [
+          ...currentTurnHistory,
+          candidate!.content,
+          Content('function', [functionResponsePart]),
+        ];
+
+        GenerateContentResponse finalResponse;
+        try {
+          finalResponse = await geminiService.generateContent(
+            "",
+            historyForSecondCall,
+            tools: null,
+          );
+        } catch (e) {
+          debugPrint("MCP ProcessQuery: Error during second Gemini call: \$e");
+          return McpProcessResult(
+            finalModelContent: Content('model', [
+              TextPart(
+                "Tool '\$toolName' executed, but encountered an error getting the final summary: \${e.toString()}",
+              ),
+            ]),
+            toolName: toolName,
+            toolArgs: toolArgs,
+            toolResult: toolResultString,
+            sourceServerId: targetServerId,
+          );
+        }
+
+        final finalContent =
+            finalResponse.candidates.firstOrNull?.content ??
+            Content('model', [
+              TextPart(
+                "Tool '\$toolName' executed. No final summary generated.",
+              ),
+            ]);
+
+        debugPrint(
+          "MCP ProcessQuery: Function call flow complete. Returning final response.",
+        );
+        return McpProcessResult(
+          finalModelContent: finalContent,
+          modelCallContent: candidate.content,
+          toolResponseContent: Content('function', [functionResponsePart]),
+          toolName: toolName,
+          toolArgs: toolArgs,
+          toolResult: toolResultString,
+          sourceServerId: targetServerId,
+        );
+      } catch (e) {
+        debugPrint(
+          "MCP ProcessQuery: Error calling tool '\$toolName' on server '\$targetServerId': \$e",
+        );
+        return McpProcessResult(
+          finalModelContent: Content('model', [
+            TextPart(
+              "Sorry, I encountered an error while trying to execute the '\$toolName' tool: \${e.toString()}",
+            ),
+          ]),
+          toolName: toolName,
+          toolArgs: toolArgs,
+          sourceServerId: targetServerId,
+        );
+      }
+    } else {
+      // --- Step 11: No Function Call - Return Direct Response ---
+      debugPrint(
+        "MCP ProcessQuery: No function call requested by Gemini. Returning direct response.",
+      );
+      final directContent =
+          candidate?.content ??
+          Content('model', [
+            TextPart("Sorry, I couldn't generate a response."),
+          ]);
+      return McpProcessResult(finalModelContent: directContent);
+    }
   }
-  
+
   // --- Cleanup ---
   @override
   void dispose() {
