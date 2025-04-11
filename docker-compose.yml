@@ -1,18 +1,41 @@
 version: '3.8'
 
 services:
+  # --- Existing Memos Service ---
   memos:
-    # Use a pinned Memos version, e.g. 0.24.0. Update as needed.
-    image: neosmemo/memos:0.24.0
+    image: neosmemo/memos:0.24.0 # Use a specific version
     container_name: memos-server
     environment:
       MEMOS_MODE: 'prod'
       MEMOS_PORT: '5230'
       TZ: 'UTC'
     volumes:
-      # Map the local memos-data directory to persist your Memos data
       - ./memos-data:/var/opt/memos
     ports:
-      # Expose port 5230 on localhost
-      - '5230:5230'
+      - '5230:5230' # Memos UI/API port
     restart: unless-stopped
+
+  # --- New MCP Proxy Service ---
+  mcp_proxy:
+    build:
+      # Correct the path to the directory containing the Dockerfile
+      context: ./api/mcp_tcp_proxy
+      dockerfile: Dockerfile
+    container_name: mcp-proxy-server
+    environment:
+      # Pass secrets needed by the stdio servers here
+      # The proxy itself doesn't need them, but it needs to pass them on via Process.start
+      # Make sure these are set in your host environment or a .env file
+      TODOIST_API_TOKEN: ${TODOIST_API_TOKEN}
+      # Add other secrets like OPENAI_API_KEY if needed by other MCP servers
+      # OPENAI_API_KEY: ${OPENAI_API_KEY}
+    ports:
+      # Map host port 8999 to container port 8999 (defined by PROXY_PORT in Dockerfile)
+      - '8999:8999'
+    restart: unless-stopped
+    # depends_on: # Add if the proxy relies on Memos, unlikely here
+    #  - memos
+
+volumes:
+  memos-data: # Define the named volume used by Memos
+# Ensure the volumes section is correctly placed at the end of the file

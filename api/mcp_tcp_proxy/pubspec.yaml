@@ -1,0 +1,15 @@
+name: mcp_tcp_proxy
+description: A TCP proxy gateway for stdio-based MCP servers.
+version: 1.0.0
+# repository: (optional)
+
+environment:
+  sdk: '>=3.0.0 &lt;4.0.0' # Match your Flutter project's SDK constraints
+
+dependencies:
+  args: ^2.4.0 # For command-line argument parsing (e.g., port)
+  # No direct mcp_dart dependency needed here, as it interacts via Process stdio
+
+dev_dependencies:
+  lints: ^3.0.0 # Or your preferred linter
+  test: ^1.24.0
