@@ -3,8 +3,14 @@ FROM dart:stable AS builder
 
 WORKDIR /app
 
-# Install necessary packages like ca-certificates if needed for network requests during build (unlikely here)
-# RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
+# <<< ADDED/MODIFIED SECTION START >>>
+# Update package lists, install certificates, and clean up
+# Run as root before creating the non-root user
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends ca-certificates && \
+    update-ca-certificates --fresh && \
+    rm -rf /var/lib/apt/lists/*
+# <<< ADDED/MODIFIED SECTION END >>>
 
 # Create a non-root user and group
 RUN groupadd -r appgroup && useradd --no-log-init -m -r -g appgroup appuser
@@ -27,6 +33,7 @@ USER appuser
 
 # --- Build Dependencies ---
 # Get dependencies for the main project (needed for todoist server)
+# This should now hopefully work with updated certificates
 RUN dart pub get
 
 # Get dependencies for the proxy (if it has its own pubspec.yaml)
@@ -59,6 +66,11 @@ WORKDIR /app
 
 # Create the same non-root user and group in the runtime stage
 RUN groupadd -r appgroup && useradd --no-log-init -m -r -g appgroup appuser
+
+# <<< ADDED SECTION START >>>
+# Copy necessary certificate authorities from the builder stage
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+# <<< ADDED SECTION END >>>
 
 # Copy only the compiled executables from the builder stage, setting ownership
 COPY --from=builder --chown=appuser:appgroup /app/compiled_bin/ /app/bin/
