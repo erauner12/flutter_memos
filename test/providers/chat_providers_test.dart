@@ -127,7 +127,9 @@ void main() {
         'create_todoist_task', {'status': 'success', 'taskId': '12345'})
   ]);
   final mockFinalModelContent =
-      Content('model', [TextPart('OK. Task "buy milk" created (ID: 12345).')]);
+      Content('model', [
+    TextPart('OK. Task "buy milk created (ID: 12345).'),
+  ]);
 
   final successfulMcpResult = McpProcessResult(
     modelCallContent: mockModelCallContent,
@@ -161,8 +163,10 @@ void main() {
     // Create ProviderContainer with overrides using the *fake* notifier
     container = ProviderContainer(
       overrides: [
-        // Override with the fake StateNotifier instance using overrideWithValue
-        mcpClientProvider.overrideWith((ref) => fakeMcpClientNotifier),
+        // Correctly override the notifier instance using .notifier.overrideWithValue
+        mcpClientProvider.notifier.overrideWithValue(
+          fakeMcpClientNotifier,
+        ), // Use .notifier.overrideWithValue
         geminiServiceProvider.overrideWithValue(mockGeminiService),
         geminiApiKeyProvider.overrideWith(
           (_) => MockPersistentStringNotifier(
