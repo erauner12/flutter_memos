@@ -21,4 +21,4 @@ for file in $mock_files; do
 done
 
 echo "✅ Successfully generated all mocks."
-echo "New mocks added: url_launcher_service_test.mocks.dart"
+echo "New mocks added: url_launcher_service_test.mocks.dart, chat_providers_test.mocks.dart"
