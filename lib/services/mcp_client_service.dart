@@ -713,101 +713,106 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
   ) async {
     // *** ADD LOGGING HERE ***
     debugPrint("MCP ProcessQuery: Entered processQuery with query: '\$query'");
-    // For this phase, we bypass Gemini and directly try the echo tool
-    // if an MCP server is connected and provides the tool.
 
     if (!state.hasActiveConnections) {
-      // Fallback: Maybe eventually call Gemini directly here?
-      // For now, return an error or a simple message.
       debugPrint("MCP ProcessQuery: No active MCP connections.");
       return McpProcessResult(
         finalModelContent: Content('model', [
-          TextPart("No active MCP server to echo."),
+          TextPart("No active MCP server to process the request."),
         ]),
       );
     }
 
-    // Find the server providing the 'echo' tool
-    final targetServerId = toolToServerIdMap['echo'];
-    // *** ADD LOGGING HERE ***
+    // --- START TEMPORARY TEST CODE for create_todoist_task ---
+    final toolToCall = 'create_todoist_task';
+    final targetServerId = toolToServerIdMap[toolToCall];
+
     debugPrint(
-      "MCP ProcessQuery: Looked up 'echo' tool. Found Server ID: \$targetServerId. Current tool map: \$toolToServerIdMap",
+      "MCP ProcessQuery: Looked up '\$toolToCall' tool. Found Server ID: \$targetServerId. Current tool map: \$toolToServerIdMap",
     );
+
     if (targetServerId == null) {
       debugPrint(
-        "MCP ProcessQuery: 'echo' tool not found in map: \$toolToServerIdMap",
+        "MCP ProcessQuery: '\$toolToCall' tool not found in map: \$toolToServerIdMap",
       );
       return McpProcessResult(
         finalModelContent: Content('model', [
-          TextPart("MCP server connected, but 'echo' tool not found."),
+          TextPart("MCP server connected, but '\$toolToCall' tool not found."),
         ]),
       );
     }
 
     final targetClient = state.activeClients[targetServerId];
-    // *** ADD LOGGING HERE ***
+    final isClientConnected = targetClient?.isConnected ?? false;
+
     debugPrint(
-      "MCP ProcessQuery: Checking target client for server '\$targetServerId'. Found: \${targetClient != null}, Connected: \${targetClient?.isConnected ?? false}",
+      "MCP ProcessQuery: Checking target client for server '\$targetServerId'. Found: \${targetClient != null}, Connected: \$isClientConnected",
     );
-    if (targetClient == null || !targetClient.isConnected) {
+
+    if (targetClient == null || !isClientConnected) {
       debugPrint(
-        "MCP ProcessQuery: Client for 'echo' tool (Server \$targetServerId) is not connected or found.",
+        "MCP ProcessQuery: Client for '\$toolToCall' tool (Server \$targetServerId) is not connected or found.",
       );
-      // Optionally try to reconnect or update status? For now, return error.
       updateServerState(
         targetServerId,
         McpConnectionStatus.error,
-        errorMsg: "Client for 'echo' tool disconnected unexpectedly.",
+        errorMsg: "Client for '\$toolToCall' tool disconnected unexpectedly.",
       );
       return McpProcessResult(
         finalModelContent: Content('model', [
           TextPart(
-            "Error: Client for 'echo' tool (Server \$targetServerId) is not connected.",
+            "Error: Client for '\$toolToCall' tool (Server \$targetServerId) is not connected.",
           ),
         ]),
-        toolName: 'echo',
+        toolName: toolToCall,
         sourceServerId: targetServerId,
       );
     }
 
     debugPrint(
-      "MCP ProcessQuery: Routing 'echo' tool call to server \$targetServerId",
+      "MCP ProcessQuery: Routing '\$toolToCall' tool call to server \$targetServerId",
     );
 
     try {
+      // Define the arguments for the Todoist task here
+      final taskArgs = {
+        'content':
+            'Test Task from Flutter Memos: \$query', // Use user query in content
+        'description': 'Created via manual MCP test call.',
+        // 'project_id': 'YOUR_PROJECT_ID', // Optional: Add a specific project ID if needed
+        'labels': ['mcp_test', 'flutter'], // Optional: Add some labels
+        'priority': 4, // Optional: Set priority (as integer)
+        // 'due_string': 'tomorrow', // Optional: Set a due date
+      };
+
       final params = mcp_dart.CallToolRequestParams(
-        name: 'echo',
-        arguments: {'message': query}, // Pass the user's query
+        name: toolToCall,
+        arguments: taskArgs,
       );
       final result = await targetClient.callTool(params);
 
-      // Extract text response from the tool result
       final toolResponseText = result.content
           .whereType<mcp_dart.TextContent>()
           .map((c) => c.text)
-          .join('\n'); // Join if multiple TextContent parts
+          .join('\n');
 
       debugPrint(
-        "MCP ProcessQuery: Tool 'echo' executed on server \$targetServerId. Result: \$toolResponseText",
+        "MCP ProcessQuery: Tool '\$toolToCall' executed on server \$targetServerId. Result: \$toolResponseText",
       );
 
-      // Simulate a simple "model" response containing the tool's output
       return McpProcessResult(
-        // We didn't call the actual model, so these can be null
         modelCallContent: null,
-        toolResponseContent: null, // Or construct if needed for history
-        // The final content IS the tool's response in this simple case
+        toolResponseContent: null,
         finalModelContent: Content('model', [TextPart(toolResponseText)]),
-        toolName: 'echo',
+        toolName: toolToCall,
         toolArgs: params.arguments,
         toolResult: toolResponseText,
         sourceServerId: targetServerId,
       );
     } catch (e) {
       final errorMsg =
-          "Error executing tool 'echo' on server \$targetServerId: \$e";
+          "Error executing tool '\$toolToCall' on server \$targetServerId: \$e";
       debugPrint("MCP ProcessQuery: \$errorMsg");
-      // Update server status to reflect the error during tool call
       updateServerState(
         targetServerId,
         McpConnectionStatus.error,
@@ -817,10 +822,15 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
         finalModelContent: Content('model', [
           TextPart("Error: \$errorMsg"),
         ]),
-        toolName: 'echo',
+        toolName: toolToCall,
         sourceServerId: targetServerId,
       );
     }
+    // --- END TEMPORARY TEST CODE ---
+
+    /* --- ORIGINAL/FUTURE GEMINI LOGIC WOULD GO HERE ---
+    // ... (Code to prepare tools for Gemini, call generateContent, handle FunctionCall, etc.)
+    */
   }
   
   // --- Cleanup ---
