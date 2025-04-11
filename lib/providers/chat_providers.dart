@@ -23,8 +23,8 @@ class ChatNotifier extends StateNotifier<ChatState> {
   StreamSubscription<GenerateContentResponse>? _geminiStreamSubscription;
 
   ChatNotifier(this._ref) : super(const ChatState()) {
-    // Initial check for API key status
-    _updateApiKeyStatus();
+    // Delay initial check slightly to allow other providers to initialize
+    Future.microtask(() => _updateApiKeyStatus());
     // Listen for changes in the API key to update status
     _ref.listen(geminiApiKeyProvider, (_, next) {
       _updateApiKeyStatus();
