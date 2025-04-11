@@ -220,9 +220,7 @@ class _AddEditMcpServerScreenState
               : null, // Use null for non-applicable fields
       port:
           _selectedType == McpConnectionType.tcp
-              ? int.tryParse(
-                _portController.text.trim(),
-              ) // Already validated parse
+              ? int.tryParse(_portController.text.trim())
               : null, // Use null for non-applicable fields
       isActive: _isActive, // Use the state variable
       customEnvironment: customEnvMap,
@@ -332,7 +330,6 @@ class _AddEditMcpServerScreenState
                             ),
                       ),
                     ),
-
                     // --- Conditional Stdio Fields ---
                     if (_selectedType == McpConnectionType.stdio) ...[
                       CupertinoTextFormFieldRow(
@@ -354,9 +351,7 @@ class _AddEditMcpServerScreenState
                         placeholder: '--port 1234 --verbose (Optional)',
                         prefix: const Text('Arguments'),
                         autocorrect: false,
-                        textInputAction:
-                            TextInputAction
-                                .next, // Change to next if TCP fields follow
+                        textInputAction: TextInputAction.next,
                       ),
                     ],
                     // --- Conditional TCP Fields ---
@@ -368,7 +363,6 @@ class _AddEditMcpServerScreenState
                         keyboardType: TextInputType.url,
                         autocorrect: false,
                         textInputAction: TextInputAction.next,
-                        // Add validator if needed, though primary validation is in _saveConfiguration
                         validator:
                             (value) =>
                                 (_selectedType == McpConnectionType.tcp &&
@@ -385,7 +379,6 @@ class _AddEditMcpServerScreenState
                           decimal: false,
                         ),
                         textInputAction: TextInputAction.done,
-                        // Add validator if needed, though primary validation is in _saveConfiguration
                         validator: (value) {
                           if (_selectedType == McpConnectionType.tcp) {
                             if (value == null || value.trim().isEmpty) {
@@ -407,7 +400,7 @@ class _AddEditMcpServerScreenState
                         8,
                         15,
                         8,
-                      ), // Match padding
+                      ),
                       title: const Text('Connect on Apply'),
                       trailing: CupertinoSwitch(
                         value: _isActive,
@@ -423,7 +416,7 @@ class _AddEditMcpServerScreenState
                     children: [
                       const Text('CUSTOM ENVIRONMENT VARIABLES'),
                       CupertinoButton(
-                        padding: const EdgeInsets.only(right: 0), // Align add button
+                        padding: const EdgeInsets.only(right: 0),
                         minSize: 0,
                         onPressed: _addEnvVar,
                         child: const Icon(CupertinoIcons.add_circled, size: 22),
@@ -431,7 +424,6 @@ class _AddEditMcpServerScreenState
                     ],
                   ),
                   footer: Padding(
-                    // Update footer text based on type
                     padding: const EdgeInsets.symmetric(
                       horizontal: 15.0,
                       vertical: 4.0,
@@ -452,7 +444,6 @@ class _AddEditMcpServerScreenState
                         ),
                       )
                     else
-                      // Build rows for existing env vars
                       ..._envVars.map((pair) => _buildEnvVarRow(pair)),
                   ],
                 ),
@@ -465,44 +456,60 @@ class _AddEditMcpServerScreenState
                       onPressed:
                           (_isEditing && widget.serverToEdit != null)
                               ? () async {
-                                // Ensure serverToEdit is not null
-                        final confirmed = await showCupertinoDialog<bool>(
-                          context: context,
-                          builder: (context) => CupertinoAlertDialog(
-                            title: const Text('Delete MCP Server?'),
-                            content: Text(
-                                'Are you sure you want to delete "${widget.serverToEdit!.name}"?'),
-                            actions: [
-                              CupertinoDialogAction(
-                                child: const Text('Cancel'),
-                                onPressed: () => Navigator.of(context).pop(false),
-                              ),
-                              CupertinoDialogAction(
-                                isDestructiveAction: true,
-                                child: const Text('Delete'),
-                                onPressed: () => Navigator.of(context).pop(true),
-                              ),
-                            ],
-                          ),
-                        );
+                                final confirmed = await showCupertinoDialog<
+                                  bool
+                                >(
+                                  context: context,
+                                  builder:
+                                      (context) => CupertinoAlertDialog(
+                                        title: const Text('Delete MCP Server?'),
+                                        content: Text(
+                                          'Are you sure you want to delete "${widget.serverToEdit!.name}"?',
+                                        ),
+                                        actions: [
+                                          CupertinoDialogAction(
+                                            child: const Text('Cancel'),
+                                            onPressed:
+                                                () => Navigator.of(
+                                                  context,
+                                                ).pop(false),
+                                          ),
+                                          CupertinoDialogAction(
+                                            isDestructiveAction: true,
+                                            child: const Text('Delete'),
+                                            onPressed:
+                                                () => Navigator.of(
+                                                  context,
+                                                ).pop(true),
+                                          ),
+                                        ],
+                                      ),
+                                );
 
-                        if (confirmed == true) {
-                          final success = await ref
-                              .read(settingsServiceProvider)
-                              .deleteMcpServer(widget.serverToEdit!.id);
-                          if (success && mounted) {
-                             _showResultDialog('Deleted', 'MCP Server "${widget.serverToEdit!.name}" deleted.');
-                            Navigator.of(context).pop(); // Pop back to settings
-                          } else if (!success && mounted) {
-                            _showResultDialog('Error', 'Failed to delete MCP server.', isError: true);
-                          }
-                        }
+                                if (confirmed == true) {
+                                  final success = await ref
+                                      .read(settingsServiceProvider)
+                                      .deleteMcpServer(widget.serverToEdit!.id);
+                                  if (success && mounted) {
+                                    _showResultDialog(
+                                      'Deleted',
+                                      'MCP Server "${widget.serverToEdit!.name}" deleted.',
+                                    );
+                                    Navigator.of(context).pop();
+                                  } else if (!success && mounted) {
+                                    _showResultDialog(
+                                      'Error',
+                                      'Failed to delete MCP server.',
+                                      isError: true,
+                                    );
+                                  }
+                                }
                               }
-                              : null, // Disable if not editing or serverToEdit is null
+                              : null,
                       child: const Text('Delete Server'),
                     ),
                   ),
-                 const SizedBox(height: 30), // Bottom padding
+                const SizedBox(height: 30),
               ],
             ),
           ),
@@ -514,7 +521,7 @@ class _AddEditMcpServerScreenState
   // Helper to build a row for an environment variable
   Widget _buildEnvVarRow(_EnvVarPair pair) {
     return Padding(
-      key: ValueKey(pair.id), // Important for stateful updates in list
+      key: ValueKey(pair.id),
       padding: const EdgeInsets.symmetric(horizontal: 15.0, vertical: 6.0),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
@@ -526,10 +533,10 @@ class _AddEditMcpServerScreenState
               placeholder: 'VARIABLE_NAME',
               style: const TextStyle(fontSize: 14),
               padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 10.0),
-               decoration: BoxDecoration(
-                 color: CupertinoColors.tertiarySystemFill.resolveFrom(context),
-                 borderRadius: BorderRadius.circular(5.0),
-               ),
+              decoration: BoxDecoration(
+                color: CupertinoColors.tertiarySystemFill.resolveFrom(context),
+                borderRadius: BorderRadius.circular(5.0),
+              ),
             ),
           ),
           const Padding(
@@ -543,10 +550,10 @@ class _AddEditMcpServerScreenState
               placeholder: 'Value',
               style: const TextStyle(fontSize: 14),
               padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 10.0),
-               decoration: BoxDecoration(
-                 color: CupertinoColors.tertiarySystemFill.resolveFrom(context),
-                 borderRadius: BorderRadius.circular(5.0),
-               ),
+              decoration: BoxDecoration(
+                color: CupertinoColors.tertiarySystemFill.resolveFrom(context),
+                borderRadius: BorderRadius.circular(5.0),
+              ),
             ),
           ),
           CupertinoButton(

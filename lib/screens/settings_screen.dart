@@ -375,104 +375,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
-  // Method to show the model picker
-  void _showModelPicker(BuildContext context) {
-    final currentModel = ref.read(openAiModelIdProvider);
-    int initialItem = _availableModels.indexOf(currentModel);
-    if (initialItem < 0) initialItem = 0; // Default to first if not found
-
-    String selectedValue =
-        _availableModels.isNotEmpty ? _availableModels[initialItem] : '';
-
-    showCupertinoModalPopup<void>(
-      context: context,
-      builder: (BuildContext context) {
-        return SafeArea(
-          top: false,
-          child: Container(
-            height: 250,
-            color: CupertinoColors.systemBackground.resolveFrom(context),
-            child: Column(
-              children: [
-                Container(
-                  decoration: BoxDecoration(
-                    color: CupertinoColors.secondarySystemBackground
-                        .resolveFrom(context),
-                    border: Border(
-                      bottom: BorderSide(
-                        color: CupertinoColors.separator.resolveFrom(context),
-                        width: 0.0,
-                      ),
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      CupertinoButton(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16.0,
-                          vertical: 10.0,
-                        ),
-                        child: const Text('Cancel'),
-                        onPressed: () => Navigator.pop(context),
-                      ),
-                      CupertinoButton(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16.0,
-                          vertical: 10.0,
-                        ),
-                        child: const Text('Done'),
-                        onPressed: () {
-                          if (selectedValue.isNotEmpty &&
-                              selectedValue != currentModel) {
-                            ref
-                                .read(openAiModelIdProvider.notifier)
-                                .set(selectedValue);
-                            if (kDebugMode) {
-                              print('Selected OpenAI Model: $selectedValue');
-                            }
-                          }
-                          Navigator.pop(context);
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-                Expanded(
-                  child: CupertinoPicker(
-                    scrollController: FixedExtentScrollController(
-                      initialItem: initialItem,
-                    ),
-                    itemExtent: 32.0,
-                    backgroundColor: CupertinoColors.systemBackground
-                        .resolveFrom(context),
-                    onSelectedItemChanged: (int index) {
-                      selectedValue = _availableModels[index];
-                    },
-                    children:
-                        _availableModels
-                            .map(
-                              (modelId) => Center(
-                                child: Text(
-                                  modelId,
-                                  style:
-                                      CupertinoTheme.of(
-                                        context,
-                                      ).textTheme.textStyle,
-                                ),
-                              ),
-                            )
-                            .toList(),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
   // Helper method to build MCP server list tiles
   List<Widget> _buildMcpServerListTiles(BuildContext context, WidgetRef ref) {
     final mcpServers = ref.watch(mcpServerListProvider);
@@ -667,6 +569,104 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
+  // Method to show the model picker
+  void _showModelPicker(BuildContext context) {
+    final currentModel = ref.read(openAiModelIdProvider);
+    int initialItem = _availableModels.indexOf(currentModel);
+    if (initialItem < 0) initialItem = 0; // Default to first if not found
+
+    String selectedValue =
+        _availableModels.isNotEmpty ? _availableModels[initialItem] : '';
+
+    showCupertinoModalPopup<void>(
+      context: context,
+      builder: (BuildContext context) {
+        return SafeArea(
+          top: false,
+          child: Container(
+            height: 250,
+            color: CupertinoColors.systemBackground.resolveFrom(context),
+            child: Column(
+              children: [
+                Container(
+                  decoration: BoxDecoration(
+                    color: CupertinoColors.secondarySystemBackground
+                        .resolveFrom(context),
+                    border: Border(
+                      bottom: BorderSide(
+                        color: CupertinoColors.separator.resolveFrom(context),
+                        width: 0.0,
+                      ),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      CupertinoButton(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16.0,
+                          vertical: 10.0,
+                        ),
+                        child: const Text('Cancel'),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                      CupertinoButton(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16.0,
+                          vertical: 10.0,
+                        ),
+                        child: const Text('Done'),
+                        onPressed: () {
+                          if (selectedValue.isNotEmpty &&
+                              selectedValue != currentModel) {
+                            ref
+                                .read(openAiModelIdProvider.notifier)
+                                .set(selectedValue);
+                            if (kDebugMode) {
+                              print('Selected OpenAI Model: $selectedValue');
+                            }
+                          }
+                          Navigator.pop(context);
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: CupertinoPicker(
+                    scrollController: FixedExtentScrollController(
+                      initialItem: initialItem,
+                    ),
+                    itemExtent: 32.0,
+                    backgroundColor: CupertinoColors.systemBackground
+                        .resolveFrom(context),
+                    onSelectedItemChanged: (int index) {
+                      selectedValue = _availableModels[index];
+                    },
+                    children:
+                        _availableModels
+                            .map(
+                              (modelId) => Center(
+                                child: Text(
+                                  modelId,
+                                  style:
+                                      CupertinoTheme.of(
+                                        context,
+                                      ).textTheme.textStyle,
+                                ),
+                              ),
+                            )
+                            .toList(),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final multiServerState = ref.watch(multiServerConfigProvider);
@@ -693,26 +693,22 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 onPressed: () {
                   Navigator.of(context).push(
                     CupertinoPageRoute(
-                      builder:
-                          (context) =>
-                              const AddEditServerScreen(), // Navigate to Memos add/edit
+                      builder: (context) => const AddEditServerScreen(),
                     ),
                   );
                 },
                 child: const Icon(
                   CupertinoIcons.add,
-                ), // Standard add icon for Memos
+                ),
               ),
-              const SizedBox(width: 8), // Spacing between buttons
+              const SizedBox(width: 8),
               // Button to add MCP server
               CupertinoButton(
                 padding: EdgeInsets.zero,
                 onPressed: () {
                   Navigator.of(context).push(
                     CupertinoPageRoute(
-                      builder:
-                          (context) =>
-                              const AddEditMcpServerScreen(), // Navigate to MCP add/edit
+                      builder: (context) => const AddEditMcpServerScreen(),
                     ),
                   );
                 },
@@ -1161,9 +1157,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         );
                       },
                       child: Row(
-                        // Keep the Row for text and icon
                         children: [
-                          // Apply the theme's actionTextStyle explicitly
                           Text(
                             'Apply Changes',
                             style:
@@ -1175,7 +1169,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           Icon(
                             CupertinoIcons.refresh_circled,
                             size: 18,
-                            // Optionally match the action text color if needed
                             color:
                                 CupertinoTheme.of(
                                   context,
