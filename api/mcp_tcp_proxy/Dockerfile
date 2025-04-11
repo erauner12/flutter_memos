@@ -22,16 +22,8 @@ RUN groupadd -r appgroup && useradd --no-log-init -m -r -g appgroup appuser
 RUN mkdir /home/appuser/.pub-cache && chown -R appuser:appgroup /home/appuser/.pub-cache
 ENV PUB_CACHE=/home/appuser/.pub-cache
 
-# Test network connectivity before attempting pub get
-RUN echo "--- Testing Network Connectivity ---" && \
-    curl -4s --head https://pub.dev || echo "Failed to reach pub.dev via curl (IPv4)" && \
-    nslookup pub.dev || echo "Failed nslookup for pub.dev" && \
-    ping -c 3 pub.dev || echo "Failed to ping pub.dev" && \
-    echo "--- Network Test Complete ---"
-
-# Copy pubspec files first to allow pub get to run
-# Use chown even though pub get runs as root for consistency
-COPY --chown=appuser:appgroup pubspec.yaml pubspec.lock* ./
+# Copy pubspec files first AS ROOT to allow pub get to run as root
+COPY pubspec.yaml pubspec.lock* ./
 # If pubspec.lock doesn't exist, the wildcard handles it gracefully
 
 # Add git safe directory config and run pub get as root BEFORE switching user.
@@ -41,12 +33,12 @@ RUN flutter pub get --verbose
 # Switch to the non-root user BEFORE copying the rest of the files and running compile steps
 USER appuser
 
-# Copy ALL source code (respecting .dockerignore), overwriting pubspec but keeping ownership
+# Copy ALL source code (respecting .dockerignore), overwriting pubspec but setting correct ownership
 # Files will be owned by appuser now
 COPY --chown=appuser:appgroup . .
 
-# Create directory for compiled output (owned by appuser)
-RUN mkdir /app/compiled_bin
+# Create directory for compiled output (owned by appuser) - will be created if not exists by compile
+RUN mkdir -p /app/compiled_bin
 
 # Compile the applications (will run as appuser)
 # Ensure paths are correct relative to WORKDIR /app
