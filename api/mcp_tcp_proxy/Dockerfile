@@ -1,5 +1,6 @@
 # Stage 1: Build the executables
-FROM cirrusci/flutter:stable AS builder
+# FROM cirrusci/flutter:stable AS builder
+FROM dart:stable AS builder
 
 WORKDIR /app
 
@@ -22,8 +23,9 @@ RUN echo "--- Testing Network Connectivity ---" && \
     ping -c 3 pub.dev || echo "Failed to ping pub.dev" && \
     echo "--- Network Test Complete ---"
 
-# Run pub get ONCE from the root directory.
-RUN flutter pub get
+# Run pub get ONCE from the root directory using dart.
+# RUN flutter pub get
+RUN dart pub get
 
 # Create directory for compiled output
 RUN mkdir /app/compiled_bin
