@@ -362,8 +362,30 @@ void main() async {
       // Match the parameters expected by TodoistApiService.createTask
     },
     // required: ['content'], // Optional: Define required fields
+    // required: ['content'], // Optional: Define required fields
     callback: _handleCreateTodoistTask, // Use a separate handler
   );
+
+  // Register the 'update_todoist_task' tool
+  // ... (update tool definition as needed) ...
+
+  // Register the 'get_todoist_tasks' tool
+   server.tool(
+     'get_todoist_tasks',
+     description: 'Retrieves active Todoist tasks. Use EITHER `filter` for complex queries OR `content_contains` for simple text search.',
+     inputSchemaProperties: {
+       'filter': {
+         'type': 'string',
+         'description': 'Full Todoist filter query (e.g., "today & #Work", "p1", "search: keyword"). Takes precedence over content_contains. Optional.',
+       },
+       'content_contains': {
+          'type': 'string',
+          'description': 'Search for tasks whose content includes this text (ignored if `filter` is provided). Optional.',
+       },
+     },
+     callback: _handleGetTodoistTasks, // Assumes this handler exists
+   );
+
 
   final transport = mcp_dart.StdioServerTransport();
   // Add signal handling (SIGINT, SIGTERM) here...

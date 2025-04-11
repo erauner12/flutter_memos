@@ -148,12 +148,17 @@ void main() async {
   server.tool(
     'get_todoist_tasks',
     description:
-        'Retrieves a list of active Todoist tasks, optionally filtered.',
+        'Retrieves active Todoist tasks. Use EITHER `filter` for complex queries OR `content_contains` for simple text search.',
     inputSchemaProperties: {
       'filter': {
         'type': 'string',
         'description':
-            'Todoist filter query (e.g., "today", "#Work", "p1", "search: keyword"). See Todoist help for syntax. Optional.',
+            'Full Todoist filter query (e.g., "today & #Work", "p1", "search: keyword"). Takes precedence over content_contains. Optional.',
+      },
+      'content_contains': {
+        'type': 'string',
+        'description':
+            'Search for tasks whose content includes this text (ignored if `filter` is provided). Optional.',
       },
       // Add other potential direct filter fields if desired (e.g., project_id, label)
       // 'project_id': {'type': 'string', 'description': 'Filter by project ID (optional).'},
@@ -386,16 +391,35 @@ Future<mcp_dart.CallToolResult> _handleGetTodoistTasks({
   }
 
   // 3. Parse Arguments
-  final filter = args?['filter'] as String?;
+  final filterArg = args?['filter'] as String?;
+  final contentContainsArg = args?['content_contains'] as String?;
   // Parse other direct filter args if added to schema (e.g., projectId, label)
+
+  // Determine the actual filter to use
+  String? effectiveFilter;
+  if (filterArg != null && filterArg.trim().isNotEmpty) {
+    effectiveFilter = filterArg; // Use explicit filter if provided
+    stderr.writeln('[TodoistServer] Using explicit filter: "$effectiveFilter"');
+  } else if (contentContainsArg != null &&
+      contentContainsArg.trim().isNotEmpty) {
+    effectiveFilter = 'search: $contentContainsArg'; // Construct search filter
+    stderr.writeln(
+      '[TodoistServer] Using constructed filter from content_contains: "$effectiveFilter"',
+    );
+  } else {
+    stderr.writeln(
+      '[TodoistServer] No filter or content_contains provided. Fetching all active tasks.',
+    );
+  }
+
 
   // 4. Call Todoist API Service
   try {
     stderr.writeln(
-      '[TodoistServer] Calling todoistService.getActiveTasks (filter: $filter)...',
+      '[TodoistServer] Calling todoistService.getActiveTasks (using filter: $effectiveFilter)...',
     );
     final tasks = await todoistService.getActiveTasks(
-      filter: filter,
+      filter: effectiveFilter, // Pass the determined filter
       // Pass other parsed filters here if implemented
     );
 
