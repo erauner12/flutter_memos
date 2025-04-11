@@ -36,7 +36,7 @@ COPY --chown=appuser:appgroup pubspec.yaml pubspec.lock* ./
 
 # Add git safe directory config and run pub get as root BEFORE switching user.
 RUN git config --global --add safe.directory /sdks/flutter
-RUN flutter pub get
+RUN flutter pub get --verbose
 
 # Switch to the non-root user BEFORE copying the rest of the files and running compile steps
 USER appuser
