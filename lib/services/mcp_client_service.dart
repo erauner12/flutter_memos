@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_memos/models/mcp_server_config.dart';
 import 'package:flutter_memos/providers/settings_provider.dart'; // To get server list and Gemini key
 import 'package:flutter_memos/services/gemini_service.dart'; // Import GeminiService
+import 'package:flutter_memos/services/mcp_tcp_transport.dart'; // Import the new TCP transport
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_generative_ai/google_generative_ai.dart'; // Import for Gemini types
 import 'package:mcp_dart/mcp_dart.dart'
@@ -122,7 +123,8 @@ class GoogleMcpClient {
   final String serverId;
   final mcp_dart.Client mcp;
   final GenerativeModel? model;
-  mcp_dart.StdioClientTransport? _transport;
+  // Change type to the correct TransportBase interface
+  mcp_dart.TransportBase? _transport;
   List<Tool> _tools = [];
   bool _isConnected = false;
   Function(String serverId, String errorMsg)? _onError;
@@ -147,57 +149,96 @@ class GoogleMcpClient {
     _onClose = onClose;
   }
 
+  // Modified to accept McpServerConfig
   Future<void> connectToServer(
-    String command,
-    List<String> args,
-    Map<String, String> environment,
-  ) async {
+    McpServerConfig config, {
+    required Map<String, String> environmentForStdio,
+  }) async {
     if (_isConnected) return;
-    if (command.trim().isEmpty) throw Exception("MCP command cannot be empty.");
+    _isConnected = false; // Reset connection status at the start
+    _tools = []; // Clear tools
+
     debugPrint(
-      "GoogleMcpClient [\$serverId]: Attempting connection: \$command \${args.join(' ')}",
+      "GoogleMcpClient [${config.id}]: Attempting connection using ${config.connectionType.name}...",
     );
 
     try {
-      _transport = mcp_dart.StdioClientTransport(
-        mcp_dart.StdioServerParameters(
-          command: command,
-          args: args,
-          // Pass the environment received from the notifier
-          environment: environment,
-          stderrMode: ProcessStartMode.normal,
-        ),
-      );
+      // --- Instantiate the correct transport based on config ---
+      if (config.connectionType == McpConnectionType.tcp) {
+        if (config.host == null || config.port == null) {
+          throw ArgumentError(
+            "Host and Port must be provided for TCP connection.",
+          );
+        }
+        debugPrint(
+          "GoogleMcpClient [${config.id}]: Creating TcpClientTransport for ${config.host}:${config.port}",
+        );
+        _transport = TcpClientTransport(host: config.host!, port: config.port!);
+      } else {
+        // Default to stdio
+        if (config.command.trim().isEmpty) {
+          throw ArgumentError(
+            "MCP command cannot be empty for stdio connection.",
+          );
+        }
+        debugPrint(
+          "GoogleMcpClient [${config.id}]: Creating StdioClientTransport for command: ${config.command}",
+        );
+        final argsList =
+            config.args.split(' ').where((s) => s.isNotEmpty).toList();
+        _transport = mcp_dart.StdioClientTransport(
+          mcp_dart.StdioServerParameters(
+            command: config.command,
+            args: argsList,
+            environment: environmentForStdio, // Use passed environment
+            stderrMode: ProcessStartMode.normal, // Keep stderr piped
+          ),
+        );
+      }
 
+      // --- Setup common callbacks ---
       _transport!.onerror = (error) {
-        final errorMsg = "MCP Transport error [\$serverId]: \$error";
+        final errorMsg = "MCP Transport error [${config.id}]: $error";
         debugPrint(errorMsg);
         _isConnected = false;
-        _onError?.call(serverId, errorMsg);
+        _onError?.call(config.id, errorMsg);
         cleanup();
       };
 
       _transport!.onclose = () {
-        debugPrint("MCP Transport closed [\$serverId].");
+        debugPrint("MCP Transport closed [${config.id}].");
         _isConnected = false;
-        _onClose?.call(serverId);
+        _onClose?.call(config.id);
         _transport = null;
         _tools = [];
       };
 
+      // --- Connect using the chosen transport ---
       await mcp.connect(_transport!);
       _isConnected = true;
-      debugPrint("GoogleMcpClient [\$serverId]: Connected successfully.");
+      debugPrint("GoogleMcpClient [${config.id}]: Connected successfully.");
       // *** ADD LOGGING HERE ***
       debugPrint(
-        "GoogleMcpClient [\$serverId]: Connection successful, proceeding to fetch tools...",
+        "GoogleMcpClient [${config.id}]: Connection successful, proceeding to fetch tools...",
       );
       await _fetchTools();
-    } catch (e) {
-      debugPrint("GoogleMcpClient [\$serverId]: Failed to connect: \$e");
+    } catch (e, s) {
+      String errorDetails = "$e";
+      if (e is SocketException) {
+        errorDetails =
+            "SocketException: ${e.message} (OS Error: ${e.osError?.message}, Code: ${e.osError?.errorCode})";
+      } else if (e is ArgumentError) {
+        errorDetails = "ArgumentError: ${e.message}";
+      } else if (e is mcp_dart.McpError) {
+        errorDetails = "McpError: ${e.message} (Code: ${e.code})";
+      }
+      debugPrint(
+        "GoogleMcpClient [${config.id}]: Failed to connect: $errorDetails\nStack: $s",
+      );
       _isConnected = false;
-      await cleanup();
-      rethrow;
+      throw StateError(
+        "Connection failed for ${config.name} [${config.id}]: $errorDetails",
+      );
     }
   }
 
@@ -206,13 +247,12 @@ class GoogleMcpClient {
       _tools = [];
       return;
     }
-    debugPrint("GoogleMcpClient [\$serverId]: Fetching tools...");
+    debugPrint("GoogleMcpClient [$serverId]: Fetching tools...");
     try {
       final toolsResult = await mcp.listTools();
-      // *** ADD LOGGING HERE ***
-      debugPrint(
-        "GoogleMcpClient [\$serverId]: Raw tools list result: \${toolsResult.tools.map((t) => t.toJson()).toList()}",
-      );
+      /* debugPrint(
+        "GoogleMcpClient [${serverId}]: Raw tools list result: ${toolsResult.tools.map((t) => t.toJson()).toList()}",
+      ); */
       List<Tool> fetchedTools = [];
       for (var toolDef in toolsResult.tools) {
         try {
@@ -232,26 +272,25 @@ class GoogleMcpClient {
             );
           } else {
             debugPrint(
-              "Warning [\$serverId]: Skipping tool '\${toolDef.name}' due to unexpected null schema after parsing non-empty object.",
+              "Warning [$serverId]: Skipping tool '${toolDef.name}' due to unexpected null schema after parsing non-empty object.",
             );
           }
         } catch (e) {
           debugPrint(
-            "Error processing schema for tool '\${toolDef.name}' [\$serverId]: \$e. Skipping tool.",
+            "Error processing schema for tool '${toolDef.name}' [$serverId]: $e. Skipping tool.",
           );
         }
       }
       _tools = fetchedTools;
-      // *** ADD LOGGING HERE ***
       debugPrint(
-        "GoogleMcpClient [\$serverId]: Processed tools for Gemini: \${_tools.map((t) => t.functionDeclarations?.map((fd) => fd.name) ?? 'null').toList()}",
+        "GoogleMcpClient [$serverId]: Processed tools for Gemini: ${_tools.map((t) => t.functionDeclarations?.map((fd) => fd.name) ?? 'null').toList()}",
       );
       debugPrint(
-        "GoogleMcpClient [\$serverId]: Successfully processed \${_tools.length} tools.",
+        "GoogleMcpClient [$serverId]: Successfully processed ${_tools.length} tools.",
       );
     } catch (e) {
       debugPrint(
-        "GoogleMcpClient [\$serverId]: Failed to fetch MCP tools: \$e",
+        "GoogleMcpClient [$serverId]: Failed to fetch MCP tools: $e",
       );
       _tools = [];
     }
@@ -261,16 +300,16 @@ class GoogleMcpClient {
     mcp_dart.CallToolRequestParams params,
   ) async {
     if (!_isConnected) {
-      throw Exception("Client [\$serverId] is not connected.");
+      throw Exception("Client [$serverId] is not connected.");
     }
     debugPrint(
-      "GoogleMcpClient [\$serverId]: Executing tool '\${params.name}' with args: \${jsonEncode(params.arguments)}",
+      "GoogleMcpClient [$serverId]: Executing tool '${params.name}' with args: ${jsonEncode(params.arguments)}",
     );
     try {
       return await mcp.callTool(params);
     } catch (e) {
       debugPrint(
-        "GoogleMcpClient [\$serverId]: Error calling tool '\${params.name}': \$e",
+        "GoogleMcpClient [$serverId]: Error calling tool '${params.name}': $e",
       );
       rethrow;
     }
@@ -280,17 +319,17 @@ class GoogleMcpClient {
     final transportToClose = _transport;
     _transport = null;
     if (transportToClose != null) {
-      debugPrint("GoogleMcpClient [\$serverId]: Cleaning up transport...");
+      debugPrint("GoogleMcpClient [$serverId]: Cleaning up transport...");
       try {
         await mcp.close();
         await transportToClose.close();
       } catch (e) {
-        debugPrint("GoogleMcpClient [\$serverId]: Error during cleanup: \$e");
+        debugPrint("GoogleMcpClient [$serverId]: Error during cleanup: $e");
       }
     }
     _isConnected = false;
     _tools = [];
-    debugPrint("GoogleMcpClient [\$serverId]: Cleanup complete.");
+    debugPrint("GoogleMcpClient [$serverId]: Cleanup complete.");
   }
 }
 
@@ -371,7 +410,7 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
       serverErrorMessages: const {},
     );
     debugPrint(
-      "McpClientNotifier: Initialized with \${initialConfigs.length} server configs.",
+      "McpClientNotifier: Initialized with ${initialConfigs.length} server configs.",
     );
 
     serverListSubscription = ref.listen<
@@ -416,7 +455,7 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
         currentStatus == McpConnectionStatus.connecting ||
         currentStatus == McpConnectionStatus.connected) {
       debugPrint(
-        "MCP [\$serverId]: Already connected or connecting, skipping connection attempt.",
+        "MCP [$serverId]: Already connected or connecting, skipping connection attempt.",
       );
       return;
     }
@@ -427,11 +466,22 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
        return;
     }
     */
-    if (serverConfig.command.trim().isEmpty) {
+
+    // Validate config based on type BEFORE attempting connection
+    if (serverConfig.connectionType == McpConnectionType.stdio &&
+        serverConfig.command.trim().isEmpty) {
       updateServerState(
         serverId,
         McpConnectionStatus.error,
-        errorMsg: "Server command is empty",
+        errorMsg: "Server command is empty for stdio type.",
+      );
+      return;
+    } else if (serverConfig.connectionType == McpConnectionType.tcp &&
+        (serverConfig.host == null || serverConfig.port == null)) {
+      updateServerState(
+        serverId,
+        McpConnectionStatus.error,
+        errorMsg: "Host and Port are required for TCP type.",
       );
       return;
     }
@@ -453,31 +503,29 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
           safeEnvLog['TODOIST_API_TOKEN'] = '********';
         }
         debugPrint(
-          "MCP [\$serverId]: Launching with environment: \$safeEnvLog",
+          "MCP [$serverId]: Environment prepared for stdio: $safeEnvLog",
         );
       }
 
-      final command = serverConfig.command;
-      final argsList =
-          serverConfig.args.split(' ').where((s) => s.isNotEmpty).toList();
+      // Create the client instance
       newClientInstance = GoogleMcpClient(
         serverId,
         null, // geminiService.model would be passed here if available
       );
+      // Setup callbacks BEFORE connectToServer
       newClientInstance.setupCallbacks(
         onError: handleClientError,
         onClose: handleClientClose,
       );
 
       await newClientInstance.connectToServer(
-        command,
-        argsList,
-        environmentToPass,
+        serverConfig,
+        environmentForStdio: environmentToPass,
       );
 
       if (newClientInstance.isConnected) {
         debugPrint(
-          "MCP [_connectServer - \$serverId]: Client connected successfully. Updating state and rebuilding tool map...",
+          "MCP [_connectServer - $serverId]: Client connected successfully. Updating state and rebuilding tool map...",
         );
         state = state.copyWith(
           activeClients: {...state.activeClients, serverId: newClientInstance},
@@ -485,7 +533,7 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
           removeErrorIds: [serverId],
         );
         debugPrint(
-          "MCP [\$serverId]: Connected successfully to \${serverConfig.name}.",
+          "MCP [$serverId]: Connected successfully to ${serverConfig.name}.",
         );
         rebuildToolMap();
       } else {
@@ -499,12 +547,14 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
         await newClientInstance.cleanup();
       }
     } catch (e) {
-      debugPrint("MCP [\$serverId]: Connection failed during setup: \$e");
+      debugPrint(
+        "MCP [$serverId]: Connection failed during setup: ${e.toString()}",
+      );
       if (state.serverStatuses[serverId] != McpConnectionStatus.error) {
         updateServerState(
           serverId,
           McpConnectionStatus.error,
-          errorMsg: "Connection failed: \$e",
+          errorMsg: "Connection failed: ${e.toString()}",
         );
       }
       await newClientInstance?.cleanup();
@@ -517,24 +567,24 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
       updateServerState(serverId, McpConnectionStatus.disconnected);
     }
     if (clientToDisconnect == null) {
-      debugPrint("MCP [\$serverId]: No active client found to disconnect.");
+      debugPrint("MCP [$serverId]: No active client found to disconnect.");
       if (state.activeClients.containsKey(serverId)) {
         state = state.copyWith(removeClientIds: [serverId]);
         rebuildToolMap();
       }
       return;
     }
-    debugPrint("MCP [\$serverId]: Disconnecting client...");
+    debugPrint("MCP [$serverId]: Disconnecting client...");
     await clientToDisconnect.cleanup();
     if (state.activeClients.containsKey(serverId)) {
       state = state.copyWith(removeClientIds: [serverId]);
       debugPrint(
-        "MCP [\$serverId]: Disconnect process complete, client removed from state.",
+        "MCP [$serverId]: Disconnect process complete, client removed from state.",
       );
       rebuildToolMap();
     } else {
       debugPrint(
-        "MCP [\$serverId]: Client already removed from state during cleanup.",
+        "MCP [$serverId]: Client already removed from state during cleanup.",
       );
       rebuildToolMap();
     }
@@ -562,10 +612,10 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
     if (serversToConnect.isNotEmpty || serversToDisconnect.isNotEmpty) {
       debugPrint("Syncing MCP Connections:");
       if (serversToConnect.isNotEmpty) {
-        debugPrint(" - To Connect: \${serversToConnect.join(', ')}");
+        debugPrint(" - To Connect: ${serversToConnect.join(', ')}");
       }
       if (serversToDisconnect.isNotEmpty) {
-        debugPrint(" - To Disconnect: \${serversToDisconnect.join(', ')}");
+        debugPrint(" - To Disconnect: ${serversToDisconnect.join(', ')}");
       }
     }
     for (final serverId in serversToDisconnect) {
@@ -590,7 +640,7 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
     final statusesToRemove = currentStatusIds.difference(knownServerIds);
     if (statusesToRemove.isNotEmpty) {
       debugPrint(
-        "MCP: Removing stale statuses/errors for IDs: \${statusesToRemove.join(', ')}",
+        "MCP: Removing stale statuses/errors for IDs: ${statusesToRemove.join(', ')}",
       );
       state = state.copyWith(
         removeStatusIds: statusesToRemove.toList(),
@@ -631,12 +681,12 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
   }
 
   void handleClientError(String serverId, String errorMsg) {
-    debugPrint("MCP [\$serverId]: Received error callback: \$errorMsg");
+    debugPrint("MCP [$serverId]: Received error callback: $errorMsg");
     updateServerState(serverId, McpConnectionStatus.error, errorMsg: errorMsg);
   }
 
   void handleClientClose(String serverId) {
-    debugPrint("MCP [\$serverId]: Received close callback.");
+    debugPrint("MCP [$serverId]: Received close callback.");
     if (state.serverStatuses[serverId] != McpConnectionStatus.error) {
       updateServerState(serverId, McpConnectionStatus.disconnected);
     } else {
@@ -664,7 +714,7 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
               if (!duplicateToolNames.contains(funcDec.name)) {
                 duplicateToolNames.add(funcDec.name);
                 debugPrint(
-                  "MCP Warning: Duplicate tool name '\${funcDec.name}' found on multiple servers. Using first encountered.",
+                  "MCP Warning: Duplicate tool name '${funcDec.name}' found on multiple servers. Using first encountered.",
                 );
               }
             } else {
@@ -678,12 +728,12 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
 
     toolToServerIdMap = newToolMap;
     debugPrint(
-      "MCP [_rebuildToolMap]: Finished rebuilding. Final map: \$toolToServerIdMap",
+      "MCP [_rebuildToolMap]: Finished rebuilding. Final map: $toolToServerIdMap",
     );
 
     if (duplicateToolNames.isNotEmpty || uniqueToolNames.isNotEmpty) {
       debugPrint(
-        "MCP: Rebuilt tool map. \${uniqueToolNames.length} unique tools found: [\${uniqueToolNames.join(', ')}]. Duplicates: [\${duplicateToolNames.join(', ')}]",
+        "MCP: Rebuilt tool map. ${uniqueToolNames.length} unique tools found: [${uniqueToolNames.join(', ')}]. Duplicates: [${duplicateToolNames.join(', ')}]",
       );
     } else {
       debugPrint("MCP: Rebuilt tool map. No tools found on connected servers.");
@@ -695,7 +745,7 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
     String query,
     List<Content> history,
   ) async {
-    debugPrint("MCP ProcessQuery: Entered processQuery with query: '\$query'");
+    debugPrint("MCP ProcessQuery: Entered processQuery with query: '$query'");
 
     // --- Step 1: Check for active connections ---
     if (!state.hasActiveConnections) {
@@ -718,7 +768,7 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
       return McpProcessResult(
         finalModelContent: Content('model', [
           TextPart(
-            "AI service is not available: \${geminiService?.initializationError ?? 'Gemini service is null or model is missing.'}",
+            "AI service is not available: ${geminiService?.initializationError ?? 'Gemini service is null or model is missing.'}",
           ),
         ]),
       );
@@ -737,7 +787,7 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
       );
     } else {
       debugPrint(
-        "MCP ProcessQuery: Passing \${allAvailableTools.length} tools to Gemini: \${allAvailableTools.map((t) => t.functionDeclarations?.firstOrNull?.name ?? 'unknown').join(', ')}",
+        "MCP ProcessQuery: Passing ${allAvailableTools.length} tools to Gemini: ${allAvailableTools.map((t) => t.functionDeclarations?.firstOrNull?.name ?? 'unknown').join(', ')}",
       );
     }
 
@@ -750,10 +800,10 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
         tools: allAvailableTools.isNotEmpty ? allAvailableTools : null,
       );
     } catch (e) {
-      debugPrint("MCP ProcessQuery: Error during first Gemini call: \$e");
+      debugPrint("MCP ProcessQuery: Error during first Gemini call: $e");
       return McpProcessResult(
         finalModelContent: Content('model', [
-          TextPart("Error communicating with AI service: \${e.toString()}"),
+          TextPart("Error communicating with AI service: ${e.toString()}"),
         ]),
       );
     }
@@ -770,19 +820,19 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
       final toolArgs = functionCall.args;
 
       debugPrint(
-        "MCP ProcessQuery: Gemini requested Function Call: '\$toolName' with args: \$toolArgs",
+        "MCP ProcessQuery: Gemini requested Function Call: '$toolName' with args: $toolArgs",
       );
 
       // --- Step 6: Find and Execute Tool ---
       final targetServerId = toolToServerIdMap[toolName];
       if (targetServerId == null) {
         debugPrint(
-          "MCP ProcessQuery: Error - Tool '\$toolName' requested by AI not found in tool map.",
+          "MCP ProcessQuery: Error - Tool '$toolName' requested by AI not found in tool map.",
         );
         return McpProcessResult(
           finalModelContent: Content('model', [
             TextPart(
-              "Sorry, I found a tool called '\$toolName' but couldn't locate the server providing it.",
+              "Sorry, I found a tool called '$toolName' but couldn't locate the server providing it.",
             ),
           ]),
         );
@@ -791,12 +841,12 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
       final targetClient = state.activeClients[targetServerId];
       if (targetClient == null || !targetClient.isConnected) {
         debugPrint(
-          "MCP ProcessQuery: Error - Client for server '\$targetServerId' (tool '\$toolName') not found or not connected.",
+          "MCP ProcessQuery: Error - Client for server '$targetServerId' (tool '$toolName') not found or not connected.",
         );
         return McpProcessResult(
           finalModelContent: Content('model', [
             TextPart(
-              "Sorry, the server responsible for the '\$toolName' tool is currently unavailable.",
+              "Sorry, the server responsible for the '$toolName' tool is currently unavailable.",
             ),
           ]),
         );
@@ -821,47 +871,40 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
         if (textContent != null && textContent is mcp_dart.TextContent) {
           toolResultString = textContent.text;
           debugPrint(
-            "MCP ProcessQuery: Tool '\$toolName' executed successfully by server '\$targetServerId'. Raw Result: \$toolResultString",
+            "MCP ProcessQuery: Tool '$toolName' executed successfully by server '$targetServerId'. Raw Result: $toolResultString",
           );
-          // *** ADD LOG ***
           debugPrint(
-            "MCP ProcessQuery: Raw toolResultString: '\$toolResultString'",
+            "MCP ProcessQuery: Raw toolResultString: '$toolResultString'",
           );
 
           try {
             final decoded = jsonDecode(toolResultString);
-            // *** ADD LOG ***
             debugPrint(
-              "MCP ProcessQuery: Decoded JSON from toolResultString: \$decoded",
+              "MCP ProcessQuery: Decoded JSON from toolResultString: $decoded",
             );
 
             if (decoded is Map<String, dynamic>) {
               toolResultJson = decoded;
             } else if (decoded is List) {
-              // Handle list results if necessary, e.g., from get_tasks
               toolResultJson = {'result_list': decoded};
             } else {
-              // Handle other types if needed, or treat as text
               toolResultJson = {'result_text': toolResultString};
             }
           } catch (e) {
             debugPrint(
-              "MCP ProcessQuery: Tool result was not valid JSON or processing failed: \$e. Using raw string.",
+              "MCP ProcessQuery: Tool result was not valid JSON or processing failed: $e. Using raw string.",
             );
             toolResultJson = {'result_text': toolResultString};
           }
         } else {
-          // Handle non-text content if necessary
           toolResultString = jsonEncode(toolResult.toJson());
           toolResultJson = {'result_raw': toolResult.toJson()};
           debugPrint(
-            "MCP ProcessQuery: Tool '\$toolName' executed by server '\$targetServerId'. Result (non-text): \$toolResultString",
+            "MCP ProcessQuery: Tool '$toolName' executed by server '$targetServerId'. Result (non-text): $toolResultString",
           );
         }
-        // *** ADD LOG ***
-        debugPrint("MCP ProcessQuery: Parsed toolResultJson: \$toolResultJson");
+        debugPrint("MCP ProcessQuery: Parsed toolResultJson: $toolResultJson");
 
-        // --- Step 8: Construct FunctionResponse with SIMPLIFIED JSON ---
         Map<String, dynamic> simplifiedResultJson;
         if (toolResultJson.containsKey('status')) {
           if (toolResultJson['status'] == 'success') {
@@ -869,18 +912,15 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
             if (toolResultJson.containsKey('taskId')) {
               simplifiedResultJson['taskId'] = toolResultJson['taskId'];
             }
-            // Include message only if taskId is NOT present (or for specific tools like get_tasks)
             if (!simplifiedResultJson.containsKey('taskId') &&
                 toolResultJson.containsKey('message')) {
               simplifiedResultJson['message'] = toolResultJson['message'];
             } else if (toolName == 'get_todoist_tasks' &&
                 toolResultJson.containsKey('result_list')) {
-              // Special handling for get_tasks list result message
               simplifiedResultJson['message'] =
-                  "Found \${(toolResultJson['result_list'] as List?)?.length ?? 0} tasks.";
+                  "Found ${(toolResultJson['result_list'] as List?)?.length ?? 0} tasks.";
             }
           } else {
-            // status == 'error' or other non-success
             simplifiedResultJson = {
               'status': toolResultJson['status'] ?? 'error',
               'message': toolResultJson['message'] ?? 'Unknown error occurred.',
@@ -890,36 +930,29 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
             }
           }
         } else {
-          // Fallback if status is missing
           simplifiedResultJson = {'result_text': toolResultString};
           if (toolResultJson.containsKey('taskId')) {
             simplifiedResultJson['taskId'] = toolResultJson['taskId'];
           }
         }
-        // *** ADD LOG ***
         debugPrint(
-          "MCP ProcessQuery: Simplified result JSON for FunctionResponse: \$simplifiedResultJson",
+          "MCP ProcessQuery: Simplified result JSON for FunctionResponse: $simplifiedResultJson",
         );
 
-        // --- Step 8.5: Construct explicit TextPart summary ---
         String summaryText;
         final status = simplifiedResultJson['status'] as String?;
         final message = simplifiedResultJson['message'] as String?;
-        final taskId =
-            simplifiedResultJson['taskId'] as String?; // Fetch as String?
-        // *** ADD LOG ***
+        final taskId = simplifiedResultJson['taskId'] as String?;
         debugPrint(
-          "MCP ProcessQuery: Extracted for summary -> status: '\$status', message: '\$message', taskId: '\$taskId'",
+          "MCP ProcessQuery: Extracted for summary -> status: '$status', message: '$message', taskId: '$taskId'",
         );
 
         if (status == 'success') {
-          // Default success message uses the simplified message if available
-          summaryText = message ?? "Tool '\$toolName' executed successfully.";
+          summaryText = message ?? "Tool '$toolName' executed successfully.";
           
           if (toolName == 'create_todoist_task') {
             final taskContent =
                 toolArgs['content'] as String? ?? '[unknown content]';
-            // Construct the string directly with conditional ID using ${taskId}
             if (taskId != null) {
               summaryText =
                   'Todoist task created successfully: "$taskContent" (ID: $taskId).';
@@ -927,97 +960,76 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
               summaryText =
                   'Todoist task created successfully: "$taskContent".';
             }
-            // Ensure log uses correct interpolation for the variable's value
             debugPrint(
               "MCP ProcessQuery [create_todoist_task]: Constructed summaryText: \"$summaryText\"",
             );
-
           } else if (toolName == 'update_todoist_task') {
-            // Construct the string directly with conditional ID using ${taskId}
             if (taskId != null) {
               summaryText = "Todoist task updated successfully (ID: $taskId).";
             } else {
               summaryText = "Todoist task updated successfully.";
             }
-            // Ensure log uses correct interpolation for the variable's value
             debugPrint(
               "MCP ProcessQuery [update_todoist_task]: Constructed summaryText: \"$summaryText\"",
             );
-
           } else if (toolName == 'get_todoist_tasks') {
-            // Use the message generated during simplification ("Found X tasks." or "No tasks found.")
             summaryText = message ?? "Tasks retrieved successfully.";
             if (taskId != null) {
-              // This case implies a single task was found by the server
-              // Try to get content from the original JSON if available
               final taskContent = toolResultJson['content'] as String?;
               if (taskContent != null) {
                 summaryText = 'Found task (ID: $taskId): "$taskContent"';
               } else {
-                summaryText =
-                    'Found task with ID: $taskId.'; // Fallback if content missing
+                summaryText = 'Found task with ID: $taskId.';
               }
             }
-            // Ensure log uses correct interpolation for the variable's value
             debugPrint(
               "MCP ProcessQuery [get_todoist_tasks]: Constructed summaryText: \"$summaryText\"",
             );
-
           } else {
-            // Generic success message for other tools, include ID if present
             if (taskId != null) {
               summaryText += " ID: $taskId.";
             }
-            // Ensure log uses correct interpolation for the variable's value
             debugPrint(
               "MCP ProcessQuery [generic success]: Constructed summaryText: \"$summaryText\"",
             );
           }
         } else if (status == 'error') {
-          // Construct error message directly with conditional ID using ${taskId}
           if (taskId != null) {
             summaryText =
-                "Tool '\$toolName' failed: ${message ?? 'Unknown error'} (Related to Task ID: $taskId)";
+                "Tool '$toolName' failed: ${message ?? 'Unknown error'} (Related to Task ID: $taskId)";
           } else {
             summaryText =
-                "Tool '\$toolName' failed: ${message ?? 'Unknown error'}";
+                "Tool '$toolName' failed: ${message ?? 'Unknown error'}";
           }
-          // Ensure log uses correct interpolation for the variable's value
           debugPrint(
             "MCP ProcessQuery [error]: Constructed summaryText: \"$summaryText\"",
           );
         } else {
-          // Fallback for unexpected status or non-JSON results using ${taskId}
           if (taskId != null) {
             summaryText =
                 toolResultJson['result_text'] as String? ??
-                "Tool '\$toolName' executed. Result: \$toolResultString (ID: $taskId)";
+                "Tool '$toolName' executed. Result: $toolResultString (ID: $taskId)";
           } else {
             summaryText =
                 toolResultJson['result_text'] as String? ??
-                "Tool '\$toolName' executed. Result: \$toolResultString";
+                "Tool '$toolName' executed. Result: $toolResultString";
           }
-          // Ensure log uses correct interpolation for the variable's value
           debugPrint(
             "MCP ProcessQuery [fallback]: Constructed summaryText: \"$summaryText\"",
           );
         }
 
-        // This log remains to show the final value before returning
-        // Ensure log uses correct interpolation for the variable's value
         debugPrint(
           "MCP ProcessQuery: Final response to UI (tool summary): \"$summaryText\"",
         );
 
         final summaryTextPart = TextPart(summaryText);
 
-        // --- Step 9: Construct Final Response DIRECTLY (Skip Second Gemini Call) ---
         final finalContent = Content('model', [summaryTextPart]);
 
         debugPrint(
           "MCP ProcessQuery: Tool execution successful. Skipping second Gemini call. Returning direct summary.",
         );
-        // *** RE-VERIFY THIS LOG ***
         debugPrint(
           "MCP ProcessQuery: Final response to UI (tool summary): \"$summaryText\"",
         );
@@ -1039,24 +1051,24 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
         );
       } catch (e) {
         debugPrint(
-          "MCP ProcessQuery: Error calling tool '\$toolName' on server '\$targetServerId': \$e",
+          "MCP ProcessQuery: Error calling tool '$toolName' on server '$targetServerId': $e",
         );
         final failedFunctionCallContent =
             candidate?.content ??
             Content('model', [
-              TextPart("Model attempted to call '\$toolName'"),
+              TextPart("Model attempted to call '$toolName'"),
             ]);
         final errorResponsePart = FunctionResponse(toolName, {
           'error': e.toString(),
         });
         final errorTextPart = TextPart(
-          "Failed to execute tool '\$toolName': \${e.toString()}",
+          "Failed to execute tool '$toolName': ${e.toString()}",
         );
 
         return McpProcessResult(
           finalModelContent: Content('model', [
             TextPart(
-              "Sorry, I encountered an error while trying to execute the '\$toolName' tool: \${e.toString()}",
+              "Sorry, I encountered an error while trying to execute the '$toolName' tool: ${e.toString()}",
             ),
           ]),
           modelCallContent: failedFunctionCallContent,
@@ -1070,7 +1082,6 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
         );
       }
     } else {
-      // --- Step 11: No Function Call - Return Direct Response ---
       debugPrint(
         "MCP ProcessQuery: No function call requested by Gemini. Returning direct response.",
       );
@@ -1081,13 +1092,13 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
           ]);
 
       debugPrint(
-        "MCP ProcessQuery: Final response to UI (direct): \"\${directContent.parts.whereType<TextPart>().map((p) => p.text).join('')}\"",
+        "MCP ProcessQuery: Final response to UI (direct): \"${directContent.parts.whereType<TextPart>().map((p) => p.text).join('')}\"",
       );
 
       return McpProcessResult(finalModelContent: directContent);
     }
   }
-  // --- Cleanup ---
+
   @override
   void dispose() {
     debugPrint("Disposing McpClientNotifier, cleaning up all clients...");
