@@ -5,8 +5,10 @@ import 'dart:typed_data';
 
 // Hide ReadBuffer from foundation to avoid conflict with the local copy
 import 'package:flutter/foundation.dart' hide ReadBuffer;
+// Import the rest with a prefix
 import 'package:mcp_dart/mcp_dart.dart' as mcp_dart;
-// Removed: import 'package:mcp_dart/src/shared/stdio.dart';
+// Import Transport directly as it's not exported by the main library file
+import 'package:mcp_dart/src/shared/transport.dart';
 
 // --- Copied Helpers from mcp_dart/src/shared/stdio.dart ---
 
@@ -135,7 +137,7 @@ String serializeMessage(mcp_dart.JsonRpcMessage message) {
 
 /// Client transport for TCP: connects to a server over a TCP socket
 /// and communicates using newline-delimited JSON messages.
-class TcpClientTransport implements mcp_dart.StdioServerTransport {
+class TcpClientTransport implements Transport { // Use the directly imported Transport
   final String host;
   final int port;
   Socket? _socket;
