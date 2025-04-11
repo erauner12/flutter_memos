@@ -18,9 +18,10 @@ services:
   # --- New MCP Proxy Service ---
   mcp_proxy:
     build:
-      # Correct the path to the directory containing the Dockerfile
-      context: ./api/mcp_tcp_proxy
-      dockerfile: Dockerfile
+      # Change context to the project root directory
+      context: .
+      # Specify the Dockerfile location relative to the new context
+      dockerfile: ./api/mcp_tcp_proxy/Dockerfile
     container_name: mcp-proxy-server
     environment:
       # Pass secrets needed by the stdio servers here
