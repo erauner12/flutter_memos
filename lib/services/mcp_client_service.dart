@@ -876,41 +876,55 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
         );
 
         // --- Step 9: Second Gemini Call (with function response) ---
+        // History includes: original user query, model's function call request (isolated), our function response
         final historyForSecondCall = [
-          ...currentTurnHistory,
-          candidate!.content,
+          ...currentTurnHistory, // History up to and including the user query
+          // Explicitly create the model turn containing ONLY the function call
+          Content('model', [
+            functionCallPart,
+          ]), // functionCallPart was extracted in Step 5
+          // The function response turn
           Content('function', [
-            functionResponsePart,
+            functionResponsePart, // functionResponsePart was constructed in Step 8
           ]),
         ];
 
         debugPrint(
-          "MCP ProcessQuery: Making second Gemini call with history containing FunctionResponse.",
+          "MCP ProcessQuery: Making second Gemini call with history containing isolated FunctionCall and FunctionResponse.",
         );
+        // Log the history structure for debugging
+        // debugPrint("MCP ProcessQuery: History for second call: \${historyForSecondCall.map((c) => c.toJson()).toList()}");
+
         GenerateContentResponse finalResponse;
         try {
           finalResponse = await geminiService.generateContent(
-            "",
-            historyForSecondCall,
-            tools: null,
+            "", // No new user prompt text, just process the tool result
+            historyForSecondCall, // Pass the refined history
+            tools: null, // No tools needed for the summary response
           );
         } catch (e) {
+          // Log the specific error from Gemini
+          debugPrint("Error calling Gemini generateContent: \$e");
           debugPrint("MCP ProcessQuery: Error during second Gemini call: \$e");
+          // Return an error result, including info about the successful tool call
           return McpProcessResult(
             finalModelContent: Content('model', [
               TextPart(
                 "Tool '\$toolName' executed successfully (Result: \${jsonEncode(toolResultJson)}), but encountered an error getting the final summary: \${e.toString()}",
               ),
             ]),
-            modelCallContent: candidate.content,
+            // Pass back the original model content that contained the call
+            modelCallContent: candidate!.content,
             toolResponseContent: Content('function', [functionResponsePart]),
             toolName: toolName,
             toolArgs: toolArgs,
-            toolResult: toolResultString,
+            toolResult:
+                toolResultString, // Keep raw string for potential display
             sourceServerId: targetServerId,
           );
         }
 
+        // --- Step 10: Process Final Response ---
         final finalContent =
             finalResponse.candidates.firstOrNull?.content ??
             Content('model', [
