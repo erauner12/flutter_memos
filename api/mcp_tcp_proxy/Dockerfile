@@ -22,22 +22,25 @@ RUN groupadd -r appgroup && useradd --no-log-init -m -r -g appgroup appuser
 RUN mkdir /home/appuser/.pub-cache && chown -R appuser:appgroup /home/appuser/.pub-cache
 ENV PUB_CACHE=/home/appuser/.pub-cache
 
-# Copy pubspec files first AS ROOT to allow pub get to run as root
-COPY pubspec.yaml pubspec.lock* ./
+# Copy pubspec files first, owned by appuser
+COPY --chown=appuser:appgroup pubspec.yaml pubspec.lock* ./
 # If pubspec.lock doesn't exist, the wildcard handles it gracefully
 
-# Add git safe directory config and run pub get as root BEFORE switching user.
-RUN git config --global --add safe.directory /sdks/flutter
-RUN flutter pub get --verbose
-
-# Switch to the non-root user BEFORE copying the rest of the files and running compile steps
-USER appuser
-
-# Copy ALL source code (respecting .dockerignore), overwriting pubspec but setting correct ownership
-# Files will be owned by appuser now
+# Copy ALL source code (respecting .dockerignore), owned by appuser
+# This overwrites pubspec files but maintains ownership
 COPY --chown=appuser:appgroup . .
 
-# Create directory for compiled output (owned by appuser) - will be created if not exists by compile
+# Add git safe directory config globally as root BEFORE switching user.
+# Flutter might still invoke git internally in ways that require this.
+RUN git config --global --add safe.directory /sdks/flutter
+
+# Switch to the non-root user for pub get and compilation
+USER appuser
+
+# Run pub get as the non-root user
+RUN flutter pub get --verbose
+
+# Create directory for compiled output (owned by appuser)
 RUN mkdir -p /app/compiled_bin
 
 # Compile the applications (will run as appuser)
