@@ -949,73 +949,36 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
         }
         final summaryTextPart = TextPart(summaryText);
 
-        // --- Step 9: Second Gemini Call (KEEP AS IS - using summaryText as prompt) ---
-        final historyForSecondCall = [
-          ...currentTurnHistory, // History up to and including the user query
-          Content('model', [
-            functionCallPart, // functionCallPart was extracted in Step 5
-          ]),
-          Content('function', [
-            summaryTextPart, // Add the explicit summary text first
-            functionResponsePart, // Then add the structured FunctionResponse
-          ]),
-        ];
+        // --- Step 9: Construct Final Response DIRECTLY (Skip Second Gemini Call) ---
+        final finalContent = Content('model', [
+          summaryTextPart,
+        ]); // Use the summary text directly
 
         debugPrint(
-          "MCP ProcessQuery: Making second Gemini call with summary as prompt and history containing isolated FunctionCall, Text Summary, and FunctionResponse.",
+          "MCP ProcessQuery: Tool execution successful. Skipping second Gemini call. Returning direct summary.",
         );
-
-        GenerateContentResponse finalResponse;
-        try {
-          finalResponse = await geminiService.generateContent(
-            summaryText, // Use summaryText as the prompt
-            historyForSecondCall, // Pass the refined history
-            tools: null, // No tools needed for the summary response
-          );
-        } catch (e) {
-          debugPrint("Error calling Gemini generateContent: \$e");
-          debugPrint("MCP ProcessQuery: Error during second Gemini call: \$e");
-          return McpProcessResult(
-            finalModelContent: Content('model', [
-              TextPart(
-                "Tool '\$toolName' executed successfully (\$summaryText), but encountered an error getting the final summary: \${e.toString()}",
-              ),
-            ]),
-            modelCallContent: candidate?.content,
-            toolResponseContent: Content('function', [
-              summaryTextPart,
-              functionResponsePart,
-            ]),
-            toolName: toolName,
-            toolArgs: toolArgs,
-            toolResult: toolResultString,
-            sourceServerId: targetServerId,
-          );
-        }
-
-        final finalContent =
-            finalResponse.candidates.firstOrNull?.content ??
-            Content('model', [
-              TextPart(
-                "Tool '\$toolName' executed (\$summaryText). No final summary generated.",
-              ),
-            ]);
-
         debugPrint(
-          "MCP ProcessQuery: Function call flow complete. Returning final response.",
+          "MCP ProcessQuery: Final response to UI (tool summary): \"\$summaryText\"",
         );
+
+        // Return the result, including the original model call and the tool response
+        // so they can be added to the history for the *next* turn.
         return McpProcessResult(
-          finalModelContent: finalContent,
-          modelCallContent: candidate?.content,
+          finalModelContent: finalContent, // The summary message
+          modelCallContent:
+              candidate
+                  ?.content, // The model's turn containing the FunctionCall
           toolResponseContent: Content('function', [
-            summaryTextPart,
-            functionResponsePart,
+            // The function turn
+            summaryTextPart, // Include summary text for history context
+            functionResponsePart, // Include the structured FunctionResponse
           ]),
           toolName: toolName,
           toolArgs: toolArgs,
-          toolResult: toolResultString,
+          toolResult: toolResultString, // Raw result string
           sourceServerId: targetServerId,
         );
+
       } catch (e) {
         debugPrint(
           "MCP ProcessQuery: Error calling tool '\$toolName' on server '\$targetServerId': \$e",
