@@ -1,5 +1,5 @@
 # Stage 1: Build the executables
-FROM dart:stable AS builder
+FROM cirrusci/flutter:stable AS builder
 
 WORKDIR /app
 
