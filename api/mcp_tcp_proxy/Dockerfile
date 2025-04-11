@@ -3,17 +3,23 @@ FROM dart:stable AS builder
 
 WORKDIR /app
 
-# Update package lists, install/update certificates, and clean up in one step
+# Update package lists, install/update certificates, force update, and clean up
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends ca-certificates && \
+    apt-get install -y --no-install-recommends ca-certificates curl dnsutils && \
+    update-ca-certificates --fresh && \
     rm -rf /var/lib/apt/lists/*
 
-# Copy ALL source code first
+# Copy ALL source code first (respecting .dockerignore)
 COPY . .
 
+# Test network connectivity before attempting pub get
+RUN echo "--- Testing Network Connectivity ---" && \
+    curl -s --head https://pub.dev || echo "Failed to reach pub.dev via curl" && \
+    nslookup pub.dev || echo "Failed nslookup for pub.dev" && \
+    ping -c 3 pub.dev || echo "Failed to ping pub.dev" && \
+    echo "--- Network Test Complete ---"
+
 # Run pub get ONCE from the root directory.
-# This should resolve dependencies for the main project, the proxy,
-# the echo server, and the todoist server based on their pubspecs.
 RUN dart pub get
 
 # Create directory for compiled output
@@ -23,7 +29,6 @@ RUN mkdir /app/compiled_bin
 # Ensure paths are correct relative to WORKDIR /app
 
 # Compile TCP Proxy (Source: /app/api/mcp_tcp_proxy/bin/mcp_tcp_proxy.dart - uses /app/api/mcp_tcp_proxy/pubspec.yaml)
-# Note: The WORKDIR is /app, so paths are relative to that.
 RUN dart compile exe api/mcp_tcp_proxy/bin/mcp_tcp_proxy.dart -o /app/compiled_bin/mcp_tcp_proxy_executable
 
 # Compile Todoist Server (Source: /app/bin/todoist_mcp_server.dart - uses /app/pubspec.yaml)

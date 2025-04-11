@@ -1,0 +1,38 @@
+# Git files
+.git
+.gitignore
+
+# IDE and editor folders
+.idea/
+.vscode/
+*.iml
+
+# Dart/Flutter build artifacts and tools
+build/
+.dart_tool/
+.packages
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# Local configuration/secrets
+.env*
+secrets/
+
+# Local data (if applicable and not needed in build)
+memos-data/
+*.db
+*.sqlite
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Test reports
+coverage/
+test/reports/
+
+# Node modules (if any JS tools are used locally)
+node_modules/
