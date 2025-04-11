@@ -950,6 +950,16 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
           Content('model', [
             TextPart("Sorry, I couldn't generate a response."),
           ]);
+
+      // Log the direct response text before returning
+      final directResponseText = directContent.parts
+          .whereType<TextPart>()
+          .map((p) => p.text)
+          .join('');
+      debugPrint(
+        "MCP ProcessQuery: Final response to UI (direct): \"$directResponseText\"",
+      );
+
       return McpProcessResult(finalModelContent: directContent);
     }
   }
