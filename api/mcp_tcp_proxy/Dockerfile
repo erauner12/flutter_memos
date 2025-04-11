@@ -29,14 +29,19 @@ RUN echo "--- Testing Network Connectivity ---" && \
     ping -c 3 pub.dev || echo "Failed to ping pub.dev" && \
     echo "--- Network Test Complete ---"
 
+# Copy pubspec files first to allow pub get to run
+# Use chown even though pub get runs as root for consistency
+COPY --chown=appuser:appgroup pubspec.yaml pubspec.lock* ./
+# If pubspec.lock doesn't exist, the wildcard handles it gracefully
+
 # Add git safe directory config and run pub get as root BEFORE switching user.
 RUN git config --global --add safe.directory /sdks/flutter
 RUN flutter pub get
 
-# Switch to the non-root user BEFORE copying files and running compile steps
+# Switch to the non-root user BEFORE copying the rest of the files and running compile steps
 USER appuser
 
-# Copy ALL source code first (respecting .dockerignore)
+# Copy ALL source code (respecting .dockerignore), overwriting pubspec but keeping ownership
 # Files will be owned by appuser now
 COPY --chown=appuser:appgroup . .
 
