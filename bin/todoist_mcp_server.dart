@@ -433,13 +433,17 @@ Future<mcp_dart.CallToolResult> _handleGetTodoistTasks({
     }
 
     // 5. Serialize Task Data for AI
-    // Return a simplified list containing only ID and content for easier parsing by the AI.
+    // Return a simplified list containing ID, content, and creation time.
     final tasksForAI =
         tasks
             .map(
               (task) => {
                 'id': task.id,
                 'content': task.content,
+                'created_at':
+                    task.createdAt != null
+                        ? DateTime.parse(task.createdAt!).toIso8601String()
+                        : null, // Add timestamp
                 // Add other fields ONLY if absolutely necessary for the AI's core function
               },
             )
