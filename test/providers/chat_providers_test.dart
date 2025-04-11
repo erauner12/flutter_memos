@@ -19,50 +19,71 @@ import 'package:mockito/mockito.dart';
 
 // Generate mocks for dependencies
 @GenerateNiceMocks([
-  MockSpec<McpClientNotifier>(),
-  MockSpec<McpClientState>(), // Although not directly injected, useful for mocking notifier state
+  MockSpec<McpClientNotifier>(), // Keep this for the delegate
+  MockSpec<McpClientState>(),
   MockSpec<GeminiService>(),
 ])
 import 'chat_providers_test.mocks.dart';
 
-// Simple mock for the PersistentStringNotifier used by geminiApiKeyProvider
-// Implement the original notifier class to satisfy the type system for overrides.
+// Mock for PersistentStringNotifier (Keep as is)
 class MockPersistentStringNotifier extends StateNotifier<String>
     implements PersistentStringNotifier {
-  // This field fulfills the interface requirement but doesn't need @override
-  // because the original class likely defines it as a final field directly, not a getter/setter.
   final String key;
-
   MockPersistentStringNotifier(this.key, String initialState)
     : super(initialState);
-
-  @override // init is part of the interface
-  Future<void> init() async {
-    // Mock init doesn't need to do anything
-  }
-
-  @override // set needs to return Future<bool>
+  @override
+  Future<void> init() async {}
+  @override
   Future<bool> set(String value) async {
     state = value;
-    return true; // Return true for success in mock
+    return true;
   }
 
-  @override // clear needs to return Future<bool>
+  @override
   Future<bool> clear() async {
     state = '';
-    return true; // Return true for success in mock
+    return true;
   }
 
   @override
   String get preferenceKey => key;
-
   @override
-  set debugSecureStorage(dynamic storage) {
-    // No-op for testing
-  }
+  set debugSecureStorage(dynamic storage) {}
 }
 
-// Helper to create GenerateContentResponse for stream testing
+// --- Fake McpClientNotifier ---
+// Extends StateNotifier to manage state correctly for Riverpod
+// Uses a Mockito mock internally for verifying calls and stubbing behavior.
+class FakeMcpClientNotifier extends StateNotifier<McpClientState> {
+  final MockMcpClientNotifier mockDelegate; // The Mockito mock
+
+  FakeMcpClientNotifier(super.initialState, this.mockDelegate);
+
+  // --- Methods to Delegate to Mock ---
+  // Delegate any method that the code under test (ChatNotifier) might call
+  // and that you need to stub or verify in your tests.
+
+  Future<McpProcessResult> processQuery(String query, List<Content>? history) {
+    // Example: Log call or modify state before delegating
+    // print("FakeMcpClientNotifier: processQuery called");
+    // Delegate the actual call to the mock for stubbing/verification
+    return mockDelegate.processQuery(query, history);
+  }
+
+  // --- Other methods/getters from McpClientNotifier ---
+  // Implement other methods if ChatNotifier uses them, otherwise they can be omitted
+  // if the mockDelegate handles them or they are not called.
+  // For simplicity, we'll assume only processQuery and the state (handled by StateNotifier)
+  // are directly relevant based on the ChatNotifier code provided.
+  // If ChatNotifier used e.g., `syncConnections`, you'd add:
+  // void syncConnections() => mockDelegate.syncConnections();
+
+  // Note: StateNotifier already provides 'state', 'mounted', 'stream', 'addListener', 'dispose' etc.
+}
+// --- End Fake McpClientNotifier ---
+
+
+// Helper to create GenerateContentResponse (Keep as is)
 GenerateContentResponse generateContentResponse({String? text}) {
   return GenerateContentResponse(
     [
@@ -82,7 +103,8 @@ GenerateContentResponse generateContentResponse({String? text}) {
 
 void main() {
   // Mocks
-  late MockMcpClientNotifier mockMcpClientNotifier;
+  late MockMcpClientNotifier
+  mockMcpClientNotifierDelegate; // Renamed for clarity
   late MockGeminiService mockGeminiService;
   late ProviderContainer container;
 
@@ -118,40 +140,38 @@ void main() {
   );
 
   setUp(() async {
-    // Initialize mocks before each test
-    mockMcpClientNotifier = MockMcpClientNotifier();
+    // Initialize mocks
+    mockMcpClientNotifierDelegate =
+        MockMcpClientNotifier(); // This is the delegate
     mockGeminiService = MockGeminiService();
 
-    // SharedPreferences mock is no longer needed here as we override the provider state/notifier
+    // Create the Fake Notifier Instance
+    final fakeMcpClientNotifier = FakeMcpClientNotifier(
+      defaultMcpState, // Initial state for the fake
+      mockMcpClientNotifierDelegate, // Pass the mock delegate
+    );
 
-    // Set default stubbing for mocks
-    when(mockMcpClientNotifier.state).thenReturn(defaultMcpState);
-    when(mockGeminiService.isInitialized).thenReturn(true); // Assume Gemini is ready
+    // Set default stubbing for the *delegate* mock
+    // No need to stub 'state' on the delegate anymore
+    when(mockMcpClientNotifierDelegate.processQuery(any, any)).thenAnswer(
+      (_) async => successfulMcpResult,
+    ); // Stub processQuery on delegate
+    when(mockGeminiService.isInitialized).thenReturn(true);
 
-    // Create a ProviderContainer for testing
+    // Create ProviderContainer with overrides using the *fake* notifier
     container = ProviderContainer(
       overrides: [
-        // Override providers with mocks
-        mcpClientProvider.overrideWith((ref) => mockMcpClientNotifier),
+        // Override with the fake StateNotifier instance using overrideWithValue
+        mcpClientProvider.overrideWith((ref) => fakeMcpClientNotifier),
         geminiServiceProvider.overrideWithValue(mockGeminiService),
-        // Override the StateNotifierProvider by providing a function that returns the mock notifier
-        // Pass the expected key (using PreferenceKeys) and initial state to the mock constructor
         geminiApiKeyProvider.overrideWith(
           (_) => MockPersistentStringNotifier(
-            PreferenceKeys
-                .geminiApiKey, // Use the correct key from PreferenceKeys
+            PreferenceKeys.geminiApiKey,
             'fake-gemini-key',
           ),
         ),
       ],
     );
-
-    // Initialization of PersistentStringNotifier is handled implicitly by Riverpod
-    // when the provider is first read. We don't need to explicitly call init()
-    // or read the provider in setUp when using overrides like this.
-
-    // Remove explicit reads from setUp - let providers initialize lazily in tests.
-
   });
 
   tearDown(() {
@@ -159,14 +179,25 @@ void main() {
   });
 
   test('sendMessage uses MCP when active and updates history correctly on tool call', () async {
-    // Arrange: Configure mocks for this specific test
+      // Arrange: Configure the *delegate* mock for this specific test
     const userQuery = 'create task buy milk';
-    // Ensure the notifier's state reflects an active connection
-    when(mockMcpClientNotifier.state).thenReturn(defaultMcpState.copyWith(
+
+      // Get the fake notifier instance from the container to potentially change its state if needed
+      // Cast is necessary because container.read returns the base StateNotifier type
+      final fakeNotifier =
+          container.read(mcpClientProvider.notifier) as FakeMcpClientNotifier;
+
+      // Ensure the fake notifier's state reflects an active connection
+      // We can directly set the state on the fake notifier
+      fakeNotifier.state = defaultMcpState.copyWith(
       serverStatuses: {'test-id': McpConnectionStatus.connected},
-    ));
-    // Mock the processQuery call to return the successful result
-    when(mockMcpClientNotifier.processQuery(userQuery, any))
+      );
+
+      // Ensure the delegate mock is stubbed correctly for this test case
+      // (already done in setUp, but could be overridden here if needed)
+      when(
+        mockMcpClientNotifierDelegate.processQuery(userQuery, any),
+      )
         .thenAnswer((_) async => successfulMcpResult);
 
     final chatNotifier = container.read(chatProvider.notifier);
@@ -175,8 +206,10 @@ void main() {
     await chatNotifier.sendMessage(userQuery);
 
     // Assert
-    // Verify processQuery was called
-    verify(mockMcpClientNotifier.processQuery(userQuery, any)).called(1);
+      // Verify calls on the *delegate* mock
+      verify(
+        mockMcpClientNotifierDelegate.processQuery(userQuery, any),
+      ).called(1);
     // Verify Gemini stream was NOT called directly
     verifyNever(mockGeminiService.sendMessageStream(any, any));
 
@@ -208,11 +241,18 @@ void main() {
    test('sendMessage uses direct Gemini stream when MCP is not active', () async {
     // Arrange
     const userQuery = 'hello gemini';
-    // Ensure MCP state shows no active connections
-     when(mockMcpClientNotifier.state).thenReturn(defaultMcpState.copyWith(
+
+    // Get the fake notifier instance
+    // Cast is necessary because container.read returns the base StateNotifier type
+    final fakeNotifier =
+        container.read(mcpClientProvider.notifier) as FakeMcpClientNotifier;
+
+    // Set the fake notifier's state to reflect no active connections
+    fakeNotifier.state = defaultMcpState.copyWith(
       serverStatuses: {'test-id': McpConnectionStatus.disconnected}, // Disconnected
-    ));
-    // Mock Gemini stream response
+    );
+
+    // Mock Gemini stream response (remains the same)
     when(mockGeminiService.sendMessageStream(userQuery, any))
         .thenAnswer((_) => Stream.fromIterable([
               // Simulate stream chunks
@@ -229,7 +269,10 @@ void main() {
 
 
     // Assert
-     verifyNever(mockMcpClientNotifier.processQuery(any, any)); // MCP should not be called
+    // Verify calls on the *delegate* mock
+    verifyNever(
+      mockMcpClientNotifierDelegate.processQuery(any, any),
+    ); // MCP should not be called
      verify(mockGeminiService.sendMessageStream(userQuery, any)).called(1); // Gemini should be called
 
      final finalState = container.read(chatProvider);
