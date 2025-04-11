@@ -13,18 +13,17 @@ services:
       - '5230:5230' # Memos UI/API port
     restart: unless-stopped
 
-  # --- New MCP Proxy Service ---
+  # --- New MCP Proxy Service (Using Go) ---
   mcp_proxy:
     build:
-      # Change context to the project root directory
-      context: .
-      # Specify the Dockerfile location relative to the new context
-      dockerfile: ./api/mcp_tcp_proxy/Dockerfile
-    container_name: mcp-proxy-server
+      # Point context to the directory containing the Go Dockerfile
+      context: ./api/mcp_tcp_proxy_go
+      dockerfile: Dockerfile
+    container_name: mcp-proxy-server-go # Renamed container for clarity
     environment:
-      # Pass secrets needed by the stdio servers here
-      # The proxy itself doesn't need them, but it needs to pass them on via Process.start
-      # Make sure these are set in your host environment or a .env file
+      # Pass secrets needed by the stdio servers here.
+      # The Go proxy reads os.Environ() and passes it down.
+      # Make sure these are set in your host environment or a .env file.
       TODOIST_API_TOKEN: ${TODOIST_API_TOKEN}
       # Add other secrets like OPENAI_API_KEY if needed by other MCP servers
       # OPENAI_API_KEY: ${OPENAI_API_KEY}
