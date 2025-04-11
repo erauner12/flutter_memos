@@ -34,14 +34,15 @@ class MockPersistentStringNotifier extends StateNotifier<String> {
 GenerateContentResponse generateContentResponse({String? text}) {
   return GenerateContentResponse(
     [
-      // Provide all required positional arguments for Candidate
+      // Provide all required positional arguments for Candidate in the correct order:
+      // content, safetyRatings, citationMetadata, finishReason, tokenCount
       Candidate(
-        Content('model', [if (text != null) TextPart(text)]),
-        FinishReason.stop, // finishReason
-        null, // safetyRatings
-        null, // citationMetadata
-        null, // tokenCount
-      ),
+        Content('model', [if (text != null) TextPart(text)]), // content
+        null, // safetyRatings (List<SafetyRating>?)
+        null, // citationMetadata (CitationMetadata?)
+        FinishReason.stop, // finishReason (FinishReason?)
+        null, // tokenCount (int?)
+      )
     ],
     null, // Prompt feedback can be null
   );
@@ -101,7 +102,7 @@ void main() {
         // Override providers with mocks
         mcpClientProvider.overrideWith((ref) => mockMcpClientNotifier),
         geminiServiceProvider.overrideWithValue(mockGeminiService),
-        // Override the StateNotifierProvider with our mock notifier instance
+        // Override the StateNotifierProvider by providing a function that returns the mock notifier
         geminiApiKeyProvider.overrideWith(
           (_) => MockPersistentStringNotifier('fake-gemini-key'),
         ),
