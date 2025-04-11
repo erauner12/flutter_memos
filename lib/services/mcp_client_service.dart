@@ -834,6 +834,8 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
 
       mcp_dart.CallToolResult toolResult;
       String toolResultString = '';
+      Map<String, dynamic> toolResultJson = {}; // Store parsed JSON
+      String messageForAI = ''; // Descriptive message for AI
 
       try {
         final params = mcp_dart.CallToolRequestParams(
@@ -843,38 +845,126 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
         toolResult = await targetClient.callTool(params);
 
         // --- Step 7: Process Tool Result ---
-        // Access the result content via 'content' (which is a list)
         final textContent = toolResult.content.firstWhereOrNull(
           (c) => c is mcp_dart.TextContent,
         );
+
         if (textContent != null && textContent is mcp_dart.TextContent) {
           toolResultString = textContent.text;
           debugPrint(
-            "MCP ProcessQuery: Tool '$toolName' executed successfully by server '$targetServerId'. Result: $toolResultString",
+            "MCP ProcessQuery: Tool '$toolName' executed successfully by server '$targetServerId'. Raw Result: $toolResultString",
           );
+
+          // Attempt to parse the result string as JSON and create a descriptive message
+          try {
+            final decoded = jsonDecode(toolResultString);
+            messageForAI =
+                "Tool '$toolName' executed successfully."; // Base message
+
+            if (decoded is Map<String, dynamic>) {
+              toolResultJson = decoded;
+              messageForAI +=
+                  " Result: ${jsonEncode(toolResultJson)}"; // Add JSON string to message
+              if (toolName == 'create_todoist_task' &&
+                  toolResultJson.containsKey('taskId')) {
+                messageForAI +=
+                    " The new task ID is ${toolResultJson['taskId']}.";
+              }
+            } else if (decoded is List) {
+              // Handle list results (likely from get_tasks)
+              toolResultJson = {
+                'result_list': decoded,
+              }; // Wrap list in a map for FunctionResponse
+              messageForAI +=
+                  " Result: ${jsonEncode(decoded)}"; // Add JSON string to message
+              if (toolName == 'get_todoist_tasks' && decoded.isNotEmpty) {
+                final taskIds =
+                    decoded
+                        .map((task) => task is Map ? task['id'] : null)
+                        .whereNotNull()
+                        .toList();
+                if (taskIds.isNotEmpty) {
+                  messageForAI += " Extracted Task IDs: ${taskIds.join(', ')}.";
+                } else {
+                  messageForAI += " Found tasks, but could not extract IDs.";
+                }
+              } else if (toolName == 'get_todoist_tasks') {
+                messageForAI += " No tasks found matching criteria.";
+              }
+            } else {
+              // Not a Map or List, treat as plain text result
+              messageForAI += " Result: $toolResultString";
+              toolResultJson = {'result_text': toolResultString}; // Wrap text
+            }
+          } catch (e) {
+            // JSON parsing failed, use the raw string
+            debugPrint(
+              "MCP ProcessQuery: Tool result was not valid JSON or processing failed: $e. Using raw string.",
+            );
+            messageForAI =
+                "Tool '$toolName' executed. Result: $toolResultString";
+            toolResultJson = {'result_text': toolResultString}; // Wrap text
+          }
+
         } else {
-          // Handle cases where result is not simple text (e.g., JSON)
-          // Serialize the whole result if no text part found
-          toolResultString = jsonEncode(toolResult.toJson());
+          // Handle cases where result is not simple text (e.g., structured non-text content)
+          toolResultString = jsonEncode(
+            toolResult.toJson(),
+          ); // Fallback serialization
+          messageForAI =
+              "Tool '$toolName' executed by server '$targetServerId'. Result (non-text): $toolResultString";
+          toolResultJson = {
+            'result_raw': toolResult.toJson(),
+          }; // Wrap raw structure
           debugPrint(
             "MCP ProcessQuery: Tool '$toolName' executed by server '$targetServerId'. Result (non-text): $toolResultString",
           );
         }
 
         // --- Step 8: Construct FunctionResponse ---
-        // Use positional arguments: FunctionResponse(name, response)
+        // Pass the parsed JSON map as the response content.
+        // The AI should be able to understand this structured data better.
         final functionResponsePart = FunctionResponse(
-          toolName, {
-          'result': toolResultString,
-        },
+          toolName,
+          toolResultJson, // Pass the parsed JSON map
         );
+        debugPrint(
+          "MCP ProcessQuery: Constructed FunctionResponse with JSON: ${jsonEncode(toolResultJson)}",
+        );
+
+        // --- Step 9: Second Gemini Call (with function response) ---
+        // History includes: original user query, model's function call request, our function response
+        final historyForSecondCall = [
+          ...currentTurnHistory, // user query
+          candidate!
+              .content, // model's response containing the function call request
+          Content('function', [
+            functionResponsePart,
+          ]), // the result from the tool execution
+        ];
+
+        debugPrint(
+          "MCP ProcessQuery: Making second Gemini call with history containing FunctionResponse.",
+        );
+        // Declare finalResponse before the try block
+        GenerateContentResponse finalResponse;
+        try {
+          finalResponse = await geminiService.generateContent(
+            "", // No new user prompt text, just process the tool result
+            historyForSecondCall,
+            tools: null, // No tools needed for the summary response
+          );
+        } catch (e) {
+          debugPrint("MCP ProcessQuery: Error during second Gemini call: $e");
+          // Existing error handling...
+        }
 
         // --- Step 9: Second Gemini Call (with function response) ---
         // Update history: Add the model's previous turn (including the function call)
         // and the function response part.
         final historyForSecondCall = [
           ...currentTurnHistory, // user query
-          candidate!.content, // model's response containing the function call
+          candidate.content, // model's response containing the function call
           Content('function', [
             functionResponsePart,
           ]), // the result from the tool
