@@ -4,6 +4,8 @@ import 'package:flutter_markdown/flutter_markdown.dart'; // For rendering markdo
 import 'package:flutter_memos/models/chat_message.dart'; // Import ChatMessage which now defines Role
 import 'package:flutter_memos/providers/chat_providers.dart';
 import 'package:flutter_memos/providers/settings_provider.dart'; // To check API key
+// Add import for McpClientService where mcpClientProvider is defined
+import 'package:flutter_memos/services/mcp_client_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 // Remove google_generative_ai import if only used for Role
 // import 'package:google_generative_ai/google_generative_ai.dart';
