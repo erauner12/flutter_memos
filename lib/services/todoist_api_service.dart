@@ -126,6 +126,36 @@ class TodoistApiService {
     }
   }
 
+  /// Get a single active task by its ID
+  Future<todoist.Task?> getActiveTaskById(String id) async {
+    if (verboseLogging) {
+      stderr.writeln('[TodoistApiService] Getting active task by ID: $id');
+    }
+
+    try {
+      final taskIdInt = int.tryParse(id);
+      if (taskIdInt == null) {
+        stderr.writeln('[TodoistApiService] Error: Invalid task ID format provided: "$id"');
+        throw ArgumentError('Invalid task ID format: $id');
+      }
+      final task = await _tasksApi.getActiveTask(taskIdInt);
+
+      if (verboseLogging) {
+        if (task != null) {
+          stderr.writeln('[TodoistApiService] Retrieved task: ${task.content}');
+        } else {
+          stderr.writeln('[TodoistApiService] Task with ID $id not found.');
+        }
+      }
+      return task;
+    } catch (e) {
+      _handleApiError('Error getting task by ID $id', e);
+      // Return null or rethrow depending on desired error handling for callers
+      // Returning null here to match the return type, caller should check.
+      return null;
+    }
+  }
+
   /// Create a new task
   Future<todoist.Task> createTask({
     required String content,
@@ -198,8 +228,7 @@ class TodoistApiService {
 
   /// Update an existing task
   Future<void> updateTask({
-    required String
-    id, // Task ID is usually a string in Todoist API v2 responses
+    required String id, // Task ID is usually a string in Todoist API v2 responses
     String? content,
     String? description,
     List<String>? labelIds,

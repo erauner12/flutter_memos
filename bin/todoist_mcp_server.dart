@@ -107,7 +107,8 @@ void main() async {
       },
       'due_datetime': {
         'type': 'string',
-        'description': 'Specific due date and time in RFC3339 UTC format (optional).',
+        'description':
+            'Specific due date and time in RFC3339 UTC format (optional).',
       },
       'due_lang': {
         'type': 'string',
@@ -121,7 +122,6 @@ void main() async {
     callback: _handleCreateTodoistTask,
   );
 
-  // Register the 'update_todoist_task' tool with updated description and schema
   server.tool(
     'update_todoist_task',
     description:
@@ -177,7 +177,6 @@ void main() async {
     callback: _handleUpdateTodoistTask,
   );
 
-  // Register the 'get_todoist_tasks' tool with updated description and schema
   server.tool(
     'get_todoist_tasks',
     description: '''Retrieves active Todoist tasks based on criteria.
@@ -254,7 +253,6 @@ Use EITHER `task_id`, `filter`, OR `content_contains`. `task_id` takes precedenc
     callback: _handleGetTodoistTasks,
   );
 
-  // Register the 'todoist_delete_task' tool
   server.tool(
     'todoist_delete_task',
     description: 'Deletes a task from Todoist by searching for it by name.',
@@ -268,7 +266,6 @@ Use EITHER `task_id`, `filter`, OR `content_contains`. `task_id` takes precedenc
     callback: _handleDeleteTodoistTask,
   );
 
-  // Register the 'todoist_complete_task' tool
   server.tool(
     'todoist_complete_task',
     description:
@@ -281,6 +278,52 @@ Use EITHER `task_id`, `filter`, OR `content_contains`. `task_id` takes precedenc
       },
     },
     callback: _handleCompleteTodoistTask,
+  );
+
+  // Register the 'get_todoist_task_by_id' tool
+  server.tool(
+    'get_todoist_task_by_id',
+    description: 'Retrieves a single active Todoist task by its specific ID.',
+    inputSchemaProperties: {
+      'task_id': {
+        'type': 'string',
+        'description': 'The exact ID of the task to retrieve (required).',
+      },
+    },
+    callback: _handleGetTodoistTaskById,
+  );
+
+  // Register the 'get_task_comments' tool
+  server.tool(
+    'get_task_comments',
+    description: 'Retrieves all comments for a specific Todoist task ID.',
+    inputSchemaProperties: {
+      'task_id': {
+        'type': 'string',
+        'description':
+            'The exact ID of the task whose comments to retrieve (required).',
+      },
+    },
+    callback: _handleGetTaskComments,
+  );
+
+  // Register the 'create_task_comment' tool
+  server.tool(
+    'create_task_comment',
+    description: 'Adds a new comment to a specific Todoist task ID.',
+    inputSchemaProperties: {
+      'task_id': {
+        'type': 'string',
+        'description':
+            'The exact ID of the task to add the comment to (required).',
+      },
+      'content': {
+        'type': 'string',
+        'description': 'The text content of the comment (required).',
+      },
+      // Optional: Add 'attachment' schema if needed later
+    },
+    callback: _handleCreateTaskComment,
   );
 
   // 3. Connect to the Transport
@@ -305,7 +348,7 @@ Use EITHER `task_id`, `filter`, OR `content_contains`. `task_id` takes precedenc
     await server.connect(transport);
     stderr.writeln('[TodoistServer] MCP Server running on stdio, ready for connections.');
     stderr.writeln(
-      '[TodoistServer] Registered tools: create_todoist_task, update_todoist_task, get_todoist_tasks, delete_todoist_task, complete_todoist_task'
+      '[TodoistServer] Registered tools: create_todoist_task, update_todoist_task, get_todoist_tasks, delete_todoist_task, complete_todoist_task, get_todoist_task_by_id, get_task_comments, create_task_comment', // Added new tools
     );
   } catch (e) {
     stderr.writeln('[TodoistServer] Failed to connect to transport: $e');
@@ -906,6 +949,426 @@ Future<mcp_dart.CallToolResult> _handleCompleteTodoistTask({
             'message': apiErrorMsg,
             'taskId': taskId,
           }),
+        ),
+      ],
+    );
+  }
+}
+
+// Handler function for the 'get_todoist_task_by_id' tool
+Future<mcp_dart.CallToolResult> _handleGetTodoistTaskById({
+  Map<String, dynamic>? args,
+  dynamic extra,
+}) async {
+  stderr.writeln('[TodoistServer] Received get_todoist_task_by_id request.');
+  stderr.writeln('[TodoistServer] Args: ${jsonEncode(args)}');
+
+  // 1. API Token Check & Service Configuration
+  final apiToken = Platform.environment['TODOIST_API_TOKEN'];
+  if (apiToken == null || apiToken.isEmpty) {
+    const errorMsg =
+        'Error: TODOIST_API_TOKEN environment variable not set or empty.';
+    stderr.writeln('[TodoistServer] $errorMsg');
+    return mcp_dart.CallToolResult(
+      content: [
+        mcp_dart.TextContent(
+          text: jsonEncode({'status': 'error', 'message': errorMsg}),
+        ),
+      ],
+    );
+  }
+
+  stderr.writeln('[TodoistServer] Configuring TodoistApiService...');
+  try {
+    todoistService.configureService(authToken: apiToken);
+    if (!await todoistService.checkHealth()) {
+      const errorMsg = 'Error: Todoist API health check failed.';
+      stderr.writeln('[TodoistServer] $errorMsg');
+      return mcp_dart.CallToolResult(
+        content: [
+          mcp_dart.TextContent(
+            text: jsonEncode({'status': 'error', 'message': errorMsg}),
+          ),
+        ],
+      );
+    }
+    stderr.writeln(
+      '[TodoistServer] TodoistApiService configured and health check passed.',
+    );
+  } catch (e) {
+    final errorMsg = 'Error configuring TodoistApiService: ${e.toString()}';
+    stderr.writeln('[TodoistServer] $errorMsg');
+    return mcp_dart.CallToolResult(
+      content: [
+        mcp_dart.TextContent(
+          text: jsonEncode({'status': 'error', 'message': errorMsg}),
+        ),
+      ],
+    );
+  }
+
+  // 2. Parse Arguments
+  final taskId = args?['task_id'] as String?;
+  if (taskId == null || taskId.trim().isEmpty) {
+    const errorMsg = 'Error: Task ID (`task_id`) is required.';
+    stderr.writeln('[TodoistServer] $errorMsg');
+    return mcp_dart.CallToolResult(
+      content: [
+        mcp_dart.TextContent(
+          text: jsonEncode({'status': 'error', 'message': errorMsg}),
+        ),
+      ],
+    );
+  }
+
+  // 3. Call Service Method
+  try {
+    stderr.writeln(
+      '[TodoistServer] Calling todoistService.getActiveTaskById for ID: $taskId...',
+    );
+    final foundTask = await todoistService.getActiveTaskById(taskId);
+
+    if (foundTask == null) {
+      final errorMsg = 'Task with ID "$taskId" not found or an error occurred.';
+      stderr.writeln('[TodoistServer] $errorMsg');
+      return mcp_dart.CallToolResult(
+        content: [
+          mcp_dart.TextContent(
+            text: jsonEncode({'status': 'error', 'message': errorMsg}),
+          ),
+        ],
+      );
+    }
+
+    // 4. Format Success Response
+    final taskDetails = {
+      'id': foundTask.id,
+      'content': foundTask.content,
+      'description': foundTask.description,
+      'priority': foundTask.priority,
+      'due_string': foundTask.due?.dueObject?.string,
+      'due_date': foundTask.due?.dueObject?.date.toIso8601String().substring(
+        0,
+        10,
+      ),
+      'due_datetime': foundTask.due?.dueObject?.datetime?.toIso8601String(),
+      'labels': foundTask.labels,
+      'project_id': foundTask.projectId,
+      'section_id': foundTask.sectionId,
+      'created_at':
+          foundTask.createdAt != null
+              ? DateTime.parse(foundTask.createdAt!).toIso8601String()
+              : null,
+      'assignee_id': foundTask.assigneeId,
+      'assigner_id': foundTask.assignerId,
+      'comment_count': foundTask.commentCount,
+      'url': foundTask.url,
+      'is_completed': foundTask.isCompleted,
+      'parent_id': foundTask.parentId,
+      'order': foundTask.order,
+      'duration_amount': foundTask.duration?.durationObject?.amount,
+      'duration_unit': foundTask.duration?.durationObject?.unit,
+    };
+    final successMsg =
+        'Successfully retrieved task: "${foundTask.content}" (ID: ${foundTask.id})';
+    stderr.writeln('[TodoistServer] $successMsg');
+    return mcp_dart.CallToolResult(
+      content: [
+        mcp_dart.TextContent(
+          text: jsonEncode({
+            'status': 'success',
+            'message': successMsg,
+            'task': taskDetails,
+          }),
+        ),
+      ],
+    );
+  } catch (e) {
+    final errorMsg =
+        'Error getting Todoist task by ID "$taskId": ${e.toString()}';
+    stderr.writeln('[TodoistServer] $errorMsg');
+    String apiErrorMsg = errorMsg;
+    if (e is todoist.ApiException) {
+      stderr.writeln(
+        '[TodoistServer] API Exception Details: Code=${e.code}, Message=${e.message}, Body=${e.innerException}',
+      );
+      apiErrorMsg =
+          'API Error getting task "$taskId" (${e.code}): ${e.message}';
+    } else if (e is ArgumentError) {
+      apiErrorMsg = 'Error: Invalid Task ID format provided: "$taskId".';
+    }
+    return mcp_dart.CallToolResult(
+      content: [
+        mcp_dart.TextContent(
+          text: jsonEncode({'status': 'error', 'message': apiErrorMsg}),
+        ),
+      ],
+    );
+  }
+}
+
+// Handler function for the 'get_task_comments' tool
+Future<mcp_dart.CallToolResult> _handleGetTaskComments({
+  Map<String, dynamic>? args,
+  dynamic extra,
+}) async {
+  stderr.writeln('[TodoistServer] Received get_task_comments request.');
+  stderr.writeln('[TodoistServer] Args: ${jsonEncode(args)}');
+
+  // 1. API Token Check & Service Configuration (Standard Setup)
+  final apiToken = Platform.environment['TODOIST_API_TOKEN'];
+  if (apiToken == null || apiToken.isEmpty) {
+    const errorMsg =
+        'Error: TODOIST_API_TOKEN environment variable not set or empty.';
+    stderr.writeln('[TodoistServer] $errorMsg');
+    return mcp_dart.CallToolResult(
+      content: [
+        mcp_dart.TextContent(
+          text: jsonEncode({'status': 'error', 'message': errorMsg}),
+        ),
+      ],
+    );
+  }
+  stderr.writeln('[TodoistServer] Configuring TodoistApiService...');
+  try {
+    todoistService.configureService(authToken: apiToken);
+    if (!await todoistService.checkHealth()) {
+      const errorMsg = 'Error: Todoist API health check failed.';
+      stderr.writeln('[TodoistServer] $errorMsg');
+      return mcp_dart.CallToolResult(
+        content: [
+          mcp_dart.TextContent(
+            text: jsonEncode({'status': 'error', 'message': errorMsg}),
+          ),
+        ],
+      );
+    }
+    stderr.writeln(
+      '[TodoistServer] TodoistApiService configured and health check passed.',
+    );
+  } catch (e) {
+    final errorMsg = 'Error configuring TodoistApiService: ${e.toString()}';
+    stderr.writeln('[TodoistServer] $errorMsg');
+    return mcp_dart.CallToolResult(
+      content: [
+        mcp_dart.TextContent(
+          text: jsonEncode({'status': 'error', 'message': errorMsg}),
+        ),
+      ],
+    );
+  }
+
+  // 2. Parse Arguments
+  final taskId = args?['task_id'] as String?;
+  if (taskId == null || taskId.trim().isEmpty) {
+    const errorMsg = 'Error: Task ID (`task_id`) is required to get comments.';
+    stderr.writeln('[TodoistServer] $errorMsg');
+    return mcp_dart.CallToolResult(
+      content: [
+        mcp_dart.TextContent(
+          text: jsonEncode({'status': 'error', 'message': errorMsg}),
+        ),
+      ],
+    );
+  }
+
+  // 3. Call Service Method
+  try {
+    stderr.writeln(
+      '[TodoistServer] Calling todoistService.getAllComments for task ID: $taskId...',
+    );
+    final comments = await todoistService.getAllComments(taskId: taskId);
+
+    // 4. Format Response
+    if (comments.isEmpty) {
+      final msg = 'No comments found for task ID "$taskId".';
+      stderr.writeln('[TodoistServer] $msg');
+      return mcp_dart.CallToolResult(
+        content: [
+          mcp_dart.TextContent(
+            text: jsonEncode({
+              'status': 'success',
+              'message': msg,
+              'comments': [],
+            }),
+          ),
+        ],
+      );
+    } else {
+      final commentList =
+          comments
+              .map(
+                (c) => {
+                  'id': c.id,
+                  'content': c.content,
+                  'posted_at': c.postedAt?.toIso8601String(),
+                },
+              )
+              .toList();
+      final msg =
+          'Successfully retrieved ${commentList.length} comments for task ID "$taskId".';
+      stderr.writeln('[TodoistServer] $msg');
+      return mcp_dart.CallToolResult(
+        content: [
+          mcp_dart.TextContent(
+            text: jsonEncode({
+              'status': 'success',
+              'message': msg,
+              'comments': commentList,
+            }),
+          ),
+        ],
+      );
+    }
+  } catch (e) {
+    final errorMsg =
+        'Error getting comments for task ID "$taskId": ${e.toString()}';
+    stderr.writeln('[TodoistServer] $errorMsg');
+    String apiErrorMsg = errorMsg;
+    if (e is todoist.ApiException) {
+      stderr.writeln(
+        '[TodoistServer] API Exception Details: Code=${e.code}, Message=${e.message}, Body=${e.innerException}',
+      );
+      apiErrorMsg =
+          'API Error getting comments for task "$taskId" (${e.code}): ${e.message}';
+    }
+    return mcp_dart.CallToolResult(
+      content: [
+        mcp_dart.TextContent(
+          text: jsonEncode({'status': 'error', 'message': apiErrorMsg}),
+        ),
+      ],
+    );
+  }
+}
+
+// Handler function for the 'create_task_comment' tool
+Future<mcp_dart.CallToolResult> _handleCreateTaskComment({
+  Map<String, dynamic>? args,
+  dynamic extra,
+}) async {
+  stderr.writeln('[TodoistServer] Received create_task_comment request.');
+  stderr.writeln('[TodoistServer] Args: ${jsonEncode(args)}');
+
+  // 1. API Token Check & Service Configuration (Standard Setup)
+  final apiToken = Platform.environment['TODOIST_API_TOKEN'];
+  if (apiToken == null || apiToken.isEmpty) {
+    const errorMsg =
+        'Error: TODOIST_API_TOKEN environment variable not set or empty.';
+    stderr.writeln('[TodoistServer] $errorMsg');
+    return mcp_dart.CallToolResult(
+      content: [
+        mcp_dart.TextContent(
+          text: jsonEncode({'status': 'error', 'message': errorMsg}),
+        ),
+      ],
+    );
+  }
+  stderr.writeln('[TodoistServer] Configuring TodoistApiService...');
+  try {
+    todoistService.configureService(authToken: apiToken);
+    if (!await todoistService.checkHealth()) {
+      const errorMsg = 'Error: Todoist API health check failed.';
+      stderr.writeln('[TodoistServer] $errorMsg');
+      return mcp_dart.CallToolResult(
+        content: [
+          mcp_dart.TextContent(
+            text: jsonEncode({'status': 'error', 'message': errorMsg}),
+          ),
+        ],
+      );
+    }
+    stderr.writeln(
+      '[TodoistServer] TodoistApiService configured and health check passed.',
+    );
+  } catch (e) {
+    final errorMsg = 'Error configuring TodoistApiService: ${e.toString()}';
+    stderr.writeln('[TodoistServer] $errorMsg');
+    return mcp_dart.CallToolResult(
+      content: [
+        mcp_dart.TextContent(
+          text: jsonEncode({'status': 'error', 'message': errorMsg}),
+        ),
+      ],
+    );
+  }
+
+  // 2. Parse Arguments
+  final taskId = args?['task_id'] as String?;
+  final content = args?['content'] as String?;
+  if (taskId == null || taskId.trim().isEmpty) {
+    const errorMsg =
+        'Error: Task ID (`task_id`) is required to create a comment.';
+    stderr.writeln('[TodoistServer] $errorMsg');
+    return mcp_dart.CallToolResult(
+      content: [
+        mcp_dart.TextContent(
+          text: jsonEncode({'status': 'error', 'message': errorMsg}),
+        ),
+      ],
+    );
+  }
+  if (content == null || content.trim().isEmpty) {
+    const errorMsg = 'Error: Comment content (`content`) cannot be empty.';
+    stderr.writeln('[TodoistServer] $errorMsg');
+    return mcp_dart.CallToolResult(
+      content: [
+        mcp_dart.TextContent(
+          text: jsonEncode({'status': 'error', 'message': errorMsg}),
+        ),
+      ],
+    );
+  }
+  // TODO: Handle attachment if added to schema later
+
+  // 3. Call Service Method
+  try {
+    stderr.writeln(
+      '[TodoistServer] Calling todoistService.createComment for task ID: $taskId...',
+    );
+    final newComment = await todoistService.createComment(
+      taskId: taskId,
+      content: content,
+      // attachment: attachment, // Pass attachment if handled
+    );
+
+    // 4. Format Success Response
+    final successMsg = 'Comment added successfully to task ID "$taskId".';
+    stderr.writeln(
+      '[TodoistServer] $successMsg (Comment ID: ${newComment.id})',
+    );
+    return mcp_dart.CallToolResult(
+      content: [
+        mcp_dart.TextContent(
+          text: jsonEncode({
+            'status': 'success',
+            'message': successMsg,
+            'commentId': newComment.id,
+          }),
+        ),
+      ],
+    );
+  } catch (e) {
+    final errorMsg =
+        'Error creating comment for task ID "$taskId": ${e.toString()}';
+    stderr.writeln('[TodoistServer] $errorMsg');
+    String apiErrorMsg = errorMsg;
+    if (e is todoist.ApiException) {
+      stderr.writeln(
+        '[TodoistServer] API Exception Details: Code=${e.code}, Message=${e.message}, Body=${e.innerException}',
+      );
+      if (e.code == 404 || e.code == 400) {
+        apiErrorMsg =
+            'API Error creating comment: Task with ID "$taskId" not found or invalid request (${e.code}).';
+      } else {
+        apiErrorMsg =
+            'API Error creating comment for task "$taskId" (${e.code}): ${e.message}';
+      }
+    }
+    return mcp_dart.CallToolResult(
+      content: [
+        mcp_dart.TextContent(
+          text: jsonEncode({'status': 'error', 'message': apiErrorMsg}),
         ),
       ],
     );
