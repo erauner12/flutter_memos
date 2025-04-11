@@ -428,7 +428,11 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
     }
     */
     if (serverConfig.command.trim().isEmpty) {
-      updateServerState(serverId, McpConnectionStatus.error, errorMsg: "Server command is empty.");
+      updateServerState(
+        serverId,
+        McpConnectionStatus.error,
+        errorMsg: "Server command is empty",
+      );
       return;
     }
 
@@ -438,21 +442,16 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
     try {
       // Fetch Todoist token using the provider
       // Ensure todoistApiKeyProvider is accessible here (might need adjustment if not directly in ref scope)
-      final todoistApiToken = ref.read(
-        todoistApiKeyProvider,
-      ); // Read the current token value
-
+      final todoistApiToken = ref.read(todoistApiKeyProvider);
       // Prepare environment, including custom vars from config AND the token
       final Map<String, String> environmentToPass = {
-        ...serverConfig.customEnvironment, // Keep existing custom vars
-        // Conditionally add the token if it's not empty
+        ...serverConfig.customEnvironment,
         if (todoistApiToken.isNotEmpty) 'TODOIST_API_TOKEN': todoistApiToken,
       };
-      // Log the environment being passed (excluding sensitive values in production)
       if (kDebugMode) {
         final safeEnvLog = Map.from(environmentToPass);
         if (safeEnvLog.containsKey('TODOIST_API_TOKEN')) {
-          safeEnvLog['TODOIST_API_TOKEN'] = '********'; // Mask token in logs
+          safeEnvLog['TODOIST_API_TOKEN'] = '********';
         }
         debugPrint(
           "MCP [\$serverId]: Launching with environment: \$safeEnvLog",
@@ -462,10 +461,9 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
       final command = serverConfig.command;
       final argsList =
           serverConfig.args.split(' ').where((s) => s.isNotEmpty).toList();
-      // PHASE 3: Pass geminiService.model instead of null
       newClientInstance = GoogleMcpClient(
         serverId,
-        null /* geminiService.model */,
+        null, // geminiService.model would be passed here if available
       );
       newClientInstance.setupCallbacks(
         onError: handleClientError,
@@ -475,12 +473,10 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
       await newClientInstance.connectToServer(
         command,
         argsList,
-        // Pass the combined environment map here
         environmentToPass,
       );
 
       if (newClientInstance.isConnected) {
-        // *** ADD LOGGING HERE ***
         debugPrint(
           "MCP [_connectServer - \$serverId]: Client connected successfully. Updating state and rebuilding tool map...",
         );
@@ -525,26 +521,22 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
       debugPrint("MCP [\$serverId]: No active client found to disconnect.");
       if (state.activeClients.containsKey(serverId)) {
         state = state.copyWith(removeClientIds: [serverId]);
-        rebuildToolMap(); // Call rebuild after removing client ID
+        rebuildToolMap();
       }
       return;
     }
     debugPrint("MCP [\$serverId]: Disconnecting client...");
     await clientToDisconnect.cleanup();
-    // Check if the client still exists in the state *before* updating
     if (state.activeClients.containsKey(serverId)) {
-      // Update state to remove the client
       state = state.copyWith(removeClientIds: [serverId]);
       debugPrint(
         "MCP [\$serverId]: Disconnect process complete, client removed from state.",
       );
-      // Rebuild the tool map *after* the state update
       rebuildToolMap();
     } else {
       debugPrint(
         "MCP [\$serverId]: Client already removed from state during cleanup.",
       );
-      // Ensure tool map is still rebuilt if the client might have been removed by error handler first
       rebuildToolMap();
     }
   }
@@ -647,14 +639,11 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
   void handleClientClose(String serverId) {
     debugPrint("MCP [\$serverId]: Received close callback.");
     if (state.serverStatuses[serverId] != McpConnectionStatus.error) {
-      // If not already in error, update status to disconnected which also removes client
       updateServerState(serverId, McpConnectionStatus.disconnected);
-      // updateServerState calls rebuildToolMap if client was removed
     } else {
-      // If it was already in error state, just ensure the client reference is removed
       if (state.activeClients.containsKey(serverId)) {
         state = state.copyWith(removeClientIds: [serverId]);
-        rebuildToolMap(); // Explicitly rebuild map after removing client due to close in error state
+        rebuildToolMap();
       }
     }
   }
@@ -665,17 +654,14 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
     final newToolMap = <String, String>{};
     final Set<String> uniqueToolNames = {};
     final List<String> duplicateToolNames = [];
-    // Use a copy of keys to avoid concurrent modification issues if state changes during iteration
     final currentClientIds = List<String>.from(state.activeClients.keys);
 
     for (final serverId in currentClientIds) {
       final client = state.activeClients[serverId];
       if (client != null && client.isConnected) {
         for (final tool in client.availableTools) {
-          // Ensure functionDeclarations is not null before iterating
           for (final funcDec in tool.functionDeclarations ?? []) {
             if (newToolMap.containsKey(funcDec.name)) {
-              // Handle duplicates if necessary (e.g., log a warning)
               if (!duplicateToolNames.contains(funcDec.name)) {
                 duplicateToolNames.add(funcDec.name);
                 debugPrint(
@@ -683,8 +669,7 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
                 );
               }
             } else {
-              newToolMap[funcDec.name] =
-                  serverId; // Store tool name -> server ID
+              newToolMap[funcDec.name] = serverId;
               uniqueToolNames.add(funcDec.name);
             }
           }
@@ -692,9 +677,7 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
       }
     }
 
-    toolToServerIdMap = newToolMap; // Assign the populated map
-
-    // *** ADD LOGGING HERE ***
+    toolToServerIdMap = newToolMap;
     debugPrint(
       "MCP [_rebuildToolMap]: Finished rebuilding. Final map: \$toolToServerIdMap",
     );
@@ -733,14 +716,12 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
       debugPrint(
         "MCP ProcessQuery: Gemini service not available or not initialized.",
       );
-      // Define errorMsg
       final errorMsg =
           geminiService?.initializationError ??
           "Gemini service is null or model is missing.";
       return McpProcessResult(
         finalModelContent: Content('model', [
-          // Use errorMsg here
-          TextPart("AI service is not available: $errorMsg"),
+          TextPart("AI service is not available: \$errorMsg"),
         ]),
       );
     }
@@ -764,16 +745,13 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
 
     // --- Step 4: First Gemini Call (with tools) ---
     GenerateContentResponse firstResponse;
-    // Keep track of the content sent to the model for history management
     final userContentForHistory = Content.text(query);
-    // History for the *current* turn starts with previous history + user query
     final currentTurnHistory = [
       ...history,
       Content('user', userContentForHistory.parts),
     ];
 
     try {
-      // Use the non-streaming generateContent for the initial call
       firstResponse = await geminiService.generateContent(
         query,
         history,
@@ -797,7 +775,7 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
     if (functionCallPart != null && functionCallPart is FunctionCall) {
       final functionCall = functionCallPart;
       final toolName = functionCall.name;
-      final toolArgs = functionCall.args; // This is Map<String, Object?>
+      final toolArgs = functionCall.args;
 
       debugPrint(
         "MCP ProcessQuery: Gemini requested Function Call: '\$toolName' with args: \$toolArgs",
@@ -834,8 +812,7 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
 
       mcp_dart.CallToolResult toolResult;
       String toolResultString = '';
-      Map<String, dynamic> toolResultJson = {}; // Store parsed JSON
-      String messageForAI = ''; // Descriptive message for AI
+      Map<String, dynamic> toolResultJson = {};
 
       try {
         final params = mcp_dart.CallToolRequestParams(
@@ -852,125 +829,64 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
         if (textContent != null && textContent is mcp_dart.TextContent) {
           toolResultString = textContent.text;
           debugPrint(
-            "MCP ProcessQuery: Tool '$toolName' executed successfully by server '$targetServerId'. Raw Result: $toolResultString",
+            "MCP ProcessQuery: Tool '\$toolName' executed successfully by server '\$targetServerId'. Raw Result: \$toolResultString",
           );
 
-          // Attempt to parse the result string as JSON and create a descriptive message
           try {
             final decoded = jsonDecode(toolResultString);
-            messageForAI =
-                "Tool '$toolName' executed successfully."; // Base message
 
             if (decoded is Map<String, dynamic>) {
               toolResultJson = decoded;
-              messageForAI +=
-                  " Result: ${jsonEncode(toolResultJson)}"; // Add JSON string to message
-              if (toolName == 'create_todoist_task' &&
-                  toolResultJson.containsKey('taskId')) {
-                messageForAI +=
-                    " The new task ID is ${toolResultJson['taskId']}.";
-              }
             } else if (decoded is List) {
-              // Handle list results (likely from get_tasks)
               toolResultJson = {
                 'result_list': decoded,
-              }; // Wrap list in a map for FunctionResponse
-              messageForAI +=
-                  " Result: ${jsonEncode(decoded)}"; // Add JSON string to message
+              };
               if (toolName == 'get_todoist_tasks' && decoded.isNotEmpty) {
-                final taskIds =
-                    decoded
-                        .map((task) => task is Map ? task['id'] : null)
-                        .whereNotNull()
-                        .toList();
-                if (taskIds.isNotEmpty) {
-                  messageForAI += " Extracted Task IDs: ${taskIds.join(', ')}.";
-                } else {
-                  messageForAI += " Found tasks, but could not extract IDs.";
-                }
-              } else if (toolName == 'get_todoist_tasks') {
-                messageForAI += " No tasks found matching criteria.";
+                decoded
+                    .map((task) => task is Map ? task['id'] : null)
+                    .nonNulls
+                    .toList();
               }
             } else {
-              // Not a Map or List, treat as plain text result
-              messageForAI += " Result: $toolResultString";
-              toolResultJson = {'result_text': toolResultString}; // Wrap text
+              toolResultJson = {'result_text': toolResultString};
             }
           } catch (e) {
-            // JSON parsing failed, use the raw string
             debugPrint(
-              "MCP ProcessQuery: Tool result was not valid JSON or processing failed: $e. Using raw string.",
+              "MCP ProcessQuery: Tool result was not valid JSON or processing failed: \$e. Using raw string.",
             );
-            messageForAI =
-                "Tool '$toolName' executed. Result: $toolResultString";
-            toolResultJson = {'result_text': toolResultString}; // Wrap text
+            toolResultJson = {'result_text': toolResultString};
           }
-
         } else {
-          // Handle cases where result is not simple text (e.g., structured non-text content)
-          toolResultString = jsonEncode(
-            toolResult.toJson(),
-          ); // Fallback serialization
-          messageForAI =
-              "Tool '$toolName' executed by server '$targetServerId'. Result (non-text): $toolResultString";
+          toolResultString = jsonEncode(toolResult.toJson());
           toolResultJson = {
             'result_raw': toolResult.toJson(),
-          }; // Wrap raw structure
+          };
           debugPrint(
-            "MCP ProcessQuery: Tool '$toolName' executed by server '$targetServerId'. Result (non-text): $toolResultString",
+            "MCP ProcessQuery: Tool '\$toolName' executed by server '\$targetServerId'. Result (non-text): \$toolResultString",
           );
         }
 
         // --- Step 8: Construct FunctionResponse ---
-        // Pass the parsed JSON map as the response content.
-        // The AI should be able to understand this structured data better.
         final functionResponsePart = FunctionResponse(
           toolName,
-          toolResultJson, // Pass the parsed JSON map
+          toolResultJson,
         );
         debugPrint(
-          "MCP ProcessQuery: Constructed FunctionResponse with JSON: ${jsonEncode(toolResultJson)}",
+          "MCP ProcessQuery: Constructed FunctionResponse with JSON: \${jsonEncode(toolResultJson)}",
         );
 
         // --- Step 9: Second Gemini Call (with function response) ---
-        // History includes: original user query, model's function call request, our function response
         final historyForSecondCall = [
-          ...currentTurnHistory, // user query
-          candidate!
-              .content, // model's response containing the function call request
+          ...currentTurnHistory,
+          candidate!.content,
           Content('function', [
             functionResponsePart,
-          ]), // the result from the tool execution
+          ]),
         ];
 
         debugPrint(
           "MCP ProcessQuery: Making second Gemini call with history containing FunctionResponse.",
         );
-        // Declare finalResponse before the try block
-        GenerateContentResponse finalResponse;
-        try {
-          finalResponse = await geminiService.generateContent(
-            "", // No new user prompt text, just process the tool result
-            historyForSecondCall,
-            tools: null, // No tools needed for the summary response
-          );
-        } catch (e) {
-          debugPrint("MCP ProcessQuery: Error during second Gemini call: $e");
-          // Existing error handling...
-        }
-
-        // --- Step 9: Second Gemini Call (with function response) ---
-        // Update history: Add the model's previous turn (including the function call)
-        // and the function response part.
-        final historyForSecondCall = [
-          ...currentTurnHistory, // user query
-          candidate.content, // model's response containing the function call
-          Content('function', [
-            functionResponsePart,
-          ]), // the result from the tool
-        ];
-
-        // Declare finalResponse before the try block
         GenerateContentResponse finalResponse;
         try {
           finalResponse = await geminiService.generateContent(
@@ -983,9 +899,11 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
           return McpProcessResult(
             finalModelContent: Content('model', [
               TextPart(
-                "Tool '\$toolName' executed, but encountered an error getting the final summary: \${e.toString()}",
+                "Tool '\$toolName' executed successfully (Result: \${jsonEncode(toolResultJson)}), but encountered an error getting the final summary: \${e.toString()}",
               ),
             ]),
+            modelCallContent: candidate.content,
+            toolResponseContent: Content('function', [functionResponsePart]),
             toolName: toolName,
             toolArgs: toolArgs,
             toolResult: toolResultString,
@@ -1007,9 +925,7 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
         return McpProcessResult(
           finalModelContent: finalContent,
           modelCallContent: candidate.content,
-          toolResponseContent: Content('function', [
-            FunctionResponse(toolName, {'result': toolResultString}),
-          ]),
+          toolResponseContent: Content('function', [functionResponsePart]),
           toolName: toolName,
           toolArgs: toolArgs,
           toolResult: toolResultString,
@@ -1041,19 +957,13 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
             TextPart("Sorry, I couldn't generate a response."),
           ]);
 
-      // Log the direct response text before returning
-      final directResponseText = directContent.parts
-          .whereType<TextPart>()
-          .map((p) => p.text)
-          .join('');
       debugPrint(
-        "MCP ProcessQuery: Final response to UI (direct): \"$directResponseText\"",
+        "MCP ProcessQuery: Final response to UI (direct): \"\${directContent.parts.whereType<TextPart>().map((p) => p.text).join('')}\"",
       );
 
       return McpProcessResult(finalModelContent: directContent);
     }
   }
-
   // --- Cleanup ---
   @override
   void dispose() {
