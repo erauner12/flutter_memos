@@ -915,45 +915,93 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
         if (status == 'success') {
           // Default success message uses the simplified message if available
           summaryText = message ?? "Tool '\$toolName' executed successfully.";
-
+          
           // Specific overrides for tools where we want more detail
           if (toolName == 'create_todoist_task') {
-            summaryText =
-                'Todoist task created successfully: "${toolArgs['content'] as String? ?? '[unknown content]'}"';
+            final taskContent =
+                toolArgs['content'] as String? ?? '[unknown content]';
+            // Construct the string directly with conditional ID
             if (taskId != null) {
-              summaryText += " (ID: \$taskId)";
+              summaryText =
+                  'Todoist task created successfully: "\$taskContent" (ID: \$taskId).';
+            } else {
+              summaryText =
+                  'Todoist task created successfully: "\$taskContent".';
             }
-            summaryText += ".";
+            // *** ADD SPECIFIC LOG HERE ***
+            debugPrint(
+              "MCP ProcessQuery [create_todoist_task]: Constructed summaryText: \"\$summaryText\"",
+            );
+          
           } else if (toolName == 'update_todoist_task') {
-            summaryText = "Todoist task updated successfully";
+            // Construct the string directly with conditional ID
             if (taskId != null) {
-              summaryText += " (ID: \$taskId)";
+              summaryText = "Todoist task updated successfully (ID: \$taskId).";
+            } else {
+              summaryText = "Todoist task updated successfully.";
             }
-            summaryText += ".";
+            // *** ADD SPECIFIC LOG HERE ***
+            debugPrint(
+              "MCP ProcessQuery [update_todoist_task]: Constructed summaryText: \"\$summaryText\"",
+            );
+          
           } else if (toolName == 'get_todoist_tasks') {
+            // Use the message generated during simplification ("Found X tasks." or "No tasks found.")
             summaryText = message ?? "Tasks retrieved successfully.";
             if (taskId != null) {
-              summaryText += " Task ID is \$taskId.";
+              // This case implies a single task was found by the server
+              summaryText +=
+                  " Task ID is \$taskId."; // Append ID if single task found
             }
+            // *** ADD SPECIFIC LOG HERE ***
+            debugPrint(
+              "MCP ProcessQuery [get_todoist_tasks]: Constructed summaryText: \"\$summaryText\"",
+            );
+          
           } else {
+            // Generic success message for other tools, include ID if present
             if (taskId != null) {
-              summaryText += " ID: \$taskId.";
+              summaryText += " ID: \$taskId."; // Append ID if present
             }
+            // *** ADD SPECIFIC LOG HERE ***
+            debugPrint(
+              "MCP ProcessQuery [generic success]: Constructed summaryText: \"\$summaryText\"",
+            );
           }
         } else if (status == 'error') {
-          summaryText =
-              "Tool '\$toolName' failed: \${message ?? 'Unknown error'}";
+          // Construct error message directly with conditional ID
           if (taskId != null) {
-            summaryText += " (Related to Task ID: \$taskId)";
+            summaryText =
+                "Tool '\$toolName' failed: \${message ?? 'Unknown error'} (Related to Task ID: \$taskId)";
+          } else {
+            summaryText =
+                "Tool '\$toolName' failed: \${message ?? 'Unknown error'}";
           }
+          // *** ADD SPECIFIC LOG HERE ***
+          debugPrint(
+            "MCP ProcessQuery [error]: Constructed summaryText: \"\$summaryText\"",
+          );
         } else {
-          summaryText =
-              toolResultJson['result_text'] as String? ??
-              "Tool '\$toolName' executed. Result: \$toolResultString";
+          // Fallback for unexpected status or non-JSON results
           if (taskId != null) {
-            summaryText += " (ID: \$taskId)";
+            summaryText =
+                toolResultJson['result_text'] as String? ??
+                "Tool '\$toolName' executed. Result: \$toolResultString (ID: \$taskId)";
+          } else {
+            summaryText =
+                toolResultJson['result_text'] as String? ??
+                "Tool '\$toolName' executed. Result: \$toolResultString";
           }
+          // *** ADD SPECIFIC LOG HERE ***
+          debugPrint(
+            "MCP ProcessQuery [fallback]: Constructed summaryText: \"\$summaryText\"",
+          );
         }
+
+        // This log remains to show the final value before returning
+        debugPrint(
+          "MCP ProcessQuery: Final response to UI (tool summary): \"\$summaryText\"",
+        );
 
         final summaryTextPart = TextPart(summaryText);
 
