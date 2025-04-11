@@ -1,65 +1,54 @@
-# Stage 1: Build the executables
-# FROM dart:stable AS builder
-FROM cirrusci/flutter:stable AS builder
+# Stage 1: Build the executables using the standard Dart SDK image
+FROM dart:stable AS builder
 
 WORKDIR /app
 
-# Set frontend to noninteractive to avoid tzdata prompts
-ENV DEBIAN_FRONTEND=noninteractive
-
-# Update package lists, install/update certificates, force update, and clean up
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends ca-certificates curl dnsutils tzdata && \
-    update-ca-certificates --fresh && \
-    rm -rf /var/lib/apt/lists/*
+# Install necessary packages like ca-certificates if needed for network requests during build (unlikely here)
+# RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
 
 # Create a non-root user and group
-# Add -m to create the home directory
 RUN groupadd -r appgroup && useradd --no-log-init -m -r -g appgroup appuser
 
-# Create and set permissions for pub cache directory
-# This should now work as /home/appuser exists
-RUN mkdir /home/appuser/.pub-cache && chown -R appuser:appgroup /home/appuser/.pub-cache
-ENV PUB_CACHE=/home/appuser/.pub-cache
+# Copy pubspec files first
+COPY pubspec.* ./
+# Copy source code for the main project (needed for dependencies of stdio servers)
+COPY bin ./bin
+COPY lib ./lib
+# Copy source code for the echo server
+COPY mcp_echo_server ./mcp_echo_server
+# Copy source code for the proxy itself
+COPY api/mcp_tcp_proxy ./api/mcp_tcp_proxy
 
-# Copy pubspec files first, owned by appuser
-COPY --chown=appuser:appgroup pubspec.yaml pubspec.lock* ./
-# If pubspec.lock doesn't exist, the wildcard handles it gracefully
+# Set ownership for the entire app directory *before* pub get
+RUN chown -R appuser:appgroup /app
 
-# Copy ALL source code (respecting .dockerignore), owned by appuser
-# This overwrites pubspec files but maintains ownership
-COPY --chown=appuser:appgroup . .
-
-# Switch to the non-root user for pub get and compilation
+# Switch to the non-root user
 USER appuser
 
-# Add git safe directory config for the appuser.
-RUN git config --global --add safe.directory /sdks/flutter
+# --- Build Dependencies ---
+# Get dependencies for the main project (needed for todoist server)
+RUN dart pub get
 
-# Grant world write permissions to the flutter sdk cache directory instead of changing ownership
-USER root
-RUN chmod -R a+rw /sdks/flutter/bin/cache
-# We might still need write access to the version file, let's try chmod for that too
-RUN chmod a+w /sdks/flutter/version || true # Use || true in case the file does not exist initially
-USER appuser
+# Get dependencies for the proxy (if it has its own pubspec.yaml)
+# If the proxy pubspec is at api/mcp_tcp_proxy/pubspec.yaml:
+WORKDIR /app/api/mcp_tcp_proxy
+RUN dart pub get
+WORKDIR /app # Switch back to the main app directory
 
-# Run pub get as the non-root user
-RUN flutter pub get --verbose
-
-# Create directory for compiled output (owned by appuser)
+# --- Compile Executables ---
+# Create directory for compiled output
 RUN mkdir -p /app/compiled_bin
 
-# Compile the applications (will run as appuser)
-# Ensure paths are correct relative to WORKDIR /app
-
-# Compile TCP Proxy (Source: /app/api/mcp_tcp_proxy/bin/mcp_tcp_proxy.dart - uses /app/api/mcp_tcp_proxy/pubspec.yaml)
+# Compile TCP Proxy
+# Ensure the path to the main Dart file is correct relative to WORKDIR /app
 RUN dart compile exe api/mcp_tcp_proxy/bin/mcp_tcp_proxy.dart -o /app/compiled_bin/mcp_tcp_proxy_executable
 
-# Compile Todoist Server (Source: /app/bin/todoist_mcp_server.dart - uses /app/pubspec.yaml)
+# Compile Todoist Server
 RUN dart compile exe bin/todoist_mcp_server.dart -o /app/compiled_bin/todoist_mcp_server_executable
 
-# Compile Echo Server (Source: /app/mcp_echo_server/bin/mcp_echo_server.dart - uses /app/pubspec.yaml)
+# Compile Echo Server
 RUN dart compile exe mcp_echo_server/bin/mcp_echo_server.dart -o /app/compiled_bin/mcp_echo_server_executable
+
 
 # Stage 2: Create the runtime image
 # Use the same base image or a minimal one like dart:stable-slim
@@ -69,14 +58,13 @@ FROM dart:stable AS runtime
 WORKDIR /app
 
 # Create the same non-root user and group in the runtime stage
-# Add -m to create the home directory
 RUN groupadd -r appgroup && useradd --no-log-init -m -r -g appgroup appuser
 
 # Copy only the compiled executables from the builder stage, setting ownership
 COPY --from=builder --chown=appuser:appgroup /app/compiled_bin/ /app/bin/
 
-# Make executables runnable (already owned by appuser)
-# RUN chmod +x /app/bin/* # chmod might not be needed if permissions are correct from COPY
+# Make executables runnable (permissions should be preserved, but explicit chmod is safe)
+RUN chmod +x /app/bin/*
 
 # Define the default port the proxy will listen on inside the container
 ENV PROXY_PORT=8999
