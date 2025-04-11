@@ -14,9 +14,11 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 # Create a non-root user and group
-RUN groupadd -r appgroup && useradd --no-log-init -r -g appgroup appuser
+# Add -m to create the home directory
+RUN groupadd -r appgroup && useradd --no-log-init -m -r -g appgroup appuser
 
 # Create and set permissions for pub cache directory
+# This should now work as /home/appuser exists
 RUN mkdir /home/appuser/.pub-cache && chown -R appuser:appgroup /home/appuser/.pub-cache
 ENV PUB_CACHE=/home/appuser/.pub-cache
 
@@ -61,7 +63,8 @@ FROM dart:stable AS runtime
 WORKDIR /app
 
 # Create the same non-root user and group in the runtime stage
-RUN groupadd -r appgroup && useradd --no-log-init -r -g appgroup appuser
+# Add -m to create the home directory
+RUN groupadd -r appgroup && useradd --no-log-init -m -r -g appgroup appuser
 
 # Copy only the compiled executables from the builder stage, setting ownership
 COPY --from=builder --chown=appuser:appgroup /app/compiled_bin/ /app/bin/
