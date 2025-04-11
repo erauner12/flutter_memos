@@ -13,10 +13,13 @@ import 'package:uuid/uuid.dart';
 const _uuid = Uuid();
 
 // Provider for the MCP client service
+// REMOVE THE FOLLOWING PROVIDER DEFINITION:
+/*
 final mcpClientProvider =
     StateNotifierProvider<McpClientNotifier, McpClientState>((ref) {
       return McpClientNotifier(ref);
     });
+*/
 
 class ChatNotifier extends StateNotifier<ChatState> {
   final Ref _ref;
