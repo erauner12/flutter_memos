@@ -82,9 +82,66 @@ void main() async {
       // Add duration fields if needed
     },
     // Define required fields if using full JSON Schema validation (optional here)
-    // required: ['content'],
+    // required: ['content'], // Optional: Define required fields
     callback: _handleCreateTodoistTask, // Use a separate handler function
   );
+
+  // Register the 'update_todoist_task' tool
+  server.tool(
+    'update_todoist_task',
+    description: 'Updates an existing task in Todoist.',
+    inputSchemaProperties: {
+      'id': {
+        // Task ID is required for updates
+        'type': 'string',
+        'description': 'The ID of the task to update (required).',
+      },
+      'content': {
+        'type': 'string',
+        'description': 'New content for the task (optional).',
+      },
+      'description': {
+        'type': 'string',
+        'description': 'New detailed description for the task (optional).',
+      },
+      'labels': {
+        'type': 'array',
+        'description':
+            'New list of label names to attach (optional, replaces existing).',
+        'items': {'type': 'string'},
+      },
+      'priority': {
+        'type': 'integer',
+        'description':
+            'New task priority from 1 (normal) to 4 (urgent) (optional).',
+      },
+      'due_string': {
+        'type': 'string',
+        'description': 'New human-readable due date (optional).',
+      },
+      'due_date': {
+        'type': 'string',
+        'description': 'New specific due date in YYYY-MM-DD format (optional).',
+      },
+      'due_datetime': {
+        'type': 'string',
+        'description':
+            'New specific due date/time in RFC3339 UTC format (optional).',
+      },
+      'due_lang': {
+        'type': 'string',
+        'description':
+            'Language code if new due_string is not English (optional).',
+      },
+      'assignee_id': {
+        'type': 'string',
+        'description': 'New ID of the user to assign the task to (optional).',
+      },
+      // Add duration fields if needed
+    },
+    callback: _handleUpdateTodoistTask, // Use a separate handler function
+  );
+
 
   // 3. Connect to the Transport
   final transport = mcp_dart.StdioServerTransport();
@@ -107,10 +164,162 @@ void main() async {
   try {
     await server.connect(transport);
     stderr.writeln('[TodoistServer] MCP Server running on stdio, ready for connections.');
-    stderr.writeln('[TodoistServer] Registered tools: create_todoist_task');
+    stderr.writeln(
+      '[TodoistServer] Registered tools: create_todoist_task, update_todoist_task',
+    );
   } catch (e) {
     stderr.writeln('[TodoistServer] Failed to connect to transport: $e');
     exit(1);
+  }
+}
+
+
+// Handler function for the 'update_todoist_task' tool
+Future<mcp_dart.CallToolResult> _handleUpdateTodoistTask({
+  Map<String, dynamic>? args,
+  dynamic extra, // Not used here, but part of the signature
+}) async {
+  stderr.writeln('[TodoistServer] Received update_todoist_task request.');
+  stderr.writeln(
+    '[TodoistServer] Args: ${jsonEncode(args)}',
+  ); // Log received args
+
+  // 1. Retrieve API Token from environment
+  final apiToken = Platform.environment['TODOIST_API_TOKEN'];
+  if (apiToken == null || apiToken.isEmpty) {
+    const errorMsg =
+        'Error: TODOIST_API_TOKEN environment variable not set or empty.';
+    stderr.writeln('[TodoistServer] $errorMsg');
+    return const mcp_dart.CallToolResult(
+      content: [mcp_dart.TextContent(text: errorMsg)],
+    );
+  }
+
+  // 2. Configure the Todoist Service (similar to create)
+  stderr.writeln(
+    '[TodoistServer] Configuring TodoistApiService with provided token.',
+  );
+  try {
+    todoistService.configureService(authToken: apiToken);
+    if (!await todoistService.checkHealth()) {
+      const errorMsg =
+          'Error: Todoist API health check failed with the provided token.';
+      stderr.writeln('[TodoistServer] $errorMsg');
+      return const mcp_dart.CallToolResult(
+        content: [mcp_dart.TextContent(text: errorMsg)],
+      );
+    }
+    stderr.writeln(
+      '[TodoistServer] TodoistApiService configured and health check passed.',
+    );
+  } catch (e) {
+    final errorMsg = 'Error configuring TodoistApiService: ${e.toString()}';
+    stderr.writeln('[TodoistServer] $errorMsg');
+    return mcp_dart.CallToolResult(
+      content: [mcp_dart.TextContent(text: errorMsg)],
+    );
+  }
+
+  // 3. Parse Arguments - ID is required
+  final taskId = args?['id'] as String?;
+  if (taskId == null || taskId.trim().isEmpty) {
+    const errorMsg = 'Error: Task ID (`id`) is required for updates.';
+    stderr.writeln('[TodoistServer] $errorMsg');
+    return const mcp_dart.CallToolResult(
+      content: [mcp_dart.TextContent(text: errorMsg)],
+    );
+  }
+
+  // Parse optional arguments
+  final content = args?['content'] as String?;
+  final description = args?['description'] as String?;
+  final labels = (args?['labels'] as List<dynamic>?)?.cast<String>();
+  final priorityStr =
+      args?['priority']?.toString(); // Handle int or string input
+  final dueString = args?['due_string'] as String?;
+  final dueDate = args?['due_date'] as String?;
+  final dueDatetime = args?['due_datetime'] as String?;
+  final dueLang = args?['due_lang'] as String?;
+  final assigneeId = args?['assignee_id'] as String?;
+
+  // Construct Due object if any due fields are present (similar to create)
+  todoist.TaskDue? due;
+  if (dueString != null || dueDate != null || dueDatetime != null) {
+    DateTime? parsedDueDate;
+    DateTime? parsedDueDateTime;
+    try {
+      if (dueDate != null) parsedDueDate = DateTime.parse(dueDate);
+      if (dueDatetime != null) parsedDueDateTime = DateTime.parse(dueDatetime);
+    } catch (e) {
+      stderr.writeln(
+        '[TodoistServer] Warning: Could not parse due date/datetime for update: $e',
+      );
+    }
+    due = todoist.TaskDue(
+      dueObject: todoist.Due(
+        string: dueString ?? '',
+        date:
+            parsedDueDate ??
+            DateTime.now(), // API might require date even if only string/datetime provided
+        datetime: parsedDueDateTime,
+        isRecurring:
+            false, // Update logic might need to handle recurring tasks differently
+        timezone: dueLang,
+      ),
+    );
+  }
+
+  // 4. Call Todoist API Update Method
+  try {
+    stderr.writeln(
+      '[TodoistServer] Calling todoistService.updateTask for ID: $taskId...',
+    );
+    await todoistService.updateTask(
+      id: taskId, // Pass the required ID
+      content: content, // Pass optional fields
+      description: description,
+      labelIds: labels,
+      priority: priorityStr,
+      due: due,
+      // duration: duration, // Add if needed
+      assigneeId: assigneeId,
+    );
+
+    final successMsg = 'Todoist task (ID: $taskId) updated successfully.';
+    stderr.writeln('[TodoistServer] $successMsg');
+    return mcp_dart.CallToolResult(
+      content: [mcp_dart.TextContent(text: successMsg)],
+    );
+  } catch (e) {
+    final errorMsg =
+        'Error updating Todoist task (ID: $taskId): ${e.toString()}';
+    stderr.writeln('[TodoistServer] $errorMsg');
+    // Provide specific API error details if available
+    if (e is todoist.ApiException) {
+      stderr.writeln(
+        '[TodoistServer] API Exception Details: Code=${e.code}, Message=${e.message}, Body=${e.innerException}',
+      );
+      String responseBody = '';
+      if (e.innerException is http.Response) {
+        try {
+          final bodyBytes = (e.innerException as http.Response).bodyBytes;
+          responseBody = utf8.decode(bodyBytes);
+          stderr.writeln('[TodoistServer] API Response Body: $responseBody');
+        } catch (decodeError) {
+          stderr.writeln('[TodoistServer] Could not decode API response body.');
+        }
+      }
+      return mcp_dart.CallToolResult(
+        content: [
+          mcp_dart.TextContent(
+            text: 'API Error updating task (${e.code}): ${e.message}',
+          ),
+        ],
+      );
+    }
+    return mcp_dart.CallToolResult(
+      content: [mcp_dart.TextContent(text: errorMsg)],
+    );
   }
 }
 

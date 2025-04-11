@@ -371,7 +371,8 @@ void main() async {
   try {
     await server.connect(transport);
     stderr.writeln('[TodoistServer] MCP Server running on stdio...');
-    stderr.writeln('[TodoistServer] Registered tools: create_todoist_task');
+    // Update this line if you add more tools
+    stderr.writeln('[TodoistServer] Registered tools: create_todoist_task, update_todoist_task');
   } catch (e) {
     stderr.writeln('[TodoistServer] Failed to connect: $e');
     exit(1);
