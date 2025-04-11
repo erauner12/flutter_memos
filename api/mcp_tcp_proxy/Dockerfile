@@ -3,13 +3,14 @@ FROM dart:stable AS builder
 
 WORKDIR /app
 
+# Update certificate authorities first to prevent TLS errors during pub get
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
+
 # Copy necessary pubspec files first for dependency caching
 # Copy main project pubspec (needed for todoist server and echo server)
 COPY pubspec.* /app/
 # Copy proxy pubspec
 COPY api/mcp_tcp_proxy/pubspec.yaml /app/api/mcp_tcp_proxy/pubspec.yaml
-# REMOVE: Copy echo server pubspec - It doesn't exist
-# COPY mcp_echo_server/pubspec.yaml /app/mcp_echo_server/pubspec.yaml
 
 # Get dependencies for the main project (covers todoist and echo servers)
 # Run pub get in the root first
@@ -17,9 +18,6 @@ RUN dart pub get
 # Get dependencies for the proxy
 WORKDIR /app/api/mcp_tcp_proxy
 RUN dart pub get
-# REMOVE: Get dependencies for the echo server - Handled by root pub get
-# WORKDIR /app/mcp_echo_server
-# RUN dart pub get
 
 # Copy the rest of the source code AFTER pub get for better caching
 WORKDIR /app
