@@ -4,24 +4,22 @@ FROM dart:stable AS builder
 WORKDIR /app
 
 # Copy necessary pubspec files first for dependency caching
-# Copy main project pubspec (needed for todoist server potentially)
+# Copy main project pubspec (needed for todoist server and echo server)
 COPY pubspec.* /app/
 # Copy proxy pubspec
 COPY api/mcp_tcp_proxy/pubspec.yaml /app/api/mcp_tcp_proxy/pubspec.yaml
-# Copy echo server pubspec (adjust path if it's different or doesn't exist)
-# If mcp_echo_server doesn't have its own pubspec.yaml, remove this line.
-COPY mcp_echo_server/pubspec.yaml /app/mcp_echo_server/pubspec.yaml
+# REMOVE: Copy echo server pubspec - It doesn't exist
+# COPY mcp_echo_server/pubspec.yaml /app/mcp_echo_server/pubspec.yaml
 
-# Get dependencies for the main project (might be needed by todoist server)
+# Get dependencies for the main project (covers todoist and echo servers)
 # Run pub get in the root first
 RUN dart pub get
 # Get dependencies for the proxy
 WORKDIR /app/api/mcp_tcp_proxy
 RUN dart pub get
-# Get dependencies for the echo server (if it has its own pubspec)
-# If mcp_echo_server doesn't have its own pubspec.yaml, remove this WORKDIR and RUN block.
-WORKDIR /app/mcp_echo_server
-RUN dart pub get
+# REMOVE: Get dependencies for the echo server - Handled by root pub get
+# WORKDIR /app/mcp_echo_server
+# RUN dart pub get
 
 # Copy the rest of the source code AFTER pub get for better caching
 WORKDIR /app
