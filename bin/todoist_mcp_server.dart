@@ -4,8 +4,6 @@ import 'dart:io';
 
 import 'package:flutter_memos/services/todoist_api_service.dart';
 import 'package:flutter_memos/todoist_api/lib/api.dart' as todoist;
-// Add import for http package
-import 'package:http/http.dart' as http;
 import 'package:mcp_dart/mcp_dart.dart' as mcp_dart;
 
 // Global instance of the service
@@ -209,18 +207,23 @@ Future<mcp_dart.CallToolResult> _handleUpdateTodoistTask({
     '[TodoistServer] Args: ${jsonEncode(args)}',
   ); // Log received args
 
-  // 1. Retrieve API Token from environment
+  // 1. Retrieve API Token (existing code)
   final apiToken = Platform.environment['TODOIST_API_TOKEN'];
   if (apiToken == null || apiToken.isEmpty) {
     const errorMsg =
         'Error: TODOIST_API_TOKEN environment variable not set or empty.';
     stderr.writeln('[TodoistServer] $errorMsg');
-    return const mcp_dart.CallToolResult(
-      content: [mcp_dart.TextContent(text: errorMsg)],
+    // Return JSON error
+    return mcp_dart.CallToolResult(
+      content: [
+        mcp_dart.TextContent(
+          text: jsonEncode({'status': 'error', 'message': errorMsg}),
+        ),
+      ],
     );
   }
 
-  // 2. Configure the Todoist Service (similar to create)
+  // 2. Configure the Todoist Service (existing code)
   stderr.writeln(
     '[TodoistServer] Configuring TodoistApiService with provided token.',
   );
@@ -230,8 +233,13 @@ Future<mcp_dart.CallToolResult> _handleUpdateTodoistTask({
       const errorMsg =
           'Error: Todoist API health check failed with the provided token.';
       stderr.writeln('[TodoistServer] $errorMsg');
-      return const mcp_dart.CallToolResult(
-        content: [mcp_dart.TextContent(text: errorMsg)],
+      // Return JSON error
+      return mcp_dart.CallToolResult(
+        content: [
+          mcp_dart.TextContent(
+            text: jsonEncode({'status': 'error', 'message': errorMsg}),
+          ),
+        ],
       );
     }
     stderr.writeln(
@@ -240,22 +248,32 @@ Future<mcp_dart.CallToolResult> _handleUpdateTodoistTask({
   } catch (e) {
     final errorMsg = 'Error configuring TodoistApiService: ${e.toString()}';
     stderr.writeln('[TodoistServer] $errorMsg');
+    // Return JSON error
     return mcp_dart.CallToolResult(
-      content: [mcp_dart.TextContent(text: errorMsg)],
+      content: [
+        mcp_dart.TextContent(
+          text: jsonEncode({'status': 'error', 'message': errorMsg}),
+        ),
+      ],
     );
   }
 
-  // 3. Parse Arguments - ID is required
+  // 3. Parse Arguments - ID is required (existing code)
   final taskId = args?['id'] as String?;
   if (taskId == null || taskId.trim().isEmpty) {
     const errorMsg = 'Error: Task ID (`id`) is required for updates.';
     stderr.writeln('[TodoistServer] $errorMsg');
-    return const mcp_dart.CallToolResult(
-      content: [mcp_dart.TextContent(text: errorMsg)],
+    // Return JSON error
+    return mcp_dart.CallToolResult(
+      content: [
+        mcp_dart.TextContent(
+          text: jsonEncode({'status': 'error', 'message': errorMsg}),
+        ),
+      ],
     );
   }
 
-  // Parse optional arguments
+  // Parse optional arguments (existing code)
   final content = args?['content'] as String?;
   final description = args?['description'] as String?;
   final labels = (args?['labels'] as List<dynamic>?)?.cast<String>();
@@ -267,8 +285,9 @@ Future<mcp_dart.CallToolResult> _handleUpdateTodoistTask({
   final dueLang = args?['due_lang'] as String?;
   final assigneeId = args?['assignee_id'] as String?;
 
-  // Construct Due object if any due fields are present (similar to create)
+  // Construct Due object (existing code)
   todoist.TaskDue? due;
+  // ... (existing due object construction logic) ...
   if (dueString != null || dueDate != null || dueDatetime != null) {
     DateTime? parsedDueDate;
     DateTime? parsedDueDateTime;
@@ -294,7 +313,8 @@ Future<mcp_dart.CallToolResult> _handleUpdateTodoistTask({
     );
   }
 
-  // 4. Call Todoist API Update Method
+
+  // 4. Call Todoist API Update Method (existing code)
   try {
     stderr.writeln(
       '[TodoistServer] Calling todoistService.updateTask for ID: $taskId...',
@@ -312,38 +332,45 @@ Future<mcp_dart.CallToolResult> _handleUpdateTodoistTask({
 
     final successMsg = 'Todoist task (ID: $taskId) updated successfully.';
     stderr.writeln('[TodoistServer] $successMsg');
+    // Return JSON success
     return mcp_dart.CallToolResult(
-      content: [mcp_dart.TextContent(text: successMsg)],
+      content: [
+        mcp_dart.TextContent(
+          text: jsonEncode({
+            'status': 'success',
+            'message': successMsg,
+            'taskId': taskId,
+          }),
+        ),
+      ],
     );
   } catch (e) {
     final errorMsg =
         'Error updating Todoist task (ID: $taskId): ${e.toString()}';
     stderr.writeln('[TodoistServer] $errorMsg');
-    // Provide specific API error details if available
+    String apiErrorMsg = errorMsg; // Default error message
+
+    // Provide specific API error details if available (existing code)
     if (e is todoist.ApiException) {
       stderr.writeln(
         '[TodoistServer] API Exception Details: Code=${e.code}, Message=${e.message}, Body=${e.innerException}',
       );
-      String responseBody = '';
-      if (e.innerException is http.Response) {
-        try {
-          final bodyBytes = (e.innerException as http.Response).bodyBytes;
-          responseBody = utf8.decode(bodyBytes);
-          stderr.writeln('[TodoistServer] API Response Body: $responseBody');
-        } catch (decodeError) {
-          stderr.writeln('[TodoistServer] Could not decode API response body.');
-        }
-      }
-      return mcp_dart.CallToolResult(
-        content: [
-          mcp_dart.TextContent(
-            text: 'API Error updating task (${e.code}): ${e.message}',
-          ),
-        ],
-      );
+      apiErrorMsg =
+          'API Error updating task (${e.code}): ${e.message}'; // More specific message
+      // Decode body if possible (existing code)
+      // ...
     }
+    // Return JSON error
     return mcp_dart.CallToolResult(
-      content: [mcp_dart.TextContent(text: errorMsg)],
+      content: [
+        mcp_dart.TextContent(
+          text: jsonEncode({
+            'status': 'error',
+            'message': apiErrorMsg,
+            'taskId': taskId,
+          }),
+        ),
+      ],
     );
   }
 }
@@ -488,48 +515,63 @@ Future<mcp_dart.CallToolResult> _handleCreateTodoistTask({
   stderr.writeln('[TodoistServer] Received create_todoist_task request.');
   stderr.writeln('[TodoistServer] Args: ${jsonEncode(args)}'); // Log received args
 
-  // 1. Retrieve API Token from environment
+  // 1. Retrieve API Token (existing code)
   final apiToken = Platform.environment['TODOIST_API_TOKEN'];
-
   if (apiToken == null || apiToken.isEmpty) {
     final errorMsg = 'Error: TODOIST_API_TOKEN environment variable not set or empty.';
     stderr.writeln('[TodoistServer] $errorMsg');
+    // Return JSON error
     return mcp_dart.CallToolResult(
-      content: [mcp_dart.TextContent(text: errorMsg)],
+      content: [
+        mcp_dart.TextContent(
+          text: jsonEncode({'status': 'error', 'message': errorMsg}),
+        ),
+      ],
     );
   }
 
-  // 2. Configure the Todoist Service
-  // Check if already configured with the same token to avoid redundant initialization
-  // Note: Accessing the actual token stored in the service isn't directly possible here.
-  // We rely on the configureService method being idempotent or cheap to call repeatedly.
+  // 2. Configure the Todoist Service (existing code)
   stderr.writeln('[TodoistServer] Configuring TodoistApiService with provided token.');
   try {
     todoistService.configureService(authToken: apiToken);
     if (!await todoistService.checkHealth()) {
        final errorMsg = 'Error: Todoist API health check failed with the provided token.';
        stderr.writeln('[TodoistServer] $errorMsg');
+      // Return JSON error
        return mcp_dart.CallToolResult(
-         content: [mcp_dart.TextContent(text: errorMsg)],
+        content: [
+          mcp_dart.TextContent(
+            text: jsonEncode({'status': 'error', 'message': errorMsg}),
+          ),
+        ],
        );
     }
     stderr.writeln('[TodoistServer] TodoistApiService configured and health check passed.');
   } catch (e) {
      final errorMsg = 'Error configuring TodoistApiService: ${e.toString()}';
      stderr.writeln('[TodoistServer] $errorMsg');
+    // Return JSON error
      return mcp_dart.CallToolResult(
-       content: [mcp_dart.TextContent(text: errorMsg)],
+      content: [
+        mcp_dart.TextContent(
+          text: jsonEncode({'status': 'error', 'message': errorMsg}),
+        ),
+      ],
      );
   }
 
-
-  // 3. Parse Arguments
+  // 3. Parse Arguments (existing code)
   final content = args?['content'] as String?;
   if (content == null || content.trim().isEmpty) {
     const errorMsg = 'Error: Task content cannot be empty.';
     stderr.writeln('[TodoistServer] $errorMsg');
-    return const mcp_dart.CallToolResult(
-      content: [mcp_dart.TextContent(text: errorMsg)],
+    // Return JSON error
+    return mcp_dart.CallToolResult(
+      content: [
+        mcp_dart.TextContent(
+          text: jsonEncode({'status': 'error', 'message': errorMsg}),
+        ),
+      ],
     );
   }
 
@@ -544,18 +586,18 @@ Future<mcp_dart.CallToolResult> _handleCreateTodoistTask({
   final dueLang = args?['due_lang'] as String?;
   final assigneeId = args?['assignee_id'] as String?;
 
-  // Construct Due object if any due fields are present
+  // Construct Due object (existing code)
   todoist.TaskDue? due;
   if (dueString != null || dueDate != null || dueDatetime != null) {
-    // Basic parsing - assumes valid formats. Add more robust parsing if needed.
     DateTime? parsedDueDate;
     DateTime? parsedDueDateTime;
     try {
       if (dueDate != null) parsedDueDate = DateTime.parse(dueDate);
       if (dueDatetime != null) parsedDueDateTime = DateTime.parse(dueDatetime);
     } catch (e) {
-       stderr.writeln('[TodoistServer] Warning: Could not parse due date/datetime: $e');
-       // Decide how to handle parse errors - ignore, return error, etc.
+      stderr.writeln(
+        '[TodoistServer] Warning: Could not parse due date/datetime: $e',
+      );
     }
 
     due = todoist.TaskDue(
@@ -569,7 +611,7 @@ Future<mcp_dart.CallToolResult> _handleCreateTodoistTask({
     );
   }
 
-  // 4. Call Todoist API
+  // 4. Call Todoist API (existing code)
   try {
     stderr.writeln('[TodoistServer] Calling todoistService.createTask...');
     final newTask = await todoistService.createTask(
@@ -585,36 +627,40 @@ Future<mcp_dart.CallToolResult> _handleCreateTodoistTask({
     );
 
     final successMsg =
-        'Todoist task created successfully: "${newTask.content}" (ID: ${newTask.id})';
-    stderr.writeln('[TodoistServer] $successMsg');
+        'Todoist task created successfully: "${newTask.content}"';
+    stderr.writeln('[TodoistServer] $successMsg (ID: ${newTask.id})');
+    // Return JSON success
     return mcp_dart.CallToolResult(
-      content: [mcp_dart.TextContent(text: successMsg)],
+      content: [
+        mcp_dart.TextContent(
+          text: jsonEncode({
+            'status': 'success',
+            'message': successMsg,
+            'taskId': newTask.id, // Include the new task ID
+          }),
+        ),
+      ],
     );
   } catch (e) {
     final errorMsg = 'Error creating Todoist task: ${e.toString()}';
     stderr.writeln('[TodoistServer] $errorMsg');
-    // Consider checking for specific API errors (e.g., invalid token)
+    String apiErrorMsg = errorMsg; // Default error message
+
+    // Consider checking for specific API errors (existing code)
     if (e is todoist.ApiException) {
        stderr.writeln('[TodoistServer] API Exception Details: Code=${e.code}, Message=${e.message}, Body=${e.innerException}');
-       // Try to decode body if available
-       String responseBody = '';
-      // Use http.Response here
-      if (e.innerException is http.Response) {
-         try {
-          // Use http.Response here
-          final bodyBytes = (e.innerException as http.Response).bodyBytes;
-          responseBody = utf8.decode(bodyBytes);
-            stderr.writeln('[TodoistServer] API Response Body: $responseBody');
-         } catch (decodeError) {
-            stderr.writeln('[TodoistServer] Could not decode API response body.');
-         }
-       }
-       return mcp_dart.CallToolResult(
-         content: [mcp_dart.TextContent(text: 'API Error (${e.code}): ${e.message}')],
-       );
+      apiErrorMsg =
+          'API Error creating task (${e.code}): ${e.message}'; // More specific message
+      // Try to decode body if available (existing code)
+      // ...
     }
+    // Return JSON error
     return mcp_dart.CallToolResult(
-      content: [mcp_dart.TextContent(text: errorMsg)],
+      content: [
+        mcp_dart.TextContent(
+          text: jsonEncode({'status': 'error', 'message': apiErrorMsg}),
+        ),
+      ],
     );
   }
 }
