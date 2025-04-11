@@ -20,7 +20,7 @@ RUN echo "--- Testing Network Connectivity ---" && \
     echo "--- Network Test Complete ---"
 
 # Run pub get ONCE from the root directory.
-RUN dart pub get
+RUN flutter pub get
 
 # Create directory for compiled output
 RUN mkdir /app/compiled_bin
