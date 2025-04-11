@@ -145,8 +145,56 @@ void main() async {
   // Register the 'get_todoist_tasks' tool
   server.tool(
     'get_todoist_tasks',
-    description:
-        'Retrieves a list of active Todoist tasks (including their IDs and content) based on a filter or content search. Use EITHER `filter` OR `content_contains`.',
+    description: '''
+Retrieves a list of active Todoist tasks (including their IDs and content) based on filter criteria.
+Use EITHER `filter` OR `content_contains`. `filter` takes precedence.
+
+**Filter Syntax Guide:**
+- **Dates:**
+  - `due: date` (e.g., `due: today`, `due: tomorrow`, `due: May 5`, `due: next Monday`)
+  - `due before: date` (e.g., `due before: next week`, `due before: +4 hours`)
+  - `due after: date` (e.g., `due after: June 20`, `due after: in 3 days`)
+  - `no date` or `no due date`: Tasks without a due date.
+  - `overdue` or `od`: Tasks that are overdue.
+  - `recurring`: Tasks with recurring due dates.
+  - **IMPORTANT:** To find tasks *created* on a specific date, use `created: date` (e.g., `created: today`, `created: Jan 3`, `created before: -365 days`, `created after: -7 days`).
+- **Priorities:**
+  - `p1`, `p2`, `p3`: Filter by priority 1, 2, or 3.
+  - `no priority`: Tasks with priority 4 (no specific priority set).
+  - `!no priority`: Tasks with p1, p2, or p3.
+- **Projects & Sections:**
+  - `#ProjectName`: Tasks in a specific project (e.g., `#Work`).
+  - `##ProjectName`: Tasks in a project and its sub-projects (e.g., `##Work`).
+  - `/SectionName`: Tasks in a specific section across all projects (e.g., `/Meetings`).
+  - `!/*`: Tasks not assigned to any section.
+- **Labels:**
+  - `@labelname`: Tasks with a specific label (e.g., `@waiting`, `@email`).
+  - `no labels`: Tasks without any labels.
+  - `!no labels`: Tasks that have at least one label.
+- **Assignments:**
+  - `assigned to: name or email` (e.g., `assigned to: John Doe`)
+  - `assigned by: me`
+  - `shared & !assigned`: Tasks in shared projects not assigned to anyone.
+- **Structure:**
+  - `subtask`: Show only sub-tasks.
+  - `!subtask`: Show only parent tasks (tasks that are not sub-tasks).
+- **Keywords:**
+  - `search: keyword`: Find tasks containing the keyword (e.g., `search: email`). Use `content_contains` argument for simpler keyword searches.
+- **Combining Queries:**
+  - `&` (AND): e.g., `today & #Work`
+  - `|` (OR): e.g., `@work | @office`
+  - `!` (NOT): e.g., `today & !#Work`
+  - `()` (Grouping): e.g., `(today | overdue) & #Work`
+  - `,` (Multiple Sections): e.g., `p1 & overdue , p4 & today` (shows two separate lists in the result)
+
+**Examples:**
+- Find tasks due today in the Work project: `filter: "today & #Work"`
+- Find tasks created in the last 7 days: `filter: "created after: -7 days"`
+- Find overdue priority 1 tasks OR tasks due today labeled @urgent: `filter: "(p1 & overdue) | (today & @urgent)"`
+- Find tasks containing "report" but not in the Archive project: `filter: "search: report & !#Archive"`
+- Find tasks without a due date: `filter: "no date"`
+- Find tasks assigned to me: `filter: "assigned to: me"`
+''',
     inputSchemaProperties: {
       'filter': {
         'type': 'string',
