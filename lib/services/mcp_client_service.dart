@@ -949,7 +949,14 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
             summaryText = message ?? "Tasks retrieved successfully.";
             if (taskId != null) {
               // This case implies a single task was found by the server
-              summaryText += " Task ID is $taskId.";
+              // Try to get content from the original JSON if available
+              final taskContent = toolResultJson['content'] as String?;
+              if (taskContent != null) {
+                summaryText = 'Found task (ID: $taskId): "$taskContent"';
+              } else {
+                summaryText =
+                    'Found task with ID: $taskId.'; // Fallback if content missing
+              }
             }
             // Ensure log uses correct interpolation for the variable's value
             debugPrint(
