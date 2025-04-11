@@ -1,7 +1,8 @@
 import 'package:flutter_memos/models/chat_message.dart';
 import 'package:flutter_memos/models/mcp_server_config.dart'; // Needed for McpClientState setup
 import 'package:flutter_memos/providers/chat_providers.dart';
-import 'package:flutter_memos/providers/settings_provider.dart'; // For geminiApiKeyProvider override
+// Import specific key needed for mock setup
+import 'package:flutter_memos/providers/settings_provider.dart' show PersistentStringNotifier, geminiApiKeyProvider, geminiApiKeyProviderKey;
 import 'package:flutter_memos/services/gemini_service.dart';
 // Hide the provider from the service file to avoid conflict with the one in chat_providers.dart
 import 'package:flutter_memos/services/mcp_client_service.dart'
@@ -21,13 +22,37 @@ import 'package:mockito/mockito.dart';
 import 'chat_providers_test.mocks.dart';
 
 // Simple mock for the PersistentStringNotifier used by geminiApiKeyProvider
-class MockPersistentStringNotifier extends StateNotifier<String> {
-  MockPersistentStringNotifier(super.initialState);
+// Implement the original notifier class to satisfy the type system for overrides.
+class MockPersistentStringNotifier extends StateNotifier<String> implements PersistentStringNotifier {
+  @override
+  final String key; // Add the key field required by the interface
 
+  MockPersistentStringNotifier(this.key, String initialState) : super(initialState);
+
+  @override // init is part of the interface
   Future<void> init() async {
     // Mock init doesn't need to do anything
   }
-  // No need to mock 'update' unless the test specifically requires verifying it
+
+  @override // set needs to return Future<bool>
+  Future<bool> set(String value) async {
+    state = value;
+    return true; // Return true for success in mock
+  }
+
+  @override // clear needs to return Future<bool>
+  Future<bool> clear() async {
+    state = '';
+    return true; // Return true for success in mock
+  }
+
+  @override
+  String get preferenceKey => key;
+
+  @override
+  set debugSecureStorage(dynamic storage) {
+    // No-op for testing
+  }
 }
 
 // Helper to create GenerateContentResponse for stream testing
@@ -103,13 +128,17 @@ void main() {
         mcpClientProvider.overrideWith((ref) => mockMcpClientNotifier),
         geminiServiceProvider.overrideWithValue(mockGeminiService),
         // Override the StateNotifierProvider by providing a function that returns the mock notifier
+        // Pass the expected key and initial state to the mock constructor
         geminiApiKeyProvider.overrideWith(
-          (_) => MockPersistentStringNotifier('fake-gemini-key'),
+          (_) => MockPersistentStringNotifier(
+            geminiApiKeyProviderKey,
+            'fake-gemini-key',
+          ),
         ),
       ],
     );
 
-     // Initialize PersistentStringNotifiers (needed by ChatNotifier constructor listener)
+    // Initialize PersistentStringNotifiers (needed by ChatNotifier constructor listener)
     // We don't need to wait for the real init here as we override the value
     await container.read(geminiApiKeyProvider.notifier).init();
 
