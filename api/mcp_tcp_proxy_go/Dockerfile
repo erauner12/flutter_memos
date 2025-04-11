@@ -5,11 +5,12 @@ FROM golang:1.22-alpine AS builder
 WORKDIR /src
 
 # Copy Go module files and download dependencies first (cache layer)
-COPY go.mod go.sum* ./
+# Source path is relative to the build context (project root)
+COPY api/mcp_tcp_proxy_go/go.mod api/mcp_tcp_proxy_go/go.sum* ./
 RUN go mod download
 
-# Copy the Go source code
-COPY . .
+# Copy the Go source code from its subdirectory relative to the build context
+COPY api/mcp_tcp_proxy_go/. .
 
 # Build the Go application statically
 # CGO_ENABLED=0 disables Cgo, needed for static builds on Alpine
@@ -18,9 +19,11 @@ RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o /app/mcp_tcp_proxy_executable ./m
 
 # --- Copy Pre-compiled Dart Executables ---
 # These need to be copied from your host *into* the builder stage
-# Adjust the source path ('../../compiled_dart_bins/') relative to this Dockerfile's location
-COPY ../../compiled_dart_bins/mcp_echo_server_executable /app/bin/
-COPY ../../compiled_dart_bins/todoist_mcp_server_executable /app/bin/
+# Source path is relative to the build context (project root)
+# Ensure the target directory exists in the builder stage
+RUN mkdir -p /app/bin
+COPY compiled_dart_bins/mcp_echo_server_executable /app/bin/
+COPY compiled_dart_bins/todoist_mcp_server_executable /app/bin/
 # Add other Dart executables if needed
 
 
