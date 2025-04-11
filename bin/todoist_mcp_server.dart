@@ -148,7 +148,7 @@ void main() async {
   server.tool(
     'get_todoist_tasks',
     description:
-        'Retrieves active Todoist tasks. Use EITHER `filter` for complex queries OR `content_contains` for simple text search.',
+        'Retrieves a list of active Todoist tasks (including their IDs and content) based on a filter or content search. Use EITHER `filter` OR `content_contains`.',
     inputSchemaProperties: {
       'filter': {
         'type': 'string',
@@ -433,21 +433,14 @@ Future<mcp_dart.CallToolResult> _handleGetTodoistTasks({
     }
 
     // 5. Serialize Task Data for AI
-    // Select only the fields most useful for the AI
+    // Return a simplified list containing only ID and content for easier parsing by the AI.
     final tasksForAI =
         tasks
             .map(
               (task) => {
                 'id': task.id,
                 'content': task.content,
-                'description': task.description,
-                'project_id': task.projectId,
-                'section_id': task.sectionId,
-                'labels': task.labels,
-                'priority': task.priority,
-                'due': task.due?.toJson(), // Include due info if available
-                'is_completed': task.isCompleted,
-                'url': task.url,
+                // Add other fields ONLY if absolutely necessary for the AI's core function
               },
             )
             .toList();

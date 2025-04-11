@@ -372,7 +372,7 @@ void main() async {
   // Register the 'get_todoist_tasks' tool
    server.tool(
      'get_todoist_tasks',
-     description: 'Retrieves active Todoist tasks. Use EITHER `filter` for complex queries OR `content_contains` for simple text search.',
+     description: 'Retrieves a list of active Todoist tasks (including their IDs and content) based on a filter or content search. Use EITHER `filter` OR `content_contains`.',
      inputSchemaProperties: {
        'filter': {
          'type': 'string',
