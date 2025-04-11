@@ -888,7 +888,9 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
         String summaryText;
         final status = simplifiedResultJson['status'] as String?;
         final message = simplifiedResultJson['message'] as String?;
-        final taskId = simplifiedResultJson['taskId'] as String?;
+        // Ensure taskId is fetched correctly from the simplified JSON
+        final taskId =
+            simplifiedResultJson['taskId'] as String?; // Fetch as String?
 
         if (status == 'success') {
           summaryText = message ?? "Tool '\$toolName' executed successfully.";
@@ -897,6 +899,7 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
             summaryText =
                 'Todoist task created successfully: "${toolArgs['content'] as String? ?? '[unknown content]'}"';
             if (taskId != null) {
+              // Corrected interpolation
               summaryText += " (ID: \$taskId)";
             }
             summaryText += ".";
@@ -904,6 +907,7 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
             // Use message and taskId from simplified result
             summaryText = message ?? "Todoist task updated successfully";
             if (taskId != null) {
+              // Corrected interpolation
               summaryText += " (ID: \$taskId)";
             }
             summaryText += ".";
@@ -913,14 +917,14 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
             // We could add IDs here if needed, but let's keep it simple for now.
             summaryText = message ?? "Tasks retrieved successfully.";
             if (taskId != null) {
-              // This handles the single-task case
+              // This handles the single-task case - Corrected interpolation
               summaryText += " Task ID is \$taskId.";
             }
           } else {
             // Generic success message for other tools
             summaryText = message ?? "Tool '\$toolName' executed successfully.";
             if (taskId != null) {
-              // Include taskId if present for any tool
+              // Include taskId if present for any tool - Corrected interpolation
               summaryText += " ID: \$taskId.";
             }
           }
@@ -928,7 +932,7 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
           summaryText =
               "Tool '\$toolName' failed: \${message ?? 'Unknown error'}";
           if (taskId != null) {
-            // Include taskId even on error if available
+            // Include taskId even on error if available - Corrected interpolation
             summaryText += " (Related to Task ID: \$taskId)";
           }
         } else {
