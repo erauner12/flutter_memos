@@ -26,7 +26,6 @@ class CloudKitService {
   // Add record type for MCP Servers
   static const String _mcpServerConfigRecordType = 'McpServerConfig';
 
-
   final FlutterCloudKit _cloudKit;
   // Add a lock specifically for the user settings singleton record operations
   final _settingsLock = Lock();
@@ -40,12 +39,12 @@ class CloudKitService {
     try {
       final status = await _cloudKit.getAccountStatus();
       if (kDebugMode) {
-        print('[CloudKitService] Account Status: $status');
+        print('[CloudKitService] Account Status: \$status');
       }
       return status;
     } catch (e) {
       if (kDebugMode) {
-        print('[CloudKitService] Error getting account status: $e');
+        print('[CloudKitService] Error getting account status: \$e');
       }
       return CloudKitAccountStatus
           .couldNotDetermine; // Use CloudKitAccountStatus enum value
@@ -73,7 +72,7 @@ class CloudKitService {
   ) {
     if (kDebugMode) {
       print(
-        '[CloudKitService][_mapToServerConfig] Mapping recordName: $recordName, data: $recordData',
+        '[CloudKitService][_mapToServerConfig] Mapping recordName: \$recordName, data: \$recordData',
       );
     }
     // Access values assuming they are strings, as saved by _serverConfigToMap
@@ -87,7 +86,7 @@ class CloudKitService {
     );
     if (kDebugMode) {
       print(
-        '[CloudKitService][_mapToServerConfig] Mapped result: ${config.toJson()}',
+        '[CloudKitService][_mapToServerConfig] Mapped result: \${config.toJson()}',
       ); // Log the resulting object
     }
     return config;
@@ -99,7 +98,7 @@ class CloudKitService {
       final mapData = _serverConfigToMap(config);
       if (kDebugMode) {
         print(
-          '[CloudKitService] Saving ServerConfig (ID: ${config.id}) to CloudKit with data: $mapData',
+          '[CloudKitService] Saving ServerConfig (ID: \${config.id}) to CloudKit with data: \$mapData',
         );
       }
       await _cloudKit.saveRecord(
@@ -111,14 +110,14 @@ class CloudKitService {
       );
       if (kDebugMode) {
         print(
-          '[CloudKitService] Saved ServerConfig (ID: ${config.id}) successfully.',
+          '[CloudKitService] Saved ServerConfig (ID: \${config.id}) successfully.',
         );
       }
       return true;
     } catch (e) {
       if (kDebugMode) {
         print(
-          '[CloudKitService] Error saving ServerConfig (ID: ${config.id}): $e',
+          '[CloudKitService] Error saving ServerConfig (ID: \${config.id}): \$e',
         );
       }
       return false;
@@ -129,10 +128,11 @@ class CloudKitService {
   Future<ServerConfig?> getServerConfig(String id) async {
     try {
       if (kDebugMode) {
-        print('[CloudKitService] Getting ServerConfig (ID: $id) from CloudKit...');
+        print(
+          '[CloudKitService] Getting ServerConfig (ID: \$id) from CloudKit...',
+        );
       }
       // getRecord returns CloudKitRecord (due to dependency typo in filename, but correct class name)
-      // Remove unnecessary nullable type annotation '?'
       final CloudKitRecord ckRecord = await _cloudKit.getRecord(
         // Use correct class name CloudKitRecord
         scope: CloudKitDatabaseScope.private, // Use CloudKitDatabaseScope enum
@@ -143,7 +143,7 @@ class CloudKitService {
       // Assuming it throws if not found, and the object is non-null on success.
 
       if (kDebugMode) {
-        print('[CloudKitService] Found ServerConfig (ID: $id).');
+        print('[CloudKitService] Found ServerConfig (ID: \$id).');
       }
       // Access fields using the '.values' property
       return _mapToServerConfig(ckRecord.recordName, ckRecord.values);
@@ -151,7 +151,7 @@ class CloudKitService {
       // Handle specific CloudKit errors if needed, e.g., record not found might throw
       if (kDebugMode) {
         // Check if the error indicates "Record not found" specifically if possible
-        print('[CloudKitService] Error getting ServerConfig (ID: $id): $e');
+        print('[CloudKitService] Error getting ServerConfig (ID: \$id): \$e');
       }
       return null; // Return null if record not found or other error
     }
@@ -171,13 +171,13 @@ class CloudKitService {
       );
       if (kDebugMode) {
         print(
-          '[CloudKitService] Found ${ckRecords.length} ServerConfig records raw from CloudKit.',
+          '[CloudKitService] Found \${ckRecords.length} ServerConfig records raw from CloudKit.',
         );
         // Add detailed logging for each record
-        for (final CloudKitRecord ckRecord in ckRecords) {
-          // Use correct class name CloudKitRecord
+        // ignore: unused_local_variable
+        for (final ckRecord in ckRecords) {
           print(
-            '[CloudKitService][Raw Record] recordName: ${ckRecord.recordName}, values: ${ckRecord.values}',
+            '[CloudKitService][Raw Record] recordName: \${ckRecord.recordName}, values: \${ckRecord.values}',
           );
         }
       }
@@ -193,7 +193,7 @@ class CloudKitService {
           .toList();
     } catch (e) {
       if (kDebugMode) {
-        print('[CloudKitService] Error getting all ServerConfigs: $e');
+        print('[CloudKitService] Error getting all ServerConfigs: \$e');
       }
       return []; // Return empty list on error
     }
@@ -205,7 +205,7 @@ class CloudKitService {
     try {
       if (kDebugMode) {
         print(
-          '[CloudKitService] Deleting ServerConfig (ID: $id) from CloudKit...',
+          '[CloudKitService] Deleting ServerConfig (ID: \$id) from CloudKit...',
         );
       }
       await _cloudKit.deleteRecord(
@@ -213,12 +213,14 @@ class CloudKitService {
         recordName: id,
       );
       if (kDebugMode) {
-        print('[CloudKitService] Deleted ServerConfig (ID: $id) successfully.');
+        print(
+          '[CloudKitService] Deleted ServerConfig (ID: \$id) successfully.',
+        );
       }
       return true; // Return true on success
     } catch (e) {
       if (kDebugMode) {
-        print('[CloudKitService] Error deleting ServerConfig (ID: $id): $e');
+        print('[CloudKitService] Error deleting ServerConfig (ID: \$id): \$e');
       }
       return false; // Return false on error
     }
@@ -250,7 +252,7 @@ class CloudKitService {
       // For now, assume any error means it might not exist or is inaccessible.
       if (kDebugMode) {
         print(
-          '[CloudKitService] Error getting UserSettings record (may not exist yet): $e',
+          '[CloudKitService] Error getting UserSettings record (may not exist yet): \$e',
         );
       }
       return null; // Return null if not found or error
@@ -268,14 +270,14 @@ class CloudKitService {
       final value = ckRecord.values[keyName] as String?;
       if (kDebugMode) {
         print(
-          '[CloudKitService] GetSetting: Found value for key "$keyName": ${value != null && value.isNotEmpty ? "present" : "empty/null"}',
+          '[CloudKitService] GetSetting: Found value for key "\$keyName": \${value != null && value.isNotEmpty ? "present" : "empty/null"}',
         );
       }
       return value;
     }
     if (kDebugMode) {
       print(
-        '[CloudKitService] GetSetting: Key "$keyName" not found in UserSettings record.',
+        '[CloudKitService] GetSetting: Key "\$keyName" not found in UserSettings record.',
       );
     }
     return null;
@@ -307,7 +309,7 @@ class CloudKitService {
 
         if (kDebugMode) {
           print(
-            '[CloudKitService] Preparing to save UserSettings with key "$keyName". Merged Data: $dataToSave',
+            '[CloudKitService] Preparing to save UserSettings with key "\$keyName". Merged Data: \$dataToSave',
           );
         }
 
@@ -338,7 +340,7 @@ class CloudKitService {
             // the subsequent save should succeed.
             if (kDebugMode) {
               print(
-                '[CloudKitService] Error deleting existing UserSettings record (proceeding to save): $deleteError',
+                '[CloudKitService] Error deleting existing UserSettings record (proceeding to save): \$deleteError',
               );
             }
           }
@@ -364,14 +366,13 @@ class CloudKitService {
       } catch (e) {
         if (kDebugMode) {
           print(
-            '[CloudKitService] Error saving UserSettings for key "$keyName" (within synchronized block): $e',
+            '[CloudKitService] Error saving UserSettings for key "\$keyName" (within synchronized block): \$e',
           );
         }
         return false;
       }
     }); // End of synchronized block
   }
-
 
   // --- MCP ServerConfig Methods ---
 
@@ -380,8 +381,13 @@ class CloudKitService {
     // CloudKit fields must match keys here. All values MUST be strings.
     return {
       'name': config.name,
+      'connectionType': config.connectionType.name, // Store enum name as string
       'command': config.command,
       'args': config.args,
+      'host': config.host ?? '', // Store nullable string, default to empty
+      'port':
+          config.port?.toString() ??
+          '', // Store nullable int as string, default to empty
       'isActive':
           config.isActive.toString(), // Store bool as string 'true'/'false'
       // Store the environment map as a JSON string
@@ -397,7 +403,7 @@ class CloudKitService {
   ) {
     if (kDebugMode) {
       print(
-        '[CloudKitService][_mapToMcpServerConfig] Mapping recordName: $recordName, data: $recordData',
+        '[CloudKitService][_mapToMcpServerConfig] Mapping recordName: \$recordName, data: \$recordData',
       );
     }
 
@@ -414,23 +420,45 @@ class CloudKitService {
         }
       } catch (e) {
         debugPrint(
-          "Error parsing customEnvironment JSON string from CloudKit for server $recordName: $e",
+          "Error parsing customEnvironment JSON string from CloudKit for server \$recordName: \$e",
         );
       }
     }
 
+    // Parse connection type from string, default to stdio if invalid/missing
+    final connectionTypeName = recordData['connectionType'] as String?;
+    final connectionType = McpConnectionType.values.firstWhere(
+      (e) => e.name == connectionTypeName,
+      orElse: () => McpConnectionType.stdio, // Default to stdio
+    );
+
+    // Parse host (allow empty string to become null)
+    final hostString = recordData['host'] as String?;
+    final host =
+        (hostString != null && hostString.isNotEmpty) ? hostString : null;
+
+    // Parse port from string safely
+    final portString = recordData['port'] as String?;
+    final port =
+        (portString != null && portString.isNotEmpty)
+            ? int.tryParse(portString)
+            : null;
+
     final config = McpServerConfig(
       id: recordName, // Use CloudKit's recordName as the unique ID
       name: recordData['name'] as String? ?? '',
+      connectionType: connectionType, // Use parsed enum
       command: recordData['command'] as String? ?? '',
       args: recordData['args'] as String? ?? '',
+      host: host, // Use parsed host
+      port: port, // Use parsed port
       // Parse bool from string, default to false if invalid/missing
       isActive: (recordData['isActive'] as String?)?.toLowerCase() == 'true',
       customEnvironment: environment,
     );
 
     if (kDebugMode) {
-      print('[CloudKitService][_mapToMcpServerConfig] Mapped result: $config');
+      print('[CloudKitService][_mapToMcpServerConfig] Mapped result: \$config');
     }
     return config;
   }
@@ -441,7 +469,7 @@ class CloudKitService {
       final mapData = _mcpServerConfigToMap(config);
       if (kDebugMode) {
         print(
-          '[CloudKitService] Saving McpServerConfig (ID: ${config.id}) to CloudKit with data: $mapData',
+          '[CloudKitService] Saving McpServerConfig (ID: \${config.id}) to CloudKit with data: \$mapData',
         );
       }
       await _cloudKit.saveRecord(
@@ -452,14 +480,14 @@ class CloudKitService {
       );
       if (kDebugMode) {
         print(
-          '[CloudKitService] Saved McpServerConfig (ID: ${config.id}) successfully.',
+          '[CloudKitService] Saved McpServerConfig (ID: \${config.id}) successfully.',
         );
       }
       return true;
     } catch (e) {
       if (kDebugMode) {
         print(
-          '[CloudKitService] Error saving McpServerConfig (ID: ${config.id}): $e',
+          '[CloudKitService] Error saving McpServerConfig (ID: \${config.id}): \$e',
         );
       }
       return false;
@@ -480,11 +508,12 @@ class CloudKitService {
       );
       if (kDebugMode) {
         print(
-          '[CloudKitService] Found ${ckRecords.length} McpServerConfig records raw from CloudKit.',
+          '[CloudKitService] Found \${ckRecords.length} McpServerConfig records raw from CloudKit.',
         );
-        for (final CloudKitRecord ckRecord in ckRecords) {
+        // ignore: unused_local_variable
+        for (final ckRecord in ckRecords) {
           print(
-            '[CloudKitService][Raw MCP Record] recordName: ${ckRecord.recordName}, values: ${ckRecord.values}',
+            '[CloudKitService][Raw MCP Record] recordName: \${ckRecord.recordName}, values: \${ckRecord.values}',
           );
         }
       }
@@ -496,7 +525,7 @@ class CloudKitService {
           .toList();
     } catch (e) {
       if (kDebugMode) {
-        print('[CloudKitService] Error getting all McpServerConfigs: $e');
+        print('[CloudKitService] Error getting all McpServerConfigs: \$e');
       }
       return []; // Return empty list on error
     }
@@ -507,7 +536,7 @@ class CloudKitService {
     try {
       if (kDebugMode) {
         print(
-          '[CloudKitService] Deleting McpServerConfig (ID: $id) from CloudKit...',
+          '[CloudKitService] Deleting McpServerConfig (ID: \$id) from CloudKit...',
         );
       }
       await _cloudKit.deleteRecord(
@@ -518,16 +547,17 @@ class CloudKitService {
       );
       if (kDebugMode) {
         print(
-          '[CloudKitService] Deleted McpServerConfig (ID: $id) successfully.',
+          '[CloudKitService] Deleted McpServerConfig (ID: \$id) successfully.',
         );
       }
       return true;
     } catch (e) {
       if (kDebugMode) {
-        print('[CloudKitService] Error deleting McpServerConfig (ID: $id): $e');
+        print(
+          '[CloudKitService] Error deleting McpServerConfig (ID: \$id): \$e',
+        );
       }
       return false;
     }
   }
-
 } // Closing brace for the CloudKitService class
