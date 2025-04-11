@@ -22,13 +22,6 @@ RUN groupadd -r appgroup && useradd --no-log-init -m -r -g appgroup appuser
 RUN mkdir /home/appuser/.pub-cache && chown -R appuser:appgroup /home/appuser/.pub-cache
 ENV PUB_CACHE=/home/appuser/.pub-cache
 
-# Switch to the non-root user BEFORE copying files and running pub get/compile
-USER appuser
-
-# Copy ALL source code first (respecting .dockerignore)
-# Files will be owned by appuser now
-COPY --chown=appuser:appgroup . .
-
 # Test network connectivity before attempting pub get
 RUN echo "--- Testing Network Connectivity ---" && \
     curl -4s --head https://pub.dev || echo "Failed to reach pub.dev via curl (IPv4)" && \
@@ -36,9 +29,16 @@ RUN echo "--- Testing Network Connectivity ---" && \
     ping -c 3 pub.dev || echo "Failed to ping pub.dev" && \
     echo "--- Network Test Complete ---"
 
-# Run pub get ONCE from the root directory using flutter (as appuser).
-# RUN dart pub get
+# Add git safe directory config and run pub get as root BEFORE switching user.
+RUN git config --global --add safe.directory /sdks/flutter
 RUN flutter pub get
+
+# Switch to the non-root user BEFORE copying files and running compile steps
+USER appuser
+
+# Copy ALL source code first (respecting .dockerignore)
+# Files will be owned by appuser now
+COPY --chown=appuser:appgroup . .
 
 # Create directory for compiled output (owned by appuser)
 RUN mkdir /app/compiled_bin
