@@ -44,10 +44,15 @@ class _AddEditMcpServerScreenState
   final _nameController = TextEditingController();
   final _commandController = TextEditingController();
   final _argsController = TextEditingController();
+  // New controllers for TCP
+  final _hostController = TextEditingController();
+  final _portController = TextEditingController();
   bool _isActive = false; // Default for new servers
   List<_EnvVarPair> _envVars = [];
 
   bool get _isEditing => widget.serverToEdit != null;
+  // State for connection type
+  McpConnectionType _selectedType = McpConnectionType.stdio; // Default to Stdio
 
   @override
   void initState() {
@@ -55,8 +60,14 @@ class _AddEditMcpServerScreenState
     if (_isEditing) {
       final server = widget.serverToEdit!;
       _nameController.text = server.name;
-      _commandController.text = server.command;
-      _argsController.text = server.args;
+      _selectedType = server.connectionType; // Initialize type
+      // Initialize fields based on type
+      if (_selectedType == McpConnectionType.tcp) {
+        _hostController.text = server.host ?? '';
+        _portController.text = server.port?.toString() ?? '';
+      }
+      _commandController.text = server.command; // Always load, might be hidden
+      _argsController.text = server.args; // Always load, might be hidden
       _isActive = server.isActive;
       _envVars = server.customEnvironment.entries
           .map((e) => _EnvVarPair.fromMapEntry(e))
@@ -69,6 +80,9 @@ class _AddEditMcpServerScreenState
     _nameController.dispose();
     _commandController.dispose();
     _argsController.dispose();
+    // Dispose new controllers
+    _hostController.dispose();
+    _portController.dispose();
     // Dispose environment variable controllers
     for (var pair in _envVars) {
       pair.dispose();
@@ -116,9 +130,52 @@ class _AddEditMcpServerScreenState
       return; // Validation failed
     }
 
+    // Additional validation based on type
+    if (_selectedType == McpConnectionType.tcp) {
+      final host = _hostController.text.trim();
+      final portText = _portController.text.trim();
+      if (host.isEmpty) {
+        _showResultDialog(
+          'Validation Error',
+          'Host cannot be empty for TCP type.',
+          isError: true,
+        );
+        return;
+      }
+      if (portText.isEmpty) {
+        _showResultDialog(
+          'Validation Error',
+          'Port cannot be empty for TCP type.',
+          isError: true,
+        );
+        return;
+      }
+      if (int.tryParse(portText) == null ||
+          int.parse(portText) <= 0 ||
+          int.parse(portText) > 65535) {
+        _showResultDialog(
+          'Validation Error',
+          'Port must be a valid number between 1 and 65535.',
+          isError: true,
+        );
+        return;
+      }
+    } else {
+      // Stdio validation
+      final command = _commandController.text.trim();
+      if (command.isEmpty) {
+        // Use form validator message if possible, otherwise show dialog
+        // This dialog might be redundant if the validator catches it first, but good as a fallback.
+        _showResultDialog(
+          'Validation Error',
+          'Command cannot be empty for Stdio type.',
+          isError: true,
+        );
+        return;
+      }
+    }
+
     final name = _nameController.text.trim();
-    final command = _commandController.text.trim();
-    final args = _argsController.text.trim();
 
     // Process environment variables
     final Map<String, String> customEnvMap = {};
@@ -143,11 +200,30 @@ class _AddEditMcpServerScreenState
 
     if (envVarError) return;
 
+    // Create config based on selected type
     final config = McpServerConfig(
       id: widget.serverToEdit?.id ?? _uuid.v4(), // Use existing ID or generate new
       name: name,
-      command: command,
-      args: args,
+      connectionType: _selectedType,
+      // Conditionally set fields
+      command:
+          _selectedType == McpConnectionType.stdio
+              ? _commandController.text.trim()
+              : '', // Use empty string for non-applicable fields
+      args:
+          _selectedType == McpConnectionType.stdio
+              ? _argsController.text.trim()
+              : '', // Use empty string for non-applicable fields
+      host:
+          _selectedType == McpConnectionType.tcp
+              ? _hostController.text.trim()
+              : null, // Use null for non-applicable fields
+      port:
+          _selectedType == McpConnectionType.tcp
+              ? int.tryParse(
+                _portController.text.trim(),
+              ) // Already validated parse
+              : null, // Use null for non-applicable fields
       isActive: _isActive, // Use the state variable
       customEnvironment: customEnvMap,
     );
@@ -207,33 +283,140 @@ class _AddEditMcpServerScreenState
                           ? 'Server Name cannot be empty'
                           : null,
                     ),
-                    CupertinoTextFormFieldRow(
-                      controller: _commandController,
-                      placeholder: r'/path/to/server or C:\path\server.exe',
-                      prefix: const Text('Command*'),
-                      autocorrect: false,
-                      textInputAction: TextInputAction.next,
-                      validator: (value) => (value == null || value.trim().isEmpty)
-                          ? 'Server Command cannot be empty'
-                          : null,
+                    // Add Connection Type Selector
+                    CupertinoFormRow(
+                      // Use CupertinoFormRow for consistent padding/alignment
+                      padding: const EdgeInsets.fromLTRB(
+                        15,
+                        8,
+                        15,
+                        8,
+                      ), // Match TextFormFieldRow padding
+                      prefix: const Text('Type'),
+                      child: Builder(
+                        // Builder ensures context for theme lookup
+                        builder:
+                            (context) => SizedBox(
+                              // Ensure SegmentedControl takes available width
+                              width: double.infinity,
+                              child: CupertinoSegmentedControl<
+                                McpConnectionType
+                              >(
+                                padding:
+                                    EdgeInsets.zero, // Remove default padding
+                                groupValue: _selectedType,
+                                children: const {
+                                  McpConnectionType.stdio: Padding(
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 6,
+                                    ), // Adjust padding as needed
+                                    child: Text('Stdio (Local)'),
+                                  ),
+                                  McpConnectionType.tcp: Padding(
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 6,
+                                    ), // Adjust padding as needed
+                                    child: Text('TCP (Network)'),
+                                  ),
+                                },
+                                onValueChanged: (McpConnectionType? newValue) {
+                                  if (newValue != null) {
+                                    setState(() {
+                                      _selectedType = newValue;
+                                    });
+                                  }
+                                },
+                              ),
+                            ),
+                      ),
                     ),
-                    CupertinoTextFormFieldRow(
-                      controller: _argsController,
-                      placeholder: '--port 1234 --verbose (Optional)',
-                      prefix: const Text('Arguments'),
-                      autocorrect: false,
-                      textInputAction: TextInputAction.done,
+
+                    // --- Conditional Stdio Fields ---
+                    if (_selectedType == McpConnectionType.stdio) ...[
+                      CupertinoTextFormFieldRow(
+                        controller: _commandController,
+                        placeholder: r'/path/to/mcp_server or C:\path\mcp.exe',
+                        prefix: const Text('Command*'),
+                        autocorrect: false,
+                        textInputAction: TextInputAction.next,
+                        // Validator remains, but saving logic also checks type
+                        validator:
+                            (value) =>
+                                (_selectedType == McpConnectionType.stdio &&
+                                        (value == null || value.trim().isEmpty))
+                                    ? 'Command is required for Stdio'
+                                    : null,
+                      ),
+                      CupertinoTextFormFieldRow(
+                        controller: _argsController,
+                        placeholder: '--port 1234 --verbose (Optional)',
+                        prefix: const Text('Arguments'),
+                        autocorrect: false,
+                        textInputAction:
+                            TextInputAction
+                                .next, // Change to next if TCP fields follow
+                      ),
+                    ],
+                    // --- Conditional TCP Fields ---
+                    if (_selectedType == McpConnectionType.tcp) ...[
+                      CupertinoTextFormFieldRow(
+                        controller: _hostController,
+                        placeholder: '192.168.1.100 or server.domain.com',
+                        prefix: const Text('Host*'),
+                        keyboardType: TextInputType.url,
+                        autocorrect: false,
+                        textInputAction: TextInputAction.next,
+                        // Add validator if needed, though primary validation is in _saveConfiguration
+                        validator:
+                            (value) =>
+                                (_selectedType == McpConnectionType.tcp &&
+                                        (value == null || value.trim().isEmpty))
+                                    ? 'Host is required for TCP'
+                                    : null,
+                      ),
+                      CupertinoTextFormFieldRow(
+                        controller: _portController,
+                        placeholder: '8999',
+                        prefix: const Text('Port*'),
+                        keyboardType: const TextInputType.numberWithOptions(
+                          signed: false,
+                          decimal: false,
+                        ),
+                        textInputAction: TextInputAction.done,
+                        // Add validator if needed, though primary validation is in _saveConfiguration
+                        validator: (value) {
+                          if (_selectedType == McpConnectionType.tcp) {
+                            if (value == null || value.trim().isEmpty) {
+                              return 'Port is required for TCP';
+                            }
+                            final port = int.tryParse(value.trim());
+                            if (port == null || port <= 0 || port > 65535) {
+                              return 'Invalid Port (1-65535)';
+                            }
+                          }
+                          return null;
+                        },
+                      ),
+                    ],
+                    // --- Common Fields ---
+                    CupertinoListTile(
+                      padding: const EdgeInsets.fromLTRB(
+                        15,
+                        8,
+                        15,
+                        8,
+                      ), // Match padding
+                      title: const Text('Connect on Apply'),
+                      trailing: CupertinoSwitch(
+                        value: _isActive,
+                        onChanged: (value) => setState(() => _isActive = value),
+                      ),
                     ),
-                     CupertinoListTile(
-                       padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
-                       title: const Text('Connect on Apply'),
-                       trailing: CupertinoSwitch(
-                         value: _isActive,
-                         onChanged: (value) => setState(() => _isActive = value),
-                       ),
-                     ),
                   ],
                 ),
+                // --- Environment Variables Section ---
                 CupertinoFormSection.insetGrouped(
                   header: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -247,13 +430,17 @@ class _AddEditMcpServerScreenState
                       ),
                     ],
                   ),
-                  footer: const Padding(
-                     padding: EdgeInsets.symmetric(horizontal: 15.0, vertical: 4.0),
-                     child: Text(
-                       'Variables passed to the server process. Overrides system variables if names conflict.',
-                       style: TextStyle(fontSize: 12),
-                     ),
-                   ),
+                  footer: Padding(
+                    // Update footer text based on type
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 15.0,
+                      vertical: 4.0,
+                    ),
+                    child: Text(
+                      'Variables passed to the server process. ${_selectedType == McpConnectionType.stdio ? 'Overrides system variables if names conflict.' : '(May not be used by TCP servers/proxies).'}',
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                  ),
                   children: [
                     if (_envVars.isEmpty)
                       const CupertinoListTile(
@@ -269,13 +456,16 @@ class _AddEditMcpServerScreenState
                       ..._envVars.map((pair) => _buildEnvVarRow(pair)),
                   ],
                 ),
-                // Add Delete button only when editing
+                // --- Delete Button Section ---
                 if (_isEditing)
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 20.0),
                     child: CupertinoButton(
                       color: CupertinoColors.destructiveRed,
-                      onPressed: () async {
+                      onPressed:
+                          (_isEditing && widget.serverToEdit != null)
+                              ? () async {
+                                // Ensure serverToEdit is not null
                         final confirmed = await showCupertinoDialog<bool>(
                           context: context,
                           builder: (context) => CupertinoAlertDialog(
@@ -307,7 +497,8 @@ class _AddEditMcpServerScreenState
                             _showResultDialog('Error', 'Failed to delete MCP server.', isError: true);
                           }
                         }
-                      },
+                              }
+                              : null, // Disable if not editing or serverToEdit is null
                       child: const Text('Delete Server'),
                     ),
                   ),

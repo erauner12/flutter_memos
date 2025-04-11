@@ -491,14 +491,23 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
 
     return mcpServers.map((server) {
-      // Get status and error for the current server
       final status =
           serverStatuses[server.id] ?? McpConnectionStatus.disconnected;
       final error = serverErrors[server.id];
       final bool userWantsActive = server.isActive;
 
       // Build subtitle text including error message if present
-      String subtitleText = '${server.command} ${server.args}'.trim();
+      String subtitleText;
+      if (server.connectionType == McpConnectionType.tcp) {
+        subtitleText =
+            '${server.host ?? 'No Host'}:${server.port ?? 'No Port'}';
+      } else {
+        // Stdio
+        subtitleText = '${server.command} ${server.args}'.trim();
+        if (subtitleText.isEmpty) {
+          subtitleText = 'Stdio (Local)'; // Placeholder if command/args empty
+        }
+      }
       if (error != null && status == McpConnectionStatus.error) {
         // Limit error message length for display
         final displayError =
@@ -582,7 +591,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       builder:
           (BuildContext context) => CupertinoActionSheet(
             title: Text(server.name),
-            message: Text('${server.command} ${server.args}'.trim()),
+            // Update message based on connection type
+            message: Text(
+              server.connectionType == McpConnectionType.tcp
+                  ? '${server.host ?? 'No Host'}:${server.port ?? 'No Port'}'
+                  : ('${server.command} ${server.args}'.trim().isEmpty
+                      ? 'Stdio (Local)'
+                      : '${server.command} ${server.args}'.trim()),
+              style: const TextStyle(
+                fontSize: 13,
+              ), // Slightly larger for readability
+            ),
             actions: <CupertinoActionSheetAction>[
               CupertinoActionSheetAction(
                 child: const Text('Edit'),
