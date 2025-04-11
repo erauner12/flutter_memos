@@ -1346,9 +1346,10 @@ Future<mcp_dart.CallToolResult> _handleCreateTaskComment({
   final taskNameArg = args?['task_name'] as String?;
   final content = args?['content'] as String?;
   String? resolvedTaskId;
-  String taskIdentifierDescription = '';
+  String taskIdentifierDescription = ''; // For logging/error messages
 
   if (taskIdArg != null && taskIdArg.trim().isNotEmpty) {
+    // Validate if it looks like an ID (basic check)
     if (int.tryParse(taskIdArg) != null) {
       resolvedTaskId = taskIdArg;
       taskIdentifierDescription = 'ID "$resolvedTaskId"';
@@ -1360,6 +1361,7 @@ Future<mcp_dart.CallToolResult> _handleCreateTaskComment({
     }
   }
 
+  // If task_id wasn't provided or was invalid, try using task_name
   if (resolvedTaskId == null &&
       taskNameArg != null &&
       taskNameArg.trim().isNotEmpty) {
@@ -1386,6 +1388,7 @@ Future<mcp_dart.CallToolResult> _handleCreateTaskComment({
     }
   }
 
+  // Check if we have a resolved Task ID
   if (resolvedTaskId == null) {
     const errorMsg =
         'Error: Task ID (`task_id`) or Task Name (`task_name`) is required to create a comment.';
@@ -1399,6 +1402,7 @@ Future<mcp_dart.CallToolResult> _handleCreateTaskComment({
     );
   }
 
+  // Check comment content
   if (content == null || content.trim().isEmpty) {
     const errorMsg = 'Error: Comment content (`content`) cannot be empty.';
     stderr.writeln('[TodoistServer] $errorMsg');
@@ -1418,10 +1422,12 @@ Future<mcp_dart.CallToolResult> _handleCreateTaskComment({
       '[TodoistServer] Calling todoistService.createComment for resolved task ID: $resolvedTaskId (identified by $taskIdentifierDescription)...',
     );
     final newComment = await todoistService.createComment(
-      taskId: resolvedTaskId,
+      taskId: resolvedTaskId, // Use the resolved ID
       content: content,
+      // attachment: attachment, // Pass attachment if handled
     );
 
+    // 4. Format Success Response
     final successMsg =
         'Comment added successfully to task ID "$resolvedTaskId".';
     stderr.writeln(
@@ -1433,7 +1439,7 @@ Future<mcp_dart.CallToolResult> _handleCreateTaskComment({
           text: jsonEncode({
             'status': 'success',
             'message': successMsg,
-            'taskId': resolvedTaskId,
+            'taskId': resolvedTaskId, // Include the resolved task ID
             'commentId': newComment.id,
           }),
         ),
@@ -1462,7 +1468,7 @@ Future<mcp_dart.CallToolResult> _handleCreateTaskComment({
           text: jsonEncode({
             'status': 'error',
             'message': apiErrorMsg,
-            'taskId': resolvedTaskId,
+            'taskId': resolvedTaskId, // Include the ID in the error response
           }),
         ),
       ],
