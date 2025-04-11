@@ -1,3 +1,5 @@
+import 'dart:convert'; // For jsonEncode/Decode
+
 import 'package:flutter/foundation.dart';
 // Correct import for flutter_cloud_kit types and main class
 import 'package:flutter_cloud_kit/flutter_cloud_kit.dart';
@@ -6,6 +8,7 @@ import 'package:flutter_cloud_kit/types/cloud_ket_record.dart'; // Keep this imp
 // Add explicit imports for the required types
 import 'package:flutter_cloud_kit/types/cloud_kit_account_status.dart';
 import 'package:flutter_cloud_kit/types/database_scope.dart';
+import 'package:flutter_memos/models/mcp_server_config.dart'; // Import MCP model
 import 'package:flutter_memos/models/server_config.dart';
 // Import the synchronized package
 import 'package:synchronized/synchronized.dart';
@@ -18,10 +21,11 @@ class CloudKitService {
   static const String _containerId =
       'iCloud.com.erauner.fluttermemos'; // Updated value
   static const String _serverConfigRecordType = 'ServerConfig';
-  // Add constants for UserSettings
   static const String _userSettingsRecordType = 'UserSettings';
-  // Use a fixed name for the single settings record per user
   static const String _userSettingsRecordName = 'user_settings_singleton';
+  // Add record type for MCP Servers
+  static const String _mcpServerConfigRecordType = 'McpServerConfig';
+
 
   final FlutterCloudKit _cloudKit;
   // Add a lock specifically for the user settings singleton record operations
@@ -47,6 +51,8 @@ class CloudKitService {
           .couldNotDetermine; // Use CloudKitAccountStatus enum value
     }
   }
+
+  // --- ServerConfig (Memos) Methods ---
 
   /// Convert ServerConfig to a map suitable for CloudKit storage (`Map<String, String>`).
   Map<String, String> _serverConfigToMap(ServerConfig config) {
@@ -85,37 +91,6 @@ class CloudKitService {
       ); // Log the resulting object
     }
     return config;
-  }
-
-  /// Fetches the user settings record from CloudKit.
-  Future<CloudKitRecord?> _fetchUserSettingsRecord() async {
-    // Use correct class name CloudKitRecord
-    // Changed CloudKitRecord to CloudKetRecord
-    try {
-      if (kDebugMode) {
-        print('[CloudKitService] Getting UserSettings record...');
-      }
-      // The getRecord method returns the correct CloudKitRecord type
-      final CloudKitRecord ckRecord = await _cloudKit.getRecord(
-        // Use correct class name CloudKitRecord
-        scope: CloudKitDatabaseScope.private,
-        recordName: _userSettingsRecordName,
-      );
-      if (kDebugMode) {
-        print('[CloudKitService] Found UserSettings record.');
-      }
-      return ckRecord;
-    } catch (e) {
-      // Specifically check if the error means "record not found"
-      // The plugin might throw a specific exception type or have an error code.
-      // For now, assume any error means it might not exist or is inaccessible.
-      if (kDebugMode) {
-        print(
-          '[CloudKitService] Error getting UserSettings record (may not exist yet): $e',
-        );
-      }
-      return null; // Return null if not found or error
-    }
   }
 
   /// Save or update a ServerConfig in CloudKit.
@@ -182,30 +157,6 @@ class CloudKitService {
     }
   }
 
-  /// Retrieve a specific setting value from the UserSettings record.
-  Future<String?> getSetting(String keyName) async {
-    final CloudKitRecord? ckRecord =
-        // Use correct class name CloudKitRecord
-        await _fetchUserSettingsRecord(); // Changed CloudKitRecord to CloudKetRecord
-    // Add null check before accessing properties
-    if (ckRecord != null && ckRecord.values.containsKey(keyName)) {
-      // Assuming the value was stored as a string
-      final value = ckRecord.values[keyName] as String?;
-      if (kDebugMode) {
-        print(
-          '[CloudKitService] GetSetting: Found value for key "$keyName": ${value != null && value.isNotEmpty ? "present" : "empty/null"}',
-        );
-      }
-      return value;
-    }
-    if (kDebugMode) {
-      print(
-        '[CloudKitService] GetSetting: Key "$keyName" not found in UserSettings record.',
-      );
-    }
-    return null;
-  }
-
   /// Retrieve all ServerConfig records from CloudKit's private database.
   Future<List<ServerConfig>> getAllServerConfigs() async {
     try {
@@ -246,6 +197,88 @@ class CloudKitService {
       }
       return []; // Return empty list on error
     }
+  }
+
+  /// Delete a ServerConfig from CloudKit by its ID.
+  Future<bool> deleteServerConfig(String id) async {
+    // Add the function body here
+    try {
+      if (kDebugMode) {
+        print(
+          '[CloudKitService] Deleting ServerConfig (ID: $id) from CloudKit...',
+        );
+      }
+      await _cloudKit.deleteRecord(
+        scope: CloudKitDatabaseScope.private, // Use CloudKitDatabaseScope enum
+        recordName: id,
+      );
+      if (kDebugMode) {
+        print('[CloudKitService] Deleted ServerConfig (ID: $id) successfully.');
+      }
+      return true; // Return true on success
+    } catch (e) {
+      if (kDebugMode) {
+        print('[CloudKitService] Error deleting ServerConfig (ID: $id): $e');
+      }
+      return false; // Return false on error
+    }
+  }
+
+  // --- UserSettings Methods ---
+
+  /// Fetches the user settings record from CloudKit.
+  Future<CloudKitRecord?> _fetchUserSettingsRecord() async {
+    // Use correct class name CloudKitRecord
+    // Changed CloudKitRecord to CloudKetRecord
+    try {
+      if (kDebugMode) {
+        print('[CloudKitService] Getting UserSettings record...');
+      }
+      // The getRecord method returns the correct CloudKitRecord type
+      final CloudKitRecord ckRecord = await _cloudKit.getRecord(
+        // Use correct class name CloudKitRecord
+        scope: CloudKitDatabaseScope.private,
+        recordName: _userSettingsRecordName,
+      );
+      if (kDebugMode) {
+        print('[CloudKitService] Found UserSettings record.');
+      }
+      return ckRecord;
+    } catch (e) {
+      // Specifically check if the error means "record not found"
+      // The plugin might throw a specific exception type or have an error code.
+      // For now, assume any error means it might not exist or is inaccessible.
+      if (kDebugMode) {
+        print(
+          '[CloudKitService] Error getting UserSettings record (may not exist yet): $e',
+        );
+      }
+      return null; // Return null if not found or error
+    }
+  }
+
+  /// Retrieve a specific setting value from the UserSettings record.
+  Future<String?> getSetting(String keyName) async {
+    final CloudKitRecord? ckRecord =
+        // Use correct class name CloudKitRecord
+        await _fetchUserSettingsRecord(); // Changed CloudKitRecord to CloudKetRecord
+    // Add null check before accessing properties
+    if (ckRecord != null && ckRecord.values.containsKey(keyName)) {
+      // Assuming the value was stored as a string
+      final value = ckRecord.values[keyName] as String?;
+      if (kDebugMode) {
+        print(
+          '[CloudKitService] GetSetting: Found value for key "$keyName": ${value != null && value.isNotEmpty ? "present" : "empty/null"}',
+        );
+      }
+      return value;
+    }
+    if (kDebugMode) {
+      print(
+        '[CloudKitService] GetSetting: Key "$keyName" not found in UserSettings record.',
+      );
+    }
+    return null;
   }
 
   /// Save or update a specific setting in the UserSettings record.
@@ -339,28 +372,162 @@ class CloudKitService {
     }); // End of synchronized block
   }
 
-  /// Delete a ServerConfig from CloudKit by its ID.
-  Future<bool> deleteServerConfig(String id) async {
-    // Add the function body here
+
+  // --- MCP ServerConfig Methods ---
+
+  /// Convert McpServerConfig to a map suitable for CloudKit storage (`Map<String, String>`).
+  Map<String, String> _mcpServerConfigToMap(McpServerConfig config) {
+    // CloudKit fields must match keys here. All values MUST be strings.
+    return {
+      'name': config.name,
+      'command': config.command,
+      'args': config.args,
+      'isActive':
+          config.isActive.toString(), // Store bool as string 'true'/'false'
+      // Store the environment map as a JSON string
+      'customEnvironment': jsonEncode(config.customEnvironment),
+      // 'id' is the recordName, not stored as a field within the record data
+    };
+  }
+
+  /// Convert CloudKit record data (`Map<String, dynamic>`) back to an McpServerConfig object.
+  McpServerConfig _mapToMcpServerConfig(
+    String recordName,
+    Map<String, dynamic> recordData,
+  ) {
+    if (kDebugMode) {
+      print(
+        '[CloudKitService][_mapToMcpServerConfig] Mapping recordName: $recordName, data: $recordData',
+      );
+    }
+
+    // Safely parse the custom environment JSON string
+    Map<String, String> environment = {};
+    final envString = recordData['customEnvironment'] as String?;
+    if (envString != null && envString.isNotEmpty) {
+      try {
+        final decodedMap = jsonDecode(envString);
+        if (decodedMap is Map) {
+          environment = Map<String, String>.from(
+            decodedMap.map((k, v) => MapEntry(k.toString(), v.toString())),
+          );
+        }
+      } catch (e) {
+        debugPrint(
+          "Error parsing customEnvironment JSON string from CloudKit for server $recordName: $e",
+        );
+      }
+    }
+
+    final config = McpServerConfig(
+      id: recordName, // Use CloudKit's recordName as the unique ID
+      name: recordData['name'] as String? ?? '',
+      command: recordData['command'] as String? ?? '',
+      args: recordData['args'] as String? ?? '',
+      // Parse bool from string, default to false if invalid/missing
+      isActive: (recordData['isActive'] as String?)?.toLowerCase() == 'true',
+      customEnvironment: environment,
+    );
+
+    if (kDebugMode) {
+      print('[CloudKitService][_mapToMcpServerConfig] Mapped result: $config');
+    }
+    return config;
+  }
+
+  /// Save or update an McpServerConfig in CloudKit.
+  Future<bool> saveMcpServerConfig(McpServerConfig config) async {
+    try {
+      final mapData = _mcpServerConfigToMap(config);
+      if (kDebugMode) {
+        print(
+          '[CloudKitService] Saving McpServerConfig (ID: ${config.id}) to CloudKit with data: $mapData',
+        );
+      }
+      await _cloudKit.saveRecord(
+        scope: CloudKitDatabaseScope.private,
+        recordType: _mcpServerConfigRecordType,
+        recordName: config.id, // Use McpServerConfig's ID as the recordName
+        record: mapData,
+      );
+      if (kDebugMode) {
+        print(
+          '[CloudKitService] Saved McpServerConfig (ID: ${config.id}) successfully.',
+        );
+      }
+      return true;
+    } catch (e) {
+      if (kDebugMode) {
+        print(
+          '[CloudKitService] Error saving McpServerConfig (ID: ${config.id}): $e',
+        );
+      }
+      return false;
+    }
+  }
+
+  /// Retrieve all McpServerConfig records from CloudKit's private database.
+  Future<List<McpServerConfig>> getAllMcpServerConfigs() async {
     try {
       if (kDebugMode) {
         print(
-          '[CloudKitService] Deleting ServerConfig (ID: $id) from CloudKit...',
+          '[CloudKitService] Getting all McpServerConfigs from CloudKit...',
+        );
+      }
+      final List<CloudKitRecord> ckRecords = await _cloudKit.getRecordsByType(
+        scope: CloudKitDatabaseScope.private,
+        recordType: _mcpServerConfigRecordType,
+      );
+      if (kDebugMode) {
+        print(
+          '[CloudKitService] Found ${ckRecords.length} McpServerConfig records raw from CloudKit.',
+        );
+        for (final CloudKitRecord ckRecord in ckRecords) {
+          print(
+            '[CloudKitService][Raw MCP Record] recordName: ${ckRecord.recordName}, values: ${ckRecord.values}',
+          );
+        }
+      }
+      return ckRecords
+          .map(
+            (ckRecord) =>
+                _mapToMcpServerConfig(ckRecord.recordName, ckRecord.values),
+          )
+          .toList();
+    } catch (e) {
+      if (kDebugMode) {
+        print('[CloudKitService] Error getting all McpServerConfigs: $e');
+      }
+      return []; // Return empty list on error
+    }
+  }
+
+  /// Delete an McpServerConfig from CloudKit by its ID.
+  Future<bool> deleteMcpServerConfig(String id) async {
+    try {
+      if (kDebugMode) {
+        print(
+          '[CloudKitService] Deleting McpServerConfig (ID: $id) from CloudKit...',
         );
       }
       await _cloudKit.deleteRecord(
-        scope: CloudKitDatabaseScope.private, // Use CloudKitDatabaseScope enum
+        scope: CloudKitDatabaseScope.private,
         recordName: id,
+        // Optionally specify recordType if needed by the plugin, though recordName should be unique
+        // recordType: _mcpServerConfigRecordType,
       );
       if (kDebugMode) {
-        print('[CloudKitService] Deleted ServerConfig (ID: $id) successfully.');
+        print(
+          '[CloudKitService] Deleted McpServerConfig (ID: $id) successfully.',
+        );
       }
-      return true; // Return true on success
+      return true;
     } catch (e) {
       if (kDebugMode) {
-        print('[CloudKitService] Error deleting ServerConfig (ID: $id): $e');
+        print('[CloudKitService] Error deleting McpServerConfig (ID: $id): $e');
       }
-      return false; // Return false on error
+      return false;
     }
-  } // Ensure this closing brace is present
+  }
+
 } // Closing brace for the CloudKitService class

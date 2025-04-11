@@ -1,16 +1,19 @@
+import 'dart:convert'; // Import dart:convert for jsonEncode/Decode
+
 import 'package:collection/collection.dart'; // For MapEquality
 import 'package:flutter/foundation.dart';
 
 @immutable
 class McpServerConfig {
+  // ... existing properties ...
   final String id; // Unique ID
   final String name;
   final String command;
   final String args;
   final bool isActive; // Whether the user wants this server to be connected
-  // New: Custom environment variables for this server
   final Map<String, String> customEnvironment;
 
+  // ... existing constructor ...
   const McpServerConfig({
     required this.id,
     required this.name,
@@ -20,7 +23,7 @@ class McpServerConfig {
     this.customEnvironment = const {}, // Default to empty map
   });
 
-  // Method to create a copy with updated values
+  // ... existing copyWith ...
   McpServerConfig copyWith({
     String? id,
     String? name,
@@ -40,22 +43,41 @@ class McpServerConfig {
     );
   }
 
-  // For saving/loading from SharedPreferences via JSON
+
+  // For saving/loading from SharedPreferences via JSON OR CloudKit (as JSON string)
   Map<String, dynamic> toJson() => {
     'id': id,
     'name': name,
     'command': command,
     'args': args,
     'isActive': isActive,
-    'customEnvironment': customEnvironment, // Include custom env
+    // Encode the map as a JSON string for easier storage
+    'customEnvironment': jsonEncode(customEnvironment),
   };
 
+  // ... fromJson remains the same for SharedPreferences, but CloudKit will use _mapToMcpServerConfig ...
+
   factory McpServerConfig.fromJson(Map<String, dynamic> json) {
-    // Safely parse the custom environment map
+    // Safely parse the custom environment map (expecting a JSON string or a Map)
     Map<String, String> environment = {};
-    if (json['customEnvironment'] is Map) {
+    if (json['customEnvironment'] is String) {
       try {
-        // Ensure keys and values are strings
+        // Decode the JSON string back into a Map
+        final decodedMap = jsonDecode(json['customEnvironment'] as String);
+        if (decodedMap is Map) {
+          // Ensure keys and values are strings
+          environment = Map<String, String>.from(
+            decodedMap.map((k, v) => MapEntry(k.toString(), v.toString())),
+          );
+        }
+      } catch (e) {
+        debugPrint(
+          "Error parsing customEnvironment JSON string for server ${json['id']}: $e",
+        );
+      }
+    } else if (json['customEnvironment'] is Map) {
+      // Handle legacy format if needed
+      try {
         environment = Map<String, String>.from(
           (json['customEnvironment'] as Map).map(
             (k, v) => MapEntry(k.toString(), v.toString()),
@@ -63,9 +85,8 @@ class McpServerConfig {
         );
       } catch (e) {
         debugPrint(
-          "Error parsing customEnvironment for server ${json['id']}: $e",
+          "Error parsing legacy customEnvironment map for server ${json['id']}: $e",
         );
-        // Keep environment as empty map on error
       }
     }
 
@@ -73,12 +94,13 @@ class McpServerConfig {
       id: json['id'] as String,
       name: json['name'] as String,
       command: json['command'] as String,
-      args: json['args'] as String? ?? '', // Handle potential null args from older saves
+      args: json['args'] as String? ?? '', // Handle potential null args
       isActive: json['isActive'] as bool? ?? false,
       customEnvironment: environment, // Use parsed map
     );
   }
 
+  // ... operator ==, hashCode, toString remain the same ...
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
