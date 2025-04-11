@@ -182,7 +182,7 @@ void main() async {
         'type': 'string',
         'description':
             "The unit for the duration ('minute' or 'day'). Requires duration.",
-        'enum': ['minute', 'day'], // Specify allowed values
+        'enum': ['minute', 'day'],
       },
     },
     callback: _handleUpdateTodoistTask,
@@ -196,7 +196,7 @@ Use EITHER `task_id`, `filter`, OR `content_contains`. `task_id` takes precedenc
 **Parameters:**
 - `task_id`: Retrieve a specific task by its ID.
 - `filter`: Use a full Todoist filter query (e.g., "today & #Work", "p1", "search: keyword"). See Filter Syntax Guide below.
-- `content_contains`: Simple search for tasks containing specific text (ignored if `task_id` or `filter` is provided).
+- `content_contains`: Simple search for tasks containing specific text (ignored if `task_id` or filter is provided).
 
 **Filter Syntax Guide:**
 - **Dates:**
@@ -321,12 +321,24 @@ Use EITHER `task_id`, `filter`, OR `content_contains`. `task_id` takes precedenc
   // Register the 'create_task_comment' tool
   server.tool(
     'create_task_comment',
-    description: 'Adds a new comment to a specific Todoist task ID.',
+    description: '''Adds a new comment to a Todoist task.
+Identify the task using EITHER `task_id` OR `task_name`. `task_id` takes precedence if both are provided.
+
+**Parameters:**
+- `task_id`: The exact ID of the task to add the comment to (optional, takes precedence over task_name).
+- `task_name`: The name/content of the task to search for (used if task_id is not provided).
+- `content`: The text content of the comment (required).
+''',
     inputSchemaProperties: {
       'task_id': {
         'type': 'string',
         'description':
-            'The exact ID of the task to add the comment to (required).',
+            'The exact ID of the task to add the comment to (optional, takes precedence over task_name).',
+      },
+      'task_name': {
+        'type': 'string',
+        'description':
+            'The name/content of the task to search for (used if task_id is not provided).',
       },
       'content': {
         'type': 'string',
@@ -359,7 +371,7 @@ Use EITHER `task_id`, `filter`, OR `content_contains`. `task_id` takes precedenc
     await server.connect(transport);
     stderr.writeln('[TodoistServer] MCP Server running on stdio, ready for connections.');
     stderr.writeln(
-      '[TodoistServer] Registered tools: create_todoist_task, update_todoist_task, get_todoist_tasks, delete_todoist_task, complete_todoist_task, get_todoist_task_by_id, get_task_comments, create_task_comment', // Added new tools
+      '[TodoistServer] Registered tools: create_todoist_task, update_todoist_task, get_todoist_tasks, delete_todoist_task, complete_todoist_task, get_todoist_task_by_id, get_task_comments, create_task_comment',
     );
   } catch (e) {
     stderr.writeln('[TodoistServer] Failed to connect to transport: $e');
@@ -462,8 +474,8 @@ Future<mcp_dart.CallToolResult> _handleUpdateTodoistTask({
   final dueDatetime = args?['due_datetime'] as String?;
   final dueLang = args?['due_lang'] as String?;
   final assigneeId = args?['assignee_id'] as String?;
-  final durationAmount = args?['duration'] as int?; // Parse duration amount
-  final durationUnit = args?['duration_unit'] as String?; // Parse duration unit
+  final durationAmount = args?['duration'] as int?;
+  final durationUnit = args?['duration_unit'] as String?;
 
   // Construct Due object
   todoist.TaskDue? due;
@@ -506,12 +518,10 @@ Future<mcp_dart.CallToolResult> _handleUpdateTodoistTask({
       );
     }
   } else if (durationAmount != null || durationUnit != null) {
-    // Only one was provided, which is invalid
     stderr.writeln(
       '[TodoistServer] Warning: Both duration amount and unit must be provided for update. Ignoring duration.',
     );
   }
-
 
   // 4. Call Todoist API Update Method using the found ID
   try {
@@ -525,7 +535,7 @@ Future<mcp_dart.CallToolResult> _handleUpdateTodoistTask({
       labelIds: labels,
       priority: priorityStr,
       due: due,
-      duration: duration, // Pass the constructed duration object
+      duration: duration,
       assigneeId: assigneeId,
     );
 
@@ -1331,12 +1341,54 @@ Future<mcp_dart.CallToolResult> _handleCreateTaskComment({
     );
   }
 
-  // 2. Parse Arguments
-  final taskId = args?['task_id'] as String?;
+  // 2. Parse Arguments and Resolve Task ID
+  final taskIdArg = args?['task_id'] as String?;
+  final taskNameArg = args?['task_name'] as String?;
   final content = args?['content'] as String?;
-  if (taskId == null || taskId.trim().isEmpty) {
+  String? resolvedTaskId;
+  String taskIdentifierDescription = '';
+
+  if (taskIdArg != null && taskIdArg.trim().isNotEmpty) {
+    if (int.tryParse(taskIdArg) != null) {
+      resolvedTaskId = taskIdArg;
+      taskIdentifierDescription = 'ID "$resolvedTaskId"';
+      stderr.writeln('[TodoistServer] Using provided task_id: $resolvedTaskId');
+    } else {
+      stderr.writeln(
+        '[TodoistServer] Warning: Provided task_id "$taskIdArg" is not a valid number. Ignoring.',
+      );
+    }
+  }
+
+  if (resolvedTaskId == null &&
+      taskNameArg != null &&
+      taskNameArg.trim().isNotEmpty) {
+    taskIdentifierDescription = 'name "$taskNameArg"';
+    stderr.writeln(
+      '[TodoistServer] task_id not provided or invalid, attempting to find task by name: "$taskNameArg"',
+    );
+    final foundTask = await _findTaskByName(taskNameArg);
+    if (foundTask != null) {
+      resolvedTaskId = foundTask.id;
+      stderr.writeln(
+        '[TodoistServer] Found task ID $resolvedTaskId by name "$taskNameArg".',
+      );
+    } else {
+      final errorMsg = 'Error: Task matching name "$taskNameArg" not found.';
+      stderr.writeln('[TodoistServer] $errorMsg');
+      return mcp_dart.CallToolResult(
+        content: [
+          mcp_dart.TextContent(
+            text: jsonEncode({'status': 'error', 'message': errorMsg}),
+          ),
+        ],
+      );
+    }
+  }
+
+  if (resolvedTaskId == null) {
     const errorMsg =
-        'Error: Task ID (`task_id`) is required to create a comment.';
+        'Error: Task ID (`task_id`) or Task Name (`task_name`) is required to create a comment.';
     stderr.writeln('[TodoistServer] $errorMsg');
     return mcp_dart.CallToolResult(
       content: [
@@ -1346,6 +1398,7 @@ Future<mcp_dart.CallToolResult> _handleCreateTaskComment({
       ],
     );
   }
+
   if (content == null || content.trim().isEmpty) {
     const errorMsg = 'Error: Comment content (`content`) cannot be empty.';
     stderr.writeln('[TodoistServer] $errorMsg');
@@ -1359,19 +1412,18 @@ Future<mcp_dart.CallToolResult> _handleCreateTaskComment({
   }
   // TODO: Handle attachment if added to schema later
 
-  // 3. Call Service Method
+  // 3. Call Service Method using the resolved Task ID
   try {
     stderr.writeln(
-      '[TodoistServer] Calling todoistService.createComment for task ID: $taskId...',
+      '[TodoistServer] Calling todoistService.createComment for resolved task ID: $resolvedTaskId (identified by $taskIdentifierDescription)...',
     );
     final newComment = await todoistService.createComment(
-      taskId: taskId,
+      taskId: resolvedTaskId,
       content: content,
-      // attachment: attachment, // Pass attachment if handled
     );
 
-    // 4. Format Success Response
-    final successMsg = 'Comment added successfully to task ID "$taskId".';
+    final successMsg =
+        'Comment added successfully to task ID "$resolvedTaskId".';
     stderr.writeln(
       '[TodoistServer] $successMsg (Comment ID: ${newComment.id})',
     );
@@ -1381,6 +1433,7 @@ Future<mcp_dart.CallToolResult> _handleCreateTaskComment({
           text: jsonEncode({
             'status': 'success',
             'message': successMsg,
+            'taskId': resolvedTaskId,
             'commentId': newComment.id,
           }),
         ),
@@ -1388,7 +1441,7 @@ Future<mcp_dart.CallToolResult> _handleCreateTaskComment({
     );
   } catch (e) {
     final errorMsg =
-        'Error creating comment for task ID "$taskId": ${e.toString()}';
+        'Error creating comment for task ID "$resolvedTaskId" (identified by $taskIdentifierDescription): ${e.toString()}';
     stderr.writeln('[TodoistServer] $errorMsg');
     String apiErrorMsg = errorMsg;
     if (e is todoist.ApiException) {
@@ -1397,16 +1450,20 @@ Future<mcp_dart.CallToolResult> _handleCreateTaskComment({
       );
       if (e.code == 404 || e.code == 400) {
         apiErrorMsg =
-            'API Error creating comment: Task with ID "$taskId" not found or invalid request (${e.code}).';
+            'API Error creating comment: Task with ID "$resolvedTaskId" not found or invalid request (${e.code}).';
       } else {
         apiErrorMsg =
-            'API Error creating comment for task "$taskId" (${e.code}): ${e.message}';
+            'API Error creating comment for task "$resolvedTaskId" (${e.code}): ${e.message}';
       }
     }
     return mcp_dart.CallToolResult(
       content: [
         mcp_dart.TextContent(
-          text: jsonEncode({'status': 'error', 'message': apiErrorMsg}),
+          text: jsonEncode({
+            'status': 'error',
+            'message': apiErrorMsg,
+            'taskId': resolvedTaskId,
+          }),
         ),
       ],
     );
