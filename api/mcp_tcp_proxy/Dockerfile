@@ -13,16 +13,24 @@ RUN apt-get update && \
     update-ca-certificates --fresh && \
     rm -rf /var/lib/apt/lists/*
 
+# Fix Flutter SDK permissions before creating the non-root user
+USER root
+# Ensure root owns the SDK, then grant owner write permissions recursively
+RUN chown -R root:root /sdks/flutter && chmod -R u+w /sdks/flutter
+
 # Create a non-root user and group
 # Add -m to create the home directory
 RUN groupadd -r appgroup && useradd --no-log-init -m -r -g appgroup appuser
 
-# Create and set permissions for pub cache directory
+# Create and set permissions for pub cache directory (owned by appuser)
 # This should now work as /home/appuser exists
 RUN mkdir /home/appuser/.pub-cache && chown -R appuser:appgroup /home/appuser/.pub-cache
 ENV PUB_CACHE=/home/appuser/.pub-cache
 
-# Copy pubspec files first, owned by appuser
+# Switch to the non-root user for subsequent steps
+USER appuser
+
+# Copy dependency files owned by appuser
 COPY --chown=appuser:appgroup pubspec.yaml pubspec.lock* ./
 # If pubspec.lock doesn't exist, the wildcard handles it gracefully
 
@@ -30,19 +38,10 @@ COPY --chown=appuser:appgroup pubspec.yaml pubspec.lock* ./
 # This overwrites pubspec files but maintains ownership
 COPY --chown=appuser:appgroup . .
 
-# Switch to the non-root user for pub get and compilation
-USER appuser
-
 # Add git safe directory config for the appuser.
 RUN git config --global --add safe.directory /sdks/flutter
 
-# Grant appuser ownership of the flutter sdk cache directory and version file
-USER root
-RUN chown -R appuser:appgroup /sdks/flutter/bin/cache && \
-    chown appuser:appgroup /sdks/flutter/version
-USER appuser
-
-# Run pub get as the non-root user
+# Run pub get as the non-root user (SDK permissions should now be sufficient)
 RUN flutter pub get --verbose
 
 # Create directory for compiled output (owned by appuser)
