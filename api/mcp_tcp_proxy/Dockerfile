@@ -36,12 +36,6 @@ USER appuser
 # Add git safe directory config for the appuser.
 RUN git config --global --add safe.directory /sdks/flutter
 
-# Grant appuser ownership of the flutter sdk directory to avoid permission issues during pub get
-# This might be necessary if flutter tries to modify files within its own sdk dir
-USER root
-RUN chown -R appuser:appgroup /sdks/flutter
-USER appuser
-
 # Run pub get as the non-root user
 RUN flutter pub get --verbose
 
