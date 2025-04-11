@@ -36,6 +36,11 @@ USER appuser
 # Add git safe directory config for the appuser.
 RUN git config --global --add safe.directory /sdks/flutter
 
+# Grant appuser ownership of the flutter sdk cache directory to allow lockfile creation/modification
+USER root
+RUN chown -R appuser:appgroup /sdks/flutter/bin/cache
+USER appuser
+
 # Run pub get as the non-root user
 RUN flutter pub get --verbose
 
