@@ -716,12 +716,12 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
       debugPrint(
         "MCP ProcessQuery: Gemini service not available or not initialized.",
       );
-      final errorMsg =
+      final errorMessageForUser =
           geminiService?.initializationError ??
           "Gemini service is null or model is missing.";
       return McpProcessResult(
         finalModelContent: Content('model', [
-          TextPart("AI service is not available: \$errorMsg"),
+          TextPart("AI service is not available: $errorMessageForUser"),
         ]),
       );
     }
@@ -913,8 +913,8 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
                 "Tool '\$toolName' executed successfully (Result: \${jsonEncode(toolResultJson)}), but encountered an error getting the final summary: \${e.toString()}",
               ),
             ]),
-            // Pass back the original model content that contained the call
-            modelCallContent: candidate!.content,
+            // Pass back the original model content that contained the call, using null-aware access
+            modelCallContent: candidate?.content,
             toolResponseContent: Content('function', [functionResponsePart]),
             toolName: toolName,
             toolArgs: toolArgs,
@@ -938,7 +938,7 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
         );
         return McpProcessResult(
           finalModelContent: finalContent,
-          modelCallContent: candidate.content,
+          modelCallContent: candidate?.content,
           toolResponseContent: Content('function', [functionResponsePart]),
           toolName: toolName,
           toolArgs: toolArgs,
