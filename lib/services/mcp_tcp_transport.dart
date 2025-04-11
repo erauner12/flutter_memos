@@ -1,19 +1,137 @@
-// lib/services/mcp_tcp_transport.dart
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:flutter/foundation.dart'; // For kDebugMode
+// Hide ReadBuffer from foundation to avoid conflict with the local copy
+import 'package:flutter/foundation.dart' hide ReadBuffer;
 import 'package:mcp_dart/mcp_dart.dart' as mcp_dart;
-// Assuming shared stdio helpers are accessible or reimplemented if needed
-// If ReadBuffer/deserializeMessage/serializeMessage are not public, copy them
-// or import the specific file if possible (adjust path if needed).
-// For now, let's assume they are available via mcp_dart main export or shared.
-// If not, we'll need to adjust imports or copy implementations.
-// NOTE: Accessing 'src' directly is generally discouraged. If mcp_dart doesn't
-// export these, they might need to be copied or reimplemented.
-import 'package:mcp_dart/src/shared/stdio.dart'; // Check if this export works
+// Removed: import 'package:mcp_dart/src/shared/stdio.dart';
+
+// --- Copied Helpers from mcp_dart/src/shared/stdio.dart ---
+
+/// Buffers a continuous stdio stream (like stdin) and parses discrete,
+/// newline-terminated JSON-RPC messages.
+class ReadBuffer {
+  final BytesBuilder _builder = BytesBuilder();
+  Uint8List? _bufferCache;
+
+  /// Appends a chunk of binary data (received from the stream) to the buffer.
+  void append(Uint8List chunk) {
+    _builder.add(chunk);
+    _bufferCache = null;
+  }
+
+  /// Attempts to read a complete, newline-terminated JSON-RPC message
+  /// from the accumulated buffer.
+  ///
+  /// Returns the parsed [JsonRpcMessage] if a complete message is found,
+  /// otherwise returns null.
+  ///
+  /// Throws [FormatException] if the extracted line is not valid JSON or
+  /// if the JSON does not represent a known [JsonRpcMessage] structure.
+  mcp_dart.JsonRpcMessage? readMessage() {
+    _bufferCache ??= _builder.toBytes();
+
+    if (_bufferCache == null || _bufferCache!.isEmpty) {
+      return null;
+    }
+
+    final newlineIndex = _bufferCache!.indexOf(10); // ASCII code for '\n'
+    if (newlineIndex == -1) {
+      return null; // No complete line found yet
+    }
+
+    // Extract the line bytes (excluding the newline character)
+    final lineBytes = Uint8List.sublistView(_bufferCache!, 0, newlineIndex);
+
+    String line;
+    try {
+      // Decode the line as UTF-8
+      line = utf8.decode(lineBytes);
+    } catch (e) {
+      // Handle potential decoding errors (e.g., invalid UTF-8 sequence)
+      // Log the error and discard the problematic segment
+      if (kDebugMode) {
+        print("[ReadBuffer] Error decoding UTF-8 line: $e");
+      }
+      _updateBufferAfterRead(newlineIndex); // Discard the invalid line
+      return null; // Indicate no valid message was read
+    }
+
+    // Update the buffer to remove the processed line (including newline)
+    _updateBufferAfterRead(newlineIndex);
+
+    // Deserialize the valid JSON line
+    return deserializeMessage(line);
+  }
+
+  /// Clears the internal buffer and resets the state.
+  void clear() {
+    _builder.clear();
+    _bufferCache = null;
+  }
+
+  /// Updates the buffer by removing the processed line and its newline character.
+  void _updateBufferAfterRead(int newlineIndex) {
+    // Check if there are bytes remaining after the newline
+    if (_bufferCache!.length > newlineIndex + 1) {
+      final remainingBytes = Uint8List.sublistView(
+        _bufferCache!,
+        newlineIndex + 1,
+      );
+      _builder.clear();
+      _builder.add(remainingBytes);
+    } else {
+      // No bytes remaining, just clear the builder
+      _builder.clear();
+    }
+    _bufferCache = null; // Invalidate the cache
+  }
+}
+
+/// Deserializes a single line of text (assumed to be a JSON object)
+/// into a [JsonRpcMessage] using its factory constructor.
+///
+/// Throws [FormatException] if the line is not valid JSON.
+mcp_dart.JsonRpcMessage deserializeMessage(String line) {
+  try {
+    final jsonMap = jsonDecode(line) as Map<String, dynamic>;
+    // Use the factory constructor from the imported mcp_dart types
+    return mcp_dart.JsonRpcMessage.fromJson(jsonMap);
+  } on FormatException catch (e) {
+    if (kDebugMode) {
+      print("[deserializeMessage] Failed to decode JSON line: $line");
+    }
+    throw FormatException("Invalid JSON received: ${e.message}", line);
+  } catch (e) {
+    // Catch other potential errors during JsonRpcMessage parsing
+    if (kDebugMode) {
+      print(
+        "[deserializeMessage] Failed to parse JsonRpcMessage from line: $line. Error: $e",
+      );
+    }
+    rethrow; // Rethrow other errors
+  }
+}
+
+/// Serializes a [JsonRpcMessage] into a JSON string suitable for transmission,
+/// appending a newline character for line-based protocols like stdio.
+String serializeMessage(mcp_dart.JsonRpcMessage message) {
+  try {
+    final json = jsonEncode(message.toJson());
+    return '$json\n'; // Append newline
+  } catch (e) {
+    if (kDebugMode) {
+      print(
+        "[serializeMessage] Failed to serialize JsonRpcMessage: $message. Error: $e",
+      );
+    }
+    rethrow; // Rethrow serialization errors
+  }
+}
+
+// --- End Copied Helpers ---
 
 /// Client transport for TCP: connects to a server over a TCP socket
 /// and communicates using newline-delimited JSON messages.
@@ -21,11 +139,13 @@ class TcpClientTransport implements mcp_dart.Transport {
   final String host;
   final int port;
   Socket? _socket;
+  // Use the locally defined ReadBuffer
   final ReadBuffer _readBuffer = ReadBuffer();
   final Completer<void> _closeCompleter = Completer<void>();
   bool _isClosing = false;
   StreamSubscription<Uint8List>? _socketSubscription;
 
+  // @override annotations should now be valid as we implement mcp_dart.Transport
   @override
   void Function()? onclose;
 
@@ -108,6 +228,7 @@ class TcpClientTransport implements mcp_dart.Transport {
    void _processReadBuffer() {
      while (true) {
        try {
+        // Use the locally defined ReadBuffer's method
          final message = _readBuffer.readMessage();
          if (message == null) break; // No complete message yet
          try {
@@ -119,6 +240,7 @@ class TcpClientTransport implements mcp_dart.Transport {
            _reportError(StateError("Error in onmessage handler: $e"));
          }
        } catch (error) {
+        // Catch errors from readMessage (e.g., FormatException)
          final Error parseError = (error is Error)
              ? error
              : StateError("Message parsing error: $error");
@@ -130,6 +252,7 @@ class TcpClientTransport implements mcp_dart.Transport {
          }
          // Decide on recovery strategy. Clearing buffer might lose subsequent valid messages.
          // For now, log and break processing loop for this data chunk.
+        // Consider clearing the buffer if errors persist: _readBuffer.clear();
          break;
        }
      }
@@ -142,7 +265,10 @@ class TcpClientTransport implements mcp_dart.Transport {
         '[TcpClientTransport] Socket error: $error\n$stackTrace',
       );
     }
-    _reportError(StateError("Socket error: $error"));
+    // Ensure we report an Error object
+    final errorObj =
+        (error is Error) ? error : StateError("Socket error: $error");
+    _reportError(errorObj);
     // Close the transport on socket errors
     close();
   }
@@ -157,10 +283,12 @@ class TcpClientTransport implements mcp_dart.Transport {
   }
 
    void _reportError(Error error) {
-     if (_isClosing) return;
+    // Avoid reporting errors if already closing or closed
+    if (_isClosing || _socket == null) return;
      try {
        onerror?.call(error);
      } catch (e) {
+      // Prevent errors in the handler from crashing the app
        if (kDebugMode) {
          print("[TcpClientTransport] Error within onerror handler: $e");
        }
@@ -174,7 +302,8 @@ class TcpClientTransport implements mcp_dart.Transport {
     }
 
     try {
-      final jsonString = serializeMessage(message); // Assumes this adds newline
+      // Use the locally defined serializeMessage
+      final jsonString = serializeMessage(message);
       final bytes = utf8.encode(jsonString);
       _socket!.add(bytes);
       await _socket!.flush(); // Ensure data is sent immediately
@@ -200,11 +329,13 @@ class TcpClientTransport implements mcp_dart.Transport {
     }
 
     // Cancel the socket listener first
+    // Use ?. operator for safety, although _socketSubscription should be non-null if connected
     await _socketSubscription?.cancel();
     _socketSubscription = null;
 
     // Close the socket
     try {
+      // Use ?. operator for safety, although _socket should be non-null if connected/closing started now
       await _socket?.close(); // Wait for the socket to acknowledge close
        if (kDebugMode) {
          print('[TcpClientTransport] Socket closed.');
@@ -214,9 +345,15 @@ class TcpClientTransport implements mcp_dart.Transport {
          print("[TcpClientTransport] Error closing socket: $e");
        }
        // Report error but continue cleanup
-       _reportError(StateError("Error closing socket: $e"));
+      // Ensure we report an Error object
+      final errorObj =
+          (e is Error) ? e : StateError("Error closing socket: $e");
+      // Don't report if already closed fully
+      if (_socket != null) {
+        _reportError(errorObj);
+      }
     } finally {
-       _socket = null; // Clear the socket reference
+      _socket = null; // Clear the socket reference *after* attempting close
        _readBuffer.clear(); // Clear any pending buffer data
     }
 
@@ -230,6 +367,7 @@ class TcpClientTransport implements mcp_dart.Transport {
        // Don't report this via onerror as we are already closing
     }
 
+    // Complete the completer if it hasn't been completed yet
     if (!_closeCompleter.isCompleted) {
         _closeCompleter.complete();
     }
