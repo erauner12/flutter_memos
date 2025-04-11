@@ -53,6 +53,8 @@ dependencies:
 
   # MCP Integration
   mcp_dart: ^0.3.6 # Keep specific version from plan
+  # mcp_dart:
+  #   path: ../mcp_dart
 
   # Other existing dependencies
   flutter_slidable: ^4.0.0

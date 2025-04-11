@@ -404,6 +404,7 @@ class SettingsService {
   }
 
   // Saves the entire list (including isActive states) to storage and updates the provider.
+  // Takes SharedPreferences instance as an argument.
   Future<void> saveMcpServerList(
     SharedPreferences prefs,
     List<McpServerConfig> servers,
@@ -428,10 +429,11 @@ class SettingsService {
 
   // Method to toggle the isActive status of a specific server
   Future<void> toggleMcpServerActive(String serverId, bool isActive) async {
+    // Get prefs instance within the method
     final prefs = await SharedPreferences.getInstance();
     final currentList = List<McpServerConfig>.from(
       _ref.read(mcpServerListProvider),
-    );
+    ); // Create mutable copy
     final index = currentList.indexWhere((s) => s.id == serverId);
     if (index != -1) {
       currentList[index] = currentList[index].copyWith(isActive: isActive);
@@ -452,6 +454,7 @@ class SettingsService {
 
   // --- Convenience methods for managing the MCP list ---
   Future<bool> addMcpServer(McpServerConfig newServer) async {
+    // Get prefs instance within the method
     final prefs = await SharedPreferences.getInstance();
     final currentList = _ref.read(mcpServerListProvider);
     // Ensure new servers added via UI start inactive unless explicitly set
@@ -461,6 +464,7 @@ class SettingsService {
   }
 
   Future<bool> updateMcpServer(McpServerConfig updatedServer) async {
+    // Get prefs instance within the method
     final prefs = await SharedPreferences.getInstance();
     final currentList = _ref.read(mcpServerListProvider);
     final index = currentList.indexWhere((s) => s.id == updatedServer.id);
@@ -480,6 +484,7 @@ class SettingsService {
   }
 
   Future<bool> deleteMcpServer(String serverId) async {
+    // Get prefs instance within the method
     final prefs = await SharedPreferences.getInstance();
     final currentList = _ref.read(mcpServerListProvider);
     final newList = currentList.where((s) => s.id != serverId).toList();

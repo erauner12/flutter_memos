@@ -2,6 +2,7 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<!-- Keep existing CloudKit/APS entitlements -->
 	<key>com.apple.developer.aps-environment</key>
 	<string>development</string>
 	<key>com.apple.developer.icloud-container-identifiers</key>
@@ -12,15 +13,32 @@
 	<array>
 		<string>CloudKit</string>
 	</array>
+
+	<!-- Keep Sandbox Disabled -->
 	<key>com.apple.security.app-sandbox</key>
-	<true/>
+	<false/>
+
+	<!-- Keep existing permissive entitlements -->
 	<key>com.apple.security.cs.allow-jit</key>
 	<true/>
-	<key>com.apple.security.files.user-selected.read-only</key>
+	<key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+	<true/>
+	<key>com.apple.security.cs.disable-library-validation</key>
 	<true/>
 	<key>com.apple.security.network.client</key>
 	<true/>
 	<key>com.apple.security.network.server</key>
 	<true/>
+	<!-- Allow user selected files just in case -->
+	<key>com.apple.security.files.user-selected.read-only</key>
+	<true/>
+
+	<!-- ADD TEMPORARY EXCEPTION FOR EXECUTABLE -->
+	<key>com.apple.security.temporary-exception.files.absolute-path.executable</key>
+	<string>/Users/erauner/git/side/flutter_memos/mcp_echo_server/bin/mcp_echo_server_executable</string>
+	<!-- ADD NEW TEMPORARY EXCEPTION FOR TODOIST SERVER -->
+	<key>com.apple.security.temporary-exception.files.absolute-path.executable</key>
+	<string>/Users/erauner/git/side/flutter_memos/bin/todoist_mcp_server_executable</string>
+
 </dict>
 </plist>

@@ -162,6 +162,7 @@ class GoogleMcpClient {
         mcp_dart.StdioServerParameters(
           command: command,
           args: args,
+          // Pass the environment received from the notifier
           environment: environment,
           stderrMode: ProcessStartMode.normal,
         ),
@@ -186,6 +187,10 @@ class GoogleMcpClient {
       await mcp.connect(_transport!);
       _isConnected = true;
       debugPrint("GoogleMcpClient [\$serverId]: Connected successfully.");
+      // *** ADD LOGGING HERE ***
+      debugPrint(
+        "GoogleMcpClient [\$serverId]: Connection successful, proceeding to fetch tools...",
+      );
       await _fetchTools();
     } catch (e) {
       debugPrint("GoogleMcpClient [\$serverId]: Failed to connect: \$e");
@@ -203,6 +208,10 @@ class GoogleMcpClient {
     debugPrint("GoogleMcpClient [\$serverId]: Fetching tools...");
     try {
       final toolsResult = await mcp.listTools();
+      // *** ADD LOGGING HERE ***
+      debugPrint(
+        "GoogleMcpClient [\$serverId]: Raw tools list result: \${toolsResult.tools.map((t) => t.toJson()).toList()}",
+      );
       List<Tool> fetchedTools = [];
       for (var toolDef in toolsResult.tools) {
         try {
@@ -232,6 +241,10 @@ class GoogleMcpClient {
         }
       }
       _tools = fetchedTools;
+      // *** ADD LOGGING HERE ***
+      debugPrint(
+        "GoogleMcpClient [\$serverId]: Processed tools for Gemini: \${_tools.map((t) => t.functionDeclarations?.map((fd) => fd.name) ?? 'null').toList()}",
+      );
       debugPrint(
         "GoogleMcpClient [\$serverId]: Successfully processed \${_tools.length} tools.",
       );
@@ -335,16 +348,17 @@ class McpClientState {
 
 // Manages the McpClientState, handling multiple connections
 class McpClientNotifier extends StateNotifier<McpClientState> {
-  final Ref _ref;
-  // Map<String, String> _toolToServerIdMap = {}; // Unused field commented out
-  ProviderSubscription<List<McpServerConfig>>? _serverListSubscription;
+  final Ref ref;
+  // Map to store tool names and the server ID that provides them
+  Map<String, String> toolToServerIdMap = {};
+  ProviderSubscription<List<McpServerConfig>>? serverListSubscription;
 
-  McpClientNotifier(this._ref) : super(const McpClientState()) {
-    _initialize();
+  McpClientNotifier(this.ref) : super(const McpClientState()) {
+    initialize();
   }
 
-  void _initialize() {
-    final initialConfigs = _ref.read(mcpServerListProvider);
+  void initialize() {
+    final initialConfigs = ref.read(mcpServerListProvider);
     final initialStatuses = <String, McpConnectionStatus>{};
     for (var config in initialConfigs) {
       initialStatuses[config.id] = McpConnectionStatus.disconnected;
@@ -359,19 +373,24 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
       "McpClientNotifier: Initialized with \${initialConfigs.length} server configs.",
     );
 
-    _serverListSubscription = _ref.listen<
+    serverListSubscription = ref.listen<
       List<McpServerConfig>
     >(mcpServerListProvider, (previousList, newList) {
       debugPrint(
         "McpClientNotifier: Server list updated in settings. Syncing connections...",
       );
-      final currentStatuses = Map<String, McpConnectionStatus>.from(state.serverStatuses);
+      final currentStatuses = Map<String, McpConnectionStatus>.from(
+        state.serverStatuses,
+      );
       final currentErrors = Map<String, String>.from(state.serverErrorMessages);
       final newServerIds = newList.map((s) => s.id).toSet();
       currentStatuses.removeWhere((id, _) => !newServerIds.contains(id));
       currentErrors.removeWhere((id, _) => !newServerIds.contains(id));
       for (final server in newList) {
-        currentStatuses.putIfAbsent(server.id, () => McpConnectionStatus.disconnected);
+        currentStatuses.putIfAbsent(
+          server.id,
+          () => McpConnectionStatus.disconnected,
+        );
       }
       state = state.copyWith(
         serverConfigs: newList,
@@ -389,33 +408,56 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
 
   // --- Connection Management ---
 
-  Future<void> _connectServer(McpServerConfig serverConfig) async {
+  Future<void> connectServer(McpServerConfig serverConfig) async {
     final serverId = serverConfig.id;
     final currentStatus = state.serverStatuses[serverId];
-    if (state.activeClients.containsKey(serverId) || currentStatus == McpConnectionStatus.connecting || currentStatus == McpConnectionStatus.connected) {
+    if (state.activeClients.containsKey(serverId) ||
+        currentStatus == McpConnectionStatus.connecting ||
+        currentStatus == McpConnectionStatus.connected) {
       debugPrint(
         "MCP [\$serverId]: Already connected or connecting, skipping connection attempt.",
       );
       return;
     }
     /*
-    final geminiService = _ref.read(geminiServiceProvider);
+    final geminiService = ref.read(geminiServiceProvider);
     if (geminiService == null || !geminiService.isInitialized) {
-       _updateServerState(serverId, McpConnectionStatus.error, errorMsg: "Gemini service not ready.");
+       updateServerState(serverId, McpConnectionStatus.error, errorMsg: "Gemini service not ready.");
        return;
     }
     */
     if (serverConfig.command.trim().isEmpty) {
-      _updateServerState(serverId, McpConnectionStatus.error, errorMsg: "Server command is empty.");
+      updateServerState(serverId, McpConnectionStatus.error, errorMsg: "Server command is empty.");
       return;
     }
 
-    _updateServerState(serverId, McpConnectionStatus.connecting);
+    updateServerState(serverId, McpConnectionStatus.connecting);
     GoogleMcpClient? newClientInstance;
 
     try {
-      final Map<String, String> combinedEnvironment = Map.from(Platform.environment);
-      combinedEnvironment.addAll(serverConfig.customEnvironment);
+      // Fetch Todoist token using the provider
+      // Ensure todoistApiKeyProvider is accessible here (might need adjustment if not directly in ref scope)
+      final todoistApiToken = ref.read(
+        todoistApiKeyProvider,
+      ); // Read the current token value
+
+      // Prepare environment, including custom vars from config AND the token
+      final Map<String, String> environmentToPass = {
+        ...serverConfig.customEnvironment, // Keep existing custom vars
+        // Conditionally add the token if it's not empty
+        if (todoistApiToken.isNotEmpty) 'TODOIST_API_TOKEN': todoistApiToken,
+      };
+      // Log the environment being passed (excluding sensitive values in production)
+      if (kDebugMode) {
+        final safeEnvLog = Map.from(environmentToPass);
+        if (safeEnvLog.containsKey('TODOIST_API_TOKEN')) {
+          safeEnvLog['TODOIST_API_TOKEN'] = '********'; // Mask token in logs
+        }
+        debugPrint(
+          "MCP [\$serverId]: Launching with environment: \$safeEnvLog",
+        );
+      }
+
       final command = serverConfig.command;
       final argsList =
           serverConfig.args.split(' ').where((s) => s.isNotEmpty).toList();
@@ -425,17 +467,22 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
         null /* geminiService.model */,
       );
       newClientInstance.setupCallbacks(
-        onError: _handleClientError,
-        onClose: _handleClientClose,
+        onError: handleClientError,
+        onClose: handleClientClose,
       );
 
       await newClientInstance.connectToServer(
         command,
         argsList,
-        combinedEnvironment,
+        // Pass the combined environment map here
+        environmentToPass,
       );
 
       if (newClientInstance.isConnected) {
+        // *** ADD LOGGING HERE ***
+        debugPrint(
+          "MCP [_connectServer - \$serverId]: Client connected successfully. Updating state and rebuilding tool map...",
+        );
         state = state.copyWith(
           activeClients: {...state.activeClients, serverId: newClientInstance},
           serverStatuses: {...state.serverStatuses, serverId: McpConnectionStatus.connected},
@@ -444,10 +491,10 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
         debugPrint(
           "MCP [\$serverId]: Connected successfully to \${serverConfig.name}.",
         );
-        _rebuildToolMap();
+        rebuildToolMap();
       } else {
         if (state.serverStatuses[serverId] != McpConnectionStatus.error) {
-          _updateServerState(
+          updateServerState(
             serverId,
             McpConnectionStatus.error,
             errorMsg: "Connection failed post-attempt.",
@@ -458,7 +505,7 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
     } catch (e) {
       debugPrint("MCP [\$serverId]: Connection failed during setup: \$e");
       if (state.serverStatuses[serverId] != McpConnectionStatus.error) {
-        _updateServerState(
+        updateServerState(
           serverId,
           McpConnectionStatus.error,
           errorMsg: "Connection failed: \$e",
@@ -468,25 +515,36 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
     }
   }
 
-  Future<void> _disconnectServer(String serverId) async {
+  Future<void> disconnectServer(String serverId) async {
     final clientToDisconnect = state.activeClients[serverId];
     if (state.serverStatuses[serverId] != McpConnectionStatus.disconnected) {
-      _updateServerState(serverId, McpConnectionStatus.disconnected);
+      updateServerState(serverId, McpConnectionStatus.disconnected);
     }
     if (clientToDisconnect == null) {
       debugPrint("MCP [\$serverId]: No active client found to disconnect.");
       if (state.activeClients.containsKey(serverId)) {
         state = state.copyWith(removeClientIds: [serverId]);
-        _rebuildToolMap();
+        rebuildToolMap(); // Call rebuild after removing client ID
       }
       return;
     }
     debugPrint("MCP [\$serverId]: Disconnecting client...");
     await clientToDisconnect.cleanup();
+    // Check if the client still exists in the state *before* updating
     if (state.activeClients.containsKey(serverId)) {
+      // Update state to remove the client
       state = state.copyWith(removeClientIds: [serverId]);
-      debugPrint("MCP [\$serverId]: Disconnect process complete.");
-      _rebuildToolMap();
+      debugPrint(
+        "MCP [\$serverId]: Disconnect process complete, client removed from state.",
+      );
+      // Rebuild the tool map *after* the state update
+      rebuildToolMap();
+    } else {
+      debugPrint(
+        "MCP [\$serverId]: Client already removed from state during cleanup.",
+      );
+       // Ensure tool map is still rebuilt if the client might have been removed by error handler first
+      rebuildToolMap();
     }
   }
 
@@ -518,14 +576,14 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
       }
     }
     for (final serverId in serversToDisconnect) {
-      _disconnectServer(serverId);
+      disconnectServer(serverId);
     }
     for (final serverId in serversToConnect) {
       final config = state.serverConfigs.firstWhereOrNull((s) => s.id == serverId);
       if (config != null) {
-        _connectServer(config);
+        connectServer(config);
       } else {
-        _updateServerState(
+        updateServerState(
           serverId,
           McpConnectionStatus.error,
           errorMsg: "Config not found during sync.",
@@ -549,7 +607,7 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
   }
 
   // --- State Update Helpers ---
-  void _updateServerState(String serverId, McpConnectionStatus status, {String? errorMsg}) {
+  void updateServerState(String serverId, McpConnectionStatus status, {String? errorMsg}) {
     if (!mounted) return;
     final newStatuses = Map<String, McpConnectionStatus>.from(state.serverStatuses);
     final newErrors = Map<String, String>.from(state.serverErrorMessages);
@@ -574,65 +632,202 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
         activeClients: newClients,
       );
       if (clientRemoved) {
-        _rebuildToolMap();
+        rebuildToolMap();
       }
     }
   }
 
-  void _handleClientError(String serverId, String errorMsg) {
+  void handleClientError(String serverId, String errorMsg) {
     debugPrint("MCP [\$serverId]: Received error callback: \$errorMsg");
-    _updateServerState(serverId, McpConnectionStatus.error, errorMsg: errorMsg);
+    updateServerState(serverId, McpConnectionStatus.error, errorMsg: errorMsg);
   }
 
-  void _handleClientClose(String serverId) {
+  void handleClientClose(String serverId) {
     debugPrint("MCP [\$serverId]: Received close callback.");
     if (state.serverStatuses[serverId] != McpConnectionStatus.error) {
-      _updateServerState(serverId, McpConnectionStatus.disconnected);
+       // If not already in error, update status to disconnected which also removes client
+       updateServerState(serverId, McpConnectionStatus.disconnected);
+      // updateServerState calls rebuildToolMap if client was removed
     } else {
+      // If it was already in error state, just ensure the client reference is removed
       if (state.activeClients.containsKey(serverId)) {
         state = state.copyWith(removeClientIds: [serverId]);
-        _rebuildToolMap();
+        rebuildToolMap(); // Explicitly rebuild map after removing client due to close in error state
       }
     }
   }
 
   // --- Tool Management (Adapted from example - for future use) ---
-  void _rebuildToolMap() {
+  void rebuildToolMap() {
     if (!mounted) return;
     final newToolMap = <String, String>{};
     final Set<String> uniqueToolNames = {};
     final List<String> duplicateToolNames = [];
+    // Use a copy of keys to avoid concurrent modification issues if state changes during iteration
     final currentClientIds = List<String>.from(state.activeClients.keys);
+
     for (final serverId in currentClientIds) {
       final client = state.activeClients[serverId];
       if (client != null && client.isConnected) {
         for (final tool in client.availableTools) {
+          // Ensure functionDeclarations is not null before iterating
           for (final funcDec in tool.functionDeclarations ?? []) {
             if (newToolMap.containsKey(funcDec.name)) {
+              // Handle duplicates if necessary (e.g., log a warning)
               if (!duplicateToolNames.contains(funcDec.name)) {
                 duplicateToolNames.add(funcDec.name);
+                debugPrint(
+                  "MCP Warning: Duplicate tool name '\${funcDec.name}' found on multiple servers. Using first encountered.",
+                );
               }
             } else {
-              newToolMap[funcDec.name] = serverId;
+              newToolMap[funcDec.name] =
+                  serverId; // Store tool name -> server ID
               uniqueToolNames.add(funcDec.name);
             }
           }
         }
       }
     }
-    // _toolToServerIdMap remains commented out as it is unused.
-    if (duplicateToolNames.isNotEmpty) {
+
+    toolToServerIdMap = newToolMap; // Assign the populated map
+
+    // *** ADD LOGGING HERE ***
+    debugPrint(
+      "MCP [_rebuildToolMap]: Finished rebuilding. Final map: \$toolToServerIdMap",
+    );
+
+    if (duplicateToolNames.isNotEmpty || uniqueToolNames.isNotEmpty) {
       debugPrint(
-        "MCP: Rebuilt tool map. \${uniqueToolNames.length} unique tools. Duplicates found: \${duplicateToolNames.join(', ')}",
+        "MCP: Rebuilt tool map. \${uniqueToolNames.length} unique tools found: [\${uniqueToolNames.join(', ')}]. Duplicates: [\${duplicateToolNames.join(', ')}]",
       );
+    } else {
+      debugPrint("MCP: Rebuilt tool map. No tools found on connected servers.");
     }
   }
 
+  // --- Query Processing ---
+  Future<McpProcessResult> processQuery(
+    String query,
+    List<Content> history,
+  ) async {
+    // *** ADD LOGGING HERE ***
+    debugPrint("MCP ProcessQuery: Entered processQuery with query: '\$query'");
+    // For this phase, we bypass Gemini and directly try the echo tool
+    // if an MCP server is connected and provides the tool.
+
+    if (!state.hasActiveConnections) {
+      // Fallback: Maybe eventually call Gemini directly here?
+      // For now, return an error or a simple message.
+      debugPrint("MCP ProcessQuery: No active MCP connections.");
+      return McpProcessResult(
+        finalModelContent: Content('model', [
+          TextPart("No active MCP server to echo."),
+        ]),
+      );
+    }
+
+    // Find the server providing the 'echo' tool
+    final targetServerId = toolToServerIdMap['echo'];
+    // *** ADD LOGGING HERE ***
+    debugPrint(
+      "MCP ProcessQuery: Looked up 'echo' tool. Found Server ID: \$targetServerId. Current tool map: \$toolToServerIdMap",
+    );
+    if (targetServerId == null) {
+      debugPrint(
+        "MCP ProcessQuery: 'echo' tool not found in map: \$toolToServerIdMap",
+      );
+      return McpProcessResult(
+        finalModelContent: Content('model', [
+          TextPart("MCP server connected, but 'echo' tool not found."),
+        ]),
+      );
+    }
+
+    final targetClient = state.activeClients[targetServerId];
+    // *** ADD LOGGING HERE ***
+    debugPrint(
+      "MCP ProcessQuery: Checking target client for server '\$targetServerId'. Found: \${targetClient != null}, Connected: \${targetClient?.isConnected ?? false}",
+    );
+    if (targetClient == null || !targetClient.isConnected) {
+      debugPrint(
+        "MCP ProcessQuery: Client for 'echo' tool (Server \$targetServerId) is not connected or found.",
+      );
+      // Optionally try to reconnect or update status? For now, return error.
+      updateServerState(
+        targetServerId,
+        McpConnectionStatus.error,
+        errorMsg: "Client for 'echo' tool disconnected unexpectedly.",
+      );
+      return McpProcessResult(
+        finalModelContent: Content('model', [
+          TextPart(
+            "Error: Client for 'echo' tool (Server \$targetServerId) is not connected.",
+          ),
+        ]),
+        toolName: 'echo',
+        sourceServerId: targetServerId,
+      );
+    }
+
+    debugPrint(
+      "MCP ProcessQuery: Routing 'echo' tool call to server \$targetServerId",
+    );
+
+    try {
+      final params = mcp_dart.CallToolRequestParams(
+        name: 'echo',
+        arguments: {'message': query}, // Pass the user's query
+      );
+      final result = await targetClient.callTool(params);
+
+      // Extract text response from the tool result
+      final toolResponseText = result.content
+          .whereType<mcp_dart.TextContent>()
+          .map((c) => c.text)
+          .join('\n'); // Join if multiple TextContent parts
+
+      debugPrint(
+        "MCP ProcessQuery: Tool 'echo' executed on server \$targetServerId. Result: \$toolResponseText",
+      );
+
+      // Simulate a simple "model" response containing the tool's output
+      return McpProcessResult(
+        // We didn't call the actual model, so these can be null
+        modelCallContent: null,
+        toolResponseContent: null, // Or construct if needed for history
+        // The final content IS the tool's response in this simple case
+        finalModelContent: Content('model', [TextPart(toolResponseText)]),
+        toolName: 'echo',
+        toolArgs: params.arguments,
+        toolResult: toolResponseText,
+        sourceServerId: targetServerId,
+      );
+    } catch (e) {
+      final errorMsg =
+          "Error executing tool 'echo' on server \$targetServerId: \$e";
+      debugPrint("MCP ProcessQuery: \$errorMsg");
+      // Update server status to reflect the error during tool call
+      updateServerState(
+        targetServerId,
+        McpConnectionStatus.error,
+        errorMsg: errorMsg,
+      );
+      return McpProcessResult(
+        finalModelContent: Content('model', [
+          TextPart("Error: \$errorMsg"),
+        ]),
+        toolName: 'echo',
+        sourceServerId: targetServerId,
+      );
+    }
+  }
+  
   // --- Cleanup ---
   @override
   void dispose() {
     debugPrint("Disposing McpClientNotifier, cleaning up all clients...");
-    _serverListSubscription?.close();
+    serverListSubscription?.close();
     final clientIds = List<String>.from(state.activeClients.keys);
     for (final serverId in clientIds) {
       state.activeClients[serverId]?.cleanup();
