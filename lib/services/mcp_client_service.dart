@@ -441,7 +441,6 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
 
     try {
       // Fetch Todoist token using the provider
-      // Ensure todoistApiKeyProvider is accessible here (might need adjustment if not directly in ref scope)
       final todoistApiToken = ref.read(todoistApiKeyProvider);
       // Prepare environment, including custom vars from config AND the token
       final Map<String, String> environmentToPass = {
@@ -824,17 +823,25 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
           debugPrint(
             "MCP ProcessQuery: Tool '\$toolName' executed successfully by server '\$targetServerId'. Raw Result: \$toolResultString",
           );
+          // *** ADD LOG ***
+          debugPrint(
+            "MCP ProcessQuery: Raw toolResultString: '\$toolResultString'",
+          );
 
           try {
             final decoded = jsonDecode(toolResultString);
+            // *** ADD LOG ***
+            debugPrint(
+              "MCP ProcessQuery: Decoded JSON from toolResultString: \$decoded",
+            );
 
             if (decoded is Map<String, dynamic>) {
               toolResultJson = decoded;
             } else if (decoded is List) {
-              toolResultJson = {
-                'result_list': decoded,
-              };
+              // Handle list results if necessary, e.g., from get_tasks
+              toolResultJson = {'result_list': decoded};
             } else {
+              // Handle other types if needed, or treat as text
               toolResultJson = {'result_text': toolResultString};
             }
           } catch (e) {
@@ -844,14 +851,15 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
             toolResultJson = {'result_text': toolResultString};
           }
         } else {
+          // Handle non-text content if necessary
           toolResultString = jsonEncode(toolResult.toJson());
-          toolResultJson = {
-            'result_raw': toolResult.toJson(),
-          };
+          toolResultJson = {'result_raw': toolResult.toJson()};
           debugPrint(
             "MCP ProcessQuery: Tool '\$toolName' executed by server '\$targetServerId'. Result (non-text): \$toolResultString",
           );
         }
+        // *** ADD LOG ***
+        debugPrint("MCP ProcessQuery: Parsed toolResultJson: \$toolResultJson");
 
         // --- Step 8: Construct FunctionResponse with SIMPLIFIED JSON ---
         Map<String, dynamic> simplifiedResultJson;
@@ -860,11 +868,14 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
             simplifiedResultJson = {'status': 'success'};
             if (toolResultJson.containsKey('taskId')) {
               simplifiedResultJson['taskId'] = toolResultJson['taskId'];
-            } else if (toolResultJson.containsKey('message')) {
-              // Include message for successes without specific IDs (e.g., get_tasks empty result)
+            }
+            // Include message only if taskId is NOT present (or for specific tools like get_tasks)
+            if (!simplifiedResultJson.containsKey('taskId') &&
+                toolResultJson.containsKey('message')) {
               simplifiedResultJson['message'] = toolResultJson['message'];
             } else if (toolName == 'get_todoist_tasks' &&
                 toolResultJson.containsKey('result_list')) {
+              // Special handling for get_tasks list result message
               simplifiedResultJson['message'] =
                   "Found \${(toolResultJson['result_list'] as List?)?.length ?? 0} tasks.";
             }
@@ -879,52 +890,53 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
             }
           }
         } else {
-          // Fallback if status is missing (shouldn't happen with current server logic)
+          // Fallback if status is missing
           simplifiedResultJson = {'result_text': toolResultString};
+          if (toolResultJson.containsKey('taskId')) {
+            simplifiedResultJson['taskId'] = toolResultJson['taskId'];
+          }
         }
+        // *** ADD LOG ***
+        debugPrint(
+          "MCP ProcessQuery: Simplified result JSON for FunctionResponse: \$simplifiedResultJson",
+        );
 
-        // --- Step 8.5: Construct explicit TextPart summary (KEEP AS IS) ---
-        // This summary text is crucial and already contains detailed info like IDs
+        // --- Step 8.5: Construct explicit TextPart summary ---
         String summaryText;
         final status = simplifiedResultJson['status'] as String?;
         final message = simplifiedResultJson['message'] as String?;
-        // Ensure taskId is fetched correctly from the simplified JSON
         final taskId =
             simplifiedResultJson['taskId'] as String?; // Fetch as String?
+        // *** ADD LOG ***
+        debugPrint(
+          "MCP ProcessQuery: Extracted for summary -> status: '\$status', message: '\$message', taskId: '\$taskId'",
+        );
 
         if (status == 'success') {
+          // Default success message uses the simplified message if available
           summaryText = message ?? "Tool '\$toolName' executed successfully.";
+
+          // Specific overrides for tools where we want more detail
           if (toolName == 'create_todoist_task') {
-            // Use original content from args and taskId from simplified result
             summaryText =
                 'Todoist task created successfully: "${toolArgs['content'] as String? ?? '[unknown content]'}"';
             if (taskId != null) {
-              // Corrected interpolation
               summaryText += " (ID: \$taskId)";
             }
             summaryText += ".";
           } else if (toolName == 'update_todoist_task') {
-            // Use message and taskId from simplified result
-            summaryText = message ?? "Todoist task updated successfully";
+            summaryText = "Todoist task updated successfully";
             if (taskId != null) {
-              // Corrected interpolation
               summaryText += " (ID: \$taskId)";
             }
             summaryText += ".";
           } else if (toolName == 'get_todoist_tasks') {
-            // Message already covers 0 or 1 task cases well.
-            // For multiple tasks, the message is "Found X matching tasks."
-            // We could add IDs here if needed, but let's keep it simple for now.
             summaryText = message ?? "Tasks retrieved successfully.";
             if (taskId != null) {
-              // This handles the single-task case - Corrected interpolation
               summaryText += " Task ID is \$taskId.";
             }
           } else {
-            // Generic success message for other tools
-            summaryText = message ?? "Tool '\$toolName' executed successfully.";
             if (taskId != null) {
-              // Include taskId if present for any tool - Corrected interpolation
               summaryText += " ID: \$taskId.";
             }
           }
@@ -932,51 +944,45 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
           summaryText =
               "Tool '\$toolName' failed: \${message ?? 'Unknown error'}";
           if (taskId != null) {
-            // Include taskId even on error if available - Corrected interpolation
             summaryText += " (Related to Task ID: \$taskId)";
           }
         } else {
-          // Fallback for unexpected status or non-JSON results
           summaryText =
               toolResultJson['result_text'] as String? ??
               "Tool '\$toolName' executed. Result: \$toolResultString";
+          if (taskId != null) {
+            summaryText += " (ID: \$taskId)";
+          }
         }
 
         final summaryTextPart = TextPart(summaryText);
 
         // --- Step 9: Construct Final Response DIRECTLY (Skip Second Gemini Call) ---
-        final finalContent = Content('model', [
-          summaryTextPart,
-        ]); // Use the summary text directly
+        final finalContent = Content('model', [summaryTextPart]);
 
         debugPrint(
           "MCP ProcessQuery: Tool execution successful. Skipping second Gemini call. Returning direct summary.",
         );
+        // *** RE-VERIFY THIS LOG ***
         debugPrint(
           "MCP ProcessQuery: Final response to UI (tool summary): \"\$summaryText\"",
         );
 
-        // Return the result, including the original model call and the tool response
-        // so they can be added to the history for the *next* turn.
         return McpProcessResult(
-          finalModelContent: finalContent, // The summary message
-          modelCallContent:
-              candidate
-                  ?.content, // The model's turn containing the FunctionCall
+          finalModelContent: finalContent,
+          modelCallContent: candidate?.content,
           toolResponseContent: Content('function', [
-            // The function turn
-            summaryTextPart, // Include summary text for history context
+            summaryTextPart,
             FunctionResponse(
               toolName,
-              simplifiedResultJson, // Pass the SIMPLIFIED JSON map
+              simplifiedResultJson,
             ),
           ]),
           toolName: toolName,
           toolArgs: toolArgs,
-          toolResult: toolResultString, // Raw result string
+          toolResult: toolResultString,
           sourceServerId: targetServerId,
         );
-
       } catch (e) {
         debugPrint(
           "MCP ProcessQuery: Error calling tool '\$toolName' on server '\$targetServerId': \$e",
