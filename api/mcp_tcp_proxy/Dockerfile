@@ -5,7 +5,7 @@ WORKDIR /app
 
 # Update package lists, install/update certificates, force update, and clean up
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends ca-certificates curl dnsutils && \
+    apt-get install -y --no-install-recommends ca-certificates curl dnsutils tzdata && \
     update-ca-certificates --fresh && \
     rm -rf /var/lib/apt/lists/*
 
@@ -14,7 +14,7 @@ COPY . .
 
 # Test network connectivity before attempting pub get
 RUN echo "--- Testing Network Connectivity ---" && \
-    curl -s --head https://pub.dev || echo "Failed to reach pub.dev via curl" && \
+    curl -4s --head https://pub.dev || echo "Failed to reach pub.dev via curl (IPv4)" && \
     nslookup pub.dev || echo "Failed nslookup for pub.dev" && \
     ping -c 3 pub.dev || echo "Failed to ping pub.dev" && \
     echo "--- Network Test Complete ---"
