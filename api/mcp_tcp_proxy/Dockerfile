@@ -36,10 +36,11 @@ USER appuser
 # Add git safe directory config for the appuser.
 RUN git config --global --add safe.directory /sdks/flutter
 
-# Grant appuser ownership of the flutter sdk cache directory and version file
+# Grant world write permissions to the flutter sdk cache directory instead of changing ownership
 USER root
-RUN chown -R appuser:appgroup /sdks/flutter/bin/cache && \
-    chown appuser:appgroup /sdks/flutter/version
+RUN chmod -R a+rw /sdks/flutter/bin/cache
+# We might still need write access to the version file, let's try chmod for that too
+RUN chmod a+w /sdks/flutter/version || true # Use || true in case the file does not exist initially
 USER appuser
 
 # Run pub get as the non-root user
