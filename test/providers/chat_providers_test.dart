@@ -163,7 +163,13 @@ void main() {
   final defaultMcpState = const McpClientState(
     serverConfigs: [
       McpServerConfig(
-          id: 'test-id', name: 'Test Server', command: 'test', args: ''),
+        id: 'test-id',
+        name: 'Test Server',
+        // Add the missing connectionType parameter
+        connectionType: McpConnectionType.stdio,
+        command: 'test',
+        args: '',
+      ),
     ],
     serverStatuses: {'test-id': McpConnectionStatus.connected},
     activeClients: {}, // Mock clients if needed for McpClientNotifier tests
