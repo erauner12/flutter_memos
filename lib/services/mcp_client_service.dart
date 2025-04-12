@@ -186,26 +186,37 @@ class GoogleMcpClient {
           );
         }
 
+        // --- Start Environment Merging ---
+        // Create a mutable map starting with the parent environment.
+        final Map<String, String> mergedEnvironment = Map.from(
+          io.Platform.environment,
+        );
+        // Add/overwrite with custom environment variables.
+        mergedEnvironment.addAll(config.customEnvironment);
+        debugPrint(
+          "GoogleMcpClient [\${config.id}]: Merged environment prepared: \${mergedEnvironment.keys.join(',')}",
+        );
+        // --- End Environment Merging ---
+
         // MODIFY: Use library prefix for Stdio types
         final serverParams = mcp_lib.StdioServerParameters(
           command: config.command,
           args: config.args.split(' '),
-          // Pass the environment map
-          environment:
-              config.customEnvironment.isEmpty
-                  ? null
-                  : config.customEnvironment,
+          // Pass the merged environment map
+          environment: mergedEnvironment,
+          // Explicitly set includeParentEnvironment to false as we provide the merged map
+          includeParentEnvironment: false,
           stderrMode: io.ProcessStartMode.normal,
         );
 
-        // Add debug print here
+        // Add debug print here (logging the environment passed to params)
         debugPrint(
           "GoogleMcpClient [\${config.id}]: Passing environment to StdioServerParameters: \${serverParams.environment}",
         );
 
         final stdioTransport = mcp_lib.StdioClientTransport(
-          serverParams,
-        ); // Pass params here
+          serverParams, // Pass params here
+        );
         _transport = stdioTransport;
 
         stdioTransport.onerror = (error) {
@@ -297,6 +308,7 @@ class GoogleMcpClient {
       debugPrint(errorMsg);
       _isConnected = false;
       await cleanup();
+      // Rethrow as a StateError to be caught by McpClientNotifier
       throw StateError(errorMsg);
     }
   }
