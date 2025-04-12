@@ -1,26 +1,24 @@
-# Use the official Dart SDK image - Use a specific stable version for reproducibility
+# Use the official Dart SDK image
 FROM dart:stable AS build
 
 WORKDIR /app
 
 # Copy only necessary files first to leverage Docker cache
-# Assuming this Dockerfile is built with the project root (flutter_memos) as context
+# Copy this package's pubspec files
 COPY pubspec.yaml pubspec.lock ./
-# If todoist_api is a local path dependency, copy it here.
-# Example: COPY todoist_api ./todoist_api/
-# If flutter_memos/services is needed by the server (it seems so), copy lib
-COPY lib ./lib/
+# The path dependency in pubspec.yaml will handle copying flutter_memos code
 
-# Get dependencies
-RUN dart pub get --offline
+# Get dependencies (ONLINE - remove --offline)
+# This will fetch mcp_dart and resolve the flutter_memos path dependency
+RUN dart pub get
 
-# Copy the rest of the required application code AFTER pub get
-COPY bin/todoist_mcp_server.dart ./bin/
-# Ensure lib is copied if not done earlier
-# COPY lib ./lib/
+# Copy the rest of the application code *from this directory's context*
+COPY . .
 
 # Verify entrypoint exists (optional sanity check)
-RUN if [ ! -f /app/bin/todoist_mcp_server.dart ]; then echo "Error: Entrypoint not found"; exit 1; fi
+RUN if [ ! -f /app/bin/todoist_mcp_server.dart ]; then echo "Error: Entrypoint not found in /app/bin/"; exit 1; fi
+# Optional: Make executable if needed (dart run doesn't require it)
+# RUN chmod +x /app/bin/todoist_mcp_server.dart
 
 # --- Runtime Stage ---
 # Use the same Dart image version
@@ -37,5 +35,5 @@ COPY --from=build /root/.pub-cache /root/.pub-cache
 EXPOSE 9000
 
 # Define the entrypoint to run the server *in SSE mode*
-# Pass the --transport=sse flag
+# Path is now relative to the WORKDIR /app
 ENTRYPOINT ["dart", "run", "/app/bin/todoist_mcp_server.dart", "--transport=sse"]

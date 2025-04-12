@@ -28,10 +28,10 @@ services:
   # --- New MCP SSE Todoist Server Service ---
   mcp_sse_todoist_server:
     build:
-      # Build context is the project root (flutter_memos)
-      context: .
-      # Path to the Dockerfile within the context
-      dockerfile: ./api/mcp_sse_todoist_server_dart/Dockerfile
+      # CHANGE: Update build context to the specific server directory
+      context: ./api/mcp_sse_todoist_server_dart
+      # Dockerfile is relative to the new context
+      dockerfile: Dockerfile
     container_name: mcp-sse-todoist-server
     environment:
       # Pass the Todoist API token securely from the host environment

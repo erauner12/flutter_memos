@@ -1,0 +1,24 @@
+name: mcp_sse_todoist_server_dart
+description: MCP server providing Todoist tools via SSE, designed for Docker.
+version: 0.1.0
+# repository: <optional_repo_link>
+
+environment:
+  sdk: '>=3.0.0 <4.0.0' # Match the main project or adjust as needed
+
+dependencies:
+  # MCP library
+  mcp_dart: ^0.3.6 # Use the same version as the main project or latest compatible
+
+  # Path dependency to access services/models from the main flutter_memos project
+  # Adjust the path based on the directory structure relative to this pubspec.yaml
+  flutter_memos:
+    path: ../../ # Goes up two levels from api/mcp_sse_todoist_server_dart to flutter_memos root
+
+  # Add other direct dependencies if todoist_mcp_server.dart imports them explicitly
+  # and they are not transitive via mcp_dart or flutter_memos.
+  # e.g., http: ^1.0.0
+
+dev_dependencies:
+  lints: ^3.0.0
+  test: ^1.24.0
