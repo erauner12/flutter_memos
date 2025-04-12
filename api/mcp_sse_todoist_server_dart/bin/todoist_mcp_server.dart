@@ -46,10 +46,10 @@ Future<bool> _checkApiHealth(todoist.ApiClient client) async {
     stderr.writeln('[TodoistServer] API health check successful.');
     return true;
   } catch (e) {
-    stderr.writeln('[TodoistServer] API health check failed: $e');
+    stderr.writeln('[TodoistServer] API health check failed: \$e');
     if (e is todoist.ApiException) {
       stderr.writeln(
-        '[TodoistServer] API Exception Details: Code=${e.code}, Message=${e.message}',
+        '[TodoistServer] API Exception Details: Code=\${e.code}, Message=\${e.message}',
       );
     }
     return false;
@@ -68,45 +68,44 @@ Future<todoist.Task?> _findTaskByName(
     stderr.writeln('[TodoistServer] _findTaskByName called with empty name.');
     return null;
   }
-  stderr.writeln('[TodoistServer] Searching for task containing: "$taskName"');
+  stderr.writeln('[TodoistServer] Searching for task containing: "\$taskName"');
   try {
     final tasksApi = todoist.TasksApi(client);
     // Fetch all active tasks - consider adding a filter if performance becomes an issue
-    // The API filter might be more efficient if applicable: filter: 'search: "$taskName"'
+    // The API filter might be more efficient if applicable: filter: 'search: "\$taskName"'
     final allTasks = await tasksApi.getTasks();
     if (allTasks == null) {
       stderr.writeln('[TodoistServer] Received null task list from API.');
       return null;
     }
 
-    final matches =
-        allTasks.where((task) {
-          // Handle potential null content
-          return task.content?.toLowerCase().contains(taskName.toLowerCase()) ??
-              false;
-        }).toList();
+    final matches = allTasks.where((task) {
+      // Handle potential null content
+      return task.content?.toLowerCase().contains(taskName.toLowerCase()) ??
+          false;
+    }).toList();
 
     if (matches.isEmpty) {
-      stderr.writeln('[TodoistServer] No task found matching "$taskName".');
+      stderr.writeln('[TodoistServer] No task found matching "\$taskName".');
       return null;
     } else if (matches.length == 1) {
       stderr.writeln(
-        '[TodoistServer] Found unique task matching "$taskName": ID ${matches.first.id}',
+        '[TodoistServer] Found unique task matching "\$taskName": ID \${matches.first.id}',
       );
       return matches.first;
     } else {
       stderr.writeln(
-        '[TodoistServer] Warning: Found ${matches.length} tasks matching "$taskName". Using the first one: ID ${matches.first.id}, Content: "${matches.first.content}"',
+        '[TodoistServer] Warning: Found \${matches.length} tasks matching "\$taskName". Using the first one: ID \${matches.first.id}, Content: "\${matches.first.content}"',
       );
       return matches.first;
     }
   } catch (e) {
     stderr.writeln(
-      '[TodoistServer] Error during _findTaskByName("$taskName"): $e',
+      '[TodoistServer] Error during _findTaskByName("\$taskName"): \$e',
     );
     if (e is todoist.ApiException) {
       stderr.writeln(
-        '[TodoistServer] API Exception Details: Code=${e.code}, Message=${e.message}, Body=${e.body}',
+        '[TodoistServer] API Exception Details: Code=\${e.code}, Message=\${e.message}',
       );
     }
     return null;
@@ -128,10 +127,10 @@ Future<void> main(List<String> args) async {
     transportMode = TransportMode.sse;
   } else if (transportArg.isNotEmpty && transportArg != '--transport=stdio') {
     stderr.writeln(
-      '[TodoistServer] Warning: Invalid --transport value "$transportArg". Defaulting to stdio.',
+      '[TodoistServer] Warning: Invalid --transport value "\$transportArg". Defaulting to stdio.',
     );
   }
-  stderr.writeln('[TodoistServer] Starting in ${transportMode.name} mode...');
+  stderr.writeln('[TodoistServer] Starting in \${transportMode.name} mode...');
 
   // 1. Create the McpServer instance (Moved before transport logic)
   final server = mcp_dart.McpServer(
@@ -331,7 +330,7 @@ Future<void> main(List<String> args) async {
             'The name/content of the task to search for and complete (required).',
       },
     },
-    callback: _handleCompleteTodoistTask, // Direct function reference
+    callback: handleCompleteTodoistTask, // Direct function reference
   );
 
   server.tool(
@@ -343,7 +342,7 @@ Future<void> main(List<String> args) async {
         'description': 'The exact ID of the task to retrieve (required).',
       },
     },
-    callback: _handleGetTodoistTaskById, // Direct function reference
+    callback: handleGetTodoistTaskById, // Direct function reference
   );
 
   server.tool(
@@ -356,7 +355,7 @@ Future<void> main(List<String> args) async {
             'The exact ID of the task whose comments to retrieve (required).',
       },
     },
-    callback: _handleGetTaskComments, // Direct function reference
+    callback: handleGetTaskComments, // Direct function reference
   );
 
   server.tool(
@@ -378,7 +377,7 @@ Future<void> main(List<String> args) async {
         'description': 'The text content of the comment (required).',
       },
     },
-    callback: _handleCreateTaskComment, // Direct function reference
+    callback: handleCreateTaskComment, // Direct function reference
   );
 
   stderr.writeln(
@@ -418,9 +417,9 @@ Future<void> main(List<String> args) async {
       // Flush stdout to ensure client receives initial messages if any
       await stdout.flush();
       stderr.writeln('[TodoistServer][stdio] Initial stdout flushed.');
-    } catch (e, s) {
+    } catch (e) {
       stderr.writeln(
-        '[TodoistServer][stdio] Failed to connect to transport: $e\n$s',
+        '[TodoistServer][stdio] Failed to connect to transport: \$e',
       );
       exit(1);
     }
@@ -439,7 +438,7 @@ Future<void> main(List<String> args) async {
       stderr.writeln("\n[TodoistServer][sse] Shutting down...");
       try {
         stderr.writeln(
-          "[TodoistServer][sse] Closing ${sseManager.activeSseTransports.length} active SSE transports...",
+          "[TodoistServer][sse] Closing \${sseManager.activeSseTransports.length} active SSE transports...",
         );
         await Future.wait(
           sseManager.activeSseTransports.values.map((t) => t.close()),
@@ -448,7 +447,7 @@ Future<void> main(List<String> args) async {
         await httpServer?.close(force: true);
         stderr.writeln("[TodoistServer][sse] HTTP server closed.");
       } catch (e) {
-        stderr.writeln("[TodoistServer][sse] Error during shutdown: $e");
+        stderr.writeln("[TodoistServer][sse] Error during shutdown: \$e");
       }
       stderr.writeln("[TodoistServer][sse] Exiting.");
       exit(0);
@@ -468,17 +467,17 @@ Future<void> main(List<String> args) async {
     try {
       httpServer = await HttpServer.bind(InternetAddress.anyIPv4, port);
       stderr.writeln(
-        '[TodoistServer][sse] Serving MCP over SSE (GET ${sseManager.ssePath}) and HTTP (POST ${sseManager.messagePath}) at http://${httpServer.address.host}:${httpServer.port}',
+        '[TodoistServer][sse] Serving MCP over SSE (GET \${sseManager.ssePath}) and HTTP (POST \${sseManager.messagePath}) at http://\${httpServer.address.host}:\${httpServer.port}',
       );
 
       httpServer.listen(
         (HttpRequest request) {
           stderr.writeln(
-            '[TodoistServer][sse] Request: ${request.method} ${request.uri}',
+            '[TodoistServer][sse] Request: \${request.method} \${request.uri}',
           );
           sseManager.handleRequest(request).catchError((e, s) {
             stderr.writeln(
-              '[TodoistServer][sse] Error handling request ${request.uri}: $e\n$s',
+              '[TodoistServer][sse] Error handling request \${request.uri}: \$e\n\$s',
             );
             try {
               // Check if response is already closed or headers sent
@@ -489,20 +488,20 @@ Future<void> main(List<String> args) async {
               }
             } catch (_) {
               stderr.writeln(
-                '[TodoistServer][sse] Could not send error response for ${request.uri}. Connection likely closed.',
+                '[TodoistServer][sse] Could not send error response for \${request.uri}. Connection likely closed.',
               );
             }
           });
         },
         onError:
             (e, s) =>
-                stderr.writeln('[TodoistServer][sse] HttpServer error: $e\n$s'),
+            stderr.writeln('[TodoistServer][sse] HttpServer error: \$e\n\$s'),
         onDone: () => stderr.writeln('[TodoistServer][sse] HttpServer closed.'),
       );
       stderr.writeln("[TodoistServer][sse] Signal handlers registered.");
-    } catch (e, s) {
+    } catch (e) {
       stderr.writeln(
-        '[TodoistServer][sse] FATAL: Failed to bind server to port $port: $e\n$s',
+        '[TodoistServer][sse] FATAL: Failed to bind server to port \$port: \$e',
       );
       exit(1);
     }
@@ -533,9 +532,9 @@ Future<mcp_dart.CallToolResult> _handleCreateTodoistTask({
 }) async {
   final requestId = extra?.sessionId;
   stderr.writeln(
-    '[TodoistServer] Received create_todoist_task request ID: $requestId.',
+    '[TodoistServer] Received create_todoist_task request ID: \$requestId.',
   );
-  stderr.writeln('[TodoistServer] Args: ${jsonEncode(args)}');
+  stderr.writeln('[TodoistServer] Args: \${jsonEncode(args)}');
 
   final apiClient = _configureApiClient();
   if (apiClient == null) {
@@ -550,7 +549,7 @@ Future<mcp_dart.CallToolResult> _handleCreateTodoistTask({
     );
   }
 
-  final contentText = args?['content'] as String?; // Renamed to avoid conflict
+  final contentText = args?['content'] as String?;
   if (contentText == null || contentText.trim().isEmpty) {
     return _createErrorResult('Task content cannot be empty.');
   }
@@ -560,7 +559,7 @@ Future<mcp_dart.CallToolResult> _handleCreateTodoistTask({
   final projectId = args?['project_id'] as String?;
   final sectionId = args?['section_id'] as String?;
   final labels = (args?['labels'] as List<dynamic>?)?.cast<String>();
-  final priority = args?['priority'] as int?; // API expects int
+  final priority = args?['priority'] as int?;
   final dueString = args?['due_string'] as String?;
   final dueDate = args?['due_date'] as String?;
   final dueDatetime = args?['due_datetime'] as String?;
@@ -571,11 +570,12 @@ Future<mcp_dart.CallToolResult> _handleCreateTodoistTask({
 
   // Construct the request object
   final request = todoist.CreateTaskRequest(
-    content: contentText, // Use renamed variable
+    content: contentText,
     description: description,
     projectId: projectId,
     sectionId: sectionId,
-    labels: labels,
+    // Provide default empty list if labels is null
+    labels: labels ?? const [],
     priority: priority,
     dueString: dueString,
     dueDate: dueDate,
@@ -598,40 +598,44 @@ Future<mcp_dart.CallToolResult> _handleCreateTodoistTask({
     }
 
     final successMsg =
-        'Todoist task created successfully: "${newTask.content}" (ID: ${newTask.id})';
-    stderr.writeln('[TodoistServer] $successMsg');
+        'Todoist task created successfully: "\${newTask.content}" (ID: \${newTask.id})';
+    stderr.writeln('[TodoistServer] \$successMsg');
     final resultPayload = {
       'status': 'success',
       'message': successMsg,
       'taskId': newTask.id,
-      // Optionally include more details from newTask if needed by the client
       'task': {
         'id': newTask.id,
         'content': newTask.content,
         'description': newTask.description,
         'priority': newTask.priority,
-        // Access via dueObject
         'due_string': newTask.due?.dueObject?.string,
         'due_date': newTask.due?.dueObject?.date,
         'due_datetime': newTask.due?.dueObject?.datetime,
         'labels': newTask.labels,
         'project_id': newTask.projectId,
-        // Remove .toIso8601String()
         'created_at': newTask.createdAt,
       }
     };
+    // Use the resultPayload map here
+    return mcp_dart.CallToolResult(
+      content: [mcp_dart.TextContent(text: jsonEncode(resultPayload))],
+    );
   } catch (e) {
-    var apiErrorMsg = 'Error creating Todoist task: ${e.toString()}';
-    stderr.writeln('[TodoistServer] $apiErrorMsg');
+    var apiErrorMsg = 'Error creating Todoist task: \${e.toString()}';
+    stderr.writeln('[TodoistServer] \$apiErrorMsg');
     if (e is todoist.ApiException) {
       stderr.writeln(
-        '[TodoistServer] API Exception Details: Code=${e.code}, Message=${e.message}',
+        '[TodoistServer] API Exception Details: Code=\${e.code}, Message=\${e.message}',
       );
       apiErrorMsg =
-          'API Error creating task (${e.code}): ${e.message ?? "Unknown API error"}';
+          'API Error creating task (\${e.code}): \${e.message ?? "Unknown API error"}';
     }
     return _createErrorResult(apiErrorMsg);
   }
+  // Add this return in case the try block completes but newTask was null
+  return _createErrorResult(
+      'API call succeeded but returned a null task object.');
 }
 
 // Handler function for the 'update_todoist_task' tool
@@ -641,9 +645,9 @@ Future<mcp_dart.CallToolResult> _handleUpdateTodoistTask({
 }) async {
   final requestId = extra?.sessionId;
   stderr.writeln(
-    '[TodoistServer] Received update_todoist_task request ID: $requestId.',
+    '[TodoistServer] Received update_todoist_task request ID: \$requestId.',
   );
-  stderr.writeln('[TodoistServer] Args: ${jsonEncode(args)}');
+  stderr.writeln('[TodoistServer] Args: \${jsonEncode(args)}');
 
   final apiClient = _configureApiClient();
   if (apiClient == null) {
@@ -667,12 +671,12 @@ Future<mcp_dart.CallToolResult> _handleUpdateTodoistTask({
 
   final foundTask = await _findTaskByName(apiClient, taskName);
   if (foundTask == null || foundTask.id == null) {
-    return _createErrorResult('Task matching "$taskName" not found.');
+    return _createErrorResult('Task matching "\$taskName" not found.');
   }
   final taskId = foundTask.id!;
 
   // Extract update args
-  final contentText = args?['content'] as String?; // Renamed to avoid conflict
+  final contentText = args?['content'] as String?;
   final description = args?['description'] as String?;
   final labels = (args?['labels'] as List<dynamic>?)?.cast<String>();
   final priority = args?['priority'] as int?;
@@ -686,9 +690,10 @@ Future<mcp_dart.CallToolResult> _handleUpdateTodoistTask({
 
   // Construct the request object - only include fields that are present
   final request = todoist.UpdateTaskRequest(
-    content: contentText, // Use renamed variable
+    content: contentText,
     description: description,
-    labels: labels,
+    // Provide default empty list if labels is null
+    labels: labels ?? const [],
     priority: priority,
     dueString: dueString,
     dueDate: dueDate,
@@ -699,7 +704,6 @@ Future<mcp_dart.CallToolResult> _handleUpdateTodoistTask({
     durationUnit: durationUnit,
   );
 
-  // Check if any update fields were actually provided
   if (contentText == null &&
       description == null &&
       labels == null &&
@@ -712,10 +716,10 @@ Future<mcp_dart.CallToolResult> _handleUpdateTodoistTask({
       durationAmount == null &&
       durationUnit == null) {
     stderr.writeln(
-      '[TodoistServer] Update request for task "$taskName" (ID: $taskId) has no fields to update. Skipping API call.',
+      '[TodoistServer] Update request for task "\$taskName" (ID: \$taskId) has no fields to update. Skipping API call.',
     );
     final msg =
-        'No update fields provided for task "$taskName" (ID: $taskId). Task not changed.';
+        'No update fields provided for task "\$taskName" (ID: \$taskId). Task not changed.';
     return mcp_dart.CallToolResult(
       content: [
         mcp_dart.TextContent(
@@ -731,15 +735,14 @@ Future<mcp_dart.CallToolResult> _handleUpdateTodoistTask({
 
   try {
     stderr.writeln(
-      '[TodoistServer] Calling TasksApi.updateTask for found ID: $taskId (Original Name: "$taskName")...',
+      '[TodoistServer] Calling TasksApi.updateTask for found ID: \$taskId (Original Name: "\$taskName")...',
     );
     final tasksApi = todoist.TasksApi(apiClient);
-    // The updateTask method in the generated client might return void or bool
     await tasksApi.updateTask(taskId, request);
 
     final successMsg =
-        'Todoist task "${foundTask.content}" (ID: $taskId) updated successfully.';
-    stderr.writeln('[TodoistServer] $successMsg');
+        'Todoist task "\${foundTask.content}" (ID: \$taskId) updated successfully.';
+    stderr.writeln('[TodoistServer] \$successMsg');
     return mcp_dart.CallToolResult(
       content: [
         mcp_dart.TextContent(
@@ -753,15 +756,15 @@ Future<mcp_dart.CallToolResult> _handleUpdateTodoistTask({
     );
   } catch (e) {
     final errorMsg =
-        'Error updating Todoist task "${foundTask.content}" (ID: $taskId): ${e.toString()}';
-    stderr.writeln('[TodoistServer] $errorMsg');
+        'Error updating Todoist task "\${foundTask.content}" (ID: \$taskId): \${e.toString()}';
+    stderr.writeln('[TodoistServer] \$errorMsg');
     var apiErrorMsg = errorMsg;
     if (e is todoist.ApiException) {
       stderr.writeln(
-        '[TodoistServer] API Exception Details: Code=${e.code}, Message=${e.message}, Body=${e.body}',
+        '[TodoistServer] API Exception Details: Code=\${e.code}, Message=\${e.message}',
       );
       apiErrorMsg =
-          'API Error updating task "${foundTask.content}" (${e.code}): ${e.message ?? "Unknown API error"}';
+          'API Error updating task "\${foundTask.content}" (\${e.code}): \${e.message ?? "Unknown API error"}';
     }
     return _createErrorResult(apiErrorMsg, taskId: taskId);
   }
@@ -774,9 +777,9 @@ Future<mcp_dart.CallToolResult> _handleGetTodoistTasks({
 }) async {
   final requestId = extra?.sessionId;
   stderr.writeln(
-    '[TodoistServer] Received get_todoist_tasks request ID: $requestId.',
+    '[TodoistServer] Received get_todoist_tasks request ID: \$requestId.',
   );
-  stderr.writeln('[TodoistServer] Args: ${jsonEncode(args)}');
+  stderr.writeln('[TodoistServer] Args: \${jsonEncode(args)}');
 
   final apiClient = _configureApiClient();
   if (apiClient == null) {
@@ -799,27 +802,25 @@ Future<mcp_dart.CallToolResult> _handleGetTodoistTasks({
 
   if (taskIdArg != null && taskIdArg.trim().isNotEmpty) {
     specificTaskId = taskIdArg;
-    stderr.writeln('[TodoistServer] Using specific task ID: $specificTaskId');
+    stderr.writeln('[TodoistServer] Using specific task ID: \$specificTaskId');
   }
 
   if (specificTaskId == null) {
     if (filterArg != null && filterArg.trim().isNotEmpty) {
       effectiveFilter = filterArg;
       stderr.writeln(
-        '[TodoistServer] Using explicit filter: "$effectiveFilter"',
+        '[TodoistServer] Using explicit filter: "\$effectiveFilter"',
       );
     } else if (contentContainsArg != null &&
         contentContainsArg.trim().isNotEmpty) {
-      // Use the API's search capability within the filter if possible
-      effectiveFilter = 'search: "$contentContainsArg"';
+      effectiveFilter = 'search: "\$contentContainsArg"';
       stderr.writeln(
-        '[TodoistServer] Using filter from content_contains: "$effectiveFilter"',
+        '[TodoistServer] Using filter from content_contains: "\$effectiveFilter"',
       );
     } else {
       stderr.writeln(
         '[TodoistServer] No task_id, filter, or content_contains provided. Fetching all active tasks.',
       );
-      // No filter means get all
     }
   }
 
@@ -829,7 +830,7 @@ Future<mcp_dart.CallToolResult> _handleGetTodoistTasks({
 
     if (specificTaskId != null) {
       stderr.writeln(
-        '[TodoistServer] Fetching specific task by ID: $specificTaskId',
+        '[TodoistServer] Fetching specific task by ID: \$specificTaskId',
       );
       try {
         final task = await tasksApi.getTask(specificTaskId);
@@ -837,14 +838,14 @@ Future<mcp_dart.CallToolResult> _handleGetTodoistTasks({
           tasks.add(task);
         } else {
           stderr.writeln(
-            '[TodoistServer] Task with ID $specificTaskId not found by API.',
+            '[TodoistServer] Task with ID \$specificTaskId not found by API.',
           );
           return mcp_dart.CallToolResult(
             content: [
               mcp_dart.TextContent(
                 text: jsonEncode({
                   'status': 'success',
-                  'message': 'Task with ID $specificTaskId not found.',
+                  'message': 'Task with ID \$specificTaskId not found.',
                   'result_list': [],
                 }),
               ),
@@ -854,14 +855,14 @@ Future<mcp_dart.CallToolResult> _handleGetTodoistTasks({
       } catch (e) {
         if (e is todoist.ApiException && e.code == 404) {
           stderr.writeln(
-            '[TodoistServer] Task with ID $specificTaskId not found (404).',
+            '[TodoistServer] Task with ID \$specificTaskId not found (404).',
           );
           return mcp_dart.CallToolResult(
             content: [
               mcp_dart.TextContent(
                 text: jsonEncode({
                   'status': 'success',
-                  'message': 'Task with ID $specificTaskId not found.',
+                  'message': 'Task with ID \$specificTaskId not found.',
                   'result_list': [],
                 }),
               ),
@@ -869,11 +870,11 @@ Future<mcp_dart.CallToolResult> _handleGetTodoistTasks({
           );
         } else {
           stderr.writeln(
-            '[TodoistServer] Error fetching task by ID $specificTaskId: $e',
+            '[TodoistServer] Error fetching task by ID \$specificTaskId: \$e',
           );
           if (e is todoist.ApiException) {
             stderr.writeln(
-              '[TodoistServer] API Exception Details: Code=${e.code}, Message=${e.message}, Body=${e.body}',
+              '[TodoistServer] API Exception Details: Code=\${e.code}, Message=\${e.message}',
             );
           }
           rethrow;
@@ -881,7 +882,7 @@ Future<mcp_dart.CallToolResult> _handleGetTodoistTasks({
       }
     } else {
       stderr.writeln(
-        '[TodoistServer] Calling TasksApi.getTasks with filter: $effectiveFilter',
+        '[TodoistServer] Calling TasksApi.getTasks with filter: \$effectiveFilter',
       );
       final result = await tasksApi.getTasks(filter: effectiveFilter);
       tasks = result ?? [];
@@ -903,55 +904,52 @@ Future<mcp_dart.CallToolResult> _handleGetTodoistTasks({
         ],
       );
     } else {
-      final tasksForAI =
-          tasks
-              .map(
-                (task) => {
-                  'id': task.id,
-                  'content': task.content,
-                  'description': task.description,
-                  'priority': task.priority,
-                  // Access via dueObject
-                  'due_string': task.due?.dueObject?.string,
-                  'due_date': task.due?.dueObject?.date,
-                  'due_datetime': task.due?.dueObject?.datetime,
-                  'labels': task.labels,
-                  'project_id': task.projectId,
-                  'section_id': task.sectionId,
-                  // Remove .toIso8601String()
-                  'created_at': task.createdAt,
-                  'assignee_id': task.assigneeId,
-                  'comment_count': task.commentCount,
-                  'url': task.url,
-                  'is_completed': task.isCompleted,
-                  'parent_id': task.parentId,
-                  'order': task.order,
-                  'duration_amount': task.duration?.durationObject?.amount,
-                  'duration_unit': task.duration?.durationObject?.unit,
-                },
+      final tasksForAI = tasks
+          .map((task) => {
+                'id': task.id,
+                'content': task.content,
+                'description': task.description,
+                'priority': task.priority,
+                'due_string': task.due?.dueObject?.string,
+                'due_date': task.due?.dueObject?.date,
+                'due_datetime': task.due?.dueObject?.datetime,
+                'labels': task.labels,
+                'project_id': task.projectId,
+                'section_id': task.sectionId,
+                'created_at': task.createdAt,
+                'assignee_id': task.assigneeId,
+                'comment_count': task.commentCount,
+                'url': task.url,
+                'is_completed': task.isCompleted,
+                'parent_id': task.parentId,
+                'order': task.order,
+                'duration_amount': task.duration?.durationObject?.amount,
+                'duration_unit': task.duration?.durationObject?.unit,
+              })
+          .toList();
 
       final resultJson = jsonEncode({
         'status': 'success',
-        'message': 'Found ${tasks.length} matching task(s).',
+        'message': 'Found \${tasks.length} matching task(s).',
         'result_list': tasksForAI,
       });
       stderr.writeln(
-        '[TodoistServer] Found ${tasks.length} task(s). Returning JSON list.',
+        '[TodoistServer] Found \${tasks.length} task(s). Returning JSON list.',
       );
       return mcp_dart.CallToolResult(
         content: [mcp_dart.TextContent(text: resultJson)],
       );
     }
   } catch (e) {
-    final errorMsg = 'Error getting Todoist tasks: ${e.toString()}';
-    stderr.writeln('[TodoistServer] $errorMsg');
+    final errorMsg = 'Error getting Todoist tasks: \${e.toString()}';
+    stderr.writeln('[TodoistServer] \$errorMsg');
     var apiErrorMsg = errorMsg;
     if (e is todoist.ApiException) {
       stderr.writeln(
-        '[TodoistServer] API Exception Details: Code=${e.code}, Message=${e.message}, Body=${e.body}',
+        '[TodoistServer] API Exception Details: Code=\${e.code}, Message=\${e.message}',
       );
       apiErrorMsg =
-          'API Error getting tasks (${e.code}): ${e.message ?? "Unknown API error"}';
+          'API Error getting tasks (\${e.code}): \${e.message ?? "Unknown API error"}';
     }
     return _createErrorResult(apiErrorMsg);
   }
@@ -964,9 +962,9 @@ Future<mcp_dart.CallToolResult> _handleDeleteTodoistTask({
 }) async {
   final requestId = extra?.sessionId;
   stderr.writeln(
-    '[TodoistServer] Received delete_todoist_task request ID: $requestId.',
+    '[TodoistServer] Received delete_todoist_task request ID: \$requestId.',
   );
-  stderr.writeln('[TodoistServer] Args: ${jsonEncode(args)}');
+  stderr.writeln('[TodoistServer] Args: \${jsonEncode(args)}');
 
   final apiClient = _configureApiClient();
   if (apiClient == null) {
@@ -990,7 +988,7 @@ Future<mcp_dart.CallToolResult> _handleDeleteTodoistTask({
 
   final foundTask = await _findTaskByName(apiClient, taskName);
   if (foundTask == null || foundTask.id == null) {
-    return _createErrorResult('Task matching "$taskName" not found.');
+    return _createErrorResult('Task matching "\$taskName" not found.');
   }
   final taskId = foundTask.id!;
   final taskContent = foundTask.content ?? '[No Content]';
@@ -1000,19 +998,19 @@ Future<mcp_dart.CallToolResult> _handleDeleteTodoistTask({
     taskIdInt = int.parse(taskId);
   } catch (formatException) {
     return _createErrorResult(
-      'Invalid Task ID format for deletion: "$taskId". Expected an integer.',
+      'Invalid Task ID format for deletion: "\$taskId". Expected an integer.',
       taskId: taskId,
     );
   }
 
   try {
     stderr.writeln(
-      '[TodoistServer] Calling TasksApi.deleteTask for ID: $taskIdInt (Name: "$taskName")...',
+      '[TodoistServer] Calling TasksApi.deleteTask for ID: \$taskIdInt (Name: "\$taskName")...',
     );
     final tasksApi = todoist.TasksApi(apiClient);
-    await tasksApi.deleteTask(taskIdInt); // Pass the parsed int ID
-    final successMsg = 'Successfully deleted task: "$taskContent"';
-    stderr.writeln('[TodoistServer] $successMsg (ID: $taskId)');
+    await tasksApi.deleteTask(taskIdInt);
+    final successMsg = 'Successfully deleted task: "\$taskContent"';
+    stderr.writeln('[TodoistServer] \$successMsg (ID: \$taskId)');
     return mcp_dart.CallToolResult(
       content: [
         mcp_dart.TextContent(
@@ -1026,19 +1024,19 @@ Future<mcp_dart.CallToolResult> _handleDeleteTodoistTask({
     );
   } catch (e) {
     final errorMsg =
-        'Error deleting Todoist task "$taskContent" (ID: $taskId): ${e.toString()}';
-    stderr.writeln('[TodoistServer] $errorMsg');
+        'Error deleting Todoist task "\$taskContent" (ID: \$taskId): \${e.toString()}';
+    stderr.writeln('[TodoistServer] \$errorMsg');
     var apiErrorMsg = errorMsg;
     if (e is todoist.ApiException) {
       stderr.writeln(
-        '[TodoistServer] API Exception Details: Code=${e.code}, Message=${e.message}',
+        '[TodoistServer] API Exception Details: Code=\${e.code}, Message=\${e.message}',
       );
       if (e.code == 404) {
         apiErrorMsg =
-            'API Error deleting task: Task with ID "$taskIdInt" not found (404).';
+            'API Error deleting task: Task with ID "\$taskIdInt" not found (404).';
       } else {
         apiErrorMsg =
-            'API Error deleting task "$taskContent" (${e.code}): ${e.message ?? "Unknown API error"}';
+            'API Error deleting task "\$taskContent" (\${e.code}): \${e.message ?? "Unknown API error"}';
       }
     }
     return _createErrorResult(apiErrorMsg, taskId: taskId);
@@ -1052,9 +1050,9 @@ Future<mcp_dart.CallToolResult> handleCompleteTodoistTask({
 }) async {
   final requestId = extra?.sessionId;
   stderr.writeln(
-    '[TodoistServer] Received complete_todoist_task request ID: $requestId.',
+    '[TodoistServer] Received complete_todoist_task request ID: \$requestId.',
   );
-  stderr.writeln('[TodoistServer] Args: ${jsonEncode(args)}');
+  stderr.writeln('[TodoistServer] Args: \${jsonEncode(args)}');
 
   final apiClient = _configureApiClient();
   if (apiClient == null) {
@@ -1072,26 +1070,32 @@ Future<mcp_dart.CallToolResult> handleCompleteTodoistTask({
   final taskName = args?['task_name'] as String?;
   if (taskName == null || taskName.trim().isEmpty) {
     return _createErrorResult(
-      'Task name (`task_name`) is required for completion.',
-    );
+        'Task name (`task_name`) is required for completion.');
   }
 
   final foundTask = await _findTaskByName(apiClient, taskName);
   if (foundTask == null || foundTask.id == null) {
-    return _createErrorResult('Task matching "$taskName" not found.');
+    return _createErrorResult('Task matching "\$taskName" not found.');
   }
   final taskId = foundTask.id!;
   final taskContent = foundTask.content ?? '[No Content]';
 
+  int? taskIdInt;
+  try {
+    taskIdInt = int.parse(taskId);
+  } catch (_) {
+    return _createErrorResult('Internal error: Parsed Task ID is null.',
+        taskId: taskId);
+  }
+
   try {
     stderr.writeln(
-      '[TodoistServer] Calling TasksApi.closeTask for ID: $taskId (Name: "$taskName")...',
+      '[TodoistServer] Calling TasksApi.closeTask for ID: \$taskIdInt (Name: "\$taskName")...',
     );
     final tasksApi = todoist.TasksApi(apiClient);
-    await tasksApi.closeTask(taskId);
-
-    final successMsg = 'Successfully completed task: "$taskContent"';
-    stderr.writeln('[TodoistServer] $successMsg (ID: $taskId)');
+    await tasksApi.closeTask(taskIdInt);
+    final successMsg = 'Successfully completed task: "\$taskContent"';
+    stderr.writeln('[TodoistServer] \$successMsg (ID: \$taskId)');
     return mcp_dart.CallToolResult(
       content: [
         mcp_dart.TextContent(
@@ -1105,19 +1109,19 @@ Future<mcp_dart.CallToolResult> handleCompleteTodoistTask({
     );
   } catch (e) {
     final errorMsg =
-        'Error completing Todoist task "$taskContent" (ID: $taskId): ${e.toString()}';
-    stderr.writeln('[TodoistServer] $errorMsg');
+        'Error completing Todoist task "\$taskContent" (ID: \$taskId): \${e.toString()}';
+    stderr.writeln('[TodoistServer] \$errorMsg');
     var apiErrorMsg = errorMsg;
     if (e is todoist.ApiException) {
       stderr.writeln(
-        '[TodoistServer] API Exception Details: Code=${e.code}, Message=${e.message}, Body=${e.body}',
+        '[TodoistServer] API Exception Details: Code=\${e.code}, Message=\${e.message}',
       );
       if (e.code == 404) {
         apiErrorMsg =
-            'API Error completing task: Task with ID "$taskId" not found (404).';
+            'API Error completing task: Task with ID "\$taskId" not found (404).';
       } else {
         apiErrorMsg =
-            'API Error completing task "$taskContent" (${e.code}): ${e.message ?? "Unknown API error"}';
+            'API Error completing task "\$taskContent" (\${e.code}): \${e.message ?? "Unknown API error"}';
       }
     }
     return _createErrorResult(apiErrorMsg, taskId: taskId);
@@ -1131,9 +1135,9 @@ Future<mcp_dart.CallToolResult> handleGetTodoistTaskById({
 }) async {
   final requestId = extra?.sessionId;
   stderr.writeln(
-    '[TodoistServer] Received get_todoist_task_by_id request ID: $requestId.',
+    '[TodoistServer] Received get_todoist_task_by_id request ID: \$requestId.',
   );
-  stderr.writeln('[TodoistServer] Args: ${jsonEncode(args)}');
+  stderr.writeln('[TodoistServer] Args: \${jsonEncode(args)}');
 
   final apiClient = _configureApiClient();
   if (apiClient == null) {
@@ -1155,30 +1159,30 @@ Future<mcp_dart.CallToolResult> handleGetTodoistTaskById({
 
   try {
     stderr.writeln(
-      '[TodoistServer] Calling TasksApi.getTask for ID: $taskId...',
+      '[TodoistServer] Calling TasksApi.getTask for ID: \$taskId...',
     );
     final tasksApi = todoist.TasksApi(apiClient);
     final foundTask = await tasksApi.getTask(taskId);
 
     if (foundTask == null) {
-      final errorMsg = 'Task with ID "$taskId" not found.';
-      stderr.writeln('[TodoistServer] $errorMsg');
+      final errorMsg = 'Task with ID "\$taskId" not found.';
+      stderr.writeln('[TodoistServer] \$errorMsg');
       return _createErrorResult(errorMsg);
     }
 
+    // Define successMsg here
+    final successMsg = 'Successfully retrieved task ID "\$taskId".';
     final taskDetails = {
       'id': foundTask.id,
       'content': foundTask.content,
       'description': foundTask.description,
       'priority': foundTask.priority,
-      // Access via dueObject
       'due_string': foundTask.due?.dueObject?.string,
       'due_date': foundTask.due?.dueObject?.date,
       'due_datetime': foundTask.due?.dueObject?.datetime,
       'labels': foundTask.labels,
       'project_id': foundTask.projectId,
       'section_id': foundTask.sectionId,
-      // Remove .toIso8601String()
       'created_at': foundTask.createdAt,
       'assignee_id': foundTask.assigneeId,
       'assigner_id': foundTask.assignerId,
@@ -1187,11 +1191,10 @@ Future<mcp_dart.CallToolResult> handleGetTodoistTaskById({
       'is_completed': foundTask.isCompleted,
       'parent_id': foundTask.parentId,
       'order': foundTask.order,
-      // Access via durationObject
       'duration_amount': foundTask.duration?.durationObject?.amount,
       'duration_unit': foundTask.duration?.durationObject?.unit,
     };
-    stderr.writeln('[TodoistServer] $successMsg');
+    stderr.writeln('[TodoistServer] \$successMsg');
     return mcp_dart.CallToolResult(
       content: [
         mcp_dart.TextContent(
@@ -1205,22 +1208,20 @@ Future<mcp_dart.CallToolResult> handleGetTodoistTaskById({
     );
   } catch (e) {
     final errorMsg =
-        'Error getting Todoist task by ID "$taskId": ${e.toString()}';
-    stderr.writeln('[TodoistServer] $errorMsg');
+        'Error getting Todoist task by ID "\$taskId": \${e.toString()}';
+    stderr.writeln('[TodoistServer] \$errorMsg');
     var apiErrorMsg = errorMsg;
     if (e is todoist.ApiException) {
       stderr.writeln(
-        '[TodoistServer] API Exception Details: Code=${e.code}, Message=${e.message}, Body=${e.body}',
+        '[TodoistServer] API Exception Details: Code=\${e.code}, Message=\${e.message}',
       );
       if (e.code == 404) {
         apiErrorMsg =
-            'API Error getting task: Task with ID "$taskId" not found (404).';
+            'API Error getting task: Task with ID "\$taskId" not found (404).';
       } else {
         apiErrorMsg =
-            'API Error getting task "$taskId" (${e.code}): ${e.message ?? "Unknown API error"}';
+            'API Error getting task "\$taskId" (\${e.code}): \${e.message ?? "Unknown API error"}';
       }
-    } else if (e is ArgumentError) {
-      apiErrorMsg = 'Error: Invalid Task ID format provided: "$taskId".';
     }
     return _createErrorResult(apiErrorMsg);
   }
@@ -1233,9 +1234,9 @@ Future<mcp_dart.CallToolResult> handleGetTaskComments({
 }) async {
   final requestId = extra?.sessionId;
   stderr.writeln(
-    '[TodoistServer] Received get_task_comments request ID: $requestId.',
+    '[TodoistServer] Received get_task_comments request ID: \$requestId.',
   );
-  stderr.writeln('[TodoistServer] Args: ${jsonEncode(args)}');
+  stderr.writeln('[TodoistServer] Args: \${jsonEncode(args)}');
 
   final apiClient = _configureApiClient();
   if (apiClient == null) {
@@ -1258,14 +1259,14 @@ Future<mcp_dart.CallToolResult> handleGetTaskComments({
 
   try {
     stderr.writeln(
-      '[TodoistServer] Calling CommentsApi.getComments for task ID: $taskId...',
+      '[TodoistServer] Calling CommentsApi.getComments for task ID: \$taskId...',
     );
     final commentsApi = todoist.CommentsApi(apiClient);
     final comments = await commentsApi.getComments(taskId: taskId);
 
     if (comments == null || comments.isEmpty) {
-      final msg = 'No comments found for task ID "$taskId".';
-      stderr.writeln('[TodoistServer] $msg');
+      final msg = 'No comments found for task ID "\$taskId".';
+      stderr.writeln('[TodoistServer] \$msg');
       return mcp_dart.CallToolResult(
         content: [
           mcp_dart.TextContent(
@@ -1278,19 +1279,16 @@ Future<mcp_dart.CallToolResult> handleGetTaskComments({
         ],
       );
     } else {
-      final commentList =
-          comments
-              .map(
-                (c) => {
-                  'id': c.id,
-                  'content': c.content,
-                  'posted_at': c.postedAt?.toIso8601String(),
-                },
-              )
-              .toList();
+      final commentList = comments
+          .map((c) => {
+                'id': c.id,
+                'content': c.content,
+                'posted_at': c.postedAt?.toIso8601String(),
+              })
+          .toList();
       final msg =
-          'Successfully retrieved ${commentList.length} comments for task ID "$taskId".';
-      stderr.writeln('[TodoistServer] $msg');
+          'Successfully retrieved \${commentList.length} comments for task ID "\$taskId".';
+      stderr.writeln('[TodoistServer] \$msg');
       return mcp_dart.CallToolResult(
         content: [
           mcp_dart.TextContent(
@@ -1305,19 +1303,19 @@ Future<mcp_dart.CallToolResult> handleGetTaskComments({
     }
   } catch (e) {
     final errorMsg =
-        'Error getting comments for task ID "$taskId": ${e.toString()}';
-    stderr.writeln('[TodoistServer] $errorMsg');
+        'Error getting comments for task ID "\$taskId": \${e.toString()}';
+    stderr.writeln('[TodoistServer] \$errorMsg');
     var apiErrorMsg = errorMsg;
     if (e is todoist.ApiException) {
       stderr.writeln(
-        '[TodoistServer] API Exception Details: Code=${e.code}, Message=${e.message}, Body=${e.body}',
+        '[TodoistServer] API Exception Details: Code=\${e.code}, Message=\${e.message}',
       );
       if (e.code == 404) {
         apiErrorMsg =
-            'API Error getting comments: Task with ID "$taskId" not found (404).';
+            'API Error getting comments: Task with ID "\$taskId" not found (404).';
       } else {
         apiErrorMsg =
-            'API Error getting comments for task "$taskId" (${e.code}): ${e.message ?? "Unknown API error"}';
+            'API Error getting comments for task "\$taskId" (\${e.code}): \${e.message ?? "Unknown API error"}';
       }
     }
     return _createErrorResult(apiErrorMsg);
@@ -1331,9 +1329,9 @@ Future<mcp_dart.CallToolResult> handleCreateTaskComment({
 }) async {
   final requestId = extra?.sessionId;
   stderr.writeln(
-    '[TodoistServer] Received create_task_comment request ID: $requestId.',
+    '[TodoistServer] Received create_task_comment request ID: \$requestId.',
   );
-  stderr.writeln('[TodoistServer] Args: ${jsonEncode(args)}');
+  stderr.writeln('[TodoistServer] Args: \${jsonEncode(args)}');
 
   final apiClient = _configureApiClient();
   if (apiClient == null) {
@@ -1349,61 +1347,52 @@ Future<mcp_dart.CallToolResult> handleCreateTaskComment({
 
   final taskIdArg = args?['task_id'] as String?;
   final taskNameArg = args?['task_name'] as String?;
-  final contentText = args?['content'] as String?; // Renamed to avoid conflict
+  final contentText = args?['content'] as String?;
   String? resolvedTaskId;
   String taskIdentifierDescription = '';
 
   if (taskIdArg != null && taskIdArg.trim().isNotEmpty) {
     resolvedTaskId = taskIdArg;
-    taskIdentifierDescription = 'ID "$resolvedTaskId"';
-    stderr.writeln('[TodoistServer] Using provided task_id: $resolvedTaskId');
+    taskIdentifierDescription = 'ID "\$resolvedTaskId"';
+    stderr.writeln('[TodoistServer] Using provided task_id: \$resolvedTaskId');
   }
 
-  // If task_id wasn't provided, try finding by name
   if (resolvedTaskId == null &&
       taskNameArg != null &&
       taskNameArg.trim().isNotEmpty) {
-    taskIdentifierDescription = 'name "$taskNameArg"';
+    taskIdentifierDescription = 'name "\$taskNameArg"';
     stderr.writeln(
-      '[TodoistServer] task_id not provided, attempting to find task by name: "$taskNameArg"',
+      '[TodoistServer] task_id not provided, attempting to find task by name: "\$taskNameArg"',
     );
     final foundTask = await _findTaskByName(apiClient, taskNameArg);
     if (foundTask != null && foundTask.id != null) {
       resolvedTaskId = foundTask.id!;
       stderr.writeln(
-        '[TodoistServer] Found task ID $resolvedTaskId by name "$taskNameArg".',
+        '[TodoistServer] Found task ID \$resolvedTaskId by name "\$taskNameArg".',
       );
     } else {
-      return _createErrorResult('Task matching name "$taskNameArg" not found.');
+      return _createErrorResult(
+          'Task matching name "\$taskNameArg" not found.');
     }
   }
 
-  // If still no resolved Task ID
   if (resolvedTaskId == null) {
     return _createErrorResult(
       'Task ID (`task_id`) or Task Name (`task_name`) is required to create a comment.',
     );
   }
 
-  // Check for comment content
   if (contentText == null || contentText.trim().isEmpty) {
     return _createErrorResult('Comment content (`content`) cannot be empty.');
   }
 
-// Construct the request object using the Comment model as CreateCommentRequest is missing
-// This assumes Comment model has these fields, adjust if necessary
-  final request = todoist.Comment(
-    taskId: resolvedTaskId,
-    content: contentText,
-  );
-
   try {
     stderr.writeln(
-      '[TodoistServer] Calling CommentsApi.createComment for resolved task ID: $resolvedTaskId (identified by $taskIdentifierDescription)...',
+      '[TodoistServer] Calling CommentsApi.createComment for resolved task ID: \$resolvedTaskId (identified by \$taskIdentifierDescription)...',
     );
     final commentsApi = todoist.CommentsApi(apiClient);
-    final newComment = await commentsApi.createComment(request);
-
+    // Pass only the content string, as the error indicates it expects String, not Comment object
+    final newComment = await commentsApi.createComment(contentText);
     if (newComment == null) {
       return _createErrorResult(
         'API returned null for the newly created comment.',
@@ -1412,9 +1401,9 @@ Future<mcp_dart.CallToolResult> handleCreateTaskComment({
     }
 
     final successMsg =
-        'Comment added successfully to task ID "$resolvedTaskId".';
+        'Comment added successfully to task ID "\$resolvedTaskId".';
     stderr.writeln(
-      '[TodoistServer] $successMsg (Comment ID: ${newComment.id})',
+      '[TodoistServer] \$successMsg (Comment ID: \${newComment.id})',
     );
     return mcp_dart.CallToolResult(
       content: [
@@ -1430,22 +1419,22 @@ Future<mcp_dart.CallToolResult> handleCreateTaskComment({
     );
   } catch (e) {
     final errorMsg =
-        'Error creating comment for task ID "$resolvedTaskId" (identified by $taskIdentifierDescription): ${e.toString()}';
-    stderr.writeln('[TodoistServer] $errorMsg');
+        'Error creating comment for task ID "\$resolvedTaskId" (identified by \$taskIdentifierDescription): \${e.toString()}';
+    stderr.writeln('[TodoistServer] \$errorMsg');
     var apiErrorMsg = errorMsg;
     if (e is todoist.ApiException) {
       stderr.writeln(
-        '[TodoistServer] API Exception Details: Code=${e.code}, Message=${e.message}, Body=${e.body}',
+        '[TodoistServer] API Exception Details: Code=\${e.code}, Message=\${e.message}',
       );
       if (e.code == 404) {
         apiErrorMsg =
-            'API Error creating comment: Task with ID "$resolvedTaskId" not found (404).';
+            'API Error creating comment: Task with ID "\$resolvedTaskId" not found (404).';
       } else if (e.code == 400) {
         apiErrorMsg =
-            'API Error creating comment: Invalid request for task "$resolvedTaskId" (400 - check parameters).';
+            'API Error creating comment: Invalid request for task "\$resolvedTaskId" (400 - check parameters).';
       } else {
         apiErrorMsg =
-            'API Error creating comment for task "$resolvedTaskId" (${e.code}): ${e.message ?? "Unknown API error"}';
+            'API Error creating comment for task "\$resolvedTaskId" (\${e.code}): \${e.message ?? "Unknown API error"}';
       }
     }
     return _createErrorResult(apiErrorMsg, taskId: resolvedTaskId);
