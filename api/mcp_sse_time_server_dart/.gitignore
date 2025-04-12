@@ -1,0 +1,18 @@
+# Dart / Pub
+.dart_tool/
+.packages
+build/
+*.lock
+
+# Docker
+docker-compose.yml # If used locally
+Dockerfile # If built elsewhere
+
+# IDE specific
+.idea/
+.vscode/
+*.iml
+
+# OS specific
+.DS_Store
+Thumbs.db
