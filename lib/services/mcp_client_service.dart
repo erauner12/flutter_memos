@@ -914,10 +914,11 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
                 ),
               )
               .toList();
-      final Content cleanQueryContent = Content('user', [TextPart(query)]);
+      // FIX: Pass the 'query' string as the first argument, not a Content object cast to String.
+      // The GeminiService.generateContent method expects the prompt string and the history *before* the prompt.
       firstResponse = await geminiService.generateContent(
-        cleanQueryContent as String,
-        cleanHistory,
+        query, // Pass the original query string
+        cleanHistory, // Pass the history *before* this query
         tools: allAvailableTools.isNotEmpty ? allAvailableTools : null,
       );
     } catch (e) {
@@ -945,15 +946,9 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
           "MCP ProcessQuery: Error - Tool '\$toolName' requested by AI not found in tool map.",
         );
         try {
+          // FIX: Pass a user message string and the correct history to generateContent
           final errorFollowUp = await geminiService.generateContent(
-            Content('user', [
-              TextPart(
-                    "The tool '\$toolName' you tried to call is not available. Please inform the user.",
-              ),
-                ])
-                as String,
-            // Ensure history includes the model's function call attempt
-            // MODIFY: Print JSON representation for Content object
+            "The tool '\$toolName' you tried to call is not available. Please inform the user.",
             (history.map((c) => c).toList() +
                 [if (candidate?.content != null) candidate!.content]),
             tools: null,
@@ -989,15 +984,9 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
           "MCP ProcessQuery: Error - Client for server '\$targetServerId' (tool '\$toolName') not found or not connected.",
         );
         try {
+          // FIX: Pass a user message string and the correct history to generateContent
           final errorFollowUp = await geminiService.generateContent(
-            Content('user', [
-              TextPart(
-                    "The server responsible for the tool '\$toolName' is currently unavailable. Please inform the user.",
-              ),
-                ])
-                as String,
-            // Ensure history includes the model's function call attempt
-            // MODIFY: Print JSON representation for Content object
+            "The server responsible for the tool '\$toolName' is currently unavailable. Please inform the user.",
             (history.map((c) => c).toList() +
                 [if (candidate?.content != null) candidate!.content]),
             tools: null,
@@ -1085,8 +1074,7 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
           "MCP ProcessQuery: Making second Gemini call with tool response...",
         );
         final secondResponse = await geminiService.generateContent(
-          // Send an empty user message to trigger processing of the function response
-          Content('user', []) as String,
+          '', // FIX: Pass an empty string prompt instead of a Content object cast to string.
           historyForSecondCall,
           tools: null,
         );
@@ -1113,15 +1101,9 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
           "MCP ProcessQuery: Error calling tool '\$toolName' on server '\$targetServerId': \$e",
         );
         try {
+          // FIX: Pass a user message string and the correct history to generateContent
           final errorFollowUp = await geminiService.generateContent(
-            Content('user', [
-              TextPart(
-                    "Executing the tool '\$toolName' failed with error: \${e.toString()}. Please inform the user.",
-              ),
-                ])
-                as String,
-            // Ensure history includes the model's function call attempt
-            // CHANGE 5: Fix debugPrint for Content object by using toJson()
+            "Executing the tool '\$toolName' failed with error: \${e.toString()}. Please inform the user.",
             (history.map((c) => c).toList() +
                 [if (candidate?.content != null) candidate!.content]),
             tools: null,
