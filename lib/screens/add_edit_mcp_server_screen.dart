@@ -60,7 +60,7 @@ class _AddEditMcpServerScreenState
       _nameController.text = server.name;
       // Always load host and port regardless of type
       _hostController.text =
-          server.host; // Direct assignment, host is non-nullable
+          server.host ?? ''; // Provide default empty string if host is null
       _portController.text = server.port.toString();
       _commandController.text =
           server.command; // Always load, might be hidden later
