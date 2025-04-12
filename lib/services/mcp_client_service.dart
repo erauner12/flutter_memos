@@ -129,7 +129,7 @@ class GoogleMcpClient {
   final mcp_lib.Client mcpClient;
   final GenerativeModel? model; // google_generative_ai.GenerativeModel
   // Use the Transport type if needed via mcp_lib
-  transport_lib.Transport? _transport;
+  transport_lib.Transport? _transport; // Use mcp_lib.Transport
   List<Tool> _tools = []; // google_generative_ai.Tool
   bool _isConnected = false;
   Function(String serverId, String errorMsg)? _onError;
@@ -186,26 +186,22 @@ class GoogleMcpClient {
           );
         }
 
-        // --- Start Environment Merging ---
-        // Create a mutable map starting with the parent environment.
-        final Map<String, String> mergedEnvironment = Map.from(
-          io.Platform.environment,
-        );
-        // Add/overwrite with custom environment variables.
-        mergedEnvironment.addAll(config.customEnvironment);
+        // --- Environment Handling ---
+        // Pass the custom environment directly. Process.start's default
+        // includeParentEnvironment=true should merge it with the parent.
+        final Map<String, String> customEnvironment = config.customEnvironment;
         debugPrint(
-          "GoogleMcpClient [\${config.id}]: Merged environment prepared: \${mergedEnvironment.keys.join(',')}",
+          "GoogleMcpClient [\${config.id}]: Preparing custom environment: \${customEnvironment.keys.join(',')}",
         );
-        // --- End Environment Merging ---
+        // --- End Environment Handling ---
 
         // MODIFY: Use library prefix for Stdio types
         final serverParams = mcp_lib.StdioServerParameters(
           command: config.command,
           args: config.args.split(' '),
-          // Pass the merged environment map
-          environment: mergedEnvironment,
-          // Explicitly set includeParentEnvironment to false as we provide the merged map
-          includeParentEnvironment: false,
+          // Pass the custom environment map directly
+          environment: customEnvironment.isNotEmpty ? customEnvironment : null,
+          // Removed: Invalid includeParentEnvironment parameter
           stderrMode: io.ProcessStartMode.normal,
         );
 
@@ -873,15 +869,14 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
     if (geminiService == null ||
         !geminiService.isInitialized ||
         geminiService.model == null) {
-      final errorMsg =
-          geminiService?.initializationError ??
-          'Gemini service is null or model is missing.';
       debugPrint(
-        "MCP ProcessQuery: Gemini service not available or not initialized. Error: \$errorMsg",
+        "MCP ProcessQuery: Gemini service not available or not initialized. Error: \${geminiService?.initializationError ?? 'Gemini service is null or model is missing.'}",
       );
       return McpProcessResult(
         finalModelContent: Content('model', [
-          TextPart("The AI service is not available: \$errorMsg"),
+          TextPart(
+            "The AI service is not available: \${geminiService?.initializationError ?? 'Gemini service is null or model is missing.'}",
+          ),
         ]),
       );
     }
@@ -939,8 +934,6 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
                 ),
               )
               .toList();
-      // FIX: Pass the 'query' string as the first argument, not a Content object cast to String.
-      // The GeminiService.generateContent method expects the prompt string and the history *before* the prompt.
       firstResponse = await geminiService.generateContent(
         query, // Pass the original query string
         cleanHistory, // Pass the history *before* this query
@@ -971,7 +964,6 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
           "MCP ProcessQuery: Error - Tool '\$toolName' requested by AI not found in tool map.",
         );
         try {
-          // FIX: Pass a user message string and the correct history to generateContent
           final errorFollowUp = await geminiService.generateContent(
             "The tool '\$toolName' you tried to call is not available. Please inform the user.",
             (history.map((c) => c).toList() +
@@ -1009,7 +1001,6 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
           "MCP ProcessQuery: Error - Client for server '\$targetServerId' (tool '\$toolName') not found or not connected.",
         );
         try {
-          // FIX: Pass a user message string and the correct history to generateContent
           final errorFollowUp = await geminiService.generateContent(
             "The server responsible for the tool '\$toolName' is currently unavailable. Please inform the user.",
             (history.map((c) => c).toList() +
@@ -1041,12 +1032,10 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
           );
         }
       }
-      // MODIFY: Use library prefix
       mcp_lib.CallToolResult toolResult;
       String toolResultString = '';
       Map<String, dynamic> toolResultJson = {};
       try {
-        // MODIFY: Use library prefix
         final params = mcp_lib.CallToolRequestParams(
           name: toolName,
           arguments: toolArgs.map((key, value) => MapEntry(key, value)),
@@ -1054,7 +1043,6 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
         toolResult = await targetClient.callTool(params);
         toolResultString =
             toolResult.content
-                // MODIFY: Use library prefix
                 .whereType<mcp_lib.TextContent>()
                 .map((c) => c.text)
                 .join('\n')
@@ -1099,7 +1087,7 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
           "MCP ProcessQuery: Making second Gemini call with tool response...",
         );
         final secondResponse = await geminiService.generateContent(
-          '', // FIX: Pass an empty string prompt instead of a Content object cast to string.
+          '', // Pass an empty string prompt
           historyForSecondCall,
           tools: null,
         );
@@ -1108,7 +1096,6 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
             Content('model', [
               TextPart("Tool '\$toolName' executed. \$toolResultString"),
             ]);
-        // CHANGE 4: Fix debugPrint for final Content object by extracting text parts
         debugPrint(
           "MCP ProcessQuery: Final response to UI (after tool call): \"\${finalContent.parts.whereType<TextPart>().map((p) => p.text).join('')}\"",
         );
@@ -1126,7 +1113,6 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
           "MCP ProcessQuery: Error calling tool '\$toolName' on server '\$targetServerId': \$e",
         );
         try {
-          // FIX: Pass a user message string and the correct history to generateContent
           final errorFollowUp = await geminiService.generateContent(
             "Executing the tool '\$toolName' failed with error: \${e.toString()}. Please inform the user.",
             (history.map((c) => c).toList() +
@@ -1174,7 +1160,6 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
           Content('model', [
             TextPart("Sorry, I couldn't generate a response."),
           ]);
-      // CHANGE 6: Fix debugPrint for direct Content object by extracting text parts
       debugPrint(
         "MCP ProcessQuery: Final response to UI (direct): \"\${directContent.parts.whereType<TextPart>().map((p) => p.text).join('')}\"",
       );
