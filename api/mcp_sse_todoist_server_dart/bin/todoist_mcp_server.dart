@@ -42,7 +42,8 @@ Future<bool> _checkApiHealth(todoist.ApiClient client) async {
   stderr.writeln('[TodoistServer] Performing API health check...');
   try {
     final projectsApi = todoist.ProjectsApi(client);
-    await projectsApi.getProjects(); // Simple call to check connectivity/auth
+    await projectsApi
+        .getAllProjects(); // Simple call to check connectivity/auth
     stderr.writeln('[TodoistServer] API health check successful.');
     return true;
   } catch (e) {
@@ -55,7 +56,6 @@ Future<bool> _checkApiHealth(todoist.ApiClient client) async {
     return false;
   }
 }
-
 
 /// Finds a single active Todoist task by its content (case-insensitive contains).
 /// Returns the first match found, or null if no match.
@@ -71,16 +71,13 @@ Future<todoist.Task?> _findTaskByName(
   stderr.writeln('[TodoistServer] Searching for task containing: "\$taskName"');
   try {
     final tasksApi = todoist.TasksApi(client);
-    // Fetch all active tasks - consider adding a filter if performance becomes an issue
-    // The API filter might be more efficient if applicable: filter: 'search: "\$taskName"'
-    final allTasks = await tasksApi.getTasks();
+    final allTasks = await tasksApi.getActiveTasks();
     if (allTasks == null) {
       stderr.writeln('[TodoistServer] Received null task list from API.');
       return null;
     }
 
     final matches = allTasks.where((task) {
-      // Handle potential null content
       return task.content?.toLowerCase().contains(taskName.toLowerCase()) ??
           false;
     }).toList();
@@ -480,7 +477,6 @@ Future<void> main(List<String> args) async {
               '[TodoistServer][sse] Error handling request \${request.uri}: \$e\n\$s',
             );
             try {
-              // Check if response is already closed or headers sent
               if (request.response.connectionInfo != null) {
                 request.response.statusCode = HttpStatus.internalServerError;
                 request.response.write('Internal Server Error');
@@ -523,7 +519,6 @@ mcp_dart.CallToolResult _createErrorResult(String message, {String? taskId}) {
     isError: true,
   );
 }
-
 
 // Handler function for the 'create_todoist_task' tool
 Future<mcp_dart.CallToolResult> _handleCreateTodoistTask({
@@ -574,7 +569,6 @@ Future<mcp_dart.CallToolResult> _handleCreateTodoistTask({
     description: description,
     projectId: projectId,
     sectionId: sectionId,
-    // Provide default empty list if labels is null
     labels: labels ?? const [],
     priority: priority,
     dueString: dueString,
@@ -617,7 +611,6 @@ Future<mcp_dart.CallToolResult> _handleCreateTodoistTask({
         'created_at': newTask.createdAt,
       }
     };
-    // Use the resultPayload map here
     return mcp_dart.CallToolResult(
       content: [mcp_dart.TextContent(text: jsonEncode(resultPayload))],
     );
@@ -633,7 +626,6 @@ Future<mcp_dart.CallToolResult> _handleCreateTodoistTask({
     }
     return _createErrorResult(apiErrorMsg);
   }
-  // Add this return in case the try block completes but newTask was null
   return _createErrorResult(
       'API call succeeded but returned a null task object.');
 }
@@ -692,7 +684,6 @@ Future<mcp_dart.CallToolResult> _handleUpdateTodoistTask({
   final request = todoist.UpdateTaskRequest(
     content: contentText,
     description: description,
-    // Provide default empty list if labels is null
     labels: labels ?? const [],
     priority: priority,
     dueString: dueString,
@@ -833,7 +824,7 @@ Future<mcp_dart.CallToolResult> _handleGetTodoistTasks({
         '[TodoistServer] Fetching specific task by ID: \$specificTaskId',
       );
       try {
-        final task = await tasksApi.getTask(specificTaskId);
+        final task = await tasksApi.getActiveTask(int.parse(specificTaskId));
         if (task != null) {
           tasks.add(task);
         } else {
@@ -882,9 +873,9 @@ Future<mcp_dart.CallToolResult> _handleGetTodoistTasks({
       }
     } else {
       stderr.writeln(
-        '[TodoistServer] Calling TasksApi.getTasks with filter: \$effectiveFilter',
+        '[TodoistServer] Calling TasksApi.getActiveTasks with filter: \$effectiveFilter',
       );
-      final result = await tasksApi.getTasks(filter: effectiveFilter);
+      final result = await tasksApi.getActiveTasks(filter: effectiveFilter);
       tasks = result ?? [];
     }
 
@@ -1159,10 +1150,10 @@ Future<mcp_dart.CallToolResult> handleGetTodoistTaskById({
 
   try {
     stderr.writeln(
-      '[TodoistServer] Calling TasksApi.getTask for ID: \$taskId...',
+      '[TodoistServer] Calling TasksApi.getActiveTask for ID: \$taskId...',
     );
     final tasksApi = todoist.TasksApi(apiClient);
-    final foundTask = await tasksApi.getTask(taskId);
+    final foundTask = await tasksApi.getActiveTask(int.parse(taskId));
 
     if (foundTask == null) {
       final errorMsg = 'Task with ID "\$taskId" not found.';
@@ -1170,7 +1161,6 @@ Future<mcp_dart.CallToolResult> handleGetTodoistTaskById({
       return _createErrorResult(errorMsg);
     }
 
-    // Define successMsg here
     final successMsg = 'Successfully retrieved task ID "\$taskId".';
     final taskDetails = {
       'id': foundTask.id,
@@ -1259,10 +1249,10 @@ Future<mcp_dart.CallToolResult> handleGetTaskComments({
 
   try {
     stderr.writeln(
-      '[TodoistServer] Calling CommentsApi.getComments for task ID: \$taskId...',
+      '[TodoistServer] Calling CommentsApi.getAllComments for task ID: \$taskId...',
     );
     final commentsApi = todoist.CommentsApi(apiClient);
-    final comments = await commentsApi.getComments(taskId: taskId);
+    final comments = await commentsApi.getAllComments(taskId: taskId);
 
     if (comments == null || comments.isEmpty) {
       final msg = 'No comments found for task ID "\$taskId".';
@@ -1391,7 +1381,6 @@ Future<mcp_dart.CallToolResult> handleCreateTaskComment({
       '[TodoistServer] Calling CommentsApi.createComment for resolved task ID: \$resolvedTaskId (identified by \$taskIdentifierDescription)...',
     );
     final commentsApi = todoist.CommentsApi(apiClient);
-    // Pass only the content string, as the error indicates it expects String, not Comment object
     final newComment = await commentsApi.createComment(contentText);
     if (newComment == null) {
       return _createErrorResult(
