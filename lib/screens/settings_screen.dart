@@ -290,6 +290,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       builder:
           (BuildContext context) => CupertinoActionSheet(
             title: Text(server.name ?? server.serverUrl),
+            // Update message based on connection type - ALWAYS SHOW HOST/PORT
+            message: Text(
+              server.serverUrl,
+              style: const TextStyle(fontSize: 13),
+            ),
             actions: <CupertinoActionSheetAction>[
               CupertinoActionSheetAction(
                 child: const Text('Edit'),
@@ -400,16 +405,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
       // Build subtitle text including error message if present
       String subtitleText;
-      if (server.connectionType == McpConnectionType.tcp) {
-        subtitleText =
-            '${server.host ?? 'No Host'}:${server.port ?? 'No Port'}';
-      } else {
-        // Stdio
-        subtitleText = '${server.command} ${server.args}'.trim();
-        if (subtitleText.isEmpty) {
-          subtitleText = 'Stdio (Local)'; // Placeholder if command/args empty
-        }
-      }
+      subtitleText = '${server.host}:${server.port}'; // Always show host:port
       if (error != null && status == McpConnectionStatus.error) {
         // Limit error message length for display
         final displayError =
@@ -493,16 +489,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       builder:
           (BuildContext context) => CupertinoActionSheet(
             title: Text(server.name),
-            // Update message based on connection type
+            // Update message based on connection type - ALWAYS SHOW HOST/PORT
             message: Text(
-              server.connectionType == McpConnectionType.tcp
-                  ? '${server.host ?? 'No Host'}:${server.port ?? 'No Port'}'
-                  : ('${server.command} ${server.args}'.trim().isEmpty
-                      ? 'Stdio (Local)'
-                      : '${server.command} ${server.args}'.trim()),
+              '${server.host}:${server.port}',
               style: const TextStyle(
                 fontSize: 13,
-              ), // Slightly larger for readability
+              ),
             ),
             actions: <CupertinoActionSheetAction>[
               CupertinoActionSheetAction(

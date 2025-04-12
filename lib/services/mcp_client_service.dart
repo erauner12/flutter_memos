@@ -1,13 +1,12 @@
 import 'dart:async';
 import 'dart:convert'; // For jsonEncode/Decode if needed for tool results
-import 'dart:io'; // Needed for Platform.environment and ProcessStartMode
 
 import 'package:collection/collection.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_memos/models/mcp_server_config.dart';
 import 'package:flutter_memos/providers/settings_provider.dart'; // To get server list and Gemini key
 import 'package:flutter_memos/services/gemini_service.dart'; // Import GeminiService
-import 'package:flutter_memos/services/mcp_tcp_transport.dart'; // Import the new TCP transport
+import 'package:flutter_memos/services/mcp_sse_client_transport.dart'; // Import the new SSE transport
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_generative_ai/google_generative_ai.dart'; // Import for Gemini types
 // Import the rest with a prefix
@@ -54,9 +53,9 @@ extension SchemaExtension on Schema {
         final enumValues = (json['enum'] as List<dynamic>?)?.cast<String>();
         return enumValues != null
             ? Schema.enumString(
-              enumValues: enumValues,
-              description: description,
-            )
+                enumValues: enumValues,
+                description: description,
+              )
             : Schema.string(description: description);
       case 'number':
       case 'integer': // Treat integer as number for Gemini
@@ -135,12 +134,12 @@ class GoogleMcpClient {
   List<Tool> get availableTools => List.unmodifiable(_tools);
 
   GoogleMcpClient(this.serverId, this.model)
-    : mcp = mcp_dart.Client(
-        const mcp_dart.Implementation(
-          name: "flutter-memos-mcp-client",
-          version: "1.0.0",
-        ),
-      );
+      : mcp = mcp_dart.Client(
+          const mcp_dart.Implementation(
+            name: "flutter-memos-mcp-client",
+            version: "1.0.0",
+          ),
+        );
 
   void setupCallbacks({
     Function(String serverId, String errorMsg)? onError,
@@ -152,56 +151,30 @@ class GoogleMcpClient {
 
   // Modified to accept McpServerConfig
   Future<void> connectToServer(
-    McpServerConfig config, {
-    required Map<String, String> environmentForStdio,
-  }) async {
+    McpServerConfig config,
+  ) async {
     if (_isConnected) return;
     _isConnected = false; // Reset connection status at the start
     _tools = []; // Clear tools
 
     debugPrint(
-      "GoogleMcpClient [${config.id}]: Attempting connection using ${config.connectionType.name}...",
+      "GoogleMcpClient [${config.id}]: Attempting SSE connection to manager at ${config.host}:${config.port}...",
     );
 
     try {
-      // --- Instantiate the correct transport based on config ---
-      if (config.connectionType == McpConnectionType.tcp) {
-        if (config.host == null || config.port == null) {
-          throw ArgumentError(
-            "Host and Port must be provided for TCP connection.",
-          );
-        }
-        debugPrint(
-          "GoogleMcpClient [${config.id}]: Creating TcpClientTransport for ${config.host}:${config.port}",
-        );
-        // _transport is now correctly typed as Transport?
-        _transport = TcpClientTransport(host: config.host!, port: config.port!);
-      } else {
-        // Default to stdio
-        if (config.command.trim().isEmpty) {
-          throw ArgumentError(
-            "MCP command cannot be empty for stdio connection.",
-          );
-        }
-        debugPrint(
-          "GoogleMcpClient [${config.id}]: Creating StdioClientTransport for command: ${config.command}",
-        );
-        final argsList =
-            config.args.split(' ').where((s) => s.isNotEmpty).toList();
-        // _transport is now correctly typed as Transport?
-        _transport = mcp_dart.StdioClientTransport(
-          mcp_dart.StdioServerParameters(
-            command: config.command,
-            args: argsList,
-            environment: environmentForStdio, // Use passed environment
-            stderrMode: ProcessStartMode.normal, // Keep stderr piped
-          ),
-        );
-      }
+      // --- Always use SseClientTransport ---
+      debugPrint(
+        "GoogleMcpClient [${config.id}]: Creating SseClientTransport for manager at ${config.host}:${config.port}",
+      );
+      _transport = SseClientTransport(
+        managerHost: config.host!,
+        managerPort: config.port ?? 80,
+        // ssePath: '/sse', // Use default or make configurable if needed
+      );
 
       // --- Setup common callbacks ---
       _transport!.onerror = (error) {
-        final errorMsg = "MCP Transport error [${config.id}]: $error";
+        final errorMsg = "MCP SSE Transport error [${config.id}]: $error";
         debugPrint(errorMsg);
         _isConnected = false;
         _onError?.call(config.id, errorMsg);
@@ -209,7 +182,7 @@ class GoogleMcpClient {
       };
 
       _transport!.onclose = () {
-        debugPrint("MCP Transport closed [${config.id}].");
+        debugPrint("MCP SSE Transport closed [${config.id}].");
         _isConnected = false;
         _onClose?.call(config.id);
         _transport = null;
@@ -219,31 +192,19 @@ class GoogleMcpClient {
       // --- Connect using the chosen transport ---
       await mcp.connect(_transport!);
       _isConnected = true;
-      debugPrint("GoogleMcpClient [${config.id}]: Connected successfully.");
-      // *** ADD LOGGING HERE ***
+      debugPrint("GoogleMcpClient [${config.id}]: SSE Transport connected successfully.");
       debugPrint(
         "GoogleMcpClient [${config.id}]: Connection successful, proceeding to fetch tools...",
       );
       await _fetchTools();
     } catch (e) {
-      // Construct error string directly for logging and StateError
       String specificErrorDetails = "$e";
-      if (e is SocketException) {
-        specificErrorDetails =
-            "SocketException: ${e.message} (OS Error: ${e.osError?.message}, Code: ${e.osError?.errorCode})";
-      } else if (e is ArgumentError) {
-        specificErrorDetails = "ArgumentError: ${e.message}";
-      } else if (e is mcp_dart.McpError) {
-        specificErrorDetails = "McpError: ${e.message} (Code: ${e.code})";
-      }
-      // Log the constructed details
       debugPrint(
-        "GoogleMcpClient [${config.id}]: Failed to connect: $specificErrorDetails",
+        "GoogleMcpClient [${config.id}]: Failed to establish SSE connection: $specificErrorDetails",
       );
       _isConnected = false;
-      // Rethrow using the constructed details
       throw StateError(
-        "Connection failed for ${config.name} [${config.id}]: $specificErrorDetails",
+        "SSE Connection failed for ${config.name} [${config.id}]: $specificErrorDetails",
       );
     }
   }
@@ -420,7 +381,7 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
     );
 
     serverListSubscription = ref.listen<
-      List<McpServerConfig>
+        List<McpServerConfig>
     >(mcpServerListProvider, (previousList, newList) {
       debugPrint(
         "McpClientNotifier: Server list updated in settings. Syncing connections...",
@@ -466,46 +427,10 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
       return;
     }
 
-    // Validate config based on type BEFORE attempting connection
-    if (serverConfig.connectionType == McpConnectionType.stdio &&
-        serverConfig.command.trim().isEmpty) {
-      updateServerState(
-        serverId,
-        McpConnectionStatus.error,
-        errorMsg: "Server command is empty for stdio type.",
-      );
-      return;
-    } else if (serverConfig.connectionType == McpConnectionType.tcp &&
-        (serverConfig.host == null || serverConfig.port == null)) {
-      updateServerState(
-        serverId,
-        McpConnectionStatus.error,
-        errorMsg: "Host and Port are required for TCP type.",
-      );
-      return;
-    }
-
     updateServerState(serverId, McpConnectionStatus.connecting);
     GoogleMcpClient? newClientInstance;
 
     try {
-      // Fetch Todoist token using the provider
-      final todoistApiToken = ref.read(todoistApiKeyProvider);
-      // Prepare environment, including custom vars from config AND the token
-      final Map<String, String> environmentToPass = {
-        ...serverConfig.customEnvironment,
-        if (todoistApiToken.isNotEmpty) 'TODOIST_API_TOKEN': todoistApiToken,
-      };
-      if (kDebugMode) {
-        final safeEnvLog = Map.from(environmentToPass);
-        if (safeEnvLog.containsKey('TODOIST_API_TOKEN')) {
-          safeEnvLog['TODOIST_API_TOKEN'] = '********';
-        }
-        debugPrint(
-          "MCP [$serverId]: Environment prepared for stdio: $safeEnvLog",
-        );
-      }
-
       // Create the client instance
       newClientInstance = GoogleMcpClient(
         serverId,
@@ -517,9 +442,9 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
         onClose: handleClientClose,
       );
 
+      // Pass config directly, connectToServer now expects manager host/port
       await newClientInstance.connectToServer(
         serverConfig,
-        environmentForStdio: environmentToPass,
       );
 
       if (newClientInstance.isConnected) {
@@ -986,28 +911,21 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
               "MCP ProcessQuery [update_todoist_task]: Constructed summaryText: \"$summaryText\"",
             );
           } else if (toolName == 'get_todoist_tasks') {
-            // Use the message if available, otherwise generate a generic one
             summaryText = message ?? "Tasks retrieved successfully.";
-            // Check if a specific task was found (indicated by taskId in the simplified result)
             if (taskId != null) {
-              // Try to get the task content from the *original* full JSON result if possible
-              // This assumes the server might return more details than just the summary message
               final taskDetails =
                   (toolResultJson['result_text'] as String?) ??
                   (toolResultJson['message'] as String?);
               if (taskDetails != null && taskDetails.isNotEmpty) {
-                // If we have details, use them. Limit length for display.
                 final displayDetails =
                     taskDetails.length > 100
                         ? '${taskDetails.substring(0, 97)}...'
                         : taskDetails;
                 summaryText = 'Found task (ID: $taskId): "$displayDetails"';
               } else {
-                // Fallback if no specific details found in the result
                 summaryText = 'Found task with ID: $taskId.';
               }
             } else {
-              // If no specific task ID, use the general message or count
               final taskList = toolResultJson['result_list'] as List?;
               if (taskList != null) {
                 summaryText = message ?? "Found ${taskList.length} tasks.";
@@ -1117,7 +1035,7 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
           ]);
 
       debugPrint(
-        "MCP ProcessQuery: Final response to UI (direct): \"${directContent.parts.whereType<TextPart>().map((p) => p.text).join('')}\"",
+        "MCP ProcessQuery: Final response to UI (direct): \"\${directContent.parts.whereType<TextPart>().map((p) => p.text).join('')}\"",
       );
 
       return McpProcessResult(finalModelContent: directContent);
@@ -1139,5 +1057,5 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
 // The main provider for accessing the MCP client state and notifier
 final mcpClientProvider =
     StateNotifierProvider<McpClientNotifier, McpClientState>((ref) {
-      return McpClientNotifier(ref);
-    });
+  return McpClientNotifier(ref);
+});
