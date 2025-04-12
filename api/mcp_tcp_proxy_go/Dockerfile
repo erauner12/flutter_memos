@@ -116,6 +116,9 @@ RUN chown -R appuser:appgroup /app && \
 ENV PROXY_PORT=8999
 EXPOSE $PROXY_PORT
 
+# Add app directories to PATH for the appuser
+ENV PATH="/app:/app/bin:${PATH}"
+
 # Switch to the non-root user
 USER appuser
 
