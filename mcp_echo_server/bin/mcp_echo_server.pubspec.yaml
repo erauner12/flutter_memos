@@ -1,0 +1,10 @@
+name: mcp_echo_server
+description: Stdio MCP server for echoing messages.
+publish_to: none
+
+environment:
+  sdk: '>=3.0.0 <4.0.0' # Match project
+
+dependencies:
+  mcp_dart: ^0.3.6 # Use the same version as your main project
+  # No other dependencies likely needed for echo server

@@ -1,0 +1,21 @@
+name: todoist_mcp_server
+description: Stdio MCP server for Todoist integration.
+publish_to: none # Prevent accidental publishing
+
+environment:
+  sdk: '>=3.0.0 <4.0.0' # Match project
+
+dependencies:
+  # Direct dependencies of todoist_mcp_server.dart and its imports
+  mcp_dart: ^0.3.6 # Use the same version as your main project
+  http: ^1.2.1
+  intl: ^0.19.0
+  # Add collection if todoist_api_service uses it
+  # collection: ^1.18.0 # Example, check if needed
+
+# If todoist_api or the service were local packages, override here:
+# dependency_overrides:
+#   todoist_api:
+#     path: ../todoist_api # Adjust path relative to this pubspec's location during build
+#   # You might need to structure differently if the service itself isn't a package
+#   # For now, assume service code is copied directly in Dockerfile

@@ -1,33 +1,49 @@
-# Stage 1: Compile Dart stdio servers for Linux
+# Stage 1: Compile Dart stdio servers for Linux (Isolated)
 FROM dart:stable AS dart-builder
 
-WORKDIR /app
-
-# Install certs if needed for pub get (though less likely than in previous attempts)
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
-
-# Copy only necessary Dart project files
-COPY pubspec.* ./
-COPY lib ./lib
-COPY bin ./bin
-COPY mcp_echo_server ./mcp_echo_server
-# Copy the todoist API dependency if it's separate
-# COPY todoist_api ./todoist_api # Uncomment if needed
-
-# Get dependencies
-RUN dart pub get --verbose
-
-# Create output directory
+# Create a common output directory early
 RUN mkdir /output
 
-# Compile Dart servers for Linux target
+WORKDIR /build
+
+# Install certs just in case
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
+
+# --- Build Todoist Server ---
+WORKDIR /build/todoist_server
+# Copy minimal pubspec for todoist server (adjust path relative to context root)
+COPY bin/todoist_mcp_server.pubspec.yaml ./pubspec.yaml
+# Copy source code needed by todoist server (adjust paths relative to context root)
+COPY bin/todoist_mcp_server.dart ./bin/
+COPY lib/services/todoist_api_service.dart ./lib/services/todoist_api_service.dart # Copy specific service file
+# Copy the generated Todoist API client (adjust path relative to context root)
+COPY todoist_api ./todoist_api
+# Copy any other direct lib dependencies if needed (adjust paths relative to context root)
+# COPY lib/models/some_model.dart ./lib/models/ # Example
+
+# Get dependencies for Todoist server ONLY
+RUN dart pub get --verbose
+# Compile Todoist Server
 RUN dart compile exe bin/todoist_mcp_server.dart -o /output/todoist_mcp_server_executable
-RUN dart compile exe mcp_echo_server/bin/mcp_echo_server.dart -o /output/mcp_echo_server_executable
+
+
+# --- Build Echo Server ---
+WORKDIR /build/echo_server
+# Copy minimal pubspec for echo server (adjust path relative to context root)
+COPY mcp_echo_server/bin/mcp_echo_server.pubspec.yaml ./pubspec.yaml
+# Copy source code needed by echo server (adjust path relative to context root)
+COPY mcp_echo_server/bin/mcp_echo_server.dart ./bin/
+# Copy mcp_dart dependency if needed locally (usually not)
+# COPY ../mcp_dart ./packages/mcp_dart # Example if using path dependency
+
+# Get dependencies for Echo server ONLY
+RUN dart pub get --verbose
+# Compile Echo Server
+RUN dart compile exe bin/mcp_echo_server.dart -o /output/mcp_echo_server_executable
 
 
 # Stage 2: Build the Go proxy executable
 FROM golang:1.22-alpine AS go-builder
-# FROM golang:1.21-alpine AS go-builder
 
 WORKDIR /src
 
