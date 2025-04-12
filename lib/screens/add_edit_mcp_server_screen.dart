@@ -210,20 +210,24 @@ class _AddEditMcpServerScreenState
         success = await settingsService.addMcpServer(config);
       }
 
-      if (success && mounted) {
+      // Check mounted before using context
+      if (!mounted) return;
+
+      if (success) {
         _showResultDialog('Success', 'MCP Server "$name" $actionVerb.');
-        Navigator.of(context).pop(); // Go back to settings screen
-      } else if (!success && mounted) {
+        // Check mounted again before popping
+        if (mounted) Navigator.of(context).pop(); // Go back to settings screen
+      } else {
         _showResultDialog('Error', 'Failed to $actionVerb MCP server configuration.', isError: true);
       }
     } catch (e) {
-      if (mounted) {
-        _showResultDialog(
-          'Error',
-          'An error occurred while saving: ${e.toString()}',
-          isError: true,
-        );
-      }
+      // Check mounted before using context
+      if (!mounted) return;
+      _showResultDialog(
+        'Error',
+        'An error occurred while saving: ${e.toString()}',
+        isError: true,
+      );
     }
   }
 
@@ -379,13 +383,18 @@ class _AddEditMcpServerScreenState
                                   final success = await ref
                                       .read(settingsServiceProvider)
                                       .deleteMcpServer(widget.serverToEdit!.id);
-                                  if (success && mounted) {
+
+                                  // Check mounted before using context
+                                  if (!mounted) return;
+
+                                  if (success) {
                                     _showResultDialog(
                                       'Deleted',
                                       'MCP Server "${widget.serverToEdit!.name}" deleted.',
                                     );
-                                    Navigator.of(context).pop();
-                                  } else if (!success && mounted) {
+                                    // Check mounted again before popping
+                                    if (mounted) Navigator.of(context).pop();
+                                  } else {
                                     _showResultDialog(
                                       'Error',
                                       'Failed to delete MCP server.',
