@@ -15,9 +15,6 @@ dependencies:
   flutter_memos:
     path: ../../ # Goes up two levels from api/mcp_sse_todoist_server_dart to flutter_memos root
 
-  # ADD: Explicitly depend on the hosted markdown version required by flutter_memos's dependencies
-  markdown: ^7.1.1
-
   # Add other direct dependencies if todoist_mcp_server.dart imports them explicitly
   # and they are not transitive via mcp_dart or flutter_memos.
   # e.g., http: ^1.0.0
