@@ -391,10 +391,11 @@ func executeStdioServer(serverCmdPath, requestJson string) ([]byte, error) {
 
 	go func() {
 		var commErr error
-		// Ensure stdin is eventually closed, especially if errors occur early
+		// Ensure stdin is eventually closed when this goroutine exits
 		defer func() {
+			log.Printf("[TCP Proxy GO] PID %d: Closing stdin in defer.", pid)
 			_ = stdinPipe.Close()
-			commErrChan <- commErr // Send nil on success, error otherwise
+			commErrChan <- commErr // Send result (nil or error)
 		}()
 
 		// 1. Send initialize request to subprocess
@@ -476,14 +477,9 @@ func executeStdioServer(serverCmdPath, requestJson string) ([]byte, error) {
 		}
 		log.Printf("[TCP Proxy GO] PID %d: Sent actual request.", pid)
 
-		// 5. Close stdin now that all requests are sent
-		if err := stdinPipe.Close(); err != nil {
-			log.Printf("[TCP Proxy GO] Warning: error closing stdin for PID %d: %v", pid, err)
-		} else {
-			log.Printf("[TCP Proxy GO] PID %d: Closed stdin.", pid)
-		}
+		// Stdin remains open until the communication goroutine exits (handled by defer)
 
-		// 6. Read the final response from subprocess (with timeout)
+		// 5. Read the final response from subprocess (with timeout)
 		log.Printf("[TCP Proxy GO] PID %d: Attempting to read final response...", pid)
 		var respReadErr error
 		readDone = make(chan bool, 1) // Reset readDone channel
