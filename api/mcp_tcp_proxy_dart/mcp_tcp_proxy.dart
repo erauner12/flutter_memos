@@ -592,21 +592,29 @@ Future<String> _executeStdioServer(
     // Handle process exit asynchronously
     process.exitCode
         .then((exitCode) {
-          final pid =
-              process?.pid ?? 'unknown'; // Capture pid before potential cleanup
+          final pid = process?.pid ?? 'unknown';
           print(
             '[TCP Proxy] Subprocess PID $pid (ID: $requestId) exited with code $exitCode.',
           );
-          // Complete the completer *only if it hasn't been completed by successful response*
-          if (!processCompleter.isCompleted) {
+          // Check if the completer for this request ID still exists and hasn't been completed
+          // (e.g., by the response listener or a timeout handler).
+          final completer = _processCompleters[requestId];
+          if (completer != null && !completer.isCompleted) {
+            // Process exited before a response was received or after an error/timeout.
             String errorMsg = 'Process PID $pid ($serverCmdPath) exited ';
             if (exitCode != 0) {
-              errorMsg += 'with code $exitCode';
+              errorMsg += 'unexpectedly with code $exitCode';
             } else {
-              errorMsg += 'with code 0 unexpectedly before sending response';
+              // Exit code 0 usually means success, but if we are here, no response was processed.
+              errorMsg += 'with code 0 but before sending a valid response';
             }
             errorMsg += '. Stderr:\n$stderrBuffer';
-            processCompleter.completeError(Exception(errorMsg));
+            completer.completeError(Exception(errorMsg));
+          } else {
+            // Completer was already completed (success/timeout/error) or removed, no action needed.
+            print(
+              "[TCP Proxy] Process PID $pid (ID: $requestId) exit code $exitCode handled, completer already finished or removed.",
+            );
           }
           // Resource cleanup is now handled in the main finally block
         })
@@ -615,8 +623,14 @@ Future<String> _executeStdioServer(
           print(
             '[TCP Proxy] Error waiting for exit code for PID $pid (ID: $requestId): $e',
           );
-          if (!processCompleter.isCompleted) {
-            processCompleter.completeError(e);
+          // Also check completer before completing with error
+          final completer = _processCompleters[requestId];
+          if (completer != null && !completer.isCompleted) {
+            completer.completeError(e);
+          } else {
+            print(
+              "[TCP Proxy] Error waiting for exit code for PID $pid (ID: $requestId), but completer already finished or removed: $e",
+            );
           }
         });
 

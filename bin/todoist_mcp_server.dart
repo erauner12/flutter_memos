@@ -1447,7 +1447,7 @@ Future<mcp_dart.CallToolResult> _handleCreateTaskComment({
           text: jsonEncode({
             'status': 'success',
             'message': successMsg,
-            'taskId': resolvedTaskId, // Include the resolved task ID
+            'taskId': resolvedTaskId,
             'commentId': newComment.id,
           }),
         ),
@@ -1476,7 +1476,7 @@ Future<mcp_dart.CallToolResult> _handleCreateTaskComment({
           text: jsonEncode({
             'status': 'error',
             'message': apiErrorMsg,
-            'taskId': resolvedTaskId, // Include the ID in the error response
+            'taskId': resolvedTaskId,
           }),
         ),
       ],
@@ -1597,9 +1597,10 @@ Future<mcp_dart.CallToolResult> _handleCreateTodoistTask({
     final successMsg =
         'Todoist task created successfully: "${newTask.content}"';
     stderr.writeln('[TodoistServer] $successMsg (ID: ${newTask.id})');
+    // Revert manual stdout writing. The manual code block has been removed.
     stderr.writeln(
-      '[TodoistServer] _handleCreateTodoistTask returning successful CallToolResult.',
-    ); // Added log
+      '[TodoistServer] DEBUG: Handler finished execution, expecting mcp_dart to send success response.',
+    );
     return mcp_dart.CallToolResult(
       content: [
         mcp_dart.TextContent(
@@ -1624,6 +1625,9 @@ Future<mcp_dart.CallToolResult> _handleCreateTodoistTask({
     stderr.writeln(
       '[TodoistServer] _handleCreateTodoistTask returning error CallToolResult: $apiErrorMsg',
     ); // Added log
+    stderr.writeln(
+      '[TodoistServer] DEBUG: Handler finished execution with error, expecting mcp_dart to send error response.',
+    );
     return mcp_dart.CallToolResult(
       content: [
         mcp_dart.TextContent(
