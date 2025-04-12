@@ -30,7 +30,7 @@ COPY bin/todoist_mcp_server.dart ./bin/
 # Copy the necessary library files into the overridden package structure
 # These paths are relative to the build context root
 COPY lib/services/todoist_api_service.dart ./packages/flutter_memos/lib/services/
-COPY lib/todoist_api ./packages/flutter_memos/lib/todoist_api/ # Copy the whole directory
+COPY lib/todoist_api ./packages/flutter_memos/lib/todoist_api/
 
 # Create a dummy pubspec.yaml for the overridden package to satisfy the path dependency
 RUN echo "name: flutter_memos\ndescription: Minimal pubspec for build override.\nenvironment:\n  sdk: '>=3.0.0 <4.0.0'" > ./packages/flutter_memos/pubspec.yaml
