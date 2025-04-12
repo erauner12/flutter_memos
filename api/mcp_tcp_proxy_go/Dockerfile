@@ -55,5 +55,7 @@ EXPOSE $PROXY_PORT
 # Switch to the non-root user
 USER appuser
 
-# Set the entrypoint to run the Go proxy executable
-ENTRYPOINT ["/app/mcp_tcp_proxy_executable", "--port", "$PROXY_PORT"]
+# Set the entrypoint to the executable (exec form)
+ENTRYPOINT ["/app/mcp_tcp_proxy_executable"]
+# Provide default arguments via CMD (shell form allows variable substitution here)
+CMD ["--port", "$PROXY_PORT"]
