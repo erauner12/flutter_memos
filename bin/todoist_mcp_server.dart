@@ -301,7 +301,8 @@ Future<mcp_dart.CallToolResult> _handleCreateTodoistTask({
   Map<String, dynamic>? args,
   RequestHandlerExtra? extra, // Use directly imported type
 }) async {
-  final requestId = extra?.message.id; // Extract request ID
+  final requestId =
+      extra?.sessionId; // Corrected: Access ID from jsonRpcMessage
   stderr.writeln('[TodoistServer] Received create_todoist_task request ID: $requestId.');
   stderr.writeln('[TodoistServer] Args: ${jsonEncode(args)}');
 
@@ -487,6 +488,14 @@ Future<mcp_dart.CallToolResult> _handleCreateTodoistTask({
     final errorMsg = 'Error creating Todoist task: ${e.toString()}';
     stderr.writeln('[TodoistServer] $errorMsg');
 
+    String apiErrorMsg = errorMsg;
+    if (e is todoist.ApiException) {
+      stderr.writeln(
+        '[TodoistServer] API Exception Details: Code=${e.code}, Message=${e.message}, Body=${e.innerException}',
+      );
+      apiErrorMsg = 'API Error creating task (${e.code}): ${e.message}';
+    }
+    
     // --- Manually write JSON-RPC error response ---
     final errorPayload = {
       'code': -32000,
@@ -516,7 +525,8 @@ Future<mcp_dart.CallToolResult> _handleUpdateTodoistTask({
   Map<String, dynamic>? args,
   RequestHandlerExtra? extra, // Use directly imported type
 }) async {
-  final requestId = extra?.message.id;
+  final requestId =
+      extra?.sessionId; // Corrected: Access ID from jsonRpcMessage
   stderr.writeln('[TodoistServer] Received update_todoist_task request ID: $requestId.');
   stderr.writeln('[TodoistServer] Args: ${jsonEncode(args)}');
 
@@ -661,7 +671,8 @@ Future<mcp_dart.CallToolResult> _handleGetTodoistTasks({
   Map<String, dynamic>? args,
   RequestHandlerExtra? extra, // Use directly imported type
 }) async {
-  final requestId = extra?.message.id;
+  final requestId =
+      extra?.sessionId; // Corrected: Access ID from jsonRpcMessage
   stderr.writeln('[TodoistServer] Received get_todoist_tasks request ID: $requestId.');
   stderr.writeln('[TodoistServer] Args: ${jsonEncode(args)}');
 
@@ -781,7 +792,8 @@ Future<mcp_dart.CallToolResult> _handleDeleteTodoistTask({
   Map<String, dynamic>? args,
   RequestHandlerExtra? extra, // Use directly imported type
 }) async {
-  final requestId = extra?.message.id;
+  final requestId =
+      extra?.sessionId; // Corrected: Access ID from jsonRpcMessage
   stderr.writeln('[TodoistServer] Received delete_todoist_task request ID: $requestId.');
   stderr.writeln('[TodoistServer] Args: ${jsonEncode(args)}');
 
@@ -860,7 +872,8 @@ Future<mcp_dart.CallToolResult> _handleCompleteTodoistTask({
   Map<String, dynamic>? args,
   RequestHandlerExtra? extra, // Use directly imported type
 }) async {
-  final requestId = extra?.message.id;
+  final requestId =
+      extra?.sessionId; // Corrected: Access ID from jsonRpcMessage
   stderr.writeln('[TodoistServer] Received complete_todoist_task request ID: $requestId.');
   stderr.writeln('[TodoistServer] Args: ${jsonEncode(args)}');
 
@@ -939,7 +952,8 @@ Future<mcp_dart.CallToolResult> _handleGetTodoistTaskById({
   Map<String, dynamic>? args,
   RequestHandlerExtra? extra, // Use directly imported type
 }) async {
-  final requestId = extra?.message.id;
+  final requestId =
+      extra?.sessionId; // Corrected: Access ID from jsonRpcMessage
   stderr.writeln('[TodoistServer] Received get_todoist_task_by_id request ID: $requestId.');
   stderr.writeln('[TodoistServer] Args: ${jsonEncode(args)}');
 
@@ -1044,7 +1058,8 @@ Future<mcp_dart.CallToolResult> _handleGetTaskComments({
   Map<String, dynamic>? args,
   RequestHandlerExtra? extra, // Use directly imported type
 }) async {
-  final requestId = extra?.message.id;
+  final requestId =
+      extra?.sessionId; // Corrected: Access ID from jsonRpcMessage
   stderr.writeln('[TodoistServer] Received get_task_comments request ID: $requestId.');
   stderr.writeln('[TodoistServer] Args: ${jsonEncode(args)}');
 
@@ -1089,7 +1104,7 @@ Future<mcp_dart.CallToolResult> _handleGetTaskComments({
   // 3. Call Service Method
   try {
     stderr.writeln('[TodoistServer] Calling todoistService.getAllComments for task ID: $taskId...');
-    final comments = await todoistService.getAllComments(taskId: $taskId);
+    final comments = await todoistService.getAllComments(taskId: taskId);
 
     // 4. Format Response
     if (comments.isEmpty) {
@@ -1129,7 +1144,8 @@ Future<mcp_dart.CallToolResult> _handleCreateTaskComment({
   Map<String, dynamic>? args,
   RequestHandlerExtra? extra, // Use directly imported type
 }) async {
-  final requestId = extra?.message.id;
+  final requestId =
+      extra?.sessionId; // Corrected: Access ID from jsonRpcMessage
   stderr.writeln('[TodoistServer] Received create_task_comment request ID: $requestId.');
   stderr.writeln('[TodoistServer] Args: ${jsonEncode(args)}');
 
