@@ -190,6 +190,7 @@ class GoogleMcpClient {
         final serverParams = mcp_lib.StdioServerParameters(
           command: config.command,
           args: config.args.split(' '),
+          // Pass the environment map
           environment:
               config.customEnvironment.isEmpty
                   ? null
@@ -197,7 +198,14 @@ class GoogleMcpClient {
           stderrMode: io.ProcessStartMode.normal,
         );
 
-        final stdioTransport = mcp_lib.StdioClientTransport(serverParams);
+        // Add debug print here
+        debugPrint(
+          "GoogleMcpClient [\${config.id}]: Passing environment to StdioServerParameters: \${serverParams.environment}",
+        );
+
+        final stdioTransport = mcp_lib.StdioClientTransport(
+          serverParams,
+        ); // Pass params here
         _transport = stdioTransport;
 
         stdioTransport.onerror = (error) {
@@ -517,6 +525,11 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
   Future<void> connectServer(McpServerConfig serverConfig) async {
     final serverId = serverConfig.id;
     final currentStatus = state.serverStatuses[serverId];
+
+    // Add debug print here
+    debugPrint(
+      "MCP [\$serverId]: Preparing to connect. Config Name: \${serverConfig.name}, Custom Env: \${serverConfig.customEnvironment}",
+    );
 
     if (state.activeClients.containsKey(serverId) ||
         currentStatus == McpConnectionStatus.connecting ||
