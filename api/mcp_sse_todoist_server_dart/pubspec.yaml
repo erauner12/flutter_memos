@@ -18,10 +18,6 @@ dependencies:
   todoist_api:
     path: ./todoist_api/
 
-  # REMOVE: Path dependency to the main flutter_memos project
-  # flutter_memos:
-  #   path: ../../
-
   # Add other direct dependencies if needed (e.g., collection if used directly)
   collection: ^1.18.0 # For safe casting, etc.
 
