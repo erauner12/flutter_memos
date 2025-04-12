@@ -59,7 +59,8 @@ class _AddEditMcpServerScreenState
       final server = widget.serverToEdit!;
       _nameController.text = server.name;
       // Always load host and port regardless of type
-      _hostController.text = server.host;
+      _hostController.text =
+          server.host; // Direct assignment, host is non-nullable
       _portController.text = server.port.toString();
       _commandController.text =
           server.command; // Always load, might be hidden later
