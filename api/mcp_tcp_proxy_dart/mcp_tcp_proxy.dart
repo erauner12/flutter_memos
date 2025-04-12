@@ -841,14 +841,16 @@ void _cancelProcess(dynamic requestId) {
   if (requestId == null) return;
   print('[TCP Proxy] Attempting to cancel process for request ID: $requestId');
 
-  // Complete the process completer immediately with a cancellation error
-  // This signals to any waiters that the operation was cancelled.
+  // Signal cancellation was requested, but don't complete the primary operation's
+  // future here. The timeout or original error handling in _executeStdioServer
+  // should manage that future's completion state. This function's role
+  // is primarily to terminate the underlying OS process.
   final completer = _processCompleters[requestId];
-  if (completer != null && !completer.isCompleted) {
-    completer.completeError(
-      Exception('Request $requestId cancelled by client'),
+  if (completer == null) {
+    print(
+      '[TCP Proxy] No process completer found for request ID $requestId during cancellation attempt.',
     );
-  } else if (completer == null) {
+    // No active process or it already finished/failed.
     print(
       '[TCP Proxy] No process completer found for request ID $requestId to cancel.',
     );

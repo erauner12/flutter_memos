@@ -375,10 +375,16 @@ Identify the task using EITHER `task_id` OR `task_name`. `task_id` takes precede
     );
     // Explicitly flush stdout to ensure the initial message is sent immediately.
     stdout.flush();
-  } catch (e) {
-    stderr.writeln('[TodoistServer] Failed to connect to transport: $e');
+    // Add a small delay and flush again in case initialization takes time.
+    await Future.delayed(const Duration(milliseconds: 100));
+    stdout.flush();
+    stderr.writeln('[TodoistServer] Initial stdout flushed.');
+  } catch (e, s) {
+    stderr.writeln('[TodoistServer] Failed to connect to transport: $e\n$s');
     exit(1);
   }
+  // Keep the main isolate running. The server runs in background listeners.
+  // We don't need an infinite loop here if the server keeps the isolate alive.
 }
 
 // Handler function for the 'update_todoist_task' tool
