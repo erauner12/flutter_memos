@@ -28,10 +28,10 @@ services:
   # --- New MCP SSE Todoist Server Service ---
   mcp_sse_todoist_server:
     build:
-      # CHANGE: Update build context to the specific server directory
-      context: ./api/mcp_sse_todoist_server_dart
-      # Dockerfile is relative to the new context
-      dockerfile: Dockerfile
+      # CHANGE: Set context to project root to access both server and lib code
+      context: .
+      # CHANGE: Specify Dockerfile path relative to the new root context
+      dockerfile: ./api/mcp_sse_todoist_server_dart/Dockerfile
     container_name: mcp-sse-todoist-server
     environment:
       # Pass the Todoist API token securely from the host environment
