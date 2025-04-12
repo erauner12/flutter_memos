@@ -13,17 +13,17 @@ services:
       - '5230:5230' # Memos UI/API port
     restart: unless-stopped
 
-  # --- New MCP Proxy Service (Using Go) ---
+  # --- New MCP Proxy Service (Using Dart) ---
   mcp_proxy:
     build:
       # Set context to the project root directory
       context: .
-      # Specify the Dockerfile path relative to the new context
-      dockerfile: ./api/mcp_tcp_proxy_go/Dockerfile
-    container_name: mcp-proxy-server-go # Renamed container for clarity
+      # Specify the Dockerfile path relative to the context
+      dockerfile: ./api/Dockerfile.proxy
+    container_name: mcp-proxy-server-dart # Renamed container for clarity
     environment:
       # Pass secrets needed by the stdio servers here.
-      # The Go proxy reads os.Environ() and passes it down.
+      # The Dart proxy reads Platform.environment and passes it down.
       # Make sure these are set in your host environment or a .env file.
       TODOIST_API_TOKEN: ${TODOIST_API_TOKEN}
       # Add other secrets like OPENAI_API_KEY if needed by other MCP servers

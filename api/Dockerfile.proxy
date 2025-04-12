@@ -1,0 +1,97 @@
+# Stage 1: Compile Dart stdio servers and Dart proxy for Linux (Isolated)
+FROM dart:stable AS dart-builder
+
+# Create a common output directory early
+RUN mkdir /output
+
+WORKDIR /build
+
+# Install certs and explicitly update the store
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends ca-certificates && \
+    update-ca-certificates --fresh && \
+    rm -rf /var/lib/apt/lists/*
+
+# --- Build Todoist Server ---
+WORKDIR /build/todoist_server
+RUN mkdir -p bin packages/flutter_memos/lib/services packages/flutter_memos/lib/todoist_api
+# Copy the minimal pubspec (WITH dependency override)
+COPY bin/todoist_mcp_server.pubspec.yaml ./pubspec.yaml
+# Copy the main server executable source
+COPY bin/todoist_mcp_server.dart ./bin/
+# Copy the necessary library files into the overridden package structure
+COPY lib/services/todoist_api_service.dart ./packages/flutter_memos/lib/services/
+COPY lib/todoist_api ./packages/flutter_memos/lib/todoist_api/
+# Create a dummy pubspec.yaml for the overridden package
+RUN echo "name: flutter_memos\ndescription: Minimal pubspec for build override.\nenvironment:\n  sdk: '>=3.0.0 <4.0.0'" > ./packages/flutter_memos/pubspec.yaml
+RUN dart pub get --verbose
+RUN dart compile exe bin/todoist_mcp_server.dart \
+    --packages=.dart_tool/package_config.json \
+    -o /output/todoist_mcp_server_executable
+
+# --- Build Echo Server ---
+WORKDIR /build/echo_server
+RUN mkdir -p bin
+COPY mcp_echo_server/bin/mcp_echo_server.pubspec.yaml ./pubspec.yaml
+COPY mcp_echo_server/bin/mcp_echo_server.dart ./bin/
+RUN dart pub get --verbose
+RUN dart compile exe bin/mcp_echo_server.dart \
+    --packages=.dart_tool/package_config.json \
+    -o /output/mcp_echo_server_executable
+
+# --- Build Dart TCP Proxy ---
+WORKDIR /build/dart_proxy
+# Copy proxy pubspec (relative to context root)
+COPY api/mcp_tcp_proxy_dart/pubspec.yaml ./pubspec.yaml
+# Copy proxy source code (relative to context root)
+COPY api/mcp_tcp_proxy_dart/mcp_tcp_proxy.dart ./bin/
+# Get dependencies for Dart Proxy
+RUN dart pub get --verbose
+# Compile Dart Proxy
+RUN dart compile exe bin/mcp_tcp_proxy.dart \
+    --packages=.dart_tool/package_config.json \
+    -o /output/mcp_tcp_proxy_executable
+
+
+# Stage 2: Create the minimal runtime image (Debian-based for Dart compatibility)
+FROM debian:stable-slim
+
+WORKDIR /app
+
+# Install ca-certificates needed for potential HTTPS calls from Dart runtime
+# Also install bash, as some Dart executables might implicitly rely on it (using apt-get)
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends ca-certificates bash && \
+    rm -rf /var/lib/apt/lists/*
+
+# Create a non-root user for security
+RUN addgroup --system appgroup && adduser --system --ingroup appgroup appuser
+
+# Create the bin directory for Dart stdio executables
+RUN mkdir /app/bin
+
+# Copy the compiled Dart proxy executable from the dart-builder stage
+COPY --from=dart-builder /output/mcp_tcp_proxy_executable /app/
+# Copy the compiled Dart stdio server executables from the dart-builder stage
+COPY --from=dart-builder /output/mcp_echo_server_executable /app/bin/
+COPY --from=dart-builder /output/todoist_mcp_server_executable /app/bin/
+
+# Ensure all executables are runnable by the appuser
+RUN chown -R appuser:appgroup /app && \
+    chmod +x /app/mcp_tcp_proxy_executable && \
+    chmod +x /app/bin/*
+
+# Define the default port
+ENV PROXY_PORT=8999
+EXPOSE $PROXY_PORT
+
+# Add app directories to PATH for the appuser
+ENV PATH="/app:/app/bin:${PATH}"
+
+# Switch to the non-root user
+USER appuser
+
+# Set the entrypoint to run the Dart proxy executable
+# Use array form for ENTRYPOINT to avoid shell interpretation issues
+ENTRYPOINT ["/app/mcp_tcp_proxy_executable", "--port", "$PROXY_PORT"]
+# CMD ["--port", "$PROXY_PORT"] # Alt: Use CMD if ENTRYPOINT is just the executable
