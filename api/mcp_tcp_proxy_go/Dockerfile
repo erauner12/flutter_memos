@@ -15,11 +15,11 @@ RUN apt-get update && \
 # --- Build Todoist Server ---
 WORKDIR /build/todoist_server
 
-# Create necessary directories for source and library files
-# The 'lib' directory here corresponds to the root of the 'package:flutter_memos' imports
-RUN mkdir -p bin lib/services lib/todoist_api
+# Create the structure expected by the dependency override and source layout
+# Ensure target directories exist before copying into them
+RUN mkdir -p bin packages/flutter_memos/lib/services packages/flutter_memos/lib/todoist_api
 
-# Copy the minimal pubspec (now without dependency override)
+# Copy the minimal pubspec (WITH dependency override)
 # Path relative to context root: bin/todoist_mcp_server.pubspec.yaml
 COPY bin/todoist_mcp_server.pubspec.yaml ./pubspec.yaml
 
@@ -27,13 +27,16 @@ COPY bin/todoist_mcp_server.pubspec.yaml ./pubspec.yaml
 # Path relative to context root: bin/todoist_mcp_server.dart
 COPY bin/todoist_mcp_server.dart ./bin/
 
-# Copy the necessary library files into the './lib' structure
+# Copy the necessary library files into the overridden package structure
 # These paths are relative to the build context root
-COPY lib/services/todoist_api_service.dart ./lib/services/
-COPY lib/todoist_api ./lib/todoist_api/
+COPY lib/services/todoist_api_service.dart ./packages/flutter_memos/lib/services/
+COPY lib/todoist_api ./packages/flutter_memos/lib/todoist_api/ # Copy the whole directory
 
-# Get dependencies for Todoist server ONLY (mcp_dart, http, intl, collection)
-# This generates .dart_tool/package_config.json
+# Create a dummy pubspec.yaml for the overridden package to satisfy the path dependency
+RUN echo "name: flutter_memos\ndescription: Minimal pubspec for build override.\nenvironment:\n  sdk: '>=3.0.0 <4.0.0'" > ./packages/flutter_memos/pubspec.yaml
+
+# Get dependencies for Todoist server ONLY (should now resolve the path override)
+# This generates .dart_tool/package_config.json mapping flutter_memos to ./packages/flutter_memos
 RUN dart pub get --verbose
 
 # Compile Todoist Server - Explicitly use the generated package config
