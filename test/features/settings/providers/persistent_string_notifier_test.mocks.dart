@@ -5,8 +5,9 @@
 // ignore_for_file: no_leading_underscores_for_library_prefixes
 import 'dart:async' as _i4;
 
-import 'package:flutter/foundation.dart' as _i7;
+import 'package:flutter/foundation.dart' as _i8;
 import 'package:flutter_cloud_kit/types/cloud_kit_account_status.dart' as _i5;
+import 'package:flutter_memos/models/mcp_server_config.dart' as _i7;
 import 'package:flutter_memos/models/server_config.dart' as _i6;
 import 'package:flutter_memos/services/cloud_kit_service.dart' as _i3;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart' as _i2;
@@ -127,15 +128,6 @@ class MockCloudKitService extends _i1.Mock implements _i3.CloudKitService {
       ) as _i4.Future<_i6.ServerConfig?>);
 
   @override
-  _i4.Future<String?> getSetting(String? keyName) => (super.noSuchMethod(
-        Invocation.method(
-          #getSetting,
-          [keyName],
-        ),
-        returnValue: _i4.Future<String?>.value(),
-      ) as _i4.Future<String?>);
-
-  @override
   _i4.Future<List<_i6.ServerConfig>> getAllServerConfigs() =>
       (super.noSuchMethod(
         Invocation.method(
@@ -145,6 +137,24 @@ class MockCloudKitService extends _i1.Mock implements _i3.CloudKitService {
         returnValue:
             _i4.Future<List<_i6.ServerConfig>>.value(<_i6.ServerConfig>[]),
       ) as _i4.Future<List<_i6.ServerConfig>>);
+
+  @override
+  _i4.Future<bool> deleteServerConfig(String? id) => (super.noSuchMethod(
+        Invocation.method(
+          #deleteServerConfig,
+          [id],
+        ),
+        returnValue: _i4.Future<bool>.value(false),
+      ) as _i4.Future<bool>);
+
+  @override
+  _i4.Future<String?> getSetting(String? keyName) => (super.noSuchMethod(
+        Invocation.method(
+          #getSetting,
+          [keyName],
+        ),
+        returnValue: _i4.Future<String?>.value(),
+      ) as _i4.Future<String?>);
 
   @override
   _i4.Future<bool> saveSetting(
@@ -163,9 +173,30 @@ class MockCloudKitService extends _i1.Mock implements _i3.CloudKitService {
       ) as _i4.Future<bool>);
 
   @override
-  _i4.Future<bool> deleteServerConfig(String? id) => (super.noSuchMethod(
+  _i4.Future<bool> saveMcpServerConfig(_i7.McpServerConfig? config) =>
+      (super.noSuchMethod(
         Invocation.method(
-          #deleteServerConfig,
+          #saveMcpServerConfig,
+          [config],
+        ),
+        returnValue: _i4.Future<bool>.value(false),
+      ) as _i4.Future<bool>);
+
+  @override
+  _i4.Future<List<_i7.McpServerConfig>> getAllMcpServerConfigs() =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #getAllMcpServerConfigs,
+          [],
+        ),
+        returnValue: _i4.Future<List<_i7.McpServerConfig>>.value(
+            <_i7.McpServerConfig>[]),
+      ) as _i4.Future<List<_i7.McpServerConfig>>);
+
+  @override
+  _i4.Future<bool> deleteMcpServerConfig(String? id) => (super.noSuchMethod(
+        Invocation.method(
+          #deleteMcpServerConfig,
           [id],
         ),
         returnValue: _i4.Future<bool>.value(false),
@@ -238,7 +269,7 @@ class MockFlutterSecureStorage extends _i1.Mock
   @override
   void registerListener({
     required String? key,
-    required _i7.ValueChanged<String?>? listener,
+    required _i8.ValueChanged<String?>? listener,
   }) =>
       super.noSuchMethod(
         Invocation.method(
@@ -255,7 +286,7 @@ class MockFlutterSecureStorage extends _i1.Mock
   @override
   void unregisterListener({
     required String? key,
-    required _i7.ValueChanged<String?>? listener,
+    required _i8.ValueChanged<String?>? listener,
   }) =>
       super.noSuchMethod(
         Invocation.method(

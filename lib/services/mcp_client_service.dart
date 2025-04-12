@@ -205,24 +205,17 @@ class GoogleMcpClient {
         // MODIFY: Use library prefix for Stdio types
         final serverParams = mcp_lib.StdioServerParameters(
           command: config.command,
-          args:
-              config.args
-                  .split(' ')
-                  .where((s) => s.isNotEmpty)
-                  .toList(), // Ensure no empty strings from split
-          // Pass the explicitly merged environment map
+          args: config.args.split(' ').where((s) => s.isNotEmpty).toList(),
           environment: processEnvironment,
-          // Keep stderrMode as normal
           stderrMode: io.ProcessStartMode.normal,
         );
 
-        // Add debug print here (logging the environment passed to params)
         debugPrint(
           "GoogleMcpClient [\${config.id}]: Passing environment to StdioServerParameters: \${serverParams.environment?.keys.join(',') ?? 'null'}",
         );
 
         final stdioTransport = mcp_lib.StdioClientTransport(
-          serverParams, // Pass params here
+          serverParams,
         );
         _transport = stdioTransport;
 
@@ -242,7 +235,6 @@ class GoogleMcpClient {
           _tools = [];
         };
 
-        // MODIFY: Use the renamed mcpClient variable
         await mcpClient.connect(stdioTransport);
         _isConnected = true;
         debugPrint(
@@ -251,7 +243,6 @@ class GoogleMcpClient {
       } else {
         // McpConnectionType.sse
         // --- SSE Connection ---
-        // MODIFY: Use nullable host/port safely
         final host = config.host;
         final port = config.port;
 
@@ -259,21 +250,17 @@ class GoogleMcpClient {
           "GoogleMcpClient [\${config.id}]: Creating SseClientTransport for manager at \$host:\$port",
         );
 
-        // Add Pre-connection Validation for SSE host/port
-        // MODIFY: Add null checks and use trim() safely
         if (host == null || host.trim().isEmpty) {
           throw StateError(
             "SSE Connection failed: Host is missing in configuration for \${config.name} [\${config.id}].",
           );
         }
-        // MODIFY: Add null check for port
         if (port == null || port <= 0 || port > 65535) {
           throw StateError(
             "SSE Connection failed: Port is missing or invalid (must be 1-65535) in configuration for \${config.name} [\${config.id}].",
           );
         }
 
-        // MODIFY: Use non-nullable assertion (!) after validation
         final sseTransport = SseClientTransport(
           managerHost: host,
           managerPort: port,
@@ -296,7 +283,6 @@ class GoogleMcpClient {
           _tools = [];
         };
 
-        // MODIFY: Use the renamed mcpClient variable
         await mcpClient.connect(sseTransport);
         _isConnected = true;
         debugPrint(
@@ -315,7 +301,6 @@ class GoogleMcpClient {
       debugPrint(errorMsg);
       _isConnected = false;
       await cleanup();
-      // Rethrow as a StateError to be caught by McpClientNotifier
       throw StateError(errorMsg);
     }
   }
@@ -546,25 +531,18 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
     final currentStatus = state.serverStatuses[serverId];
 
     // --- START MODIFICATION: Inject Todoist API Key ---
-    McpServerConfig configToUse =
-        serverConfig; // Start with the original config
-
-    // Check if this server config is intended for Todoist by looking for the specific env key
+    McpServerConfig configToUse = serverConfig;
     if (serverConfig.customEnvironment.containsKey('TODOIST_API_TOKEN')) {
       debugPrint(
         "MCP [\$serverId]: Detected TODOIST_API_TOKEN key in config. Attempting to inject actual token.",
       );
       try {
-        // Read the current token from the provider
         final todoistApiKey = ref.read(todoistApiKeyProvider);
         if (todoistApiKey.isNotEmpty) {
-          // Create an updated environment map
           final updatedEnv = Map<String, String>.from(
             serverConfig.customEnvironment,
           );
           updatedEnv['TODOIST_API_TOKEN'] = todoistApiKey;
-
-          // Create a new config instance with the updated environment
           configToUse = serverConfig.copyWith(customEnvironment: updatedEnv);
           debugPrint(
             "MCP [\$serverId]: Successfully injected Todoist API token into environment for connection.",
@@ -578,12 +556,10 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
         debugPrint(
           "MCP [\$serverId]: Error reading Todoist API key provider: \$e. Proceeding without injection.",
         );
-        // Proceed with the original config, the server will likely fail later
       }
     }
     // --- END MODIFICATION ---
 
-    // Add debug print here (using the potentially modified config)
     debugPrint(
       "MCP [\$serverId]: Preparing to connect. Config Name: \${configToUse.name}, Custom Env Keys: \${configToUse.customEnvironment.keys.join(',')}",
     );
@@ -614,7 +590,6 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
         onClose: handleClientClose,
       );
 
-      // Use the potentially updated configToUse here
       await newClientInstance.connectToServer(configToUse);
 
       if (newClientInstance.isConnected) {
@@ -971,6 +946,8 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
         "MCP ProcessQuery: Passing \${allAvailableTools.length} unique tools to Gemini: \${allAvailableTools.map((t) => t.functionDeclarations?.firstOrNull?.name ?? 'unknown').join(', ')}",
       );
     }
+
+    // --- First Gemini Call ---
     GenerateContentResponse firstResponse;
     try {
       final List<Content> cleanHistory =
@@ -984,11 +961,29 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
                 ),
               )
               .toList();
+      // *** ADDED LOGGING ***
+      debugPrint(
+        "MCP ProcessQuery: Making first Gemini call with query and \${allAvailableTools.length} tools.",
+      );
       firstResponse = await geminiService.generateContent(
-        query, // Pass the original query string
-        cleanHistory, // Pass the history *before* this query
+        query,
+        cleanHistory,
         tools: allAvailableTools.isNotEmpty ? allAvailableTools : null,
       );
+      // *** ADDED LOGGING ***
+      final firstCandidate = firstResponse.candidates.firstOrNull;
+      final functionCallPartCheck = firstCandidate?.content.parts
+          .firstWhereOrNull((part) => part is FunctionCall);
+      if (functionCallPartCheck != null &&
+          functionCallPartCheck is FunctionCall) {
+        debugPrint(
+          "MCP ProcessQuery: First Gemini response contained FunctionCall: \${functionCallPartCheck.name}(\${functionCallPartCheck.args})",
+        );
+      } else {
+        debugPrint(
+          "MCP ProcessQuery: First Gemini response did NOT contain a FunctionCall.",
+        );
+      }
     } catch (e) {
       debugPrint("MCP ProcessQuery: Error during first Gemini call: \$e");
       return McpProcessResult(
@@ -997,10 +992,13 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
         ]),
       );
     }
+
     final candidate = firstResponse.candidates.firstOrNull;
     final functionCallPart = candidate?.content.parts.firstWhereOrNull(
       (part) => part is FunctionCall,
     );
+
+    // --- Handle Function Call ---
     if (functionCallPart != null && functionCallPart is FunctionCall) {
       final functionCall = functionCallPart;
       final toolName = functionCall.name;
@@ -1008,6 +1006,7 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
       debugPrint(
         "MCP ProcessQuery: Gemini requested Function Call: '\$toolName' with args: \$toolArgs",
       );
+
       final targetServerId = toolToServerIdMap[toolName];
       if (targetServerId == null) {
         debugPrint(
@@ -1045,6 +1044,7 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
           );
         }
       }
+
       final targetClient = state.activeClients[targetServerId];
       if (targetClient == null || !targetClient.isConnected) {
         debugPrint(
@@ -1082,6 +1082,8 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
           );
         }
       }
+
+      // --- Execute Tool via MCP ---
       mcp_lib.CallToolResult toolResult;
       String toolResultString = '';
       Map<String, dynamic> toolResultJson = {};
@@ -1089,6 +1091,10 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
         final params = mcp_lib.CallToolRequestParams(
           name: toolName,
           arguments: toolArgs.map((key, value) => MapEntry(key, value)),
+        );
+        // *** ADDED LOGGING ***
+        debugPrint(
+          "MCP ProcessQuery: Calling MCP tool '\$toolName' on server '\$targetServerId'...",
         );
         toolResult = await targetClient.callTool(params);
         toolResultString =
@@ -1123,32 +1129,67 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
             "MCP ProcessQuery: Tool '\$toolName' executed by server '\$targetServerId'. No text content found. Raw Result: \$toolResultString",
           );
         }
-        debugPrint("MCP ProcessQuery: Parsed toolResultJson: \$toolResultJson");
+        // *** ADDED LOGGING ***
+        debugPrint(
+          "MCP ProcessQuery: Tool '\$toolName' executed. Raw Result: \${toolResult.toJson()}",
+        );
+        debugPrint(
+          "MCP ProcessQuery: Tool '\$toolName' executed. Parsed JSON for Gemini: \$toolResultJson",
+        );
+
+        // --- Prepare for Second Gemini Call ---
         final Content toolResponseContent = Content('function', [
           FunctionResponse(toolName, toolResultJson),
         ]);
         final List<Content> historyForSecondCall =
-            history.map((c) => c).toList() +
-            [
-              if (candidate?.content != null) candidate!.content,
-              toolResponseContent,
-            ];
+            history.map((c) => c).toList();
+        historyForSecondCall.add(Content('user', [TextPart(query)]));
+        if (candidate?.content != null) {
+          historyForSecondCall.add(candidate!.content);
+        }
+        historyForSecondCall.add(toolResponseContent);
+
+        // *** ADDED DETAILED LOGGING ***
         debugPrint(
-          "MCP ProcessQuery: Making second Gemini call with tool response...",
+          "MCP ProcessQuery: History for second Gemini call (JSON): \${jsonEncode(historyForSecondCall.map((c) => c.toJson()).toList())}",
         );
+        debugPrint(
+          "MCP ProcessQuery: Making second Gemini call with tool response (prompt is empty string)...",
+        );
+
+        // --- Second Gemini Call ---
         final secondResponse = await geminiService.generateContent(
-          '', // Pass an empty string prompt
+          '',
           historyForSecondCall,
           tools: null,
         );
+
         final Content finalContent =
             secondResponse.candidates.firstOrNull?.content ??
             Content('model', [
-              TextPart("Tool '\$toolName' executed. \$toolResultString"),
+              TextPart(
+                "Tool '\$toolName' executed. Result: \$toolResultString",
+              ),
             ]);
+        // *** ADDED DETAILED LOGGING ***
+        final finalResponseText = finalContent.parts
+            .whereType<TextPart>()
+            .map((p) => p.text)
+            .join('');
         debugPrint(
-          "MCP ProcessQuery: Final response to UI (after tool call): \"\${finalContent.parts.whereType<TextPart>().map((p) => p.text).join('')}\"",
+          "MCP ProcessQuery: Raw finalContent from Gemini (2nd call): \${jsonEncode(finalContent.toJson())}",
         );
+        debugPrint(
+          "MCP ProcessQuery: Extracted final text for UI: \"\$finalResponseText\"",
+        );
+        if (finalResponseText.isEmpty ||
+            finalResponseText.toLowerCase().contains(
+              "provide me with a prompt",
+            )) {
+          debugPrint(
+            "MCP ProcessQuery: WARNING - Second Gemini call resulted in empty or generic response!",
+          );
+        }
         return McpProcessResult(
           finalModelContent: finalContent,
           modelCallContent: candidate?.content,
@@ -1159,8 +1200,9 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
           sourceServerId: targetServerId,
         );
       } catch (e) {
+        // *** ADDED LOGGING ***
         debugPrint(
-          "MCP ProcessQuery: Error calling tool '\$toolName' on server '\$targetServerId': \$e",
+          "MCP ProcessQuery: Error during tool execution or second Gemini call: \$e",
         );
         try {
           final errorFollowUp = await geminiService.generateContent(
@@ -1202,6 +1244,7 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
         }
       }
     } else {
+      // --- Handle Direct Response (No Function Call) ---
       debugPrint(
         "MCP ProcessQuery: No function call requested by Gemini. Returning direct response.",
       );
@@ -1210,8 +1253,16 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
           Content('model', [
             TextPart("Sorry, I couldn't generate a response."),
           ]);
+      // *** ADDED DETAILED LOGGING ***
+      final directResponseText = directContent.parts
+          .whereType<TextPart>()
+          .map((p) => p.text)
+          .join('');
       debugPrint(
-        "MCP ProcessQuery: Final response to UI (direct): \"\${directContent.parts.whereType<TextPart>().map((p) => p.text).join('')}\"",
+        "MCP ProcessQuery: Raw directContent from Gemini (1st call): \${jsonEncode(directContent.toJson())}",
+      );
+      debugPrint(
+        "MCP ProcessQuery: Extracted direct text for UI: \"\$directResponseText\"",
       );
       return McpProcessResult(finalModelContent: directContent);
     }

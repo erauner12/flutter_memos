@@ -6,6 +6,7 @@
 import 'dart:async' as _i3;
 
 import 'package:flutter_cloud_kit/types/cloud_kit_account_status.dart' as _i4;
+import 'package:flutter_memos/models/mcp_server_config.dart' as _i6;
 import 'package:flutter_memos/models/server_config.dart' as _i5;
 import 'package:flutter_memos/services/cloud_kit_service.dart' as _i2;
 import 'package:mockito/mockito.dart' as _i1;
@@ -63,15 +64,6 @@ class MockCloudKitService extends _i1.Mock implements _i2.CloudKitService {
       ) as _i3.Future<_i5.ServerConfig?>);
 
   @override
-  _i3.Future<String?> getSetting(String? keyName) => (super.noSuchMethod(
-        Invocation.method(
-          #getSetting,
-          [keyName],
-        ),
-        returnValue: _i3.Future<String?>.value(),
-      ) as _i3.Future<String?>);
-
-  @override
   _i3.Future<List<_i5.ServerConfig>> getAllServerConfigs() =>
       (super.noSuchMethod(
         Invocation.method(
@@ -81,6 +73,24 @@ class MockCloudKitService extends _i1.Mock implements _i2.CloudKitService {
         returnValue:
             _i3.Future<List<_i5.ServerConfig>>.value(<_i5.ServerConfig>[]),
       ) as _i3.Future<List<_i5.ServerConfig>>);
+
+  @override
+  _i3.Future<bool> deleteServerConfig(String? id) => (super.noSuchMethod(
+        Invocation.method(
+          #deleteServerConfig,
+          [id],
+        ),
+        returnValue: _i3.Future<bool>.value(false),
+      ) as _i3.Future<bool>);
+
+  @override
+  _i3.Future<String?> getSetting(String? keyName) => (super.noSuchMethod(
+        Invocation.method(
+          #getSetting,
+          [keyName],
+        ),
+        returnValue: _i3.Future<String?>.value(),
+      ) as _i3.Future<String?>);
 
   @override
   _i3.Future<bool> saveSetting(
@@ -99,9 +109,30 @@ class MockCloudKitService extends _i1.Mock implements _i2.CloudKitService {
       ) as _i3.Future<bool>);
 
   @override
-  _i3.Future<bool> deleteServerConfig(String? id) => (super.noSuchMethod(
+  _i3.Future<bool> saveMcpServerConfig(_i6.McpServerConfig? config) =>
+      (super.noSuchMethod(
         Invocation.method(
-          #deleteServerConfig,
+          #saveMcpServerConfig,
+          [config],
+        ),
+        returnValue: _i3.Future<bool>.value(false),
+      ) as _i3.Future<bool>);
+
+  @override
+  _i3.Future<List<_i6.McpServerConfig>> getAllMcpServerConfigs() =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #getAllMcpServerConfigs,
+          [],
+        ),
+        returnValue: _i3.Future<List<_i6.McpServerConfig>>.value(
+            <_i6.McpServerConfig>[]),
+      ) as _i3.Future<List<_i6.McpServerConfig>>);
+
+  @override
+  _i3.Future<bool> deleteMcpServerConfig(String? id) => (super.noSuchMethod(
+        Invocation.method(
+          #deleteMcpServerConfig,
           [id],
         ),
         returnValue: _i3.Future<bool>.value(false),
