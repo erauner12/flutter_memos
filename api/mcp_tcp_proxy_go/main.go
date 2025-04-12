@@ -83,7 +83,7 @@ const (
 	methodNotFoundCode = -32601
 	internalErrorCode  = -32603
 	serverTimeoutCode  = -32001 // Custom code for server timeout
-	handshakeTimeout   = 10 * time.Second
+	handshakeTimeout   = 20 * time.Second // Increased timeout for handshake
 	requestTimeout     = 60 * time.Second // Timeout for the actual request/response
 )
 
@@ -393,7 +393,7 @@ func executeStdioServer(serverCmdPath, requestJson string, requestID json.RawMes
 				return
 			}
 			log.Printf("[TCP Proxy GO] Received initialize response from PID %d: %s", pid, strings.TrimSpace(string(initRespBytes)))
-			// TODO: Optionally parse and validate the initialize response here
+			// Initialize response received, proceed with handshake.
 		case <-time.After(handshakeTimeout):
 			commErrChan <- fmt.Errorf("timeout reading initialize response from %s (PID %d)", serverCmdPath, pid)
 			return
