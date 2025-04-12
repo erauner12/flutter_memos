@@ -13,21 +13,41 @@ services:
       - '5230:5230' # Memos UI/API port
     restart: unless-stopped
 
-  # --- New MCP SSE Time Server Service ---
+  # --- Existing MCP SSE Time Server Service ---
   mcp_sse_time_server:
     build:
-      # Set context to the directory containing the Dockerfile
+      # Context is the specific directory containing its Dockerfile
       context: ./api/mcp_sse_time_server_dart
-      # Specify the Dockerfile name within that context
       dockerfile: Dockerfile
     container_name: mcp-sse-time-server
-    # No environment variables needed for this simple server
-    # environment:
-    #   PORT: 8999 # Optional: Can override the default port in the Dockerfile
     ports:
       # Map host port 8999 to container port 8999 (exposed in Dockerfile)
       - '8999:8999'
     restart: unless-stopped
+
+  # --- New MCP SSE Todoist Server Service ---
+  mcp_sse_todoist_server:
+    build:
+      # Build context is the project root (flutter_memos)
+      context: .
+      # Path to the Dockerfile within the context
+      dockerfile: ./api/mcp_sse_todoist_server_dart/Dockerfile
+    container_name: mcp-sse-todoist-server
+    environment:
+      # Pass the Todoist API token securely from the host environment
+      # Ensure TODOIST_API_TOKEN is set on the machine running docker-compose up
+      - TODOIST_API_TOKEN=${TODOIST_API_TOKEN:?err} # Use :?err to fail if unset
+      # Set the port inside the container (must match EXPOSE in Dockerfile and server code)
+      - PORT=9000
+      # Optional: Add other environment variables if needed by the server
+      # - OTHER_VAR=value
+    ports:
+      # Map host port 9000 to container port 9000
+      - '9000:9000'
+    restart: unless-stopped
+    # Optional: Add depends_on if it needs another service (e.g., a database)
+    # depends_on:
+    #   - some_other_service
 
 volumes:
   memos-data: # Define the named volume used by Memos

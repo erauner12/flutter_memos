@@ -76,7 +76,7 @@ class McpServerConfig {
     'customEnvironment': jsonEncode(customEnvironment), // Keep as JSON string
   };
 
-  // MODIFY: Update fromJson
+  // MODIFY: Update fromJson factory
   factory McpServerConfig.fromJson(Map<String, dynamic> json) {
     // Safely parse the custom environment map (expecting a JSON string or a Map)
     Map<String, String> environment = {};
@@ -137,7 +137,9 @@ class McpServerConfig {
       if (potentialHost != null &&
           potentialHost.isNotEmpty &&
           parsedPotentialPort != null &&
-          parsedPotentialPort > 0) {
+          parsedPotentialPort > 0 &&
+          parsedPotentialPort <= 65535) {
+        // Add port range check here too
         debugPrint(
           "Applying heuristic: Assuming SSE type due to valid host/port for server ${json['id']}.",
         );
