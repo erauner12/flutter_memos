@@ -184,9 +184,7 @@ class CloudKitService {
       return ckRecords
           .map(
             (ckRecord) => _mapToServerConfig(
-              ckRecord
-                  .recordName, // No null check needed here as ckRecord is from a non-null list
-              ckRecord.values, // Use .values
+              ckRecord.recordName, ckRecord.values,
             ),
           )
           .toList();
@@ -230,14 +228,12 @@ class CloudKitService {
   /// Fetches the user settings record from CloudKit.
   Future<CloudKitRecord?> _fetchUserSettingsRecord() async {
     // Use correct class name CloudKitRecord
-    // Changed CloudKitRecord to CloudKetRecord
     try {
       if (kDebugMode) {
         print('[CloudKitService] Getting UserSettings record...');
       }
       // The getRecord method returns the correct CloudKitRecord type
       final CloudKitRecord ckRecord = await _cloudKit.getRecord(
-        // Use correct class name CloudKitRecord
         scope: CloudKitDatabaseScope.private,
         recordName: _userSettingsRecordName,
       );
@@ -246,9 +242,6 @@ class CloudKitService {
       }
       return ckRecord;
     } catch (e) {
-      // Specifically check if the error means "record not found"
-      // The plugin might throw a specific exception type or have an error code.
-      // For now, assume any error means it might not exist or is inaccessible.
       if (kDebugMode) {
         print(
           '[CloudKitService] Error getting UserSettings record (may not exist yet): \$e',
@@ -260,12 +253,8 @@ class CloudKitService {
 
   /// Retrieve a specific setting value from the UserSettings record.
   Future<String?> getSetting(String keyName) async {
-    final CloudKitRecord? ckRecord =
-        // Use correct class name CloudKitRecord
-        await _fetchUserSettingsRecord(); // Changed CloudKitRecord to CloudKetRecord
-    // Add null check before accessing properties
+    final CloudKitRecord? ckRecord = await _fetchUserSettingsRecord();
     if (ckRecord != null && ckRecord.values.containsKey(keyName)) {
-      // Assuming the value was stored as a string
       final value = ckRecord.values[keyName] as String?;
       if (kDebugMode) {
         print(
@@ -284,25 +273,17 @@ class CloudKitService {
 
   /// Save or update a specific setting in the UserSettings record.
   Future<bool> saveSetting(String keyName, String value) async {
-    // Wrap the entire operation in a synchronized block to prevent race conditions
-    // when multiple settings are saved concurrently for the same singleton record.
     return _settingsLock.synchronized(() async {
-      CloudKitRecord? ckRecord; // Use correct class name CloudKitRecord
+      CloudKitRecord? ckRecord;
       try {
-        // 1. Fetch existing settings record
-        ckRecord =
-            await _fetchUserSettingsRecord(); // Changed CloudKitRecord to CloudKetRecord
-
-        // 2. Prepare the data map for saving
+        ckRecord = await _fetchUserSettingsRecord();
         Map<String, String> dataToSave;
         if (ckRecord != null) {
-          // Record exists: Create a mutable copy and update the key
           dataToSave = Map<String, String>.from(
             ckRecord.values.map((key, val) => MapEntry(key, val.toString())),
           );
-          dataToSave[keyName] = value; // Add or update the specific key
+          dataToSave[keyName] = value;
         } else {
-          // Record doesn't exist: Create a new map with only the current key/value
           dataToSave = {keyName: value};
         }
 
@@ -312,10 +293,6 @@ class CloudKitService {
           );
         }
 
-        // 3. *** If record exists, attempt to delete it first ***
-        // This delete-before-save strategy is needed because CloudKit's saveRecord
-        // might not perform an upsert reliably in all scenarios, especially with potential
-        // sync conflicts or delays. Deleting first ensures the subsequent save is an insert.
         if (ckRecord != null) {
           try {
             if (kDebugMode) {
@@ -333,10 +310,6 @@ class CloudKitService {
               );
             }
           } catch (deleteError) {
-            // Log the deletion error but proceed to save anyway.
-            // The save might still succeed, or it might fail with the known error.
-            // If the delete failed because the record was already deleted by another concurrent operation,
-            // the subsequent save should succeed.
             if (kDebugMode) {
               print(
                 '[CloudKitService] Error deleting existing UserSettings record (proceeding to save): \$deleteError',
@@ -345,7 +318,6 @@ class CloudKitService {
           }
         }
 
-        // 4. Save the record (now attempting an insert)
         if (kDebugMode) {
           print(
             '[CloudKitService] Saving UserSettings record (attempting insert)...',
@@ -354,8 +326,8 @@ class CloudKitService {
         await _cloudKit.saveRecord(
           scope: CloudKitDatabaseScope.private,
           recordType: _userSettingsRecordType,
-          recordName: _userSettingsRecordName, // Use fixed name
-          record: dataToSave, // Save the potentially merged map
+          recordName: _userSettingsRecordName,
+          record: dataToSave,
         );
 
         if (kDebugMode) {
@@ -370,7 +342,7 @@ class CloudKitService {
         }
         return false;
       }
-    }); // End of synchronized block
+    });
   }
 
   // --- MCP ServerConfig Methods ---
@@ -380,14 +352,16 @@ class CloudKitService {
     // CloudKit fields must match keys here. All values MUST be strings.
     return {
       'name': config.name,
-      // 'connectionType' field removed as per instruction
+      'connectionType': config.connectionType.name, // Store enum name
       'command': config.command,
       'args': config.args,
-      'host': config.host, // Store non-nullable string
-      'port': config.port.toString(), // Store non-nullable int as string
+      'host':
+          config.host ?? '', // Store nullable string, default to empty if null
+      'port':
+          config.port.toString() ??
+          '', // Store nullable int as string, default to empty if null
       'isActive':
           config.isActive.toString(), // Store bool as string 'true'/'false'
-      // Store the environment map as a JSON string
       'customEnvironment': jsonEncode(config.customEnvironment),
       // 'id' is the recordName, not stored as a field within the record data
     };
@@ -422,28 +396,63 @@ class CloudKitService {
       }
     }
 
-    // Parse host (allow empty string to become default empty string)
-    final hostString = recordData['host'] as String?;
-    // Ensure host is never null, default to empty string if missing/null
-    final host = hostString ?? '';
+    // Parse connectionType safely, defaulting to stdio if missing/invalid
+    McpConnectionType parsedConnectionType = McpConnectionType.stdio; // Default
+    final typeString = recordData['connectionType'] as String?;
+    if (typeString != null) {
+      try {
+        parsedConnectionType = McpConnectionType.values.byName(typeString);
+      } catch (_) {
+        debugPrint(
+          "Invalid connectionType '\$typeString' found for server \$recordName, defaulting to stdio.",
+        );
+      }
+    } else {
+      debugPrint(
+        "Missing connectionType for server \$recordName, defaulting to stdio.",
+      );
+      final potentialHost = recordData['host'] as String?;
+      final potentialPortStr = recordData['port'] as String?;
+      final potentialPort =
+          (potentialPortStr != null && potentialPortStr.isNotEmpty)
+              ? int.tryParse(potentialPortStr)
+              : null;
+      if (potentialHost != null &&
+          potentialHost.isNotEmpty &&
+          potentialPort != null &&
+          potentialPort > 0) {
+        debugPrint(
+          "Applying heuristic: Assuming SSE type due to valid host/port for server \$recordName.",
+        );
+        parsedConnectionType = McpConnectionType.sse;
+      }
+    }
 
-    // Parse port from string safely
+    // Parse host (nullable) - store empty string as empty string, null as null
+    String? parsedHost = recordData['host'] as String?;
+    if (parsedHost == '') parsedHost = null;
+
+    // Parse port from string safely (nullable)
+    int? parsedPort;
     final portString = recordData['port'] as String?;
-    // Ensure port is never null, default to 0 if missing/null/invalid
-    final port =
-        (portString != null && portString.isNotEmpty)
-            ? int.tryParse(portString) ?? 0
-            : 0;
+    if (portString != null && portString.isNotEmpty) {
+      parsedPort = int.tryParse(portString);
+      if (parsedPort == null || parsedPort <= 0 || parsedPort > 65535) {
+        debugPrint(
+          "Invalid port value '\$portString' found for server \$recordName, setting port to null.",
+        );
+        parsedPort = null;
+      }
+    }
 
     final config = McpServerConfig(
       id: recordName, // Use CloudKit's recordName as the unique ID
       name: recordData['name'] as String? ?? '',
-      // connectionType parsing removed as per instruction
+      connectionType: parsedConnectionType, // Use parsed type
       command: recordData['command'] as String? ?? '',
       args: recordData['args'] as String? ?? '',
-      host: host, // Use parsed host
-      port: port, // Use parsed port
-      // Parse bool from string, default to false if invalid/missing
+      host: parsedHost, // Use nullable host
+      port: parsedPort, // Use nullable port
       isActive: (recordData['isActive'] as String?)?.toLowerCase() == 'true',
       customEnvironment: environment,
     );

@@ -42,13 +42,17 @@ class _AddEditMcpServerScreenState
     extends ConsumerState<AddEditMcpServerScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
+  // Stdio Controllers
   final _commandController = TextEditingController();
   final _argsController = TextEditingController();
-  // New controllers for TCP
+  // SSE Controllers
   final _hostController = TextEditingController();
   final _portController = TextEditingController();
-  bool _isActive = false; // Default for new servers
+  // Common State
+  bool _isActive = false;
   List<_EnvVarPair> _envVars = [];
+  // Added: State for connection type selection
+  McpConnectionType _selectedType = McpConnectionType.stdio; // Default to stdio
 
   bool get _isEditing => widget.serverToEdit != null;
 
@@ -58,20 +62,26 @@ class _AddEditMcpServerScreenState
     if (_isEditing) {
       final server = widget.serverToEdit!;
       _nameController.text = server.name;
-      // Always load host and port regardless of type
-      _hostController.text = server.host; // Directly assign non-nullable host
-      _portController.text = server.port.toString();
-      _commandController.text =
-          server.command; // Always load, might be hidden later
-      _argsController.text = server.args; // Always load, might be hidden later
+      _selectedType =
+          server.connectionType; // Initialize type from existing server
+      // Load fields based on type, handling nulls
+      _hostController.text = server.host ?? ''; // Load host if available
+      _portController.text =
+          server.port.toString() ?? ''; // Load port if available
+      _commandController.text = server.command; // Always load command
+      _argsController.text = server.args; // Always load args
       _isActive = server.isActive;
       _envVars = server.customEnvironment.entries
           .map((e) => _EnvVarPair.fromMapEntry(e))
           .toList();
     } else {
-      // Set defaults for new server if needed (e.g., _isActive = false)
+      // Defaults for a new server
+      _selectedType = McpConnectionType.stdio; // Default new servers to stdio
       _isActive = false;
       _envVars = [];
+      // Ensure controllers for the non-default type are empty
+      _hostController.clear();
+      _portController.clear();
     }
   }
 
@@ -80,10 +90,8 @@ class _AddEditMcpServerScreenState
     _nameController.dispose();
     _commandController.dispose();
     _argsController.dispose();
-    // Dispose new controllers
     _hostController.dispose();
     _portController.dispose();
-    // Dispose environment variable controllers
     for (var pair in _envVars) {
       pair.dispose();
     }
@@ -127,43 +135,71 @@ class _AddEditMcpServerScreenState
   Future<void> _saveConfiguration() async {
     FocusScope.of(context).unfocus();
     if (!_formKey.currentState!.validate()) {
-      return; // Validation failed
+      return; // Validation failed based on visible fields
     }
 
-    // Simplified validation: always use Manager Host and Manager Port
-    final host = _hostController.text.trim();
-    final portText = _portController.text.trim();
-    if (host.isEmpty) {
-      _showResultDialog(
-        'Validation Error',
-        'Manager Host cannot be empty.',
-        isError: true,
-      );
-      return;
-    }
-    if (portText.isEmpty) {
-      _showResultDialog(
-        'Validation Error',
-        'Manager Port cannot be empty.',
-        isError: true,
-      );
-      return;
-    }
-    final parsedPort = int.tryParse(portText);
-    if (parsedPort == null || parsedPort <= 0 || parsedPort > 65535) {
-      _showResultDialog(
-        'Validation Error',
-        'Manager Port must be a valid number between 1 and 65535.',
-        isError: true,
-      );
-      return;
+    // --- Validation based on selected type ---
+    String? command;
+    String? args;
+    String? host;
+    int? port;
+
+    if (_selectedType == McpConnectionType.stdio) {
+      command = _commandController.text.trim();
+      args = _argsController.text.trim();
+      if (command.isEmpty) {
+        _showResultDialog(
+          'Validation Error',
+          'Command cannot be empty for Stdio connection.',
+          isError: true,
+        );
+        return;
+      }
+      // Host and port are not needed for stdio, keep them null
+      host = null;
+      port = null;
+    } else {
+      // McpConnectionType.sse
+      host = _hostController.text.trim();
+      final portText = _portController.text.trim();
+      if (host.isEmpty) {
+        _showResultDialog(
+          'Validation Error',
+          'Manager Host cannot be empty for SSE connection.',
+          isError: true,
+        );
+        return;
+      }
+      if (portText.isEmpty) {
+        _showResultDialog(
+          'Validation Error',
+          'Manager Port cannot be empty for SSE connection.',
+          isError: true,
+        );
+        return;
+      }
+      final parsedPort = int.tryParse(portText);
+      if (parsedPort == null || parsedPort <= 0 || parsedPort > 65535) {
+        _showResultDialog(
+          'Validation Error',
+          'Manager Port must be a valid number between 1 and 65535 for SSE connection.',
+          isError: true,
+        );
+        return;
+      }
+      port = parsedPort;
+      // Command and args are not strictly needed for SSE, keep them as they are or clear them
+      command =
+          _commandController.text.trim(); // Keep entered value or set to ''
+      args = _argsController.text.trim(); // Keep entered value or set to ''
     }
 
     final name = _nameController.text.trim();
 
-    // Process environment variables
+    // Process environment variables (logic remains the same)
     final Map<String, String> customEnvMap = {};
     bool envVarError = false;
+    // ... (existing environment variable processing logic) ...
     for (var pair in _envVars) {
       final key = pair.keyController.text.trim();
       final value = pair.valueController.text; // Keep value as is
@@ -185,17 +221,19 @@ class _AddEditMcpServerScreenState
       }
     }
 
+
     if (envVarError) return;
 
-    // Simplified config creation
+    // Create config with the selected type and appropriate fields
     final config = McpServerConfig(
-      id: widget.serverToEdit?.id ?? _uuid.v4(), // Use existing ID or generate new
+      id: widget.serverToEdit?.id ?? _uuid.v4(),
       name: name,
-      host: host,
-      port: parsedPort,
-      command: _commandController.text.trim(), // Pass value even if hidden
-      args: _argsController.text.trim(), // Pass value even if hidden
-      isActive: _isActive, // Use the state variable
+      connectionType: _selectedType, // Pass the selected type
+      command: command, // Pass potentially null/empty command
+      args: args, // Pass potentially null/empty args
+      host: host, // Pass potentially null host
+      port: port, // Pass potentially null port
+      isActive: _isActive,
       customEnvironment: customEnvMap,
     );
 
@@ -210,18 +248,15 @@ class _AddEditMcpServerScreenState
         success = await settingsService.addMcpServer(config);
       }
 
-      // Check mounted before using context
       if (!mounted) return;
 
       if (success) {
         _showResultDialog('Success', 'MCP Server "$name" $actionVerb.');
-        // Check mounted again before popping
-        if (mounted) Navigator.of(context).pop(); // Go back to settings screen
+        if (mounted) Navigator.of(context).pop();
       } else {
         _showResultDialog('Error', 'Failed to $actionVerb MCP server configuration.', isError: true);
       }
     } catch (e) {
-      // Check mounted before using context
       if (!mounted) return;
       _showResultDialog(
         'Error',
@@ -261,39 +296,134 @@ class _AddEditMcpServerScreenState
                           ? 'Server Name cannot be empty'
                           : null,
                     ),
-                    CupertinoTextFormFieldRow(
-                      controller: _hostController,
-                      placeholder: 'manager.example.com or 10.0.0.5',
-                      prefix: const Text('Manager Host*'),
-                      keyboardType: TextInputType.url,
-                      autocorrect: false,
-                      textInputAction: TextInputAction.next,
-                      validator:
-                          (value) =>
-                              (value == null || value.trim().isEmpty)
-                                  ? 'Manager Host is required'
-                                  : null,
-                    ),
-                    CupertinoTextFormFieldRow(
-                      controller: _portController,
-                      placeholder: '8999',
-                      prefix: const Text('Manager Port*'),
-                      keyboardType: const TextInputType.numberWithOptions(
-                        signed: false,
-                        decimal: false,
+                    // --- Connection Type Selector ---
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 10.0,
+                        horizontal: 15.0,
                       ),
-                      textInputAction: TextInputAction.done,
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
-                          return 'Manager Port is required';
-                        }
-                        final port = int.tryParse(value.trim());
-                        if (port == null || port <= 0 || port > 65535) {
-                          return 'Invalid Port (1-65535)';
-                        }
-                        return null;
-                      },
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Connection Type',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: CupertinoColors.systemGrey,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          SizedBox(
+                            // Ensure segmented control takes full width
+                            width: double.infinity,
+                            child: CupertinoSegmentedControl<McpConnectionType>(
+                              children: const {
+                                McpConnectionType.stdio: Padding(
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 6,
+                                  ),
+                                  child: Text('Stdio (Local)'),
+                                ),
+                                McpConnectionType.sse: Padding(
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 6,
+                                  ),
+                                  child: Text('SSE (Manager)'),
+                                ),
+                              },
+                              groupValue: _selectedType,
+                              onValueChanged: (McpConnectionType? newValue) {
+                                if (newValue != null) {
+                                  setState(() {
+                                    _selectedType = newValue;
+                                    // Optional: Clear fields of the other type when switching
+                                    // if (newValue == McpConnectionType.stdio) {
+                                    //   _hostController.clear();
+                                    //   _portController.clear();
+                                    // } else {
+                                    //   _commandController.clear();
+                                    //   _argsController.clear();
+                                    // }
+                                  });
+                                }
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
+                    // --- Stdio Fields (Conditional) ---
+                    if (_selectedType == McpConnectionType.stdio) ...[
+                      CupertinoTextFormFieldRow(
+                        controller: _commandController,
+                        placeholder: '/path/to/mcp_server or dart',
+                        prefix: const Text('Command*'),
+                        textInputAction: TextInputAction.next,
+                        autocorrect: false,
+                        validator: (value) {
+                          // Only validate if stdio is selected
+                          if (_selectedType == McpConnectionType.stdio &&
+                              (value == null || value.trim().isEmpty)) {
+                            return 'Command is required for Stdio';
+                          }
+                          return null;
+                        },
+                      ),
+                      CupertinoTextFormFieldRow(
+                        controller: _argsController,
+                        placeholder: 'run /path/to/script.dart --port 8080',
+                        prefix: const Text('Arguments'),
+                        textInputAction: TextInputAction.done,
+                        autocorrect: false,
+                        // No validator needed for optional args
+                      ),
+                    ],
+                    // --- SSE Fields (Conditional) ---
+                    if (_selectedType == McpConnectionType.sse) ...[
+                      CupertinoTextFormFieldRow(
+                        controller: _hostController,
+                        placeholder: 'manager.example.com or 10.0.0.5',
+                        prefix: const Text('Manager Host*'),
+                        keyboardType: TextInputType.url,
+                        autocorrect: false,
+                        textInputAction: TextInputAction.next,
+                        validator: (value) {
+                          // Only validate if SSE is selected
+                          if (_selectedType == McpConnectionType.sse &&
+                              (value == null || value.trim().isEmpty)) {
+                            return 'Manager Host is required for SSE';
+                          }
+                          return null;
+                        },
+                      ),
+                      CupertinoTextFormFieldRow(
+                        controller: _portController,
+                        placeholder: '8999',
+                        prefix: const Text('Manager Port*'),
+                        keyboardType: const TextInputType.numberWithOptions(
+                          signed: false,
+                          decimal: false,
+                        ),
+                        textInputAction: TextInputAction.done,
+                        validator: (value) {
+                          // Only validate if SSE is selected
+                          if (_selectedType == McpConnectionType.sse) {
+                            if (value == null || value.trim().isEmpty) {
+                              return 'Manager Port is required for SSE';
+                            }
+                            final port = int.tryParse(value.trim());
+                            if (port == null || port <= 0 || port > 65535) {
+                              return 'Invalid Port (1-65535)';
+                            }
+                          }
+                          return null;
+                        },
+                      ),
+                    ],
+                    // --- Common Fields ---
                     CupertinoListTile(
                       padding: const EdgeInsets.fromLTRB(15, 8, 15, 8),
                       title: const Text('Connect on Apply'),
@@ -304,6 +434,7 @@ class _AddEditMcpServerScreenState
                     ),
                   ],
                 ),
+                // ... Environment Variables Section (remains the same) ...
                 CupertinoFormSection.insetGrouped(
                   header: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -323,7 +454,7 @@ class _AddEditMcpServerScreenState
                       vertical: 4.0,
                     ),
                     child: Text(
-                      'Variables passed by the MCP Manager to the underlying server process (if supported by the manager).',
+                      'Variables passed to the underlying server process (for Stdio) or potentially used by the Manager (for SSE).', // Updated footer text
                       style: TextStyle(fontSize: 12),
                     ),
                   ),
@@ -341,6 +472,7 @@ class _AddEditMcpServerScreenState
                       ..._envVars.map((pair) => _buildEnvVarRow(pair)),
                   ],
                 ),
+                // ... Delete Button Section (remains the same) ...
                 if (_isEditing)
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 20.0),
@@ -349,6 +481,7 @@ class _AddEditMcpServerScreenState
                       onPressed:
                           (_isEditing && widget.serverToEdit != null)
                               ? () async {
+                                // ... existing delete confirmation logic ...
                                 final confirmed = await showCupertinoDialog<
                                   bool
                                 >(
@@ -415,7 +548,7 @@ class _AddEditMcpServerScreenState
       ),
     );
   }
-
+  // ... _buildEnvVarRow and _showResultDialog methods remain the same ...
   // Helper to build a row for an environment variable
   Widget _buildEnvVarRow(_EnvVarPair pair) {
     return Padding(
@@ -466,6 +599,25 @@ class _AddEditMcpServerScreenState
           ),
         ],
       ),
+    );
+  }
+
+  void _showResultDialog(String title, String content, {bool isError = false}) {
+    if (!mounted) return;
+    showCupertinoDialog(
+      context: context,
+      builder:
+          (context) => CupertinoAlertDialog(
+            title: Text(title),
+            content: Text(content),
+            actions: [
+              CupertinoDialogAction(
+                isDefaultAction: true,
+                child: const Text('OK'),
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+            ],
+          ),
     );
   }
 }
