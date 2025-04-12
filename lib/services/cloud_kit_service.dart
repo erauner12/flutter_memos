@@ -174,7 +174,6 @@ class CloudKitService {
           '[CloudKitService] Found \${ckRecords.length} ServerConfig records raw from CloudKit.',
         );
         // Add detailed logging for each record
-        // ignore: unused_local_variable
         for (final ckRecord in ckRecords) {
           print(
             '[CloudKitService][Raw Record] recordName: \${ckRecord.recordName}, values: \${ckRecord.values}',
@@ -381,13 +380,11 @@ class CloudKitService {
     // CloudKit fields must match keys here. All values MUST be strings.
     return {
       'name': config.name,
-      'connectionType': config.connectionType.name, // Store enum name as string
+      // 'connectionType' field removed as per instruction
       'command': config.command,
       'args': config.args,
-      'host': config.host ?? '', // Store nullable string, default to empty
-      'port':
-          config.port?.toString() ??
-          '', // Store nullable int as string, default to empty
+      'host': config.host, // Store non-nullable string
+      'port': config.port.toString(), // Store non-nullable int as string
       'isActive':
           config.isActive.toString(), // Store bool as string 'true'/'false'
       // Store the environment map as a JSON string
@@ -425,29 +422,23 @@ class CloudKitService {
       }
     }
 
-    // Parse connection type from string, default to stdio if invalid/missing
-    final connectionTypeName = recordData['connectionType'] as String?;
-    final connectionType = McpConnectionType.values.firstWhere(
-      (e) => e.name == connectionTypeName,
-      orElse: () => McpConnectionType.stdio, // Default to stdio
-    );
-
-    // Parse host (allow empty string to become null)
+    // Parse host (allow empty string to become default empty string)
     final hostString = recordData['host'] as String?;
-    final host =
-        (hostString != null && hostString.isNotEmpty) ? hostString : null;
+    // Ensure host is never null, default to empty string if missing/null
+    final host = hostString ?? '';
 
     // Parse port from string safely
     final portString = recordData['port'] as String?;
+    // Ensure port is never null, default to 0 if missing/null/invalid
     final port =
         (portString != null && portString.isNotEmpty)
-            ? int.tryParse(portString)
-            : null;
+            ? int.tryParse(portString) ?? 0
+            : 0;
 
     final config = McpServerConfig(
       id: recordName, // Use CloudKit's recordName as the unique ID
       name: recordData['name'] as String? ?? '',
-      connectionType: connectionType, // Use parsed enum
+      // connectionType parsing removed as per instruction
       command: recordData['command'] as String? ?? '',
       args: recordData['args'] as String? ?? '',
       host: host, // Use parsed host
@@ -510,7 +501,6 @@ class CloudKitService {
         print(
           '[CloudKitService] Found \${ckRecords.length} McpServerConfig records raw from CloudKit.',
         );
-        // ignore: unused_local_variable
         for (final ckRecord in ckRecords) {
           print(
             '[CloudKitService][Raw MCP Record] recordName: \${ckRecord.recordName}, values: \${ckRecord.values}',
@@ -542,8 +532,6 @@ class CloudKitService {
       await _cloudKit.deleteRecord(
         scope: CloudKitDatabaseScope.private,
         recordName: id,
-        // Optionally specify recordType if needed by the plugin, though recordName should be unique
-        // recordType: _mcpServerConfigRecordType,
       );
       if (kDebugMode) {
         print(
@@ -560,4 +548,4 @@ class CloudKitService {
       return false;
     }
   }
-} // Closing brace for the CloudKitService class
+}
