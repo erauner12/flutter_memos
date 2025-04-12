@@ -176,6 +176,23 @@ void main() {
     serverErrorMessages: {},
   );
 
+  // Define the SSE config and state
+  final defaultSseMcpConfig = const McpServerConfig(
+    id: 'test-sse-id',
+    name: 'Test SSE Server',
+    connectionType: McpConnectionType.sse,
+    host: 'localhost', // Example host
+    port: 8999, // Example port
+    isActive: true,
+  );
+
+  final defaultSseMcpState = McpClientState(
+    serverConfigs: [defaultSseMcpConfig],
+    serverStatuses: {'test-sse-id': McpConnectionStatus.connected},
+    activeClients: {}, // Mock clients if needed
+    serverErrorMessages: {},
+  );
+
   final mockModelCallContent = Content('model', [
     FunctionCall('create_todoist_task', {'content': 'buy milk'})
   ]);
@@ -321,66 +338,139 @@ void main() {
     expect(finalState.chatHistory[3], mockFinalModelContent); // Check final model summary
   });
 
-   test('sendMessage uses direct Gemini stream when MCP is not active', () async {
-    // Arrange
-    const userQuery = 'hello gemini';
+  test(
+    'sendMessage uses MCP (SSE) when active and updates history correctly',
+    () async {
+      // Arrange: Configure the *delegate* mock for this specific test
+      const userQuery = 'create sse task buy milk';
 
-    // Get the fake notifier instance
-    // Cast to the correct FakeMcpClientNotifier type
-    final fakeNotifier =
-        container.read(mcpClientProvider.notifier) as FakeMcpClientNotifier;
+      // Get the fake notifier instance from the container
+      final fakeNotifier =
+          container.read(mcpClientProvider.notifier) as FakeMcpClientNotifier;
 
-    // Set the fake notifier's state to reflect no active connections
-    fakeNotifier.state = defaultMcpState.copyWith(
-      serverStatuses: {
-        'test-id': McpConnectionStatus.disconnected,
-      }, // Disconnected
-      activeClients: {}, // Ensure no active clients
-    );
-    // Add a debug print to confirm state before acting
+      // Ensure the fake notifier's state reflects an active SSE connection
+      // Use the newly defined SSE state
+      fakeNotifier.state = defaultSseMcpState; // Use SSE state
+
+      // Ensure the delegate mock is stubbed correctly for this test case
+      // Re-use the existing successfulMcpResult for simplicity
+      when(
+        mockMcpClientNotifierDelegate.processQuery(userQuery, any),
+      ).thenAnswer(
+        (_) async => successfulMcpResult,
+      ); // Return the same successful result
+
+      final chatNotifier = container.read(chatProvider.notifier);
+
+      // Act: Call the method under test
+      await chatNotifier.sendMessage(userQuery);
+
+      // Assert
+      // Verify calls on the *delegate* mock
+      verify(
+        mockMcpClientNotifierDelegate.processQuery(userQuery, any),
+      ).called(1); // Verify MCP processQuery was called
+      // Verify Gemini stream was NOT called directly
+      verifyNever(mockGeminiService.sendMessageStream(any, any));
+
+      final finalState = container.read(chatProvider);
+
+      // Check display messages (should match the stdio MCP test assertions)
+      expect(finalState.isLoading, isFalse);
+      expect(
+        finalState.displayMessages.length,
+        2,
+      ); // User message + Final response
+      expect(finalState.displayMessages.first.role, Role.user);
+      expect(finalState.displayMessages.first.text, userQuery);
+      expect(finalState.displayMessages.last.role, Role.model);
+      expect(finalState.displayMessages.last.isLoading, isFalse);
+      expect(finalState.displayMessages.last.isError, isFalse);
+      expect(
+        chatNotifier.getTextFromContent(mockFinalModelContent),
+        'OK. Task "buy milk" created (ID: 12345).',
+      );
+      expect(
+        finalState.displayMessages.last.text,
+        'OK. Task "buy milk" created (ID: 12345).',
+      );
+
+      // Check chat history (should match the stdio MCP test assertions)
+      expect(
+        finalState.chatHistory.length,
+        4,
+      ); // User + ModelCall + ToolResponse + FinalModel
+      expect(finalState.chatHistory[0].role, 'user');
+      expect(
+        chatNotifier.getTextFromContent(finalState.chatHistory[0]),
+        userQuery,
+      );
+      expect(finalState.chatHistory[1], mockModelCallContent);
+      expect(finalState.chatHistory[2], mockToolResponseContent);
+      expect(finalState.chatHistory[3], mockFinalModelContent);
+    },
+  );
+
+  test(
+    'sendMessage uses direct Gemini stream when MCP is not active',
+    () async {
+      // Arrange
+      const userQuery = 'hello gemini';
     
+      // Get the fake notifier instance
+      // Cast to the correct FakeMcpClientNotifier type
+      final fakeNotifier =
+          container.read(mcpClientProvider.notifier) as FakeMcpClientNotifier;
 
+      // Set the fake notifier's state to reflect no active connections
+      fakeNotifier.state = defaultMcpState.copyWith(
+        serverStatuses: {
+          'test-id': McpConnectionStatus.disconnected,
+        }, // Disconnected
+        activeClients: {}, // Ensure no active clients
+      );
 
-    // Mock Gemini stream response (remains the same)
-    when(mockGeminiService.sendMessageStream(userQuery, any)).thenAnswer(
-      (_) => Stream.fromIterable([
-        // Simulate stream chunks
-        generateContentResponse(text: 'Hello '),
-        generateContentResponse(text: 'there!'),
-      ]),
-    );
+      // Mock Gemini stream response (remains the same)
+      when(mockGeminiService.sendMessageStream(userQuery, any)).thenAnswer(
+        (_) => Stream.fromIterable([
+          // Simulate stream chunks
+          generateContentResponse(text: 'Hello '),
+          generateContentResponse(text: 'there!'),
+        ]),
+      );
 
-    final chatNotifier = container.read(chatProvider.notifier);
+      final chatNotifier = container.read(chatProvider.notifier);
 
-    // Act
-    await chatNotifier.sendMessage(userQuery);
-    // Need a slight delay to allow the stream listener to process 'onDone'
-    await Future.delayed(Duration.zero);
+      // Act
+      await chatNotifier.sendMessage(userQuery);
+      // Need a slight delay to allow the stream listener to process 'onDone'
+      await Future.delayed(Duration.zero);
 
+      // Assert
+      // Verify calls on the *delegate* mock
+      verifyNever(
+        mockMcpClientNotifierDelegate.processQuery(any, any),
+      ); // MCP should not be called
+      verify(
+        mockGeminiService.sendMessageStream(userQuery, any),
+      ).called(1); // Gemini should be called
 
-    // Assert
-    // Verify calls on the *delegate* mock
-    verifyNever(
-      mockMcpClientNotifierDelegate.processQuery(any, any),
-    ); // MCP should not be called
-    verify(
-      mockGeminiService.sendMessageStream(userQuery, any),
-    ).called(1); // Gemini should be called
+      final finalState = container.read(chatProvider);
+      expect(finalState.isLoading, isFalse);
+      expect(finalState.displayMessages.length, 2); // User + Final response
+      expect(finalState.displayMessages.last.text, 'Hello there!');
+      expect(finalState.displayMessages.last.isLoading, isFalse);
 
-    final finalState = container.read(chatProvider);
-    expect(finalState.isLoading, isFalse);
-    expect(finalState.displayMessages.length, 2); // User + Final response
-    expect(finalState.displayMessages.last.text, 'Hello there!');
-    expect(finalState.displayMessages.last.isLoading, isFalse);
-
-    // Check history for direct Gemini call
-    expect(finalState.chatHistory.length, 2); // User + Final Model
-    expect(finalState.chatHistory[0].role, 'user');
-    expect(finalState.chatHistory[1].role, 'model');
-    expect(
-      chatNotifier.getTextFromContent(finalState.chatHistory[1]), // Use helper
-      'Hello there!',
-    );
-  });
-
+      // Check history for direct Gemini call
+      expect(finalState.chatHistory.length, 2); // User + Final Model
+      expect(finalState.chatHistory[0].role, 'user');
+      expect(finalState.chatHistory[1].role, 'model');
+      expect(
+        chatNotifier.getTextFromContent(
+          finalState.chatHistory[1],
+        ), // Use helper
+        'Hello there!',
+      );
+    },
+  );
 }
