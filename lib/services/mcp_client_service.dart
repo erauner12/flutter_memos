@@ -100,8 +100,7 @@ extension SchemaExtension on Schema {
 @immutable
 class McpProcessResult {
   final Content? modelCallContent; // google_generative_ai.Content
-  final Content?
-  toolResponseContent; // google_generative_ai.Content (FunctionResponse)
+  final Content? toolResponseContent; // google_generative_ai.Content (FunctionResponse)
   final Content finalModelContent; // google_generative_ai.Content
   final String? toolName;
   final Map<String, dynamic>? toolArgs;
@@ -1103,42 +1102,64 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
                 .map((c) => c.text)
                 .join('\n')
                 .trim();
+
+        // --- Phase 4: Parse standardized JSON ---
         if (toolResultString.isNotEmpty) {
           debugPrint(
-            "MCP ProcessQuery: Tool '\$toolName' executed by server '\$targetServerId'. Combined Text Result: '\$toolResultString'",
+            "MCP ProcessQuery: Tool '\$toolName' executed by server '\$targetServerId'. Raw Text Result: '\$toolResultString'",
           );
           try {
             final decoded = jsonDecode(toolResultString);
             if (decoded is Map<String, dynamic>) {
-              toolResultJson = decoded;
+              // Expecting {"status": "...", "message": "...", "result": {...}}
+              final status = decoded['status'] as String?;
+              final message = decoded['message'] as String?;
+              final resultData = decoded['result'] as Map<String, dynamic>?;
+              if (status == 'success') {
+                // Pass the structured result data to Gemini
+                toolResultJson = resultData ?? {'message': message ?? 'Success'};
+                debugPrint("MCP ProcessQuery: Parsed SUCCESS result for Gemini: \$toolResultJson");
+              } else if (status == 'error') {
+                // Pass structured error data to Gemini
+                toolResultJson = {
+                  'error': message ?? 'Unknown server error',
+                  ...?resultData
+                };
+                debugPrint("MCP ProcessQuery: Parsed ERROR result for Gemini: \$toolResultJson");
+              } else {
+                // Fallback if status is missing or unexpected
+                debugPrint("MCP ProcessQuery: Parsed JSON but status field ('\$status') is missing or unexpected. Using raw map.");
+                toolResultJson = decoded;
+              }
             } else if (decoded is List) {
+              // Less likely with new structure, but handle just in case
+              debugPrint("MCP ProcessQuery: Tool result is JSON List. Wrapping in 'result_list'.");
               toolResultJson = {'result_list': decoded};
             } else {
+              // Not a Map or List
+              debugPrint("MCP ProcessQuery: Tool result is valid JSON but not Map/List. Using raw text.");
               toolResultJson = {'result_text': toolResultString};
             }
           } catch (e) {
+            // JSON parsing failed
             debugPrint(
-              "MCP ProcessQuery: Tool result is not valid JSON. Using raw text.",
+              "MCP ProcessQuery: Tool result is not valid JSON ('\$e'). Using raw text.",
             );
             toolResultJson = {'result_text': toolResultString};
           }
         } else {
-          toolResultString = jsonEncode(toolResult.toJson());
-          toolResultJson = {'result_raw': toolResult.toJson()};
+          // Empty response from tool
+          toolResultString = '{"status": "success", "message": "Tool executed successfully but returned no content.", "result": {}}';
+          toolResultJson = {'message': 'Tool executed successfully but returned no content.'};
           debugPrint(
-            "MCP ProcessQuery: Tool '\$toolName' executed by server '\$targetServerId'. No text content found. Raw Result: \$toolResultString",
+            "MCP ProcessQuery: Tool '\$toolName' executed by server '\$targetServerId'. No text content found. Sending default success message.",
           );
         }
-        // *** ADDED LOGGING ***
-        debugPrint(
-          "MCP ProcessQuery: Tool '\$toolName' executed. Raw Result: \${toolResult.toJson()}",
-        );
-        debugPrint(
-          "MCP ProcessQuery: Tool '\$toolName' executed. Parsed JSON for Gemini: \$toolResultJson",
-        );
+        // --- End Phase 4 ---
 
         // --- Prepare for Second Gemini Call ---
         final Content toolResponseContent = Content('function', [
+          // Send the parsed JSON (either success data or error structure)
           FunctionResponse(toolName, toolResultJson),
         ]);
         final List<Content> historyForSecondCall =
@@ -1149,14 +1170,9 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
         }
         historyForSecondCall.add(toolResponseContent);
 
-        // *** ADDED DETAILED LOGGING ***
         debugPrint(
-          "MCP ProcessQuery: History for second Gemini call (JSON): \${jsonEncode(historyForSecondCall.map((c) => c.toJson()).toList())}",
+          "MCP ProcessQuery: Making second Gemini call with tool response...",
         );
-        debugPrint(
-          "MCP ProcessQuery: Making second Gemini call with tool response (prompt is empty string)...",
-        );
-
         // --- Second Gemini Call ---
         final secondResponse = await geminiService.generateContent(
           '',
@@ -1171,7 +1187,6 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
                 "Tool '\$toolName' executed. Result: \$toolResultString",
               ),
             ]);
-        // *** ADDED DETAILED LOGGING ***
         final finalResponseText = finalContent.parts
             .whereType<TextPart>()
             .map((p) => p.text)
@@ -1200,7 +1215,6 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
           sourceServerId: targetServerId,
         );
       } catch (e) {
-        // *** ADDED LOGGING ***
         debugPrint(
           "MCP ProcessQuery: Error during tool execution or second Gemini call: \$e",
         );
@@ -1253,7 +1267,6 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
           Content('model', [
             TextPart("Sorry, I couldn't generate a response."),
           ]);
-      // *** ADDED DETAILED LOGGING ***
       final directResponseText = directContent.parts
           .whereType<TextPart>()
           .map((p) => p.text)
