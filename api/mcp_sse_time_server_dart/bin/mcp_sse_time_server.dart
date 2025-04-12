@@ -5,8 +5,9 @@ import 'package:mcp_dart/mcp_dart.dart' as mcp;
 // Import necessary components from mcp_dart
 import 'package:mcp_dart/src/server/sse_server_manager.dart';
 import 'package:mcp_dart/src/shared/protocol.dart' show RequestHandlerExtra;
-import 'package:shelf/shelf.dart';
-import 'package:shelf/shelf_io.dart' as shelf_io;
+// Remove shelf imports
+// import 'package:shelf/shelf.dart';
+// import 'package:shelf/shelf_io.dart' as shelf_io;
 
 // --- Tool Callback ---
 FutureOr<mcp.CallToolResult> _handleGetServerTime({
@@ -56,19 +57,44 @@ Future<void> main(List<String> args) async {
   // --- HTTP Server Start ---
   final port = int.tryParse(Platform.environment['PORT'] ?? '8999') ?? 8999;
 
-  // The main handler simply delegates all requests to the SseServerManager
-  final handler = const Pipeline()
-      .addMiddleware(logRequests()) // Optional: Log incoming HTTP requests
-      .addHandler(sseManager.handleRequest); // Delegate to the manager
-
-  final server = await shelf_io.serve(
-    handler,
+  // Use dart:io HttpServer directly
+  final server = await HttpServer.bind(
     InternetAddress.anyIPv4, // Listen on all interfaces
     port,
   );
 
   stderr.writeln(
       '[TimeServer] Serving MCP over SSE (GET ${sseManager.ssePath}) and HTTP (POST ${sseManager.messagePath}) at http://${server.address.host}:${server.port}');
+
+  // Listen for incoming requests and delegate to SseServerManager
+  server.listen(
+    (HttpRequest request) {
+      // No need for shelf Pipeline or logRequests middleware here
+      // Logging can be added manually if desired:
+      // stderr.writeln('[TimeServer] Request: ${request.method} ${request.uri}');
+      sseManager.handleRequest(request).catchError((e, s) {
+        stderr.writeln(
+            '[TimeServer] Error handling request ${request.uri}: $e\n$s');
+        // Attempt to close the response if possible and not already closed
+        try {
+          if (!request.response.headers.persistentConnection) {
+            request.response.statusCode = HttpStatus.internalServerError;
+            request.response.write('Internal Server Error');
+            request.response.close();
+          }
+        } catch (_) {
+          // Ignore errors during error response sending
+        }
+      });
+    },
+    onError: (e, s) {
+      stderr.writeln('[TimeServer] HttpServer error: $e\n$s');
+    },
+    onDone: () {
+      stderr.writeln('[TimeServer] HttpServer closed.');
+    },
+  );
+
 
   // --- Graceful Shutdown ---
   Future<void> shutdown() async {
