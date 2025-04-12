@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+// MODIFY: Ensure the model is imported
 import 'package:flutter_memos/models/mcp_server_config.dart';
 import 'package:flutter_memos/providers/settings_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -51,7 +52,7 @@ class _AddEditMcpServerScreenState
   // Common State
   bool _isActive = false;
   List<_EnvVarPair> _envVars = [];
-  // Added: State for connection type selection
+  // MODIFY: Use the imported McpConnectionType enum
   McpConnectionType _selectedType = McpConnectionType.stdio; // Default to stdio
 
   bool get _isEditing => widget.serverToEdit != null;
@@ -67,8 +68,7 @@ class _AddEditMcpServerScreenState
       // Load fields based on type, handling nulls
       _hostController.text = server.host ?? ''; // Load host if available
       _portController.text =
-          server.port.toString() ??
-          ''; // Load port if available, convert int? to String
+          server.port.toString() ?? ''; // Use null-aware access and toString
       _commandController.text = server.command; // Always load command
       _argsController.text = server.args; // Always load args
       _isActive = server.isActive;
@@ -147,10 +147,10 @@ class _AddEditMcpServerScreenState
     }
 
     // --- Validation based on selected type ---
-    String? command;
-    String? args;
-    String? host;
-    int? port;
+    String command = ''; // Default empty
+    String args = ''; // Default empty
+    String? host; // Default null
+    int? port; // Default null
 
     if (_selectedType == McpConnectionType.stdio) {
       command = _commandController.text.trim();
@@ -163,9 +163,7 @@ class _AddEditMcpServerScreenState
         );
         return;
       }
-      // Host and port are not needed for stdio, ensure they are null
-      host = null;
-      port = null;
+      // Host and port remain null for stdio
     } else {
       // McpConnectionType.sse
       host = _hostController.text.trim();
@@ -196,9 +194,7 @@ class _AddEditMcpServerScreenState
         return;
       }
       port = parsedPort;
-      // Command and args are not strictly needed for SSE, ensure they are null/empty
-      command = '';
-      args = '';
+      // Command and args remain empty for SSE
     }
 
     final name = _nameController.text.trim();
@@ -229,13 +225,13 @@ class _AddEditMcpServerScreenState
 
     if (envVarError) return;
 
-    // Create config with the selected type and appropriate fields
+    // MODIFY: Create config using the corrected constructor
     final config = McpServerConfig(
       id: widget.serverToEdit?.id ?? _uuid.v4(),
       name: name,
       connectionType: _selectedType, // Pass the selected type
-      command: command, // Pass potentially null/empty command
-      args: args, // Pass potentially null/empty args
+      command: command, // Pass potentially empty command
+      args: args, // Pass potentially empty args
       host: host, // Pass potentially null host
       port: port, // Pass potentially null port
       isActive: _isActive,
@@ -324,6 +320,7 @@ class _AddEditMcpServerScreenState
                           const SizedBox(height: 6),
                           SizedBox(
                             width: double.infinity,
+                            // MODIFY: Use McpConnectionType enum here
                             child: CupertinoSegmentedControl<McpConnectionType>(
                               children: {
                                 McpConnectionType.stdio: const Padding(
@@ -363,6 +360,7 @@ class _AddEditMcpServerScreenState
                         textInputAction: TextInputAction.next,
                         autocorrect: false,
                         validator: (value) {
+                          // MODIFY: Use McpConnectionType enum here
                           if (_selectedType == McpConnectionType.stdio &&
                               (value == null || value.trim().isEmpty)) {
                             return 'Command is required for Stdio';
@@ -388,6 +386,7 @@ class _AddEditMcpServerScreenState
                         autocorrect: false,
                         textInputAction: TextInputAction.next,
                         validator: (value) {
+                          // MODIFY: Use McpConnectionType enum here
                           if (_selectedType == McpConnectionType.sse &&
                               (value == null || value.trim().isEmpty)) {
                             return 'Manager Host is required for SSE';
@@ -405,6 +404,7 @@ class _AddEditMcpServerScreenState
                         ),
                         textInputAction: TextInputAction.done,
                         validator: (value) {
+                          // MODIFY: Use McpConnectionType enum here
                           if (_selectedType == McpConnectionType.sse) {
                             if (value == null || value.trim().isEmpty) {
                               return 'Manager Port is required for SSE';

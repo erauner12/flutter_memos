@@ -355,11 +355,10 @@ class CloudKitService {
       'connectionType': config.connectionType.name, // Store enum name
       'command': config.command,
       'args': config.args,
-      'host':
-          config.host ?? '', // Store nullable string, default to empty if null
+      'host': config.host ?? '', // Store nullable string, default to empty
       'port':
           config.port.toString() ??
-          '', // Store nullable int as string, default to empty if null
+          '', // Store nullable int as string, default to empty
       'isActive':
           config.isActive.toString(), // Store bool as string 'true'/'false'
       // Store the environment map as a JSON string
@@ -453,14 +452,13 @@ class CloudKitService {
     }
 
     final config = McpServerConfig(
-      id: recordName, // Use CloudKit's recordName as the unique ID
+      id: recordName,
       name: recordData['name'] as String? ?? '',
-      connectionType: parsedConnectionType, // Use parsed type
+      connectionType: parsedConnectionType, // Pass parsed enum
       command: recordData['command'] as String? ?? '',
       args: recordData['args'] as String? ?? '',
-      host: parsedHost, // Use nullable host
-      port: parsedPort, // Use nullable port
-      // Parse bool from string, default to false if invalid/missing
+      host: parsedHost, // Pass nullable host
+      port: parsedPort, // Pass nullable port
       isActive: (recordData['isActive'] as String?)?.toLowerCase() == 'true',
       customEnvironment: environment,
     );
