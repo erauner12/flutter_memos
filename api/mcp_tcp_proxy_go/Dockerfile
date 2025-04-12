@@ -1,35 +1,62 @@
-# Stage 1: Build the Go proxy executable
-FROM golang:1.22-alpine AS builder
-# FROM golang:1.21-alpine AS builder # Use 1.21 if your go.mod specifies it
+# Stage 1: Build Go proxy AND Dart stdio servers
+# Use an image containing both Go and Dart/Flutter SDKs
+FROM cirrusci/flutter:stable AS builder
 
-WORKDIR /src
+# Install Go (Alpine doesn't have it by default in this image)
+# Check available Go version if specific one needed, e.g., apk add go~1.22
+# Using 'go' package usually gets a recent stable version.
+RUN apk update && apk add --no-cache go git
 
-# Copy Go module files and download dependencies first (cache layer)
-# Source path is relative to the build context (project root)
+WORKDIR /build
+
+# --- Setup Go ---
+# Set GOPATH and add Go bin to PATH (optional but good practice)
+ENV GOPATH /go
+ENV PATH $GOPATH/bin:/usr/local/go/bin:$PATH
+RUN mkdir -p "$GOPATH/src" "$GOPATH/bin" && chmod -R 777 "$GOPATH"
+WORKDIR $GOPATH/src/proxy
+
+# Copy Go module files first for caching
 COPY api/mcp_tcp_proxy_go/go.mod api/mcp_tcp_proxy_go/go.sum* ./
 RUN go mod download
 
-# Copy the Go source code from its subdirectory relative to the build context
+# Copy Go source code
 COPY api/mcp_tcp_proxy_go/. .
 
-# Build the Go application statically
-# CGO_ENABLED=0 disables Cgo, needed for static builds on Alpine
-# -ldflags="-s -w" strips debug symbols and DWARF info for smaller binary
-RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o /app/mcp_tcp_proxy_executable ./main.go
+# Build the Go proxy statically for Alpine
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o /app/mcp_tcp_proxy_executable ./main.go
 
-# --- Copy Pre-compiled Dart Executables ---
-# These need to be copied from your host *into* the builder stage
-# Source path is relative to the build context (project root)
-# Ensure the target directory exists in the builder stage
+
+# --- Setup Dart ---
+WORKDIR /build/flutter_app # Use a different directory for Dart project
+
+# Create a non-root user (optional but good practice for pub get/compile)
+# RUN addgroup -S appgroup && adduser -S -G appgroup appuser
+# RUN chown -R appuser:appgroup /build/flutter_app
+# USER appuser
+
+# Copy Dart project files (relative to build context root)
+COPY pubspec.* ./
+COPY bin ./bin
+COPY lib ./lib
+COPY mcp_echo_server ./mcp_echo_server
+# Note: No need to copy api/mcp_tcp_proxy_go here as it's handled above
+
+# Get Dart dependencies for the main project and servers
+RUN dart pub get --verbose
+
+# --- Compile Dart Executables ---
+# Create output directory
 RUN mkdir -p /app/bin
-COPY compiled_dart_bins/mcp_echo_server_executable /app/bin/
-COPY compiled_dart_bins/todoist_mcp_server_executable /app/bin/
-# Add other Dart executables if needed
 
+# Compile Todoist Server (for Linux)
+RUN dart compile exe bin/todoist_mcp_server.dart -o /app/bin/todoist_mcp_server_executable
 
-# Stage 2: Create the minimal runtime image
+# Compile Echo Server (for Linux)
+RUN dart compile exe mcp_echo_server/bin/mcp_echo_server.dart -o /app/bin/mcp_echo_server_executable
+
+# --- Stage 2: Create the minimal runtime image ---
 FROM alpine:latest
-# FROM scratch # For ultra-minimal image, but requires static Go binary and no shell access
 
 WORKDIR /app
 
@@ -53,5 +80,5 @@ EXPOSE $PROXY_PORT
 # Switch to the non-root user
 USER appuser
 
-# Set the entrypoint to run the Go proxy executable using shell form for variable substitution
-ENTRYPOINT /app/mcp_tcp_proxy_executable --port $PROXY_PORT
+# Set the entrypoint to run the Go proxy executable
+ENTRYPOINT ["/app/mcp_tcp_proxy_executable", "--port", "$PROXY_PORT"]
