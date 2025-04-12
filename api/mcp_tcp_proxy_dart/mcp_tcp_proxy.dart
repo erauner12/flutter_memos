@@ -294,7 +294,14 @@ Future<void> handleMcpRequest(
           '[TCP Proxy] Received cancel notification for request ID $cancelledRequestId from $clientDesc.',
         );
         if (cancelledRequestId != null) {
-          _cancelProcess(cancelledRequestId);
+          try {
+            _cancelProcess(cancelledRequestId);
+          } catch (e, s) {
+            print(
+              '[TCP Proxy] Error during process cancellation for request ID $cancelledRequestId: $e\n$s',
+            );
+            // Decide if an error should be sent back; typically notifications don't get responses.
+          }
         } else {
           print('[TCP Proxy] Cancel notification missing requestId.');
         }

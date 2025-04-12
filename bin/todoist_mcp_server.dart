@@ -1591,6 +1591,9 @@ Future<mcp_dart.CallToolResult> _handleCreateTodoistTask({
     final successMsg =
         'Todoist task created successfully: "${newTask.content}"';
     stderr.writeln('[TodoistServer] $successMsg (ID: ${newTask.id})');
+    stderr.writeln(
+      '[TodoistServer] _handleCreateTodoistTask returning successful CallToolResult.',
+    ); // Added log
     return mcp_dart.CallToolResult(
       content: [
         mcp_dart.TextContent(
@@ -1612,6 +1615,9 @@ Future<mcp_dart.CallToolResult> _handleCreateTodoistTask({
       );
       apiErrorMsg = 'API Error creating task (${e.code}): ${e.message}';
     }
+    stderr.writeln(
+      '[TodoistServer] _handleCreateTodoistTask returning error CallToolResult: $apiErrorMsg',
+    ); // Added log
     return mcp_dart.CallToolResult(
       content: [
         mcp_dart.TextContent(
