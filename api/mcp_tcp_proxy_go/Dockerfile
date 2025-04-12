@@ -55,7 +55,6 @@ EXPOSE $PROXY_PORT
 # Switch to the non-root user
 USER appuser
 
-# Set the entrypoint to the executable (exec form)
-ENTRYPOINT ["/app/mcp_tcp_proxy_executable"]
-# Provide default arguments via CMD (shell form allows variable substitution here)
-CMD ["--port", "$PROXY_PORT"]
+# Set the entrypoint using shell form to ensure variable substitution
+# Use /bin/sh -c to explicitly invoke a shell
+ENTRYPOINT ["/bin/sh", "-c", "/app/mcp_tcp_proxy_executable --port $PROXY_PORT"]
