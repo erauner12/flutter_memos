@@ -33,10 +33,13 @@ COPY lib/services/todoist_api_service.dart ./lib/services/
 COPY lib/todoist_api ./lib/todoist_api/
 
 # Get dependencies for Todoist server ONLY (mcp_dart, http, intl, collection)
+# This generates .dart_tool/package_config.json
 RUN dart pub get --verbose
 
-# Compile Todoist Server - Compiler should resolve package:flutter_memos/... via ./lib
-RUN dart compile exe bin/todoist_mcp_server.dart -o /output/todoist_mcp_server_executable
+# Compile Todoist Server - Explicitly use the generated package config
+RUN dart compile exe bin/todoist_mcp_server.dart \
+    --packages=.dart_tool/package_config.json \
+    -o /output/todoist_mcp_server_executable
 
 
 # --- Build Echo Server ---
@@ -49,9 +52,12 @@ COPY mcp_echo_server/bin/mcp_echo_server.pubspec.yaml ./pubspec.yaml
 COPY mcp_echo_server/bin/mcp_echo_server.dart ./bin/
 
 # Get dependencies for Echo server ONLY
+# This generates .dart_tool/package_config.json
 RUN dart pub get --verbose
-# Compile Echo Server
-RUN dart compile exe bin/mcp_echo_server.dart -o /output/mcp_echo_server_executable
+# Compile Echo Server - Explicitly use the generated package config
+RUN dart compile exe bin/mcp_echo_server.dart \
+    --packages=.dart_tool/package_config.json \
+    -o /output/mcp_echo_server_executable
 
 
 # Stage 2: Build the Go proxy executable
