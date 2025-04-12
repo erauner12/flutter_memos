@@ -127,7 +127,7 @@ class GoogleMcpClient {
   final mcp_lib.Client mcpClient;
   final GenerativeModel? model; // google_generative_ai.GenerativeModel
   // Use the Transport type if needed via mcp_lib
-  mcp_lib.Transport? _transport;
+  mcp_lib.Transport? _transport; // MODIFY: Use prefixed type
   List<Tool> _tools = []; // google_generative_ai.Tool
   bool _isConnected = false;
   Function(String serverId, String errorMsg)? _onError;
@@ -223,6 +223,7 @@ class GoogleMcpClient {
       } else {
         // McpConnectionType.sse
         // --- SSE Connection ---
+        // MODIFY: Use nullable host/port safely
         final host = config.host;
         final port = config.port;
 
@@ -230,17 +231,21 @@ class GoogleMcpClient {
           "GoogleMcpClient [${config.id}]: Creating SseClientTransport for manager at $host:$port",
         );
 
-        if (host.trim().isEmpty) {
+        // Add Pre-connection Validation for SSE host/port
+        // MODIFY: Add null checks and use trim() safely
+        if (host == null || host.trim().isEmpty) {
           throw StateError(
             "SSE Connection failed: Host is missing in configuration for ${config.name} [${config.id}].",
           );
         }
-        if (port <= 0 || port > 65535) {
+        // MODIFY: Add null check for port
+        if (port == null || port <= 0 || port > 65535) {
           throw StateError(
             "SSE Connection failed: Port is missing or invalid (must be 1-65535) in configuration for ${config.name} [${config.id}].",
           );
         }
 
+        // MODIFY: Use non-nullable assertion (!) after validation
         final sseTransport = SseClientTransport(
           managerHost: host,
           managerPort: port,
@@ -944,9 +949,14 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
                 "The tool '$toolName' you tried to call is not available. Please inform the user.",
               ),
             ]),
+            // Ensure history includes the model's function call attempt
+            // MODIFY: Print JSON representation for Content object
             (history.map((c) => c).toList() +
                 [if (candidate?.content != null) candidate!.content]),
             tools: null,
+          );
+          debugPrint(
+            "MCP ProcessQuery: Error follow-up response: \${errorFollowUp.candidates.firstOrNull?.content?.toJson()}",
           );
           return McpProcessResult(
             finalModelContent:
@@ -958,6 +968,9 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
                 ]),
           );
         } catch (e) {
+          debugPrint(
+            "MCP ProcessQuery: Error during error follow-up Gemini call: $e",
+          );
           return McpProcessResult(
             finalModelContent: Content('model', [
               TextPart(
@@ -979,9 +992,14 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
                 "The server responsible for the tool '$toolName' is currently unavailable. Please inform the user.",
               ),
             ]),
+            // Ensure history includes the model's function call attempt
+            // MODIFY: Print JSON representation for Content object
             (history.map((c) => c).toList() +
                 [if (candidate?.content != null) candidate!.content]),
             tools: null,
+          );
+          debugPrint(
+            "MCP ProcessQuery: Unavailable server follow-up response: \${errorFollowUp.candidates.firstOrNull?.content?.toJson()}",
           );
           return McpProcessResult(
             finalModelContent:
@@ -993,6 +1011,9 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
                 ]),
           );
         } catch (e) {
+          debugPrint(
+            "MCP ProcessQuery: Error during unavailable server follow-up Gemini call: $e",
+          );
           return McpProcessResult(
             finalModelContent: Content('model', [
               TextPart(
@@ -1002,10 +1023,12 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
           );
         }
       }
+      // MODIFY: Use library prefix
       mcp_lib.CallToolResult toolResult;
       String toolResultString = '';
       Map<String, dynamic> toolResultJson = {};
       try {
+        // MODIFY: Use library prefix
         final params = mcp_lib.CallToolRequestParams(
           name: toolName,
           arguments: toolArgs.map((key, value) => MapEntry(key, value)),
@@ -1013,6 +1036,7 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
         toolResult = await targetClient.callTool(params);
         toolResultString =
             toolResult.content
+                // MODIFY: Use library prefix
                 .whereType<mcp_lib.TextContent>()
                 .map((c) => c.text)
                 .join('\n')
@@ -1048,6 +1072,7 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
           FunctionResponse(toolName, toolResultJson),
         ]);
         final List<Content> historyForSecondCall =
+            // Ensure history includes the model's function call attempt AND the function response
             history.map((c) => c).toList() +
             [
               if (candidate?.content != null) candidate!.content,
@@ -1057,6 +1082,7 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
           "MCP ProcessQuery: Making second Gemini call with tool response...",
         );
         final secondResponse = await geminiService.generateContent(
+          // Send an empty user message to trigger processing of the function response
           Content('user', []),
           historyForSecondCall,
           tools: null,
@@ -1066,8 +1092,9 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
             Content('model', [
               TextPart("Tool '$toolName' executed. $toolResultString"),
             ]);
+        // MODIFY: Print text parts for Content object
         debugPrint(
-          "MCP ProcessQuery: Final response to UI (after tool call): \"${finalContent.parts.whereType<TextPart>().map((p) => p.text).join('')}\"",
+          "MCP ProcessQuery: Final response to UI (after tool call): \"\${finalContent.parts.whereType<TextPart>().map((p) => p.text).join('')}\"",
         );
         return McpProcessResult(
           finalModelContent: finalContent,
@@ -1089,9 +1116,14 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
                 "Executing the tool '$toolName' failed with error: ${e.toString()}. Please inform the user.",
               ),
             ]),
+            // Ensure history includes the model's function call attempt
+            // MODIFY: Print JSON representation for Content object
             (history.map((c) => c).toList() +
                 [if (candidate?.content != null) candidate!.content]),
             tools: null,
+          );
+          debugPrint(
+            "MCP ProcessQuery: Tool execution error follow-up response: \${errorFollowUp.candidates.firstOrNull?.content?.toJson()}",
           );
           return McpProcessResult(
             finalModelContent:
@@ -1103,6 +1135,9 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
                 ]),
           );
         } catch (geminiError) {
+          debugPrint(
+            "MCP ProcessQuery: Error during tool execution error follow-up Gemini call: $geminiError",
+          );
           return McpProcessResult(
             finalModelContent: Content('model', [
               TextPart(
@@ -1128,8 +1163,9 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
           Content('model', [
             TextPart("Sorry, I couldn't generate a response."),
           ]);
+      // MODIFY: Print text parts for Content object
       debugPrint(
-        "MCP ProcessQuery: Final response to UI (direct): \"${directContent.parts.whereType<TextPart>().map((p) => p.text).join('')}\"",
+        "MCP ProcessQuery: Final response to UI (direct): \"\${directContent.parts.whereType<TextPart>().map((p) => p.text).join('')}\"",
       );
       return McpProcessResult(finalModelContent: directContent);
     }
