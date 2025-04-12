@@ -167,8 +167,8 @@ class GoogleMcpClient {
         "GoogleMcpClient [${config.id}]: Creating SseClientTransport for manager at ${config.host}:${config.port}",
       );
       _transport = SseClientTransport(
-        managerHost: config.host!,
-        managerPort: config.port ?? 80,
+        managerHost: config.host,
+        managerPort: config.port,
         // ssePath: '/sse', // Use default or make configurable if needed
       );
 
