@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"bytes" // Needed for stdout buffer
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -14,20 +15,21 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	// Added for potential timeouts
 )
 
 // Configuration mapping tool names to the command path *inside the container*
 // These paths must match where the Dart executables are copied in the Dockerfile
 var toolToServerCommand = map[string]string{
-	"echo":                  "/app/bin/mcp_echo_server_executable",
-	"create_todoist_task":   "/app/bin/todoist_mcp_server_executable",
-	"update_todoist_task":   "/app/bin/todoist_mcp_server_executable",
-	"get_todoist_tasks":     "/app/bin/todoist_mcp_server_executable",
-	"todoist_delete_task":   "/app/bin/todoist_mcp_server_executable",
-	"todoist_complete_task": "/app/bin/todoist_mcp_server_executable",
+	"echo":                   "/app/bin/mcp_echo_server_executable",
+	"create_todoist_task":    "/app/bin/todoist_mcp_server_executable",
+	"update_todoist_task":    "/app/bin/todoist_mcp_server_executable",
+	"get_todoist_tasks":      "/app/bin/todoist_mcp_server_executable",
+	"todoist_delete_task":    "/app/bin/todoist_mcp_server_executable",
+	"todoist_complete_task":  "/app/bin/todoist_mcp_server_executable",
 	"get_todoist_task_by_id": "/app/bin/todoist_mcp_server_executable",
-	"get_task_comments":     "/app/bin/todoist_mcp_server_executable",
-	"create_task_comment":   "/app/bin/todoist_mcp_server_executable",
+	"get_task_comments":      "/app/bin/todoist_mcp_server_executable",
+	"create_task_comment":    "/app/bin/todoist_mcp_server_executable",
 	// Add other tools if needed
 }
 
@@ -43,6 +45,7 @@ func init() {
 	for cmdPath := range serverSet {
 		serversToListTools = append(serversToListTools, cmdPath)
 	}
+	log.SetFlags(log.LstdFlags | log.Lmicroseconds) // Add microseconds to logs
 }
 
 // Simple struct to represent a parsed MCP request (only need method and id for routing)
@@ -66,12 +69,19 @@ type mcpError struct {
 	Data    interface{} `json:"data,omitempty"`
 }
 
+// Struct for successful MCP response result
+type mcpSuccessResponse struct {
+	Jsonrpc string      `json:"jsonrpc"`
+	ID      interface{} `json:"id"`
+	Result  interface{} `json:"result"`
+}
+
 const (
-	parseErrorCode      = -32700
-	invalidRequestCode  = -32600
-	methodNotFoundCode  = -32601
-	internalErrorCode   = -32603
-	serverErrorCodeBase = -32000
+	parseErrorCode     = -32700
+	invalidRequestCode = -32600
+	methodNotFoundCode = -32601
+	internalErrorCode  = -32603
+	// serverErrorCodeBase = -32000 // Not used directly here yet
 )
 
 func main() {
@@ -101,7 +111,7 @@ func main() {
 		conn, err := listener.Accept()
 		if err != nil {
 			// Check if the error is due to the listener being closed
-			if opErr, ok := err.(*net.OpError); ok && opErr.Err.Error() == "use of closed network connection" {
+			if opErr, ok := err.(*net.OpError); ok && (strings.Contains(opErr.Err.Error(), "use of closed network connection") || strings.Contains(opErr.Err.Error(), "invalid argument")) {
 				log.Println("[TCP Proxy GO] Listener closed, exiting accept loop.")
 				break // Exit loop gracefully
 			}
@@ -121,15 +131,18 @@ func handleClient(conn net.Conn, clientDesc string) {
 	defer log.Printf("[TCP Proxy GO] Client disconnected: %s", clientDesc)
 
 	reader := bufio.NewReader(conn)
+	// Use a channel to signal when request handling is done for this connection
+	// This helps manage goroutines if needed, though currently each request gets its own
+	// doneChan := make(chan bool)
 
 	for {
 		// Read messages delimited by newline
 		messageBytes, err := reader.ReadBytes('\n')
 		if err != nil {
-			if err != io.EOF { // EOF is expected when client disconnects cleanly
+			if err != io.EOF && !strings.Contains(err.Error(), "use of closed network connection") {
 				log.Printf("[TCP Proxy GO] Error reading from client %s: %v", clientDesc, err)
 			} else {
-				log.Printf("[TCP Proxy GO] Client %s closed connection (EOF).", clientDesc)
+				log.Printf("[TCP Proxy GO] Client %s closed connection.", clientDesc)
 			}
 			break // Exit loop on error or EOF
 		}
@@ -142,9 +155,11 @@ func handleClient(conn net.Conn, clientDesc string) {
 
 		log.Printf("[TCP Proxy GO] Received raw from %s: %s", clientDesc, messageString)
 
-		// Handle the request asynchronously (optional, but good for long-running tools)
+		// Handle the request asynchronously
+		// Pass the connection so the handler can write back
 		go handleMcpRequest(messageString, conn, clientDesc)
 	}
+	// close(doneChan) // Signal that this client handler is finished
 }
 
 // Parses the MCP request and routes it to the appropriate stdio server
@@ -159,17 +174,30 @@ func handleMcpRequest(messageJsonString string, clientConn net.Conn, clientDesc 
 		sendErrorResponse(clientConn, nil, parseErrorCode, "Parse error", nil) // ID is null here
 		return
 	}
-	reqID = req.ID // Store ID after successful basic parse
+	// Attempt to unmarshal the ID specifically to preserve its type (number or string)
+	// If ID is missing or null in the JSON, reqID will remain nil
+	_ = json.Unmarshal(req.ID, &reqID)
 
 	log.Printf("[TCP Proxy GO] Parsed request ID %v, Method %s from %s", reqID, req.Method, clientDesc)
 
 	// --- Routing Logic ---
 	switch req.Method {
+	case "initialize":
+		// Handle initialize directly in the proxy if needed, or just ignore/pass through
+		// For now, send a basic success response mimicking a simple server
+		log.Printf("[TCP Proxy GO] Handling initialize request from %s", clientDesc)
+		sendInitializeResponse(clientConn, reqID)
+	case "ping":
+		log.Printf("[TCP Proxy GO] Handling ping request from %s", clientDesc)
+		sendSuccessResponse(clientConn, reqID, map[string]interface{}{}) // Empty result for ping
 	case "tools/call":
 		handleToolCall(messageJsonString, req, clientConn, clientDesc)
 	case "tools/list":
 		handleToolList(req, clientConn, clientDesc)
-	// Add cases for other methods like "initialize", "ping" if needed
+	// Add cases for other methods like "notifications/initialized" (ignore?)
+	case "notifications/initialized":
+		log.Printf("[TCP Proxy GO] Received initialized notification from %s. Ignoring.", clientDesc)
+		// No response needed for notifications
 	default:
 		log.Printf("[TCP Proxy GO] Method not found: %s from %s", req.Method, clientDesc)
 		sendErrorResponse(clientConn, reqID, methodNotFoundCode, "Method not found", nil)
@@ -180,11 +208,10 @@ func handleMcpRequest(messageJsonString string, clientConn net.Conn, clientDesc 
 func handleToolCall(originalRequestJson string, req mcpRequest, clientConn net.Conn, clientDesc string) {
 	var callParams struct {
 		Name      string            `json:"name"`
-		Arguments json.RawMessage `json:"arguments"` // Keep args raw for now
+		Arguments json.RawMessage `json:"arguments"` // Keep args raw
 	}
 
-	err := json.Unmarshal(req.Params, &callParams)
-	if err != nil {
+	if err := json.Unmarshal(req.Params, &callParams); err != nil {
 		log.Printf("[TCP Proxy GO] Error parsing tools/call params from %s: %v", clientDesc, err)
 		sendErrorResponse(clientConn, req.ID, invalidRequestCode, "Invalid parameters for tools/call", nil)
 		return
@@ -201,97 +228,19 @@ func handleToolCall(originalRequestJson string, req mcpRequest, clientConn net.C
 	log.Printf("[TCP Proxy GO] Routing tool '%s' to command '%s' for client %s", toolName, serverCmdPath, clientDesc)
 
 	// --- Execute Stdio Server ---
-	cmd := exec.Command(serverCmdPath)
-
-	// Prepare environment variables
-	cmd.Env = os.Environ() // Inherit proxy's environment (includes TODOIST_API_TOKEN etc. from docker-compose)
-	// Add/override specific env vars if needed:
-	// cmd.Env = append(cmd.Env, "MY_VAR=some_value")
-
-	stdinPipe, err := cmd.StdinPipe()
+	responseBytes, err := executeStdioServer(serverCmdPath, originalRequestJson)
 	if err != nil {
-		log.Printf("[TCP Proxy GO] Error creating stdin pipe for %s: %v", serverCmdPath, err)
-		sendErrorResponse(clientConn, req.ID, internalErrorCode, "Failed to start tool server", nil)
-		return
-	}
-	stdoutPipe, err := cmd.StdoutPipe()
-	if err != nil {
-		log.Printf("[TCP Proxy GO] Error creating stdout pipe for %s: %v", serverCmdPath, err)
-		sendErrorResponse(clientConn, req.ID, internalErrorCode, "Failed to start tool server", nil)
-		return
-	}
-	stderrPipe, err := cmd.StderrPipe()
-	if err != nil {
-		log.Printf("[TCP Proxy GO] Error creating stderr pipe for %s: %v", serverCmdPath, err)
-		sendErrorResponse(clientConn, req.ID, internalErrorCode, "Failed to start tool server", nil)
-		return
-	}
-
-	// Start the command
-	err = cmd.Start()
-	if err != nil {
-		log.Printf("[TCP Proxy GO] Error starting command %s: %v", serverCmdPath, err)
-		sendErrorResponse(clientConn, req.ID, internalErrorCode, "Failed to start tool server process", nil)
-		return
-	}
-	log.Printf("[TCP Proxy GO] Started subprocess PID %d for %s", cmd.Process.Pid, serverCmdPath)
-
-	// Goroutine to log stderr from the subprocess
-	go func() {
-		scanner := bufio.NewScanner(stderrPipe)
-		for scanner.Scan() {
-			log.Printf("[Subprocess %d stderr] %s", cmd.Process.Pid, scanner.Text())
-		}
-	}()
-
-	// Write the original request JSON to the subprocess's stdin
-	// Important: Include the newline character!
-	_, err = io.WriteString(stdinPipe, originalRequestJson+"\n")
-	if err != nil {
-		log.Printf("[TCP Proxy GO] Error writing to stdin of PID %d: %v", cmd.Process.Pid, err)
-		cmd.Process.Kill() // Kill process if we can't write to it
-		sendErrorResponse(clientConn, req.ID, internalErrorCode, "Error communicating with tool server", nil)
-		return
-	}
-	stdinPipe.Close() // Close stdin to signal end of input
-
-	// Read the response JSON from the subprocess's stdout (expects one line)
-	responseReader := bufio.NewReader(stdoutPipe)
-	responseBytes, err := responseReader.ReadBytes('\n')
-
-	// Wait for the process to finish and check exit code *after* reading stdout
-	waitErr := cmd.Wait()
-
-	if err != nil && err != io.EOF { // EOF might happen if process exits without newline
-		log.Printf("[TCP Proxy GO] Error reading stdout from PID %d: %v", cmd.Process.Pid, err)
-		// Don't send error yet, check waitErr first
-	}
-
-	if waitErr != nil {
-		log.Printf("[TCP Proxy GO] Subprocess PID %d exited with error: %v", cmd.Process.Pid, waitErr)
-		// If we didn't get a response OR the process errored, send internal error
-		if len(responseBytes) == 0 || err != nil {
-			sendErrorResponse(clientConn, req.ID, internalErrorCode, "Tool server exited unexpectedly", fmt.Sprintf("%v", waitErr))
-			return
-		}
-		// If we got a response but the process still errored, log it but proceed with the response
-		log.Printf("[TCP Proxy GO] Warning: Subprocess PID %d exited with error but provided a response.", cmd.Process.Pid)
-	} else {
-		log.Printf("[TCP Proxy GO] Subprocess PID %d exited successfully.", cmd.Process.Pid)
-	}
-
-	if len(responseBytes) == 0 {
-		log.Printf("[TCP Proxy GO] No response received from stdout of PID %d", cmd.Process.Pid)
-		sendErrorResponse(clientConn, req.ID, internalErrorCode, "No response from tool server", nil)
+		log.Printf("[TCP Proxy GO] Error executing stdio server %s for tool '%s': %v", serverCmdPath, toolName, err)
+		sendErrorResponse(clientConn, req.ID, internalErrorCode, fmt.Sprintf("Error executing tool '%s'", toolName), err.Error())
 		return
 	}
 
 	// Forward the raw response (including newline) back to the client
-	log.Printf("[TCP Proxy GO] Forwarding response from PID %d to client %s", cmd.Process.Pid, clientDesc)
+	log.Printf("[TCP Proxy GO] Forwarding response for tool '%s' to client %s", toolName, clientDesc)
 	_, writeErr := clientConn.Write(responseBytes)
 	if writeErr != nil {
 		log.Printf("[TCP Proxy GO] Error writing response to client %s: %v", clientDesc, writeErr)
-		// Client connection might be dead, can't send error back
+		// Client connection might be dead
 	}
 }
 
@@ -302,8 +251,11 @@ func handleToolList(req mcpRequest, clientConn net.Conn, clientDesc string) {
 	var allTools []map[string]interface{} // Store tools from all servers
 	var wg sync.WaitGroup
 	var mu sync.Mutex // Mutex to protect access to allTools slice
+	var errors []string // Collect errors from subprocesses
 
-	listRequestJson := fmt.Sprintf(`{"jsonrpc":"2.0","method":"tools/list","id":%s}`+"\n", string(req.ID)) // Use client's ID? Or generate new? Using client's ID for now.
+	// Use a unique ID for proxy's internal requests to servers? Or reuse client's?
+	// Reusing client's ID might be simpler for now, assuming servers handle it.
+	listRequestJson := fmt.Sprintf(`{"jsonrpc":"2.0","method":"tools/list","id":%s}`+"\n", string(req.ID))
 
 	for _, serverCmdPath := range serversToListTools {
 		wg.Add(1)
@@ -311,67 +263,50 @@ func handleToolList(req mcpRequest, clientConn net.Conn, clientDesc string) {
 			defer wg.Done()
 			log.Printf("[TCP Proxy GO] Querying tools/list from %s", cmdPath)
 
-			cmd := exec.Command(cmdPath)
-			cmd.Env = os.Environ() // Pass environment
-
-			stdinPipe, _ := cmd.StdinPipe() // Error handling omitted for brevity here, add in real code
-			stdoutPipe, _ := cmd.StdoutPipe()
-			stderrPipe, _ := cmd.StderrPipe() // Capture stderr
-
-			err := cmd.Start()
+			responseBytes, err := executeStdioServer(cmdPath, listRequestJson)
 			if err != nil {
-				log.Printf("[TCP Proxy GO] Error starting %s for tools/list: %v", cmdPath, err)
-				return
-			}
-			pid := cmd.Process.Pid
-
-			// Log stderr
-			go func() {
-				scanner := bufio.NewScanner(stderrPipe)
-				for scanner.Scan() {
-					log.Printf("[Subprocess %d stderr] %s", pid, scanner.Text())
-				}
-			}()
-
-			_, err = io.WriteString(stdinPipe, listRequestJson)
-			if err != nil {
-				log.Printf("[TCP Proxy GO] Error writing tools/list request to PID %d: %v", pid, err)
-				cmd.Process.Kill()
-				return
-			}
-			stdinPipe.Close()
-
-			responseReader := bufio.NewReader(stdoutPipe)
-			responseBytes, err := responseReader.ReadBytes('\n')
-			waitErr := cmd.Wait() // Wait after reading
-
-			if err != nil && err != io.EOF {
-				log.Printf("[TCP Proxy GO] Error reading tools/list response from PID %d: %v", pid, err)
-				return
-			}
-			if waitErr != nil {
-				log.Printf("[TCP Proxy GO] Subprocess PID %d for tools/list exited with error: %v", pid, waitErr)
-				// Don't return error to client, just log, maybe one server failed
+				log.Printf("[TCP Proxy GO] Error executing %s for tools/list: %v", cmdPath, err)
+				mu.Lock()
+				errors = append(errors, fmt.Sprintf("Server %s failed: %v", cmdPath, err))
+				mu.Unlock()
 				return
 			}
 
 			// Parse the response to get the tools list
 			var listResponse struct {
+				// Use json.RawMessage for ID to handle string or number
+				ID     json.RawMessage `json:"id"`
 				Result struct {
 					Tools []map[string]interface{} `json:"tools"`
 				} `json:"result"`
+				Error *mcpError `json:"error,omitempty"` // Pointer to handle potential error response from server
 			}
-			err = json.Unmarshal(responseBytes, &listResponse)
-			if err != nil {
-				log.Printf("[TCP Proxy GO] Error parsing tools/list response JSON from PID %d: %v. Raw: %s", pid, err, string(responseBytes))
+			if err := json.Unmarshal(responseBytes, &listResponse); err != nil {
+				log.Printf("[TCP Proxy GO] Error parsing tools/list response JSON from %s: %v. Raw: %s", cmdPath, err, string(responseBytes))
+				mu.Lock()
+				errors = append(errors, fmt.Sprintf("Server %s invalid response: %v", cmdPath, err))
+				mu.Unlock()
+				return
+			}
+
+			// Check if the server returned an error in the JSON-RPC response
+			if listResponse.Error != nil {
+				log.Printf("[TCP Proxy GO] Server %s returned error for tools/list: %v", cmdPath, listResponse.Error.Message)
+				mu.Lock()
+				errors = append(errors, fmt.Sprintf("Server %s error: %s", cmdPath, listResponse.Error.Message))
+				mu.Unlock()
 				return
 			}
 
 			// Add tools to the shared list safely
-			mu.Lock()
-			allTools = append(allTools, listResponse.Result.Tools...)
-			mu.Unlock()
-			log.Printf("[TCP Proxy GO] Got %d tools from %s", len(listResponse.Result.Tools), cmdPath)
+			if len(listResponse.Result.Tools) > 0 {
+				mu.Lock()
+				allTools = append(allTools, listResponse.Result.Tools...)
+				mu.Unlock()
+				log.Printf("[TCP Proxy GO] Got %d tools from %s", len(listResponse.Result.Tools), cmdPath)
+			} else {
+				log.Printf("[TCP Proxy GO] Got 0 tools from %s", cmdPath)
+			}
 
 		}(serverCmdPath)
 	}
@@ -379,33 +314,104 @@ func handleToolList(req mcpRequest, clientConn net.Conn, clientDesc string) {
 	wg.Wait() // Wait for all goroutines to finish
 
 	// --- Send aggregated response ---
-	finalResponse := map[string]interface{}{
-		"jsonrpc": "2.0",
-		"id":      req.ID,
-		"result": map[string]interface{}{
-			"tools": allTools,
-		},
+	// Even if some servers failed, send back the tools we did get
+	log.Printf("[TCP Proxy GO] Aggregated %d tools total.", len(allTools))
+	if len(errors) > 0 {
+		log.Printf("[TCP Proxy GO] Errors encountered during tools/list: %s", strings.Join(errors, "; "))
+		// Optionally include errors in the response metadata if the protocol supported it
 	}
 
-	responseBytes, err := json.Marshal(finalResponse)
+	sendSuccessResponse(clientConn, req.ID, map[string]interface{}{"tools": allTools})
+}
+
+// Executes a stdio server process, sends a request, and returns the response.
+func executeStdioServer(serverCmdPath, requestJson string) ([]byte, error) {
+	cmd := exec.Command(serverCmdPath)
+	cmd.Env = os.Environ() // Inherit environment
+
+	stdinPipe, err := cmd.StdinPipe()
 	if err != nil {
-		log.Printf("[TCP Proxy GO] Error marshalling final tools/list response: %v", err)
-		sendErrorResponse(clientConn, req.ID, internalErrorCode, "Failed to assemble tool list", nil)
-		return
+		return nil, fmt.Errorf("error creating stdin pipe for %s: %w", serverCmdPath, err)
+	}
+	stdoutPipe, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, fmt.Errorf("error creating stdout pipe for %s: %w", serverCmdPath, err)
+	}
+	stderrPipe, err := cmd.StderrPipe()
+	if err != nil {
+		return nil, fmt.Errorf("error creating stderr pipe for %s: %w", serverCmdPath, err)
 	}
 
-	log.Printf("[TCP Proxy GO] Sending aggregated tools/list response to %s (%d tools)", clientDesc, len(allTools))
-	_, writeErr := clientConn.Write(append(responseBytes, '\n')) // Add newline
-	if writeErr != nil {
-		log.Printf("[TCP Proxy GO] Error writing tools/list response to client %s: %v", clientDesc, writeErr)
+	// Start the command
+	if err := cmd.Start(); err != nil {
+		return nil, fmt.Errorf("error starting command %s: %w", serverCmdPath, err)
 	}
+	pid := cmd.Process.Pid
+	log.Printf("[TCP Proxy GO] Started subprocess PID %d for %s", pid, serverCmdPath)
+
+	// Goroutine to log stderr
+	var stderrOutput bytes.Buffer
+	go func() {
+		scanner := bufio.NewScanner(stderrPipe)
+		for scanner.Scan() {
+			line := scanner.Text()
+			log.Printf("[Subprocess %d stderr] %s", pid, line)
+			stderrOutput.WriteString(line + "\n") // Capture stderr
+		}
+	}()
+
+	// Write request to stdin
+	if _, err = io.WriteString(stdinPipe, requestJson); err != nil {
+		cmd.Process.Kill() // Ensure process is killed
+		cmd.Wait()         // Wait for resources to be released
+		return nil, fmt.Errorf("error writing to stdin of PID %d: %w", pid, err)
+	}
+	// Close stdin *after* writing
+	if err := stdinPipe.Close(); err != nil {
+		log.Printf("[TCP Proxy GO] Warning: error closing stdin for PID %d: %v", pid, err)
+		// Continue, maybe process already exited
+	}
+
+	// Read response from stdout
+	responseReader := bufio.NewReader(stdoutPipe)
+	responseBytes, readErr := responseReader.ReadBytes('\n') // Read until newline
+
+	// Wait for the process to finish *after* attempting to read stdout
+	waitErr := cmd.Wait()
+
+	// --- Error Handling ---
+	// Prioritize process exit error if we didn't get a response
+	if waitErr != nil && (readErr != nil || len(responseBytes) == 0) {
+		log.Printf("[TCP Proxy GO] Subprocess PID %d exited with error: %v. Stderr: %s", pid, waitErr, stderrOutput.String())
+		return nil, fmt.Errorf("server process %s exited with error: %w. Stderr: %s", serverCmdPath, waitErr, stderrOutput.String())
+	}
+	// Handle read error if process exited cleanly but read failed
+	if readErr != nil && readErr != io.EOF {
+		log.Printf("[TCP Proxy GO] Error reading stdout from PID %d: %v. Stderr: %s", pid, readErr, stderrOutput.String())
+		return nil, fmt.Errorf("error reading response from %s: %w. Stderr: %s", serverCmdPath, readErr, stderrOutput.String())
+	}
+	// Handle case where process exited cleanly but sent no response
+	if len(responseBytes) == 0 {
+		log.Printf("[TCP Proxy GO] No response received from stdout of PID %d. Stderr: %s", pid, stderrOutput.String())
+		return nil, fmt.Errorf("no response from server %s. Stderr: %s", serverCmdPath, stderrOutput.String())
+	}
+	// Log success if process exited cleanly
+	if waitErr == nil {
+		log.Printf("[TCP Proxy GO] Subprocess PID %d exited successfully.", pid)
+	} else {
+		// Log warning if process errored but we still got a response
+		log.Printf("[TCP Proxy GO] Warning: Subprocess PID %d exited with error (%v) but provided a response.", pid, waitErr)
+	}
+
+
+	return responseBytes, nil
 }
 
 // Helper to send a JSON-RPC error response
 func sendErrorResponse(conn net.Conn, id interface{}, code int, message string, data interface{}) {
 	errResp := mcpErrorResponse{
 		Jsonrpc: "2.0",
-		ID:      id,
+		ID:      id, // Use the passed ID (can be nil for parse errors)
 		Error: mcpError{
 			Code:    code,
 			Message: message,
@@ -416,11 +422,51 @@ func sendErrorResponse(conn net.Conn, id interface{}, code int, message string, 
 	if err != nil {
 		log.Printf("[TCP Proxy GO] CRITICAL: Failed to marshal error response: %v", err)
 		// Attempt to send a plain text error if JSON fails
-		conn.Write([]byte(fmt.Sprintf("Error: %s\n", message)))
+		_, _ = conn.Write([]byte(fmt.Sprintf("{\"jsonrpc\":\"2.0\",\"id\":null,\"error\":{\"code\":%d,\"message\":\"%s\"}}\n", internalErrorCode, "Proxy error marshalling response")))
 		return
 	}
 	_, writeErr := conn.Write(append(respBytes, '\n')) // Add newline
 	if writeErr != nil {
+		// Log locally, can't send back to client if write fails
 		log.Printf("[TCP Proxy GO] Failed to write error response to client: %v", writeErr)
 	}
+}
+
+// Helper to send a JSON-RPC success response
+func sendSuccessResponse(conn net.Conn, id interface{}, result interface{}) {
+	resp := mcpSuccessResponse{
+		Jsonrpc: "2.0",
+		ID:      id,
+		Result:  result,
+	}
+	respBytes, err := json.Marshal(resp)
+	if err != nil {
+		log.Printf("[TCP Proxy GO] Error marshalling success response: %v", err)
+		// Try sending an internal error back to the client
+		sendErrorResponse(conn, id, internalErrorCode, "Failed to marshal success response", err.Error())
+		return
+	}
+	_, writeErr := conn.Write(append(respBytes, '\n')) // Add newline
+	if writeErr != nil {
+		log.Printf("[TCP Proxy GO] Failed to write success response to client: %v", writeErr)
+	}
+}
+
+// Specific handler for initialize response (mimics basic server)
+func sendInitializeResponse(conn net.Conn, id interface{}) {
+	// Define basic proxy capabilities (it doesn't really have MCP capabilities itself)
+	// It just forwards tool calls.
+	capabilities := map[string]interface{}{
+		"tools": map[string]interface{}{}, // Indicate tool support is proxied
+	}
+	serverInfo := map[string]string{
+		"name":    "mcp-tcp-proxy-go",
+		"version": "0.1.0", // Example version
+	}
+	result := map[string]interface{}{
+		"protocolVersion": "2024-11-05", // Use the latest known version
+		"capabilities":    capabilities,
+		"serverInfo":      serverInfo,
+	}
+	sendSuccessResponse(conn, id, result)
 }
