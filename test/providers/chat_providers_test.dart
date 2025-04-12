@@ -11,7 +11,7 @@ import 'package:flutter_memos/services/gemini_service.dart';
 // Explicitly import necessary symbols AND the provider from the service file.
 import 'package:flutter_memos/services/mcp_client_service.dart'
     show // Import only what's needed + the provider
-        McpClientNotifier,
+        McpClientNotifier, // Keep the real notifier for extension
         McpClientState,
         McpConnectionStatus,
         McpProcessResult,
@@ -66,12 +66,13 @@ class FakeMcpClientNotifier extends McpClientNotifier {
 
   // Constructor now accepts Ref and initial state, passes Ref to super
   FakeMcpClientNotifier(
-    super.ref,
+    super.ref, // Accept Ref
     McpClientState initialState,
     this.mockDelegate,
   ) {
     // Pass ref to super constructor
     // Manually set the initial state since the super constructor initializes differently
+    // Or if the super constructor sets a default state, override it here.
     state = initialState;
   }
 
@@ -98,27 +99,38 @@ class FakeMcpClientNotifier extends McpClientNotifier {
   void initialize() {
     // Prevent real initialization logic if necessary
     // mockDelegate.initialize(); // Optionally delegate if needed for verification
-}
+    print("FakeMcpClientNotifier: initialize() called (overridden, no-op)");
+  }
 
   @override
   Future<void> connectServer(McpServerConfig serverConfig) async {
+    print(
+      "FakeMcpClientNotifier: connectServer(${serverConfig.id}) called (overridden, no-op)",
+    );
     // Optionally delegate: return mockDelegate.connectServer(serverConfig);
     return Future.value();
   }
 
   @override
   Future<void> disconnectServer(String serverId) async {
+    print(
+      "FakeMcpClientNotifier: disconnectServer($serverId) called (overridden, no-op)",
+    );
     // Optionally delegate: return mockDelegate.disconnectServer(serverId);
     return Future.value();
   }
 
   @override
   void syncConnections() {
+    print(
+      "FakeMcpClientNotifier: syncConnections() called (overridden, no-op)",
+    );
     // Optionally delegate: mockDelegate.syncConnections();
   }
 
   @override
   void rebuildToolMap() {
+    print("FakeMcpClientNotifier: rebuildToolMap() called (overridden, no-op)");
     // Optionally delegate: mockDelegate.rebuildToolMap();
   }
 
@@ -126,9 +138,10 @@ class FakeMcpClientNotifier extends McpClientNotifier {
   // We override dispose to avoid potential issues with the real notifier's dispose logic.
   @override
   void dispose() {
+    print("FakeMcpClientNotifier: dispose() called (overridden)");
     // Don't call super.dispose() if it has complex logic we want to avoid.
     // Or delegate if the mock needs to track disposal: mockDelegate.dispose();
-    super.dispose(); // Call super.dispose()
+    // super.dispose(); // Call super.dispose() if it's safe/needed
   }
 }
 // --- End Fake McpClientNotifier ---
@@ -158,20 +171,22 @@ void main() {
   mockMcpClientNotifierDelegate; // Renamed for clarity
   late MockGeminiService mockGeminiService;
   late ProviderContainer container;
+  // Access ChatNotifier instance for helper method
+  late ChatNotifier chatNotifierInstance;
 
   // Default mock states/values
-  final defaultMcpState = const McpClientState(
-    serverConfigs: [
-      McpServerConfig(
-        id: 'test-id',
-        name: 'Test Server',
-        // Add the missing connectionType parameter
-        connectionType: McpConnectionType.stdio,
-        command: 'test',
-        args: '',
-      ),
-    ],
-    serverStatuses: {'test-id': McpConnectionStatus.connected},
+  final defaultStdioMcpConfig = const McpServerConfig(
+    id: 'test-stdio-id',
+    name: 'Test Stdio Server',
+    connectionType: McpConnectionType.stdio, // Explicitly stdio
+    command: 'test',
+    args: '',
+    isActive: true,
+  );
+
+  final defaultStdioMcpState = McpClientState(
+    serverConfigs: [defaultStdioMcpConfig],
+    serverStatuses: {'test-stdio-id': McpConnectionStatus.connected},
     activeClients: {}, // Mock clients if needed for McpClientNotifier tests
     serverErrorMessages: {},
   );
@@ -180,7 +195,7 @@ void main() {
   final defaultSseMcpConfig = const McpServerConfig(
     id: 'test-sse-id',
     name: 'Test SSE Server',
-    connectionType: McpConnectionType.sse,
+    connectionType: McpConnectionType.sse, // Explicitly sse
     host: 'localhost', // Example host
     port: 8999, // Example port
     isActive: true,
@@ -193,6 +208,15 @@ void main() {
     serverErrorMessages: {},
   );
 
+  // Define disconnected state (can be used for stdio or sse id)
+  final disconnectedMcpState = McpClientState(
+    serverConfigs: [defaultStdioMcpConfig], // Include a config for reference
+    serverStatuses: {'test-stdio-id': McpConnectionStatus.disconnected},
+    activeClients: {},
+    serverErrorMessages: {},
+  );
+
+
   final mockModelCallContent = Content('model', [
     FunctionCall('create_todoist_task', {'content': 'buy milk'})
   ]);
@@ -202,7 +226,9 @@ void main() {
   ]);
   final mockFinalModelContent =
       Content('model', [
-    TextPart('OK. Task "buy milk" created (ID: 12345).'), // Added closing "
+    TextPart(
+      'OK. Task "buy milk" created (ID: 12345).',
+    ), // Corrected closing quote
   ]);
 
   final successfulMcpResult = McpProcessResult(
@@ -212,8 +238,20 @@ void main() {
     toolName: 'create_todoist_task',
     toolArgs: {'content': 'buy milk'},
     toolResult: '{"status":"success","taskId":"12345"}',
-    sourceServerId: 'test-id',
+    sourceServerId: 'test-stdio-id', // Match stdio config id
   );
+
+  // Result specific to SSE server ID
+  final successfulSseMcpResult = McpProcessResult(
+    modelCallContent: mockModelCallContent,
+    toolResponseContent: mockToolResponseContent,
+    finalModelContent: mockFinalModelContent, // Can reuse content
+    toolName: 'create_todoist_task',
+    toolArgs: {'content': 'buy milk'},
+    toolResult: '{"status":"success","taskId":"12345"}',
+    sourceServerId: 'test-sse-id', // Match SSE config id
+  );
+
 
   setUp(() async {
     // Initialize mocks
@@ -221,10 +259,10 @@ void main() {
         MockMcpClientNotifier(); // This is the delegate
     mockGeminiService = MockGeminiService();
 
-    // Set default stubbing for the *delegate* mock
+    // Set default stubbing for the *delegate* mock (can be overridden in tests)
     when(mockMcpClientNotifierDelegate.processQuery(any, any)).thenAnswer(
-      (_) async => successfulMcpResult,
-    ); // Stub processQuery on delegate
+      (_) async => successfulMcpResult, // Default to stdio result
+    );
     when(mockGeminiService.isInitialized).thenReturn(true);
 
     // Create ProviderContainer with overrides
@@ -236,9 +274,11 @@ void main() {
           // Create the Fake Notifier Instance here, passing the ref
           final fakeMcpClientNotifier = FakeMcpClientNotifier(
             ref, // Pass the ref from the override callback
-            defaultMcpState, // Initial state for the fake
+            defaultStdioMcpState, // Initial state for the fake (can be changed in tests)
             mockMcpClientNotifierDelegate, // Pass the mock delegate
           );
+          // IMPORTANT: Call initialize manually if the real one does setup
+          // fakeMcpClientNotifier.initialize(); // Call fake initialize (currently no-op)
           return fakeMcpClientNotifier; // Return the FakeMcpClientNotifier instance
         }),
         geminiServiceProvider.overrideWithValue(mockGeminiService),
@@ -255,127 +295,63 @@ void main() {
     // the container is created, especially if the super constructor or initialize
     // methods (even if overridden) affect the state.
     // Let's read the notifier after creation and explicitly set state if needed.
-    final fakeNotifier =
-        container.read(mcpClientProvider.notifier) as FakeMcpClientNotifier;
-    fakeNotifier.state =
-        defaultMcpState; // Ensure initial state is set correctly
+    // final fakeNotifier =
+    //     container.read(mcpClientProvider.notifier) as FakeMcpClientNotifier;
+    // fakeNotifier.state =
+    //     defaultStdioMcpState; // Ensure initial state is set correctly
+
+    // Get ChatNotifier instance for helper method access
+    chatNotifierInstance = container.read(chatProvider.notifier);
 
   });
 
-  tearDown(() {
-    container.dispose(); // Dispose container after each test
-  });
-
-  test('sendMessage uses MCP when active and updates history correctly on tool call', () async {
+  test(
+    'sendMessage uses MCP (stdio) when active and updates history correctly on tool call',
+    () async {
       // Arrange: Configure the *delegate* mock for this specific test
-    const userQuery = 'create task buy milk';
+      const userQuery = 'create task buy milk';
+      const expectedServerId = 'test-stdio-id'; // Expect stdio server
 
       // Get the fake notifier instance from the container
       // Cast to the correct FakeMcpClientNotifier type
       final fakeNotifier =
           container.read(mcpClientProvider.notifier) as FakeMcpClientNotifier;
 
-      // Ensure the fake notifier's state reflects an active connection
+      // Ensure the fake notifier's state reflects an active stdio connection
       // We can directly set the state on the fake notifier
-      fakeNotifier.state = defaultMcpState.copyWith(
-        // Ensure hasActiveConnections is true for this test
-        serverStatuses: {'test-id': McpConnectionStatus.connected},
-        // Make sure activeClients isn't empty if hasActiveConnections relies on it
-        // (Though McpClientState calculates it based on serverStatuses)
-      );
+      fakeNotifier.state = defaultStdioMcpState; // Use stdio state
+
       // Add a debug print to confirm state before acting
-      
+      print(
+        "Test (stdio): Fake MCP Notifier state set to: ${fakeNotifier.state}",
+      );
+      expect(fakeNotifier.state.hasActiveConnections, isTrue);
 
 
       // Ensure the delegate mock is stubbed correctly for this test case
+      // Use the result with the matching server ID
+      final expectedResult = successfulMcpResult.copyWith(
+        sourceServerId: expectedServerId,
+      );
       when(
         mockMcpClientNotifierDelegate.processQuery(userQuery, any),
       )
-        .thenAnswer((_) async => successfulMcpResult);
-
-    final chatNotifier = container.read(chatProvider.notifier);
-
-    // Act: Call the method under test
-    await chatNotifier.sendMessage(userQuery);
-
-    // Assert
-      // Verify calls on the *delegate* mock
-      verify(
-        mockMcpClientNotifierDelegate.processQuery(userQuery, any),
-      ).called(1);
-    // Verify Gemini stream was NOT called directly
-    verifyNever(mockGeminiService.sendMessageStream(any, any));
-
-    final finalState = container.read(chatProvider);
-
-    // Check display messages
-    expect(finalState.isLoading, isFalse);
-    expect(finalState.displayMessages.length, 2); // User message + Final response
-    expect(finalState.displayMessages.first.role, Role.user);
-    expect(finalState.displayMessages.first.text, userQuery);
-    expect(finalState.displayMessages.last.role, Role.model);
-    expect(finalState.displayMessages.last.isLoading, isFalse);
-    expect(finalState.displayMessages.last.isError, isFalse);
-      // Use the helper function to extract text for comparison
-      expect(
-        chatNotifier.getTextFromContent(mockFinalModelContent),
-        'OK. Task "buy milk" created (ID: 12345).',
-      );
-    expect(finalState.displayMessages.last.text,
-        'OK. Task "buy milk" created (ID: 12345).'); // Corrected expected text
-
-    // Check chat history
-    expect(finalState.chatHistory.length, 4); // User + ModelCall + ToolResponse + FinalModel
-    expect(finalState.chatHistory[0].role, 'user');
-      expect(
-        chatNotifier.getTextFromContent(
-          finalState.chatHistory[0],
-        ), // Use helper
-        userQuery,
-      );
-    expect(finalState.chatHistory[1], mockModelCallContent); // Check model call
-    expect(finalState.chatHistory[2], mockToolResponseContent); // Check tool response
-    expect(finalState.chatHistory[3], mockFinalModelContent); // Check final model summary
-  });
-
-  test(
-    'sendMessage uses MCP (SSE) when active and updates history correctly',
-    () async {
-      // Arrange: Configure the *delegate* mock for this specific test
-      const userQuery = 'create sse task buy milk';
-
-      // Get the fake notifier instance from the container
-      final fakeNotifier =
-          container.read(mcpClientProvider.notifier) as FakeMcpClientNotifier;
-
-      // Ensure the fake notifier's state reflects an active SSE connection
-      // Use the newly defined SSE state
-      fakeNotifier.state = defaultSseMcpState; // Use SSE state
-
-      // Ensure the delegate mock is stubbed correctly for this test case
-      // Re-use the existing successfulMcpResult for simplicity
-      when(
-        mockMcpClientNotifierDelegate.processQuery(userQuery, any),
-      ).thenAnswer(
-        (_) async => successfulMcpResult,
-      ); // Return the same successful result
-
-      final chatNotifier = container.read(chatProvider.notifier);
+      .thenAnswer((_) async => expectedResult);
 
       // Act: Call the method under test
-      await chatNotifier.sendMessage(userQuery);
+      await chatNotifierInstance.sendMessage(userQuery);
 
       // Assert
       // Verify calls on the *delegate* mock
       verify(
         mockMcpClientNotifierDelegate.processQuery(userQuery, any),
-      ).called(1); // Verify MCP processQuery was called
+      ).called(1);
       // Verify Gemini stream was NOT called directly
       verifyNever(mockGeminiService.sendMessageStream(any, any));
 
       final finalState = container.read(chatProvider);
 
-      // Check display messages (should match the stdio MCP test assertions)
+      // Check display messages
       expect(finalState.isLoading, isFalse);
       expect(
         finalState.displayMessages.length,
@@ -387,7 +363,108 @@ void main() {
       expect(finalState.displayMessages.last.isLoading, isFalse);
       expect(finalState.displayMessages.last.isError, isFalse);
       expect(
-        chatNotifier.getTextFromContent(mockFinalModelContent),
+        finalState.displayMessages.last.sourceServerId,
+        expectedServerId,
+      ); // Check source server
+      // Use the helper function to extract text for comparison
+      expect(
+        chatNotifierInstance.getTextFromContent(mockFinalModelContent),
+        'OK. Task "buy milk" created (ID: 12345).',
+      );
+      expect(
+        finalState.displayMessages.last.text,
+        'OK. Task "buy milk" created (ID: 12345).',
+      ); // Corrected expected text
+
+      // Check chat history
+      expect(
+        finalState.chatHistory.length,
+        4,
+      ); // User + ModelCall + ToolResponse + FinalModel
+      expect(finalState.chatHistory[0].role, 'user');
+      expect(
+        chatNotifierInstance.getTextFromContent(
+          finalState.chatHistory[0],
+        ), // Use helper
+        userQuery,
+      );
+      expect(
+        finalState.chatHistory[1],
+        mockModelCallContent,
+      ); // Check model call (role 'model')
+      expect(
+        finalState.chatHistory[2],
+        mockToolResponseContent,
+      ); // Check tool response (role 'function')
+      expect(
+        finalState.chatHistory[3],
+        mockFinalModelContent,
+      ); // Check final model summary (role 'model')
+    },
+  );
+
+test(
+    'sendMessage uses MCP (SSE) when active and updates history correctly',
+    () async {
+      // Arrange: Configure the *delegate* mock for this specific test
+      const userQuery = 'create sse task buy milk';
+      const expectedServerId = 'test-sse-id'; // Expect SSE server
+
+      // Get the fake notifier instance from the container
+      final fakeNotifier =
+          container.read(mcpClientProvider.notifier) as FakeMcpClientNotifier;
+
+      // Ensure the fake notifier's state reflects an active SSE connection
+      // Use the newly defined SSE state
+      fakeNotifier.state = defaultSseMcpState; // Use SSE state
+
+      // Add a debug print to confirm state before acting
+      print(
+        "Test (SSE): Fake MCP Notifier state set to: ${fakeNotifier.state}",
+      );
+      expect(fakeNotifier.state.hasActiveConnections, isTrue);
+
+
+      // Ensure the delegate mock is stubbed correctly for this test case
+      // Use the result with the matching SSE server ID
+      final expectedResult = successfulSseMcpResult.copyWith(
+        sourceServerId: expectedServerId,
+      );
+      when(
+        mockMcpClientNotifierDelegate.processQuery(userQuery, any),
+      ).thenAnswer(
+      (_) async => expectedResult);
+
+      // Act: Call the method under test
+      await chatNotifierInstance.sendMessage(userQuery);
+
+      // Assert
+      // Verify calls on the *delegate* mock
+      verify(
+        mockMcpClientNotifierDelegate.processQuery(userQuery, any),
+      ).called(1); // Verify MCP processQuery was called
+      // Verify Gemini stream was NOT called directly
+      verifyNever(mockGeminiService.sendMessageStream(any, any));
+
+      final finalState = container.read(chatProvider);
+
+      // Check display messages
+      expect(finalState.isLoading, isFalse);
+      expect(
+        finalState.displayMessages.length,
+        2,
+      ); // User message + Final response
+      expect(finalState.displayMessages.first.role, Role.user);
+      expect(finalState.displayMessages.first.text, userQuery);
+      expect(finalState.displayMessages.last.role, Role.model);
+      expect(finalState.displayMessages.last.isLoading, isFalse);
+      expect(finalState.displayMessages.last.isError, isFalse);
+      expect(
+        finalState.displayMessages.last.sourceServerId,
+        expectedServerId,
+      ); // Check source server
+      expect(
+        chatNotifierInstance.getTextFromContent(mockFinalModelContent),
         'OK. Task "buy milk" created (ID: 12345).',
       );
       expect(
@@ -395,19 +472,22 @@ void main() {
         'OK. Task "buy milk" created (ID: 12345).',
       );
 
-      // Check chat history (should match the stdio MCP test assertions)
+      // Check chat history
       expect(
         finalState.chatHistory.length,
         4,
       ); // User + ModelCall + ToolResponse + FinalModel
       expect(finalState.chatHistory[0].role, 'user');
       expect(
-        chatNotifier.getTextFromContent(finalState.chatHistory[0]),
+        chatNotifierInstance.getTextFromContent(finalState.chatHistory[0]),
         userQuery,
       );
-      expect(finalState.chatHistory[1], mockModelCallContent);
-      expect(finalState.chatHistory[2], mockToolResponseContent);
-      expect(finalState.chatHistory[3], mockFinalModelContent);
+      expect(finalState.chatHistory[1], mockModelCallContent); // Role 'model'
+      expect(
+        finalState.chatHistory[2],
+        mockToolResponseContent,
+      ); // Role 'function'
+      expect(finalState.chatHistory[3], mockFinalModelContent); // Role 'model'
     },
   );
 
@@ -416,19 +496,21 @@ void main() {
     () async {
       // Arrange
       const userQuery = 'hello gemini';
-    
+
       // Get the fake notifier instance
       // Cast to the correct FakeMcpClientNotifier type
       final fakeNotifier =
           container.read(mcpClientProvider.notifier) as FakeMcpClientNotifier;
 
       // Set the fake notifier's state to reflect no active connections
-      fakeNotifier.state = defaultMcpState.copyWith(
-        serverStatuses: {
-          'test-id': McpConnectionStatus.disconnected,
-        }, // Disconnected
-        activeClients: {}, // Ensure no active clients
+      fakeNotifier.state = disconnectedMcpState; // Use disconnected state
+
+      // Add a debug print to confirm state before acting
+      print(
+        "Test (Gemini): Fake MCP Notifier state set to: ${fakeNotifier.state}",
       );
+      expect(fakeNotifier.state.hasActiveConnections, isFalse);
+
 
       // Mock Gemini stream response (remains the same)
       when(mockGeminiService.sendMessageStream(userQuery, any)).thenAnswer(
@@ -439,10 +521,8 @@ void main() {
         ]),
       );
 
-      final chatNotifier = container.read(chatProvider.notifier);
-
       // Act
-      await chatNotifier.sendMessage(userQuery);
+      await chatNotifierInstance.sendMessage(userQuery);
       // Need a slight delay to allow the stream listener to process 'onDone'
       await Future.delayed(Duration.zero);
 
@@ -460,13 +540,17 @@ void main() {
       expect(finalState.displayMessages.length, 2); // User + Final response
       expect(finalState.displayMessages.last.text, 'Hello there!');
       expect(finalState.displayMessages.last.isLoading, isFalse);
+      expect(
+        finalState.displayMessages.last.sourceServerId,
+        isNull,
+      ); // No server involved
 
       // Check history for direct Gemini call
       expect(finalState.chatHistory.length, 2); // User + Final Model
       expect(finalState.chatHistory[0].role, 'user');
       expect(finalState.chatHistory[1].role, 'model');
       expect(
-        chatNotifier.getTextFromContent(
+        chatNotifierInstance.getTextFromContent(
           finalState.chatHistory[1],
         ), // Use helper
         'Hello there!',

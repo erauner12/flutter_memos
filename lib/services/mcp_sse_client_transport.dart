@@ -136,8 +136,22 @@ class SseClientTransport implements Transport {
          // Give it a bit more time, maybe network is slow
          await Future.delayed(const Duration(seconds: 2));
          if (_sessionId == null || _messageEndpointPath == null) {
-            throw StateError("SSE connection established, but did not receive 'endpoint' event with session details in time.");
-         }
+          // Check if we are already closing due to an error during the delay
+          if (_isClosing) {
+            // Error likely occurred in _processSseEvent or stream listener
+            // The error has already been reported and close() called.
+            // Throw a more specific error indicating the root cause if possible,
+            // otherwise rethrow a generic state error.
+            throw StateError(
+              "SSE connection failed during initialization (check previous logs for details).",
+            );
+          } else {
+            // If not closing, it's a timeout waiting for the endpoint event
+            throw StateError(
+              "SSE connection established, but did not receive 'endpoint' event with session details in time.",
+            );
+          }
+        }
       }
 
       _isConnected = true;
@@ -151,11 +165,20 @@ class SseClientTransport implements Transport {
       if (kDebugMode) {
         print('[SseClientTransport] Error during SSE start: $e\n$s');
       }
-      _isClosing = true;
-      final error = StateError("Failed to establish SSE connection: $e");
-      _reportError(error);
-      await close(); // Ensure cleanup on start failure
-      throw error;
+      // Ensure we are marked as closing *before* reporting error and cleaning up
+      if (!_isClosing) {
+        _isClosing = true; // Mark as closing if not already
+        final error =
+            e is StateError
+                ? e
+                : StateError("Failed to establish SSE connection: $e");
+        _reportError(error);
+        await close(); // Ensure cleanup on start failure
+        throw error; // Rethrow the captured or wrapped error
+      } else {
+        // If already closing (e.g., due to error in listener during delay), just rethrow
+        rethrow;
+      }
     }
   }
 
@@ -226,8 +249,13 @@ class SseClientTransport implements Transport {
     );
 
     if (kDebugMode) {
+      // Log the JSON representation for better readability
+      String messageJsonString = '(serialization error)';
+      try {
+        messageJsonString = jsonEncode(message.toJson());
+      } catch (_) {}
       print(
-        '[SseClientTransport] Sending POST to $postUri with message: ${message.toJson()}',
+        '[SseClientTransport] Sending POST to $postUri with message: $messageJsonString',
       );
     }
 
@@ -243,6 +271,12 @@ class SseClientTransport implements Transport {
 
       if (response.statusCode != HttpStatus.accepted) {
          final responseBody = await response.transform(utf8.decoder).join();
+        // Log the error response body
+        if (kDebugMode) {
+          print(
+            '[SseClientTransport] POST failed (Status: ${response.statusCode}). Response body: $responseBody',
+          );
+        }
         throw HttpException(
           'Failed to send message: ${response.statusCode} ${response.reasonPhrase}\n$responseBody',
           uri: postUri,

@@ -68,6 +68,15 @@ class ChatNotifier extends StateNotifier<ChatState> {
     debugPrint(
       "ChatNotifier: Checking MCP state. hasActiveConnections: ${mcpState.hasActiveConnections}",
     );
+    if (mcpState.hasActiveConnections && kDebugMode) {
+      // Log details about active connections if debugging
+      final activeStatuses =
+          mcpState.serverStatuses.entries
+              .where((e) => e.value == McpConnectionStatus.connected)
+              .map((e) => e.key)
+              .toList();
+      debugPrint("ChatNotifier: Active MCP server IDs: $activeStatuses");
+    }
 
     // Check if Gemini API key is set (required for fallback)
     // We assume MCP servers might function independently or use other models later
@@ -171,28 +180,66 @@ class ChatNotifier extends StateNotifier<ChatState> {
           ];
           // Add model's function call request if it exists
           if (mcpResult.modelCallContent != null) {
-            finalHistory.add(mcpResult.modelCallContent!);
+            // Ensure role is 'model' for function calls in history
+            if (mcpResult.modelCallContent!.role != 'model') {
+              debugPrint(
+                "ChatNotifier Warning: modelCallContent from MCP had unexpected role: ${mcpResult.modelCallContent!.role}. Forcing 'model'.",
+              );
+              finalHistory.add(
+                Content('model', mcpResult.modelCallContent!.parts),
+              );
+            } else {
+              finalHistory.add(mcpResult.modelCallContent!);
+            }
           }
           // Add the tool's response if it exists
           if (mcpResult.toolResponseContent != null) {
-            finalHistory.add(mcpResult.toolResponseContent!);
+            // Ensure role is 'function' (or 'tool' if API changes) for tool responses in history
+            if (mcpResult.toolResponseContent!.role != 'function') {
+              debugPrint(
+                "ChatNotifier Warning: toolResponseContent from MCP had unexpected role: ${mcpResult.toolResponseContent!.role}. Forcing 'function'.",
+              );
+              finalHistory.add(
+                Content('function', mcpResult.toolResponseContent!.parts),
+              );
+            } else {
+              finalHistory.add(mcpResult.toolResponseContent!);
+            }
           }
           // Add the final model summary (already in finalModelContent)
           // Ensure it has the 'model' role
-          if (mcpResult.finalModelContent.role != 'model') {
-            // This case shouldn't happen based on McpClientService logic, but safety check
-            final textParts =
-                mcpResult.finalModelContent.parts
-                    .whereType<TextPart>()
-                    .toList();
-            finalHistory.add(Content('model', textParts));
-            debugPrint(
-              "ChatNotifier Warning: finalModelContent from MCP had unexpected role: ${mcpResult.finalModelContent.role}",
-            );
+          // Check if finalModelContent is actually present and has parts
+          if (mcpResult.finalModelContent.parts.isNotEmpty) {
+            if (mcpResult.finalModelContent.role != 'model') {
+              // This case shouldn't happen based on McpClientService logic, but safety check
+              debugPrint(
+                "ChatNotifier Warning: finalModelContent from MCP had unexpected role: ${mcpResult.finalModelContent.role}. Forcing 'model'.",
+              );
+              final textParts =
+                  mcpResult.finalModelContent.parts
+                      .whereType<TextPart>()
+                      .toList();
+              // Only add if there's actual text content
+              if (textParts.isNotEmpty ||
+                  mcpResult.finalModelContent.parts.any(
+                    (p) => p is! TextPart,
+                  )) {
+                finalHistory.add(
+                  Content('model', mcpResult.finalModelContent.parts),
+                );
+              } else {
+                debugPrint(
+                  "ChatNotifier Info: finalModelContent from MCP had no text parts and role was not 'model'. Not adding to history.",
+                );
+              }
+            } else {
+              finalHistory.add(mcpResult.finalModelContent);
+            }
           } else {
-            finalHistory.add(mcpResult.finalModelContent);
+            debugPrint(
+              "ChatNotifier Info: finalModelContent from MCP was empty. Not adding to history.",
+            );
           }
-
 
           state = state.copyWith(
             displayMessages: messages,
@@ -319,8 +366,9 @@ class ChatNotifier extends StateNotifier<ChatState> {
           cancelOnError: true,
         );
       } // End of else block for direct Gemini call
-    } catch (e) {
-      debugPrint("Error sending message: $e");
+    } catch (e, s) {
+      // Add stack trace
+      debugPrint("Error sending message: $e\n$s"); // Log stack trace
       // Update placeholder to error state if something went wrong before streaming/MCP call
       final messages = List<ChatMessage>.from(state.displayMessages);
       final index = messages.indexWhere((m) => m.id == modelMessageId);
@@ -361,9 +409,9 @@ class ChatNotifier extends StateNotifier<ChatState> {
 
   // Add method to clear only the error message
   void clearErrorMessage() {
-     if (state.errorMessage != null) {
-       state = state.copyWith(clearErrorMessage: true);
-     }
+    if (state.errorMessage != null) {
+      state = state.copyWith(clearErrorMessage: true);
+    }
   }
 
   @override
