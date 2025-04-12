@@ -390,11 +390,17 @@ Future<void> _handleToolCall(
   );
 
   try {
+    print(
+      '[TCP Proxy] _handleToolCall (ID: $requestId): Awaiting _executeStdioServer...',
+    );
     // Execute the stdio server, sending the original client request JSON
     final responseJson = await _executeStdioServer(
       serverCmdPath,
       originalRequestJson,
       requestId,
+    );
+    print(
+      '[TCP Proxy] _handleToolCall (ID: $requestId): _executeStdioServer completed. Response length: ${responseJson.length}',
     );
 
     // Forward the raw response JSON back to the client
