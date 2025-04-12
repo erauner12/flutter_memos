@@ -16,7 +16,7 @@ dependencies:
   # ADD: Path dependency to the *local* generated Todoist API client
   # This directory should be copied into api/mcp_sse_todoist_server_dart/
   todoist_api:
-    path: ./todoist_api/
+    path: ../../lib/todoist_api/ # Corrected relative path
 
   # Add other direct dependencies if needed (e.g., collection if used directly)
   collection: ^1.18.0 # For safe casting, etc.
