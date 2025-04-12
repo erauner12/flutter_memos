@@ -12,6 +12,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_generative_ai/google_generative_ai.dart'; // Import for Gemini types (Content, Tool, etc.)
 // MODIFY: Change import prefix to avoid conflict
 import 'package:mcp_dart/mcp_dart.dart' as mcp_lib;
+import 'package:mcp_dart/src/shared/transport.dart'
+    as transport_lib; // For Transport type
 // Import Stdio types explicitly (less likely to conflict)
 // Note: These should be available via the main lib export now
 // REMOVE: Direct import of Transport
@@ -127,7 +129,7 @@ class GoogleMcpClient {
   final mcp_lib.Client mcpClient;
   final GenerativeModel? model; // google_generative_ai.GenerativeModel
   // Use the Transport type if needed via mcp_lib
-  mcp_lib.Transport? _transport; // MODIFY: Use prefixed type
+  transport_lib.Transport? _transport;
   List<Tool> _tools = []; // google_generative_ai.Tool
   bool _isConnected = false;
   Function(String serverId, String errorMsg)? _onError;
