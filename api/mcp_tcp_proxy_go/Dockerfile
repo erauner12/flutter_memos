@@ -81,21 +81,23 @@ COPY api/mcp_tcp_proxy_go/. .
 # Create output directory
 RUN mkdir /output
 
-# Build the Go application statically for Alpine
+# Build the Go application statically for Alpine (still okay as Go build is static)
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /output/mcp_tcp_proxy_executable ./main.go
 
 
-# Stage 3: Create the minimal runtime image
-FROM alpine:latest
+# Stage 3: Create the minimal runtime image (Debian-based for Dart compatibility)
+FROM debian:stable-slim
 
 WORKDIR /app
 
 # Install ca-certificates needed for potential HTTPS calls from Go/Dart runtime
-# Also install bash, as some Dart executables might implicitly rely on it
-RUN apk update && apk add --no-cache ca-certificates bash
+# Also install bash, as some Dart executables might implicitly rely on it (using apt-get)
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends ca-certificates bash && \
+    rm -rf /var/lib/apt/lists/*
 
-# Create a non-root user for security
-RUN addgroup -S appgroup && adduser -S -G appgroup appuser
+# Create a non-root user for security (adduser command works on Debian)
+RUN addgroup --system appgroup && adduser --system --ingroup appgroup appuser
 
 # Create the bin directory for Dart executables
 RUN mkdir /app/bin
