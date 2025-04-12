@@ -1,5 +1,5 @@
 # Use the official Dart SDK image - Use a specific stable version for reproducibility
-FROM dart:3.4 AS build
+FROM dart:stable AS build
 
 WORKDIR /app
 
@@ -24,7 +24,7 @@ RUN if [ ! -f /app/bin/todoist_mcp_server.dart ]; then echo "Error: Entrypoint n
 
 # --- Runtime Stage ---
 # Use the same Dart image version
-FROM dart:3.4
+FROM dart:stable
 
 WORKDIR /app
 
