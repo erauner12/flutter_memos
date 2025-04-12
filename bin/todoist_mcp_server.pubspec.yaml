@@ -13,7 +13,4 @@ dependencies:
   # Add collection if todoist_api_service or todoist_api uses it
   collection: ^1.18.0 # Verify if needed by copied lib code
 
-# Override flutter_memos to point to the local copy within the Docker build stage
-dependency_overrides:
-  flutter_memos:
-    path: ./packages/flutter_memos # Path relative to this pubspec.yaml inside the container build stage
+# No dependency overrides needed; imports will be resolved via copied lib structure.

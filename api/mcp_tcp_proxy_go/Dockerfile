@@ -6,33 +6,36 @@ RUN mkdir /output
 
 WORKDIR /build
 
-# Install certs just in case
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
+# Install certs and explicitly update the store
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends ca-certificates && \
+    update-ca-certificates --fresh && \
+    rm -rf /var/lib/apt/lists/*
 
 # --- Build Todoist Server ---
 WORKDIR /build/todoist_server
 
-# Create the structure expected by the dependency override and source layout
-# Ensure target directories exist before copying into them
-RUN mkdir -p bin packages/flutter_memos/lib/services packages/flutter_memos/lib/todoist_api
+# Create necessary directories for source and library files
+# The 'lib' directory here corresponds to the root of the 'package:flutter_memos' imports
+RUN mkdir -p bin lib/services lib/todoist_api
 
-# Copy the modified minimal pubspec (with dependency override)
-# This pubspec should be located at bin/todoist_mcp_server.pubspec.yaml in the build context
+# Copy the minimal pubspec (now without dependency override)
+# Path relative to context root: bin/todoist_mcp_server.pubspec.yaml
 COPY bin/todoist_mcp_server.pubspec.yaml ./pubspec.yaml
 
 # Copy the main server executable source
-# This should be located at bin/todoist_mcp_server.dart in the build context
+# Path relative to context root: bin/todoist_mcp_server.dart
 COPY bin/todoist_mcp_server.dart ./bin/
 
-# Copy the necessary library files into the overridden package structure
+# Copy the necessary library files into the './lib' structure
 # These paths are relative to the build context root
-COPY lib/services/todoist_api_service.dart ./packages/flutter_memos/lib/services/
-COPY lib/todoist_api ./packages/flutter_memos/lib/todoist_api/
+COPY lib/services/todoist_api_service.dart ./lib/services/
+COPY lib/todoist_api ./lib/todoist_api/
 
-# Get dependencies for Todoist server ONLY (should use the override)
+# Get dependencies for Todoist server ONLY (mcp_dart, http, intl, collection)
 RUN dart pub get --verbose
 
-# Compile Todoist Server
+# Compile Todoist Server - Compiler should resolve package:flutter_memos/... via ./lib
 RUN dart compile exe bin/todoist_mcp_server.dart -o /output/todoist_mcp_server_executable
 
 
