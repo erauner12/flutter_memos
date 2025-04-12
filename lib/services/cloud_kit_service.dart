@@ -8,8 +8,7 @@ import 'package:flutter_cloud_kit/types/cloud_ket_record.dart'; // Keep this imp
 // Add explicit imports for the required types
 import 'package:flutter_cloud_kit/types/cloud_kit_account_status.dart';
 import 'package:flutter_cloud_kit/types/database_scope.dart';
-import 'package:flutter_memos/models/mcp_connection_type.dart'; // Import MCP connection type
-import 'package:flutter_memos/models/mcp_server_config.dart'; // Import MCP model
+import 'package:flutter_memos/models/mcp_server_config.dart'; // Import MCP model (contains the enum)
 import 'package:flutter_memos/models/server_config.dart';
 // Import the synchronized package
 import 'package:synchronized/synchronized.dart';

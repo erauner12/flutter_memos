@@ -1,5 +1,5 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter_memos/models/mcp_server_config.dart'; // Import the model
+import 'package:flutter_memos/models/mcp_server_config.dart';
 import 'package:flutter_memos/providers/settings_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
@@ -137,7 +137,11 @@ class _AddEditMcpServerScreenState
   }
 
   Future<void> _saveConfiguration() async {
-    FocusScope.of(context).unfocus();
+    // Keep the mounted check here before the async gap
+    if (!mounted) return;
+    final contextBeforeGap = context; // Capture context before async gap
+
+    FocusScope.of(contextBeforeGap).unfocus(); // Use captured context
     if (!_formKey.currentState!.validate()) {
       return; // Validation failed based on visible fields
     }
@@ -159,7 +163,7 @@ class _AddEditMcpServerScreenState
         );
         return;
       }
-      // Host and port are not needed for stdio, keep them null
+      // Host and port are not needed for stdio, ensure they are null
       host = null;
       port = null;
     } else {
@@ -192,9 +196,9 @@ class _AddEditMcpServerScreenState
         return;
       }
       port = parsedPort;
-      // Command and args are not strictly needed for SSE, keep them as they are or clear them
-      command = _commandController.text.trim();
-      args = _argsController.text.trim();
+      // Command and args are not strictly needed for SSE, ensure they are null/empty
+      command = '';
+      args = '';
     }
 
     final name = _nameController.text.trim();
@@ -249,15 +253,18 @@ class _AddEditMcpServerScreenState
         success = await settingsService.addMcpServer(config);
       }
 
+      // Check mounted *after* the await
       if (!mounted) return;
 
       if (success) {
         _showResultDialog('Success', 'MCP Server "$name" $actionVerb.');
+        // Check mounted again before popping
         if (mounted) Navigator.of(context).pop();
       } else {
         _showResultDialog('Error', 'Failed to $actionVerb MCP server configuration.', isError: true);
       }
     } catch (e) {
+      // Check mounted *after* the await
       if (!mounted) return;
       _showResultDialog(
         'Error',
@@ -318,15 +325,15 @@ class _AddEditMcpServerScreenState
                           SizedBox(
                             width: double.infinity,
                             child: CupertinoSegmentedControl<McpConnectionType>(
-                              children: const {
-                                McpConnectionType.stdio: Padding(
+                              children: {
+                                McpConnectionType.stdio: const Padding(
                                   padding: EdgeInsets.symmetric(
                                     horizontal: 8,
                                     vertical: 6,
                                   ),
                                   child: Text('Stdio (Local)'),
                                 ),
-                                McpConnectionType.sse: Padding(
+                                McpConnectionType.sse: const Padding(
                                   padding: EdgeInsets.symmetric(
                                     horizontal: 8,
                                     vertical: 6,
@@ -467,10 +474,16 @@ class _AddEditMcpServerScreenState
                       onPressed:
                           (_isEditing && widget.serverToEdit != null)
                               ? () async {
+                                // Keep mounted check here before async gap
+                                if (!mounted) return;
+                                final contextBeforeDialog =
+                                    context; // Capture context
+
                                 final confirmed = await showCupertinoDialog<
                                   bool
                                 >(
-                                  context: context,
+                                  context:
+                                      contextBeforeDialog, // Use captured context
                                   builder:
                                       (context) => CupertinoAlertDialog(
                                         title: const Text('Delete MCP Server?'),
@@ -497,11 +510,15 @@ class _AddEditMcpServerScreenState
                                       ),
                                 );
 
+                                // Check mounted *after* the await
+                                if (!mounted) return;
+
                                 if (confirmed == true) {
                                   final success = await ref
                                       .read(settingsServiceProvider)
                                       .deleteMcpServer(widget.serverToEdit!.id);
 
+                                  // Check mounted again *after* the await
                                   if (!mounted) return;
 
                                   if (success) {
@@ -509,6 +526,7 @@ class _AddEditMcpServerScreenState
                                       'Deleted',
                                       'MCP Server "${widget.serverToEdit!.name}" deleted.',
                                     );
+                                    // Check mounted again before popping
                                     if (mounted) Navigator.of(context).pop();
                                   } else {
                                     _showResultDialog(
