@@ -15,7 +15,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
-	"time" // Added for timeouts
+	"time"
 )
 
 // Configuration mapping tool names to the command path *inside the container*
@@ -61,7 +61,7 @@ type mcpResponse struct {
 
 type mcpErrorResponse struct {
 	Jsonrpc string      `json:"jsonrpc"`
-	ID      interface{} `json:"id"`
+	ID      interface{} `json:"id"` // Use interface{} for flexibility
 	Error   mcpError    `json:"error"`
 }
 
@@ -73,7 +73,7 @@ type mcpError struct {
 
 type mcpSuccessResponse struct {
 	Jsonrpc string      `json:"jsonrpc"`
-	ID      interface{} `json:"id"`
+	ID      interface{} `json:"id"` // Use interface{} for flexibility
 	Result  interface{} `json:"result"`
 }
 
@@ -83,6 +83,8 @@ const (
 	methodNotFoundCode = -32601
 	internalErrorCode  = -32603
 	serverTimeoutCode  = -32001 // Custom code for server timeout
+	handshakeTimeout   = 10 * time.Second
+	requestTimeout     = 60 * time.Second // Timeout for the actual request/response
 )
 
 func main() {
@@ -150,7 +152,7 @@ func handleClient(conn net.Conn, clientDesc string) {
 
 func handleMcpRequest(messageJsonString string, clientConn net.Conn, clientDesc string) {
 	var req mcpRequest
-	var reqID interface{}
+	var reqID interface{} // Use interface{} to handle potential null ID
 
 	err := json.Unmarshal([]byte(messageJsonString), &req)
 	if err != nil {
@@ -158,17 +160,18 @@ func handleMcpRequest(messageJsonString string, clientConn net.Conn, clientDesc 
 		sendErrorResponse(clientConn, nil, parseErrorCode, "Parse error", nil)
 		return
 	}
-	_ = json.Unmarshal(req.ID, &reqID) // Attempt to get ID even if parsing failed later
+	// Unmarshal the ID separately to preserve its type (number or string or null)
+	_ = json.Unmarshal(req.ID, &reqID)
 
 	log.Printf("[TCP Proxy GO] Parsed request ID %v, Method %s from %s", reqID, req.Method, clientDesc)
 
 	switch req.Method {
 	case "initialize":
 		log.Printf("[TCP Proxy GO] Handling initialize request from %s", clientDesc)
-		sendInitializeResponse(clientConn, reqID)
+		sendInitializeResponse(clientConn, reqID) // Use parsed interface{} ID
 	case "ping":
 		log.Printf("[TCP Proxy GO] Handling ping request from %s", clientDesc)
-		sendSuccessResponse(clientConn, reqID, map[string]interface{}{})
+		sendSuccessResponse(clientConn, reqID, map[string]interface{}{}) // Use parsed interface{} ID
 	case "tools/call":
 		handleToolCall(messageJsonString, req, clientConn, clientDesc)
 	case "tools/list":
@@ -177,13 +180,14 @@ func handleMcpRequest(messageJsonString string, clientConn net.Conn, clientDesc 
 		log.Printf("[TCP Proxy GO] Received initialized notification from %s. Ignoring.", clientDesc)
 	default:
 		log.Printf("[TCP Proxy GO] Method not found: %s from %s", req.Method, clientDesc)
-		sendErrorResponse(clientConn, reqID, methodNotFoundCode, "Method not found", nil)
+		sendErrorResponse(clientConn, reqID, methodNotFoundCode, "Method not found", nil) // Use parsed interface{} ID
 	}
 }
 
 func handleToolCall(originalRequestJson string, req mcpRequest, clientConn net.Conn, clientDesc string) {
 	var callParams struct {
 		Name string `json:"name"`
+		// Arguments json.RawMessage `json:"arguments"` // Not needed for routing
 	}
 
 	if err := json.Unmarshal(req.Params, &callParams); err != nil {
@@ -202,10 +206,10 @@ func handleToolCall(originalRequestJson string, req mcpRequest, clientConn net.C
 
 	log.Printf("[TCP Proxy GO] Routing tool '%s' to command '%s' for client %s", toolName, serverCmdPath, clientDesc)
 
-	responseBytes, err := executeStdioServer(serverCmdPath, originalRequestJson, req.ID) // Pass original request and ID
+	// Pass original request JSON (which includes the newline) and the original RawMessage ID
+	responseBytes, err := executeStdioServer(serverCmdPath, originalRequestJson+"\n", req.ID)
 	if err != nil {
 		log.Printf("[TCP Proxy GO] Error executing stdio server %s for tool '%s': %v", serverCmdPath, toolName, err)
-		// Use the original request ID for the error response
 		sendErrorResponse(clientConn, req.ID, internalErrorCode, fmt.Sprintf("Error executing tool '%s'", toolName), err.Error())
 		return
 	}
@@ -229,7 +233,7 @@ func handleToolList(req mcpRequest, clientConn net.Conn, clientDesc string) {
 	listRequestJsonBytes, _ := json.Marshal(map[string]interface{}{
 		"jsonrpc": "2.0",
 		"method":  "tools/list",
-		"id":      req.ID, // Use the original request ID
+		"id":      req.ID, // Use the original RawMessage ID
 	})
 	listRequestJson := string(listRequestJsonBytes) + "\n" // Add newline
 
@@ -239,7 +243,7 @@ func handleToolList(req mcpRequest, clientConn net.Conn, clientDesc string) {
 			defer wg.Done()
 			log.Printf("[TCP Proxy GO] Querying tools/list from %s", cmdPath)
 
-			// Execute server, passing the specific tools/list request and its ID
+			// Execute server, passing the specific tools/list request and its RawMessage ID
 			responseBytes, err := executeStdioServer(cmdPath, listRequestJson, req.ID)
 			if err != nil {
 				log.Printf("[TCP Proxy GO] Error executing %s for tools/list: %v", cmdPath, err)
@@ -258,7 +262,6 @@ func handleToolList(req mcpRequest, clientConn net.Conn, clientDesc string) {
 				return
 			}
 
-			// Check for JSON-RPC level error from the server
 			if listResponse.Error != nil {
 				log.Printf("[TCP Proxy GO] Server %s returned error for tools/list: %v", cmdPath, listResponse.Error.Message)
 				mu.Lock()
@@ -267,7 +270,7 @@ func handleToolList(req mcpRequest, clientConn net.Conn, clientDesc string) {
 				return
 			}
 
-			// Check if the response ID matches the request ID
+			// IMPORTANT: Compare the ID from the response with the ID from the *original* request
 			if !bytes.Equal(listResponse.ID, req.ID) {
 				log.Printf("[TCP Proxy GO] Mismatched ID in tools/list response from %s. Expected: %s, Got: %s", cmdPath, string(req.ID), string(listResponse.ID))
 				mu.Lock()
@@ -276,7 +279,6 @@ func handleToolList(req mcpRequest, clientConn net.Conn, clientDesc string) {
 				return
 			}
 
-			// Parse the actual "result" field which should contain the tools
 			var resultData struct {
 				Tools []map[string]interface{} `json:"tools"`
 			}
@@ -306,13 +308,13 @@ func handleToolList(req mcpRequest, clientConn net.Conn, clientDesc string) {
 		log.Printf("[TCP Proxy GO] Errors encountered during tools/list: %s", strings.Join(errors, "; "))
 	}
 
-	// Send the aggregated success response using the original request ID
+	// Send the aggregated success response using the original RawMessage ID
 	sendSuccessResponse(clientConn, req.ID, map[string]interface{}{"tools": allTools})
 }
 
 // Executes a stdio server, handles handshake, sends one request, reads one response.
 // requestJson MUST include the trailing newline.
-// requestID is the ID from the original client request, used for error reporting.
+// requestID is the RawMessage ID from the original client request, used for error reporting and response matching.
 func executeStdioServer(serverCmdPath, requestJson string, requestID json.RawMessage) ([]byte, error) {
 	log.Printf("[TCP Proxy GO] Executing: %s", serverCmdPath)
 	cmd := exec.Command(serverCmdPath)
@@ -324,23 +326,22 @@ func executeStdioServer(serverCmdPath, requestJson string, requestID json.RawMes
 	}
 	stdoutPipe, err := cmd.StdoutPipe()
 	if err != nil {
-		stdinPipe.Close() // Clean up stdin pipe
+		stdinPipe.Close()
 		return nil, fmt.Errorf("error creating stdout pipe for %s: %w", serverCmdPath, err)
 	}
 	stderrPipe, err := cmd.StderrPipe()
 	if err != nil {
 		stdinPipe.Close()
-		stdoutPipe.Close() // Clean up stdout pipe
+		stdoutPipe.Close()
 		return nil, fmt.Errorf("error creating stderr pipe for %s: %w", serverCmdPath, err)
 	}
 
 	stdoutReader := bufio.NewReader(stdoutPipe)
 	var stderrOutput bytes.Buffer
-	processExited := make(chan error, 1) // Channel to signal process exit
+	processExited := make(chan error, 1)
 
 	// Start the command
 	if err := cmd.Start(); err != nil {
-		// Ensure pipes are closed if start fails
 		stdinPipe.Close()
 		stdoutPipe.Close()
 		stderrPipe.Close()
@@ -364,132 +365,138 @@ func executeStdioServer(serverCmdPath, requestJson string, requestID json.RawMes
 		processExited <- cmd.Wait()
 	}()
 
-	// --- MCP Handshake and Request/Response ---
-	var responseBytes []byte
-	var readErr error
-	handshakeComplete := false
-	requestSent := false
+	// --- Communication with Timeout ---
+	var finalResponseBytes []byte
+	commErrChan := make(chan error, 1) // Channel for communication errors
 
-	// Use a timer for the overall operation
-	timeout := 60 * time.Second // Example timeout
-	timer := time.NewTimer(timeout)
-	defer timer.Stop()
+	go func() { // Goroutine to handle the sequential communication
+		defer func() {
+			// Ensure stdin is closed if we exit this goroutine,
+			// unless it was already closed after sending the request.
+			// This helps the subprocess terminate if it's waiting for stdin.
+			_ = stdinPipe.Close()
+		}()
 
-	// Communication loop with timeout
-	for {
+		// 1. Read initialize response (with timeout)
+		var initRespBytes []byte
+		var initReadErr error
+		readDone := make(chan bool, 1)
+		go func() {
+			initRespBytes, initReadErr = stdoutReader.ReadBytes('\n')
+			readDone <- true
+		}()
+
 		select {
-		case <-timer.C:
-			log.Printf("[TCP Proxy GO] Timeout waiting for response/exit from PID %d (%s)", pid, serverCmdPath)
-			_ = cmd.Process.Kill() // Attempt to kill the process
-			return nil, fmt.Errorf("timeout waiting for server %s (PID %d)", serverCmdPath, pid)
-
-		case waitErr := <-processExited:
-			// Process exited. Check if we got a response or if the exit was unexpected.
-			log.Printf("[TCP Proxy GO] Subprocess PID %d exited. Wait error: %v", pid, waitErr)
-			if !requestSent || readErr != nil || len(responseBytes) == 0 {
-				// If we didn't successfully send/receive, the exit is an error.
-				errMsg := fmt.Sprintf("server process %s (PID %d) exited prematurely", serverCmdPath, pid)
-				if waitErr != nil {
-					errMsg = fmt.Sprintf("%s with error: %v", errMsg, waitErr)
-				}
-				stderrStr := stderrOutput.String()
-				if stderrStr != "" {
-					errMsg = fmt.Sprintf("%s. Stderr: %s", errMsg, stderrStr)
-				}
-				return nil, fmt.Errorf(errMsg)
+		case <-readDone:
+			if initReadErr != nil {
+				commErrChan <- fmt.Errorf("error reading initialize response from %s (PID %d): %w", serverCmdPath, pid, initReadErr)
+				return
 			}
-			// If we got a response, the exit is fine (or was already logged as a warning).
-			return responseBytes, nil // Return the response we got before exit
-
-		default:
-			// Try non-blocking communication steps
-			if !handshakeComplete {
-				// 1. Read initialize response
-				// Set a short deadline for reading the initialize response
-				// Note: Deadlines on pipes might not be reliable across all OSes.
-				// Consider a channel-based read with timeout if this is problematic.
-				// stdoutPipe.(net.Conn).SetReadDeadline(time.Now().Add(5 * time.Second)) // This cast might fail
-				initRespBytes, initReadErr := stdoutReader.ReadBytes('\n')
-				// stdoutPipe.(net.Conn).SetReadDeadline(time.Time{}) // Clear deadline
-
-				if initReadErr != nil {
-					if initReadErr == io.EOF {
-						log.Printf("[TCP Proxy GO] EOF reading initialize response from PID %d. Process likely exited.", pid)
-						// Let the processExited channel handle the error reporting
-						time.Sleep(10 * time.Millisecond) // Small sleep to allow exit goroutine to potentially run
-						continue
-					}
-					log.Printf("[TCP Proxy GO] Error reading initialize response from PID %d: %v", pid, initReadErr)
-					_ = cmd.Process.Kill()
-					return nil, fmt.Errorf("error reading initialize response from %s: %w", serverCmdPath, initReadErr)
-				}
-				log.Printf("[TCP Proxy GO] Received initialize response from PID %d: %s", pid, strings.TrimSpace(string(initRespBytes)))
-				// TODO: Optionally parse and validate the initialize response
-
-				// 2. Send initialized notification
-				initNotification := `{"jsonrpc":"2.0","method":"notifications/initialized"}` + "\n"
-				if _, err = io.WriteString(stdinPipe, initNotification); err != nil {
-					log.Printf("[TCP Proxy GO] Error writing initialized notification to PID %d: %v", pid, err)
-					_ = cmd.Process.Kill()
-					return nil, fmt.Errorf("error writing initialized notification to %s: %w", serverCmdPath, err)
-				}
-				log.Printf("[TCP Proxy GO] Sent initialized notification to PID %d", pid)
-				handshakeComplete = true
-			} else if !requestSent {
-				// 3. Send the actual request
-				if _, err = io.WriteString(stdinPipe, requestJson); err != nil {
-					log.Printf("[TCP Proxy GO] Error writing request to PID %d: %v", pid, err)
-					_ = cmd.Process.Kill()
-					return nil, fmt.Errorf("error writing request to %s: %w", serverCmdPath, err)
-				}
-				log.Printf("[TCP Proxy GO] Sent request to PID %d: %s", pid, strings.TrimSpace(requestJson))
-				requestSent = true
-
-				// 4. Close stdin now that the request is sent
-				if err := stdinPipe.Close(); err != nil {
-					log.Printf("[TCP Proxy GO] Warning: error closing stdin for PID %d: %v", pid, err)
-				}
-			} else {
-				// 5. Read the actual response
-				// Set a deadline for reading the actual response
-				// stdoutPipe.(net.Conn).SetReadDeadline(time.Now().Add(10 * time.Second)) // Adjust timeout as needed
-				responseBytes, readErr = stdoutReader.ReadBytes('\n')
-				// stdoutPipe.(net.Conn).SetReadDeadline(time.Time{}) // Clear deadline
-
-				if readErr != nil {
-					if readErr == io.EOF {
-						log.Printf("[TCP Proxy GO] EOF reading main response from PID %d. Process likely exited.", pid)
-						// Let the processExited channel handle reporting if needed
-						time.Sleep(10 * time.Millisecond)
-						continue
-					}
-					log.Printf("[TCP Proxy GO] Error reading main response from PID %d: %v", pid, readErr)
-					_ = cmd.Process.Kill()
-					return nil, fmt.Errorf("error reading response from %s: %w", serverCmdPath, readErr)
-				}
-				log.Printf("[TCP Proxy GO] Received main response from PID %d: %s", pid, strings.TrimSpace(string(responseBytes)))
-
-				// We got the response, now wait for the process to exit cleanly or return immediately
-				// Let the select loop handle the processExited channel.
-				// If we return here, the exit goroutine might report an error later.
-				// Instead, just wait for the exit signal via the select loop.
-				// return responseBytes, nil // Don't return yet, wait for exit confirmation
-			}
-			// If no error, loop again or yield CPU briefly
-			time.Sleep(5 * time.Millisecond) // Prevent busy-waiting
+			log.Printf("[TCP Proxy GO] Received initialize response from PID %d: %s", pid, strings.TrimSpace(string(initRespBytes)))
+			// TODO: Optionally parse and validate the initialize response here
+		case <-time.After(handshakeTimeout):
+			commErrChan <- fmt.Errorf("timeout reading initialize response from %s (PID %d)", serverCmdPath, pid)
+			return
 		}
+
+		// 2. Send initialized notification
+		initNotification := `{"jsonrpc":"2.0","method":"notifications/initialized"}` + "\n"
+		if _, err = io.WriteString(stdinPipe, initNotification); err != nil {
+			commErrChan <- fmt.Errorf("error writing initialized notification to %s (PID %d): %w", serverCmdPath, pid, err)
+			return
+		}
+		log.Printf("[TCP Proxy GO] Sent initialized notification to PID %d", pid)
+
+		// 3. Send the actual request
+		if _, err = io.WriteString(stdinPipe, requestJson); err != nil {
+			commErrChan <- fmt.Errorf("error writing request to %s (PID %d): %w", serverCmdPath, pid, err)
+			return
+		}
+		log.Printf("[TCP Proxy GO] Sent request to PID %d: %s", pid, strings.TrimSpace(requestJson))
+
+		// 4. Close stdin now that the request is sent
+		// It's important to close stdin so the server knows no more input is coming.
+		if err := stdinPipe.Close(); err != nil {
+			log.Printf("[TCP Proxy GO] Warning: error closing stdin for PID %d: %v", pid, err)
+			// Don't necessarily fail here, the process might still work
+		}
+
+		// 5. Read the actual response (with timeout)
+		var respReadErr error
+		readDone = make(chan bool, 1) // Reset readDone channel
+		go func() {
+			finalResponseBytes, respReadErr = stdoutReader.ReadBytes('\n')
+			readDone <- true
+		}()
+
+		select {
+		case <-readDone:
+			if respReadErr != nil {
+				commErrChan <- fmt.Errorf("error reading main response from %s (PID %d): %w", serverCmdPath, pid, respReadErr)
+				return
+			}
+			log.Printf("[TCP Proxy GO] Received main response from PID %d: %s", pid, strings.TrimSpace(string(finalResponseBytes)))
+			commErrChan <- nil // Signal success
+		case <-time.After(requestTimeout):
+			commErrChan <- fmt.Errorf("timeout reading main response from %s (PID %d)", serverCmdPath, pid)
+			return
+		}
+	}()
+
+	// --- Wait for communication or process exit ---
+	select {
+	case commErr := <-commErrChan:
+		if commErr != nil {
+			log.Printf("[TCP Proxy GO] Communication error with PID %d: %v", pid, commErr)
+			_ = cmd.Process.Kill() // Ensure process is killed on comm error
+			// Wait briefly for exit goroutine to potentially capture final stderr/exit code
+			select {
+			case waitErr := <-processExited:
+				log.Printf("[TCP Proxy GO] Process PID %d exited after comm error. Wait error: %v", pid, waitErr)
+			case <-time.After(100 * time.Millisecond):
+				log.Printf("[TCP Proxy GO] Process PID %d did not exit quickly after comm error.", pid)
+			}
+			return nil, commErr // Return the communication error
+		}
+		// Communication successful, now wait for process exit
+		select {
+		case waitErr := <-processExited:
+			if waitErr != nil {
+				// Process exited with an error *after* successful communication
+				log.Printf("[TCP Proxy GO] Warning: Subprocess PID %d exited with error (%v) after sending response. Stderr: %s", pid, waitErr, stderrOutput.String())
+				// Still return the response we received
+			} else {
+				log.Printf("[TCP Proxy GO] Subprocess PID %d exited successfully after sending response.", pid)
+			}
+			return finalResponseBytes, nil
+		case <-time.After(5 * time.Second): // Timeout waiting for exit after response
+			log.Printf("[TCP Proxy GO] Warning: Timeout waiting for process PID %d to exit after successful response.", pid)
+			// We got the response, so return it, but the process might linger.
+			return finalResponseBytes, nil
+		}
+
+	case waitErr := <-processExited:
+		// Process exited *before* communication finished or completed with error
+		log.Printf("[TCP Proxy GO] Subprocess PID %d exited prematurely. Wait error: %v", pid, waitErr)
+		errMsg := fmt.Sprintf("server process %s (PID %d) exited prematurely", serverCmdPath, pid)
+		if waitErr != nil {
+			errMsg = fmt.Sprintf("%s with error: %v", errMsg, waitErr)
+		}
+		stderrStr := stderrOutput.String()
+		if stderrStr != "" {
+			errMsg = fmt.Sprintf("%s. Stderr: %s", errMsg, stderrStr)
+		}
+		return nil, fmt.Errorf(errMsg)
 	}
 }
 
 // Helper to send a JSON-RPC error response
 func sendErrorResponse(conn net.Conn, id interface{}, code int, message string, data interface{}) {
-	// If the original ID was json.RawMessage, try to use it directly
 	var marshaledID json.RawMessage
 	if rawID, ok := id.(json.RawMessage); ok {
-		marshaledID = rawID
+		marshaledID = rawID // Use original RawMessage if available
 	} else {
-		// Otherwise, marshal the interface{} ID (could be nil, string, number)
-		// Handle potential marshal error for nil ID specifically
+		// Marshal the interface{} ID (could be nil, string, number)
 		if id == nil {
 			marshaledID = json.RawMessage("null")
 		} else {
@@ -505,7 +512,7 @@ func sendErrorResponse(conn net.Conn, id interface{}, code int, message string, 
 
 	errResp := mcpErrorResponse{
 		Jsonrpc: "2.0",
-		ID:      marshaledID, // Use marshaled ID
+		ID:      marshaledID,
 		Error: mcpError{
 			Code:    code,
 			Message: message,
@@ -515,7 +522,7 @@ func sendErrorResponse(conn net.Conn, id interface{}, code int, message string, 
 	respBytes, err := json.Marshal(errResp)
 	if err != nil {
 		log.Printf("[TCP Proxy GO] CRITICAL: Failed to marshal error response: %v", err)
-		_, _ = conn.Write([]byte(fmt.Sprintf("{\"jsonrpc\":\"2.0\",\"id\":null,\"error\":{\"code\":%d,\"message\":\"%s\"}}\n", internalErrorCode, "Proxy error marshalling response")))
+		_, _ = conn.Write([]byte(fmt.Sprintf("{\"jsonrpc\":\"2.0\",\"id\":%s,\"error\":{\"code\":%d,\"message\":\"%s\"}}\n", string(marshaledID), internalErrorCode, "Proxy error marshalling response")))
 		return
 	}
 	_, writeErr := conn.Write(append(respBytes, '\n'))
@@ -526,12 +533,11 @@ func sendErrorResponse(conn net.Conn, id interface{}, code int, message string, 
 
 // Helper to send a JSON-RPC success response
 func sendSuccessResponse(conn net.Conn, id interface{}, result interface{}) {
-	// If the original ID was json.RawMessage, try to use it directly
 	var marshaledID json.RawMessage
 	if rawID, ok := id.(json.RawMessage); ok {
-		marshaledID = rawID
+		marshaledID = rawID // Use original RawMessage if available
 	} else {
-		// Otherwise, marshal the interface{} ID
+		// Marshal the interface{} ID
 		idBytes, err := json.Marshal(id)
 		if err != nil {
 			log.Printf("[TCP Proxy GO] Error marshalling ID for success response: %v. Sending internal error.", err)
@@ -543,13 +549,13 @@ func sendSuccessResponse(conn net.Conn, id interface{}, result interface{}) {
 
 	resp := mcpSuccessResponse{
 		Jsonrpc: "2.0",
-		ID:      marshaledID, // Use marshaled ID
+		ID:      marshaledID,
 		Result:  result,
 	}
 	respBytes, err := json.Marshal(resp)
 	if err != nil {
 		log.Printf("[TCP Proxy GO] Error marshalling success response: %v", err)
-		sendErrorResponse(conn, id, internalErrorCode, "Failed to marshal success response", err.Error())
+		sendErrorResponse(conn, marshaledID, internalErrorCode, "Failed to marshal success response", err.Error()) // Send error with marshaled ID
 		return
 	}
 	_, writeErr := conn.Write(append(respBytes, '\n'))
