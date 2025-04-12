@@ -3,10 +3,11 @@
 .packages
 build/
 *.lock
+pubspec.lock
 
 # Docker
-docker-compose.yml # If used locally
-Dockerfile # If built elsewhere
+docker-compose.yml
+Dockerfile
 
 # IDE specific
 .idea/

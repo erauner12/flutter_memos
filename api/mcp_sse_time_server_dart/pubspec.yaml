@@ -7,9 +7,7 @@ environment:
   sdk: '>=3.0.0 <4.0.0'
 
 dependencies:
-  mcp_dart: ^0.3.6 # Ensure this matches the version used by flutter_memos
-  # shelf: ^1.4.0
-  # shelf_router: ^1.1.0
+  mcp_dart: ^0.3.6 # Or the specific version compatible with flutter_memos
 
 dev_dependencies:
   lints: ^3.0.0

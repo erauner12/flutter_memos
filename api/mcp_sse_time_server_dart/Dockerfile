@@ -19,13 +19,17 @@ RUN if [ -f /app/bin/mcp_sse_time_server.dart ]; then chmod +x /app/bin/mcp_sse_
 # RUN dart compile exe bin/mcp_sse_time_server.dart -o bin/server
 # If running from source, skip compile step
 
-# Use a smaller base image for the final stage
+# Use the same Dart image for the final stage (no need for smaller base if running from source)
 FROM dart:stable
 
 WORKDIR /app
 
 # Copy artifacts from the build stage
+# This includes the source code and the populated .dart_tool/ and .pub-cache/
 COPY --from=build /app /app
+# Copy the pub cache from the build stage to the final stage
+# This ensures packages are available at runtime without needing 'dart pub get' again
+COPY --from=build /root/.pub-cache /root/.pub-cache
 
 # Expose the port the server listens on (default 8999)
 EXPOSE 8999
