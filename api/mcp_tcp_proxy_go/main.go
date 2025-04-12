@@ -227,7 +227,8 @@ func handleToolCall(originalRequestJson string, req mcpRequest, clientConn net.C
 
 
 	log.Printf("[TCP Proxy GO] Forwarding response for tool '%s' to client %s", toolName, clientDesc)
-	_, writeErr := clientConn.Write(responseBytes) // responseBytes already includes newline
+	// Add newline back since ReadAll/TrimSpace removed it
+	_, writeErr := clientConn.Write(append(responseBytes, '\n'))
 	if writeErr != nil {
 		log.Printf("[TCP Proxy GO] Error writing response to client %s: %v", clientDesc, writeErr)
 	}
@@ -322,6 +323,10 @@ func handleToolList(req mcpRequest, clientConn net.Conn, clientDesc string) {
 
 	// Send the aggregated success response using the original RawMessage ID
 	sendSuccessResponse(clientConn, req.ID, map[string]interface{}{"tools": allTools})
+
+	// Note: The response from executeStdioServer in the goroutine above
+	// is parsed, but the raw bytes aren't directly forwarded here.
+	// sendSuccessResponse handles adding the newline.
 }
 
 // Executes a stdio server, handles handshake, sends one request, reads one response.
@@ -479,12 +484,22 @@ func executeStdioServer(serverCmdPath, requestJson string) ([]byte, error) {
 
 		// Stdin remains open until the communication goroutine exits (handled by defer)
 
-		// 5. Read the final response from subprocess (with timeout)
-		log.Printf("[TCP Proxy GO] PID %d: Attempting to read final response...", pid)
+		// 6. Read the final response from subprocess (with timeout)
+		log.Printf("[TCP Proxy GO] PID %d: Attempting to read final response until EOF...", pid)
 		var respReadErr error
-		readDone = make(chan bool, 1) // Reset readDone channel
+		readDone = make(chan bool, 1)
+		var readBytes []byte // Variable to store result of io.ReadAll
+
 		go func() {
-			finalResponseBytes, respReadErr = stdoutReader.ReadBytes('\n')
+			// Read everything until the stdout pipe is closed (EOF)
+			readBytes, respReadErr = io.ReadAll(stdoutReader)
+			// EOF is expected here, so don't treat it as an error for commErr
+			if respReadErr != nil && respReadErr != io.EOF {
+				log.Printf("[TCP Proxy GO] PID %d: Error during io.ReadAll: %v", pid, respReadErr)
+				// Keep respReadErr to potentially set commErr later
+			} else {
+				respReadErr = nil // Clear EOF error if that's all it was
+			}
 			readDone <- true
 		}()
 
@@ -494,7 +509,14 @@ func executeStdioServer(serverCmdPath, requestJson string) ([]byte, error) {
 				commErr = fmt.Errorf("error reading final response from %s (PID %d): %w", serverCmdPath, pid, respReadErr)
 				return
 			}
-			log.Printf("[TCP Proxy GO] PID %d: Received final response: %s", pid, strings.TrimSpace(string(finalResponseBytes)))
+			// Trim whitespace (like trailing newlines) before assigning
+			finalResponseBytes = bytes.TrimSpace(readBytes)
+			if len(finalResponseBytes) == 0 {
+				// This case might happen if the process exits without writing anything after handshake
+				commErr = fmt.Errorf("received empty final response (EOF?) from %s (PID %d)", serverCmdPath, pid)
+				return
+			}
+			log.Printf("[TCP Proxy GO] PID %d: Received final response (ReadAll): %s", pid, string(finalResponseBytes))
 			// Success - commErr remains nil
 		case <-time.After(requestTimeout):
 			commErr = fmt.Errorf("timeout reading final response from %s (PID %d)", serverCmdPath, pid)
