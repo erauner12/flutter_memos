@@ -6,10 +6,11 @@ WORKDIR /app
 # Copy only necessary files first to leverage Docker cache
 # Copy this package's pubspec files
 COPY pubspec.yaml pubspec.lock ./
-# The path dependency in pubspec.yaml will handle copying flutter_memos code
+# ADD: Copy the local generated API client code needed for the path dependency
+COPY todoist_api/ ./todoist_api/
 
 # Get dependencies (ONLINE - remove --offline)
-# This will fetch mcp_dart and resolve the flutter_memos path dependency
+# This will fetch mcp_dart, http, and resolve the local todoist_api path dependency
 RUN dart pub get
 
 # Copy the rest of the application code *from this directory's context*

@@ -10,14 +10,20 @@ dependencies:
   # MCP library
   mcp_dart: ^0.3.6 # Use the same version as the main project or latest compatible
 
-  # Path dependency to access services/models from the main flutter_memos project
-  # Adjust the path based on the directory structure relative to this pubspec.yaml
-  flutter_memos:
-    path: ../../ # Goes up two levels from api/mcp_sse_todoist_server_dart to flutter_memos root
+  # ADD: HTTP client for API calls
+  http: ^1.2.1
 
-  # Add other direct dependencies if todoist_mcp_server.dart imports them explicitly
-  # and they are not transitive via mcp_dart or flutter_memos.
-  # e.g., http: ^1.0.0
+  # ADD: Path dependency to the *local* generated Todoist API client
+  # This directory should be copied into api/mcp_sse_todoist_server_dart/
+  todoist_api:
+    path: ./todoist_api/
+
+  # REMOVE: Path dependency to the main flutter_memos project
+  # flutter_memos:
+  #   path: ../../
+
+  # Add other direct dependencies if needed (e.g., collection if used directly)
+  collection: ^1.18.0 # For safe casting, etc.
 
 dev_dependencies:
   lints: ^3.0.0
