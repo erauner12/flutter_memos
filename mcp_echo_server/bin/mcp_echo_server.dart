@@ -116,6 +116,9 @@ Future<void> main(List<String> args) async {
     stderr.writeln(
       "[EchoServer] Server connected to stdio transport. Ready for connections.",
     );
+    // Explicitly flush stdout to ensure the initial message is sent immediately.
+    // This might be necessary when running as a subprocess.
+    stdout.flush();
     // Keep the server running indefinitely until a signal is received
     // The transport listener runs in the background.
   } catch (e, s) {

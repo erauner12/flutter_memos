@@ -373,6 +373,8 @@ Identify the task using EITHER `task_id` OR `task_name`. `task_id` takes precede
     stderr.writeln(
       '[TodoistServer] Registered tools: create_todoist_task, update_todoist_task, get_todoist_tasks, delete_todoist_task, complete_todoist_task, get_todoist_task_by_id, get_task_comments, create_task_comment',
     );
+    // Explicitly flush stdout to ensure the initial message is sent immediately.
+    stdout.flush();
   } catch (e) {
     stderr.writeln('[TodoistServer] Failed to connect to transport: $e');
     exit(1);
