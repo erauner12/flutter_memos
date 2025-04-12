@@ -6,6 +6,11 @@ import 'package:collection/collection.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_memos/models/mcp_server_config.dart';
 import 'package:flutter_memos/providers/settings_provider.dart'; // To get server list and Gemini key
+// Import Stdio types explicitly (less likely to conflict)
+// Note: These should be available via the main lib export now
+// REMOVE: Direct import of Transport
+
+// ADD: Import Todoist API key provider
 import 'package:flutter_memos/services/gemini_service.dart'; // Import GeminiService
 import 'package:flutter_memos/services/mcp_sse_client_transport.dart'; // Import the new SSE transport
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -14,9 +19,6 @@ import 'package:google_generative_ai/google_generative_ai.dart'; // Import for G
 import 'package:mcp_dart/mcp_dart.dart' as mcp_lib;
 import 'package:mcp_dart/src/shared/transport.dart'
     as transport_lib; // For Transport type
-// Import Stdio types explicitly (less likely to conflict)
-// Note: These should be available via the main lib export now
-// REMOVE: Direct import of Transport
 
 // --- Helper Extension (Schema parsing - adapted from example) ---
 // Uses google_generative_ai.Schema
@@ -543,9 +545,47 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
     final serverId = serverConfig.id;
     final currentStatus = state.serverStatuses[serverId];
 
-    // Add debug print here
+    // --- START MODIFICATION: Inject Todoist API Key ---
+    McpServerConfig configToUse =
+        serverConfig; // Start with the original config
+
+    // Check if this server config is intended for Todoist by looking for the specific env key
+    if (serverConfig.customEnvironment.containsKey('TODOIST_API_TOKEN')) {
+      debugPrint(
+        "MCP [\$serverId]: Detected TODOIST_API_TOKEN key in config. Attempting to inject actual token.",
+      );
+      try {
+        // Read the current token from the provider
+        final todoistApiKey = ref.read(todoistApiKeyProvider);
+        if (todoistApiKey.isNotEmpty) {
+          // Create an updated environment map
+          final updatedEnv = Map<String, String>.from(
+            serverConfig.customEnvironment,
+          );
+          updatedEnv['TODOIST_API_TOKEN'] = todoistApiKey;
+
+          // Create a new config instance with the updated environment
+          configToUse = serverConfig.copyWith(customEnvironment: updatedEnv);
+          debugPrint(
+            "MCP [\$serverId]: Successfully injected Todoist API token into environment for connection.",
+          );
+        } else {
+          debugPrint(
+            "MCP [\$serverId]: Warning - TODOIST_API_TOKEN key found, but token value from provider is empty. Proceeding without injection.",
+          );
+        }
+      } catch (e) {
+        debugPrint(
+          "MCP [\$serverId]: Error reading Todoist API key provider: \$e. Proceeding without injection.",
+        );
+        // Proceed with the original config, the server will likely fail later
+      }
+    }
+    // --- END MODIFICATION ---
+
+    // Add debug print here (using the potentially modified config)
     debugPrint(
-      "MCP [\$serverId]: Preparing to connect. Config Name: \${serverConfig.name}, Custom Env: \${serverConfig.customEnvironment}",
+      "MCP [\$serverId]: Preparing to connect. Config Name: \${configToUse.name}, Custom Env Keys: \${configToUse.customEnvironment.keys.join(',')}",
     );
 
     if (state.activeClients.containsKey(serverId) ||
@@ -574,7 +614,8 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
         onClose: handleClientClose,
       );
 
-      await newClientInstance.connectToServer(serverConfig);
+      // Use the potentially updated configToUse here
+      await newClientInstance.connectToServer(configToUse);
 
       if (newClientInstance.isConnected) {
         debugPrint(
@@ -594,7 +635,7 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
             removeErrorIds: [serverId],
           );
           debugPrint(
-            "MCP [\$serverId]: State updated to connected for \${serverConfig.name}.",
+            "MCP [\$serverId]: State updated to connected for \${configToUse.name}.",
           );
           rebuildToolMap();
         } else {
