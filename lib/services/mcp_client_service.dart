@@ -1104,52 +1104,52 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
                 .trim();
 
         // --- Phase 4: Parse standardized JSON ---
-        if (toolResultString.isNotEmpty) {
-          debugPrint(
-            "MCP ProcessQuery: Tool '\$toolName' executed by server '\$targetServerId'. Raw Text Result: '\$toolResultString'",
-          );
-          try {
-            final decoded = jsonDecode(toolResultString);
-            if (decoded is Map<String, dynamic>) {
-              // Expecting {"status": "...", "message": "...", "result": {...}}
+        try {
+          final decoded = jsonDecode(toolResultString);
+          if (decoded is Map<String, dynamic>) {
               final status = decoded['status'] as String?;
               final message = decoded['message'] as String?;
               final resultData = decoded['result'] as Map<String, dynamic>?;
+  
               if (status == 'success') {
-                // Pass the structured result data to Gemini
-                toolResultJson = resultData ?? {'message': message ?? 'Success'};
-                debugPrint("MCP ProcessQuery: Parsed SUCCESS result for Gemini: \$toolResultJson");
+              // Pass the structured result data to Gemini
+              toolResultJson = resultData ?? {'message': message ?? 'Success'};
+              debugPrint(
+                "MCP ProcessQuery: Parsed SUCCESS result for Gemini: \$toolResultJson",
+              );
               } else if (status == 'error') {
-                // Pass structured error data to Gemini
-                toolResultJson = {
-                  'error': message ?? 'Unknown server error',
-                  ...?resultData
-                };
-                debugPrint("MCP ProcessQuery: Parsed ERROR result for Gemini: \$toolResultJson");
+              // Pass structured error data to Gemini
+              toolResultJson = {
+                'error': message ?? 'Unknown server error',
+                ...?resultData, // Include any additional error details from result
+              };
+              debugPrint(
+                "MCP ProcessQuery: Parsed ERROR result for Gemini: \$toolResultJson",
+              );
               } else {
-                // Fallback if status is missing or unexpected
-                debugPrint("MCP ProcessQuery: Parsed JSON but status field ('\$status') is missing or unexpected. Using raw map.");
-                toolResultJson = decoded;
+              // Fallback if status is missing or unexpected
+              debugPrint(
+                "MCP ProcessQuery: Parsed JSON but status field ('\$status') is missing or unexpected. Using raw map.",
+              );
+              toolResultJson = decoded;
               }
-            } else if (decoded is List) {
+          } else if (decoded is List) {
               // Less likely with new structure, but handle just in case
-              debugPrint("MCP ProcessQuery: Tool result is JSON List. Wrapping in 'result_list'.");
-              toolResultJson = {'result_list': decoded};
-            } else {
-              // Not a Map or List
-              debugPrint("MCP ProcessQuery: Tool result is valid JSON but not Map/List. Using raw text.");
-              toolResultJson = {'result_text': toolResultString};
-            }
-          } catch (e) {
-            // JSON parsing failed
             debugPrint(
-              "MCP ProcessQuery: Tool result is not valid JSON ('\$e'). Using raw text.",
+              "MCP ProcessQuery: Tool result is JSON List. Wrapping in 'result_list'.",
             );
-            toolResultJson = {'result_text': toolResultString};
           }
-        } else {
+        } catch (e) {
+          // JSON parsing failed
+          debugPrint(
+            "MCP ProcessQuery: Tool result is not valid JSON ('\$e'). Using raw text.",
+          );
+          toolResultJson = {'result_text': toolResultString};
+        }
+        if (toolResultString.isEmpty) {
           // Empty response from tool
-          toolResultString = '{"status": "success", "message": "Tool executed successfully but returned no content.", "result": {}}';
+          toolResultString =
+              '{"status": "success", "message": "Tool executed successfully but returned no content.", "result": {}}'; // Provide default structure
           toolResultJson = {'message': 'Tool executed successfully but returned no content.'};
           debugPrint(
             "MCP ProcessQuery: Tool '\$toolName' executed by server '\$targetServerId'. No text content found. Sending default success message.",
