@@ -187,27 +187,36 @@ class GoogleMcpClient {
         }
 
         // --- Environment Handling ---
-        // Pass the custom environment directly. Process.start's default
-        // includeParentEnvironment=true should merge it with the parent.
-        final Map<String, String> customEnvironment = config.customEnvironment;
+        // Explicitly merge parent environment with custom environment.
+        final Map<String, String> processEnvironment = Map.from(
+          io.Platform.environment,
+        );
+        processEnvironment.addAll(
+          config.customEnvironment,
+        ); // Add/overwrite with custom vars
+
         debugPrint(
-          "GoogleMcpClient [\${config.id}]: Preparing custom environment: \${customEnvironment.keys.join(',')}",
+          "GoogleMcpClient [\${config.id}]: Prepared final environment for process: \${processEnvironment.keys.join(',')}",
         );
         // --- End Environment Handling ---
 
         // MODIFY: Use library prefix for Stdio types
         final serverParams = mcp_lib.StdioServerParameters(
           command: config.command,
-          args: config.args.split(' '),
-          // Pass the custom environment map directly
-          environment: customEnvironment.isNotEmpty ? customEnvironment : null,
-          // Removed: Invalid includeParentEnvironment parameter
+          args:
+              config.args
+                  .split(' ')
+                  .where((s) => s.isNotEmpty)
+                  .toList(), // Ensure no empty strings from split
+          // Pass the explicitly merged environment map
+          environment: processEnvironment,
+          // Keep stderrMode as normal
           stderrMode: io.ProcessStartMode.normal,
         );
 
         // Add debug print here (logging the environment passed to params)
         debugPrint(
-          "GoogleMcpClient [\${config.id}]: Passing environment to StdioServerParameters: \${serverParams.environment}",
+          "GoogleMcpClient [\${config.id}]: Passing environment to StdioServerParameters: \${serverParams.environment?.keys.join(',') ?? 'null'}",
         );
 
         final stdioTransport = mcp_lib.StdioClientTransport(
