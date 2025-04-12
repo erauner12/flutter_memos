@@ -47,14 +47,12 @@ const Duration processExitTimeout = Duration(
   seconds: 5,
 ); // Grace period for process exit after response
 
-
 // Global map to track active processes managed by the proxy
 // Key: Request ID (from client), Value: Process
 final Map<dynamic, Process> _activeProcesses = {};
 final Map<dynamic, Completer<void>> _processCompleters = {};
 final Map<dynamic, StreamSubscription> _stderrSubscriptions = {};
 final Map<dynamic, StreamSubscription> _stdoutSubscriptions = {};
-
 
 Future<void> main(List<String> arguments) async {
   // --- Argument Parsing ---
@@ -213,7 +211,6 @@ void _processClientBuffer(BytesBuilder buffer, Socket clientSocket, String clien
   }
 }
 
-
 // --- MCP Request Handling ---
 Future<void> handleMcpRequest(String messageJsonString, Socket clientSocket, String clientDesc) async {
   Map<String, dynamic>? request; // Make nullable
@@ -351,7 +348,6 @@ Future<void> _handleToolCall(String originalRequestJson, Map<String, dynamic> re
   // No finally block needed here, _executeStdioServer handles its own cleanup
 }
 
-
 Future<void> _handleToolList(Map<String, dynamic> request, Socket clientSocket, String clientDesc) async {
   final requestId = request['id']; // Already known to be non-null from caller
   print('[TCP Proxy] Handling tools/list request (ID: $requestId) from $clientDesc');
@@ -463,7 +459,6 @@ Future<String> _executeStdioServer(String serverCmdPath, String requestJson, dyn
       '[TCP Proxy] Started subprocess PID ${process.pid} for $serverCmdPath (ID: $requestId) in ${stopwatch.elapsedMilliseconds}ms',
     );
 
-
     // Capture stderr asynchronously
     stderrSub = process.stderr
         .transform(utf8.decoder)
@@ -488,7 +483,6 @@ Future<String> _executeStdioServer(String serverCmdPath, String requestJson, dyn
       }
     );
     _stderrSubscriptions[requestId] = stderrSub; // Track subscription
-
 
     // Handle process exit asynchronously
     process.exitCode.then((exitCode) {
@@ -571,10 +565,8 @@ Future<String> _executeStdioServer(String serverCmdPath, String requestJson, dyn
             }
         } catch (e) {
               print(
-                '[TCP Proxy] Error parsing stdout line from PID $pid: $e. Line: "$line"',
+                '[TCP Proxy] Warning: Failed to parse stdout line from PID $pid as JSON: $e. Line: "$line". Ignoring line.',
               );
-              // Don't fail immediately, let timeout or process exit handle it
-              // If this happens often, might indicate a server issue.
         }
       },
       onError: (err) {
@@ -606,7 +598,6 @@ Future<String> _executeStdioServer(String serverCmdPath, String requestJson, dyn
       cancelOnError: true,
     );
     _stdoutSubscriptions[requestId] = stdoutSub; // Track subscription
-
 
     // --- Send Handshake and Request ---
     // 1. Send initialize request
@@ -648,7 +639,6 @@ Future<String> _executeStdioServer(String serverCmdPath, String requestJson, dyn
       );
       // Don't necessarily fail the whole operation here, stdout might still arrive.
     }
-
 
     // 5. Wait for the final response from stdout listener OR timeout
     final responseJson = await responseCompleter.future.timeout(requestTimeout,
@@ -730,7 +720,6 @@ void _cleanupProcessResources(dynamic requestId) {
   _processCompleters.remove(requestId);
 }
 
-
 void _cancelProcess(dynamic requestId) {
   if (requestId == null) return;
   print('[TCP Proxy] Attempting to cancel process for request ID: $requestId');
@@ -795,7 +784,6 @@ void _sendRawJson(Socket clientSocket, String jsonString) {
     } catch (_) {} // Attempt to close socket
   }
 }
-
 
 void _sendJsonResponse(Socket clientSocket, dynamic id, dynamic result) {
   final response = {
