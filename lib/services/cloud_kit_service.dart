@@ -8,6 +8,7 @@ import 'package:flutter_cloud_kit/types/cloud_ket_record.dart'; // Keep this imp
 // Add explicit imports for the required types
 import 'package:flutter_cloud_kit/types/cloud_kit_account_status.dart';
 import 'package:flutter_cloud_kit/types/database_scope.dart';
+import 'package:flutter_memos/models/mcp_connection_type.dart'; // Import MCP connection type
 import 'package:flutter_memos/models/mcp_server_config.dart'; // Import MCP model
 import 'package:flutter_memos/models/server_config.dart';
 // Import the synchronized package
@@ -362,6 +363,7 @@ class CloudKitService {
           '', // Store nullable int as string, default to empty if null
       'isActive':
           config.isActive.toString(), // Store bool as string 'true'/'false'
+      // Store the environment map as a JSON string
       'customEnvironment': jsonEncode(config.customEnvironment),
       // 'id' is the recordName, not stored as a field within the record data
     };
@@ -406,13 +408,16 @@ class CloudKitService {
         debugPrint(
           "Invalid connectionType '\$typeString' found for server \$recordName, defaulting to stdio.",
         );
+        // Keep default stdio
       }
     } else {
       debugPrint(
         "Missing connectionType for server \$recordName, defaulting to stdio.",
       );
+      // Apply heuristic for old data: if host/port look valid, assume SSE
       final potentialHost = recordData['host'] as String?;
-      final potentialPortStr = recordData['port'] as String?;
+      final potentialPortStr =
+          recordData['port'] as String?; // Port stored as string
       final potentialPort =
           (potentialPortStr != null && potentialPortStr.isNotEmpty)
               ? int.tryParse(potentialPortStr)
@@ -428,15 +433,18 @@ class CloudKitService {
       }
     }
 
-    // Parse host (nullable) - store empty string as empty string, null as null
+    // Parse host (nullable) - Treat empty string from CK as null
     String? parsedHost = recordData['host'] as String?;
-    if (parsedHost == '') parsedHost = null;
+    if (parsedHost != null && parsedHost.isEmpty) {
+      parsedHost = null;
+    }
 
     // Parse port from string safely (nullable)
-    int? parsedPort;
-    final portString = recordData['port'] as String?;
+    int? parsedPort; // Default to null
+    final portString = recordData['port'] as String?; // Expect string
     if (portString != null && portString.isNotEmpty) {
       parsedPort = int.tryParse(portString);
+      // Invalidate if not parseable or out of range
       if (parsedPort == null || parsedPort <= 0 || parsedPort > 65535) {
         debugPrint(
           "Invalid port value '\$portString' found for server \$recordName, setting port to null.",
@@ -453,6 +461,7 @@ class CloudKitService {
       args: recordData['args'] as String? ?? '',
       host: parsedHost, // Use nullable host
       port: parsedPort, // Use nullable port
+      // Parse bool from string, default to false if invalid/missing
       isActive: (recordData['isActive'] as String?)?.toLowerCase() == 'true',
       customEnvironment: environment,
     );

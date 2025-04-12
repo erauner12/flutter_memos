@@ -1,5 +1,5 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter_memos/models/mcp_server_config.dart';
+import 'package:flutter_memos/models/mcp_server_config.dart'; // Import the model
 import 'package:flutter_memos/providers/settings_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
@@ -67,7 +67,8 @@ class _AddEditMcpServerScreenState
       // Load fields based on type, handling nulls
       _hostController.text = server.host ?? ''; // Load host if available
       _portController.text =
-          server.port.toString() ?? ''; // Load port if available
+          server.port.toString() ??
+          ''; // Load port if available, convert int? to String
       _commandController.text = server.command; // Always load command
       _argsController.text = server.args; // Always load args
       _isActive = server.isActive;
@@ -82,6 +83,9 @@ class _AddEditMcpServerScreenState
       // Ensure controllers for the non-default type are empty
       _hostController.clear();
       _portController.clear();
+      // Also clear stdio fields if defaulting to SSE (or vice versa if default changes)
+      _commandController.clear();
+      _argsController.clear();
     }
   }
 
@@ -189,9 +193,8 @@ class _AddEditMcpServerScreenState
       }
       port = parsedPort;
       // Command and args are not strictly needed for SSE, keep them as they are or clear them
-      command =
-          _commandController.text.trim(); // Keep entered value or set to ''
-      args = _argsController.text.trim(); // Keep entered value or set to ''
+      command = _commandController.text.trim();
+      args = _argsController.text.trim();
     }
 
     final name = _nameController.text.trim();
@@ -199,7 +202,6 @@ class _AddEditMcpServerScreenState
     // Process environment variables (logic remains the same)
     final Map<String, String> customEnvMap = {};
     bool envVarError = false;
-    // ... (existing environment variable processing logic) ...
     for (var pair in _envVars) {
       final key = pair.keyController.text.trim();
       final value = pair.valueController.text; // Keep value as is
@@ -220,7 +222,6 @@ class _AddEditMcpServerScreenState
         break;
       }
     }
-
 
     if (envVarError) return;
 
@@ -315,7 +316,6 @@ class _AddEditMcpServerScreenState
                           ),
                           const SizedBox(height: 6),
                           SizedBox(
-                            // Ensure segmented control takes full width
                             width: double.infinity,
                             child: CupertinoSegmentedControl<McpConnectionType>(
                               children: const {
@@ -339,14 +339,6 @@ class _AddEditMcpServerScreenState
                                 if (newValue != null) {
                                   setState(() {
                                     _selectedType = newValue;
-                                    // Optional: Clear fields of the other type when switching
-                                    // if (newValue == McpConnectionType.stdio) {
-                                    //   _hostController.clear();
-                                    //   _portController.clear();
-                                    // } else {
-                                    //   _commandController.clear();
-                                    //   _argsController.clear();
-                                    // }
                                   });
                                 }
                               },
@@ -364,7 +356,6 @@ class _AddEditMcpServerScreenState
                         textInputAction: TextInputAction.next,
                         autocorrect: false,
                         validator: (value) {
-                          // Only validate if stdio is selected
                           if (_selectedType == McpConnectionType.stdio &&
                               (value == null || value.trim().isEmpty)) {
                             return 'Command is required for Stdio';
@@ -378,7 +369,6 @@ class _AddEditMcpServerScreenState
                         prefix: const Text('Arguments'),
                         textInputAction: TextInputAction.done,
                         autocorrect: false,
-                        // No validator needed for optional args
                       ),
                     ],
                     // --- SSE Fields (Conditional) ---
@@ -391,7 +381,6 @@ class _AddEditMcpServerScreenState
                         autocorrect: false,
                         textInputAction: TextInputAction.next,
                         validator: (value) {
-                          // Only validate if SSE is selected
                           if (_selectedType == McpConnectionType.sse &&
                               (value == null || value.trim().isEmpty)) {
                             return 'Manager Host is required for SSE';
@@ -409,7 +398,6 @@ class _AddEditMcpServerScreenState
                         ),
                         textInputAction: TextInputAction.done,
                         validator: (value) {
-                          // Only validate if SSE is selected
                           if (_selectedType == McpConnectionType.sse) {
                             if (value == null || value.trim().isEmpty) {
                               return 'Manager Port is required for SSE';
@@ -434,7 +422,6 @@ class _AddEditMcpServerScreenState
                     ),
                   ],
                 ),
-                // ... Environment Variables Section (remains the same) ...
                 CupertinoFormSection.insetGrouped(
                   header: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -454,7 +441,7 @@ class _AddEditMcpServerScreenState
                       vertical: 4.0,
                     ),
                     child: Text(
-                      'Variables passed to the underlying server process (for Stdio) or potentially used by the Manager (for SSE).', // Updated footer text
+                      'Variables passed to the underlying server process (for Stdio) or potentially used by the Manager (for SSE).',
                       style: TextStyle(fontSize: 12),
                     ),
                   ),
@@ -472,7 +459,6 @@ class _AddEditMcpServerScreenState
                       ..._envVars.map((pair) => _buildEnvVarRow(pair)),
                   ],
                 ),
-                // ... Delete Button Section (remains the same) ...
                 if (_isEditing)
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 20.0),
@@ -481,7 +467,6 @@ class _AddEditMcpServerScreenState
                       onPressed:
                           (_isEditing && widget.serverToEdit != null)
                               ? () async {
-                                // ... existing delete confirmation logic ...
                                 final confirmed = await showCupertinoDialog<
                                   bool
                                 >(
@@ -517,7 +502,6 @@ class _AddEditMcpServerScreenState
                                       .read(settingsServiceProvider)
                                       .deleteMcpServer(widget.serverToEdit!.id);
 
-                                  // Check mounted before using context
                                   if (!mounted) return;
 
                                   if (success) {
@@ -525,7 +509,6 @@ class _AddEditMcpServerScreenState
                                       'Deleted',
                                       'MCP Server "${widget.serverToEdit!.name}" deleted.',
                                     );
-                                    // Check mounted again before popping
                                     if (mounted) Navigator.of(context).pop();
                                   } else {
                                     _showResultDialog(
@@ -548,7 +531,7 @@ class _AddEditMcpServerScreenState
       ),
     );
   }
-  // ... _buildEnvVarRow and _showResultDialog methods remain the same ...
+  
   // Helper to build a row for an environment variable
   Widget _buildEnvVarRow(_EnvVarPair pair) {
     return Padding(
@@ -599,25 +582,6 @@ class _AddEditMcpServerScreenState
           ),
         ],
       ),
-    );
-  }
-
-  void _showResultDialog(String title, String content, {bool isError = false}) {
-    if (!mounted) return;
-    showCupertinoDialog(
-      context: context,
-      builder:
-          (context) => CupertinoAlertDialog(
-            title: Text(title),
-            content: Text(content),
-            actions: [
-              CupertinoDialogAction(
-                isDefaultAction: true,
-                child: const Text('OK'),
-                onPressed: () => Navigator.of(context).pop(),
-              ),
-            ],
-          ),
     );
   }
 }
