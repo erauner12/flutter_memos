@@ -34,9 +34,18 @@ const int internalErrorCode = -32603;
 const int serverTimeoutCode = -32001; // Custom code
 
 // Timeouts
-const Duration handshakeTimeout = Duration(seconds: 20);
-const Duration requestTimeout = Duration(seconds: 60);
-const Duration processStartTimeout = Duration(seconds: 10);
+const Duration handshakeTimeout = Duration(
+  seconds: 20,
+); // Keep for potential future use
+const Duration requestTimeout = Duration(
+  seconds: 60,
+); // Overall request timeout
+const Duration processStartTimeout = Duration(
+  seconds: 10,
+); // Timeout for Process.start
+const Duration processExitTimeout = Duration(
+  seconds: 5,
+); // Grace period for process exit after response
 
 
 // Global map to track active processes managed by the proxy
@@ -84,18 +93,19 @@ Future<void> main(List<String> arguments) async {
     print('\n[TCP Proxy] Shutting down...');
     await serverSocket.close();
     // Kill any remaining active processes
+    final pids = _activeProcesses.values.map((p) => p.pid).toList();
     for (var process in _activeProcesses.values) {
       try {
         print('[TCP Proxy] Killing lingering process PID ${process.pid}');
         process.kill(ProcessSignal.sigterm); // Try graceful first
-        // Optionally wait a short time then force kill if needed
       } catch (e) {
         print('[TCP Proxy] Error killing process PID ${process.pid}: $e');
       }
     }
     _activeProcesses.clear();
-    _processCompleters.clear();
+    _processCompleters.clear(); // Clear completers
     for (var sub in _stderrSubscriptions.values) {
+      // Cancel subscriptions
       sub.cancel();
     }
     _stderrSubscriptions.clear();
@@ -103,6 +113,7 @@ Future<void> main(List<String> arguments) async {
       sub.cancel();
     }
     _stdoutSubscriptions.clear();
+    print('[TCP Proxy] Killed lingering processes: $pids');
     print('[TCP Proxy] Exiting.');
     exit(0);
   }
@@ -143,8 +154,9 @@ void _cleanupClientResources(Socket clientSocket, String clientDesc, StreamSubsc
    } catch(e) {
       print('[TCP Proxy] Error destroying socket for $clientDesc: $e');
    }
-   // Note: Associated processes are cleaned up when handleMcpRequest completes or times out
-   // We don't have a direct mapping from client socket to request IDs here easily
+  // Active processes related to this client are not directly tracked here.
+  // Cancellation requests (`notifications/cancelled`) or timeouts in `handleMcpRequest`
+  // are responsible for cleaning up individual processes via `_cancelProcess` or the `finally` block.
 }
 
 // --- Buffer Processing ---
@@ -167,31 +179,36 @@ void _processClientBuffer(BytesBuilder buffer, Socket clientSocket, String clien
 
       String messageString;
       try {
+        // Decode even if empty, trim later
         messageString = utf8.decode(messageBytes);
         if (messageString.trim().isNotEmpty) {
           print('[TCP Proxy] Received raw from $clientDesc: $messageString');
           // Handle the request asynchronously, don't await here
+          // Use unawaited_futures or simply ignore the future if not needed
           handleMcpRequest(messageString, clientSocket, clientDesc);
+        } else {
+          print('[TCP Proxy] Received empty line from $clientDesc. Ignoring.');
         }
       } catch (e, s) {
         print('[TCP Proxy] Error decoding message from $clientDesc: $e\n$s');
         _sendJsonError(clientSocket, null, parseErrorCode, 'Parse error', e.toString());
-        // Decide if the connection should be dropped on parse error
+        // Consider dropping connection on persistent parse errors?
         // clientSocket.destroy();
         // return;
       }
     } else {
-      break;
+      break; // No complete line found, wait for more data
     }
   }
 
+  // Update the buffer with remaining bytes
   if (offset > 0) {
     if (offset < currentBytes.length) {
       final remainingBytes = Uint8List.sublistView(currentBytes, offset);
       buffer.clear();
       buffer.add(remainingBytes);
     } else {
-      buffer.clear();
+      buffer.clear(); // All bytes processed
     }
   }
 }
@@ -199,14 +216,14 @@ void _processClientBuffer(BytesBuilder buffer, Socket clientSocket, String clien
 
 // --- MCP Request Handling ---
 Future<void> handleMcpRequest(String messageJsonString, Socket clientSocket, String clientDesc) async {
-  Map<String, dynamic> request;
+  Map<String, dynamic>? request; // Make nullable
   dynamic requestId; // Can be int, String, or null
 
   try {
     request = jsonDecode(messageJsonString) as Map<String, dynamic>;
-    requestId = request['id']; // Store ID early
+    requestId = request['id']; // Store ID early, can be null
     final method = request['method'] as String?;
-    final params = request['params'] as Map<String, dynamic>?; // Assuming params is an object
+    final params = request['params']; // Can be Map, List, or null
 
     if (method == null) {
       _sendJsonError(clientSocket, requestId, invalidRequestCode, 'Invalid Request', 'Missing method');
@@ -223,7 +240,13 @@ Future<void> handleMcpRequest(String messageJsonString, Socket clientSocket, Str
         _sendJsonResponse(clientSocket, requestId, {});
         break;
       case 'tools/call':
-        await _handleToolCall(messageJsonString, request, clientSocket, clientDesc);
+        // Ensure request is not null before passing
+        await _handleToolCall(
+          messageJsonString,
+          request,
+          clientSocket,
+          clientDesc,
+        );
         break;
       case 'tools/list':
         await _handleToolList(request, clientSocket, clientDesc);
@@ -233,13 +256,30 @@ Future<void> handleMcpRequest(String messageJsonString, Socket clientSocket, Str
          // No response needed for notifications
         break;
       case 'notifications/cancelled':
-          final cancelledRequestId = params?['requestId'];
+        dynamic cancelledRequestId;
+        if (params is Map<String, dynamic>) {
+          cancelledRequestId = params['requestId'];
+        }
           print('[TCP Proxy] Received cancel notification for request ID $cancelledRequestId from $clientDesc.');
+        if (cancelledRequestId != null) {
           _cancelProcess(cancelledRequestId);
+        } else {
+          print('[TCP Proxy] Cancel notification missing requestId.');
+        }
           break;
       default:
         _sendJsonError(clientSocket, requestId, methodNotFoundCode, 'Method not found', method);
     }
+  } on FormatException catch (e) {
+    print('[TCP Proxy] JSON Parse Error from $clientDesc: $e');
+    // requestId might be null here if parsing failed early
+    _sendJsonError(
+      clientSocket,
+      requestId,
+      parseErrorCode,
+      'Parse error',
+      e.message,
+    );
   } catch (e, s) {
     print('[TCP Proxy] Error processing request from $clientDesc: $e\n$s');
     // Attempt to send error, using potentially recovered requestId
@@ -250,7 +290,7 @@ Future<void> handleMcpRequest(String messageJsonString, Socket clientSocket, Str
 // --- Specific Handlers ---
 
 void _handleInitialize(Socket clientSocket, dynamic requestId) {
-  print('[TCP Proxy] Handling initialize request');
+  print('[TCP Proxy] Handling initialize request ID: $requestId');
   final response = {
     'protocolVersion': '2024-11-05', // MCP version proxy supports
     'capabilities': {
@@ -267,7 +307,7 @@ void _handleInitialize(Socket clientSocket, dynamic requestId) {
 Future<void> _handleToolCall(String originalRequestJson, Map<String, dynamic> request, Socket clientSocket, String clientDesc) async {
   final params = request['params'] as Map<String, dynamic>?;
   final toolName = params?['name'] as String?;
-  final requestId = request['id'];
+  final requestId = request['id']; // Already known to be non-null from caller
 
   if (toolName == null) {
     _sendJsonError(clientSocket, requestId, invalidRequestCode, 'Invalid params for tools/call', 'Missing tool name');
@@ -286,27 +326,34 @@ Future<void> _handleToolCall(String originalRequestJson, Map<String, dynamic> re
     // Execute the stdio server, sending the original client request JSON
     final responseJson = await _executeStdioServer(serverCmdPath, originalRequestJson, requestId);
 
-    // Forward the raw response JSON (it should include the ID) back to the client
+    // Forward the raw response JSON back to the client
     print('[TCP Proxy] Forwarding response for tool "$toolName" (ID: $requestId) to client $clientDesc');
     _sendRawJson(clientSocket, responseJson);
 
   } catch (e, s) {
-    print('[TCP Proxy] Error executing stdio server $serverCmdPath for tool "$toolName" (ID: $requestId): $e\n$s');
+    print(
+      '[TCP Proxy] Error executing/handling stdio server $serverCmdPath for tool "$toolName" (ID: $requestId): $e\n$s',
+    );
      String errorMessage = 'Error executing tool "$toolName"';
      if (e is TimeoutException) {
-        _sendJsonError(clientSocket, requestId, serverTimeoutCode, 'Tool execution timed out', errorMessage);
+      _sendJsonError(
+        clientSocket,
+        requestId,
+        serverTimeoutCode,
+        'Tool execution timed out',
+        e.message,
+      );
      } else {
         _sendJsonError(clientSocket, requestId, internalErrorCode, errorMessage, e.toString());
      }
-  } finally {
-      // Clean up process tracking for this request ID
-      _cleanupProcessResources(requestId);
+    // Cleanup happens in _executeStdioServer's finally block now
   }
+  // No finally block needed here, _executeStdioServer handles its own cleanup
 }
 
 
 Future<void> _handleToolList(Map<String, dynamic> request, Socket clientSocket, String clientDesc) async {
-  final requestId = request['id'];
+  final requestId = request['id']; // Already known to be non-null from caller
   print('[TCP Proxy] Handling tools/list request (ID: $requestId) from $clientDesc');
 
   final List<Map<String, dynamic>> allTools = [];
@@ -317,18 +364,24 @@ Future<void> _handleToolList(Map<String, dynamic> request, Socket clientSocket, 
   final listRequestPayload = {
     'jsonrpc': '2.0',
     'method': 'tools/list',
-    'id': requestId, // Use the client's request ID
+    'id': requestId, // Use the client's original request ID
   };
   final listRequestJson = jsonEncode(listRequestPayload);
 
   for (final serverCmdPath in serversToListTools) {
       if (serversProcessed.contains(serverCmdPath)) {
-          continue; // Already querying this server
+      continue; // Already querying this server path
       }
       serversProcessed.add(serverCmdPath);
-      print('[TCP Proxy] Querying tools/list from $serverCmdPath (ID: $requestId)');
+
+    // Generate a unique sub-request ID for tracking this specific process call
+    final subRequestId = '$requestId-list-${serverCmdPath.hashCode}';
+    print(
+      '[TCP Proxy] Querying tools/list from $serverCmdPath (Sub-ID: $subRequestId, Orig-ID: $requestId)',
+    );
+
       futures.add(
-          _executeStdioServer(serverCmdPath, listRequestJson, '$requestId-list-${serversProcessed.length}')
+      _executeStdioServer(serverCmdPath, listRequestJson, subRequestId)
               .then((responseJson) {
                   try {
                       final response = jsonDecode(responseJson) as Map<String, dynamic>;
@@ -352,13 +405,13 @@ Future<void> _handleToolList(Map<String, dynamic> request, Socket clientSocket, 
                   }
               })
               .catchError((e, s) {
-                  print('[TCP Proxy] Error executing $serverCmdPath for tools/list (ID: $requestId): $e\n$s');
+            // Errors during execution are logged within _executeStdioServer
+            print(
+              '[TCP Proxy] Execution/Handling failed for $serverCmdPath during tools/list (Sub-ID: $subRequestId): $e',
+            );
                   return <Map<String, dynamic>>[]; // Return empty list on error
               })
-              .whenComplete(() {
-                 // Clean up process tracking for the sub-request ID
-                 _cleanupProcessResources('$requestId-list-${serversProcessed.length}');
-              })
+      // No whenComplete cleanup needed here, _executeStdioServer handles it
       );
   }
 
@@ -381,124 +434,182 @@ Future<void> _handleToolList(Map<String, dynamic> request, Socket clientSocket, 
 // Executes a stdio server, handles handshake, sends one request, reads one response.
 // Returns the raw JSON response string (including newline).
 Future<String> _executeStdioServer(String serverCmdPath, String requestJson, dynamic requestId) async {
+  // Ensure requestId is provided
+  if (requestId == null) {
+    throw ArgumentError('requestId cannot be null for _executeStdioServer');
+  }
   print('[TCP Proxy] Executing: $serverCmdPath for request ID: $requestId');
-  Process process;
+
+  Process? process; // Make nullable
   final processCompleter = Completer<void>();
   _processCompleters[requestId] = processCompleter;
 
   final stopwatch = Stopwatch()..start();
+  StreamSubscription? stderrSub;
+  StreamSubscription? stdoutSub;
+  final stderrBuffer = StringBuffer();
+
   try {
     process = await Process.start(
       serverCmdPath,
       [],
       environment: Platform.environment, // Forward environment variables
-      runInShell: false, // More secure and often more reliable
+      runInShell: false,
     ).timeout(processStartTimeout);
 
-     print('[TCP Proxy] Started subprocess PID ${process.pid} for $serverCmdPath (ID: $requestId) in ${stopwatch.elapsedMilliseconds}ms');
+    // Store the non-null process associated with this request ID
     _activeProcesses[requestId] = process;
+    print(
+      '[TCP Proxy] Started subprocess PID ${process.pid} for $serverCmdPath (ID: $requestId) in ${stopwatch.elapsedMilliseconds}ms',
+    );
 
 
     // Capture stderr asynchronously
-    final stderrBuffer = StringBuffer();
-    final stderrSub = process.stderr.transform(utf8.decoder).listen(
+    stderrSub = process.stderr
+        .transform(utf8.decoder)
+        .listen(
       (line) {
-        print('[Subprocess ${process.pid} stderr] $line');
+            final pid = _activeProcesses[requestId]?.pid ?? 'unknown';
+            print('[Subprocess $pid stderr] $line');
         stderrBuffer.writeln(line);
       },
       onError: (err) {
-         print('[TCP Proxy] Error reading stderr from PID ${process.pid} (ID: $requestId): $err');
+            final pid = _activeProcesses[requestId]?.pid ?? 'unknown';
+            print(
+              '[TCP Proxy] Error reading stderr from PID $pid (ID: $requestId): $err',
+            );
          stderrBuffer.writeln('Error reading stderr: $err');
       },
       onDone: () {
-        print('[TCP Proxy] Stderr pipe closed for PID ${process.pid} (ID: $requestId)');
+            final pid = _activeProcesses[requestId]?.pid ?? 'unknown';
+            print(
+              '[TCP Proxy] Stderr pipe closed for PID $pid (ID: $requestId)',
+            );
       }
     );
-     _stderrSubscriptions[requestId] = stderrSub;
+    _stderrSubscriptions[requestId] = stderrSub; // Track subscription
 
 
-    // Complete the completer when the process exits
+    // Handle process exit asynchronously
     process.exitCode.then((exitCode) {
-      print('[TCP Proxy] Subprocess PID ${process.pid} (ID: $requestId) exited with code $exitCode.');
+          final pid =
+              process?.pid ?? 'unknown'; // Capture pid before potential cleanup
+          print(
+            '[TCP Proxy] Subprocess PID $pid (ID: $requestId) exited with code $exitCode.',
+          );
+          // Complete the completer *only if it hasn't been completed by successful response*
       if (!processCompleter.isCompleted) {
+            String errorMsg = 'Process PID $pid ($serverCmdPath) exited ';
           if (exitCode != 0) {
-             processCompleter.completeError(
-                 Exception('Process PID ${process.pid} ($serverCmdPath) exited with code $exitCode. Stderr:\n$stderrBuffer'));
+              errorMsg += 'with code $exitCode';
           } else {
-             // Should have completed via stdout response normally if exit code is 0
-             // If it completes here with 0 without a response, it's likely an issue.
-             processCompleter.completeError(
-                 Exception('Process PID ${process.pid} ($serverCmdPath) exited with code 0 before sending response. Stderr:\n$stderrBuffer'));
+              errorMsg += 'with code 0 unexpectedly before sending response';
           }
+            errorMsg += '. Stderr:\n$stderrBuffer';
+            processCompleter.completeError(Exception(errorMsg));
       }
-       // Ensure cleanup happens even if process exits unexpectedly
-       _cleanupProcessResources(requestId);
+          // Resource cleanup is now handled in the main finally block
     }).catchError((e) {
-         print('[TCP Proxy] Error waiting for exit code for PID ${process.pid} (ID: $requestId): $e');
+          final pid = process?.pid ?? 'unknown';
+          print(
+            '[TCP Proxy] Error waiting for exit code for PID $pid (ID: $requestId): $e',
+          );
          if (!processCompleter.isCompleted) {
            processCompleter.completeError(e);
-         }
-          _cleanupProcessResources(requestId);
+          }
     });
 
     // --- MCP Handshake and Request/Response ---
     final responseCompleter = Completer<String>();
-    StreamSubscription? stdoutSub;
 
-    stdoutSub = process.stdout.transform(utf8.decoder).transform(const LineSplitter()).listen(
+    stdoutSub = process.stdout
+        .transform(utf8.decoder)
+        .transform(const LineSplitter())
+        .listen(
       (line) {
-        // Handle handshake responses and the final response
-         print('[Subprocess ${process.pid} stdout] $line');
+            final currentProcess =
+                _activeProcesses[requestId]; // Check if still active
+            if (currentProcess == null)
+              return; // Process was cancelled/cleaned up
+
+            final pid = currentProcess.pid;
+            print('[Subprocess $pid stdout] $line');
         try {
             final jsonLine = jsonDecode(line);
             if (jsonLine is Map<String,dynamic>) {
                 final responseId = jsonLine['id'];
-                // Check if it's the final response matching the requestJson's ID
-                // This relies on requestJson being parsed *before* calling _executeStdioServer,
-                // or parsing it here. Let's parse it here for safety.
                 final parsedRequest = jsonDecode(requestJson) as Map<String,dynamic>;
-                final originalRequestId = parsedRequest['id'];
+                final originalRequestId =
+                    parsedRequest['id']; // ID from the *client's* request
 
                 if (responseId == originalRequestId && !responseCompleter.isCompleted) {
-                    print('[TCP Proxy] Received final response for ID $responseId from PID ${process.pid}');
-                    responseCompleter.complete('$line\n'); // Include newline
+                  print(
+                    '[TCP Proxy] Received final response for ID $responseId from PID $pid',
+                  );
+                  responseCompleter.complete(
+                    '$line\n',
+                  ); // Complete with the full line+newline
+                  // Indicate successful communication by completing the process completer
+                  if (!processCompleter.isCompleted) {
+                    processCompleter.complete();
+                  }
                 } else if (responseId.toString().startsWith('proxy-init-')) {
-                   // Handle initialize response implicitly during handshake phase (below)
-                   print('[TCP Proxy] Received handshake response line for ID $responseId from PID ${process.pid}');
+                  // This is the response to our internal initialize request
+                  print(
+                    '[TCP Proxy] Received handshake response line for ID $responseId from PID $pid',
+                  );
+                  // Basic validation could be added here if needed
                 } else {
-                   print('[TCP Proxy] Received unexpected stdout line from PID ${process.pid}: $line');
+                  print(
+                    '[TCP Proxy] Received unexpected stdout JSON line from PID $pid (ID: $responseId): $line',
+                  );
                 }
             } else {
-                print('[TCP Proxy] Received non-JSON stdout line from PID ${process.pid}: $line');
+                print(
+                  '[TCP Proxy] Received non-JSON stdout line from PID $pid: $line',
+                );
             }
         } catch (e) {
-             print('[TCP Proxy] Error parsing stdout line from PID ${process.pid}: $e. Line: "$line"');
-             if (!responseCompleter.isCompleted) {
-                 // responseCompleter.completeError(Exception('Invalid JSON from subprocess: $line'));
-                 // Decide if we should fail the whole request or just log
-             }
+              print(
+                '[TCP Proxy] Error parsing stdout line from PID $pid: $e. Line: "$line"',
+              );
+              // Don't fail immediately, let timeout or process exit handle it
+              // If this happens often, might indicate a server issue.
         }
       },
       onError: (err) {
-         print('[TCP Proxy] Error reading stdout from PID ${process.pid} (ID: $requestId): $err');
-         if (!responseCompleter.isCompleted) {
-            responseCompleter.completeError(err);
-         }
+            final pid = _activeProcesses[requestId]?.pid ?? 'unknown';
+            print(
+              '[TCP Proxy] Error reading stdout from PID $pid (ID: $requestId): $err',
+            );
+            final error = Exception('Stdout stream error for $requestId: $err');
+            if (!responseCompleter.isCompleted)
+              responseCompleter.completeError(error);
+            if (!processCompleter.isCompleted)
+              processCompleter.completeError(error);
       },
       onDone: () {
-         print('[TCP Proxy] Stdout pipe closed for PID ${process.pid} (ID: $requestId)');
+            final pid = _activeProcesses[requestId]?.pid ?? 'unknown';
+            print(
+              '[TCP Proxy] Stdout pipe closed for PID $pid (ID: $requestId)',
+            );
          if (!responseCompleter.isCompleted) {
-             // Process likely exited without sending the expected final response
-             responseCompleter.completeError(
-                 Exception('Stdout closed before final response received for ID $requestId. Stderr:\n$stderrBuffer'));
+              // Process exited without sending the expected final response after handshake
+              final error = Exception(
+                'Stdout closed before final response received for ID $requestId. Stderr:\n$stderrBuffer',
+              );
+              responseCompleter.completeError(error);
+              if (!processCompleter.isCompleted)
+                processCompleter.completeError(error);
          }
       },
       cancelOnError: true,
     );
-     _stdoutSubscriptions[requestId] = stdoutSub;
+    _stdoutSubscriptions[requestId] = stdoutSub; // Track subscription
 
 
-    // 1. Send initialize
+    // --- Send Handshake and Request ---
+    // 1. Send initialize request
     final proxyInitId = 'proxy-init-${DateTime.now().microsecondsSinceEpoch}';
     final initRequest = jsonEncode({
       'jsonrpc': '2.0',
@@ -512,62 +623,75 @@ Future<String> _executeStdioServer(String serverCmdPath, String requestJson, dyn
     });
     print('[TCP Proxy] PID ${process.pid}: Sending initialize (ID: $proxyInitId)');
     process.stdin.writeln(initRequest);
-    await process.stdin.flush(); //.timeout(handshakeTimeout); // Add timeout?
-
-    // (Implicitly wait for initialize response via the stdout listener)
-    // We rely on the overall requestTimeout to catch handshake failures
 
     // 2. Send initialized notification
-     print('[TCP Proxy] PID ${process.pid}: Sending initialized notification');
-    process.stdin.writeln('{"jsonrpc":"2.0","method":"notifications/initialized"}');
-     await process.stdin.flush(); //.timeout(handshakeTimeout);
+    print('[TCP Proxy] PID ${process.pid}: Sending initialized notification');
+    process.stdin.writeln(
+      '{"jsonrpc":"2.0","method":"notifications/initialized"}',
+    );
 
     // 3. Send the actual client request
-    print('[TCP Proxy] PID ${process.pid}: Sending actual request (ID: ${jsonDecode(requestJson)['id']})');
+    final clientId = jsonDecode(requestJson)['id'];
+    print(
+      '[TCP Proxy] PID ${process.pid}: Sending actual request (Client ID: $clientId)',
+    );
     process.stdin.writeln(requestJson);
-     await process.stdin.flush(); //.timeout(requestTimeout);
 
-    // 4. Close stdin - Signals the end of input to the subprocess
-    // Crucially, DO NOT close stdin *immediately* after writing the request.
-    // Some servers might need a moment to process. Closing it is often done
-    // implicitly when the Process object is garbage collected or explicitly
-    // after getting the response, but closing *early* can cause issues.
-    // Let's rely on the process exiting to handle stdin closure implicitly,
-    // or close it after the response is received if needed. For now, leave it open.
-    // await process.stdin.close(); // <-- Potentially problematic if done too early
+    // 4. Flush and Close stdin: Signal that no more input is coming.
+    try {
+      await process.stdin.flush().timeout(const Duration(seconds: 5));
+      await process.stdin.close();
+      print('[TCP Proxy] PID ${process.pid}: Flushed and closed stdin.');
+    } catch (e) {
+      print(
+        '[TCP Proxy] PID ${process.pid}: Error flushing/closing stdin: $e. Process might have already exited.',
+      );
+      // Don't necessarily fail the whole operation here, stdout might still arrive.
+    }
 
-    // 5. Wait for the final response from stdout listener or timeout
+
+    // 5. Wait for the final response from stdout listener OR timeout
     final responseJson = await responseCompleter.future.timeout(requestTimeout,
         onTimeout: () {
+        // This timeout triggers if the responseCompleter isn't completed in time.
             throw TimeoutException(
-                'Timeout waiting for response from $serverCmdPath (PID ${process.pid}) for request ID $requestId',
+          'Timeout waiting for response from $serverCmdPath (PID ${process?.pid ?? 'unknown'}) for request ID $requestId. Stderr:\n$stderrBuffer',
                 requestTimeout);
          });
 
-    // Optional: Close stdin now if the process hasn't exited yet
-    // try { await process.stdin.close(); } catch (e) {}
+    // 6. If response received, wait briefly for the process to exit gracefully.
+    // The exitCode handler completes the processCompleter.
+    try {
+      await processCompleter.future.timeout(processExitTimeout);
+      print(
+        "[TCP Proxy] Process PID ${process.pid ?? 'unknown'} (ID: $requestId) exited gracefully after response.",
+      );
+    } on TimeoutException {
+      print(
+        "[TCP Proxy] Warning: Process PID ${process.pid ?? 'unknown'} (ID: $requestId) did not exit within ${processExitTimeout.inSeconds}s after response. Cleanup will force kill if needed.",
+      );
+    } catch (e) {
+      print(
+        "[TCP Proxy] Error waiting for process exit completer for PID ${process.pid ?? 'unknown'} (ID: $requestId): $e",
+      );
+    }
 
-    // Wait for the process to fully exit before returning
-    await processCompleter.future.timeout(const Duration(seconds: 5)); // Short timeout for exit
-
-    return responseJson;
+    return responseJson; // Return the successfully received response
 
   } catch (e,s) {
-    print('[TCP Proxy] Error in _executeStdioServer for ID $requestId: $e\n$s');
-    // Ensure process is killed on error/timeout
-    if (_activeProcesses.containsKey(requestId)) {
-      _activeProcesses[requestId]?.kill();
-    }
-    // Ensure the process completer is finished with an error
-    if (!_processCompleters[requestId]!.isCompleted) {
-       _processCompleters[requestId]!.completeError(e);
-    }
-    rethrow; // Rethrow the error to be handled by the caller
+    // Catch errors from Process.start, timeouts, stream errors, etc.
+    print(
+      '[TCP Proxy] Error in _executeStdioServer outer catch for ID $requestId: $e\n$s',
+    );
+    // Process killing and resource cleanup are handled in the finally block
+    rethrow; // Rethrow the error to be handled by the caller (_handleToolCall/_handleToolList)
   } finally {
      stopwatch.stop();
-     print('[TCP Proxy] _executeStdioServer for ID $requestId completed in ${stopwatch.elapsedMilliseconds}ms');
-     // Cleanup is handled by callers or process exit handler now
-     // _cleanupProcessResources(requestId); // Moved
+    print(
+      '[TCP Proxy] _executeStdioServer for ID $requestId finished in ${stopwatch.elapsedMilliseconds}ms',
+    );
+    // Perform cleanup robustly in finally block, regardless of success or failure
+    _cleanupProcessResources(requestId);
   }
 }
 
@@ -578,49 +702,74 @@ void _cleanupProcessResources(dynamic requestId) {
 
     print("[TCP Proxy] Cleaning up resources for request ID: $requestId");
 
+  // Cancel stream subscriptions safely
     _stderrSubscriptions.remove(requestId)?.cancel();
     _stdoutSubscriptions.remove(requestId)?.cancel();
 
+  // Remove and potentially kill the process
     final process = _activeProcesses.remove(requestId);
-    if (process != null) {
-        // Check if it's still running (though it should have exited or been killed)
-        // process.kill(); // Consider if kill is needed here
+  if (process != null) {
         print("[TCP Proxy] Removed process PID ${process.pid} from active map for request ID $requestId.");
+    // Attempt to kill the process if it's still somehow alive.
+    // This might happen if the exitCode future hasn't completed yet or there was an error.
+    try {
+      // Send SIGKILL as a final measure, as SIGTERM might have been tried already.
+      process.kill(ProcessSignal.sigkill);
+      print(
+        "[TCP Proxy] Sent SIGKILL to process PID ${process.pid} during cleanup (request ID: $requestId).",
+      );
+    } catch (e) {
+      // Might fail if process already exited
+      print(
+        "[TCP Proxy] Error sending SIGKILL during cleanup for PID ${process.pid} (request ID: $requestId): $e",
+      );
+    }
     }
 
-    final completer = _processCompleters.remove(requestId);
-    if (completer != null && !completer.isCompleted) {
-        print("[TCP Proxy] Completing process completer for request ID $requestId due to cleanup.");
-        // Complete with an error indicating cleanup? Or just complete normally?
-        // Let's assume the process exited or error was handled elsewhere.
-        // completer.complete(); // Or completeError if appropriate
-    }
+  // Remove the completer (don't complete it again)
+  _processCompleters.remove(requestId);
 }
 
 
 void _cancelProcess(dynamic requestId) {
   if (requestId == null) return;
   print('[TCP Proxy] Attempting to cancel process for request ID: $requestId');
-  final process = _activeProcesses[requestId];
-  final completer = _processCompleters[requestId];
 
+  // Complete the process completer immediately with a cancellation error
+  // This signals to any waiters that the operation was cancelled.
+  final completer = _processCompleters[requestId];
+  if (completer != null && !completer.isCompleted) {
+    completer.completeError(
+      Exception('Request $requestId cancelled by client'),
+    );
+  } else if (completer == null) {
+    print(
+      '[TCP Proxy] No process completer found for request ID $requestId to cancel.',
+    );
+    // No active process or it already finished/failed.
+    return; // Nothing more to do
+  }
+  // Note: Don't remove the completer here, cleanup will handle it.
+
+  final process = _activeProcesses[requestId];
   if (process != null) {
     print('[TCP Proxy] Sending SIGTERM to process PID ${process.pid} for request ID $requestId');
-    bool killed = process.kill(ProcessSignal.sigterm); // Try graceful kill
+    bool killed = process.kill(
+      ProcessSignal.sigterm,
+    ); // Try graceful kill first
     if (!killed) {
        print('[TCP Proxy] Failed to send SIGTERM to PID ${process.pid}, attempting SIGKILL.');
        process.kill(ProcessSignal.sigkill);
     }
-    // Process exit handler should trigger cleanup via _cleanupProcessResources
+    // Process exit handler (`process.exitCode.then`) should still run eventually.
+    // The `finally` block in `_executeStdioServer` will call `_cleanupProcessResources`.
   } else {
-     print('[TCP Proxy] No active process found for request ID $requestId to cancel.');
+    print(
+      '[TCP Proxy] No active process found in map for request ID $requestId to kill.',
+    );
+    // If completer existed but process didn't, cleanup might be needed anyway.
+    _cleanupProcessResources(requestId);
   }
-
-   // Complete the completer immediately with a cancellation error
-   if (completer != null && !completer.isCompleted) {
-      completer.completeError(Exception('Request $requestId cancelled by client'));
-       _cleanupProcessResources(requestId); // Ensure cleanup happens now
-   }
 }
 
 // --- JSON RPC Response Helpers ---
@@ -632,14 +781,18 @@ void _sendRawJson(Socket clientSocket, String jsonString) {
     final dataToSend = jsonString.endsWith('\n') ? jsonString : '$jsonString\n';
     print('[TCP Proxy] Sending raw response: ${dataToSend.trim()}');
     clientSocket.write(dataToSend);
-    // Don't await flush here to avoid blocking the handler loop
-    clientSocket.flush().catchError((e) {
-       print('[TCP Proxy] Error flushing socket during sendRawJson: $e');
+    // Use async flush but don't wait for it here to avoid blocking.
+    clientSocket.flush().catchError((e, s) {
+      print('[TCP Proxy] Error flushing socket during sendRawJson: $e\n$s');
+      // Consider destroying socket on flush error?
+      // try { clientSocket.destroy(); } catch (_) {}
     });
-  } catch (e) {
-    print('[TCP Proxy] Error sending raw JSON response: $e');
-    // Attempt to close socket?
-    try { clientSocket.destroy(); } catch (_) {}
+  } catch (e, s) {
+    // Catch errors like socket being closed
+    print('[TCP Proxy] Error sending raw JSON response: $e\n$s');
+    try {
+      clientSocket.destroy();
+    } catch (_) {} // Attempt to close socket
   }
 }
 
@@ -664,11 +817,11 @@ void _sendJsonError(Socket clientSocket, dynamic id, int code, String message, [
   final errorPayload = {
     'code': code,
     'message': message,
-    if (data != null) 'data': data,
+    if (data != null) 'data': data.toString(), // Ensure data is stringified
   };
   final response = {
     'jsonrpc': '2.0',
-    'id': id, // Can be null if request ID wasn't parsed
+    'id': id, // Use original ID, which might be null
     'error': errorPayload,
   };
    try {
@@ -676,17 +829,31 @@ void _sendJsonError(Socket clientSocket, dynamic id, int code, String message, [
      _sendRawJson(clientSocket, responseString);
    } catch (e) {
       print('[TCP Proxy] CRITICAL: Error encoding error response: $e');
-      // Fallback to plain text error if JSON encoding fails
+    // Fallback to pre-formatted string if JSON encoding fails
       try {
-         final fallbackError = '{"jsonrpc":"2.0","id":null,"error":{"code":$internalErrorCode,"message":"Proxy failed to encode error response"}}\n';
+      // Ensure ID is JSON compatible (null, string, number)
+      String idString = 'null';
+      if (id is String) {
+        idString =
+            '"${jsonEncode(id).substring(1, jsonEncode(id).length - 1)}"'; // Basic string escape
+      } else if (id is num) {
+        idString = id.toString();
+      }
+      final fallbackError =
+          '{"jsonrpc":"2.0","id":$idString,"error":{"code":$internalErrorCode,"message":"Proxy failed to encode error response"}}\n';
          clientSocket.write(fallbackError);
-         clientSocket.flush().catchError((flushError) {
-           print('[TCP Proxy] Error flushing socket during fallback error send: $flushError');
+      clientSocket.flush().catchError((flushError, stack) {
+        print(
+          '[TCP Proxy] Error flushing socket during fallback error send: $flushError\n$stack',
+        );
          });
-      } catch (fallbackErr) {
-         print('[TCP Proxy] CRITICAL: Failed even to send fallback error: $fallbackErr');
-         // Close socket as last resort
-         try { clientSocket.destroy(); } catch (_) {}
+    } catch (fallbackErr, stack) {
+      print(
+        '[TCP Proxy] CRITICAL: Failed even to send fallback error: $fallbackErr\n$stack',
+      );
+      try {
+        clientSocket.destroy();
+      } catch (_) {} // Final attempt: close socket
       }
    }
 }
