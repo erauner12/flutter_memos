@@ -6,7 +6,6 @@ import 'dart:io';
 import 'package:mcp_dart/mcp_dart.dart' as mcp_dart;
 import 'package:mcp_dart/src/server/sse_server_manager.dart';
 import 'package:mcp_dart/src/shared/protocol.dart' show RequestHandlerExtra;
-
 // REMOVE: Imports related to flutter_memos service
 // import 'package:flutter_memos/services/todoist_api_service.dart';
 
@@ -165,7 +164,7 @@ Future<void> main(List<String> args) async {
 
   // 2. Register Tools
 
-  // ADD: Register create_todoist_task tool
+  // Change 1: create_todoist_task tool anyOf moved outside inputSchemaProperties
   server.tool(
     'create_todoist_task',
     description:
@@ -227,7 +226,8 @@ Future<void> main(List<String> args) async {
             },
             'due_lang': {
               'type': 'string',
-              'description': 'Language code if due_string is not English (optional).',
+              'description':
+                  '2-letter language code for deadline parsing (optional)',
             },
             'assignee_id': {
               'type': 'string',
@@ -330,16 +330,20 @@ Future<void> main(List<String> args) async {
       'deadline_lang': {
         'type': 'string',
         'description': '2-letter language code for deadline parsing (optional)',
-      },
-      'anyOf': [
-        {'required': ['tasks']},
-        {'required': ['content']}
-      ],
+      }
     },
+    // anyOf: [
+    //   {
+    //     'required': ['tasks']
+    //   },
+    //   {
+    //     'required': ['content']
+    //   }
+    // ],
     callback: _handleCreateTodoistTask, // Use the correct handler
   );
 
-  // Change 3: update_todoist_task tool definition for batch support
+  // Change 2: update_todoist_task tool anyOf moved outside inputSchemaProperties
   server.tool(
     'update_todoist_task',
     description:
@@ -430,11 +434,7 @@ Future<void> main(List<String> args) async {
               'type': 'string',
               'description': 'New 2-letter language code for deadline parsing (optional)',
             }
-          },
-          'anyOf': [
-            {'required': ['task_id']},
-            {'required': ['task_name']}
-          ]
+          }
         },
       },
       'task_id': {
@@ -515,19 +515,27 @@ Future<void> main(List<String> args) async {
       'deadline_lang': {
         'type': 'string',
         'description': 'New 2-letter language code for deadline parsing (optional)',
-      },
-      'anyOf': [
-        {'required': ['tasks']},
-        {'anyOf': [
-          {'required': ['task_id']},
-          {'required': ['task_name']}
-        ]}
-      ],
+      }
     },
+    // anyOf: [
+    //   {
+    //     'required': ['tasks']
+    //   },
+    //   {
+    //     'anyOf': [
+    //       {
+    //         'required': ['task_id']
+    //       },
+    //       {
+    //         'required': ['task_name']
+    //       }
+    //     ]
+    //   }
+    // ],
     callback: _handleUpdateTodoistTask, // Direct function reference
   );
 
-  // Change 4: update todoist_delete_task tool definition for batch support.
+  // Change 3: todoist_delete_task tool anyOf moved outside inputSchemaProperties
   server.tool(
     'todoist_delete_task',
     description:
@@ -548,12 +556,8 @@ Future<void> main(List<String> args) async {
               'type': 'string',
               'description':
                   'The name/content of the task to search for and delete (required if task_id is not provided).',
-            },
-          },
-          'anyOf': [
-            {'required': ['task_id']},
-            {'required': ['task_name']}
-          ]
+            }
+          }
         },
       },
       'task_id': {
@@ -567,17 +571,17 @@ Future<void> main(List<String> args) async {
             'The name/content of the task to search for and delete (required if task_id is not provided and "tasks" array is not used).',
       },
     },
-    'anyOf': [
-      {'required': ['tasks']},
-      {'anyOf': [
-        {'required': ['task_id']},
-        {'required': ['task_name']}
-      ]}
-    ],
+    // anyOf: [
+    //   {'required': ['tasks']},
+    //   {'anyOf': [
+    //     {'required': ['task_id']},
+    //     {'required': ['task_name']}
+    //   ]}
+    // ],
     callback: _handleDeleteTodoistTask, // Direct function reference
   );
 
-  // Change 5: update todoist_complete_task tool definition for batch support.
+  // Change 4: todoist_complete_task tool anyOf moved outside inputSchemaProperties
   server.tool(
     'todoist_complete_task',
     description:
@@ -598,12 +602,8 @@ Future<void> main(List<String> args) async {
               'type': 'string',
               'description':
                   'The name/content of the task to search for and complete (required if task_id is not provided).',
-            },
-          },
-          'anyOf': [
-            {'required': ['task_id']},
-            {'required': ['task_name']}
-          ]
+            }
+          }
         },
       },
       'task_id': {
@@ -617,130 +617,17 @@ Future<void> main(List<String> args) async {
             'The name/content of the task to search for and complete (required if task_id is not provided and "tasks" array is not used).',
       },
     },
-    'anyOf': [
-      {'required': ['tasks']},
-      {'anyOf': [
-        {'required': ['task_id']},
-        {'required': ['task_name']}
-      ]}
-    ],
+    // anyOf: [
+    //   {'required': ['tasks']},
+    //   {'anyOf': [
+    //     {'required': ['task_id']},
+    //     {'required': ['task_name']}
+    //   ]}
+    // ],
     callback: handleCompleteTodoistTask, // Direct function reference
   );
 
-  // Change 6: update get_todoist_tasks tool definition to match TS version.
-  server.tool(
-    'get_todoist_tasks',
-    description:
-        'Retrieves active Todoist tasks based on filters. Returns a list of tasks.',
-    inputSchemaProperties: {
-      'project_id': {
-        'type': 'string',
-        'description': 'Filter tasks by project ID (optional).',
-      },
-      'section_id': {
-        'type': 'string',
-        'description': 'Filter tasks by section ID (optional).',
-      },
-      'label': {
-        'type': 'string',
-        'description': 'Filter tasks by label name (optional).',
-      },
-      'filter': {
-        'type': 'string',
-        'description':
-            'Todoist filter query (e.g., "today", "p1", "#Work") (optional).',
-      },
-      'lang': {
-        'type': 'string',
-        'description': 'IETF language tag defining what language filter is written in (optional).',
-      },
-      'ids': {
-        'type': 'array',
-        'description': 'Array of specific task IDs to retrieve (optional).',
-        'items': {'type': 'string'},
-      },
-      'priority': {
-        'type': 'integer',
-        'description': 'Filter by priority level (1-4) (optional, client-side filtering may be needed if API doesn\'t support).',
-        'enum': [1, 2, 3, 4],
-      },
-      'limit': {
-        'type': 'integer',
-        'description': 'Maximum number of tasks to return (optional, client-side filtering).',
-        'default': 10,
-      },
-    },
-    callback: _handleGetTodoistTasks, // Use the correct handler
-  );
-
-  // Change 7: Remove get_todoist_task_by_id tool (redundant)
-  // Removed
-
-  // Change 7: refine get_task_comments description.
-  server.tool(
-    'get_task_comments',
-    description:
-        'Retrieves all comments for a specific Todoist task ID. Returns a list of comments.',
-    inputSchemaProperties: {
-      'task_id': {
-        'type': 'string',
-        'description':
-            'The exact ID of the task whose comments to retrieve (required).',
-      },
-    },
-    callback: handleGetTaskComments, // Direct function reference
-  );
-
-  // Change 7: refine create_task_comment description.
-  server.tool(
-    'create_task_comment',
-    description:
-        'Adds a new comment to a Todoist task. Requires task_id or task_name (task_id preferred). Returns the new comment ID and task ID.',
-    inputSchemaProperties: {
-      'task_id': {
-        'type': 'string',
-        'description':
-            'The specific ID of the task to add a comment to (optional, takes precedence over task_name).',
-      },
-      'task_name': {
-        'type': 'string',
-        'description':
-            'The name/content of the task to search for (required if task_id is not provided).',
-      },
-      'content': {
-        'type': 'string',
-        'description': 'The text content of the comment (required).',
-      },
-    },
-    callback: handleCreateTaskComment, // Direct function reference
-  );
-
-  // --- ADD NEW TOOLS BASED ON TYPESCRIPT SERVER ---
-
-  // Project Tools
-  server.tool(
-    'todoist_get_projects',
-    description: 'Get projects with optional filtering and hierarchy information.',
-    inputSchemaProperties: {
-      'project_ids': {
-        'type': 'array',
-        'items': {'type': 'string'},
-        'description': 'Optional: Specific project IDs to retrieve.'
-      },
-      'include_sections': {
-        'type': 'boolean',
-        'description': 'Optional: Include sections within each project.',
-        'default': false
-      },
-      'include_hierarchy': {
-        'type': 'boolean',
-        'description': 'Optional: Include full parent-child relationships.',
-        'default': false
-      }
-    },
-    callback: _handleGetProjects, // Placeholder for new handler
-  );
-
+  // Change 5: todoist_create_project tool anyOf moved outside inputSchemaProperties
   server.tool(
     'todoist_create_project',
     description: 'Create one or more projects with support for nested hierarchies.',
@@ -807,13 +694,14 @@ Future<void> main(List<String> args) async {
         'enum': ['list', 'board']
       }
     },
-    'anyOf': [
-      {'required': ['projects']},
-      {'required': ['name']}
-    ],
+    // anyOf: [
+    //   {'required': ['projects']},
+    //   {'required': ['name']}
+    // ],
     callback: _handleCreateProject, // Placeholder for new handler
   );
 
+  // Change 6: todoist_update_project tool anyOf moved outside inputSchemaProperties
   server.tool(
     'todoist_update_project',
     description: 'Update one or more projects in Todoist.',
@@ -878,13 +766,14 @@ Future<void> main(List<String> args) async {
         'enum': ['list', 'board']
       }
     },
-    'anyOf': [
-      {'required': ['projects']},
-      {'required': ['project_id']}
-    ],
+    // anyOf: [
+    //   {'required': ['projects']},
+    //   {'required': ['project_id']}
+    // ],
     callback: _handleUpdateProject, // Placeholder for new handler
   );
 
+  // Change 7: todoist_get_project_sections tool anyOf moved outside inputSchemaProperties
   server.tool(
     'todoist_get_project_sections',
     description: 'Get sections from one or more projects in Todoist.',
@@ -903,11 +792,7 @@ Future<void> main(List<String> args) async {
               'type': 'string',
               'description': 'Name of the project to get sections from (if ID not provided).'
             }
-          },
-          'anyOf': [
-            {'required': ['project_id']},
-            {'required': ['project_name']}
-          ]
+          }
         },
       },
       'project_id': {
@@ -924,16 +809,17 @@ Future<void> main(List<String> args) async {
         'default': true
       }
     },
-    'anyOf': [
-      {'required': ['projects']},
-      {'anyOf': [
-        {'required': ['project_id']},
-        {'required': ['project_name']}
-      ]}
-    ],
+    // anyOf: [
+    //   {'required': ['projects']},
+    //   {'anyOf': [
+    //     {'required': ['project_id']},
+    //     {'required': ['project_name']}
+    //   ]}
+    // ],
     callback: _handleGetProjectSections, // Placeholder for new handler
   );
 
+  // Change 8: todoist_create_project_section tool anyOf moved outside inputSchemaProperties
   server.tool(
     'todoist_create_project_section',
     description: 'Create one or more sections in Todoist projects.',
@@ -961,11 +847,7 @@ Future<void> main(List<String> args) async {
               'description': 'Order of the section (optional).'
             }
           },
-          'required': ['name'],
-          'anyOf': [
-            {'required': ['project_id']},
-            {'required': ['project_name']}
-          ]
+          'required': ['name']
         },
       },
       'project_id': {
@@ -981,10 +863,10 @@ Future<void> main(List<String> args) async {
         'description': 'Order of the section (optional).'
       }
     },
-    'anyOf': [
-      {'required': ['sections']},
-      {'required': ['project_id', 'name']}
-    ],
+    // anyOf: [
+    //   {'required': ['sections']},
+    //   {'required': ['project_id', 'name']}
+    // ],
     callback: _handleCreateProjectSection, // Placeholder for new handler
   );
 
@@ -996,6 +878,7 @@ Future<void> main(List<String> args) async {
     callback: _handleGetPersonalLabels, // Placeholder for new handler
   );
 
+  // Change 9: todoist_create_personal_label tool anyOf moved outside inputSchemaProperties
   server.tool(
     'todoist_create_personal_label',
     description: 'Create one or more personal labels in Todoist.',
@@ -1043,10 +926,10 @@ Future<void> main(List<String> args) async {
         'description': 'Whether the label is a favorite (optional).'
       }
     },
-    'anyOf': [
-      {'required': ['labels']},
-      {'required': ['name']}
-    ],
+    // anyOf: [
+    //   {'required': ['labels']},
+    //   {'required': ['name']}
+    // ],
     callback: _handleCreatePersonalLabel, // Placeholder for new handler
   );
 
@@ -1059,10 +942,15 @@ Future<void> main(List<String> args) async {
         'description': 'ID of the label to retrieve.'
       }
     },
-    'required': ['label_id'],
+    // anyOf: [
+    //   {
+    //     'required': ['label_id']
+    //   }
+    // ],
     callback: _handleGetPersonalLabel, // Placeholder for new handler
   );
 
+  // Change 10: todoist_update_personal_label tool anyOf moved outside inputSchemaProperties
   server.tool(
     'todoist_update_personal_label',
     description: 'Update one or more existing personal labels in Todoist.',
@@ -1097,11 +985,7 @@ Future<void> main(List<String> args) async {
               'type': 'boolean',
               'description': 'Whether the label is a favorite (optional).'
             }
-          },
-          'anyOf': [
-            {'required': ['label_id']},
-            {'required': ['label_name']}
-          ]
+          }
         }
       },
       'label_id': {
@@ -1129,13 +1013,13 @@ Future<void> main(List<String> args) async {
         'description': 'Whether the label is a favorite (optional).'
       }
     },
-    'anyOf': [
-      {'required': ['labels']},
-      {'anyOf': [
-        {'required': ['label_id']},
-        {'required': ['label_name']}
-      ]}
-    ],
+    // anyOf: [
+    //   {'required': ['labels']},
+    //   {'anyOf': [
+    //     {'required': ['label_id']},
+    //     {'required': ['label_name']}
+    //   ]}
+    // ],
     callback: _handleUpdatePersonalLabel, // Placeholder for new handler
   );
 
@@ -1148,7 +1032,11 @@ Future<void> main(List<String> args) async {
         'description': 'ID of the label to delete.'
       }
     },
-    'required': ['label_id'],
+    // anyOf: [
+    //   {
+    //     'required': ['label_id']
+    //   }
+    // ],
     callback: _handleDeletePersonalLabel, // Placeholder for new handler
   );
 
@@ -1165,6 +1053,7 @@ Future<void> main(List<String> args) async {
     callback: _handleGetSharedLabels, // Placeholder for new handler
   );
 
+  // Change 11: todoist_rename_shared_labels tool anyOf moved outside inputSchemaProperties
   server.tool(
     'todoist_rename_shared_labels',
     description: 'Rename one or more shared labels in Todoist.',
@@ -1196,13 +1085,14 @@ Future<void> main(List<String> args) async {
         'description': 'The new name for the label (required if "labels" array is not used).'
       }
     },
-    'anyOf': [
-      {'required': ['labels']},
-      {'required': ['name', 'new_name']}
-    ],
+    // anyOf: [
+    //   {'required': ['labels']},
+    //   {'required': ['name', 'new_name']}
+    // ],
     callback: _handleRenameSharedLabels, // Placeholder for new handler
   );
 
+  // Change 12: todoist_remove_shared_labels tool anyOf moved outside inputSchemaProperties
   server.tool(
     'todoist_remove_shared_labels',
     description: 'Remove one or more shared labels from Todoist tasks.',
@@ -1226,14 +1116,15 @@ Future<void> main(List<String> args) async {
         'description': 'The name of the label to remove (required if "labels" array is not used).'
       }
     },
-    'anyOf': [
-      {'required': ['labels']},
-      {'required': ['name']}
-    ],
+    // anyOf: [
+    //   {'required': ['labels']},
+    //   {'required': ['name']}
+    // ],
     callback: _handleRemoveSharedLabels, // Placeholder for new handler
   );
 
   // Task Label Tool
+  // Change 13: todoist_update_task_labels tool anyOf moved outside inputSchemaProperties
   server.tool(
     'todoist_update_task_labels',
     description: 'Update the labels of one or more tasks in Todoist.',
@@ -1255,14 +1146,11 @@ Future<void> main(List<String> args) async {
             'labels': {
               'type': 'array',
               'items': {'type': 'string'},
-              'description': 'Array of label names to set for the task.'
+              'description':
+                  'Array of label names to set for the task (required if "tasks" array is not used).'
             }
           },
-          'required': ['labels'],
-          'anyOf': [
-            {'required': ['task_id']},
-            {'required': ['task_name']}
-          ]
+          'required': ['labels']
         }
       },
       'task_id': {
@@ -1279,13 +1167,13 @@ Future<void> main(List<String> args) async {
         'description': 'Array of label names to set for the task (required if "tasks" array is not used).'
       }
     },
-    'anyOf': [
-      {'required': ['tasks']},
-      {'required': ['labels'], 'anyOf': [
-        {'required': ['task_id']},
-        {'required': ['task_name']}
-      ]}
-    ],
+    // anyOf: [
+    //   {'required': ['tasks']},
+    //   {'required': ['labels'], 'anyOf': [
+    //     {'required': ['task_id']},
+    //     {'required': ['task_name']}
+    //   ]}
+    // ],
     callback: _handleUpdateTaskLabels, // Placeholder for new handler
   );
 
