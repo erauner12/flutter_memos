@@ -1,5 +1,12 @@
 # Makefile for Flutter Memos - Build, Test, and Distribution
 
+# Include .env file if it exists and export its variables
+# This makes SENTRY_DSN available to the commands below
+ifneq (,$(wildcard .env))
+	include .env
+	export $(shell sed 's/=.*//' .env)
+endif
+
 # PHONY targets to prevent conflicts with files of the same names
 .PHONY: test-integration-macos test-integration-ios test-integration-ipad-portrait test-integration-ipad-landscape \
 		test-integration-web kill-simulator test-integration-iphone run-iphone \
@@ -50,12 +57,12 @@ DMG_PATH := $(DMG_DIR)/flutter_memos.dmg
 # Build for macOS (debug mode)
 build-macos:
 	@echo "Building Flutter Memos for macOS (debug mode)..."
-	flutter build macos
+	flutter build macos --dart-define=SENTRY_DSN=$(SENTRY_DSN)
 
 # Build for macOS (release mode)
 release-macos:
 	@echo "Building Flutter Memos for macOS (release mode)..."
-	flutter build macos --release
+	flutter build macos --release --dart-define=SENTRY_DSN=$(SENTRY_DSN)
 	@echo "Release build for macOS complete. You can find the app in build/macos/Build/Products/Release/"
 
 # Install built macOS app directly (without DMG)
@@ -73,17 +80,19 @@ install-macos:
 # Build for iPhone
 build-iphone:
 	@echo "Building Flutter Memos for iPhone (iOS release mode)..."
-	flutter build ios --release
+	flutter build ios --release --dart-define=SENTRY_DSN=$(SENTRY_DSN)
 
 # Install to physical iPhone
 release-iphone: build-iphone
 	@echo "Installing Flutter Memos to iPhone device with ID $(IPHONE_DEVICE_ID)..."
+	# Note: flutter install doesn't directly support --dart-define easily here as it uses the pre-built app.
+	# The DSN should be baked in during the 'build-iphone' step.
 	flutter install -d $(IPHONE_DEVICE_ID)
 
 # Run app on physical iPhone without tests
 run-iphone:
 	@echo "Building and running app on physical iPhone with ID $(IPHONE_DEVICE_ID)..."
-	flutter run -d $(IPHONE_DEVICE_ID)
+	flutter run -d $(IPHONE_DEVICE_ID) --dart-define=SENTRY_DSN=$(SENTRY_DSN)
 
 #
 # DMG Packaging & Installation
@@ -262,7 +271,7 @@ test-integration-macos:
 	flutter drive \
 		--driver=test_driver/integration_test_driver.dart \
 		--target=integration_test/memo_card_actions_test.dart \
-		-d "macos"
+		-d "macos" --dart-define=SENTRY_DSN=$(SENTRY_DSN)
 
 # Run tests on physical iPhone
 test-integration-iphone:
@@ -270,7 +279,7 @@ test-integration-iphone:
 	flutter drive \
 		--driver=test_driver/integration_test_driver.dart \
 		--target=integration_test/memo_card_actions_test.dart \
-		-d $(IPHONE_DEVICE_ID)
+		-d $(IPHONE_DEVICE_ID) --dart-define=SENTRY_DSN=$(SENTRY_DSN)
 
 # Run tests on iOS simulator
 test-integration-ios:
@@ -285,7 +294,7 @@ test-integration-ios:
 	flutter drive \
 		--driver=test_driver/integration_test_driver.dart \
 		--target=integration_test/memo_card_actions_test.dart \
-		-d $$UDID; \
+		-d $$UDID --dart-define=SENTRY_DSN=$(SENTRY_DSN); \
 	echo "Killing iOS simulator after tests..."; \
 	make kill-simulator
 
@@ -302,7 +311,7 @@ test-integration-ipad-portrait:
 	flutter drive \
 		--driver=test_driver/integration_test_driver.dart \
 		--target=integration_test/memo_card_actions_test.dart \
-		-d $$UDID; \
+		-d $$UDID --dart-define=SENTRY_DSN=$(SENTRY_DSN); \
 	echo "Killing iOS simulator after iPad tests..."; \
 	make kill-simulator
 
@@ -322,7 +331,7 @@ test-integration-ipad-landscape:
 	flutter drive \
 		--driver=test_driver/integration_test_driver.dart \
 		--target=integration_test/memo_card_actions_test.dart \
-		-d $$UDID; \
+		-d $$UDID --dart-define=SENTRY_DSN=$(SENTRY_DSN); \
 	echo "Killing iOS simulator after iPad tests..."; \
 	make kill-simulator
 
@@ -338,7 +347,7 @@ test-integration-web:
 	flutter drive \
 		--driver=test_driver/integration_test_driver.dart \
 		--target=integration_test/memo_card_actions_test.dart \
-		-d web-server
+		-d web-server --dart-define=SENTRY_DSN=$(SENTRY_DSN)
 
 	@echo "Killing Chromedriver..."
 	kill %1
@@ -351,7 +360,7 @@ kill-simulator:
 # Run all tests on macOS
 test-integration-all:
 	for test_file in integration_test/*_test.dart; do \
-		flutter drive --driver=test_driver/integration_test_driver.dart --target=$$test_file -d "macos"; \
+		flutter drive --driver=test_driver/integration_test_driver.dart --target=$$test_file -d "macos" --dart-define=SENTRY_DSN=$(SENTRY_DSN); \
 	done
 
 #
@@ -367,7 +376,7 @@ _setup-sim-for-deeplink:
 	@echo "Waiting for simulator to boot..."
 	xcrun simctl bootstatus $(SIM_UDID) -b
 	@echo "Installing app (debug build)..."
-	flutter build ios --debug --simulator # Ensure debug build for simulator
+	flutter build ios --debug --simulator --dart-define=SENTRY_DSN=$(SENTRY_DSN) # Ensure debug build for simulator with DSN
 	xcrun simctl install $(SIM_UDID) build/ios/iphonesimulator/Runner.app
 	@echo "Simulator setup complete for UDID $(SIM_UDID)."
 

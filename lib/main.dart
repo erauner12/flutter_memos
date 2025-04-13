@@ -12,8 +12,8 @@ import 'package:flutter_memos/providers/theme_provider.dart';
 import 'package:flutter_memos/providers/ui_providers.dart'; // Import for UI providers including highlightedCommentIdProvider
 import 'package:flutter_memos/screens/edit_memo/edit_memo_screen.dart';
 import 'package:flutter_memos/screens/home_screen.dart';
-// Add import for the new env file
-import 'package:flutter_memos/utils/env.dart';
+// Remove import for the env file
+// import 'package:flutter_memos/utils/env.dart';
 import 'package:flutter_memos/screens/memo_detail/memo_detail_screen.dart';
 import 'package:flutter_memos/screens/memos/memos_screen.dart';
 import 'package:flutter_memos/screens/new_memo/new_memo_screen.dart'; // Import NewMemoScreen
@@ -28,11 +28,32 @@ Future<void> main() async {
   // Ensure bindings are initialized before Sentry and runApp
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Use the hardcoded DSN from env.dart
+  // Read the SENTRY_DSN from environment variables passed via --dart-define
+  const sentryDsn = String.fromEnvironment('SENTRY_DSN');
+
+  // Add back the check for an empty DSN
+  if (sentryDsn.isEmpty) {
+    // Log a warning if the DSN is not provided during build/run
+    // Sentry will be effectively disabled in this case by not setting options.dsn
+    if (kDebugMode) {
+      print(
+        'Warning: SENTRY_DSN environment variable not set. Sentry reporting will be disabled.',
+      );
+    }
+  }
+
   await SentryFlutter.init(
     (options) {
-      // Set the DSN directly from the imported constant
-      options.dsn = sentryDsn; // Use the constant from env.dart
+      // Set the DSN only if it was provided via --dart-define
+      if (sentryDsn.isNotEmpty) {
+        options.dsn = sentryDsn;
+      } else {
+        // Explicitly disable Sentry if DSN is missing, although not setting it might suffice
+        options.enabled = false;
+        if (kDebugMode) {
+          print("Sentry DSN not found, Sentry integration disabled.");
+        }
+      }
       // Set tracesSampleRate to 1.0 to capture 100% of transactions for performance monitoring.
       // Adjust this value in production.
       options.tracesSampleRate = 1.0;
