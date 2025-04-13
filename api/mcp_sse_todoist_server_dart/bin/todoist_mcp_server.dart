@@ -1725,8 +1725,9 @@ Future<mcp_dart.CallToolResult> _handleGetTodoistTasks({
               'creator_id': task.creatorId,
               'assignee_id': task.assigneeId,
               'assigner_id': task.assignerId,
-              'duration': task.duration?.amount,
-              'duration_unit': task.duration?.unit,
+              'duration': task.duration?.durationObject?.amount,
+              'duration_unit': task.duration?.durationObject?.unit,
+              'is_completed': task.isCompleted,
             })
         .toList();
 
