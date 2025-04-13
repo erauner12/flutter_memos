@@ -57,8 +57,9 @@ dependencies:
   # mcp_dart:
   #   git: ...
   # Use the local path override
-  mcp_dart:
-    path: ../mcp_dart # Verify this path is correct relative to pubspec.yaml
+  mcp_dart: ^0.3.6 # Keep specific version from plan
+  # mcp_dart:
+  #   path: ../mcp_dart # Verify this path is correct relative to pubspec.yaml
 
   # Other existing dependencies
   flutter_slidable: ^4.0.0

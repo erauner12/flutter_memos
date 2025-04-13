@@ -1,6 +1,5 @@
 import 'package:flutter/cupertino.dart'; // Import Cupertino
 import 'package:flutter/foundation.dart';
-// Keep specific framework imports needed
 import 'package:flutter/material.dart'; // Import Material for Tooltip
 import 'package:flutter/services.dart'; // Add import for keyboard events
 import 'package:flutter_memos/models/memo.dart';
@@ -15,8 +14,7 @@ import 'package:flutter_memos/providers/server_config_provider.dart'; // Import 
 import 'package:flutter_memos/providers/service_providers.dart';
 // Import Settings providers (API Keys etc.)
 import 'package:flutter_memos/providers/settings_provider.dart';
-import 'package:flutter_memos/providers/ui_providers.dart'
-    as ui_providers; // Add import
+import 'package:flutter_memos/providers/ui_providers.dart' as ui_providers; // Add import
 // Import MemosBody
 import 'package:flutter_memos/screens/memos/memos_body.dart';
 import 'package:flutter_memos/utils/keyboard_navigation.dart'; // Add import
@@ -81,71 +79,66 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
           CupertinoButton(
             padding: const EdgeInsets.symmetric(horizontal: 8.0),
             minSize: 0,
-            onPressed:
-                selectedCount > 0
-                    ? () {
-                      // TODO: Implement multi-delete logic
-                      // Show confirmation dialog first
-                      showCupertinoDialog(
-                        context: context,
-                        builder:
-                            (context) => CupertinoAlertDialog(
-                              title: Text('Delete $selectedCount Memos?'),
-                              content: const Text(
-                                'This action cannot be undone.',
-                              ),
-                              actions: [
-                                CupertinoDialogAction(
-                                  child: const Text('Cancel'),
-                                  onPressed: () => Navigator.pop(context),
-                                ),
-                                CupertinoDialogAction(
-                                  isDestructiveAction: true,
-                                  child: const Text('Delete'),
-                                  onPressed: () {
-                                    Navigator.pop(context);
-                                    // TODO: Actual deletion logic here...
-                                    if (kDebugMode) {
-                                      print(
-                                        '[MemosScreen] Multi-delete action triggered (not implemented)',
-                                      );
-                                    }
-                                  },
-                                ),
-                              ],
-                            ),
-                      );
-                    }
-                    : null,
+            onPressed: selectedCount > 0
+                ? () {
+                    // TODO: Implement multi-delete logic
+                    // Show confirmation dialog first
+                    showCupertinoDialog(
+                      context: context,
+                      builder: (context) => CupertinoAlertDialog(
+                        title: Text('Delete $selectedCount Memos?'),
+                        content: const Text(
+                          'This action cannot be undone.',
+                        ),
+                        actions: [
+                          CupertinoDialogAction(
+                            child: const Text('Cancel'),
+                            onPressed: () => Navigator.pop(context),
+                          ),
+                          CupertinoDialogAction(
+                            isDestructiveAction: true,
+                            child: const Text('Delete'),
+                            onPressed: () {
+                              Navigator.pop(context);
+                              // TODO: Actual deletion logic here...
+                              if (kDebugMode) {
+                                print(
+                                  '[MemosScreen] Multi-delete action triggered (not implemented)',
+                                );
+                              }
+                            },
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+                : null,
             child: Icon(
               CupertinoIcons.delete,
-              color:
-                  selectedCount > 0
-                      ? CupertinoColors.destructiveRed
-                      : CupertinoColors.inactiveGray,
+              color: selectedCount > 0
+                  ? CupertinoColors.destructiveRed
+                  : CupertinoColors.inactiveGray,
             ),
           ),
           // Archive button
           CupertinoButton(
             padding: const EdgeInsets.symmetric(horizontal: 8.0),
             minSize: 0,
-            onPressed:
-                selectedCount > 0
-                    ? () {
-                      // TODO: Implement multi-archive logic
-                      if (kDebugMode) {
-                        print(
-                          '[MemosScreen] Multi-archive action triggered (not implemented)',
-                        );
-                      }
+            onPressed: selectedCount > 0
+                ? () {
+                    // TODO: Implement multi-archive logic
+                    if (kDebugMode) {
+                      print(
+                        '[MemosScreen] Multi-archive action triggered (not implemented)',
+                      );
                     }
-                    : null,
+                  }
+                : null,
             child: Icon(
               CupertinoIcons.archivebox,
-              color:
-                  selectedCount > 0
-                      ? CupertinoTheme.of(context).primaryColor
-                      : CupertinoColors.inactiveGray,
+              color: selectedCount > 0
+                  ? CupertinoTheme.of(context).primaryColor
+                  : CupertinoColors.inactiveGray,
             ),
           ),
         ],
@@ -277,86 +270,78 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
     final selectedPresetKey = ref.watch(quickFilterPresetProvider);
     final currentPresetLabel =
         quickFilterPresets[selectedPresetKey]?.label ?? 'Memos';
-    final isMultiSelectMode = ref.watch(
-      ui_providers.memoMultiSelectModeProvider,
-    );
-    final selectedIds = ref.watch(
-      ui_providers.selectedMemoIdsForMultiSelectProvider,
-    );
+    final isMultiSelectMode = ref.watch(ui_providers.memoMultiSelectModeProvider);
+    final selectedIds = ref.watch(ui_providers.selectedMemoIdsForMultiSelectProvider);
 
     return CupertinoPageScaffold(
-      navigationBar:
-          isMultiSelectMode
-              ? _buildMultiSelectNavBar(selectedIds.length)
-              : CupertinoNavigationBar(
-                transitionBetweenRoutes: false,
-                leading: _buildServerSwitcherButton(),
-                middle: GestureDetector(
-                  onTap: () {
-                    if (_scrollController.hasClients) {
-                      _scrollController.animateTo(
-                        0.0,
-                        duration: const Duration(milliseconds: 300),
-                        curve: Curves.easeOut,
-                      );
-                    }
-                  },
-                  child: Container(
-                    color: CupertinoColors.transparent,
-                    child: Text(currentPresetLabel),
-                  ),
-                ),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Multi-select button
-                    CupertinoButton(
-                      padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                      minSize: 0,
-                      onPressed:
-                          () =>
-                              ref.read(
-                                ui_providers.toggleMemoMultiSelectModeProvider,
-                              )(),
-                      child: const Icon(CupertinoIcons.checkmark_seal,
-                    ),
-                    ),
-                    // Advanced filter button
-                    CupertinoButton(
-                      padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                      minSize: 0,
-                      onPressed: () => _showAdvancedFilterPanel(context),
-                      child: const Icon(CupertinoIcons.tuningfork),
-                    ),
-                    // Create new memo button
-                    CupertinoButton(
-                      padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                      minSize: 0,
-                      onPressed: () {
-                        Navigator.of(
-                          context,
-                          rootNavigator: true,
-                        ).pushNamed('/new-memo');
-                      },
-                      child: const Icon(CupertinoIcons.add),
-                    ),
-                    // Add Reset Button (Temporary placement) per Change 2
-                    CupertinoButton(
-                      padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                      minSize: 0,
-                      onPressed:
-                          _showResetConfirmationDialog, // Call confirmation dialog
-                      child: const Tooltip(
-                        message: 'Reset All Cloud & Local Data',
-                        child: Icon(
-                          CupertinoIcons.exclamationmark_octagon,
-                          color: CupertinoColors.systemRed, // Make it stand out
-                        ),
-                      ),
-                    ),
-                  ],
+      navigationBar: isMultiSelectMode
+          ? _buildMultiSelectNavBar(selectedIds.length)
+          : CupertinoNavigationBar(
+              transitionBetweenRoutes: false,
+              leading: _buildServerSwitcherButton(),
+              middle: GestureDetector(
+                onTap: () {
+                  if (_scrollController.hasClients) {
+                    _scrollController.animateTo(
+                      0.0,
+                      duration: const Duration(milliseconds: 300),
+                      curve: Curves.easeOut,
+                    );
+                  }
+                },
+                child: Container(
+                  color: CupertinoColors.transparent,
+                  child: Text(currentPresetLabel),
                 ),
               ),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Multi-select button
+                  CupertinoButton(
+                    padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                    minSize: 0,
+                    onPressed: () =>
+                        ref.read(ui_providers.toggleMemoMultiSelectModeProvider)(),
+                    child: const Icon(
+                      CupertinoIcons.checkmark_seal,
+                    ),
+                  ),
+                  // Advanced filter button
+                  CupertinoButton(
+                    padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                    minSize: 0,
+                    onPressed: () => _showAdvancedFilterPanel(context),
+                    child: const Icon(CupertinoIcons.tuningfork),
+                  ),
+                  // Create new memo button
+                  CupertinoButton(
+                    padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                    minSize: 0,
+                    onPressed: () {
+                      Navigator.of(
+                        context,
+                        rootNavigator: true,
+                      ).pushNamed('/new-memo');
+                    },
+                    child: const Icon(CupertinoIcons.add),
+                  ),
+                  // Add Reset Button (Temporary placement) per Change 2
+                  CupertinoButton(
+                    padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                    minSize: 0,
+                    onPressed: _showResetConfirmationDialog,
+                    child: const Tooltip(
+                      message: 'Reset All Cloud & Local Data',
+                      child: Icon(
+                        CupertinoIcons.exclamationmark_octagon,
+                        color: CupertinoColors.systemRed,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
       child: SafeArea(
         child: Focus(
           focusNode: _focusNode,
@@ -412,9 +397,7 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
       child: CupertinoSlidingSegmentedControl<String>(
         groupValue: selectedPresetKey == 'custom' ? null : selectedPresetKey,
         thumbColor: theme.primaryColor,
-        backgroundColor: CupertinoColors.secondarySystemFill.resolveFrom(
-          context,
-        ),
+        backgroundColor: CupertinoColors.secondarySystemFill.resolveFrom(context),
         onValueChanged: (String? newPresetKey) {
           if (newPresetKey != null) {
             if (kDebugMode) {
@@ -455,9 +438,7 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
     final serverName =
         activeServer?.name ?? activeServer?.serverUrl ?? 'No Server';
     final truncatedName =
-        serverName.length > 15
-            ? '${serverName.substring(0, 12)}...'
-            : serverName;
+        serverName.length > 15 ? '${serverName.substring(0, 12)}...' : serverName;
 
     return CupertinoButton(
       padding: const EdgeInsets.only(left: 8.0),
@@ -487,69 +468,66 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
     if (servers.isEmpty) {
       showCupertinoDialog(
         context: context,
-        builder:
-            (context) => CupertinoAlertDialog(
-              title: const Text('No Servers'),
-              content: const Text(
-                'Please add a server configuration in Settings.',
-              ),
-              actions: [
-                CupertinoDialogAction(
-                  child: const Text('Settings'),
-                  onPressed: () {
-                    Navigator.pop(context);
-                    Navigator.of(
-                      context,
-                      rootNavigator: true,
-                    ).pushNamed('/settings');
-                  },
-                ),
-                CupertinoDialogAction(
-                  isDefaultAction: true,
-                  child: const Text('OK'),
-                  onPressed: () => Navigator.pop(context),
-                ),
-              ],
+        builder: (context) => CupertinoAlertDialog(
+          title: const Text('No Servers'),
+          content: const Text(
+            'Please add a server configuration in Settings.',
+          ),
+          actions: [
+            CupertinoDialogAction(
+              child: const Text('Settings'),
+              onPressed: () {
+                Navigator.pop(context);
+                Navigator.of(
+                  context,
+                  rootNavigator: true,
+                ).pushNamed('/settings');
+              },
             ),
+            CupertinoDialogAction(
+              isDefaultAction: true,
+              child: const Text('OK'),
+              onPressed: () => Navigator.pop(context),
+            ),
+          ],
+        ),
       );
       return;
     }
 
     showCupertinoModalPopup<void>(
       context: context,
-      builder:
-          (BuildContext context) => CupertinoActionSheet(
-            title: const Text('Switch Active Server'),
-            actions:
-                servers.map((server) {
-                  final bool isActive = server.id == activeServerId;
-                  return CupertinoActionSheetAction(
-                    isDefaultAction: isActive,
-                    onPressed: () {
-                      if (!isActive) {
-                        if (kDebugMode) {
-                          print(
-                            '[MemosScreen] Setting active server to: ${server.name ?? server.id}',
-                          );
-                        }
-                        notifier.setActiveServer(server.id);
-                        ref.invalidate(memosNotifierProvider);
-                        if (kDebugMode) {
-                          print(
-                            '[MemosScreen] Invalidated memosNotifierProvider after server switch.',
-                          );
-                        }
-                      }
-                      Navigator.pop(context);
-                    },
-                    child: Text(server.name ?? server.serverUrl),
+      builder: (BuildContext context) => CupertinoActionSheet(
+        title: const Text('Switch Active Server'),
+        actions: servers.map((server) {
+          final bool isActive = server.id == activeServerId;
+          return CupertinoActionSheetAction(
+            isDefaultAction: isActive,
+            onPressed: () {
+              if (!isActive) {
+                if (kDebugMode) {
+                  print(
+                    '[MemosScreen] Setting active server to: ${server.name ?? server.id}',
                   );
-                }).toList(),
-            cancelButton: CupertinoActionSheetAction(
-              child: const Text('Cancel'),
-              onPressed: () => Navigator.pop(context),
-            ),
-          ),
+                }
+                notifier.setActiveServer(server.id);
+                ref.invalidate(memosNotifierProvider);
+                if (kDebugMode) {
+                  print(
+                    '[MemosScreen] Invalidated memosNotifierProvider after server switch.',
+                  );
+                }
+              }
+              Navigator.pop(context);
+            },
+            child: Text(server.name ?? server.serverUrl),
+          );
+        }).toList(),
+        cancelButton: CupertinoActionSheetAction(
+          child: const Text('Cancel'),
+          onPressed: () => Navigator.pop(context),
+        ),
+      ),
     );
   }
 
@@ -588,9 +566,7 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
 
   void _handleMoveMemoToServer(String memoId) {
     if (kDebugMode) {
-      print(
-        '[MemosScreen] _handleMoveMemoToServer called for memo ID: $memoId',
-      );
+      print('[MemosScreen] _handleMoveMemoToServer called for memo ID: $memoId');
     }
 
     final multiServerState = ref.read(multiServerConfigProvider);
@@ -600,58 +576,51 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
         servers.where((s) => s.id != activeServerId).toList();
 
     if (kDebugMode) {
-      print(
-        '[MemosScreen] Found ${availableTargetServers.length} target servers.',
-      );
+      print('[MemosScreen] Found ${availableTargetServers.length} target servers.');
     }
 
     if (availableTargetServers.isEmpty) {
       showCupertinoDialog(
         context: context,
-        builder:
-            (ctx) => CupertinoAlertDialog(
-              title: const Text('No Other Servers'),
-              content: const Text(
-                'You need to configure at least one other server to move memos.',
-              ),
-              actions: [
-                CupertinoDialogAction(
-                  isDefaultAction: true,
-                  child: const Text('OK'),
-                  onPressed: () => Navigator.pop(ctx),
-                ),
-              ],
+        builder: (ctx) => CupertinoAlertDialog(
+          title: const Text('No Other Servers'),
+          content: const Text(
+            'You need to configure at least one other server to move memos.',
+          ),
+          actions: [
+            CupertinoDialogAction(
+              isDefaultAction: true,
+              child: const Text('OK'),
+              onPressed: () => Navigator.pop(ctx),
             ),
+          ],
+        ),
       );
       return;
     }
 
     showCupertinoModalPopup<ServerConfig>(
       context: context,
-      builder:
-          (sheetContext) => CupertinoActionSheet(
-            title: const Text('Move Memo To...'),
-            actions:
-                availableTargetServers
-                    .map(
-                      (server) => CupertinoActionSheetAction(
-                        child: Text(server.name ?? server.serverUrl),
-                        onPressed: () {
-                          if (kDebugMode) {
-                            print(
-                              '[MemosScreen] Selected target server: ${server.name ?? server.id}',
-                            );
-                          }
-                          Navigator.pop(sheetContext, server);
-                        },
-                      ),
-                    )
-                    .toList(),
-            cancelButton: CupertinoActionSheetAction(
-              child: const Text('Cancel'),
-              onPressed: () => Navigator.pop(sheetContext),
-            ),
+      builder: (sheetContext) => CupertinoActionSheet(
+        title: const Text('Move Memo To...'),
+        actions: availableTargetServers.map(
+          (server) => CupertinoActionSheetAction(
+            child: Text(server.name ?? server.serverUrl),
+            onPressed: () {
+              if (kDebugMode) {
+                print(
+                  '[MemosScreen] Selected target server: ${server.name ?? server.id}',
+                );
+              }
+              Navigator.pop(sheetContext, server);
+            },
           ),
+        ).toList(),
+        cancelButton: CupertinoActionSheetAction(
+          child: const Text('Cancel'),
+          onPressed: () => Navigator.pop(sheetContext),
+        ),
+      ),
     ).then((selectedServer) {
       if (selectedServer != null) {
         if (kDebugMode) {
@@ -663,57 +632,52 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
           memoId: memoId,
           targetServer: selectedServer,
         );
-        ref
-            .read(moveMemoProvider(moveParams))()
-            .then((_) {
-              if (kDebugMode) {
-                print('[MemosScreen] Move successful for memo $memoId');
-              }
-              if (mounted) {
-                showCupertinoDialog(
-                  context: context,
-                  builder:
-                      (ctx) => CupertinoAlertDialog(
-                        title: const Text('Move Successful'),
-                        content: Text(
-                          'Memo moved to ${selectedServer.name ?? selectedServer.serverUrl}.',
-                        ),
-                        actions: [
-                          CupertinoDialogAction(
-                            isDefaultAction: true,
-                            child: const Text('OK'),
-                            onPressed: () => Navigator.pop(ctx),
-                          ),
-                        ],
-                      ),
-                );
-              }
-            })
-            .catchError((error, stackTrace) {
-              if (kDebugMode) {
-                print('[MemosScreen] Move failed for memo $memoId: $error');
-                print(stackTrace);
-              }
-              if (mounted) {
-                showCupertinoDialog(
-                  context: context,
-                  builder:
-                      (ctx) => CupertinoAlertDialog(
-                        title: const Text('Move Failed'),
-                        content: Text(
-                          'Could not move memo. Error: ${error.toString()}',
-                        ),
-                        actions: [
-                          CupertinoDialogAction(
-                            isDefaultAction: true,
-                            child: const Text('OK'),
-                            onPressed: () => Navigator.pop(ctx),
-                          ),
-                        ],
-                      ),
-                );
-              }
-            });
+        ref.read(moveMemoProvider(moveParams))().then((_) {
+          if (kDebugMode) {
+            print('[MemosScreen] Move successful for memo $memoId');
+          }
+          if (mounted) {
+            showCupertinoDialog(
+              context: context,
+              builder: (ctx) => CupertinoAlertDialog(
+                title: const Text('Move Successful'),
+                content: Text(
+                  'Memo moved to ${selectedServer.name ?? selectedServer.serverUrl}.',
+                ),
+                actions: [
+                  CupertinoDialogAction(
+                    isDefaultAction: true,
+                    child: const Text('OK'),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ],
+              ),
+            );
+          }
+        }).catchError((error, stackTrace) {
+          if (kDebugMode) {
+            print('[MemosScreen] Move failed for memo $memoId: $error');
+            print(stackTrace);
+          }
+          if (mounted) {
+            showCupertinoDialog(
+              context: context,
+              builder: (ctx) => CupertinoAlertDialog(
+                title: const Text('Move Failed'),
+                content: Text(
+                  'Could not move memo. Error: ${error.toString()}',
+                ),
+                actions: [
+                  CupertinoDialogAction(
+                    isDefaultAction: true,
+                    child: const Text('OK'),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ],
+              ),
+            );
+          }
+        });
       } else {
         if (kDebugMode) {
           print('[MemosScreen] No target server selected.');
@@ -737,28 +701,27 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
 
     showCupertinoDialog(
       context: context,
-      builder:
-          (BuildContext dialogContext) => CupertinoAlertDialog(
-            title: const Text('Reset All Cloud & Local Data?'),
-            content: const Text(
-              'WARNING: This will permanently delete ALL Memos server configurations, MCP server configurations, and saved API keys (Todoist, OpenAI, Gemini) from this device AND from your iCloud account.\n\nThis action cannot be undone and is intended for recovery purposes only.',
-            ),
-            actions: [
-              CupertinoDialogAction(
-                child: const Text('Cancel'),
-                onPressed: () => Navigator.pop(dialogContext),
-              ),
-              CupertinoDialogAction(
-                isDestructiveAction: true,
-                child: const Text('Reset Data'),
-                onPressed: () {
-                  Navigator.pop(dialogContext); // Close the dialog first
-                  // Call the reset asynchronously without awaiting here
-                  _performFullReset();
-                },
-              ),
-            ],
+      builder: (BuildContext dialogContext) => CupertinoAlertDialog(
+        title: const Text('Reset All Cloud & Local Data?'),
+        content: const Text(
+          'WARNING: This will permanently delete ALL Memos server configurations, MCP server configurations, and saved API keys (Todoist, OpenAI, Gemini) from this device AND from your iCloud account.\n\nThis action cannot be undone and is intended for recovery purposes only.',
+        ),
+        actions: [
+          CupertinoDialogAction(
+            child: const Text('Cancel'),
+            onPressed: () => Navigator.pop(dialogContext),
           ),
+          CupertinoDialogAction(
+            isDestructiveAction: true,
+            child: const Text('Reset Data'),
+            onPressed: () {
+              Navigator.pop(dialogContext); // Close the dialog first
+              // Call the reset asynchronously without awaiting here
+              _performFullReset();
+            },
+          ),
+        ],
+      ),
     );
   }
 
@@ -768,6 +731,22 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
       print('[MemosScreen] Starting full data reset...');
     }
 
+    // --- Read Notifiers BEFORE Await ---
+    // Store notifier instances in local variables to use after potential awaits
+    // Check if mounted before reading, although less critical here than before await
+    if (!mounted) {
+      if (kDebugMode) print('[MemosScreen] Reset aborted: Widget unmounted before starting.');
+      return;
+    }
+    final cloudKitService = ref.read(cloudKitServiceProvider);
+    final multiServerNotifier = ref.read(multiServerConfigProvider.notifier);
+    final mcpServerNotifier = ref.read(mcpServerConfigProvider.notifier);
+    final todoistNotifier = ref.read(todoistApiKeyProvider.notifier);
+    final openAiKeyNotifier = ref.read(openAiApiKeyProvider.notifier);
+    final openAiModelNotifier = ref.read(openAiModelIdProvider.notifier);
+    final geminiNotifier = ref.read(geminiApiKeyProvider.notifier);
+    // --- End Reading Notifiers ---
+
     // Optional: Show a loading indicator (e.g., using a state variable and conditional UI)
     // setState(() => _isResetting = true); // Example
 
@@ -775,84 +754,68 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
     String cloudErrorMessage = '';
 
     try {
-      final cloudKitService = ref.read(cloudKitServiceProvider);
-
       // Delete CloudKit Data - Await each deletion attempt
-      if (kDebugMode)
-        print('[MemosScreen] Deleting CloudKit ServerConfig records...');
-      bool deleteServersSuccess = await cloudKitService.deleteAllRecordsOfType(
-        'ServerConfig',
-      );
+      if (kDebugMode) print('[MemosScreen] Deleting CloudKit ServerConfig records...');
+      bool deleteServersSuccess = await cloudKitService.deleteAllRecordsOfType('ServerConfig');
       if (!deleteServersSuccess) {
         cloudSuccess = false;
         cloudErrorMessage += 'Failed to delete ServerConfig records. ';
-        if (kDebugMode)
-          print('[MemosScreen] Failed CloudKit ServerConfig deletion.');
+        if (kDebugMode) print('[MemosScreen] Failed CloudKit ServerConfig deletion.');
       }
 
-      if (kDebugMode)
-        print('[MemosScreen] Deleting CloudKit McpServerConfig records...');
-      bool deleteMcpSuccess = await cloudKitService.deleteAllRecordsOfType(
-        'McpServerConfig',
-      );
+      if (kDebugMode) print('[MemosScreen] Deleting CloudKit McpServerConfig records...');
+      bool deleteMcpSuccess = await cloudKitService.deleteAllRecordsOfType('McpServerConfig');
       if (!deleteMcpSuccess) {
         cloudSuccess = false;
         cloudErrorMessage += 'Failed to delete McpServerConfig records. ';
-        if (kDebugMode)
-          print('[MemosScreen] Failed CloudKit McpServerConfig deletion.');
+        if (kDebugMode) print('[MemosScreen] Failed CloudKit McpServerConfig deletion.');
       }
 
-      if (kDebugMode)
-        print('[MemosScreen] Deleting CloudKit UserSettings record...');
-      bool deleteSettingsSuccess =
-          await cloudKitService.deleteUserSettingsRecord();
+      if (kDebugMode) print('[MemosScreen] Deleting CloudKit UserSettings record...');
+      bool deleteSettingsSuccess = await cloudKitService.deleteUserSettingsRecord();
       if (!deleteSettingsSuccess) {
         cloudSuccess = false;
         cloudErrorMessage += 'Failed to delete UserSettings record. ';
-        if (kDebugMode)
-          print('[MemosScreen] Failed CloudKit UserSettings deletion.');
+        if (kDebugMode) print('[MemosScreen] Failed CloudKit UserSettings deletion.');
       }
 
       if (!cloudSuccess) {
-        if (kDebugMode)
-          print(
-            '[MemosScreen] CloudKit deletion finished with errors: $cloudErrorMessage',
-          );
+        if (kDebugMode) print('[MemosScreen] CloudKit deletion finished with errors: $cloudErrorMessage');
       } else {
-        if (kDebugMode)
-          print('[MemosScreen] CloudKit deletion finished successfully.');
+        if (kDebugMode) print('[MemosScreen] CloudKit deletion finished successfully.');
       }
     } catch (e, s) {
       if (kDebugMode) {
-        print(
-          '[MemosScreen] Critical error during CloudKit deletion phase: $e\n$s',
-        );
+        print('[MemosScreen] Critical error during CloudKit deletion phase: $e\n$s');
       }
       cloudSuccess = false;
-      cloudErrorMessage =
-          'A critical error occurred during CloudKit deletion: $e';
+      cloudErrorMessage = 'A critical error occurred during CloudKit deletion: $e';
     }
 
     // Reset Local Notifiers and Cache (always attempt this, even if CloudKit failed)
+    // Use the local variables captured before the awaits
     try {
-      if (kDebugMode)
-        print('[MemosScreen] Resetting local notifiers and cache...');
-      // Use read().notifier for StateNotifiers
-      await ref.read(multiServerConfigProvider.notifier).resetStateAndCache();
-      await ref.read(mcpServerConfigProvider.notifier).resetStateAndCache();
-      await ref
-          .read(todoistApiKeyProvider.notifier)
-          .clear(); // Uses set('') internally
-      await ref.read(openAiApiKeyProvider.notifier).clear();
-      await ref.read(openAiModelIdProvider.notifier).clear();
-      await ref.read(geminiApiKeyProvider.notifier).clear();
+      if (kDebugMode) print('[MemosScreen] Resetting local notifiers and cache...');
+      await multiServerNotifier.resetStateAndCache();
+      await mcpServerNotifier.resetStateAndCache();
+      await todoistNotifier.clear(); // Uses set('') internally
+      await openAiKeyNotifier.clear();
+      await openAiModelNotifier.clear();
+      await geminiNotifier.clear();
       if (kDebugMode) print('[MemosScreen] Local reset finished.');
     } catch (e, s) {
       if (kDebugMode) {
         print('[MemosScreen] Error during local notifier reset phase: $e\n$s');
       }
       // Log error, but don't necessarily mark overall success as false just for local errors
-      cloudErrorMessage += '\nAn error also occurred during local data reset.';
+      // Append to existing message if CloudKit also failed
+      if (cloudErrorMessage.isNotEmpty) {
+        cloudErrorMessage += '\nAn error also occurred during local data reset.';
+      } else {
+        cloudErrorMessage = 'An error occurred during local data reset.';
+        // If CloudKit succeeded but local failed, mark overall as failure for the dialog
+        cloudSuccess = false;
+      }
     }
 
     // Optional: Hide loading indicator
@@ -862,38 +825,40 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
     if (mounted) {
       showCupertinoDialog(
         context: context,
-        builder:
-            (BuildContext finalDialogContext) => CupertinoAlertDialog(
-              title: Text(
-                cloudSuccess ? 'Reset Complete' : 'Reset Partially Failed',
-              ),
-              content: Text(
-                cloudSuccess
-                    ? 'All cloud and local configurations have been reset. Please restart the app or navigate to Settings to reconfigure.'
-                    : 'Local data has been reset, but errors occurred during CloudKit deletion. $cloudErrorMessage\nPlease check your iCloud data manually via Settings > Apple ID > iCloud > Manage Account Storage, then restart the app.',
-              ),
-              actions: [
-                CupertinoDialogAction(
-                  isDefaultAction: true,
-                  child: const Text('OK'),
-                  onPressed: () {
-                    Navigator.pop(finalDialogContext);
-                    ref.invalidate(loadServerConfigProvider);
-                    if (kDebugMode) {
-                      print(
-                        '[MemosScreen] Reset complete. Invalidated loadServerConfigProvider.',
-                      );
-                    }
-                  },
-                ),
-              ],
+        builder: (BuildContext finalDialogContext) => CupertinoAlertDialog(
+          title: Text(cloudSuccess ? 'Reset Complete' : 'Reset Failed'),
+          content: Text(
+            cloudSuccess
+                ? 'All cloud and local configurations have been reset. Please restart the app or navigate to Settings to reconfigure.'
+                : 'The reset process encountered errors:\n$cloudErrorMessage\nPlease check your iCloud data manually via Settings > Apple ID > iCloud > Manage Account Storage, then restart the app.'
+          ),
+          actions: [
+            CupertinoDialogAction(
+              isDefaultAction: true,
+              child: const Text('OK'),
+              onPressed: () {
+                Navigator.pop(finalDialogContext);
+                // Invalidate the main loading provider to force a reload/redirect
+                // This assumes your app's startup logic handles the "no config" state.
+                // Check mounted again before invalidating ref
+                if (mounted) {
+                  ref.invalidate(loadServerConfigProvider);
+                  if (kDebugMode) {
+                    print('[MemosScreen] Reset complete. Invalidated loadServerConfigProvider.');
+                  }
+                } else {
+                  if (kDebugMode) {
+                    print('[MemosScreen] Widget unmounted before invalidating loadServerConfigProvider.');
+                  }
+                }
+              },
             ),
+          ],
+        ),
       );
     } else {
       if (kDebugMode) {
-        print(
-          '[MemosScreen] Widget unmounted before final reset dialog could be shown.',
-        );
+        print('[MemosScreen] Widget unmounted before final reset dialog could be shown.');
       }
     }
   }

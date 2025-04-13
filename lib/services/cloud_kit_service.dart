@@ -213,7 +213,7 @@ class CloudKitService {
   Future<bool> deleteAllRecordsOfType(String recordType) async {
     if (kDebugMode) {
       print(
-        '[CloudKitService] Attempting to delete all records of type: \$recordType',
+        '[CloudKitService] Attempting to delete all records of type: $recordType',
       );
     }
     try {
@@ -225,7 +225,7 @@ class CloudKitService {
 
       if (kDebugMode) {
         print(
-          '[CloudKitService] Found \${ckRecords.length} records of type \$recordType to delete.',
+          '[CloudKitService] Found ${ckRecords.length} records of type $recordType to delete.',
         );
       }
 
@@ -237,11 +237,12 @@ class CloudKitService {
       final recordNames = ckRecords.map((r) => r.recordName).toList();
 
       // 3. Delete each record
+      bool allSucceeded = true; // Track overall success
       for (final recordName in recordNames) {
         try {
           if (kDebugMode) {
             print(
-              '[CloudKitService] Deleting record: \$recordName (type: \$recordType)',
+              '[CloudKitService] Deleting record: $recordName (type: $recordType)',
             );
           }
           await _cloudKit.deleteRecord(
@@ -251,22 +252,24 @@ class CloudKitService {
         } catch (deleteError) {
           if (kDebugMode) {
             print(
-              '[CloudKitService] Error deleting record \$recordName (type: \$recordType): \$deleteError',
+              '[CloudKitService] Error deleting record $recordName (type: $recordType): $deleteError',
             );
           }
+          allSucceeded = false; // Mark failure but continue
         }
       }
 
       if (kDebugMode) {
         print(
-          '[CloudKitService] Finished deleting records of type \$recordType. Overall success: true',
+          '[CloudKitService] Finished deleting records of type $recordType. Overall success: $allSucceeded',
         );
       }
+      // Return true if the process completed, even if individual deletions failed.
       return true;
     } catch (fetchError) {
       if (kDebugMode) {
         print(
-          '[CloudKitService] Error fetching records for deletion (type: \$recordType): \$fetchError',
+          '[CloudKitService] Error fetching records for deletion (type: $recordType): $fetchError',
         );
       }
       return false;
@@ -277,7 +280,7 @@ class CloudKitService {
   Future<bool> deleteUserSettingsRecord() async {
     if (kDebugMode) {
       print(
-        '[CloudKitService] Attempting to delete UserSettings record (\$_userSettingsRecordName)...',
+        '[CloudKitService] Attempting to delete UserSettings record ($_userSettingsRecordName)...',
       );
     }
     // Use the lock to prevent conflicts with saveSetting potentially running concurrently
@@ -289,7 +292,7 @@ class CloudKitService {
         );
         if (kDebugMode) {
           print(
-            '[CloudKitService] Successfully deleted UserSettings record (\$_userSettingsRecordName).',
+            '[CloudKitService] Successfully deleted UserSettings record ($_userSettingsRecordName).',
           );
         }
         return true;
@@ -305,7 +308,7 @@ class CloudKitService {
         }
         if (kDebugMode) {
           print(
-            '[CloudKitService] Error deleting UserSettings record (\$_userSettingsRecordName): \$e',
+            '[CloudKitService] Error deleting UserSettings record ($_userSettingsRecordName): $e',
           );
         }
         return false;
@@ -332,7 +335,7 @@ class CloudKitService {
     } catch (e) {
       if (kDebugMode) {
         print(
-          '[CloudKitService] Error getting UserSettings record (may not exist yet): \$e',
+          '[CloudKitService] Error getting UserSettings record (may not exist yet): $e',
         );
       }
       return null;
@@ -346,14 +349,14 @@ class CloudKitService {
       final value = ckRecord.values[keyName] as String?;
       if (kDebugMode) {
         print(
-          '[CloudKitService] GetSetting: Found value for key "\$keyName": \${value != null && value.isNotEmpty ? "present" : "empty/null"}',
+          '[CloudKitService] GetSetting: Found value for key "$keyName": \${value != null && value.isNotEmpty ? "present" : "empty/null"}',
         );
       }
       return value;
     }
     if (kDebugMode) {
       print(
-        '[CloudKitService] GetSetting: Key "\$keyName" not found in UserSettings record.',
+        '[CloudKitService] GetSetting: Key "$keyName" not found in UserSettings record.',
       );
     }
     return null;
@@ -377,7 +380,7 @@ class CloudKitService {
 
         if (kDebugMode) {
           print(
-            '[CloudKitService] Preparing to save UserSettings with key "\$keyName". Merged Data: \$dataToSave',
+            '[CloudKitService] Preparing to save UserSettings with key "$keyName". Merged Data: $dataToSave',
           );
         }
 
@@ -400,7 +403,7 @@ class CloudKitService {
           } catch (deleteError) {
             if (kDebugMode) {
               print(
-                '[CloudKitService] Error deleting existing UserSettings record (proceeding to save): \$deleteError',
+                '[CloudKitService] Error deleting existing UserSettings record (proceeding to save): $deleteError',
               );
             }
           }
@@ -425,7 +428,7 @@ class CloudKitService {
       } catch (e) {
         if (kDebugMode) {
           print(
-            '[CloudKitService] Error saving UserSettings for key "\$keyName" (within synchronized block): \$e',
+            '[CloudKitService] Error saving UserSettings for key "$keyName" (within synchronized block): $e',
           );
         }
         return false;
