@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_memos/models/mcp_server_config.dart';
@@ -15,6 +14,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 // Import generated mocks relative to this file's location
 import 'mcp_client_service_test.mocks.dart';
+
+// --- ADD Correct Cache Key ---
+// Match the key used in McpServerConfigNotifier
+const String mcpCacheKey = 'mcp_server_config_cache';
 
 // Sample McpServerConfig data for tests
 final mcpServerStdio = const McpServerConfig(
@@ -42,8 +45,6 @@ final mcpServerInactive = const McpServerConfig(
   args: '5',
   isActive: false,
 );
-
-const String mcpCacheKey = 'mcp_server_configs';
 
 // Annotations to generate mocks
 // We mock the GoogleMcpClient wrapper, not the underlying mcp_dart Client directly for simpler testing.
@@ -178,13 +179,15 @@ void main() {
     test(
       'Initializes with server list from config provider (via cache)',
       () async {
-      // Arrange
-      final initialConfigs = [mcpServerStdio, mcpServerInactive];
-        // Set up SharedPreferences cache
+        // Arrange
+        final initialConfigs = [mcpServerStdio, mcpServerInactive];
+        // Set up SharedPreferences cache using the CORRECT key
         final cacheJson = jsonEncode(
           initialConfigs.map((s) => s.toJson()).toList(),
         );
-        SharedPreferences.setMockInitialValues({mcpCacheKey: cacheJson});
+        SharedPreferences.setMockInitialValues({
+          mcpCacheKey: cacheJson,
+        }); // Use correct key
         // Ensure CloudKit returns empty to isolate cache loading
         when(
           mockCloudKitService.getAllMcpServerConfigs(),
@@ -197,16 +200,25 @@ void main() {
         await container.pump(); // Allow loading to complete
 
         // Read the client provider AFTER config is loaded
-      final state = container.read(mcpClientProvider);
+        final state = container.read(mcpClientProvider);
         // Allow microtasks like the initial sync in McpClientNotifier to run
-      await container.pump();
+        await container.pump();
 
-      // Assert: Initial status should be disconnected for all
-      expect(state.serverConfigs, initialConfigs);
-      expect(state.serverStatuses.length, 2);
-      expect(state.serverStatuses[mcpServerStdio.id], McpConnectionStatus.disconnected);
-      expect(state.serverStatuses[mcpServerInactive.id], McpConnectionStatus.disconnected);
-      expect(state.activeClients, isEmpty); // No connections attempted yet by default
+        // Assert: Initial status should be disconnected for all
+        expect(state.serverConfigs, initialConfigs);
+        expect(state.serverStatuses.length, 2);
+        expect(
+          state.serverStatuses[mcpServerStdio.id],
+          McpConnectionStatus.disconnected,
+        );
+        expect(
+          state.serverStatuses[mcpServerInactive.id],
+          McpConnectionStatus.disconnected,
+        );
+        expect(
+          state.activeClients,
+          isEmpty,
+        ); // No connections attempted yet by default
         verify(
           mockCloudKitService.getAllMcpServerConfigs(),
         ).called(1); // Verify load attempt
@@ -222,7 +234,9 @@ void main() {
       final cacheJson = jsonEncode(
         initialConfigs.map((s) => s.toJson()).toList(),
       );
-      SharedPreferences.setMockInitialValues({mcpCacheKey: cacheJson});
+      SharedPreferences.setMockInitialValues({
+        mcpCacheKey: cacheJson,
+      }); // Use correct key
       when(
         mockCloudKitService.getAllMcpServerConfigs(),
       ).thenAnswer((_) async => []);
@@ -264,7 +278,9 @@ void main() {
       final config = mcpServerStdio.copyWith(isActive: true);
       // Set up initial state via SharedPreferences/CloudKit mock
       final cacheJson = jsonEncode([config].map((s) => s.toJson()).toList());
-      SharedPreferences.setMockInitialValues({mcpCacheKey: cacheJson});
+      SharedPreferences.setMockInitialValues({
+        mcpCacheKey: cacheJson,
+      }); // Use correct key
       when(
         mockCloudKitService.getAllMcpServerConfigs(),
       ).thenAnswer((_) async => []);
@@ -274,52 +290,28 @@ void main() {
       await configNotifier.loadConfiguration();
       await container.pump();
 
-      // Get client notifier AFTER config is loaded
+      // Get client notifier AFTER config is loaded - this triggers initial sync
+      // ignore: unused_local_variable
       final clientNotifier = container.read(mcpClientProvider.notifier);
       // ignore: unused_local_variable
-      final mockClient = createMockClient(config.id, false);
-
-      // --- IMPORTANT: How to inject the mock client? ---
-      // Option 1: Modify McpClientNotifier to accept a factory (complex)
-      // Option 2: Test side effects only (status changes)
-      // Option 3: Use a test-specific GoogleMcpClient implementation via override (best?)
-      // For now, we'll test side effects (status changes) and assume the real client works.
-      // We need to mock the *result* of the connection. Let's assume connectServer
-      // internally creates the client and calls connectToServer. We can't easily mock that.
-      // Let's focus on the state transitions based on the *assumption* connect succeeds/fails.
-
-      // Act: Call connectServer directly (syncConnections might also call it)
-      // We need to ensure the state is ready before calling connectServer manually
-      container.read(mcpClientProvider); // Ensure provider is initialized
-      await container.pump(); // Allow initial sync
-
-      // Simulate successful connection by manually updating state (since we can't mock the client easily)
-      // This is NOT ideal, but demonstrates the desired outcome.
-      // A better approach would involve mocking the client creation/connection.
-      clientNotifier.updateServerState(
+      final mockClient = createMockClient(
         config.id,
-        McpConnectionStatus.connecting,
-      ); // Simulate start
-      await container.pump();
-      // Simulate the client connecting and calling back
-      clientNotifier.updateServerState(
-        config.id,
-        McpConnectionStatus.connected,
-      );
-      // Manually add a mock client to the state for verification (again, not ideal)
-      clientNotifier.state = clientNotifier.state.copyWith(
-        activeClients: {
-          ...clientNotifier.state.activeClients,
-          config.id: mockClient,
-        },
-      );
+        false,
+      ); // Keep mock creation for potential future use
+
+      // Act
+      // Allow the initial sync triggered by reading the provider to run
       await container.pump();
 
-
-      // Assert: Check state changes
+      // Assert: Check that the initial sync initiated the connection attempt
       final state = container.read(mcpClientProvider);
-      expect(state.serverStatuses[config.id], McpConnectionStatus.connected);
-      expect(state.activeClients.containsKey(config.id), isTrue);
+      expect(
+        state.serverStatuses[config.id],
+        McpConnectionStatus.connecting,
+        reason: "Initial sync should attempt to connect the active server.",
+      );
+      // We cannot easily assert the final 'connected' state without better mocking
+      // expect(state.activeClients.containsKey(config.id), isTrue); // This part is hard to verify reliably now
       expect(state.serverErrorMessages[config.id], isNull);
     });
 
