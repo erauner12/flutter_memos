@@ -252,7 +252,8 @@ Future<void> main(List<String> args) async {
             },
             'due_date': {
               'type': 'string',
-              'description': 'Specific due date in YYYY-MM-DD format (optional).',
+              'description':
+                  'Specific due date in YYYY-MM-DD format (optional).',
             },
             'due_datetime': {
               'type': 'string',
@@ -482,7 +483,8 @@ Future<void> main(List<String> args) async {
             },
             'due_date': {
               'type': 'string',
-              'description': 'New specific due date in YYYY-MM-DD format (optional).',
+              'description':
+                  'New specific due date in YYYY-MM-DD format (optional).',
             },
             'due_datetime': {
               'type': 'string',
@@ -496,7 +498,8 @@ Future<void> main(List<String> args) async {
             },
             'assignee_id': {
               'type': 'string',
-              'description': 'New ID of the user to assign the task to (optional).',
+              'description':
+                  'New ID of the user to assign the task to (optional).',
             },
             'duration': {
               'type': 'integer',
@@ -641,7 +644,8 @@ Future<void> main(List<String> args) async {
     'todoist_create_project', // This closing parenthesis comes from previous block and is now closed.
     description: 'dummy placeholder to maintain structure',
     inputSchemaProperties: {},
-    callback: ({args, extra}) => _createErrorResult('Should not be called'),
+    callback: ({Map<String, dynamic>? args, RequestHandlerExtra? extra}) =>
+        _createErrorResult('Should not be called'),
   );
   // The above is a dummy and will not be executed.
   // ADD: Register todoist_update_project tool
@@ -679,7 +683,8 @@ Future<void> main(List<String> args) async {
     'update_todoist_task',
     description: 'dummy placeholder to maintain structure',
     inputSchemaProperties: {},
-    callback: (args, extra) => _createErrorResult('Should not be called'),
+    callback: ({Map<String, dynamic>? args, RequestHandlerExtra? extra}) =>
+        _createErrorResult('Should not be called'),
   );
   // ADD: Register todoist_get_project_sections tool
   server.tool(
