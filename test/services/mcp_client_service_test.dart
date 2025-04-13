@@ -124,6 +124,14 @@ void main() {
     // when(mockMcpServerConfigNotifier.state).thenReturn(newState);
     // serverConfigStreamController.add(newState);
 
+    // ADD: Stub for addListener to satisfy ref.listen
+    when(
+      mockMcpServerConfigNotifier.addListener(
+        any,
+        fireImmediately: anyNamed('fireImmediately'),
+      ),
+    ).thenReturn(() {}); // Return a no-op RemoveListener
+
     // Initial state for the stream
     serverConfigStreamController.add([]);
 
