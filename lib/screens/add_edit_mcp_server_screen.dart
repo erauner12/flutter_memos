@@ -39,8 +39,7 @@ class AddEditMcpServerScreen extends ConsumerStatefulWidget {
       _AddEditMcpServerScreenState();
 }
 
-class _AddEditMcpServerScreenState
-    extends ConsumerState<AddEditMcpServerScreen> {
+class _AddEditMcpServerScreenState extends ConsumerState<AddEditMcpServerScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   // Stdio Controllers
@@ -52,6 +51,8 @@ class _AddEditMcpServerScreenState
   // Common State
   bool _isActive = false;
   List<_EnvVarPair> _envVars = [];
+  // ADD: State variable for HTTPS toggle
+  bool _isSecure = false;
   // MODIFY: Use the imported McpConnectionType enum
   McpConnectionType _selectedType = McpConnectionType.stdio; // Default to stdio
 
@@ -63,18 +64,18 @@ class _AddEditMcpServerScreenState
     if (_isEditing) {
       final server = widget.serverToEdit!;
       _nameController.text = server.name;
-      _selectedType =
-          server.connectionType; // Initialize type from existing server
+      _selectedType = server.connectionType; // Initialize type from existing server
       // Load fields based on type, handling nulls
       _hostController.text = server.host ?? ''; // Load host if available
-      _portController.text =
-          server.port.toString() ?? ''; // Use null-aware access and toString
+      _portController.text = server.port?.toString() ?? ''; // Use null-aware access and toString
       _commandController.text = server.command; // Always load command
       _argsController.text = server.args; // Always load args
       _isActive = server.isActive;
       _envVars = server.customEnvironment.entries
           .map((e) => _EnvVarPair.fromMapEntry(e))
           .toList();
+      // Initialize isSecure from existing server (only relevant for SSE)
+      _isSecure = server.isSecure;
     } else {
       // Defaults for a new server
       _selectedType = McpConnectionType.stdio; // Default new servers to stdio
@@ -86,6 +87,8 @@ class _AddEditMcpServerScreenState
       // Also clear stdio fields if defaulting to SSE (or vice versa if default changes)
       _commandController.clear();
       _argsController.clear();
+      // Default isSecure for new servers
+      _isSecure = false;
     }
   }
 
@@ -137,20 +140,19 @@ class _AddEditMcpServerScreenState
   }
 
   Future<void> _saveConfiguration() async {
-    // Keep the mounted check here before the async gap
     if (!mounted) return;
     final contextBeforeGap = context; // Capture context before async gap
 
-    FocusScope.of(contextBeforeGap).unfocus(); // Use captured context
+    FocusScope.of(contextBeforeGap).unfocus();
     if (!_formKey.currentState!.validate()) {
-      return; // Validation failed based on visible fields
+      return;
     }
 
     // --- Validation based on selected type ---
-    String command = ''; // Default empty
-    String args = ''; // Default empty
-    String? host; // Default null
-    int? port; // Default null
+    String command = '';
+    String args = '';
+    String? host;
+    int? port;
 
     if (_selectedType == McpConnectionType.stdio) {
       command = _commandController.text.trim();
@@ -163,7 +165,6 @@ class _AddEditMcpServerScreenState
         );
         return;
       }
-      // Host and port remain null for stdio
     } else {
       // McpConnectionType.sse
       host = _hostController.text.trim();
@@ -194,17 +195,16 @@ class _AddEditMcpServerScreenState
         return;
       }
       port = parsedPort;
-      // Command and args remain empty for SSE
     }
 
     final name = _nameController.text.trim();
 
-    // Process environment variables (logic remains the same)
+    // Process environment variables
     final Map<String, String> customEnvMap = {};
     bool envVarError = false;
     for (var pair in _envVars) {
       final key = pair.keyController.text.trim();
-      final value = pair.valueController.text; // Keep value as is
+      final value = pair.valueController.text;
       if (key.isNotEmpty) {
         if (customEnvMap.containsKey(key)) {
           _showResultDialog('Validation Error', 'Duplicate environment key "$key"', isError: true);
@@ -229,13 +229,15 @@ class _AddEditMcpServerScreenState
     final config = McpServerConfig(
       id: widget.serverToEdit?.id ?? _uuid.v4(),
       name: name,
-      connectionType: _selectedType, // Pass the selected type
-      command: command, // Pass potentially empty command
-      args: args, // Pass potentially empty args
-      host: host, // Pass potentially null host
-      port: port, // Pass potentially null port
+      connectionType: _selectedType,
+      command: command,
+      args: args,
+      host: host,
+      port: port,
       isActive: _isActive,
       customEnvironment: customEnvMap,
+      // Pass the isSecure flag (only relevant for SSE, but pass always)
+      isSecure: _isSecure,
     );
 
     final settingsService = ref.read(settingsServiceProvider);
@@ -249,18 +251,15 @@ class _AddEditMcpServerScreenState
         success = await settingsService.addMcpServer(config);
       }
 
-      // Check mounted *after* the await
       if (!mounted) return;
 
       if (success) {
         _showResultDialog('Success', 'MCP Server "$name" $actionVerb.');
-        // Check mounted again before popping
         if (mounted) Navigator.of(context).pop();
       } else {
         _showResultDialog('Error', 'Failed to $actionVerb MCP server configuration.', isError: true);
       }
     } catch (e) {
-      // Check mounted *after* the await
       if (!mounted) return;
       _showResultDialog(
         'Error',
@@ -360,7 +359,6 @@ class _AddEditMcpServerScreenState
                         textInputAction: TextInputAction.next,
                         autocorrect: false,
                         validator: (value) {
-                          // MODIFY: Use McpConnectionType enum here
                           if (_selectedType == McpConnectionType.stdio &&
                               (value == null || value.trim().isEmpty)) {
                             return 'Command is required for Stdio';
@@ -386,7 +384,6 @@ class _AddEditMcpServerScreenState
                         autocorrect: false,
                         textInputAction: TextInputAction.next,
                         validator: (value) {
-                          // MODIFY: Use McpConnectionType enum here
                           if (_selectedType == McpConnectionType.sse &&
                               (value == null || value.trim().isEmpty)) {
                             return 'Manager Host is required for SSE';
@@ -404,7 +401,6 @@ class _AddEditMcpServerScreenState
                         ),
                         textInputAction: TextInputAction.done,
                         validator: (value) {
-                          // MODIFY: Use McpConnectionType enum here
                           if (_selectedType == McpConnectionType.sse) {
                             if (value == null || value.trim().isEmpty) {
                               return 'Manager Port is required for SSE';
@@ -416,6 +412,15 @@ class _AddEditMcpServerScreenState
                           }
                           return null;
                         },
+                      ),
+                      // ADD: HTTPS Toggle for SSE
+                      CupertinoListTile(
+                        padding: const EdgeInsets.fromLTRB(15, 8, 15, 8),
+                        title: const Text('Use HTTPS (Secure)'),
+                        trailing: CupertinoSwitch(
+                          value: _isSecure,
+                          onChanged: (value) => setState(() => _isSecure = value),
+                        ),
                       ),
                     ],
                     // --- Common Fields ---
@@ -471,73 +476,51 @@ class _AddEditMcpServerScreenState
                     padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 20.0),
                     child: CupertinoButton(
                       color: CupertinoColors.destructiveRed,
-                      onPressed:
-                          (_isEditing && widget.serverToEdit != null)
-                              ? () async {
-                                // Keep mounted check here before async gap
+                      onPressed: (_isEditing && widget.serverToEdit != null)
+                          ? () async {
+                              if (!mounted) return;
+                              final contextBeforeDialog = context;
+                              final confirmed = await showCupertinoDialog<bool>(
+                                context: contextBeforeDialog,
+                                builder: (context) => CupertinoAlertDialog(
+                                  title: const Text('Delete MCP Server?'),
+                                  content: Text(
+                                    'Are you sure you want to delete "${widget.serverToEdit!.name}"?',
+                                  ),
+                                  actions: [
+                                    CupertinoDialogAction(
+                                      child: const Text('Cancel'),
+                                      onPressed: () => Navigator.of(context).pop(false),
+                                    ),
+                                    CupertinoDialogAction(
+                                      isDestructiveAction: true,
+                                      child: const Text('Delete'),
+                                      onPressed: () => Navigator.of(context).pop(true),
+                                    ),
+                                  ],
+                                ),
+                              );
+                              if (!mounted) return;
+                              if (confirmed == true) {
+                                final success = await ref.read(settingsServiceProvider)
+                                    .deleteMcpServer(widget.serverToEdit!.id);
                                 if (!mounted) return;
-                                final contextBeforeDialog =
-                                    context; // Capture context
-
-                                final confirmed = await showCupertinoDialog<
-                                  bool
-                                >(
-                                  context:
-                                      contextBeforeDialog, // Use captured context
-                                  builder:
-                                      (context) => CupertinoAlertDialog(
-                                        title: const Text('Delete MCP Server?'),
-                                        content: Text(
-                                          'Are you sure you want to delete "${widget.serverToEdit!.name}"?',
-                                        ),
-                                        actions: [
-                                          CupertinoDialogAction(
-                                            child: const Text('Cancel'),
-                                            onPressed:
-                                                () => Navigator.of(
-                                                  context,
-                                                ).pop(false),
-                                          ),
-                                          CupertinoDialogAction(
-                                            isDestructiveAction: true,
-                                            child: const Text('Delete'),
-                                            onPressed:
-                                                () => Navigator.of(
-                                                  context,
-                                                ).pop(true),
-                                          ),
-                                        ],
-                                      ),
-                                );
-
-                                // Check mounted *after* the await
-                                if (!mounted) return;
-
-                                if (confirmed == true) {
-                                  final success = await ref
-                                      .read(settingsServiceProvider)
-                                      .deleteMcpServer(widget.serverToEdit!.id);
-
-                                  // Check mounted again *after* the await
-                                  if (!mounted) return;
-
-                                  if (success) {
-                                    _showResultDialog(
-                                      'Deleted',
-                                      'MCP Server "${widget.serverToEdit!.name}" deleted.',
-                                    );
-                                    // Check mounted again before popping
-                                    if (mounted) Navigator.of(context).pop();
-                                  } else {
-                                    _showResultDialog(
-                                      'Error',
-                                      'Failed to delete MCP server.',
-                                      isError: true,
-                                    );
-                                  }
+                                if (success) {
+                                  _showResultDialog(
+                                    'Deleted',
+                                    'MCP Server "${widget.serverToEdit!.name}" deleted.',
+                                  );
+                                  if (mounted) Navigator.of(context).pop();
+                                } else {
+                                  _showResultDialog(
+                                    'Error',
+                                    'Failed to delete MCP server.',
+                                    isError: true,
+                                  );
                                 }
                               }
-                              : null,
+                            }
+                          : null,
                       child: const Text('Delete Server'),
                     ),
                   ),

@@ -12,6 +12,8 @@ class SseClientTransport implements Transport {
   final String managerHost;
   final int managerPort;
   final String ssePath; // Path for the initial SSE connection, e.g., "/sse"
+  // ADD: Flag for HTTPS
+  final bool isSecure;
 
   HttpClient? _httpClient;
   StreamSubscription<String>? _sseSubscription;
@@ -37,6 +39,7 @@ class SseClientTransport implements Transport {
     required this.managerHost,
     required this.managerPort,
     this.ssePath = '/sse', // Default SSE path
+    this.isSecure = false, // Default to HTTP
   });
 
   @override
@@ -46,21 +49,25 @@ class SseClientTransport implements Transport {
     }
     if (kDebugMode) {
       print(
-        '[SseClientTransport] Attempting SSE connection to http://$managerHost:$managerPort$ssePath...',
+        '[SseClientTransport] Attempting SSE connection to ${isSecure ? 'https' : 'http'}://$managerHost:$managerPort$ssePath...',
       );
     }
 
     _httpClient = HttpClient();
     // Allow self-signed certificates in debug mode if needed for local testing
-    // if (kDebugMode) {
+    // if (kDebugMode && isSecure) { // Only relevant for HTTPS
     //   _httpClient?.badCertificateCallback =
     //       (X509Certificate cert, String host, int port) => true;
     // }
 
     try {
-      final request = await _httpClient!.getUrl(
-        Uri.http('$managerHost:$managerPort', ssePath),
-      );
+      // MODIFY: Use Uri.https or Uri.http based on isSecure flag
+      final uri =
+          isSecure
+              ? Uri.https('$managerHost:$managerPort', ssePath)
+              : Uri.http('$managerHost:$managerPort', ssePath);
+
+      final request = await _httpClient!.getUrl(uri);
       request.headers.set(HttpHeaders.acceptHeader, 'text/event-stream');
       request.headers.set(HttpHeaders.cacheControlHeader, 'no-cache');
       request.headers.set(HttpHeaders.connectionHeader, 'keep-alive');
@@ -242,11 +249,15 @@ class SseClientTransport implements Transport {
       );
     }
 
-    final postUri = Uri.http(
-      '$managerHost:$managerPort',
-      _messageEndpointPath!,
-      {'sessionId': _sessionId!},
-    );
+    // MODIFY: Use Uri.https or Uri.http based on isSecure flag
+    final postUri =
+        isSecure
+            ? Uri.https('$managerHost:$managerPort', _messageEndpointPath!, {
+              'sessionId': _sessionId!,
+            })
+            : Uri.http('$managerHost:$managerPort', _messageEndpointPath!, {
+              'sessionId': _sessionId!,
+            });
 
     if (kDebugMode) {
       // Log the JSON representation for better readability

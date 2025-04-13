@@ -20,6 +20,8 @@ class McpServerConfig {
   final int? port; // Nullable: Port of the MCP Manager service
   // State field
   final bool isActive; // Whether the user wants this server to be connected
+  // ADD: isSecure field for SSE connections
+  final bool isSecure; // Whether to use HTTPS for SSE connection
   final Map<String, String> customEnvironment;
 
   // MODIFY: Update constructor
@@ -32,6 +34,7 @@ class McpServerConfig {
     this.host, // Make host nullable
     this.port, // Make port nullable
     this.isActive = false,
+    this.isSecure = false, // Default to false
     this.customEnvironment = const {}, // Default to empty map
   });
 
@@ -46,6 +49,7 @@ class McpServerConfig {
     int? port, // Keep nullable
     bool? isActive,
     Map<String, String>? customEnvironment,
+    bool? isSecure, // Add isSecure
     bool setHostToNull = false, // Flag to explicitly nullify host
     bool setPortToNull = false, // Flag to explicitly nullify port
   }) {
@@ -59,6 +63,7 @@ class McpServerConfig {
       host: setHostToNull ? null : (host ?? this.host), // Handle nullability
       port: setPortToNull ? null : (port ?? this.port), // Handle nullability
       isActive: isActive ?? this.isActive,
+      isSecure: isSecure ?? this.isSecure, // Add isSecure
       customEnvironment: customEnvironment ?? this.customEnvironment,
     );
   }
@@ -73,6 +78,7 @@ class McpServerConfig {
     'host': host, // Store nullable string
     'port': port, // Store nullable int
     'isActive': isActive,
+    'isSecure': isSecure, // Add isSecure
     'customEnvironment': jsonEncode(customEnvironment), // Keep as JSON string
   };
 
@@ -180,6 +186,8 @@ class McpServerConfig {
       port: parsedPort, // Use nullable port
       isActive: json['isActive'] as bool? ?? false,
       customEnvironment: environment,
+      isSecure:
+          json['isSecure'] as bool? ?? false, // Parse isSecure, default false
     );
   }
 
@@ -197,6 +205,7 @@ class McpServerConfig {
           host == other.host && // Compare nullable host
           port == other.port && // Compare nullable port
           isActive == other.isActive &&
+          isSecure == other.isSecure && // Add isSecure comparison
           const MapEquality().equals(
             customEnvironment,
             other.customEnvironment,
@@ -213,11 +222,12 @@ class McpServerConfig {
       host.hashCode ^ // Include nullable host hash
       port.hashCode ^ // Include nullable port hash
       isActive.hashCode ^
+      isSecure.hashCode ^ // Add isSecure hash
       const MapEquality().hash(customEnvironment);
 
   // MODIFY: Update toString
   @override
   String toString() {
-    return 'McpServerConfig{id: $id, name: $name, connectionType: ${connectionType.name}, command: $command, args: $args, host: $host, port: $port, isActive: $isActive, customEnvironment: $customEnvironment}';
+    return 'McpServerConfig{id: $id, name: $name, connectionType: ${connectionType.name}, command: $command, args: $args, host: $host, port: $port, isActive: $isActive, isSecure: $isSecure, customEnvironment: $customEnvironment}';
   }
 }

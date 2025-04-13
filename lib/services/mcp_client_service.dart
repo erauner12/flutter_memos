@@ -142,12 +142,12 @@ class GoogleMcpClient {
 
   // MODIFY: Fix constructor initialization
   GoogleMcpClient(this.serverId, this.model)
-    : mcpClient = mcp_lib.Client(
-        const mcp_lib.Implementation(
-          name: 'flutter-memos-mcp-client',
-          version: '1.0.0',
-        ),
-      );
+      : mcpClient = mcp_lib.Client(
+          const mcp_lib.Implementation(
+            name: 'flutter-memos-mcp-client',
+            version: '1.0.0',
+          ),
+        );
 
   void setupCallbacks({
     Function(String serverId, String errorMsg)? onError,
@@ -260,9 +260,11 @@ class GoogleMcpClient {
           );
         }
 
+        // MODIFY: Pass isSecure flag to SseClientTransport constructor
         final sseTransport = SseClientTransport(
           managerHost: host,
           managerPort: port,
+          isSecure: config.isSecure, // Pass the flag here
         );
         _transport = sseTransport;
 
