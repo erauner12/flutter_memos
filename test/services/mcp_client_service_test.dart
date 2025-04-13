@@ -184,7 +184,7 @@ void main() {
       expect(state.connectedServerCount, 0);
     });
 
-    test('Initializes with server list from config provider', () {
+    test('Initializes with server list from config provider', () async {
       // Arrange
       final initialConfigs = [mcpServerStdio, mcpServerInactive];
       // Update the mock *before* reading the provider
