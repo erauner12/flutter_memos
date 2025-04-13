@@ -6,6 +6,7 @@ import 'dart:io';
 import 'package:mcp_dart/mcp_dart.dart' as mcp_dart;
 import 'package:mcp_dart/src/server/sse_server_manager.dart';
 import 'package:mcp_dart/src/shared/protocol.dart' show RequestHandlerExtra;
+
 // REMOVE: Imports related to flutter_memos service
 // import 'package:flutter_memos/services/todoist_api_service.dart';
 
@@ -107,14 +108,12 @@ Future<todoist.Task?> _findTaskByName(
 // Generic error result helper
 mcp_dart.CallToolResult _createErrorResult(String message,
     {Map<String, dynamic>? errorData}) {
-  // Added errorData parameter
   final payload = {
     'status': 'error',
     'message': message,
-    'result': errorData ?? {}, // Include errorData in result field
+    'result': errorData ?? {},
   };
-  stderr.writeln(
-      '[TodoistServer] Creating Error Result: \${jsonEncode(payload)}');
+  stderr.writeln('[TodoistServer] Creating Error Result: \${jsonEncode(payload)}');
   return mcp_dart.CallToolResult(
     content: [mcp_dart.TextContent(text: jsonEncode(payload))],
     isError: true,
@@ -127,10 +126,9 @@ mcp_dart.CallToolResult _createSuccessResult(String message,
   final payload = {
     'status': 'success',
     'message': message,
-    'result': resultData ?? {}, // Include resultData in result field
+    'result': resultData ?? {},
   };
-  stderr.writeln(
-      '[TodoistServer] Creating Success Result: \${jsonEncode(payload)}');
+  stderr.writeln('[TodoistServer] Creating Success Result: \${jsonEncode(payload)}');
   return mcp_dart.CallToolResult(
     content: [mcp_dart.TextContent(text: jsonEncode(payload))],
   );
@@ -165,16 +163,102 @@ Future<void> main(List<String> args) async {
     ),
   );
 
-  // 2. Register Tools (Moved before transport logic)
+  // 2. Register Tools
+
   // ADD: Register create_todoist_task tool
   server.tool(
     'create_todoist_task',
     description:
-        'Creates a new task in Todoist. Returns the created task details.',
+        'Creates one or more tasks in Todoist. Returns the created task details.',
     inputSchemaProperties: {
+      'tasks': {
+        'type': 'array',
+        'description': 'Array of tasks to create (for batch operations)',
+        'items': {
+          'type': 'object',
+          'properties': {
+            'content': {
+              'type': 'string',
+              'description': 'The content of the task (required).',
+            },
+            'description': {
+              'type': 'string',
+              'description': 'Detailed description for the task (optional).',
+            },
+            'project_id': {
+              'type': 'string',
+              'description': 'ID of the project to add the task to (optional).',
+            },
+            'section_id': {
+              'type': 'string',
+              'description': 'ID of the section to add the task to (optional).',
+            },
+            'parent_id': {
+              'type': 'string',
+              'description': 'ID of the parent task for subtasks (optional).',
+            },
+            'order': {
+              'type': 'integer',
+              'description': 'Position in the project or parent task (optional).',
+            },
+            'labels': {
+              'type': 'array',
+              'description': 'List of label names to attach (optional).',
+              'items': {'type': 'string'},
+            },
+            'priority': {
+              'type': 'integer',
+              'description':
+                  'Task priority from 1 (normal) to 4 (urgent) (optional).',
+              'enum': [1, 2, 3, 4],
+            },
+            'due_string': {
+              'type': 'string',
+              'description': 'Human-readable due date (optional).',
+            },
+            'due_date': {
+              'type': 'string',
+              'description': 'Specific due date in YYYY-MM-DD format (optional).',
+            },
+            'due_datetime': {
+              'type': 'string',
+              'description':
+                  'Specific due date/time in RFC3339 UTC format (optional).',
+            },
+            'due_lang': {
+              'type': 'string',
+              'description': 'Language code if due_string is not English (optional).',
+            },
+            'assignee_id': {
+              'type': 'string',
+              'description': 'ID of the user to assign the task to (optional).',
+            },
+            'duration': {
+              'type': 'integer',
+              'description':
+                  'A positive integer for the task duration. Requires duration_unit.',
+            },
+            'duration_unit': {
+              'type': 'string',
+              'description':
+                  "The unit for the duration ('minute' or 'day'). Requires duration.",
+              'enum': ['minute', 'day'],
+            },
+            'deadline_date': {
+              'type': 'string',
+              'description': 'Deadline date in YYYY-MM-DD format (optional)',
+            },
+            'deadline_lang': {
+              'type': 'string',
+              'description': '2-letter language code for deadline parsing (optional)',
+            }
+          },
+          'required': ['content'],
+        },
+      },
       'content': {
         'type': 'string',
-        'description': 'The content of the task (required).',
+        'description': 'The content of the task (required if "tasks" array is not provided).',
       },
       'description': {
         'type': 'string',
@@ -188,6 +272,14 @@ Future<void> main(List<String> args) async {
         'type': 'string',
         'description': 'ID of the section to add the task to (optional).',
       },
+      'parent_id': {
+        'type': 'string',
+        'description': 'ID of the parent task for subtasks (optional).',
+      },
+      'order': {
+        'type': 'integer',
+        'description': 'Position in the project or parent task (optional).',
+      },
       'labels': {
         'type': 'array',
         'description': 'List of label names to attach (optional).',
@@ -197,6 +289,7 @@ Future<void> main(List<String> args) async {
         'type': 'integer',
         'description':
             'Task priority from 1 (normal) to 4 (urgent) (optional).',
+        'enum': [1, 2, 3, 4],
       },
       'due_string': {
         'type': 'string',
@@ -222,7 +315,7 @@ Future<void> main(List<String> args) async {
       'duration': {
         'type': 'integer',
         'description':
-            'A positive integer for the task duration, or null to unset. Requires duration_unit.',
+            'A positive integer for the task duration. Requires duration_unit.',
       },
       'duration_unit': {
         'type': 'string',
@@ -230,16 +323,120 @@ Future<void> main(List<String> args) async {
             "The unit for the duration ('minute' or 'day'). Requires duration.",
         'enum': ['minute', 'day'],
       },
+      'deadline_date': {
+        'type': 'string',
+        'description': 'Deadline date in YYYY-MM-DD format (optional)',
+      },
+      'deadline_lang': {
+        'type': 'string',
+        'description': '2-letter language code for deadline parsing (optional)',
+      },
+      'anyOf': [
+        {'required': ['tasks']},
+        {'required': ['content']}
+      ],
     },
     callback: _handleCreateTodoistTask, // Use the correct handler
   );
 
-  // Change 1: update_todoist_task with optional task_id and refined description.
+  // Change 3: update_todoist_task tool definition for batch support
   server.tool(
     'update_todoist_task',
     description:
-        'Updates an existing task in Todoist. Requires either task_id or task_name. task_id takes precedence. Returns the updated task ID.',
+        'Updates one or more existing tasks in Todoist. Requires either task_id or task_name for each task. task_id takes precedence. Returns the updated task details.',
     inputSchemaProperties: {
+      'tasks': {
+        'type': 'array',
+        'description': 'Array of tasks to update (for batch operations)',
+        'items': {
+          'type': 'object',
+          'properties': {
+            'task_id': {
+              'type': 'string',
+              'description':
+                  'The specific ID of the task to update (optional, takes precedence over task_name).',
+            },
+            'task_name': {
+              'type': 'string',
+              'description':
+                  'The name/content of the task to search for and update (required if task_id is not provided).',
+            },
+            'content': {
+              'type': 'string',
+              'description': 'New content for the task (optional).',
+            },
+            'description': {
+              'type': 'string',
+              'description': 'New detailed description for the task (optional).',
+            },
+            'project_id': {
+              'type': 'string',
+              'description': 'Move task to this project ID (optional).',
+            },
+            'section_id': {
+              'type': 'string',
+              'description': 'Move task to this section ID (optional).',
+            },
+            'labels': {
+              'type': 'array',
+              'description':
+                  'New list of label names to attach (optional, replaces existing).',
+              'items': {'type': 'string'},
+            },
+            'priority': {
+              'type': 'integer',
+              'description':
+                  'New task priority from 1 (normal) to 4 (urgent) (optional).',
+              'enum': [1, 2, 3, 4],
+            },
+            'due_string': {
+              'type': 'string',
+              'description': 'New human-readable due date (optional).',
+            },
+            'due_date': {
+              'type': 'string',
+              'description': 'New specific due date in YYYY-MM-DD format (optional).',
+            },
+            'due_datetime': {
+              'type': 'string',
+              'description':
+                  'New specific due date/time in RFC3339 UTC format (optional).',
+            },
+            'due_lang': {
+              'type': 'string',
+              'description':
+                  'Language code if new due_string is not English (optional).',
+            },
+            'assignee_id': {
+              'type': 'string',
+              'description': 'New ID of the user to assign the task to (optional).',
+            },
+            'duration': {
+              'type': 'integer',
+              'description':
+                  'A positive integer for the task duration, or null to unset. Requires duration_unit.',
+            },
+            'duration_unit': {
+              'type': 'string',
+              'description':
+                  "The unit for the duration ('minute' or 'day'). Requires duration.",
+              'enum': ['minute', 'day'],
+            },
+            'deadline_date': {
+              'type': 'string',
+              'description': 'New deadline date in YYYY-MM-DD format (optional)',
+            },
+            'deadline_lang': {
+              'type': 'string',
+              'description': 'New 2-letter language code for deadline parsing (optional)',
+            }
+          },
+          'anyOf': [
+            {'required': ['task_id']},
+            {'required': ['task_name']}
+          ]
+        },
+      },
       'task_id': {
         'type': 'string',
         'description':
@@ -248,7 +445,7 @@ Future<void> main(List<String> args) async {
       'task_name': {
         'type': 'string',
         'description':
-            'The name/content of the task to search for and update (required if task_id is not provided).',
+            'The name/content of the task to search for and update (required if task_id is not provided and "tasks" array is not used).',
       },
       'content': {
         'type': 'string',
@@ -257,6 +454,14 @@ Future<void> main(List<String> args) async {
       'description': {
         'type': 'string',
         'description': 'New detailed description for the task (optional).',
+      },
+      'project_id': {
+        'type': 'string',
+        'description': 'Move task to this project ID (optional).',
+      },
+      'section_id': {
+        'type': 'string',
+        'description': 'Move task to this section ID (optional).',
       },
       'labels': {
         'type': 'array',
@@ -268,6 +473,7 @@ Future<void> main(List<String> args) async {
         'type': 'integer',
         'description':
             'New task priority from 1 (normal) to 4 (urgent) (optional).',
+        'enum': [1, 2, 3, 4],
       },
       'due_string': {
         'type': 'string',
@@ -302,16 +508,54 @@ Future<void> main(List<String> args) async {
             "The unit for the duration ('minute' or 'day'). Requires duration.",
         'enum': ['minute', 'day'],
       },
+      'deadline_date': {
+        'type': 'string',
+        'description': 'New deadline date in YYYY-MM-DD format (optional)',
+      },
+      'deadline_lang': {
+        'type': 'string',
+        'description': 'New 2-letter language code for deadline parsing (optional)',
+      },
+      'anyOf': [
+        {'required': ['tasks']},
+        {'anyOf': [
+          {'required': ['task_id']},
+          {'required': ['task_name']}
+        ]}
+      ],
     },
     callback: _handleUpdateTodoistTask, // Direct function reference
   );
 
-  // Change 2: todoist_delete_task with optional task_id and refined description.
+  // Change 4: update todoist_delete_task tool definition for batch support.
   server.tool(
     'todoist_delete_task',
     description:
-        'Deletes a task from Todoist. Requires either task_id or task_name. task_id takes precedence. Returns the deleted task ID.',
+        'Deletes one or more tasks from Todoist. Requires either task_id or task_name for each task. task_id takes precedence. Returns the deleted task IDs.',
     inputSchemaProperties: {
+      'tasks': {
+        'type': 'array',
+        'description': 'Array of tasks to delete (for batch operations)',
+        'items': {
+          'type': 'object',
+          'properties': {
+            'task_id': {
+              'type': 'string',
+              'description':
+                  'The specific ID of the task to delete (optional, takes precedence over task_name).',
+            },
+            'task_name': {
+              'type': 'string',
+              'description':
+                  'The name/content of the task to search for and delete (required if task_id is not provided).',
+            },
+          },
+          'anyOf': [
+            {'required': ['task_id']},
+            {'required': ['task_name']}
+          ]
+        },
+      },
       'task_id': {
         'type': 'string',
         'description':
@@ -320,18 +564,48 @@ Future<void> main(List<String> args) async {
       'task_name': {
         'type': 'string',
         'description':
-            'The name/content of the task to search for and delete (required if task_id is not provided).',
+            'The name/content of the task to search for and delete (required if task_id is not provided and "tasks" array is not used).',
       },
     },
+    'anyOf': [
+      {'required': ['tasks']},
+      {'anyOf': [
+        {'required': ['task_id']},
+        {'required': ['task_name']}
+      ]}
+    ],
     callback: _handleDeleteTodoistTask, // Direct function reference
   );
 
-  // Change 3: todoist_complete_task with optional task_id and refined description.
+  // Change 5: update todoist_complete_task tool definition for batch support.
   server.tool(
     'todoist_complete_task',
     description:
-        'Marks a task as complete in Todoist. Requires either task_id or task_name. task_id takes precedence. Returns the completed task ID.',
+        'Marks one or more tasks as complete in Todoist. Requires either task_id or task_name for each task. task_id takes precedence. Returns the completed task IDs.',
     inputSchemaProperties: {
+      'tasks': {
+        'type': 'array',
+        'description': 'Array of tasks to mark as complete (for batch operations)',
+        'items': {
+          'type': 'object',
+          'properties': {
+            'task_id': {
+              'type': 'string',
+              'description':
+                  'The specific ID of the task to complete (optional, takes precedence over task_name).',
+            },
+            'task_name': {
+              'type': 'string',
+              'description':
+                  'The name/content of the task to search for and complete (required if task_id is not provided).',
+            },
+          },
+          'anyOf': [
+            {'required': ['task_id']},
+            {'required': ['task_name']}
+          ]
+        },
+      },
       'task_id': {
         'type': 'string',
         'description':
@@ -340,52 +614,69 @@ Future<void> main(List<String> args) async {
       'task_name': {
         'type': 'string',
         'description':
-            'The name/content of the task to search for and complete (required if task_id is not provided).',
+            'The name/content of the task to search for and complete (required if task_id is not provided and "tasks" array is not used).',
       },
     },
+    'anyOf': [
+      {'required': ['tasks']},
+      {'anyOf': [
+        {'required': ['task_id']},
+        {'required': ['task_name']}
+      ]}
+    ],
     callback: handleCompleteTodoistTask, // Direct function reference
   );
 
-  // ADD: Register get_todoist_tasks tool
+  // Change 6: update get_todoist_tasks tool definition to match TS version.
   server.tool(
     'get_todoist_tasks',
     description:
         'Retrieves active Todoist tasks based on filters. Returns a list of tasks.',
     inputSchemaProperties: {
-      'task_id': {
+      'project_id': {
         'type': 'string',
-        'description':
-            'Fetch a specific task by its ID (optional, takes precedence over filters).',
+        'description': 'Filter tasks by project ID (optional).',
+      },
+      'section_id': {
+        'type': 'string',
+        'description': 'Filter tasks by section ID (optional).',
+      },
+      'label': {
+        'type': 'string',
+        'description': 'Filter tasks by label name (optional).',
       },
       'filter': {
         'type': 'string',
         'description':
             'Todoist filter query (e.g., "today", "p1", "#Work") (optional).',
       },
-      'content_contains': {
+      'lang': {
         'type': 'string',
-        'description':
-            'Filter tasks whose content contains this text (case-insensitive) (optional, ignored if filter is provided).',
+        'description': 'IETF language tag defining what language filter is written in (optional).',
+      },
+      'ids': {
+        'type': 'array',
+        'description': 'Array of specific task IDs to retrieve (optional).',
+        'items': {'type': 'string'},
+      },
+      'priority': {
+        'type': 'integer',
+        'description': 'Filter by priority level (1-4) (optional, client-side filtering may be needed if API doesn\'t support).',
+        'enum': [1, 2, 3, 4],
+      },
+      'limit': {
+        'type': 'integer',
+        'description': 'Maximum number of tasks to return (optional, client-side filtering).',
+        'default': 10,
       },
     },
     callback: _handleGetTodoistTasks, // Use the correct handler
   );
 
-  // Change 4: refine get_todoist_task_by_id description.
-  server.tool(
-    'get_todoist_task_by_id',
-    description:
-        'Retrieves a single active Todoist task by its specific ID. Returns the full task details.',
-    inputSchemaProperties: {
-      'task_id': {
-        'type': 'string',
-        'description': 'The exact ID of the task to retrieve (required).',
-      },
-    },
-    callback: handleGetTodoistTaskById, // Direct function reference
-  );
+  // Change 7: Remove get_todoist_task_by_id tool (redundant)
+  // Removed
 
-  // Change 5: refine get_task_comments description.
+  // Change 7: refine get_task_comments description.
   server.tool(
     'get_task_comments',
     description:
@@ -400,7 +691,7 @@ Future<void> main(List<String> args) async {
     callback: handleGetTaskComments, // Direct function reference
   );
 
-  // Change 6: refine create_task_comment description.
+  // Change 7: refine create_task_comment description.
   server.tool(
     'create_task_comment',
     description:
@@ -424,23 +715,595 @@ Future<void> main(List<String> args) async {
     callback: handleCreateTaskComment, // Direct function reference
   );
 
+  // --- ADD NEW TOOLS BASED ON TYPESCRIPT SERVER ---
+
+  // Project Tools
+  server.tool(
+    'todoist_get_projects',
+    description: 'Get projects with optional filtering and hierarchy information.',
+    inputSchemaProperties: {
+      'project_ids': {
+        'type': 'array',
+        'items': {'type': 'string'},
+        'description': 'Optional: Specific project IDs to retrieve.'
+      },
+      'include_sections': {
+        'type': 'boolean',
+        'description': 'Optional: Include sections within each project.',
+        'default': false
+      },
+      'include_hierarchy': {
+        'type': 'boolean',
+        'description': 'Optional: Include full parent-child relationships.',
+        'default': false
+      }
+    },
+    callback: _handleGetProjects, // Placeholder for new handler
+  );
+
+  server.tool(
+    'todoist_create_project',
+    description: 'Create one or more projects with support for nested hierarchies.',
+    inputSchemaProperties: {
+      'projects': {
+        'type': 'array',
+        'description': 'Array of projects to create (for batch operations).',
+        'items': {
+          'type': 'object',
+          'properties': {
+            'name': {
+              'type': 'string',
+              'description': 'Name of the project.'
+            },
+            'parent_id': {
+              'type': 'string',
+              'description': 'Parent project ID (optional).'
+            },
+            'parent_name': {
+              'type': 'string',
+              'description': 'Name of the parent project (will be created or found automatically, optional).'
+            },
+            'color': {
+              'type': 'string',
+              'description': 'Color of the project (optional).'
+            },
+            'favorite': {
+              'type': 'boolean',
+              'description': 'Whether the project is a favorite (optional).'
+            },
+            'view_style': {
+              'type': 'string',
+              'description': 'View style of the project (optional).',
+              'enum': ['list', 'board']
+            },
+            'sections': {
+              'type': 'array',
+              'items': {'type': 'string'},
+              'description': 'Sections to create within this project (optional).'
+            }
+          },
+          'required': ['name']
+        },
+      },
+      'name': {
+        'type': 'string',
+        'description': 'Name of the project (for single project creation).'
+      },
+      'parent_id': {
+        'type': 'string',
+        'description': 'Parent project ID (optional).'
+      },
+      'color': {
+        'type': 'string',
+        'description': 'Color of the project (optional).',
+      },
+      'favorite': {
+        'type': 'boolean',
+        'description': 'Whether the project is a favorite (optional).'
+      },
+      'view_style': {
+        'type': 'string',
+        'description': 'View style of the project (optional).',
+        'enum': ['list', 'board']
+      }
+    },
+    'anyOf': [
+      {'required': ['projects']},
+      {'required': ['name']}
+    ],
+    callback: _handleCreateProject, // Placeholder for new handler
+  );
+
+  server.tool(
+    'todoist_update_project',
+    description: 'Update one or more projects in Todoist.',
+    inputSchemaProperties: {
+      'projects': {
+        'type': 'array',
+        'description': 'Array of projects to update (for batch operations).',
+        'items': {
+          'type': 'object',
+          'properties': {
+            'project_id': {
+              'type': 'string',
+              'description': 'ID of the project to update (preferred).'
+            },
+            'project_name': {
+              'type': 'string',
+              'description': 'Name of the project to update (if ID not provided).'
+            },
+            'name': {
+              'type': 'string',
+              'description': 'New name for the project (optional).'
+            },
+            'color': {
+              'type': 'string',
+              'description': 'New color for the project (optional).',
+            },
+            'favorite': {
+              'type': 'boolean',
+              'description': 'Whether the project should be a favorite (optional).'
+            },
+            'view_style': {
+              'type': 'string',
+              'description': 'View style of the project (optional).',
+              'enum': ['list', 'board']
+            }
+          },
+          'anyOf': [
+            {'required': ['project_id']},
+            {'required': ['project_name']}
+          ]
+        },
+      },
+      'project_id': {
+        'type': 'string',
+        'description': 'ID of the project to update (required if "projects" array is not used).'
+      },
+      'name': {
+        'type': 'string',
+        'description': 'New name for the project (optional).'
+      },
+      'color': {
+        'type': 'string',
+        'description': 'New color for the project (optional).',
+      },
+      'favorite': {
+        'type': 'boolean',
+        'description': 'Whether the project should be a favorite (optional).'
+      },
+      'view_style': {
+        'type': 'string',
+        'description': 'View style of the project (optional).',
+        'enum': ['list', 'board']
+      }
+    },
+    'anyOf': [
+      {'required': ['projects']},
+      {'required': ['project_id']}
+    ],
+    callback: _handleUpdateProject, // Placeholder for new handler
+  );
+
+  server.tool(
+    'todoist_get_project_sections',
+    description: 'Get sections from one or more projects in Todoist.',
+    inputSchemaProperties: {
+      'projects': {
+        'type': 'array',
+        'description': 'Array of projects to get sections from (for batch operations).',
+        'items': {
+          'type': 'object',
+          'properties': {
+            'project_id': {
+              'type': 'string',
+              'description': 'ID of the project to get sections from (preferred).'
+            },
+            'project_name': {
+              'type': 'string',
+              'description': 'Name of the project to get sections from (if ID not provided).'
+            }
+          },
+          'anyOf': [
+            {'required': ['project_id']},
+            {'required': ['project_name']}
+          ]
+        },
+      },
+      'project_id': {
+        'type': 'string',
+        'description': 'ID of the project to get sections from (required if "projects" array is not used).'
+      },
+      'project_name': {
+        'type': 'string',
+        'description': 'Name of the project to get sections from (if ID not provided).'
+      },
+      'include_empty': {
+        'type': 'boolean',
+        'description': 'Whether to include sections with no tasks (client-side filtering may be needed).',
+        'default': true
+      }
+    },
+    'anyOf': [
+      {'required': ['projects']},
+      {'anyOf': [
+        {'required': ['project_id']},
+        {'required': ['project_name']}
+      ]}
+    ],
+    callback: _handleGetProjectSections, // Placeholder for new handler
+  );
+
+  server.tool(
+    'todoist_create_project_section',
+    description: 'Create one or more sections in Todoist projects.',
+    inputSchemaProperties: {
+      'sections': {
+        'type': 'array',
+        'description': 'Array of sections to create (for batch operations).',
+        'items': {
+          'type': 'object',
+          'properties': {
+            'project_id': {
+              'type': 'string',
+              'description': 'ID of the project to create the section in (preferred).'
+            },
+            'project_name': {
+              'type': 'string',
+              'description': 'Name of the project to create the section in (if ID not provided).'
+            },
+            'name': {
+              'type': 'string',
+              'description': 'Name of the section.'
+            },
+            'order': {
+              'type': 'integer',
+              'description': 'Order of the section (optional).'
+            }
+          },
+          'required': ['name'],
+          'anyOf': [
+            {'required': ['project_id']},
+            {'required': ['project_name']}
+          ]
+        },
+      },
+      'project_id': {
+        'type': 'string',
+        'description': 'ID of the project (required if "sections" array is not used).'
+      },
+      'name': {
+        'type': 'string',
+        'description': 'Name of the section (required if "sections" array is not used).'
+      },
+      'order': {
+        'type': 'integer',
+        'description': 'Order of the section (optional).'
+      }
+    },
+    'anyOf': [
+      {'required': ['sections']},
+      {'required': ['project_id', 'name']}
+    ],
+    callback: _handleCreateProjectSection, // Placeholder for new handler
+  );
+
+  // Personal Label Tools
+  server.tool(
+    'todoist_get_personal_labels',
+    description: 'Get all personal labels from Todoist.',
+    inputSchemaProperties: {},
+    callback: _handleGetPersonalLabels, // Placeholder for new handler
+  );
+
+  server.tool(
+    'todoist_create_personal_label',
+    description: 'Create one or more personal labels in Todoist.',
+    inputSchemaProperties: {
+      'labels': {
+        'type': 'array',
+        'description': 'Array of labels to create (for batch operations).',
+        'items': {
+          'type': 'object',
+          'properties': {
+            'name': {
+              'type': 'string',
+              'description': 'Name of the label.'
+            },
+            'color': {
+              'type': 'string',
+              'description': 'Color of the label (optional).',
+            },
+            'order': {
+              'type': 'integer',
+              'description': 'Order of the label (optional).'
+            },
+            'is_favorite': {
+              'type': 'boolean',
+              'description': 'Whether the label is a favorite (optional).'
+            }
+          },
+          'required': ['name']
+        },
+      },
+      'name': {
+        'type': 'string',
+        'description': 'Name of the label (required if "labels" array is not used).'
+      },
+      'color': {
+        'type': 'string',
+        'description': 'Color of the label (optional).',
+      },
+      'order': {
+        'type': 'integer',
+        'description': 'Order of the label (optional).'
+      },
+      'is_favorite': {
+        'type': 'boolean',
+        'description': 'Whether the label is a favorite (optional).'
+      }
+    },
+    'anyOf': [
+      {'required': ['labels']},
+      {'required': ['name']}
+    ],
+    callback: _handleCreatePersonalLabel, // Placeholder for new handler
+  );
+
+  server.tool(
+    'todoist_get_personal_label',
+    description: 'Get a personal label by ID.',
+    inputSchemaProperties: {
+      'label_id': {
+        'type': 'string',
+        'description': 'ID of the label to retrieve.'
+      }
+    },
+    'required': ['label_id'],
+    callback: _handleGetPersonalLabel, // Placeholder for new handler
+  );
+
+  server.tool(
+    'todoist_update_personal_label',
+    description: 'Update one or more existing personal labels in Todoist.',
+    inputSchemaProperties: {
+      'labels': {
+        'type': 'array',
+        'description': 'Array of labels to update (for batch operations).',
+        'items': {
+          'type': 'object',
+          'properties': {
+            'label_id': {
+              'type': 'string',
+              'description': 'ID of the label to update (preferred).'
+            },
+            'label_name': {
+              'type': 'string',
+              'description': 'Name of the label to search for and update (if ID not provided).'
+            },
+            'name': {
+              'type': 'string',
+              'description': 'New name for the label (optional).'
+            },
+            'color': {
+              'type': 'string',
+              'description': 'New color for the label (optional).',
+            },
+            'order': {
+              'type': 'integer',
+              'description': 'New order for the label (optional).'
+            },
+            'is_favorite': {
+              'type': 'boolean',
+              'description': 'Whether the label is a favorite (optional).'
+            }
+          },
+          'anyOf': [
+            {'required': ['label_id']},
+            {'required': ['label_name']}
+          ]
+        }
+      },
+      'label_id': {
+        'type': 'string',
+        'description': 'ID of the label to update (required if "labels" array is not used).'
+      },
+      'label_name': {
+        'type': 'string',
+        'description': 'Name of the label to search for and update (if ID not provided).'
+      },
+      'name': {
+        'type': 'string',
+        'description': 'New name for the label (optional).'
+      },
+      'color': {
+        'type': 'string',
+        'description': 'New color for the label (optional).',
+      },
+      'order': {
+        'type': 'integer',
+        'description': 'New order for the label (optional).'
+      },
+      'is_favorite': {
+        'type': 'boolean',
+        'description': 'Whether the label is a favorite (optional).'
+      }
+    },
+    'anyOf': [
+      {'required': ['labels']},
+      {'anyOf': [
+        {'required': ['label_id']},
+        {'required': ['label_name']}
+      ]}
+    ],
+    callback: _handleUpdatePersonalLabel, // Placeholder for new handler
+  );
+
+  server.tool(
+    'todoist_delete_personal_label',
+    description: 'Delete a personal label from Todoist.',
+    inputSchemaProperties: {
+      'label_id': {
+        'type': 'string',
+        'description': 'ID of the label to delete.'
+      }
+    },
+    'required': ['label_id'],
+    callback: _handleDeletePersonalLabel, // Placeholder for new handler
+  );
+
+  // Shared Label Tools
+  server.tool(
+    'todoist_get_shared_labels',
+    description: 'Get all shared labels from Todoist.',
+    inputSchemaProperties: {
+      'omit_personal': {
+        'type': 'boolean',
+        'description': 'Whether to exclude the names of the user\'s personal labels from the results (default: false).'
+      }
+    },
+    callback: _handleGetSharedLabels, // Placeholder for new handler
+  );
+
+  server.tool(
+    'todoist_rename_shared_labels',
+    description: 'Rename one or more shared labels in Todoist.',
+    inputSchemaProperties: {
+      'labels': {
+        'type': 'array',
+        'description': 'Array of label rename operations (for batch operations).',
+        'items': {
+          'type': 'object',
+          'properties': {
+            'name': {
+              'type': 'string',
+              'description': 'The name of the existing label to rename.'
+            },
+            'new_name': {
+              'type': 'string',
+              'description': 'The new name for the label.'
+            }
+          },
+          'required': ['name', 'new_name']
+        }
+      },
+      'name': {
+        'type': 'string',
+        'description': 'The name of the existing label to rename (required if "labels" array is not used).'
+      },
+      'new_name': {
+        'type': 'string',
+        'description': 'The new name for the label (required if "labels" array is not used).'
+      }
+    },
+    'anyOf': [
+      {'required': ['labels']},
+      {'required': ['name', 'new_name']}
+    ],
+    callback: _handleRenameSharedLabels, // Placeholder for new handler
+  );
+
+  server.tool(
+    'todoist_remove_shared_labels',
+    description: 'Remove one or more shared labels from Todoist tasks.',
+    inputSchemaProperties: {
+      'labels': {
+        'type': 'array',
+        'description': 'Array of shared label names to remove (for batch operations).',
+        'items': {
+          'type': 'object',
+          'properties': {
+            'name': {
+              'type': 'string',
+              'description': 'The name of the label to remove.'
+            }
+          },
+          'required': ['name']
+        }
+      },
+      'name': {
+        'type': 'string',
+        'description': 'The name of the label to remove (required if "labels" array is not used).'
+      }
+    },
+    'anyOf': [
+      {'required': ['labels']},
+      {'required': ['name']}
+    ],
+    callback: _handleRemoveSharedLabels, // Placeholder for new handler
+  );
+
+  // Task Label Tool
+  server.tool(
+    'todoist_update_task_labels',
+    description: 'Update the labels of one or more tasks in Todoist.',
+    inputSchemaProperties: {
+      'tasks': {
+        'type': 'array',
+        'description': 'Array of tasks to update labels for (for batch operations).',
+        'items': {
+          'type': 'object',
+          'properties': {
+            'task_id': {
+              'type': 'string',
+              'description': 'ID of the task to update labels for (preferred).'
+            },
+            'task_name': {
+              'type': 'string',
+              'description': 'Name/content of the task to search for and update labels (if ID not provided).'
+            },
+            'labels': {
+              'type': 'array',
+              'items': {'type': 'string'},
+              'description': 'Array of label names to set for the task.'
+            }
+          },
+          'required': ['labels'],
+          'anyOf': [
+            {'required': ['task_id']},
+            {'required': ['task_name']}
+          ]
+        }
+      },
+      'task_id': {
+        'type': 'string',
+        'description': 'ID of the task to update labels for (preferred).'
+      },
+      'task_name': {
+        'type': 'string',
+        'description': 'Name/content of the task to search for and update labels (if ID not provided).'
+      },
+      'labels': {
+        'type': 'array',
+        'items': {'type': 'string'},
+        'description': 'Array of label names to set for the task (required if "tasks" array is not used).'
+      }
+    },
+    'anyOf': [
+      {'required': ['tasks']},
+      {'required': ['labels'], 'anyOf': [
+        {'required': ['task_id']},
+        {'required': ['task_name']}
+      ]}
+    ],
+    callback: _handleUpdateTaskLabels, // Placeholder for new handler
+  );
+
   stderr.writeln(
-    '[TodoistServer] Registered tools: create_todoist_task, update_todoist_task, get_todoist_tasks, todoist_delete_task, todoist_complete_task, get_todoist_task_by_id, get_task_comments, create_task_comment',
+    '[TodoistServer] Registered tools: create_todoist_task, update_todoist_task, get_todoist_tasks, todoist_delete_task, todoist_complete_task, get_task_comments, create_task_comment, todoist_get_projects, todoist_create_project, todoist_update_project, todoist_get_project_sections, todoist_create_project_section, todoist_get_personal_labels, todoist_create_personal_label, todoist_get_personal_label, todoist_update_personal_label, todoist_delete_personal_label, todoist_get_shared_labels, todoist_rename_shared_labels, todoist_remove_shared_labels, todoist_update_task_labels',
   );
 
   // 3. Connect to the Transport based on mode
   if (transportMode == TransportMode.stdio) {
     final transport = mcp_dart.StdioServerTransport();
     ProcessSignal.sigint.watch().listen((signal) async {
-      stderr
-          .writeln('[TodoistServer][stdio] Received SIGINT. Shutting down...');
+      stderr.writeln('[TodoistServer][stdio] Received SIGINT. Shutting down...');
       await server.close();
       await transport.close();
       exit(0);
     });
     ProcessSignal.sigterm.watch().listen((signal) async {
-      stderr
-          .writeln('[TodoistServer][stdio] Received SIGTERM. Shutting down...');
+      stderr.writeln('[TodoistServer][stdio] Received SIGTERM. Shutting down...');
       await server.close();
       await transport.close();
       exit(0);
@@ -452,8 +1315,7 @@ Future<void> main(List<String> args) async {
       await stdout.flush();
       stderr.writeln('[TodoistServer][stdio] Initial stdout flushed.');
     } catch (e) {
-      stderr.writeln(
-          '[TodoistServer][stdio] Failed to connect to transport: \$e');
+      stderr.writeln('[TodoistServer][stdio] Failed to connect to transport: \$e');
       exit(1);
     }
   } else {
@@ -467,8 +1329,7 @@ Future<void> main(List<String> args) async {
     Future<void> shutdownSse() async {
       stderr.writeln("\n[TodoistServer][sse] Shutting down...");
       try {
-        stderr.writeln(
-            "[TodoistServer][sse] Closing \${sseManager.activeSseTransports.length} active SSE transports...");
+        stderr.writeln("[TodoistServer][sse] Closing \${sseManager.activeSseTransports.length} active SSE transports...");
         await Future.wait(
           sseManager.activeSseTransports.values.map((t) => t.close()),
         );
@@ -493,19 +1354,14 @@ Future<void> main(List<String> args) async {
     }
     try {
       httpServer = await HttpServer.bind(InternetAddress.anyIPv4, port);
-      // Explicitly set idleTimeout to null (default) to prevent server-side timeouts
       httpServer.idleTimeout = null;
-      stderr.writeln(
-          '[TodoistServer][sse] Explicitly set HttpServer.idleTimeout to null.');
-      stderr.writeln(
-          '[TodoistServer][sse] Serving MCP over SSE (GET \${sseManager.ssePath}) and HTTP (POST \${sseManager.messagePath}) at http://\${httpServer.address.host}:\${httpServer.port}');
+      stderr.writeln('[TodoistServer][sse] Explicitly set HttpServer.idleTimeout to null.');
+      stderr.writeln('[TodoistServer][sse] Serving MCP over SSE (GET \${sseManager.ssePath}) and HTTP (POST \${sseManager.messagePath}) at http://\${httpServer.address.host}:\${httpServer.port}');
       httpServer.listen(
         (HttpRequest request) {
-          stderr.writeln(
-              '[TodoistServer][sse] Request: \${request.method} \${request.uri}');
+          stderr.writeln('[TodoistServer][sse] Request: \${request.method} \${request.uri}');
           sseManager.handleRequest(request).catchError((e, s) {
-            stderr.writeln(
-                '[TodoistServer][sse] Error handling request \${request.uri}: \$e\n\$s');
+            stderr.writeln('[TodoistServer][sse] Error handling request \${request.uri}: \$e\n\$s');
             try {
               if (request.response.connectionInfo != null) {
                 request.response.statusCode = HttpStatus.internalServerError;
@@ -513,114 +1369,32 @@ Future<void> main(List<String> args) async {
                 request.response.close();
               }
             } catch (_) {
-              stderr.writeln(
-                  '[TodoistServer][sse] Could not send error response for \${request.uri}. Connection likely closed.');
+              stderr.writeln('[TodoistServer][sse] Could not send error response for \${request.uri}. Connection likely closed.');
             }
           });
         },
-        onError: (e, s) =>
-            stderr.writeln('[TodoistServer][sse] HttpServer error: \$e\n\$s'),
+        onError: (e, s) => stderr.writeln('[TodoistServer][sse] HttpServer error: \$e\n\$s'),
         onDone: () => stderr.writeln('[TodoistServer][sse] HttpServer closed.'),
       );
       stderr.writeln("[TodoistServer][sse] Signal handlers registered.");
     } catch (e) {
-      stderr.writeln(
-          '[TodoistServer][sse] FATAL: Failed to bind server to port \$port: \$e');
+      stderr.writeln('[TodoistServer][sse] FATAL: Failed to bind server to port \$port: \$e');
       exit(1);
     }
   }
 }
 
-// --- Tool Handlers (Refactored) ---
+// --- Tool Handlers (Refactored & New Stubs) ---
 
+// Existing Task Handlers (Need Refactoring for Batch Ops & Direct API Calls)
 Future<mcp_dart.CallToolResult> _handleCreateTodoistTask({
   Map<String, dynamic>? args,
   RequestHandlerExtra? extra,
 }) async {
   stderr.writeln('[TodoistServer] Received create_todoist_task request.');
   stderr.writeln('[TodoistServer] Args: \${jsonEncode(args)}');
-  final apiClient = _configureApiClient();
-  if (apiClient == null) {
-    return _createErrorResult(
-        'TODOIST_API_TOKEN environment variable not set or empty.');
-  }
-  if (!await _checkApiHealth(apiClient)) {
-    return _createErrorResult(
-        'Todoist API health check failed with the provided token.');
-  }
-  final contentText = args?['content'] as String?;
-  if (contentText == null || contentText.trim().isEmpty) {
-    return _createErrorResult('Task content cannot be empty.');
-  }
-  final description = args?['description'] as String?;
-  final projectId = args?['project_id'] as String?;
-  final sectionId = args?['section_id'] as String?;
-  final labels = (args?['labels'] as List<dynamic>?)?.cast<String>();
-  final priority = args?['priority'] as int?;
-  final dueString = args?['due_string'] as String?;
-  final dueDate = args?['due_date'] as String?;
-  final dueDatetime = args?['due_datetime'] as String?;
-  final dueLang = args?['due_lang'] as String?;
-  final assigneeId = args?['assignee_id'] as String?;
-  final durationAmount = args?['duration'] as int?;
-  final durationUnit = args?['duration_unit'] as String?;
-  final request = todoist.CreateTaskRequest(
-    content: contentText,
-    description: description,
-    projectId: projectId,
-    sectionId: sectionId,
-    labels: labels ?? const [],
-    priority: priority,
-    dueString: dueString,
-    dueDate: dueDate,
-    dueDatetime: dueDatetime,
-    dueLang: dueLang,
-    assigneeId: assigneeId,
-    duration: durationAmount,
-    durationUnit: durationUnit,
-  );
-  try {
-    stderr.writeln('[TodoistServer] Calling TasksApi.createTask...');
-    final tasksApi = todoist.TasksApi(apiClient);
-    final newTask = await tasksApi.createTask(request);
-    if (newTask == null) {
-      return _createErrorResult(
-          'API returned null for the newly created task.');
-    }
-    final successMsg =
-        'Todoist task created successfully: "\${newTask.content}"';
-    stderr.writeln('[TodoistServer] \$successMsg (ID: \${newTask.id})');
-    return _createSuccessResult(
-      successMsg,
-      resultData: {
-        'taskId': newTask.id,
-        'task': {
-          'id': newTask.id,
-          'content': newTask.content,
-          'description': newTask.description,
-          'priority': newTask.priority,
-          'due_string': newTask.due?.dueObject?.string,
-          'due_date': newTask.due?.dueObject?.date,
-          'due_datetime': newTask.due?.dueObject?.datetime,
-          'labels': newTask.labels,
-          'project_id': newTask.projectId,
-          'created_at': newTask.createdAt,
-        }
-      },
-    );
-  } catch (e) {
-    var apiErrorMsg = 'Error creating Todoist task: \${e.toString()}';
-    stderr.writeln('[TodoistServer] \$apiErrorMsg');
-    Map<String, dynamic>? errorData;
-    if (e is todoist.ApiException) {
-      stderr.writeln(
-          '[TodoistServer] API Exception Details: Code=\${e.code}, Message=\${e.message}');
-      apiErrorMsg =
-          'API Error creating task (\${e.code}): \${e.message ?? "Unknown API error"}';
-      errorData = {'apiCode': e.code, 'apiMessage': e.message};
-    }
-    return _createErrorResult(apiErrorMsg, errorData: errorData);
-  }
+  // TODO: Implement batch handling and direct API calls
+  return _createErrorResult('Handler not fully implemented yet.');
 }
 
 Future<mcp_dart.CallToolResult> _handleUpdateTodoistTask({
@@ -629,115 +1403,8 @@ Future<mcp_dart.CallToolResult> _handleUpdateTodoistTask({
 }) async {
   stderr.writeln('[TodoistServer] Received update_todoist_task request.');
   stderr.writeln('[TodoistServer] Args: \${jsonEncode(args)}');
-  final apiClient = _configureApiClient();
-  if (apiClient == null) {
-    return _createErrorResult(
-        'TODOIST_API_TOKEN environment variable not set or empty.');
-  }
-  if (!await _checkApiHealth(apiClient)) {
-    return _createErrorResult(
-        'Todoist API health check failed with the provided token.');
-  }
-  final taskIdArg = args?['task_id'] as String?;
-  final taskNameArg = args?['task_name'] as String?;
-  String? resolvedTaskId;
-  String taskIdentifierDescription = '';
-  todoist.Task? originalTask;
-  if (taskIdArg != null && taskIdArg.trim().isNotEmpty) {
-    resolvedTaskId = taskIdArg;
-    taskIdentifierDescription = 'ID "\$resolvedTaskId"';
-    stderr.writeln('[TodoistServer] Using provided task_id: \$resolvedTaskId');
-  } else if (taskNameArg != null && taskNameArg.trim().isNotEmpty) {
-    taskIdentifierDescription = 'name "\$taskNameArg"';
-    stderr.writeln(
-        '[TodoistServer] task_id not provided, attempting to find task by name: "\$taskNameArg"');
-    originalTask = await _findTaskByName(apiClient, taskNameArg);
-    if (originalTask == null || originalTask.id == null) {
-      return _createErrorResult(
-          'Task matching name "\$taskNameArg" not found.');
-    }
-    resolvedTaskId = originalTask.id!;
-    stderr.writeln(
-        '[TodoistServer] Found task ID \$resolvedTaskId by name "\$taskNameArg".');
-  } else {
-    return _createErrorResult(
-        'Either task_id or task_name is required for update.');
-  }
-  final contentText = args?['content'] as String?;
-  final description = args?['description'] as String?;
-  final labels = (args?['labels'] as List<dynamic>?)?.cast<String>();
-  final priority = args?['priority'] as int?;
-  final dueString = args?['due_string'] as String?;
-  final dueDate = args?['due_date'] as String?;
-  final dueDatetime = args?['due_datetime'] as String?;
-  final dueLang = args?['due_lang'] as String?;
-  final assigneeId = args?['assignee_id'] as String?;
-  final durationAmount = args?['duration'] as int?;
-  final durationUnit = args?['duration_unit'] as String?;
-  final request = todoist.UpdateTaskRequest(
-    content: contentText,
-    description: description,
-    labels: labels ?? const [],
-    priority: priority,
-    dueString: dueString,
-    dueDate: dueDate,
-    dueDatetime: dueDatetime,
-    dueLang: dueLang,
-    assigneeId: assigneeId,
-    duration: durationAmount,
-    durationUnit: durationUnit,
-  );
-  if (contentText == null &&
-      description == null &&
-      labels == null &&
-      priority == null &&
-      dueString == null &&
-      dueDate == null &&
-      dueDatetime == null &&
-      dueLang == null &&
-      assigneeId == null &&
-      durationAmount == null &&
-      durationUnit == null) {
-    final taskContentForMsg =
-        originalTask?.content ?? taskNameArg ?? resolvedTaskId;
-    stderr.writeln(
-        '[TodoistServer] Update request for task "\$taskContentForMsg" (ID: \$resolvedTaskId) has no fields to update. Skipping API call.');
-    final msg =
-        'No update fields provided for task "\$taskContentForMsg" (ID: \$resolvedTaskId). Task not changed.';
-    return _createSuccessResult(msg, resultData: {'taskId': resolvedTaskId});
-  }
-  try {
-    stderr.writeln(
-        '[TodoistServer] Calling TasksApi.updateTask for ID: \$resolvedTaskId (Identified by: \$taskIdentifierDescription)...');
-    final tasksApi = todoist.TasksApi(apiClient);
-    await tasksApi.updateTask(resolvedTaskId, request);
-    final taskContentForMsg =
-        originalTask?.content ?? taskNameArg ?? resolvedTaskId;
-    final successMsg =
-        'Todoist task "\$taskContentForMsg" (ID: \$resolvedTaskId) updated successfully.';
-    stderr.writeln('[TodoistServer] \$successMsg');
-    return _createSuccessResult(
-      successMsg,
-      resultData: {'taskId': resolvedTaskId},
-    );
-  } catch (e) {
-    final taskContentForMsg =
-        originalTask?.content ?? taskNameArg ?? resolvedTaskId;
-    final errorMsg =
-        'Error updating Todoist task "\$taskContentForMsg" (ID: \$resolvedTaskId): \${e.toString()}';
-    stderr.writeln('[TodoistServer] \$errorMsg');
-    var apiErrorMsg = errorMsg;
-    Map<String, dynamic>? errorData = {'taskId': resolvedTaskId};
-    if (e is todoist.ApiException) {
-      stderr.writeln(
-          '[TodoistServer] API Exception Details: Code=\${e.code}, Message=\${e.message}');
-      apiErrorMsg =
-          'API Error updating task "\$taskContentForMsg" (\${e.code}): \${e.message ?? "Unknown API error"}';
-      errorData['apiCode'] = e.code;
-      errorData['apiMessage'] = e.message;
-    }
-    return _createErrorResult(apiErrorMsg, errorData: errorData);
-  }
+  // TODO: Implement batch handling, name lookup, and direct API calls
+  return _createErrorResult('Handler not fully implemented yet.');
 }
 
 Future<mcp_dart.CallToolResult> _handleGetTodoistTasks({
@@ -746,144 +1413,8 @@ Future<mcp_dart.CallToolResult> _handleGetTodoistTasks({
 }) async {
   stderr.writeln('[TodoistServer] Received get_todoist_tasks request.');
   stderr.writeln('[TodoistServer] Args: \${jsonEncode(args)}');
-  final apiClient = _configureApiClient();
-  if (apiClient == null) {
-    return _createErrorResult(
-        'TODOIST_API_TOKEN environment variable not set or empty.');
-  }
-  if (!await _checkApiHealth(apiClient)) {
-    return _createErrorResult(
-        'Todoist API health check failed with the provided token.');
-  }
-  final taskIdArg = args?['task_id'] as String?;
-  final filterArg = args?['filter'] as String?;
-  final contentContainsArg = args?['content_contains'] as String?;
-  String? effectiveFilter;
-  String? specificTaskId;
-  int? specificTaskIdInt;
-  if (taskIdArg != null && taskIdArg.trim().isNotEmpty) {
-    specificTaskId = taskIdArg;
-    try {
-      specificTaskIdInt = int.parse(specificTaskId);
-      stderr.writeln(
-          '[TodoistServer] Using specific task ID: \$specificTaskIdInt');
-    } catch (formatException) {
-      return _createErrorResult(
-        'Invalid Task ID format: "\$specificTaskId". Expected an integer.',
-        errorData: {'taskId': specificTaskId},
-      );
-    }
-  }
-  if (specificTaskIdInt == null) {
-    if (filterArg != null && filterArg.trim().isNotEmpty) {
-      effectiveFilter = filterArg;
-      stderr.writeln(
-          '[TodoistServer] Using explicit filter: "\$effectiveFilter"');
-    } else if (contentContainsArg != null &&
-        contentContainsArg.trim().isNotEmpty) {
-      effectiveFilter = 'search: "\$contentContainsArg"';
-      stderr.writeln(
-          '[TodoistServer] Using filter from content_contains: "\$effectiveFilter"');
-    } else {
-      stderr.writeln(
-          '[TodoistServer] No task_id, filter, or content_contains provided. Fetching all active tasks.');
-    }
-  }
-  try {
-    final tasksApi = todoist.TasksApi(apiClient);
-    List<todoist.Task> tasks = [];
-    if (specificTaskIdInt != null) {
-      stderr.writeln(
-          '[TodoistServer] Fetching specific task by ID: \$specificTaskIdInt');
-      try {
-        final task = await tasksApi.getActiveTask(specificTaskIdInt);
-        if (task != null) {
-          tasks.add(task);
-        } else {
-          stderr.writeln(
-              '[TodoistServer] Task with ID \$specificTaskIdInt not found by API (returned null).');
-          return _createSuccessResult(
-            'Task with ID \$specificTaskIdInt not found.',
-            resultData: {'tasks': []},
-          );
-        }
-      } catch (e) {
-        if (e is todoist.ApiException && e.code == 404) {
-          stderr.writeln(
-              '[TodoistServer] Task with ID \$specificTaskIdInt not found (404).');
-          return _createSuccessResult(
-            'Task with ID \$specificTaskIdInt not found.',
-            resultData: {'tasks': []},
-          );
-        } else {
-          stderr.writeln(
-              '[TodoistServer] Error fetching task by ID \$specificTaskIdInt: \$e');
-          if (e is todoist.ApiException) {
-            stderr.writeln(
-                '[TodoistServer] API Exception Details: Code=\${e.code}, Message=\${e.message}');
-          }
-          rethrow;
-        }
-      }
-    } else {
-      stderr.writeln(
-          '[TodoistServer] Calling TasksApi.getActiveTasks with filter: \$effectiveFilter');
-      final result = await tasksApi.getActiveTasks(filter: effectiveFilter);
-      tasks = result ?? [];
-    }
-    if (tasks.isEmpty) {
-      final msg = specificTaskIdInt != null
-          ? 'Task with ID \$specificTaskIdInt not found.'
-          : 'No active tasks found matching the criteria.';
-      stderr.writeln('[TodoistServer] \$msg');
-      return _createSuccessResult(msg, resultData: {'tasks': []});
-    } else {
-      final tasksForAI = tasks
-          .map((task) => {
-                'id': task.id,
-                'content': task.content,
-                'description': task.description,
-                'priority': task.priority,
-                'due_string': task.due?.dueObject?.string,
-                'due_date': task.due?.dueObject?.date,
-                'due_datetime': task.due?.dueObject?.datetime,
-                'labels': task.labels,
-                'project_id': task.projectId,
-                'section_id': task.sectionId,
-                'created_at': task.createdAt,
-                'assignee_id': task.assigneeId,
-                'comment_count': task.commentCount,
-                'url': task.url,
-                'is_completed': task.isCompleted,
-                'parent_id': task.parentId,
-                'order': task.order,
-                'duration_amount': task.duration?.durationObject?.amount,
-                'duration_unit': task.duration?.durationObject?.unit,
-              })
-          .toList();
-      final msg = specificTaskIdInt != null
-          ? 'Successfully retrieved task ID \$specificTaskIdInt.'
-          : 'Found \${tasks.length} matching task(s).';
-      stderr.writeln('[TodoistServer] \$msg Returning JSON list.');
-      return _createSuccessResult(msg, resultData: {'tasks': tasksForAI});
-    }
-  } catch (e) {
-    final errorMsg = 'Error getting Todoist tasks: \${e.toString()}';
-    stderr.writeln('[TodoistServer] \$errorMsg');
-    var apiErrorMsg = errorMsg;
-    Map<String, dynamic>? errorData;
-    if (e is todoist.ApiException) {
-      stderr.writeln(
-          '[TodoistServer] API Exception Details: Code=\${e.code}, Message=\${e.message}');
-      apiErrorMsg =
-          'API Error getting tasks (\${e.code}): \${e.message ?? "Unknown API error"}';
-      errorData = {'apiCode': e.code, 'apiMessage': e.message};
-      if (specificTaskIdInt != null) {
-        errorData['taskId'] = specificTaskId;
-      }
-    }
-    return _createErrorResult(apiErrorMsg, errorData: errorData);
-  }
+  // TODO: Implement filtering based on new schema and direct API calls
+  return _createErrorResult('Handler not fully implemented yet.');
 }
 
 Future<mcp_dart.CallToolResult> _handleDeleteTodoistTask({
@@ -892,82 +1423,8 @@ Future<mcp_dart.CallToolResult> _handleDeleteTodoistTask({
 }) async {
   stderr.writeln('[TodoistServer] Received delete_todoist_task request.');
   stderr.writeln('[TodoistServer] Args: \${jsonEncode(args)}');
-  final apiClient = _configureApiClient();
-  if (apiClient == null) {
-    return _createErrorResult(
-        'TODOIST_API_TOKEN environment variable not set or empty.');
-  }
-  if (!await _checkApiHealth(apiClient)) {
-    return _createErrorResult(
-        'Todoist API health check failed with the provided token.');
-  }
-  final taskIdArg = args?['task_id'] as String?;
-  final taskNameArg = args?['task_name'] as String?;
-  String? resolvedTaskId;
-  String taskIdentifierDescription = '';
-  todoist.Task? originalTask;
-  String? taskContentForMsg;
-  if (taskIdArg != null && taskIdArg.trim().isNotEmpty) {
-    resolvedTaskId = taskIdArg;
-    taskIdentifierDescription = 'ID "\$resolvedTaskId"';
-    stderr.writeln('[TodoistServer] Using provided task_id: \$resolvedTaskId');
-    taskContentForMsg = resolvedTaskId;
-  } else if (taskNameArg != null && taskNameArg.trim().isNotEmpty) {
-    taskIdentifierDescription = 'name "\$taskNameArg"';
-    stderr.writeln(
-        '[TodoistServer] task_id not provided, attempting to find task by name: "\$taskNameArg"');
-    originalTask = await _findTaskByName(apiClient, taskNameArg);
-    if (originalTask == null || originalTask.id == null) {
-      return _createErrorResult(
-          'Task matching name "\$taskNameArg" not found.');
-    }
-    resolvedTaskId = originalTask.id!;
-    taskContentForMsg = originalTask.content ?? taskNameArg;
-    stderr.writeln(
-        '[TodoistServer] Found task ID \$resolvedTaskId by name "\$taskNameArg".');
-  } else {
-    return _createErrorResult(
-        'Either task_id or task_name is required for deletion.');
-  }
-  int? taskIdInt;
-  try {
-    taskIdInt = int.parse(resolvedTaskId);
-  } catch (formatException) {
-    return _createErrorResult(
-      'Invalid Task ID format for deletion: "\$resolvedTaskId". Expected an integer.',
-      errorData: {'taskId': resolvedTaskId},
-    );
-  }
-  try {
-    stderr.writeln(
-        '[TodoistServer] Calling TasksApi.deleteTask for ID: \$taskIdInt (Identified by: \$taskIdentifierDescription)...');
-    final tasksApi = todoist.TasksApi(apiClient);
-    await tasksApi.deleteTask(taskIdInt);
-    final successMsg = 'Successfully deleted task: "\$taskContentForMsg"';
-    stderr.writeln('[TodoistServer] \$successMsg (ID: \$resolvedTaskId)');
-    return _createSuccessResult(successMsg,
-        resultData: {'taskId': resolvedTaskId});
-  } catch (e) {
-    final errorMsg =
-        'Error deleting Todoist task "\$taskContentForMsg" (ID: \$resolvedTaskId): \${e.toString()}';
-    stderr.writeln('[TodoistServer] \$errorMsg');
-    var apiErrorMsg = errorMsg;
-    Map<String, dynamic>? errorData = {'taskId': resolvedTaskId};
-    if (e is todoist.ApiException) {
-      stderr.writeln(
-          '[TodoistServer] API Exception Details: Code=\${e.code}, Message=\${e.message}');
-      if (e.code == 404) {
-        apiErrorMsg =
-            'API Error deleting task: Task with ID "\$resolvedTaskId" not found (404).';
-      } else {
-        apiErrorMsg =
-            'API Error deleting task "\$taskContentForMsg" (\${e.code}): \${e.message ?? "Unknown API error"}';
-      }
-      errorData['apiCode'] = e.code;
-      errorData['apiMessage'] = e.message;
-    }
-    return _createErrorResult(apiErrorMsg, errorData: errorData);
-  }
+  // TODO: Implement batch handling, name lookup, and direct API calls
+  return _createErrorResult('Handler not fully implemented yet.');
 }
 
 Future<mcp_dart.CallToolResult> handleCompleteTodoistTask({
@@ -976,240 +1433,19 @@ Future<mcp_dart.CallToolResult> handleCompleteTodoistTask({
 }) async {
   stderr.writeln('[TodoistServer] Received complete_todoist_task request.');
   stderr.writeln('[TodoistServer] Args: \${jsonEncode(args)}');
-  final apiClient = _configureApiClient();
-  if (apiClient == null) {
-    return _createErrorResult(
-        'TODOIST_API_TOKEN environment variable not set or empty.');
-  }
-  if (!await _checkApiHealth(apiClient)) {
-    return _createErrorResult(
-        'Todoist API health check failed with the provided token.');
-  }
-  final taskIdArg = args?['task_id'] as String?;
-  final taskNameArg = args?['task_name'] as String?;
-  String? resolvedTaskId;
-  String taskIdentifierDescription = '';
-  todoist.Task? originalTask;
-  String? taskContentForMsg;
-  if (taskIdArg != null && taskIdArg.trim().isNotEmpty) {
-    resolvedTaskId = taskIdArg;
-    taskIdentifierDescription = 'ID "\$resolvedTaskId"';
-    stderr.writeln('[TodoistServer] Using provided task_id: \$resolvedTaskId');
-    taskContentForMsg = resolvedTaskId;
-  } else if (taskNameArg != null && taskNameArg.trim().isNotEmpty) {
-    taskIdentifierDescription = 'name "\$taskNameArg"';
-    stderr.writeln(
-        '[TodoistServer] task_id not provided, attempting to find task by name: "\$taskNameArg"');
-    originalTask = await _findTaskByName(apiClient, taskNameArg);
-    if (originalTask == null || originalTask.id == null) {
-      return _createErrorResult(
-          'Task matching name "\$taskNameArg" not found.');
-    }
-    resolvedTaskId = originalTask.id!;
-    taskContentForMsg = originalTask.content ?? taskNameArg;
-    stderr.writeln(
-        '[TodoistServer] Found task ID \$resolvedTaskId by name "\$taskNameArg".');
-  } else {
-    return _createErrorResult(
-        'Either task_id or task_name is required for completion.');
-  }
-  int? taskIdInt;
-  try {
-    taskIdInt = int.parse(resolvedTaskId);
-  } catch (formatException) {
-    return _createErrorResult(
-      'Invalid Task ID format for completion: "\$resolvedTaskId". Expected an integer.',
-      errorData: {'taskId': resolvedTaskId},
-    );
-  }
-  try {
-    stderr.writeln(
-        '[TodoistServer] Calling TasksApi.closeTask for ID: \$taskIdInt (Identified by: \$taskIdentifierDescription)...');
-    final tasksApi = todoist.TasksApi(apiClient);
-    await tasksApi.closeTask(taskIdInt);
-    final successMsg = 'Successfully completed task: "\$taskContentForMsg"';
-    stderr.writeln('[TodoistServer] \$successMsg (ID: \$resolvedTaskId)');
-    return _createSuccessResult(successMsg,
-        resultData: {'taskId': resolvedTaskId});
-  } catch (e) {
-    final errorMsg =
-        'Error completing Todoist task "\$taskContentForMsg" (ID: \$resolvedTaskId): \${e.toString()}';
-    stderr.writeln('[TodoistServer] \$errorMsg');
-    var apiErrorMsg = errorMsg;
-    Map<String, dynamic>? errorData = {'taskId': resolvedTaskId};
-    if (e is todoist.ApiException) {
-      stderr.writeln(
-          '[TodoistServer] API Exception Details: Code=\${e.code}, Message=\${e.message}');
-      if (e.code == 404) {
-        apiErrorMsg =
-            'API Error completing task: Task with ID "\$resolvedTaskId" not found (404).';
-      } else {
-        apiErrorMsg =
-            'API Error completing task "\$taskContentForMsg" (\${e.code}): \${e.message ?? "Unknown API error"}';
-      }
-      errorData['apiCode'] = e.code;
-      errorData['apiMessage'] = e.message;
-    }
-    return _createErrorResult(apiErrorMsg, errorData: errorData);
-  }
+  // TODO: Implement batch handling, name lookup, and direct API calls
+  return _createErrorResult('Handler not fully implemented yet.');
 }
 
-Future<mcp_dart.CallToolResult> handleGetTodoistTaskById({
-  Map<String, dynamic>? args,
-  RequestHandlerExtra? extra,
-}) async {
-  stderr.writeln('[TodoistServer] Received get_todoist_task_by_id request.');
-  stderr.writeln('[TodoistServer] Args: \${jsonEncode(args)}');
-  final apiClient = _configureApiClient();
-  if (apiClient == null) {
-    return _createErrorResult(
-        'TODOIST_API_TOKEN environment variable not set or empty.');
-  }
-  if (!await _checkApiHealth(apiClient)) {
-    return _createErrorResult(
-        'Todoist API health check failed with the provided token.');
-  }
-  final taskId = args?['task_id'] as String?;
-  if (taskId == null || taskId.trim().isEmpty) {
-    return _createErrorResult('Task ID (`task_id`) is required.');
-  }
-  int? taskIdInt;
-  try {
-    taskIdInt = int.parse(taskId);
-  } catch (formatException) {
-    return _createErrorResult(
-      'Invalid Task ID format: "\$taskId". Expected an integer.',
-      errorData: {'taskId': taskId},
-    );
-  }
-  try {
-    stderr.writeln(
-        '[TodoistServer] Calling TasksApi.getActiveTask for ID: \$taskIdInt...');
-    final tasksApi = todoist.TasksApi(apiClient);
-    final foundTask = await tasksApi.getActiveTask(taskIdInt);
-    if (foundTask == null) {
-      final msg = 'Task with ID "\$taskId" not found.';
-      stderr.writeln('[TodoistServer] \$msg');
-      return _createSuccessResult(msg,
-          resultData: {'taskId': taskId, 'task': null});
-    }
-    final successMsg = 'Successfully retrieved task ID "\$taskId".';
-    final taskDetails = {
-      'id': foundTask.id,
-      'content': foundTask.content,
-      'description': foundTask.description,
-      'priority': foundTask.priority,
-      'due_string': foundTask.due?.dueObject?.string,
-      'due_date': foundTask.due?.dueObject?.date,
-      'due_datetime': foundTask.due?.dueObject?.datetime,
-      'labels': foundTask.labels,
-      'project_id': foundTask.projectId,
-      'section_id': foundTask.sectionId,
-      'created_at': foundTask.createdAt,
-      'assignee_id': foundTask.assigneeId,
-      'assigner_id': foundTask.assignerId,
-      'comment_count': foundTask.commentCount,
-      'url': foundTask.url,
-      'is_completed': foundTask.isCompleted,
-      'parent_id': foundTask.parentId,
-      'order': foundTask.order,
-      'duration_amount': foundTask.duration?.durationObject?.amount,
-      'duration_unit': foundTask.duration?.durationObject?.unit,
-    };
-    stderr.writeln('[TodoistServer] \$successMsg');
-    return _createSuccessResult(successMsg,
-        resultData: {'taskId': taskId, 'task': taskDetails});
-  } catch (e) {
-    final errorMsg =
-        'Error getting Todoist task by ID "\$taskId": \${e.toString()}';
-    stderr.writeln('[TodoistServer] \$errorMsg');
-    var apiErrorMsg = errorMsg;
-    Map<String, dynamic>? errorData = {'taskId': taskId};
-    if (e is todoist.ApiException) {
-      stderr.writeln(
-          '[TodoistServer] API Exception Details: Code=\${e.code}, Message=\${e.message}');
-      if (e.code == 404) {
-        apiErrorMsg =
-            'API Error getting task: Task with ID "\$taskId" not found (404).';
-      } else {
-        apiErrorMsg =
-            'API Error getting task "\$taskId" (\${e.code}): \${e.message ?? "Unknown API error"}';
-      }
-      errorData['apiCode'] = e.code;
-      errorData['apiMessage'] = e.message;
-    }
-    return _createErrorResult(apiErrorMsg, errorData: errorData);
-  }
-}
-
+// Existing Comment Handlers
 Future<mcp_dart.CallToolResult> handleGetTaskComments({
   Map<String, dynamic>? args,
   RequestHandlerExtra? extra,
 }) async {
   stderr.writeln('[TodoistServer] Received get_task_comments request.');
   stderr.writeln('[TodoistServer] Args: \${jsonEncode(args)}');
-  final apiClient = _configureApiClient();
-  if (apiClient == null) {
-    return _createErrorResult(
-        'TODOIST_API_TOKEN environment variable not set or empty.');
-  }
-  if (!await _checkApiHealth(apiClient)) {
-    return _createErrorResult(
-        'Todoist API health check failed with the provided token.');
-  }
-  final taskId = args?['task_id'] as String?;
-  if (taskId == null || taskId.trim().isEmpty) {
-    return _createErrorResult(
-        'Task ID (`task_id`) is required to get comments.');
-  }
-  try {
-    int.parse(taskId);
-  } catch (formatException) {
-    return _createErrorResult(
-        'Invalid Task ID format: "\$taskId". Expected an integer.',
-        errorData: {'taskId': taskId});
-  }
-  try {
-    stderr.writeln(
-        '[TodoistServer] Calling CommentsApi.getAllComments for task ID: \$taskId...');
-    final commentsApi = todoist.CommentsApi(apiClient);
-    final comments = await commentsApi.getAllComments(taskId: taskId);
-    if (comments == null || comments.isEmpty) {
-      final msg = 'No comments found for task ID "\$taskId".';
-      stderr.writeln('[TodoistServer] \$msg');
-      return _createSuccessResult(msg,
-          resultData: {'taskId': taskId, 'comments': []});
-    } else {
-      final commentList = comments
-          .map((c) => {
-                'id': c.id,
-                'content': c.content,
-                'posted_at': c.postedAt?.toIso8601String(),
-              })
-          .toList();
-      final msg =
-          'Successfully retrieved \${commentList.length} comments for task ID "\$taskId".';
-      stderr.writeln('[TodoistServer] \$msg');
-      return _createSuccessResult(msg,
-          resultData: {'taskId': taskId, 'comments': commentList});
-    }
-  } catch (e) {
-    final errorMsg =
-        'Error getting comments for task ID "\$taskId": \${e.toString()}';
-    stderr.writeln('[TodoistServer] \$errorMsg');
-    var apiErrorMsg = errorMsg;
-    Map<String, dynamic>? errorData = {'taskId': taskId};
-    if (e is todoist.ApiException) {
-      stderr.writeln(
-          '[TodoistServer] API Exception Details: Code=\${e.code}, Message=\${e.message}');
-      apiErrorMsg = e.code == 404
-          ? 'API Error getting comments: Task with ID "\$taskId" not found (404).'
-          : 'API Error getting comments for task "\$taskId" (\${e.code}): \${e.message ?? "Unknown API error"}';
-      errorData['apiCode'] = e.code;
-      errorData['apiMessage'] = e.message;
-    }
-    return _createErrorResult(apiErrorMsg, errorData: errorData);
-  }
+  // TODO: Review implementation for direct API calls
+  return _createErrorResult('Handler not fully implemented yet.');
 }
 
 Future<mcp_dart.CallToolResult> handleCreateTaskComment({
@@ -1218,102 +1454,110 @@ Future<mcp_dart.CallToolResult> handleCreateTaskComment({
 }) async {
   stderr.writeln('[TodoistServer] Received create_task_comment request.');
   stderr.writeln('[TodoistServer] Args: \${jsonEncode(args)}');
-  final apiClient = _configureApiClient();
-  if (apiClient == null) {
-    return _createErrorResult(
-        'TODOIST_API_TOKEN environment variable not set or empty.');
-  }
-  if (!await _checkApiHealth(apiClient)) {
-    return _createErrorResult(
-        'Todoist API health check failed with the provided token.');
-  }
-  final taskIdArg = args?['task_id'] as String?;
-  final taskNameArg = args?['task_name'] as String?;
-  final contentText = args?['content'] as String?;
-  String? resolvedTaskId;
-  String taskIdentifierDescription = '';
-  if (taskIdArg != null && taskIdArg.trim().isNotEmpty) {
-    resolvedTaskId = taskIdArg;
-    taskIdentifierDescription = 'ID "\$resolvedTaskId"';
-    stderr.writeln('[TodoistServer] Using provided task_id: \$resolvedTaskId');
-    try {
-      int.parse(resolvedTaskId);
-    } catch (formatException) {
-      return _createErrorResult(
-          'Invalid Task ID format: "\$resolvedTaskId". Expected an integer.',
-          errorData: {'taskId': resolvedTaskId});
-    }
-  } else if (taskNameArg != null && taskNameArg.trim().isNotEmpty) {
-    taskIdentifierDescription = 'name "\$taskNameArg"';
-    stderr.writeln(
-        '[TodoistServer] task_id not provided, attempting to find task by name: "\$taskNameArg"');
-    final foundTask = await _findTaskByName(apiClient, taskNameArg);
-    if (foundTask != null && foundTask.id != null) {
-      resolvedTaskId = foundTask.id!;
-      stderr.writeln(
-          '[TodoistServer] Found task ID \$resolvedTaskId by name "\$taskNameArg".');
-    } else {
-      return _createErrorResult(
-          'Task matching name "\$taskNameArg" not found.');
-    }
-  } else {
-    return _createErrorResult(
-        'Task ID (`task_id`) or Task Name (`task_name`) is required to create a comment.');
-  }
-  if (contentText == null || contentText.trim().isEmpty) {
-    return _createErrorResult('Comment content (`content`) cannot be empty.');
-  }
-  try {
-    stderr.writeln(
-        '[TodoistServer] Calling CommentsApi.createComment for resolved task ID: \$resolvedTaskId (identified by \$taskIdentifierDescription)...');
-    final commentsApi = todoist.CommentsApi(apiClient);
-    final newComment = await commentsApi.createComment(
-      contentText,
-      taskId: resolvedTaskId,
-    );
-    if (newComment == null) {
-      return _createErrorResult(
-          'API returned null for the newly created comment.',
-          errorData: {'taskId': resolvedTaskId});
-    }
-    final successMsg =
-        'Comment added successfully to task ID "\$resolvedTaskId".';
-    stderr.writeln(
-        '[TodoistServer] \$successMsg (Comment ID: \${newComment.id})');
-    return _createSuccessResult(
-      successMsg,
-      resultData: {
-        'taskId': resolvedTaskId,
-        'commentId': newComment.id,
-        'comment': {
-          'id': newComment.id,
-          'content': newComment.content,
-          'posted_at': newComment.postedAt?.toIso8601String(),
-        }
-      },
-    );
-  } catch (e) {
-    final errorMsg =
-        'Error creating comment for task ID "\$resolvedTaskId" (identified by \$taskIdentifierDescription): \${e.toString()}';
-    stderr.writeln('[TodoistServer] \$errorMsg');
-    var apiErrorMsg = errorMsg;
-    Map<String, dynamic>? errorData = {'taskId': resolvedTaskId};
-    if (e is todoist.ApiException) {
-      stderr.writeln(
-          '[TodoistServer] API Exception Details: Code=\${e.code}, Message=\${e.message}');
-      if (e.code == 404) {
-        apiErrorMsg =
-            'API Error creating comment: Task with ID "\$resolvedTaskId" not found (404).';
-      } else if (e.code == 400) {
-        apiErrorMsg =
-            'API Error creating comment: Invalid request for task "\$resolvedTaskId" (400 - check parameters). Message: \${e.message}';
-      } else {
-        apiErrorMsg =
-            'API Error creating comment for task "\$resolvedTaskId" (\${e.code}): \${e.message ?? "Unknown API error"}';
-      }
-      errorData['apiCode'] = e.code;
-      errorData['apiMessage'] = e.message;
-    }
-    return _createErrorResult(apiErrorMsg, errorData: errorData);
-  }
+  // TODO: Review implementation for direct API calls and name lookup
+  return _createErrorResult('Handler not fully implemented yet.');
+}
+
+// --- Stubs for New Handlers ---
+
+// Project Handlers
+Future<mcp_dart.CallToolResult> _handleGetProjects({ Map<String, dynamic>? args, RequestHandlerExtra? extra, }) async {
+  stderr.writeln('[TodoistServer] Received todoist_get_projects request.');
+  stderr.writeln('[TodoistServer] Args: \${jsonEncode(args)}');
+  // TODO: Implement logic using todoist.ProjectsApi
+  return _createErrorResult('Handler not implemented yet.');
+}
+
+Future<mcp_dart.CallToolResult> _handleCreateProject({ Map<String, dynamic>? args, RequestHandlerExtra? extra, }) async {
+  stderr.writeln('[TodoistServer] Received todoist_create_project request.');
+  stderr.writeln('[TodoistServer] Args: \${jsonEncode(args)}');
+  // TODO: Implement batch handling, parent name lookup, section creation, using todoist.ProjectsApi/SectionsApi
+  return _createErrorResult('Handler not implemented yet.');
+}
+
+Future<mcp_dart.CallToolResult> _handleUpdateProject({ Map<String, dynamic>? args, RequestHandlerExtra? extra, }) async {
+  stderr.writeln('[TodoistServer] Received todoist_update_project request.');
+  stderr.writeln('[TodoistServer] Args: \${jsonEncode(args)}');
+  // TODO: Implement batch handling, name lookup, using todoist.ProjectsApi
+  return _createErrorResult('Handler not implemented yet.');
+}
+
+Future<mcp_dart.CallToolResult> _handleGetProjectSections({ Map<String, dynamic>? args, RequestHandlerExtra? extra, }) async {
+  stderr.writeln('[TodoistServer] Received todoist_get_project_sections request.');
+  stderr.writeln('[TodoistServer] Args: \${jsonEncode(args)}');
+  // TODO: Implement batch handling, name lookup, empty filtering, using todoist.SectionsApi/TasksApi
+  return _createErrorResult('Handler not implemented yet.');
+}
+
+Future<mcp_dart.CallToolResult> _handleCreateProjectSection({ Map<String, dynamic>? args, RequestHandlerExtra? extra, }) async {
+  stderr.writeln('[TodoistServer] Received todoist_create_project_section request.');
+  stderr.writeln('[TodoistServer] Args: \${jsonEncode(args)}');
+  // TODO: Implement batch handling, name lookup, using todoist.SectionsApi
+  return _createErrorResult('Handler not implemented yet.');
+}
+
+// Personal Label Handlers
+Future<mcp_dart.CallToolResult> _handleGetPersonalLabels({ Map<String, dynamic>? args, RequestHandlerExtra? extra, }) async {
+  stderr.writeln('[TodoistServer] Received todoist_get_personal_labels request.');
+  stderr.writeln('[TodoistServer] Args: \${jsonEncode(args)}');
+  // TODO: Implement logic using todoist.LabelsApi.getAllPersonalLabels
+  return _createErrorResult('Handler not implemented yet.');
+}
+
+Future<mcp_dart.CallToolResult> _handleCreatePersonalLabel({ Map<String, dynamic>? args, RequestHandlerExtra? extra, }) async {
+  stderr.writeln('[TodoistServer] Received todoist_create_personal_label request.');
+  stderr.writeln('[TodoistServer] Args: \${jsonEncode(args)}');
+  // TODO: Implement batch handling using todoist.LabelsApi.createPersonalLabel
+  return _createErrorResult('Handler not implemented yet.');
+}
+
+Future<mcp_dart.CallToolResult> _handleGetPersonalLabel({ Map<String, dynamic>? args, RequestHandlerExtra? extra, }) async {
+  stderr.writeln('[TodoistServer] Received todoist_get_personal_label request.');
+  stderr.writeln('[TodoistServer] Args: \${jsonEncode(args)}');
+  // TODO: Implement logic using todoist.LabelsApi.getPersonalLabel
+  return _createErrorResult('Handler not implemented yet.');
+}
+
+Future<mcp_dart.CallToolResult> _handleUpdatePersonalLabel({ Map<String, dynamic>? args, RequestHandlerExtra? extra, }) async {
+  stderr.writeln('[TodoistServer] Received todoist_update_personal_label request.');
+  stderr.writeln('[TodoistServer] Args: \${jsonEncode(args)}');
+  // TODO: Implement batch handling, name lookup, using todoist.LabelsApi.updatePersonalLabel
+  return _createErrorResult('Handler not implemented yet.');
+}
+
+Future<mcp_dart.CallToolResult> _handleDeletePersonalLabel({ Map<String, dynamic>? args, RequestHandlerExtra? extra, }) async {
+  stderr.writeln('[TodoistServer] Received todoist_delete_personal_label request.');
+  stderr.writeln('[TodoistServer] Args: \${jsonEncode(args)}');
+  // TODO: Implement logic using todoist.LabelsApi.deletePersonalLabel
+  return _createErrorResult('Handler not implemented yet.');
+}
+
+// Shared Label Handlers
+Future<mcp_dart.CallToolResult> _handleGetSharedLabels({ Map<String, dynamic>? args, RequestHandlerExtra? extra, }) async {
+  stderr.writeln('[TodoistServer] Received todoist_get_shared_labels request.');
+  stderr.writeln('[TodoistServer] Args: \${jsonEncode(args)}');
+  // TODO: Implement logic (Note: No direct equivalent in generated API? May need custom logic)
+  return _createErrorResult('Handler not implemented yet.');
+}
+
+Future<mcp_dart.CallToolResult> _handleRenameSharedLabels({ Map<String, dynamic>? args, RequestHandlerExtra? extra, }) async {
+  stderr.writeln('[TodoistServer] Received todoist_rename_shared_labels request.');
+  stderr.writeln('[TodoistServer] Args: \${jsonEncode(args)}');
+  // TODO: Implement batch handling (Note: No direct equivalent in generated API? May need custom logic)
+  return _createErrorResult('Handler not implemented yet.');
+}
+
+Future<mcp_dart.CallToolResult> _handleRemoveSharedLabels({ Map<String, dynamic>? args, RequestHandlerExtra? extra, }) async {
+  stderr.writeln('[TodoistServer] Received todoist_remove_shared_labels request.');
+  stderr.writeln('[TodoistServer] Args: \${jsonEncode(args)}');
+  // TODO: Implement batch handling (Note: May need custom logic)
+  return _createErrorResult('Handler not implemented yet.');
+}
+
+// Task Label Handler
+Future<mcp_dart.CallToolResult> _handleUpdateTaskLabels({ Map<String, dynamic>? args, RequestHandlerExtra? extra, }) async {
+  stderr.writeln('[TodoistServer] Received todoist_update_task_labels request.');
+  stderr.writeln('[TodoistServer] Args: \${jsonEncode(args)}');
+  // TODO: Implement batch handling, name lookup, using todoist.TasksApi.updateTask
+  return _createErrorResult('Handler not implemented yet.');
 }
