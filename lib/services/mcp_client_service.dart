@@ -474,8 +474,12 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
   final Ref ref;
   Map<String, String> toolToServerIdMap = {};
   ProviderSubscription<List<McpServerConfig>>? serverListSubscription;
-  // ADD: Map to track pending reconnect timers
   final Map<String, Timer> _reconnectTimers = {};
+  // ADD: Map to track exponential backoff delays
+  final Map<String, Duration> _reconnectDelays = {};
+  // ADD: Constants for backoff timing
+  static const Duration _initialReconnectDelay = Duration(seconds: 5);
+  static const Duration _maxReconnectDelay = Duration(minutes: 1);
 
   McpClientNotifier(this.ref) : super(const McpClientState()) {
     initialize();
@@ -536,11 +540,8 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
     });
   }
 
-  // ADD: Helper method to schedule reconnection attempts
-  void _scheduleReconnect(
-    String serverId, {
-    Duration delay = const Duration(seconds: 5),
-  }) {
+  // MODIFY: Helper method to schedule reconnection attempts with exponential backoff
+  void _scheduleReconnect(String serverId) {
     if (!mounted) return;
 
     // Cancel any existing timer for this server
@@ -553,10 +554,13 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
 
     // Only schedule if the server config exists and is marked active
     if (serverConfig != null && serverConfig.isActive) {
+      // Get the current delay, default to initial if not set
+      final currentDelay = _reconnectDelays[serverId] ?? _initialReconnectDelay;
+
       debugPrint(
-        "MCP [_scheduleReconnect]: Scheduling reconnect for active server [\$serverId] in \$delay.",
+        "MCP [_scheduleReconnect]: Scheduling reconnect for active server [\$serverId] in \$currentDelay.",
       );
-      _reconnectTimers[serverId] = Timer(delay, () {
+      _reconnectTimers[serverId] = Timer(currentDelay, () {
         if (!mounted) return;
         _reconnectTimers.remove(
           serverId,
@@ -579,17 +583,35 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
             debugPrint(
               "MCP [_scheduleReconnect]: Timer fired for [\$serverId], but status is already \$currentStatus. Skipping reconnect.",
             );
+            // Reset delay even if skipping, as it implies connection is okay now or being handled
+            _reconnectDelays[serverId] = _initialReconnectDelay;
           }
         } else {
           debugPrint(
             "MCP [_scheduleReconnect]: Timer fired for [\$serverId], but server is no longer active or config removed. Skipping reconnect.",
           );
+          _reconnectDelays.remove(
+            serverId,
+          ); // Clean up delay if server is gone/inactive
         }
       });
+
+      // Calculate and store the *next* delay (exponential backoff)
+      Duration nextDelay = currentDelay * 2;
+      if (nextDelay > _maxReconnectDelay) {
+        nextDelay = _maxReconnectDelay;
+      }
+      _reconnectDelays[serverId] = nextDelay;
+      debugPrint(
+        "MCP [_scheduleReconnect]: Next reconnect delay for [\$serverId] set to \$nextDelay.",
+      );
     } else {
       debugPrint(
         "MCP [_scheduleReconnect]: Server [\$serverId] is not active or config not found. Skipping reconnect schedule.",
       );
+      _reconnectDelays.remove(
+        serverId,
+      ); // Clean up delay if server is gone/inactive
     }
   }
 
@@ -671,9 +693,14 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
         debugPrint(
           "MCP [\$serverId]: Client connected successfully. Updating state and rebuilding tool map...",
         );
-        // ADD: Ensure reconnect timer is cancelled on successful connection
+        // Ensure reconnect timer is cancelled on successful connection
         _reconnectTimers[serverId]?.cancel();
         _reconnectTimers.remove(serverId);
+        // ADD: Reset the reconnect delay back to initial on successful connection
+        _reconnectDelays[serverId] = _initialReconnectDelay;
+        debugPrint(
+          "MCP [connectServer]: Reset reconnect delay for [\$serverId] to initial value.",
+        );
 
         if (mounted &&
             state.serverStatuses[serverId] == McpConnectionStatus.connecting) {
@@ -734,8 +761,10 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
     // ADD: Cancel any pending reconnect timer when explicitly disconnecting
     _reconnectTimers[serverId]?.cancel();
     _reconnectTimers.remove(serverId);
+    // ADD: Remove the stored reconnect delay for this server
+    _reconnectDelays.remove(serverId);
     debugPrint(
-      "MCP [disconnectServer]: Cleared any pending reconnect timer for [\$serverId].",
+      "MCP [disconnectServer]: Cleared pending reconnect timer and delay for [\$serverId].",
     );
 
     final clientToDisconnect = state.activeClients[serverId];
@@ -1060,7 +1089,6 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
                 ),
               )
               .toList();
-      // *** ADDED LOGGING ***
       debugPrint(
         "MCP ProcessQuery: Making first Gemini call with query and \${allAvailableTools.length} tools.",
       );
@@ -1069,7 +1097,6 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
         cleanHistory,
         tools: allAvailableTools.isNotEmpty ? allAvailableTools : null,
       );
-      // *** ADDED LOGGING ***
       final firstCandidate = firstResponse.candidates.firstOrNull;
       final functionCallPartCheck = firstCandidate?.content.parts
           .firstWhereOrNull((part) => part is FunctionCall);
@@ -1191,7 +1218,6 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
           name: toolName,
           arguments: toolArgs.map((key, value) => MapEntry(key, value)),
         );
-        // *** ADDED LOGGING ***
         debugPrint(
           "MCP ProcessQuery: Calling MCP tool '\$toolName' on server '\$targetServerId'...",
         );
@@ -1207,18 +1233,15 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
         try {
           final decoded = jsonDecode(toolResultString);
           if (decoded is Map<String, dynamic>) {
-              final status = decoded['status'] as String?;
-              final message = decoded['message'] as String?;
-              final resultData = decoded['result'] as Map<String, dynamic>?;
-  
-              if (status == 'success') {
-              // Pass the structured result data to Gemini
+            final status = decoded['status'] as String?;
+            final message = decoded['message'] as String?;
+            final resultData = decoded['result'] as Map<String, dynamic>?;
+            if (status == 'success') {
               toolResultJson = resultData ?? {'message': message ?? 'Success'};
               debugPrint(
                 "MCP ProcessQuery: Parsed SUCCESS result for Gemini: \$toolResultJson",
               );
-              } else if (status == 'error') {
-              // Pass structured error data to Gemini
+            } else if (status == 'error') {
               toolResultJson = {
                 'error': message ?? 'Unknown server error',
                 ...?resultData,
@@ -1226,28 +1249,24 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
               debugPrint(
                 "MCP ProcessQuery: Parsed ERROR result for Gemini: \$toolResultJson",
               );
-              } else {
-              // Fallback if status is missing or unexpected
+            } else {
               debugPrint(
                 "MCP ProcessQuery: Parsed JSON but status field ('\$status') is missing or unexpected. Using raw map.",
               );
               toolResultJson = decoded;
-              }
+            }
           } else if (decoded is List) {
-              // Less likely with new structure, but handle just in case
             debugPrint(
               "MCP ProcessQuery: Tool result is JSON List. Wrapping in 'result_list'.",
             );
           }
         } catch (e) {
-          // JSON parsing failed
           debugPrint(
             "MCP ProcessQuery: Tool result is not valid JSON ('\$e'). Using raw text.",
           );
           toolResultJson = {'result_text': toolResultString};
         }
         if (toolResultString.isEmpty) {
-          // Empty response from tool
           toolResultString =
               '{"status": "success", "message": "Tool executed successfully but returned no content.", "result": {}}';
           toolResultJson = {'message': 'Tool executed successfully but returned no content.'};
@@ -1257,7 +1276,6 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
         }
         // --- End Phase 4 ---
 
-        // --- Prepare for Second Gemini Call ---
         final Content toolResponseContent = Content('function', [
           FunctionResponse(toolName, toolResultJson),
         ]);
@@ -1272,7 +1290,6 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
         debugPrint(
           "MCP ProcessQuery: Making second Gemini call with tool response...",
         );
-        // --- Second Gemini Call ---
         final secondResponse = await geminiService.generateContent(
           '',
           historyForSecondCall,
@@ -1357,7 +1374,6 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
         }
       }
     } else {
-      // --- Handle Direct Response (No Function Call) ---
       debugPrint(
         "MCP ProcessQuery: No function call requested by Gemini. Returning direct response.",
       );
@@ -1366,7 +1382,6 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
           Content('model', [
             TextPart("Sorry, I couldn't generate a response."),
           ]);
-      // TODO: should I make use of this?
       final directResponseText = directContent.parts
           .whereType<TextPart>()
           .map((p) => p.text)
@@ -1385,10 +1400,12 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
   void dispose() {
     debugPrint("Disposing McpClientNotifier, cleaning up all clients...");
     serverListSubscription?.close();
-    // ADD: Cancel all pending reconnect timers
+    // Cancel all pending reconnect timers
     _reconnectTimers.forEach((_, timer) => timer.cancel());
     _reconnectTimers.clear();
-    debugPrint("MCP [dispose]: Cancelled all pending reconnect timers.");
+    // ADD: Clear the reconnect delays map
+    _reconnectDelays.clear();
+    debugPrint("MCP [dispose]: Cancelled timers and cleared reconnect delays.");
 
     final clientIds = List<String>.from(state.activeClients.keys);
     for (final serverId in clientIds) {
