@@ -61,6 +61,7 @@ dependencies:
     git:
       url: git@github.com:erauner12/mcp_dart.git # Your SSH URL
       ref: main # Point to the main branch
+      # path: ../mcp_dart # Assumes mcp_dart is cloned next to flutter_memos
 
   # Other existing dependencies
   flutter_slidable: ^4.0.0
@@ -96,6 +97,7 @@ dependency_overrides:
     git:
       url: git@github.com:erauner12/mcp_dart.git # Your SSH URL
       ref: main # Point to the main branch
+      # path: ../mcp_dart # Assumes mcp_dart is cloned next to flutter_memos
 
 dev_dependencies:
   flutter_test:
