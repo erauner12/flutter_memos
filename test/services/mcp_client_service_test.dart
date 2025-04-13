@@ -54,6 +54,8 @@ void main() {
   late MockGeminiService mockGeminiService;
   // late MockGenerativeModel mockGenerativeModel; // Removed
   late ProviderContainer container;
+  // Declare the stream controller here
+  late StreamController<List<McpServerConfig>> serverConfigStreamController;
   // Keep track of mocked clients created during tests
   final Map<String, MockGoogleMcpClient> mockClients = {};
   // Maps to capture callbacks for triggering in tests
@@ -109,7 +111,9 @@ void main() {
     // McpServerConfigNotifier: Start with an empty list
     when(mockMcpServerConfigNotifier.state).thenReturn([]);
     // Use streamController to allow updating the state during tests
-    final serverConfigStreamController = StreamController<List<McpServerConfig>>.broadcast();
+    // Initialize the controller here
+    serverConfigStreamController =
+        StreamController<List<McpServerConfig>>.broadcast();
     when(mockMcpServerConfigNotifier.stream).thenAnswer((_) => serverConfigStreamController.stream);
     // Provide a way to update the mock state and stream
     // mockMcpServerConfigNotifier.updateState = (List<McpServerConfig> newState) { // Removed: Incorrect assignment to method
@@ -149,6 +153,8 @@ void main() {
   tearDown(() {
     container.dispose();
     mockClients.clear();
+    // Close the stream controller
+    serverConfigStreamController.close();
   });
 
   // --- Test Groups ---
