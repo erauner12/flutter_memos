@@ -14,11 +14,11 @@
 		<string>CloudKit</string>
 	</array>
 
-	<!-- Keep Sandbox Disabled -->
+	<!-- Keep Sandbox Disabled for Debug/Profile -->
 	<key>com.apple.security.app-sandbox</key>
 	<false/>
 
-	<!-- Keep existing permissive entitlements -->
+	<!-- Keep existing permissive entitlements for Debug/Profile -->
 	<key>com.apple.security.cs.allow-jit</key>
 	<true/>
 	<key>com.apple.security.cs.allow-unsigned-executable-memory</key>
@@ -33,12 +33,13 @@
 	<key>com.apple.security.files.user-selected.read-only</key>
 	<true/>
 
-	<!-- ADD TEMPORARY EXCEPTION FOR EXECUTABLE -->
-	<key>com.apple.security.temporary-exception.files.absolute-path.executable</key>
-	<string>/Users/erauner/git/side/flutter_memos/mcp_echo_server/bin/mcp_echo_server_executable</string>
-	<!-- ADD NEW TEMPORARY EXCEPTION FOR TODOIST SERVER -->
-	<key>com.apple.security.temporary-exception.files.absolute-path.executable</key>
-	<string>/Users/erauner/git/side/flutter_memos/bin/todoist_mcp_server_executable</string>
+	<!-- REMOVE TEMPORARY EXCEPTIONS - These are incompatible with sandboxing (used in Release) -->
+	<!-- and likely represent an old/unused approach. If these servers are needed, -->
+	<!-- they must be communicated with via network or bundled differently. -->
+	<!-- <key>com.apple.security.temporary-exception.files.absolute-path.executable</key> -->
+	<!-- <string>/Users/erauner/git/side/flutter_memos/mcp_echo_server/bin/mcp_echo_server_executable</string> -->
+	<!-- <key>com.apple.security.temporary-exception.files.absolute-path.executable</key> -->
+	<!-- <string>/Users/erauner/git/side/flutter_memos/bin/todoist_mcp_server_executable</string> -->
 
 </dict>
 </plist>

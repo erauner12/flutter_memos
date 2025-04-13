@@ -19,10 +19,40 @@ import 'package:flutter_memos/utils/keyboard_shortcuts.dart'; // Import keyboard
 import 'package:flutter_memos/utils/provider_logger.dart';
 import 'package:flutter_memos/widgets/config_check_wrapper.dart'; // Import the new wrapper
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:sentry_flutter/sentry_flutter.dart'; // Import Sentry
 
-void main() {
-  runApp(
-    ProviderScope(observers: [LoggingProviderObserver()], child: const MyApp()),
+Future<void> main() async {
+  // Make main async
+  // Ensure bindings are initialized before Sentry and runApp
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // TODO: Replace 'YOUR_SENTRY_DSN_HERE' with your actual Sentry DSN
+  // It's highly recommended to load this from environment variables or a secure config
+  // rather than hardcoding it.
+  const sentryDsn = 'YOUR_SENTRY_DSN_HERE';
+
+  await SentryFlutter.init(
+    (options) {
+      options.dsn = sentryDsn;
+      // Set tracesSampleRate to 1.0 to capture 100% of transactions for performance monitoring.
+      // Adjust this value in production.
+      options.tracesSampleRate = 1.0;
+      // Optional: Set environment based on build mode
+      options.environment =
+          kReleaseMode
+              ? 'production'
+              : (kProfileMode ? 'profile' : 'development');
+      // Optional: Enable Sentry debug logging in non-release builds
+      options.debug = !kReleaseMode;
+    },
+    // Wrap your original runApp call
+    appRunner:
+        () => runApp(
+          ProviderScope(
+            observers: [LoggingProviderObserver()],
+            child: const MyApp(),
+          ),
+        ),
   );
 }
 

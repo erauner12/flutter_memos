@@ -67,6 +67,8 @@ dependencies:
       path: pkgs/markdown
       ref: main
 
+  # Crash Reporting
+  sentry_flutter: ^8.14.1
 
 dependency_overrides:
   markdown: # Keep git override
