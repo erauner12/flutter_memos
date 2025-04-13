@@ -11,7 +11,8 @@ endif
 .PHONY: test-integration-macos test-integration-ios test-integration-ipad-portrait test-integration-ipad-landscape \
 		test-integration-web kill-simulator test-integration-iphone run-iphone \
 		build-macos release-macos build-dmg install-dmg clean-dmg \
-		build-iphone release-iphone install-macos test-integration-all help
+		build-iphone release-iphone install-macos test-integration-all help \
+		run-macos
 
 # Default target - show help
 help:
@@ -20,6 +21,7 @@ help:
 	@echo "Build & Install Targets:"
 	@echo "  build-macos         - Build Flutter Memos for macOS (debug mode)"
 	@echo "  release-macos       - Build Flutter Memos for macOS (release mode)"
+	@echo "  run-macos           - Run Flutter Memos on macOS (debug mode)"
 	@echo "  build-dmg           - Build a DMG installer"
 	@echo "  install-dmg         - Install from the previously built DMG"
 	@echo "  clean-dmg           - Remove previous DMG builds"
@@ -64,6 +66,11 @@ release-macos:
 	@echo "Building Flutter Memos for macOS (release mode)..."
 	flutter build macos --release --dart-define=SENTRY_DSN=$(SENTRY_DSN)
 	@echo "Release build for macOS complete. You can find the app in build/macos/Build/Products/Release/"
+
+# Run for macOS (debug mode)
+run-macos:
+	@echo "Running Flutter Memos for macOS (debug mode)..."
+	flutter run -d macos --dart-define=SENTRY_DSN=$(SENTRY_DSN)
 
 # Install built macOS app directly (without DMG)
 install-macos:

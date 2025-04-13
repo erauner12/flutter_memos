@@ -48,8 +48,8 @@ Future<void> main() async {
       if (sentryDsn.isNotEmpty) {
         options.dsn = sentryDsn;
       } else {
-        // Explicitly disable Sentry if DSN is missing, although not setting it might suffice
-        options.enabled = false;
+        // Sentry is automatically disabled if options.dsn is null or empty.
+        // No need to set options.enabled = false;
         if (kDebugMode) {
           print("Sentry DSN not found, Sentry integration disabled.");
         }
@@ -226,76 +226,68 @@ class _MyAppState extends ConsumerState<MyApp> {
   void _handleDeepLink(Uri? uri) {
     if (uri == null || uri.scheme != 'flutter-memos') {
       if (kDebugMode && uri != null) {
-        if (kDebugMode) {
-          print('[DeepLink] Ignoring URI: \${uri.toString()}');
-        }
+        print('[DeepLink] Ignoring URI: ${uri.toString()}');
       }
       return;
     }
 
     if (kDebugMode) {
-      print('[DeepLink] Handling URI: \${uri.toString()}');
+      print('[DeepLink] Handling URI: ${uri.toString()}');
     }
 
     final host = uri.host; // Get the host: 'memo' or 'comment'
     final pathSegments = uri.pathSegments;
 
-    if (kDebugMode) {
-      print('[DeepLink] Host: \$host, Path segments: \$pathSegments');
-    }
-
-    // Variables to extract
-    String? memoId;
-    String? commentIdToHighlight;
-
     if (host == 'memo' && pathSegments.isNotEmpty) {
       // For memo links: flutter-memos://memo/memoId
-      memoId = pathSegments[0];
+      final memoId = pathSegments[0];
+      if (kDebugMode) {
+        print(
+          '[DeepLink] Navigating to memo: \$memoId, highlight comment: null',
+        );
+      }
+      _navigatorKey.currentState?.pushNamed(
+        '/deep-link-target',
+        arguments: {'memoId': memoId, 'commentIdToHighlight': null},
+      );
     } else if (host == 'comment' && pathSegments.length >= 2) {
       // For comment links: flutter-memos://comment/memoId/commentId
-      memoId = pathSegments[0];
-      commentIdToHighlight = pathSegments[1];
+      final memoId = pathSegments[0];
+      final commentIdToHighlight = pathSegments[1];
+      if (kDebugMode) {
+        print(
+          '[DeepLink] Navigating to memo: \$memoId, highlight comment: \$commentIdToHighlight',
+        );
+      }
+      _navigatorKey.currentState?.pushNamed(
+        '/deep-link-target',
+        arguments: {
+          'memoId': memoId,
+          'commentIdToHighlight': commentIdToHighlight,
+        },
+      );
     } else {
       if (kDebugMode) {
         print(
-          '[DeepLink] Invalid URI structure: \$host/\${pathSegments.join(' /
-              ')}',
+          '[DeepLink] Invalid URI structure: \$host/${pathSegments.join('/')}',
         );
       }
       return;
     }
-
-    if (kDebugMode) {
-      print(
-        '[DeepLink] Navigating to memo: \$memoId, highlight comment: \$commentIdToHighlight',
-      );
-    }
-
-    // Use the navigator key to access the navigator from anywhere
-    _navigatorKey.currentState?.pushNamed(
-      '/deep-link-target',
-      arguments: {
-        'memoId': memoId,
-        'commentIdToHighlight': commentIdToHighlight,
-      },
-    );
   }
   
   @override
   Widget build(BuildContext context) {
-    // Watch the theme mode provider
-    final themeMode = ref.watch(themeModeProvider);
-    
+    // Watch the theme mode provider - Removed unused variable
     if (kDebugMode) {
-      print('[MyApp] Building with theme mode: \$themeMode');
+      // Use ref.watch directly where needed or read if only needed once
+      print(
+        '[MyApp] Building with theme mode: ${ref.watch(themeModeProvider)}',
+      );
     }
 
     // Removed custom macOS keyboard handler as it seems to cause assertion errors.
     // Relying on default Flutter keyboard handling for now.
-    
-    if (kDebugMode) {
-      print('[MyApp] Current theme mode: \$themeMode');
-    }
     
     return Shortcuts(
       shortcuts: buildGlobalShortcuts(),
@@ -349,9 +341,9 @@ class _MyAppState extends ConsumerState<MyApp> {
             // Use Builder to get context for MediaQuery
             builder: (context) {
               // Determine Brightness based on provider and system setting
-              final themePreference = ref.watch(themeModeProvider);
               final platformBrightness =
                   MediaQuery.of(context).platformBrightness;
+              final themePreference = ref.watch(themeModeProvider);
 
               Brightness finalBrightness;
               switch (themePreference) {
@@ -513,13 +505,13 @@ class _MyAppState extends ConsumerState<MyApp> {
                   return CupertinoPageRoute(
                     // Use CupertinoPageRoute
                     builder:
-                        (context) => const CupertinoPageScaffold(
-                          navigationBar: CupertinoNavigationBar(
+                        (context) => CupertinoPageScaffold(
+                          navigationBar: const CupertinoNavigationBar(
                             middle: Text('Not Found'),
                           ),
                           child: Center(
                             child: Text(
-                              'No route defined for \${settings.name}',
+                              'No route defined for ${settings.name}',
                             ),
                           ),
                         ),
