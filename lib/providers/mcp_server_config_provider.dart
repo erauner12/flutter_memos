@@ -29,11 +29,10 @@ class McpServerConfigNotifier extends StateNotifier<List<McpServerConfig>> {
     }
     final prefs = await SharedPreferences.getInstance();
     List<McpServerConfig> initialStateFromCache = [];
-    bool migrationNeededFromOldPrefs = false;
 
     // 1. Load initial state from local cache (or old prefs for migration)
     final cachedJsonString = prefs.getString(_mcpServerConfigCacheKey);
-    final oldPrefsJsonString = prefs.getString(
+    prefs.getString(
       // MODIFY: Use the local constant
       _oldMcpServerListKey,
     ); // Old key from SettingsService
@@ -81,7 +80,6 @@ class McpServerConfigNotifier extends StateNotifier<List<McpServerConfig>> {
           '[McpServerConfigNotifier] Notifier unmounted before initial state could be set.',
         );
       }
-      return;
     }
 
     // --- Now, fetch from CloudKit asynchronously ---
@@ -131,54 +129,11 @@ class McpServerConfigNotifier extends StateNotifier<List<McpServerConfig>> {
         }
       }
 
-      // Perform migration if needed (after CloudKit check)
-      if (migrationNeededFromOldPrefs) {
-        if (kDebugMode) {
-          print('[McpServerConfigNotifier] Performing MCP migration cleanup...');
-        }
-        // Upload migrated servers to CloudKit in the background
-        await _migratePrefsToCloudKit(initialStateFromCache);
-        // Remove the old prefs key
-        // MODIFY: Use the local constant
-        await prefs.remove(_oldMcpServerListKey);
-        // Ensure the new cache key is populated if CloudKit sync didn't happen or failed
-        if (cachedJsonString == null) {
-           await _updateLocalCache(initialStateFromCache);
-        }
-        if (kDebugMode) {
-          print('[McpServerConfigNotifier] MCP migration cleanup complete.');
-        }
-      } else if (cachedJsonString == null && oldPrefsJsonString != null) {
-         // If cache was empty but old prefs existed, ensure cache is populated after CloudKit check
-         if (mounted) {
-           await _updateLocalCache(state);
-           if (kDebugMode) {
-             print(
-               '[McpServerConfigNotifier] Populated empty MCP cache after checking CloudKit during migration phase.',
-             );
-           }
-         }
-      }
-
     } catch (e) {
       if (kDebugMode) {
         print(
           '[McpServerConfigNotifier] Error during async CloudKit fetch: $e. Continuing with cached data.',
         );
-      }
-      // Optionally, trigger migration cleanup even on CloudKit error if needed
-      if (migrationNeededFromOldPrefs) {
-         if (kDebugMode) {
-           print('[McpServerConfigNotifier] Performing MCP migration cleanup after CloudKit error...');
-         }
-        // MODIFY: Use the local constant
-        await prefs.remove(_oldMcpServerListKey);
-         if (cachedJsonString == null) {
-            await _updateLocalCache(initialStateFromCache);
-         }
-         if (kDebugMode) {
-           print('[McpServerConfigNotifier] MCP migration cleanup complete after CloudKit error.');
-         }
       }
     }
   }
@@ -204,33 +159,6 @@ class McpServerConfigNotifier extends StateNotifier<List<McpServerConfig>> {
         );
       }
       return false;
-    }
-  }
-
-  // Helper to migrate old prefs data to CloudKit
-  Future<void> _migratePrefsToCloudKit(List<McpServerConfig> servers) async {
-    if (kDebugMode) {
-      print(
-        '[McpServerConfigNotifier] Attempting background migration of ${servers.length} MCP servers to CloudKit...',
-      );
-    }
-    for (final server in servers) {
-      try {
-        // Use the specific MCP save method
-        await _cloudKitService.saveMcpServerConfig(server);
-      } catch (e) {
-        if (kDebugMode) {
-          print(
-            '[McpServerConfigNotifier] Error migrating MCP server ${server.id} to CloudKit: $e',
-          );
-        }
-        // Decide if you want to stop migration on first error or continue
-      }
-    }
-    if (kDebugMode) {
-      print(
-        '[McpServerConfigNotifier] Background MCP migration attempt complete.',
-      );
     }
   }
 
