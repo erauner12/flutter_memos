@@ -1352,7 +1352,7 @@ Future<mcp_dart.CallToolResult> _handleUpdateTodoistTask({
 
           if (request.content == null &&
               request.description == null &&
-              request.labels == null &&
+              request.labels.isEmpty &&
               request.priority == null &&
               request.dueString == null &&
               request.dueDate == null &&
@@ -1436,7 +1436,6 @@ Future<mcp_dart.CallToolResult> _handleUpdateTodoistTask({
 
       if (request.content == null &&
           request.description == null &&
-          request.labels == null &&
           request.priority == null &&
           request.dueString == null &&
           request.dueDate == null &&
