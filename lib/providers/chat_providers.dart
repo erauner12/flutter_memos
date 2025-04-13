@@ -97,10 +97,35 @@ class ChatNotifier extends StateNotifier<ChatState> {
       );
     }
 
+    // *** ADD TODOIST CONTEXT ***
+    const String todoistContext = """
+  Todoist Filter Reference (Examples):
+  - `today`: Tasks due today.
+  - `overdue`: Tasks past their due date.
+  - `p1`, `p2`, `p3`, `p4`: Filter by priority.
+  - `#ProjectName`: Tasks in a specific project.
+  - `##ParentProject`: Tasks in a project and its sub-projects.
+  - `@labelName`: Tasks with a specific label.
+  - `7 days`: Tasks due in the next 7 days.
+  - `no date`: Tasks without a due date.
+  - `search: keyword`: Tasks containing a keyword.
+  - Combine with `&` (AND), `|` (OR), `!` (NOT), `()` (grouping). Example: `(today | overdue) & #Work`
+
+  Todoist Date Reference (Examples):
+  - `today`, `tomorrow`, `next monday`, `Jan 27`, `in 3 weeks`
+  - `every day`, `every other week`, `every 3rd friday`, `every! day` (repeats from completion date)
+  - `starting tomorrow`, `until Dec 31`, `for 3 weeks`
+  - `at 5pm`, `for 2h` (duration)
+  """;
+
+    final String messageWithContext = "$todoistContext\\n\\nUser query: $text";
+    // *** END TODOIST CONTEXT ***
+
     final userMessageId = _uuid.v4();
     final userMessage = ChatMessage(
       id: userMessageId,
       role: Role.user, // Use local Role enum
+      // Use the original text for display
       text: text,
       timestamp: DateTime.now(),
     );
@@ -112,7 +137,8 @@ class ChatNotifier extends StateNotifier<ChatState> {
     currentDisplayMessages.add(userMessage);
     // Convert user message text to Content for history
     // Use 'user' string role for Content API
-    currentHistory.add(Content('user', [TextPart(text)]));
+    // Use the message *with context* for the history sent to the AI
+    currentHistory.add(Content('user', [TextPart(messageWithContext)]));
 
     // Add placeholder for model response
     final modelMessageId = _uuid.v4();
@@ -138,15 +164,16 @@ class ChatNotifier extends StateNotifier<ChatState> {
       if (mcpState.hasActiveConnections) {
         // --- Use MCP Client ---
         debugPrint("ChatNotifier: Processing query via MCP Client(s)...");
-        // Pass the history *before* the current user message
+        // Pass the history *before* the current user message (with context)
         final historyForMcp = List<Content>.from(state.chatHistory);
         // Remove the last user message added in this function call
         if (historyForMcp.isNotEmpty && historyForMcp.last.role == 'user') {
           historyForMcp.removeLast();
         }
 
+        // Pass the message *with context* to processQuery
         final McpProcessResult mcpResult = await mcpClientNotifier.processQuery(
-          text,
+          messageWithContext,
           historyForMcp,
         );
 
@@ -176,7 +203,9 @@ class ChatNotifier extends StateNotifier<ChatState> {
           // Update chat history including intermediate steps for context
           final List<Content> finalHistory = [
             ...historyForMcp, // History before user message
-            Content('user', [TextPart(text)]), // User message
+            Content('user', [
+              TextPart(messageWithContext),
+            ]), // User message (with context)
           ];
           // Add model's function call request if it exists
           if (mcpResult.modelCallContent != null) {
@@ -268,7 +297,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
 
         _geminiStreamSubscription?.cancel(); // Cancel previous stream if any
 
-        // Pass the history *before* the current user message
+        // Pass the history *before* the current user message (with context)
         final historyForGemini = List<Content>.from(state.chatHistory);
         // Remove the last added user message before sending to API
         if (historyForGemini.isNotEmpty &&
@@ -280,7 +309,11 @@ class ChatNotifier extends StateNotifier<ChatState> {
           );
         }
 
-        final stream = geminiService.sendMessageStream(text, historyForGemini);
+        // Pass the message *with context* to sendMessageStream
+        final stream = geminiService.sendMessageStream(
+          messageWithContext,
+          historyForGemini,
+        );
 
         _geminiStreamSubscription = stream.listen(
           (response) {
@@ -311,6 +344,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
               messages[index] = finalMessage;
 
               // Add the complete model response to the chat history
+              // History already contains the user message with context
               final updatedHistory = List<Content>.from(state.chatHistory);
               // Ensure the role is 'model' for the history entry
               // Use 'model' string role for Content API
@@ -368,7 +402,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
       } // End of else block for direct Gemini call
     } catch (e, s) {
       // Add stack trace
-      debugPrint("Error sending message: $e\n$s"); // Log stack trace
+      debugPrint("Error sending message: $e\\n$s"); // Log stack trace
       // Update placeholder to error state if something went wrong before streaming/MCP call
       final messages = List<ChatMessage>.from(state.displayMessages);
       final index = messages.indexWhere((m) => m.id == modelMessageId);

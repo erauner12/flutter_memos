@@ -332,14 +332,6 @@ Future<void> main(List<String> args) async {
         'description': '2-letter language code for deadline parsing (optional)',
       }
     },
-    // anyOf: [
-    //   {
-    //     'required': ['tasks']
-    //   },
-    //   {
-    //     'required': ['content']
-    //   }
-    // ],
     callback: _handleCreateTodoistTask, // Use the correct handler
   );
 
@@ -517,21 +509,6 @@ Future<void> main(List<String> args) async {
         'description': 'New 2-letter language code for deadline parsing (optional)',
       }
     },
-    // anyOf: [
-    //   {
-    //     'required': ['tasks']
-    //   },
-    //   {
-    //     'anyOf': [
-    //       {
-    //         'required': ['task_id']
-    //       },
-    //       {
-    //         'required': ['task_name']
-    //       }
-    //     ]
-    //   }
-    // ],
     callback: _handleUpdateTodoistTask, // Direct function reference
   );
 
@@ -571,13 +548,6 @@ Future<void> main(List<String> args) async {
             'The name/content of the task to search for and delete (required if task_id is not provided and "tasks" array is not used).',
       },
     },
-    // anyOf: [
-    //   {'required': ['tasks']},
-    //   {'anyOf': [
-    //     {'required': ['task_id']},
-    //     {'required': ['task_name']}
-    //   ]}
-    // ],
     callback: _handleDeleteTodoistTask, // Direct function reference
   );
 
@@ -617,13 +587,6 @@ Future<void> main(List<String> args) async {
             'The name/content of the task to search for and complete (required if task_id is not provided and "tasks" array is not used).',
       },
     },
-    // anyOf: [
-    //   {'required': ['tasks']},
-    //   {'anyOf': [
-    //     {'required': ['task_id']},
-    //     {'required': ['task_name']}
-    //   ]}
-    // ],
     callback: handleCompleteTodoistTask, // Direct function reference
   );
 
@@ -694,10 +657,6 @@ Future<void> main(List<String> args) async {
         'enum': ['list', 'board']
       }
     },
-    // anyOf: [
-    //   {'required': ['projects']},
-    //   {'required': ['name']}
-    // ],
     callback: _handleCreateProject, // Placeholder for new handler
   );
 
@@ -737,11 +696,7 @@ Future<void> main(List<String> args) async {
               'description': 'View style of the project (optional).',
               'enum': ['list', 'board']
             }
-          },
-          'anyOf': [
-            {'required': ['project_id']},
-            {'required': ['project_name']}
-          ]
+          }
         },
       },
       'project_id': {
@@ -766,10 +721,6 @@ Future<void> main(List<String> args) async {
         'enum': ['list', 'board']
       }
     },
-    // anyOf: [
-    //   {'required': ['projects']},
-    //   {'required': ['project_id']}
-    // ],
     callback: _handleUpdateProject, // Placeholder for new handler
   );
 
@@ -809,13 +760,6 @@ Future<void> main(List<String> args) async {
         'default': true
       }
     },
-    // anyOf: [
-    //   {'required': ['projects']},
-    //   {'anyOf': [
-    //     {'required': ['project_id']},
-    //     {'required': ['project_name']}
-    //   ]}
-    // ],
     callback: _handleGetProjectSections, // Placeholder for new handler
   );
 
@@ -863,19 +807,15 @@ Future<void> main(List<String> args) async {
         'description': 'Order of the section (optional).'
       }
     },
-    // anyOf: [
-    //   {'required': ['sections']},
-    //   {'required': ['project_id', 'name']}
-    // ],
     callback: _handleCreateProjectSection, // Placeholder for new handler
   );
 
-  // Personal Label Tools
+  // Personal Label Tools (No top-level anyOf to remove here)
   server.tool(
     'todoist_get_personal_labels',
     description: 'Get all personal labels from Todoist.',
     inputSchemaProperties: {},
-    callback: _handleGetPersonalLabels, // Placeholder for new handler
+    callback: _handleGetPersonalLabels,
   );
 
   // Change 9: todoist_create_personal_label tool anyOf moved outside inputSchemaProperties
@@ -926,10 +866,6 @@ Future<void> main(List<String> args) async {
         'description': 'Whether the label is a favorite (optional).'
       }
     },
-    // anyOf: [
-    //   {'required': ['labels']},
-    //   {'required': ['name']}
-    // ],
     callback: _handleCreatePersonalLabel, // Placeholder for new handler
   );
 
@@ -942,11 +878,6 @@ Future<void> main(List<String> args) async {
         'description': 'ID of the label to retrieve.'
       }
     },
-    // anyOf: [
-    //   {
-    //     'required': ['label_id']
-    //   }
-    // ],
     callback: _handleGetPersonalLabel, // Placeholder for new handler
   );
 
@@ -1013,13 +944,6 @@ Future<void> main(List<String> args) async {
         'description': 'Whether the label is a favorite (optional).'
       }
     },
-    // anyOf: [
-    //   {'required': ['labels']},
-    //   {'anyOf': [
-    //     {'required': ['label_id']},
-    //     {'required': ['label_name']}
-    //   ]}
-    // ],
     callback: _handleUpdatePersonalLabel, // Placeholder for new handler
   );
 
@@ -1032,15 +956,10 @@ Future<void> main(List<String> args) async {
         'description': 'ID of the label to delete.'
       }
     },
-    // anyOf: [
-    //   {
-    //     'required': ['label_id']
-    //   }
-    // ],
     callback: _handleDeletePersonalLabel, // Placeholder for new handler
   );
 
-  // Shared Label Tools
+  // Shared Label Tools (No top-level anyOf to remove here)
   server.tool(
     'todoist_get_shared_labels',
     description: 'Get all shared labels from Todoist.',
@@ -1050,7 +969,7 @@ Future<void> main(List<String> args) async {
         'description': 'Whether to exclude the names of the user\'s personal labels from the results (default: false).'
       }
     },
-    callback: _handleGetSharedLabels, // Placeholder for new handler
+    callback: _handleGetSharedLabels,
   );
 
   // Change 11: todoist_rename_shared_labels tool anyOf moved outside inputSchemaProperties
@@ -1085,10 +1004,6 @@ Future<void> main(List<String> args) async {
         'description': 'The new name for the label (required if "labels" array is not used).'
       }
     },
-    // anyOf: [
-    //   {'required': ['labels']},
-    //   {'required': ['name', 'new_name']}
-    // ],
     callback: _handleRenameSharedLabels, // Placeholder for new handler
   );
 
@@ -1116,10 +1031,6 @@ Future<void> main(List<String> args) async {
         'description': 'The name of the label to remove (required if "labels" array is not used).'
       }
     },
-    // anyOf: [
-    //   {'required': ['labels']},
-    //   {'required': ['name']}
-    // ],
     callback: _handleRemoveSharedLabels, // Placeholder for new handler
   );
 
@@ -1167,13 +1078,6 @@ Future<void> main(List<String> args) async {
         'description': 'Array of label names to set for the task (required if "tasks" array is not used).'
       }
     },
-    // anyOf: [
-    //   {'required': ['tasks']},
-    //   {'required': ['labels'], 'anyOf': [
-    //     {'required': ['task_id']},
-    //     {'required': ['task_name']}
-    //   ]}
-    // ],
     callback: _handleUpdateTaskLabels, // Placeholder for new handler
   );
 
