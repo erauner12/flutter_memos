@@ -2,8 +2,9 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_memos/models/mcp_server_config.dart';
-import 'package:flutter_memos/providers/cloudkit_service_provider.dart';
 import 'package:flutter_memos/providers/mcp_server_config_provider.dart';
+import 'package:flutter_memos/providers/service_providers.dart';
+import 'package:flutter_memos/services/cloud_kit_service.dart';
 import 'package:flutter_memos/services/gemini_service.dart';
 import 'package:flutter_memos/services/mcp_client_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';

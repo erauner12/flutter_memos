@@ -3,18 +3,18 @@
 // Do not manually edit this file.
 
 // ignore_for_file: no_leading_underscores_for_library_prefixes
-import 'dart:async' as _i5;
+import 'dart:async' as _i6;
 
-import 'package:flutter_memos/models/mcp_server_config.dart' as _i6;
-import 'package:flutter_memos/providers/mcp_server_config_provider.dart' as _i3;
-import 'package:flutter_memos/services/gemini_service.dart' as _i11;
-import 'package:flutter_memos/services/mcp_client_service.dart' as _i8;
-import 'package:flutter_riverpod/flutter_riverpod.dart' as _i4;
-import 'package:google_generative_ai/google_generative_ai.dart' as _i10;
+import 'package:flutter_cloud_kit/types/cloud_kit_account_status.dart' as _i10;
+import 'package:flutter_memos/models/mcp_server_config.dart' as _i7;
+import 'package:flutter_memos/models/server_config.dart' as _i11;
+import 'package:flutter_memos/services/cloud_kit_service.dart' as _i9;
+import 'package:flutter_memos/services/gemini_service.dart' as _i8;
+import 'package:flutter_memos/services/mcp_client_service.dart' as _i3;
+import 'package:google_generative_ai/google_generative_ai.dart' as _i5;
 import 'package:mcp_dart/mcp_dart.dart' as _i2;
 import 'package:mockito/mockito.dart' as _i1;
-import 'package:mockito/src/dummies.dart' as _i9;
-import 'package:state_notifier/state_notifier.dart' as _i7;
+import 'package:mockito/src/dummies.dart' as _i4;
 
 // ignore_for_file: type=lint
 // ignore_for_file: avoid_redundant_argument_values
@@ -51,162 +51,10 @@ class _FakeCallToolResult_1 extends _i1.SmartFake
         );
 }
 
-/// A class which mocks [McpServerConfigNotifier].
-///
-/// See the documentation for Mockito's code generation for more information.
-class MockMcpServerConfigNotifier extends _i1.Mock
-    implements _i3.McpServerConfigNotifier {
-  MockMcpServerConfigNotifier() {
-    _i1.throwOnMissingStub(this);
-  }
-
-  @override
-  set onError(_i4.ErrorListener? _onError) => super.noSuchMethod(
-        Invocation.setter(
-          #onError,
-          _onError,
-        ),
-        returnValueForMissingStub: null,
-      );
-
-  @override
-  bool get mounted => (super.noSuchMethod(
-        Invocation.getter(#mounted),
-        returnValue: false,
-      ) as bool);
-
-  @override
-  _i5.Stream<List<_i6.McpServerConfig>> get stream => (super.noSuchMethod(
-        Invocation.getter(#stream),
-        returnValue: _i5.Stream<List<_i6.McpServerConfig>>.empty(),
-      ) as _i5.Stream<List<_i6.McpServerConfig>>);
-
-  @override
-  List<_i6.McpServerConfig> get state => (super.noSuchMethod(
-        Invocation.getter(#state),
-        returnValue: <_i6.McpServerConfig>[],
-      ) as List<_i6.McpServerConfig>);
-
-  @override
-  set state(List<_i6.McpServerConfig>? value) => super.noSuchMethod(
-        Invocation.setter(
-          #state,
-          value,
-        ),
-        returnValueForMissingStub: null,
-      );
-
-  @override
-  List<_i6.McpServerConfig> get debugState => (super.noSuchMethod(
-        Invocation.getter(#debugState),
-        returnValue: <_i6.McpServerConfig>[],
-      ) as List<_i6.McpServerConfig>);
-
-  @override
-  bool get hasListeners => (super.noSuchMethod(
-        Invocation.getter(#hasListeners),
-        returnValue: false,
-      ) as bool);
-
-  @override
-  _i5.Future<void> loadConfiguration() => (super.noSuchMethod(
-        Invocation.method(
-          #loadConfiguration,
-          [],
-        ),
-        returnValue: _i5.Future<void>.value(),
-        returnValueForMissingStub: _i5.Future<void>.value(),
-      ) as _i5.Future<void>);
-
-  @override
-  _i5.Future<bool> addServer(_i6.McpServerConfig? config) =>
-      (super.noSuchMethod(
-        Invocation.method(
-          #addServer,
-          [config],
-        ),
-        returnValue: _i5.Future<bool>.value(false),
-      ) as _i5.Future<bool>);
-
-  @override
-  _i5.Future<bool> updateServer(_i6.McpServerConfig? updatedConfig) =>
-      (super.noSuchMethod(
-        Invocation.method(
-          #updateServer,
-          [updatedConfig],
-        ),
-        returnValue: _i5.Future<bool>.value(false),
-      ) as _i5.Future<bool>);
-
-  @override
-  _i5.Future<bool> removeServer(String? serverId) => (super.noSuchMethod(
-        Invocation.method(
-          #removeServer,
-          [serverId],
-        ),
-        returnValue: _i5.Future<bool>.value(false),
-      ) as _i5.Future<bool>);
-
-  @override
-  _i5.Future<bool> toggleServerActive(
-    String? serverId,
-    bool? isActive,
-  ) =>
-      (super.noSuchMethod(
-        Invocation.method(
-          #toggleServerActive,
-          [
-            serverId,
-            isActive,
-          ],
-        ),
-        returnValue: _i5.Future<bool>.value(false),
-      ) as _i5.Future<bool>);
-
-  @override
-  bool updateShouldNotify(
-    List<_i6.McpServerConfig>? old,
-    List<_i6.McpServerConfig>? current,
-  ) =>
-      (super.noSuchMethod(
-        Invocation.method(
-          #updateShouldNotify,
-          [
-            old,
-            current,
-          ],
-        ),
-        returnValue: false,
-      ) as bool);
-
-  @override
-  _i4.RemoveListener addListener(
-    _i7.Listener<List<_i6.McpServerConfig>>? listener, {
-    bool? fireImmediately = true,
-  }) =>
-      (super.noSuchMethod(
-        Invocation.method(
-          #addListener,
-          [listener],
-          {#fireImmediately: fireImmediately},
-        ),
-        returnValue: () {},
-      ) as _i4.RemoveListener);
-
-  @override
-  void dispose() => super.noSuchMethod(
-        Invocation.method(
-          #dispose,
-          [],
-        ),
-        returnValueForMissingStub: null,
-      );
-}
-
 /// A class which mocks [GoogleMcpClient].
 ///
 /// See the documentation for Mockito's code generation for more information.
-class MockGoogleMcpClient extends _i1.Mock implements _i8.GoogleMcpClient {
+class MockGoogleMcpClient extends _i1.Mock implements _i3.GoogleMcpClient {
   MockGoogleMcpClient() {
     _i1.throwOnMissingStub(this);
   }
@@ -214,7 +62,7 @@ class MockGoogleMcpClient extends _i1.Mock implements _i8.GoogleMcpClient {
   @override
   String get serverId => (super.noSuchMethod(
         Invocation.getter(#serverId),
-        returnValue: _i9.dummyValue<String>(
+        returnValue: _i4.dummyValue<String>(
           this,
           Invocation.getter(#serverId),
         ),
@@ -236,10 +84,10 @@ class MockGoogleMcpClient extends _i1.Mock implements _i8.GoogleMcpClient {
       ) as bool);
 
   @override
-  List<_i10.Tool> get availableTools => (super.noSuchMethod(
+  List<_i5.Tool> get availableTools => (super.noSuchMethod(
         Invocation.getter(#availableTools),
-        returnValue: <_i10.Tool>[],
-      ) as List<_i10.Tool>);
+        returnValue: <_i5.Tool>[],
+      ) as List<_i5.Tool>);
 
   @override
   void setupCallbacks({
@@ -262,47 +110,47 @@ class MockGoogleMcpClient extends _i1.Mock implements _i8.GoogleMcpClient {
       );
 
   @override
-  _i5.Future<void> connectToServer(_i6.McpServerConfig? config) =>
+  _i6.Future<void> connectToServer(_i7.McpServerConfig? config) =>
       (super.noSuchMethod(
         Invocation.method(
           #connectToServer,
           [config],
         ),
-        returnValue: _i5.Future<void>.value(),
-        returnValueForMissingStub: _i5.Future<void>.value(),
-      ) as _i5.Future<void>);
+        returnValue: _i6.Future<void>.value(),
+        returnValueForMissingStub: _i6.Future<void>.value(),
+      ) as _i6.Future<void>);
 
   @override
-  _i5.Future<_i2.CallToolResult> callTool(_i2.CallToolRequestParams? params) =>
+  _i6.Future<_i2.CallToolResult> callTool(_i2.CallToolRequestParams? params) =>
       (super.noSuchMethod(
         Invocation.method(
           #callTool,
           [params],
         ),
-        returnValue: _i5.Future<_i2.CallToolResult>.value(_FakeCallToolResult_1(
+        returnValue: _i6.Future<_i2.CallToolResult>.value(_FakeCallToolResult_1(
           this,
           Invocation.method(
             #callTool,
             [params],
           ),
         )),
-      ) as _i5.Future<_i2.CallToolResult>);
+      ) as _i6.Future<_i2.CallToolResult>);
 
   @override
-  _i5.Future<void> cleanup() => (super.noSuchMethod(
+  _i6.Future<void> cleanup() => (super.noSuchMethod(
         Invocation.method(
           #cleanup,
           [],
         ),
-        returnValue: _i5.Future<void>.value(),
-        returnValueForMissingStub: _i5.Future<void>.value(),
-      ) as _i5.Future<void>);
+        returnValue: _i6.Future<void>.value(),
+        returnValueForMissingStub: _i6.Future<void>.value(),
+      ) as _i6.Future<void>);
 }
 
 /// A class which mocks [GeminiService].
 ///
 /// See the documentation for Mockito's code generation for more information.
-class MockGeminiService extends _i1.Mock implements _i11.GeminiService {
+class MockGeminiService extends _i1.Mock implements _i8.GeminiService {
   MockGeminiService() {
     _i1.throwOnMissingStub(this);
   }
@@ -314,10 +162,10 @@ class MockGeminiService extends _i1.Mock implements _i11.GeminiService {
       ) as bool);
 
   @override
-  _i5.Future<_i10.GenerateContentResponse> generateContent(
+  _i6.Future<_i5.GenerateContentResponse> generateContent(
     String? prompt,
-    List<_i10.Content>? history, {
-    List<_i10.Tool>? tools,
+    List<_i5.Content>? history, {
+    List<_i5.Tool>? tools,
   }) =>
       (super.noSuchMethod(
         Invocation.method(
@@ -328,8 +176,8 @@ class MockGeminiService extends _i1.Mock implements _i11.GeminiService {
           ],
           {#tools: tools},
         ),
-        returnValue: _i5.Future<_i10.GenerateContentResponse>.value(
-            _i9.dummyValue<_i10.GenerateContentResponse>(
+        returnValue: _i6.Future<_i5.GenerateContentResponse>.value(
+            _i4.dummyValue<_i5.GenerateContentResponse>(
           this,
           Invocation.method(
             #generateContent,
@@ -340,12 +188,12 @@ class MockGeminiService extends _i1.Mock implements _i11.GeminiService {
             {#tools: tools},
           ),
         )),
-      ) as _i5.Future<_i10.GenerateContentResponse>);
+      ) as _i6.Future<_i5.GenerateContentResponse>);
 
   @override
-  _i5.Stream<_i10.GenerateContentResponse> sendMessageStream(
+  _i6.Stream<_i5.GenerateContentResponse> sendMessageStream(
     String? prompt,
-    List<_i10.Content>? history,
+    List<_i5.Content>? history,
   ) =>
       (super.noSuchMethod(
         Invocation.method(
@@ -355,6 +203,120 @@ class MockGeminiService extends _i1.Mock implements _i11.GeminiService {
             history,
           ],
         ),
-        returnValue: _i5.Stream<_i10.GenerateContentResponse>.empty(),
-      ) as _i5.Stream<_i10.GenerateContentResponse>);
+        returnValue: _i6.Stream<_i5.GenerateContentResponse>.empty(),
+      ) as _i6.Stream<_i5.GenerateContentResponse>);
+}
+
+/// A class which mocks [CloudKitService].
+///
+/// See the documentation for Mockito's code generation for more information.
+class MockCloudKitService extends _i1.Mock implements _i9.CloudKitService {
+  MockCloudKitService() {
+    _i1.throwOnMissingStub(this);
+  }
+
+  @override
+  _i6.Future<_i10.CloudKitAccountStatus> initialize() => (super.noSuchMethod(
+        Invocation.method(
+          #initialize,
+          [],
+        ),
+        returnValue: _i6.Future<_i10.CloudKitAccountStatus>.value(
+            _i10.CloudKitAccountStatus.couldNotDetermine),
+      ) as _i6.Future<_i10.CloudKitAccountStatus>);
+
+  @override
+  _i6.Future<bool> saveServerConfig(_i11.ServerConfig? config) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #saveServerConfig,
+          [config],
+        ),
+        returnValue: _i6.Future<bool>.value(false),
+      ) as _i6.Future<bool>);
+
+  @override
+  _i6.Future<_i11.ServerConfig?> getServerConfig(String? id) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #getServerConfig,
+          [id],
+        ),
+        returnValue: _i6.Future<_i11.ServerConfig?>.value(),
+      ) as _i6.Future<_i11.ServerConfig?>);
+
+  @override
+  _i6.Future<List<_i11.ServerConfig>> getAllServerConfigs() =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #getAllServerConfigs,
+          [],
+        ),
+        returnValue:
+            _i6.Future<List<_i11.ServerConfig>>.value(<_i11.ServerConfig>[]),
+      ) as _i6.Future<List<_i11.ServerConfig>>);
+
+  @override
+  _i6.Future<bool> deleteServerConfig(String? id) => (super.noSuchMethod(
+        Invocation.method(
+          #deleteServerConfig,
+          [id],
+        ),
+        returnValue: _i6.Future<bool>.value(false),
+      ) as _i6.Future<bool>);
+
+  @override
+  _i6.Future<String?> getSetting(String? keyName) => (super.noSuchMethod(
+        Invocation.method(
+          #getSetting,
+          [keyName],
+        ),
+        returnValue: _i6.Future<String?>.value(),
+      ) as _i6.Future<String?>);
+
+  @override
+  _i6.Future<bool> saveSetting(
+    String? keyName,
+    String? value,
+  ) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #saveSetting,
+          [
+            keyName,
+            value,
+          ],
+        ),
+        returnValue: _i6.Future<bool>.value(false),
+      ) as _i6.Future<bool>);
+
+  @override
+  _i6.Future<bool> saveMcpServerConfig(_i7.McpServerConfig? config) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #saveMcpServerConfig,
+          [config],
+        ),
+        returnValue: _i6.Future<bool>.value(false),
+      ) as _i6.Future<bool>);
+
+  @override
+  _i6.Future<List<_i7.McpServerConfig>> getAllMcpServerConfigs() =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #getAllMcpServerConfigs,
+          [],
+        ),
+        returnValue: _i6.Future<List<_i7.McpServerConfig>>.value(
+            <_i7.McpServerConfig>[]),
+      ) as _i6.Future<List<_i7.McpServerConfig>>);
+
+  @override
+  _i6.Future<bool> deleteMcpServerConfig(String? id) => (super.noSuchMethod(
+        Invocation.method(
+          #deleteMcpServerConfig,
+          [id],
+        ),
+        returnValue: _i6.Future<bool>.value(false),
+      ) as _i6.Future<bool>);
 }
