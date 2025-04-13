@@ -4,13 +4,11 @@ import 'package:collection/collection.dart'; // For DeepCollectionEquality
 import 'package:flutter/foundation.dart';
 import 'package:flutter_memos/models/mcp_server_config.dart';
 import 'package:flutter_memos/providers/service_providers.dart';
-// REMOVE: import 'package:flutter_memos/providers/settings_provider.dart'; // For old PreferenceKeys
 import 'package:flutter_memos/services/cloud_kit_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 const _mcpServerConfigCacheKey = 'mcp_server_config_cache'; // New cache key
-// ADD: Define the old key locally for migration purposes
 const _oldMcpServerListKey = 'mcp_server_list';
 
 /// Notifier for managing multiple MCP server configurations with persistence
@@ -29,15 +27,14 @@ class McpServerConfigNotifier extends StateNotifier<List<McpServerConfig>> {
     }
     final prefs = await SharedPreferences.getInstance();
     List<McpServerConfig> initialStateFromCache = [];
+    bool migrationNeededFromOldPrefs = false; // Flag for migration
 
     // 1. Load initial state from local cache (or old prefs for migration)
     final cachedJsonString = prefs.getString(_mcpServerConfigCacheKey);
-    prefs.getString(
-      // MODIFY: Use the local constant
-      _oldMcpServerListKey,
-    ); // Old key from SettingsService
+    final oldPrefsJsonString = prefs.getString(_oldMcpServerListKey); // Old key
 
     if (cachedJsonString != null) {
+      // Cache exists, load from it
       try {
         final decodedList = jsonDecode(cachedJsonString) as List;
         initialStateFromCache = decodedList
@@ -55,15 +52,40 @@ class McpServerConfigNotifier extends StateNotifier<List<McpServerConfig>> {
           );
         }
         initialStateFromCache = [];
-        // MODIFY: Use the local constant
-        await prefs.remove(_oldMcpServerListKey);
+        await prefs.remove(_mcpServerConfigCacheKey); // Remove bad cache key
+      }
+    } else if (oldPrefsJsonString != null) {
+      // Cache is empty, try loading from the old key for migration
+      try {
+        final decodedList = jsonDecode(oldPrefsJsonString) as List;
+        initialStateFromCache = decodedList
+            .map((item) => McpServerConfig.fromJson(item as Map<String, dynamic>))
+            .toList();
+        migrationNeededFromOldPrefs = true; // Mark for migration
+        if (kDebugMode) {
+          print(
+            '[McpServerConfigNotifier] Cache empty, using old prefs key $_oldMcpServerListKey for initial state. Migration needed.',
+          );
+        }
+      } catch (e) {
+        if (kDebugMode) {
+          print(
+            '[McpServerConfigNotifier] Error parsing old prefs JSON from key $_oldMcpServerListKey: $e. Starting fresh.',
+          );
+        }
+        initialStateFromCache = [];
+        await prefs.remove(
+          _oldMcpServerListKey,
+        ); // Remove the problematic old key
       }
     } else {
+      // Neither cache nor old prefs exist
       if (kDebugMode) {
         print(
           '[McpServerConfigNotifier] No cache or old prefs found for initial state.',
         );
       }
+      initialStateFromCache = []; // Ensure it's empty
     }
 
     // Set initial state immediately from cache/migration source
@@ -80,6 +102,8 @@ class McpServerConfigNotifier extends StateNotifier<List<McpServerConfig>> {
           '[McpServerConfigNotifier] Notifier unmounted before initial state could be set.',
         );
       }
+      // If unmounted here, no point proceeding with CloudKit fetch for this instance
+      return;
     }
 
     // --- Now, fetch from CloudKit asynchronously ---
@@ -97,12 +121,12 @@ class McpServerConfigNotifier extends StateNotifier<List<McpServerConfig>> {
       }
 
       final listEquals = const DeepCollectionEquality().equals;
-      final currentServers = state; // Get current state
+      final currentServers = state; // Get current state AFTER initial set
 
       if (!listEquals(cloudServers, currentServers)) {
         if (kDebugMode) {
           print(
-            '[McpServerConfigNotifier] CloudKit MCP data differs from cache. Updating state and cache...',
+            '[McpServerConfigNotifier] CloudKit MCP data differs from local state. Updating state and cache...',
           );
         }
 
@@ -124,28 +148,123 @@ class McpServerConfigNotifier extends StateNotifier<List<McpServerConfig>> {
       } else {
         if (kDebugMode) {
           print(
-            '[McpServerConfigNotifier] CloudKit MCP data matches cache. No update needed.',
+            '[McpServerConfigNotifier] CloudKit MCP data matches local state. No update needed.',
           );
         }
       }
 
+      // Perform migration if needed (after CloudKit check)
+      if (migrationNeededFromOldPrefs) {
+        if (kDebugMode) {
+          print('[McpServerConfigNotifier] Performing MCP migration cleanup...');
+        }
+        // Upload migrated servers to CloudKit in the background
+        // Use the initially loaded state from old prefs for migration upload
+        await _migratePrefsToCloudKit(initialStateFromCache);
+        // Remove the old prefs key
+        await prefs.remove(_oldMcpServerListKey);
+        // Ensure the new cache key is populated if CloudKit sync didn't happen or failed
+        // AND if the cache was initially empty (which it was if migrationNeeded is true)
+        if (cachedJsonString == null) {
+          await _updateLocalCache(
+            state,
+          ); // Use the potentially updated state from CloudKit
+          if (kDebugMode) {
+            print(
+              '[McpServerConfigNotifier] Ensured new cache is populated after migration.',
+            );
+          }
+        }
+        if (kDebugMode) {
+          print('[McpServerConfigNotifier] MCP migration cleanup complete.');
+        }
+      } else if (cachedJsonString == null && oldPrefsJsonString != null) {
+        // If cache was empty but old prefs existed (and CloudKit matched, so no migration needed)
+        // ensure cache is populated with the final state.
+        if (mounted) {
+          await _updateLocalCache(state);
+          if (kDebugMode) {
+            print(
+              '[McpServerConfigNotifier] Populated empty MCP cache after checking CloudKit (no migration needed).',
+            );
+          }
+        }
+      }
     } catch (e) {
       if (kDebugMode) {
         print(
-          '[McpServerConfigNotifier] Error during async CloudKit fetch: $e. Continuing with cached data.',
+          '[McpServerConfigNotifier] Error during async CloudKit fetch: $e. Continuing with local data.',
         );
+      }
+      // If CloudKit fails during migration, still try to clean up
+      if (migrationNeededFromOldPrefs) {
+        if (kDebugMode) {
+          print(
+            '[McpServerConfigNotifier] Performing MCP migration cleanup after CloudKit error...',
+          );
+        }
+        // Don't attempt CloudKit upload again
+        await prefs.remove(_oldMcpServerListKey);
+        // Ensure cache is populated with the data loaded from old prefs
+        if (cachedJsonString == null && mounted) {
+          await _updateLocalCache(
+            initialStateFromCache,
+          ); // Use the data from old prefs
+          if (kDebugMode) {
+            print(
+              '[McpServerConfigNotifier] Ensured new cache is populated with old prefs data after CloudKit error.',
+            );
+          }
+        }
+        if (kDebugMode) {
+          print(
+            '[McpServerConfigNotifier] MCP migration cleanup (post-error) complete.',
+          );
+        }
       }
     }
   }
 
-  // Helper to update the local SharedPreferences cache
+  /// Helper to upload migrated servers to CloudKit in the background.
+  Future<void> _migratePrefsToCloudKit(
+    List<McpServerConfig> serversToMigrate,
+  ) async {
+    if (kDebugMode) {
+      print(
+        '[McpServerConfigNotifier] Attempting background migration of ${serversToMigrate.length} MCP servers to CloudKit...',
+      );
+    }
+    for (final server in serversToMigrate) {
+      try {
+        // Use the existing CloudKit service method
+        await _cloudKitService.saveMcpServerConfig(server);
+      } catch (e) {
+        if (kDebugMode) {
+          print(
+            '[McpServerConfigNotifier] Error migrating MCP server ${server.id} to CloudKit: $e',
+          );
+        }
+        // Continue trying to migrate others even if one fails
+      }
+    }
+    if (kDebugMode) {
+      print(
+        '[McpServerConfigNotifier] Background MCP migration attempt complete.',
+      );
+    }
+  }
+
+  /// Helper to update the local SharedPreferences cache
   Future<bool> _updateLocalCache(List<McpServerConfig> servers) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final serverListJson = jsonEncode(
         servers.map((s) => s.toJson()).toList(),
       );
-      final success = await prefs.setString(_mcpServerConfigCacheKey, serverListJson);
+      final success = await prefs.setString(
+        _mcpServerConfigCacheKey,
+        serverListJson,
+      );
       if (kDebugMode) {
         print(
           '[McpServerConfigNotifier] Updated local MCP server cache (success: $success). Cached ${servers.length} servers.',
@@ -219,7 +338,9 @@ class McpServerConfigNotifier extends StateNotifier<List<McpServerConfig>> {
     }
 
     // 1. Sync change to CloudKit FIRST
-    final cloudSuccess = await _cloudKitService.saveMcpServerConfig(updatedConfig);
+    final cloudSuccess = await _cloudKitService.saveMcpServerConfig(
+      updatedConfig,
+    );
 
     if (cloudSuccess) {
       if (!mounted) {
@@ -316,13 +437,13 @@ class McpServerConfigNotifier extends StateNotifier<List<McpServerConfig>> {
     final success = await updateServer(updatedConfig);
 
     if (success && kDebugMode) {
-      // COMMENT OUT: print(
-      //   "[McpServerConfigNotifier] Toggled MCP server '$serverId' isActive to: $isActive and synced.",
-      // );
+      print(
+        "[McpServerConfigNotifier] Toggled MCP server '$serverId' isActive to: $isActive and synced.",
+      );
     } else if (!success && kDebugMode) {
-      // COMMENT OUT: print(
-      //  "[McpServerConfigNotifier] Failed to toggle MCP server '$serverId' isActive status.",
-      // );
+      print(
+        "[McpServerConfigNotifier] Failed to toggle MCP server '$serverId' isActive status.",
+      );
     }
     return success;
   }
@@ -330,6 +451,8 @@ class McpServerConfigNotifier extends StateNotifier<List<McpServerConfig>> {
 
 /// Provider for the MCP server configuration state and management
 final mcpServerConfigProvider =
-    StateNotifierProvider<McpServerConfigNotifier, List<McpServerConfig>>((ref) {
-  return McpServerConfigNotifier(ref);
-}, name: 'mcpServerConfigProvider');
+    StateNotifierProvider<McpServerConfigNotifier, List<McpServerConfig>>((
+      ref,
+    ) {
+      return McpServerConfigNotifier(ref);
+    }, name: 'mcpServerConfigProvider');

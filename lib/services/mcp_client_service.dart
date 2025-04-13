@@ -5,10 +5,11 @@ import 'dart:io' as io; // Use 'io' prefix for dart:io types
 import 'package:collection/collection.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_memos/models/mcp_server_config.dart';
-import 'package:flutter_memos/providers/settings_provider.dart'; // To get server list and Gemini key
+// MODIFY: Import the correct provider
+import 'package:flutter_memos/providers/mcp_server_config_provider.dart';
+import 'package:flutter_memos/providers/settings_provider.dart'; // To get Gemini key & Todoist key
 // Import Stdio types explicitly (less likely to conflict)
 // Note: These should be available via the main lib export now
-// REMOVE: Direct import of Transport
 
 // ADD: Import Todoist API key provider
 import 'package:flutter_memos/services/gemini_service.dart'; // Import GeminiService
@@ -479,7 +480,8 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
   }
 
   void initialize() {
-    final initialConfigs = ref.read(mcpServerListProvider);
+    // MODIFY: Read from the new provider
+    final initialConfigs = ref.read(mcpServerConfigProvider);
     final initialStatuses = <String, McpConnectionStatus>{};
     for (var config in initialConfigs) {
       initialStatuses[config.id] = McpConnectionStatus.disconnected;
@@ -491,12 +493,13 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
       serverErrorMessages: const {},
     );
     debugPrint(
-      "McpClientNotifier: Initialized with \${initialConfigs.length} server configs.",
+      "McpClientNotifier: Initialized with ${initialConfigs.length} server configs.",
     );
 
+    // MODIFY: Listen to the new provider
     serverListSubscription = ref.listen<
       List<McpServerConfig>
-    >(mcpServerListProvider, (previousList, newList) {
+    >(mcpServerConfigProvider, (previousList, newList) {
       debugPrint(
         "McpClientNotifier: Server list updated in settings. Syncing connections...",
       );
@@ -505,8 +508,10 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
       );
       final currentErrors = Map<String, String>.from(state.serverErrorMessages);
       final newServerIds = newList.map((s) => s.id).toSet();
+      // Remove statuses/errors for servers that no longer exist
       currentStatuses.removeWhere((id, _) => !newServerIds.contains(id));
       currentErrors.removeWhere((id, _) => !newServerIds.contains(id));
+      // Add default disconnected status for newly added servers
       for (final server in newList) {
         currentStatuses.putIfAbsent(
           server.id,
@@ -518,9 +523,11 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
         serverStatuses: currentStatuses,
         serverErrorMessages: currentErrors,
       );
+      // Trigger connection sync whenever the list changes
       syncConnections();
     }, fireImmediately: false);
 
+    // Trigger initial sync after initialization
     Future.microtask(() {
       debugPrint("McpClientNotifier: Triggering initial connection sync...");
       syncConnections();
@@ -1123,7 +1130,7 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
               // Pass structured error data to Gemini
               toolResultJson = {
                 'error': message ?? 'Unknown server error',
-                ...?resultData, // Include any additional error details from result
+                ...?resultData,
               };
               debugPrint(
                 "MCP ProcessQuery: Parsed ERROR result for Gemini: \$toolResultJson",
@@ -1151,7 +1158,7 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
         if (toolResultString.isEmpty) {
           // Empty response from tool
           toolResultString =
-              '{"status": "success", "message": "Tool executed successfully but returned no content.", "result": {}}'; // Provide default structure
+              '{"status": "success", "message": "Tool executed successfully but returned no content.", "result": {}}';
           toolResultJson = {'message': 'Tool executed successfully but returned no content.'};
           debugPrint(
             "MCP ProcessQuery: Tool '\$toolName' executed by server '\$targetServerId'. No text content found. Sending default success message.",
@@ -1161,7 +1168,6 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
 
         // --- Prepare for Second Gemini Call ---
         final Content toolResponseContent = Content('function', [
-          // Send the parsed JSON (either success data or error structure)
           FunctionResponse(toolName, toolResultJson),
         ]);
         final List<Content> historyForSecondCall =
