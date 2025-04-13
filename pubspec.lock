@@ -790,10 +790,11 @@ packages:
   mcp_dart:
     dependency: "direct main"
     description:
-      name: mcp_dart
-      sha256: "0d06648d74f04aecaaa88c6199cd5852814e000012441359f7106c9f467c6f3c"
-      url: "https://pub.dev"
-    source: hosted
+      path: "."
+      ref: main
+      resolved-ref: "5748f07b7a1998947958c357312737daedf1c820"
+      url: "git@github.com:erauner12/mcp_dart.git"
+    source: git
     version: "0.3.6"
   meta:
     dependency: "direct dev"
