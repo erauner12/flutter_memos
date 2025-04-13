@@ -792,7 +792,7 @@ packages:
     description:
       path: "."
       ref: main
-      resolved-ref: "5748f07b7a1998947958c357312737daedf1c820"
+      resolved-ref: "16ec50ed1f60906b7b4e6faf1c3bfc13b6db9456"
       url: "git@github.com:erauner12/mcp_dart.git"
     source: git
     version: "0.3.6"
