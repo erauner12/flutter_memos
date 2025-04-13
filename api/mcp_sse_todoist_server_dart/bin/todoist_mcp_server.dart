@@ -493,6 +493,10 @@ Future<void> main(List<String> args) async {
     }
     try {
       httpServer = await HttpServer.bind(InternetAddress.anyIPv4, port);
+      // Explicitly set idleTimeout to null (default) to prevent server-side timeouts
+      httpServer.idleTimeout = null;
+      stderr.writeln(
+          '[TodoistServer][sse] Explicitly set HttpServer.idleTimeout to null.');
       stderr.writeln(
           '[TodoistServer][sse] Serving MCP over SSE (GET \${sseManager.ssePath}) and HTTP (POST \${sseManager.messagePath}) at http://\${httpServer.address.host}:\${httpServer.port}');
       httpServer.listen(
