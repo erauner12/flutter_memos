@@ -103,26 +103,24 @@ void main() {
   setUp(() {
     // Create fresh mocks for each test
     mockMcpServerConfigNotifier = MockMcpServerConfigNotifier();
+    // Stub state IMMEDIATELY
+    when(mockMcpServerConfigNotifier.state).thenReturn([]);
+    // Stub debugState as well, as Riverpod might check it during init
+    when(mockMcpServerConfigNotifier.debugState).thenReturn([]);
+
     mockGeminiService = MockGeminiService();
     // mockGenerativeModel = MockGenerativeModel(); // Removed
     mockClients.clear(); // Clear client map
+    capturedOnErrorCallbacks.clear();
+    capturedOnCloseCallbacks.clear();
 
     // Default behavior for mocks
-    // McpServerConfigNotifier: Start with an empty list
-    when(mockMcpServerConfigNotifier.state).thenReturn([]);
-    // Use streamController to allow updating the state during tests
-    // Initialize the controller here
+    // McpServerConfigNotifier: Use streamController for updates
     serverConfigStreamController =
         StreamController<List<McpServerConfig>>.broadcast();
-    when(mockMcpServerConfigNotifier.stream).thenAnswer((_) => serverConfigStreamController.stream);
-    // Provide a way to update the mock state and stream
-    // mockMcpServerConfigNotifier.updateState = (List<McpServerConfig> newState) { // Removed: Incorrect assignment to method
-    //   when(mockMcpServerConfigNotifier.state).thenReturn(newState);
-    //   serverConfigStreamController.add(newState);
-    // };
-    // Use when/controller directly to update state in tests:
-    // when(mockMcpServerConfigNotifier.state).thenReturn(newState);
-    // serverConfigStreamController.add(newState);
+    when(
+      mockMcpServerConfigNotifier.stream,
+    ).thenAnswer((_) => serverConfigStreamController.stream);
 
     // ADD: Stub for addListener to satisfy ref.listen
     when(
@@ -153,9 +151,6 @@ void main() {
         // We don't override mcpClientProvider itself, but its dependencies
       ],
     );
-
-    // Ensure the notifier reads the initial (empty) state
-    // container.read(mcpClientProvider);
   });
 
   tearDown(() {
