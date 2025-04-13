@@ -123,7 +123,16 @@ class McpServerConfigNotifier extends StateNotifier<List<McpServerConfig>> {
       final listEquals = const DeepCollectionEquality().equals;
       final currentServers = state; // Get current state AFTER initial set
 
-      if (!listEquals(cloudServers, currentServers)) {
+      // --- MODIFICATION START: Prevent overwriting local data with empty CloudKit ---
+      // Only update from CloudKit if CloudKit provides non-empty data that differs,
+      // or if the local state was initially empty and CloudKit provides data.
+      final shouldUpdateFromCloudKit =
+          (cloudServers.isNotEmpty &&
+              !listEquals(cloudServers, currentServers)) ||
+          (currentServers.isEmpty && cloudServers.isNotEmpty);
+
+      if (shouldUpdateFromCloudKit) {
+        // --- MODIFICATION END ---
         if (kDebugMode) {
           print(
             '[McpServerConfigNotifier] CloudKit MCP data differs from local state. Updating state and cache...',
@@ -147,9 +156,16 @@ class McpServerConfigNotifier extends StateNotifier<List<McpServerConfig>> {
         }
       } else {
         if (kDebugMode) {
-          print(
-            '[McpServerConfigNotifier] CloudKit MCP data matches local state. No update needed.',
-          );
+          // Add logging for the case where update is skipped
+          if (cloudServers.isEmpty && currentServers.isNotEmpty) {
+            print(
+              '[McpServerConfigNotifier] CloudKit returned empty MCP data, but local state exists. Keeping local state.',
+            );
+          } else {
+            print(
+              '[McpServerConfigNotifier] CloudKit MCP data matches local state or no update needed. No state/cache change.',
+            );
+          }
         }
       }
 
