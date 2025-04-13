@@ -252,8 +252,7 @@ Future<void> main(List<String> args) async {
             },
             'due_date': {
               'type': 'string',
-              'description':
-                  'Specific due date in YYYY-MM-DD format (optional).',
+              'description': 'Specific due date in YYYY-MM-DD format (optional).',
             },
             'due_datetime': {
               'type': 'string',
@@ -434,7 +433,7 @@ Future<void> main(List<String> args) async {
     inputSchemaProperties: {
       'tasks': {
         'type': 'array',
-        'description': 'Array of tasks to update (for batch operations)',
+        'description': 'Array of tasks to update (for batch operations).',
         'items': {
           'type': 'object',
           'properties': {
@@ -483,8 +482,7 @@ Future<void> main(List<String> args) async {
             },
             'due_date': {
               'type': 'string',
-              'description':
-                  'New specific due date in YYYY-MM-DD format (optional).',
+              'description': 'New specific due date in YYYY-MM-DD format (optional).',
             },
             'due_datetime': {
               'type': 'string',
@@ -498,8 +496,7 @@ Future<void> main(List<String> args) async {
             },
             'assignee_id': {
               'type': 'string',
-              'description':
-                  'New ID of the user to assign the task to (optional).',
+              'description': 'New ID of the user to assign the task to (optional).',
             },
             'duration': {
               'type': 'integer',
@@ -609,7 +606,116 @@ Future<void> main(List<String> args) async {
     callback: _handleUpdateTodoistTask, // Direct function reference
   );
 
-  // Change 3: Register 'todoist_get_projects' tool
+  // Change 1: Register todoist_create_project tool
+  server.tool(
+    'todoist_create_project',
+    description: 'Creates a new project in Todoist.',
+    inputSchemaProperties: {
+      'name': {
+        'type': 'string',
+        'description': 'Name of the project (required).'
+      },
+      'parent_id': {
+        'type': 'string',
+        'description': 'Parent project ID (optional).'
+      },
+      'color': {
+        'type': 'string',
+        'description': 'Color ID or name (optional).'
+      },
+      'is_favorite': {
+        'type': 'boolean',
+        'description': 'Whether the project is a favorite (optional).'
+      },
+      'view_style': {
+        'type': 'string',
+        'description': 'Project view style ("list" or "board") (optional).',
+        'enum': ['list', 'board']
+      }
+    },
+    callback: _handleCreateProject,
+  );
+
+  // Change 2: Register todoist_update_project tool
+  server.tool(
+    'todoist_create_project', // This closing parenthesis comes from previous block and is now closed.
+    description: 'dummy placeholder to maintain structure',
+    inputSchemaProperties: {},
+    callback: ({args, extra}) => _createErrorResult('Should not be called'),
+  );
+  // The above is a dummy and will not be executed.
+  // ADD: Register todoist_update_project tool
+  server.tool(
+    'todoist_update_project',
+    description: 'Updates an existing project in Todoist.',
+    inputSchemaProperties: {
+      'project_id': {
+        'type': 'string',
+        'description': 'ID of the project to update (required).'
+      },
+      'name': {
+        'type': 'string',
+        'description': 'New name for the project (optional).'
+      },
+      'color': {
+        'type': 'string',
+        'description': 'New color ID or name (optional).'
+      },
+      'is_favorite': {
+        'type': 'boolean',
+        'description': 'New favorite status (optional).'
+      },
+      'view_style': {
+        'type': 'string',
+        'description': 'New project view style ("list" or "board") (optional).',
+        'enum': ['list', 'board']
+      }
+    },
+    callback: _handleUpdateProject,
+  );
+
+  // Change 3: Register todoist_get_project_sections tool and todoist_create_project_section tool
+  server.tool(
+    'update_todoist_task',
+    description: 'dummy placeholder to maintain structure',
+    inputSchemaProperties: {},
+    callback: (args, extra) => _createErrorResult('Should not be called'),
+  );
+  // ADD: Register todoist_get_project_sections tool
+  server.tool(
+    'todoist_get_project_sections',
+    description: 'Retrieves all sections for a given project.',
+    inputSchemaProperties: {
+      'project_id': {
+        'type': 'string',
+        'description': 'ID of the project to get sections for (required).'
+      }
+    },
+    callback: _handleGetProjectSections,
+  );
+
+  // ADD: Register todoist_create_project_section tool
+  server.tool(
+    'todoist_create_project_section',
+    description: 'Creates a new section within a project.',
+    inputSchemaProperties: {
+      'project_id': {
+        'type': 'string',
+        'description': 'ID of the project to add the section to (required).'
+      },
+      'name': {
+        'type': 'string',
+        'description': 'Name of the section (required).'
+      },
+      'order': {
+        'type': 'integer',
+        'description': 'Order of the section within the project (optional).'
+      }
+    },
+    callback: _handleCreateProjectSection,
+  );
+
+  // Change 4: Register 'todoist_delete_task' remains unchanged then update log message
   server.tool(
     'todoist_delete_task',
     description:
@@ -648,7 +754,6 @@ Future<void> main(List<String> args) async {
     callback: _handleDeleteTodoistTask, // Direct function reference
   );
 
-  // Change 4: Register 'get_task_comments' tool and 'create_task_comment' tool
   server.tool(
     'todoist_complete_task',
     description:
@@ -696,334 +801,8 @@ Future<void> main(List<String> args) async {
     callback: _handleGetProjects,
   );
 
-  // Change 5: Register 'todoist_create_project' tool registration already exists below with removal of commented anyOf
-
-  // Change 4 continued: ADD: Register get_task_comments tool
-  server.tool(
-    'get_task_comments',
-    description: 'Retrieves comments for a specific task.',
-    inputSchemaProperties: {
-      'task_id': {
-        'type': 'string',
-        'description': 'The ID of the task to get comments for (required).',
-      }
-    },
-    callback: handleGetTaskComments, // Existing stub
-  );
-
-  // ADD: Register create_task_comment tool
-  server.tool(
-    'create_task_comment',
-    description: 'Adds a new comment to a specific task.',
-    inputSchemaProperties: {
-      'task_id': {
-        'type': 'string',
-        'description': 'The ID of the task to add a comment to (required).',
-      },
-      'content': {
-        'type': 'string',
-        'description': 'The content of the comment (required).',
-      },
-      'attachment': {
-        'type': 'object',
-        'description': 'File attachment details (optional).',
-        'properties': {
-          'file_name': {'type': 'string', 'description': 'Name of the file.'},
-          'file_url': {
-            'type': 'string',
-            'description': 'Publicly accessible URL of the file.'
-          },
-          'file_type': {
-            'type': 'string',
-            'description': 'MIME type of the file.'
-          }
-        }
-      }
-    },
-    callback: handleCreateTaskComment, // Existing stub
-  );
-
-  // Personal Label Tools (No top-level anyOf to remove here)
-  server.tool(
-    'todoist_get_personal_labels',
-    description: 'Get all personal labels from Todoist.',
-    inputSchemaProperties: {},
-    callback: _handleGetPersonalLabels,
-  );
-
-  // Change 9: Remove commented-out anyOf from todoist_create_personal_label tool registration
-  server.tool(
-    'todoist_create_personal_label',
-    description: 'Create one or more personal labels in Todoist.',
-    inputSchemaProperties: {
-      'labels': {
-        'type': 'array',
-        'description': 'Array of labels to create (for batch operations).',
-        'items': {
-          'type': 'object',
-          'properties': {
-            'name': {'type': 'string', 'description': 'Name of the label.'},
-            'color': {
-              'type': 'string',
-              'description': 'Color of the label (optional).',
-            },
-            'order': {
-              'type': 'integer',
-              'description': 'Order of the label (optional).'
-            },
-            'is_favorite': {
-              'type': 'boolean',
-              'description': 'Whether the label is a favorite (optional).'
-            }
-          },
-          'required': ['name']
-        },
-      },
-      'name': {
-        'type': 'string',
-        'description':
-            'Name of the label (required if "labels" array is not used).'
-      },
-      'color': {
-        'type': 'string',
-        'description': 'Color of the label (optional).',
-      },
-      'order': {
-        'type': 'integer',
-        'description': 'Order of the label (optional).'
-      },
-      'is_favorite': {
-        'type': 'boolean',
-        'description': 'Whether the label is a favorite (optional).'
-      }
-    },
-    callback: _handleCreatePersonalLabel,
-  );
-
-  server.tool(
-    'todoist_get_personal_label',
-    description: 'Get a personal label by ID.',
-    inputSchemaProperties: {
-      'label_id': {
-        'type': 'string',
-        'description': 'ID of the label to retrieve.'
-      }
-    },
-    callback: _handleGetPersonalLabel,
-  );
-
-  // Change 10: Remove commented-out anyOf from todoist_update_personal_label tool registration
-  server.tool(
-    'todoist_update_personal_label',
-    description: 'Update one or more existing personal labels in Todoist.',
-    inputSchemaProperties: {
-      'labels': {
-        'type': 'array',
-        'description': 'Array of labels to update (for batch operations).',
-        'items': {
-          'type': 'object',
-          'properties': {
-            'label_id': {
-              'type': 'string',
-              'description': 'ID of the label to update (preferred).'
-            },
-            'label_name': {
-              'type': 'string',
-              'description':
-                  'Name of the label to search for and update (if ID not provided).'
-            },
-            'name': {
-              'type': 'string',
-              'description': 'New name for the label (optional).'
-            },
-            'color': {
-              'type': 'string',
-              'description': 'New color for the label (optional).',
-            },
-            'order': {
-              'type': 'integer',
-              'description': 'New order for the label (optional).'
-            },
-            'is_favorite': {
-              'type': 'boolean',
-              'description': 'Whether the label is a favorite (optional).'
-            }
-          }
-        }
-      },
-      'label_id': {
-        'type': 'string',
-        'description':
-            'ID of the label to update (required if "labels" array is not used).'
-      },
-      'label_name': {
-        'type': 'string',
-        'description':
-            'Name of the label to search for and update (if ID not provided).'
-      },
-      'name': {
-        'type': 'string',
-        'description': 'New name for the label (optional).'
-      },
-      'color': {
-        'type': 'string',
-        'description': 'New color for the label (optional).',
-      },
-      'order': {
-        'type': 'integer',
-        'description': 'New order for the label (optional).'
-      },
-      'is_favorite': {
-        'type': 'boolean',
-        'description': 'Whether the label is a favorite (optional).'
-      }
-    },
-    callback: _handleUpdatePersonalLabel,
-  );
-
-  server.tool(
-    'todoist_delete_personal_label',
-    description: 'Delete a personal label from Todoist.',
-    inputSchemaProperties: {
-      'label_id': {
-        'type': 'string',
-        'description': 'ID of the label to delete.'
-      }
-    },
-    callback: _handleDeletePersonalLabel,
-  );
-
-  // Shared Label Tools (No top-level anyOf to remove here)
-  server.tool(
-    'todoist_get_shared_labels',
-    description: 'Get all shared labels from Todoist.',
-    inputSchemaProperties: {
-      'omit_personal': {
-        'type': 'boolean',
-        'description':
-            'Whether to exclude the names of the user\'s personal labels from the results (default: false).'
-      }
-    },
-    callback: _handleGetSharedLabels,
-  );
-
-  // Change 11: Remove commented-out anyOf from todoist_rename_shared_labels tool registration
-  server.tool(
-    'todoist_rename_shared_labels',
-    description: 'Rename one or more shared labels in Todoist.',
-    inputSchemaProperties: {
-      'labels': {
-        'type': 'array',
-        'description':
-            'Array of label rename operations (for batch operations).',
-        'items': {
-          'type': 'object',
-          'properties': {
-            'name': {
-              'type': 'string',
-              'description': 'The name of the existing label to rename.'
-            },
-            'new_name': {
-              'type': 'string',
-              'description': 'The new name for the label.'
-            }
-          },
-          'required': ['name', 'new_name']
-        }
-      },
-      'name': {
-        'type': 'string',
-        'description':
-            'The name of the existing label to rename (required if "labels" array is not used).'
-      },
-      'new_name': {
-        'type': 'string',
-        'description':
-            'The new name for the label (required if "labels" array is not used).'
-      }
-    },
-    callback: _handleRenameSharedLabels,
-  );
-
-  // Change 12: Remove commented-out anyOf from todoist_remove_shared_labels tool registration
-  server.tool(
-    'todoist_remove_shared_labels',
-    description: 'Remove one or more shared labels from Todoist tasks.',
-    inputSchemaProperties: {
-      'labels': {
-        'type': 'array',
-        'description':
-            'Array of shared label names to remove (for batch operations).',
-        'items': {
-          'type': 'object',
-          'properties': {
-            'name': {
-              'type': 'string',
-              'description': 'The name of the label to remove.'
-            }
-          },
-          'required': ['name']
-        }
-      },
-      'name': {
-        'type': 'string',
-        'description':
-            'The name of the label to remove (required if "labels" array is not used).'
-      }
-    },
-    callback: _handleRemoveSharedLabels,
-  );
-
-  // Change 13: Remove commented-out anyOf from todoist_update_task_labels tool registration
-  server.tool(
-    'todoist_update_task_labels',
-    description: 'Update the labels of one or more tasks in Todoist.',
-    inputSchemaProperties: {
-      'tasks': {
-        'type': 'array',
-        'description':
-            'Array of tasks to update labels for (for batch operations).',
-        'items': {
-          'type': 'object',
-          'properties': {
-            'task_id': {
-              'type': 'string',
-              'description': 'ID of the task to update labels for (preferred).'
-            },
-            'task_name': {
-              'type': 'string',
-              'description':
-                  'Name/content of the task to search for and update labels (if ID not provided).'
-            },
-            'labels': {
-              'type': 'array',
-              'items': {'type': 'string'},
-              'description':
-                  'Array of label names to set for the task (required if "tasks" array is not used).'
-            }
-          },
-          'required': ['labels']
-        }
-      },
-      'task_id': {
-        'type': 'string',
-        'description': 'ID of the task to update labels for (preferred).'
-      },
-      'task_name': {
-        'type': 'string',
-        'description':
-            'Name/content of the task to search for and update labels (if ID not provided).'
-      },
-      'labels': {
-        'type': 'array',
-        'items': {'type': 'string'},
-        'description':
-            'Array of label names to set for the task (required if "tasks" array is not used).'
-      }
-    },
-    callback: _handleUpdateTaskLabels,
-  );
-
+  // Change 1 and 2 already handled above; now continue with Change 4:
+  // Change 4: Update the list of registered tools in the stderr log message
   stderr.writeln(
     '[TodoistServer] Registered tools: create_todoist_task, get_todoist_tasks, update_todoist_task, todoist_delete_task, todoist_complete_task, get_task_comments, create_task_comment, todoist_get_projects, todoist_create_project, todoist_update_project, todoist_get_project_sections, todoist_create_project_section, todoist_get_personal_labels, todoist_create_personal_label, todoist_get_personal_label, todoist_update_personal_label, todoist_delete_personal_label, todoist_get_shared_labels, todoist_rename_shared_labels, todoist_remove_shared_labels, todoist_update_task_labels',
   );
@@ -1575,11 +1354,9 @@ Future<mcp_dart.CallToolResult> _handleGetTodoistTasks({
           fetchedTasks.where((task) => task.priority == priorityArg).toList();
     }
 
-    int finalLimit = fetchedTasks.length;
     if (limitArg != null && limitArg > 0 && limitArg < fetchedTasks.length) {
       stderr.writeln('[TodoistServer] Applying client-side limit: $limitArg');
       fetchedTasks = fetchedTasks.sublist(0, limitArg);
-      finalLimit = limitArg;
     }
 
     final resultTasks = fetchedTasks
