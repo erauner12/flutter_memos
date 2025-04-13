@@ -474,6 +474,8 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
   final Ref ref;
   Map<String, String> toolToServerIdMap = {};
   ProviderSubscription<List<McpServerConfig>>? serverListSubscription;
+  // ADD: Map to track pending reconnect timers
+  final Map<String, Timer> _reconnectTimers = {};
 
   McpClientNotifier(this.ref) : super(const McpClientState()) {
     initialize();
@@ -493,7 +495,7 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
       serverErrorMessages: const {},
     );
     debugPrint(
-      "McpClientNotifier: Initialized with ${initialConfigs.length} server configs.",
+      "McpClientNotifier: Initialized with \${initialConfigs.length} server configs.",
     );
 
     // MODIFY: Listen to the new provider
@@ -534,8 +536,73 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
     });
   }
 
+  // ADD: Helper method to schedule reconnection attempts
+  void _scheduleReconnect(
+    String serverId, {
+    Duration delay = const Duration(seconds: 5),
+  }) {
+    if (!mounted) return;
+
+    // Cancel any existing timer for this server
+    _reconnectTimers[serverId]?.cancel();
+    _reconnectTimers.remove(serverId);
+
+    final serverConfig = state.serverConfigs.firstWhereOrNull(
+      (s) => s.id == serverId,
+    );
+
+    // Only schedule if the server config exists and is marked active
+    if (serverConfig != null && serverConfig.isActive) {
+      debugPrint(
+        "MCP [_scheduleReconnect]: Scheduling reconnect for active server [\$serverId] in \$delay.",
+      );
+      _reconnectTimers[serverId] = Timer(delay, () {
+        if (!mounted) return;
+        _reconnectTimers.remove(
+          serverId,
+        ); // Remove timer entry before attempting connect
+
+        // Re-check config and active status right before connecting
+        final currentConfig = state.serverConfigs.firstWhereOrNull(
+          (s) => s.id == serverId,
+        );
+        if (currentConfig != null && currentConfig.isActive) {
+          // Check current status - don't try to connect if already connecting/connected
+          final currentStatus = state.serverStatuses[serverId];
+          if (currentStatus != McpConnectionStatus.connected &&
+              currentStatus != McpConnectionStatus.connecting) {
+            debugPrint(
+              "MCP [_scheduleReconnect]: Timer fired for [\$serverId]. Attempting reconnect.",
+            );
+            connectServer(currentConfig); // Attempt connection
+          } else {
+            debugPrint(
+              "MCP [_scheduleReconnect]: Timer fired for [\$serverId], but status is already \$currentStatus. Skipping reconnect.",
+            );
+          }
+        } else {
+          debugPrint(
+            "MCP [_scheduleReconnect]: Timer fired for [\$serverId], but server is no longer active or config removed. Skipping reconnect.",
+          );
+        }
+      });
+    } else {
+      debugPrint(
+        "MCP [_scheduleReconnect]: Server [\$serverId] is not active or config not found. Skipping reconnect schedule.",
+      );
+    }
+  }
+
   Future<void> connectServer(McpServerConfig serverConfig) async {
     final serverId = serverConfig.id;
+
+    // ADD: Cancel any pending reconnect timer for this server before starting connection attempt
+    _reconnectTimers[serverId]?.cancel();
+    _reconnectTimers.remove(serverId);
+    debugPrint(
+      "MCP [connectServer]: Cleared any pending reconnect timer for [\$serverId].",
+    );
+
     final currentStatus = state.serverStatuses[serverId];
 
     // --- START MODIFICATION: Inject Todoist API Key ---
@@ -604,6 +671,10 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
         debugPrint(
           "MCP [\$serverId]: Client connected successfully. Updating state and rebuilding tool map...",
         );
+        // ADD: Ensure reconnect timer is cancelled on successful connection
+        _reconnectTimers[serverId]?.cancel();
+        _reconnectTimers.remove(serverId);
+
         if (mounted &&
             state.serverStatuses[serverId] == McpConnectionStatus.connecting) {
           state = state.copyWith(
@@ -660,6 +731,13 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
   }
 
   Future<void> disconnectServer(String serverId) async {
+    // ADD: Cancel any pending reconnect timer when explicitly disconnecting
+    _reconnectTimers[serverId]?.cancel();
+    _reconnectTimers.remove(serverId);
+    debugPrint(
+      "MCP [disconnectServer]: Cleared any pending reconnect timer for [\$serverId].",
+    );
+
     final clientToDisconnect = state.activeClients[serverId];
     if (state.serverStatuses[serverId] != McpConnectionStatus.disconnected) {
       updateServerState(serverId, McpConnectionStatus.disconnected);
@@ -805,12 +883,25 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
   void handleClientError(String serverId, String errorMsg) {
     debugPrint("MCP [\$serverId]: Received error callback: \$errorMsg");
     if (!mounted) return;
+    // ADD: Schedule a reconnect attempt *before* updating state if server is active
+    _scheduleReconnect(serverId);
     updateServerState(serverId, McpConnectionStatus.error, errorMsg: errorMsg);
   }
 
   void handleClientClose(String serverId) {
     debugPrint("MCP [\$serverId]: Received close callback.");
     if (!mounted) return;
+
+    // Determine if the close was expected (e.g., due to error state already set)
+    final wasInErrorState =
+        state.serverStatuses[serverId] == McpConnectionStatus.error;
+
+    // ADD: Schedule a reconnect attempt *before* updating state if server is active
+    // Only schedule if not already in an error state (error state handles its own reconnect schedule)
+    if (!wasInErrorState) {
+      _scheduleReconnect(serverId);
+    }
+
     if (state.serverStatuses[serverId] != McpConnectionStatus.error) {
       updateServerState(serverId, McpConnectionStatus.disconnected);
     } else {
@@ -1275,6 +1366,7 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
           Content('model', [
             TextPart("Sorry, I couldn't generate a response."),
           ]);
+      // TODO: should I make use of this?
       final directResponseText = directContent.parts
           .whereType<TextPart>()
           .map((p) => p.text)
@@ -1293,6 +1385,11 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
   void dispose() {
     debugPrint("Disposing McpClientNotifier, cleaning up all clients...");
     serverListSubscription?.close();
+    // ADD: Cancel all pending reconnect timers
+    _reconnectTimers.forEach((_, timer) => timer.cancel());
+    _reconnectTimers.clear();
+    debugPrint("MCP [dispose]: Cancelled all pending reconnect timers.");
+
     final clientIds = List<String>.from(state.activeClients.keys);
     for (final serverId in clientIds) {
       state.activeClients[serverId]?.cleanup();
