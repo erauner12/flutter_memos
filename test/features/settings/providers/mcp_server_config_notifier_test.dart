@@ -18,7 +18,7 @@ const mcpCacheKey = 'mcp_server_config_cache';
 const oldMcpPrefsKey = 'mcp_server_list'; // Match the constant in the notifier
 
 // Sample McpServerConfig data for tests
-final mcpServer1 = McpServerConfig(
+final mcpServer1 = const McpServerConfig(
   id: 'mcp-id-1',
   name: 'MCP Server 1',
   connectionType: McpConnectionType.stdio,
@@ -27,7 +27,7 @@ final mcpServer1 = McpServerConfig(
   isActive: true,
   customEnvironment: {'VAR1': 'VAL1'},
 );
-final mcpServer2 = McpServerConfig(
+final mcpServer2 = const McpServerConfig(
   id: 'mcp-id-2',
   name: 'MCP Server 2',
   connectionType: McpConnectionType.sse,
@@ -102,8 +102,8 @@ void main() {
         await notifier.loadConfiguration();
         await container.pump();
 
-        // Assert
-        expect(notifier.state, initialServers);
+        // Assert: State should remain the cached value, not be cleared by empty CloudKit
+        expect(notifier.state, initialServers); // MODIFY: Expect cached value
         verify(mockCloudKitService.getAllMcpServerConfigs()).called(1);
         // Should not attempt to migrate or upload if cache exists and CloudKit is empty
         verifyNever(mockCloudKitService.saveMcpServerConfig(any));
@@ -124,12 +124,14 @@ void main() {
         // Assert
         expect(notifier.state, initialServers);
         verify(mockCloudKitService.getAllMcpServerConfigs()).called(1);
-        verifyNever(mockCloudKitService.saveMcpServerConfig(any)); // No upload needed
-        // Cache shouldn't be rewritten if data matches
-        // (We can't easily verify no write without mocking SharedPreferences itself)
+        verifyNever(
+          mockCloudKitService.saveMcpServerConfig(any),
+        ); // No upload needed
       });
 
-       test('Loads from cache, CloudKit differs, updates state and cache', () async {
+      test(
+        'Loads from cache, CloudKit differs, updates state and cache',
+        () async {
         // Arrange
         final cachedServers = [mcpServer1];
         final cloudServers = [mcpServer1, mcpServer2]; // CloudKit has more data
@@ -169,8 +171,9 @@ void main() {
         await notifier.loadConfiguration();
         await container.pump(); // Allow async operations
 
-        // Assert: State loaded from old prefs
-        expect(notifier.state, oldServers);
+          // Assert: State loaded from old prefs initially, should remain that value
+          // even though CloudKit returned empty.
+          expect(notifier.state, oldServers); // MODIFY: Expect migrated value
         verify(mockCloudKitService.getAllMcpServerConfigs()).called(1);
 
         // Assert Migration actions:
@@ -188,7 +191,9 @@ void main() {
         expect(prefs.getString(oldMcpPrefsKey), isNull);
       });
 
-       test('Migrates from old prefs, CloudKit has different data, uses CloudKit data', () async {
+      test(
+        'Migrates from old prefs, CloudKit has different data, uses CloudKit data',
+        () async {
         // Arrange: Cache empty, Prefs has value, CloudKit has different value
         final oldServers = [mcpServer1];
         final cloudServers = [mcpServer2]; // CloudKit has different data
@@ -263,7 +268,9 @@ void main() {
         verifyNever(mockCloudKitService.saveMcpServerConfig(any));
       });
 
-       test('Handles CloudKit error during migration, uses local value (old prefs), cleans up old key', () async {
+      test(
+        'Handles CloudKit error during migration, uses local value (old prefs), cleans up old key',
+        () async {
         // Arrange: Cache empty, Prefs has value, CloudKit fails
         final oldServers = [mcpServer1];
         final oldPrefsJson = jsonEncode(oldServers.map((s) => s.toJson()).toList());
@@ -297,7 +304,9 @@ void main() {
 
     // --- addServer Tests ---
     group('addServer', () {
-       test('Adds server successfully, updates state, cache, and CloudKit', () async {
+      test(
+        'Adds server successfully, updates state, cache, and CloudKit',
+        () async {
         // Arrange
         final notifier = container.read(mcpServerConfigProvider.notifier);
         await notifier.loadConfiguration(); // Start empty
@@ -342,7 +351,7 @@ void main() {
         expect(prefs.getString(mcpCacheKey), isNull);
       });
 
-       test('Does not add server if ID already exists', () async {
+      test('Does not add server if ID already exists', () async {
         // Arrange
         final notifier = container.read(mcpServerConfigProvider.notifier);
         // Preload state with server1
@@ -427,7 +436,9 @@ void main() {
 
     // --- removeServer Tests ---
     group('removeServer', () {
-       test('Removes server successfully, updates state, cache, and CloudKit', () async {
+      test(
+        'Removes server successfully, updates state, cache, and CloudKit',
+        () async {
         // Arrange
         final notifier = container.read(mcpServerConfigProvider.notifier);
         notifier.state = [mcpServer1, mcpServer2]; // Initial state

@@ -19,8 +19,6 @@ import 'package:flutter_memos/utils/keyboard_shortcuts.dart'; // Import keyboard
 import 'package:flutter_memos/utils/provider_logger.dart';
 import 'package:flutter_memos/widgets/config_check_wrapper.dart'; // Import the new wrapper
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-// Add import for shared_preferences
-import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   runApp(
@@ -52,7 +50,7 @@ class _MyAppState extends ConsumerState<MyApp> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadInitialTheme();
       _loadServerConfig();
-      _loadMcpServerConfig(); // Call the new loading method
+      // Removed call to the now obsolete loading method
       _initializePersistentNotifiers(); // Call method to initialize string notifiers
       // Replace uni_links initialization
       // _initUniLinks();
@@ -109,32 +107,7 @@ class _MyAppState extends ConsumerState<MyApp> {
     }
   }
 
-  // Add method to load MCP server config
-  void _loadMcpServerConfig() async {
-    // Make async
-    // Get SharedPreferences instance here
-    final prefs = await SharedPreferences.getInstance();
-    // Use the settings service provider to load the list
-    // Pass the prefs instance
-    ref
-        .read(settingsServiceProvider)
-        .loadMcpServerList(prefs) // Pass prefs here
-        .then((_) {
-          if (kDebugMode) {
-            print(
-              '[MyApp] MCP server configuration loaded via SettingsService.',
-            );
-          }
-        })
-        .catchError((e) {
-          if (kDebugMode) {
-            print('[MyApp] Error loading MCP server configuration: $e');
-          }
-          // Handle error if necessary
-        });
-  }
-
-// New method to initialize all PersistentStringNotifiers
+  // New method to initialize all PersistentStringNotifiers
   void _initializePersistentNotifiers() {
     // Use Future.wait to initialize them concurrently, but wait for all
     // This ensures they are ready before the UI might need them or try to save.
@@ -489,13 +462,13 @@ class _MyAppState extends ConsumerState<MyApp> {
                   return CupertinoPageRoute(
                     // Use CupertinoPageRoute
                     builder:
-                        (context) => CupertinoPageScaffold(
-                          navigationBar: const CupertinoNavigationBar(
+                        (context) => const CupertinoPageScaffold(
+                          navigationBar: CupertinoNavigationBar(
                             middle: Text('Not Found'),
                           ),
                           child: Center(
                             child: Text(
-                              'No route defined for ${settings.name}',
+                              'No route defined for \${settings.name}',
                             ),
                           ),
                         ),
