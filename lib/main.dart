@@ -12,6 +12,8 @@ import 'package:flutter_memos/providers/theme_provider.dart';
 import 'package:flutter_memos/providers/ui_providers.dart'; // Import for UI providers including highlightedCommentIdProvider
 import 'package:flutter_memos/screens/edit_memo/edit_memo_screen.dart';
 import 'package:flutter_memos/screens/home_screen.dart';
+// Add import for the new env file
+import 'package:flutter_memos/utils/env.dart';
 import 'package:flutter_memos/screens/memo_detail/memo_detail_screen.dart';
 import 'package:flutter_memos/screens/memos/memos_screen.dart';
 import 'package:flutter_memos/screens/new_memo/new_memo_screen.dart'; // Import NewMemoScreen
@@ -26,14 +28,11 @@ Future<void> main() async {
   // Ensure bindings are initialized before Sentry and runApp
   WidgetsFlutterBinding.ensureInitialized();
 
-  // TODO: Replace 'YOUR_SENTRY_DSN_HERE' with your actual Sentry DSN
-  // It's highly recommended to load this from environment variables or a secure config
-  // rather than hardcoding it.
-  const sentryDsn = 'YOUR_SENTRY_DSN_HERE';
-
+  // Use the hardcoded DSN from env.dart
   await SentryFlutter.init(
     (options) {
-      options.dsn = sentryDsn;
+      // Set the DSN directly from the imported constant
+      options.dsn = sentryDsn; // Use the constant from env.dart
       // Set tracesSampleRate to 1.0 to capture 100% of transactions for performance monitoring.
       // Adjust this value in production.
       options.tracesSampleRate = 1.0;
@@ -106,7 +105,7 @@ class _MyAppState extends ConsumerState<MyApp> {
       prefs.whenData((savedMode) {
         if (mounted) {
           if (kDebugMode) {
-            print('[MyApp] Setting initial theme to: $savedMode');
+            print('[MyApp] Setting initial theme to: \$savedMode');
           }
           ref.read(themeModeProvider.notifier).state = savedMode;
           setState(() {
@@ -157,13 +156,13 @@ class _MyAppState extends ConsumerState<MyApp> {
         })
         .catchError((e) {
           if (kDebugMode) {
-            print('[MyApp] Error initializing PersistentStringNotifiers: $e');
+            print('[MyApp] Error initializing PersistentStringNotifiers: \$e');
           }
           // Handle initialization error if necessary
         });
   }
 
-// Initialize deep link handling using app_links
+  // Initialize deep link handling using app_links
   Future<void> _initAppLinks() async {
     _appLinks = AppLinks(); // Initialize AppLinks
   
@@ -172,7 +171,7 @@ class _MyAppState extends ConsumerState<MyApp> {
       final initialUri = await _appLinks.getInitialLink();
       if (initialUri != null) {
         if (kDebugMode) {
-          print('[AppLinks] Initial link found: $initialUri');
+          print('[AppLinks] Initial link found: \$initialUri');
         }
         _handleDeepLink(initialUri);
       } else {
@@ -182,21 +181,21 @@ class _MyAppState extends ConsumerState<MyApp> {
       }
     } catch (e) {
       // Handle potential errors during initialization
-      if (kDebugMode) print('[AppLinks] Error getting initial link: $e');
+      if (kDebugMode) print('[AppLinks] Error getting initial link: \$e');
     }
   
     // Handle links received while the app is running
     _linkSubscription = _appLinks.uriLinkStream.listen(
       (uri) {
         if (kDebugMode) {
-          print('[AppLinks] Link received while running: $uri');
+          print('[AppLinks] Link received while running: \$uri');
         }
         _handleDeepLink(uri);
       },
       onError: (err) {
         // Handle potential errors in the stream
         if (kDebugMode) {
-          print('[AppLinks] Error listening to link stream: $err');
+          print('[AppLinks] Error listening to link stream: \$err');
         }
       },
     );
@@ -207,21 +206,21 @@ class _MyAppState extends ConsumerState<MyApp> {
     if (uri == null || uri.scheme != 'flutter-memos') {
       if (kDebugMode && uri != null) {
         if (kDebugMode) {
-          print('[DeepLink] Ignoring URI: ${uri.toString()}');
+          print('[DeepLink] Ignoring URI: \${uri.toString()}');
         }
       }
       return;
     }
 
     if (kDebugMode) {
-      print('[DeepLink] Handling URI: ${uri.toString()}');
+      print('[DeepLink] Handling URI: \${uri.toString()}');
     }
 
     final host = uri.host; // Get the host: 'memo' or 'comment'
     final pathSegments = uri.pathSegments;
 
     if (kDebugMode) {
-      print('[DeepLink] Host: $host, Path segments: $pathSegments');
+      print('[DeepLink] Host: \$host, Path segments: \$pathSegments');
     }
 
     // Variables to extract
@@ -238,7 +237,8 @@ class _MyAppState extends ConsumerState<MyApp> {
     } else {
       if (kDebugMode) {
         print(
-          '[DeepLink] Invalid URI structure: $host/${pathSegments.join('/')}',
+          '[DeepLink] Invalid URI structure: \$host/\${pathSegments.join(' /
+              ')}',
         );
       }
       return;
@@ -246,7 +246,7 @@ class _MyAppState extends ConsumerState<MyApp> {
 
     if (kDebugMode) {
       print(
-        '[DeepLink] Navigating to memo: $memoId, highlight comment: $commentIdToHighlight',
+        '[DeepLink] Navigating to memo: \$memoId, highlight comment: \$commentIdToHighlight',
       );
     }
 
@@ -266,14 +266,14 @@ class _MyAppState extends ConsumerState<MyApp> {
     final themeMode = ref.watch(themeModeProvider);
     
     if (kDebugMode) {
-      print('[MyApp] Building with theme mode: $themeMode');
+      print('[MyApp] Building with theme mode: \$themeMode');
     }
 
     // Removed custom macOS keyboard handler as it seems to cause assertion errors.
     // Relying on default Flutter keyboard handling for now.
     
     if (kDebugMode) {
-      print('[MyApp] Current theme mode: $themeMode');
+      print('[MyApp] Current theme mode: \$themeMode');
     }
     
     return Shortcuts(
@@ -438,15 +438,15 @@ class _MyAppState extends ConsumerState<MyApp> {
                 },
                 onGenerateRoute: (settings) {
                   // Use CupertinoPageRoute for iOS-style transitions later (Phase 4)
-                  // For now, keep MaterialPageRoute to avoid breaking existing navigation
-                  // until screens are migrated.
+                  // For now, keep MaterialPageRoute to avoid breaking existing navigation until screens are migrated.
                   if (settings.name == '/memo-detail') {
                     final args = settings.arguments as Map<String, dynamic>;
                     return CupertinoPageRoute(
                       // Use CupertinoPageRoute
                       builder:
-                          (context) =>
-                          MemoDetailScreen(memoId: args['memoId'] as String),
+                          (context) => MemoDetailScreen(
+                            memoId: args['memoId'] as String,
+                          ),
                       settings: settings, // Pass settings
                     );
                   } else if (settings.name == '/edit-entity') {
@@ -458,9 +458,9 @@ class _MyAppState extends ConsumerState<MyApp> {
                       // Use CupertinoPageRoute
                       builder:
                           (context) => EditMemoScreen(
-                        entityId: entityId,
-                        entityType: entityType,
-                      ),
+                            entityId: entityId,
+                            entityType: entityType,
+                          ),
                       settings: settings, // Pass settings
                     );
                   } else if (settings.name == '/deep-link-target') {
