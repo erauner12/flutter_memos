@@ -92,9 +92,18 @@ class McpServerConfigNotifier extends StateNotifier<List<McpServerConfig>> {
     if (mounted) {
       state = initialStateFromCache;
       if (kDebugMode) {
+        final source =
+            cachedJsonString != null
+                ? 'cache'
+                : (oldPrefsJsonString != null ? 'old_prefs' : 'none');
         print(
-          '[McpServerConfigNotifier] Initial state set from cache/prefs. Servers: ${state.length}',
+          '[McpServerConfigNotifier] Initial state set. Source: $source. Servers in state: ${state.length}',
         );
+        if (state.isNotEmpty) {
+          print(
+            '[McpServerConfigNotifier] Initial state server IDs: ${state.map((s) => s.id).join(', ')}',
+          );
+        }
       }
     } else {
       if (kDebugMode) {
@@ -488,7 +497,7 @@ class McpServerConfigNotifier extends StateNotifier<List<McpServerConfig>> {
       }
     } catch (e) {
       if (kDebugMode) {
-        print('[McpServerConfigNotifier] Error clearing local cache: \$e');
+        print('[McpServerConfigNotifier] Error clearing local cache: $e');
       }
       // Logged error, but proceed. Reset is best-effort.
     }
