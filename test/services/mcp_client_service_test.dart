@@ -155,7 +155,7 @@ void main() {
     );
 
     // Ensure the notifier reads the initial (empty) state
-    container.read(mcpClientProvider);
+    // container.read(mcpClientProvider);
   });
 
   tearDown(() {
@@ -170,7 +170,9 @@ void main() {
   group('McpClientNotifier Initialization and Sync', () {
     test('Initial state is correct with no servers', () {
       // Arrange (already done in setUp)
+
       // Act
+      // Read the provider here to trigger initialization
       final state = container.read(mcpClientProvider);
 
       // Assert
@@ -190,9 +192,14 @@ void main() {
       serverConfigStreamController.add(initialConfigs);
 
       // Act: Re-read or trigger initialization if needed (depends on setup)
-      // In this setup, the listener should trigger sync automatically.
       // We might need a small delay or pump to ensure listener fires.
+      // final state = container.read(mcpClientProvider); // Original line
+
+      // Act: Read the provider to trigger initialization and initial sync logic
       final state = container.read(mcpClientProvider);
+      // Allow microtasks like the initial sync to run
+      await container.pump();
+
 
       // Assert: Initial status should be disconnected for all
       expect(state.serverConfigs, initialConfigs);
@@ -228,6 +235,10 @@ void main() {
       // This is tricky without direct injection. We might need to adjust the service
       // or use a more complex mocking strategy if GoogleMcpClient isn't easily mockable.
       // For now, assume we can intercept/verify the call somehow or test side effects.
+
+      // Initialize the provider before acting
+      container.read(mcpClientProvider);
+      await container.pump(); // Allow initialization microtasks
 
       // Act
       await notifier.connectServer(config);
