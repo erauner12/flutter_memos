@@ -4,12 +4,14 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_memos/models/mcp_server_config.dart';
 import 'package:flutter_memos/models/server_config.dart';
 import 'package:flutter_memos/providers/api_providers.dart';
+// ADD: Import the new MCP config provider
+import 'package:flutter_memos/providers/mcp_server_config_provider.dart';
 import 'package:flutter_memos/providers/server_config_provider.dart';
 import 'package:flutter_memos/providers/settings_provider.dart'; // Import settings provider
 import 'package:flutter_memos/screens/add_edit_mcp_server_screen.dart'; // Will be created next
 import 'package:flutter_memos/screens/add_edit_server_screen.dart';
 // Import MCP client provider (for status later)
-import 'package:flutter_memos/services/mcp_client_service.dart'; // Import the new service
+import 'package:flutter_memos/services/mcp_client_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -360,12 +362,20 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         ),
                   );
                   if (confirmed == true) {
-                    final success = await notifier.removeServer(server.id);
+                    // MODIFY: Call removeServer on the new notifier
+                    final success = await ref
+                        .read(mcpServerConfigProvider.notifier)
+                        .removeServer(server.id);
                     if (!success && mounted) {
                       _showResultDialog(
                         'Error',
-                        'Failed to delete server.',
+                        'Failed to delete MCP server.',
                         isError: true,
+                      );
+                    } else if (success && mounted) {
+                      _showResultDialog(
+                        'Deleted',
+                        'MCP Server "${server.name}" deleted.',
                       );
                     }
                   }
@@ -382,7 +392,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   // Helper method to build MCP server list tiles
   List<Widget> _buildMcpServerListTiles(BuildContext context, WidgetRef ref) {
-    final mcpServers = ref.watch(mcpServerListProvider);
+    // MODIFY: Watch the new provider
+    final mcpServers = ref.watch(mcpServerConfigProvider);
     // Watch the MCP client state to get statuses and errors
     final mcpClientState = ref.watch(mcpClientProvider);
     final serverStatuses = mcpClientState.serverStatuses;
@@ -434,9 +445,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             CupertinoSwitch(
               value: userWantsActive,
               onChanged: (bool value) {
+                // MODIFY: Call the method on the new notifier
                 ref
-                    .read(settingsServiceProvider)
-                    .toggleMcpServerActive(server.id, value);
+                    .read(mcpServerConfigProvider.notifier)
+                    .toggleServerActive(server.id, value);
               },
             ),
             const SizedBox(width: 8),
@@ -539,9 +551,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       ),
                 );
                 if (confirmed == true) {
+                  // MODIFY: Call removeServer on the new notifier
                   final success = await ref
-                      .read(settingsServiceProvider)
-                      .deleteMcpServer(server.id);
+                      .read(mcpServerConfigProvider.notifier)
+                      .removeServer(server.id);
                   if (!success && mounted) {
                     _showResultDialog(
                       'Error',

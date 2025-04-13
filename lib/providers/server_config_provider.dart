@@ -2,6 +2,8 @@ import 'package:collection/collection.dart'; // For firstWhereOrNull
 import 'package:flutter/foundation.dart';
 import 'package:flutter_memos/models/multi_server_config_state.dart'; // Import new state model
 import 'package:flutter_memos/models/server_config.dart';
+// ADD: Import the new MCP config provider
+import 'package:flutter_memos/providers/mcp_server_config_provider.dart';
 import 'package:flutter_memos/providers/service_providers.dart'; // Import service provider
 import 'package:flutter_memos/providers/settings_provider.dart';
 import 'package:flutter_memos/services/cloud_kit_service.dart'; // Import CloudKit service
@@ -621,6 +623,21 @@ final loadServerConfigProvider = FutureProvider<void>((ref) async {
   if (kDebugMode) {
     print('[loadServerConfigProvider] Server config load complete.');
   }
+
+  // ADD: Load MCP server configurations
+  try {
+    await ref.read(mcpServerConfigProvider.notifier).loadConfiguration();
+    if (kDebugMode) {
+      print('[loadServerConfigProvider] MCP server config load triggered.');
+    }
+  } catch (e) {
+    if (kDebugMode) {
+      print(
+        '[loadServerConfigProvider] Error initializing MCP config provider: $e',
+      );
+    }
+  }
+  // END ADD
 
   try {
     await ref.read(todoistApiKeyProvider.notifier).init();

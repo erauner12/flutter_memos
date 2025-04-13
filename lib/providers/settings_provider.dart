@@ -1,7 +1,4 @@
-import 'dart:convert'; // For JSON encoding/decoding
-
 import 'package:flutter/foundation.dart';
-import 'package:flutter_memos/models/mcp_server_config.dart'; // Import the new model
 // Add Ref and CloudKitService imports
 import 'package:flutter_memos/providers/service_providers.dart';
 import 'package:flutter_memos/services/cloud_kit_service.dart';
@@ -19,8 +16,7 @@ class PreferenceKeys {
 
   // New keys for Gemini and MCP
   static const String geminiApiKey = 'gemini_api_key';
-  static const String mcpServerListKey =
-      'mcp_server_list'; // Added MCP list key
+  // Removed mcpServerListKey - Managed by McpServerConfigNotifier
 }
 
 /// Provider for the Todoist API key with persistence using SharedPreferences
@@ -68,13 +64,6 @@ final geminiApiKeyProvider =
       name: 'geminiApiKeyProvider', // Provider name
     );
 // --- End Gemini ---
-
-// --- Start MCP ---
-/// Provider holding the list of configured MCP servers.
-/// This list is loaded from SharedPreferences at startup (in main.dart)
-/// and saved back by the SettingsService.
-final mcpServerListProvider = StateProvider<List<McpServerConfig>>((ref) => [], name: 'mcpServerListProvider');
-// --- End MCP ---
 
 /// A StateNotifier that persists string values to SharedPreferences
 class PersistentStringNotifier extends StateNotifier<String> {
@@ -363,144 +352,10 @@ class PersistentStringNotifier extends StateNotifier<String> {
 // --- Settings Service ---
 
 /// Service class to interact with settings persistence (SharedPreferences, SecureStorage, CloudKit).
-/// Handles saving and loading various settings, including API keys and server lists.
+/// Handles saving and loading various settings, including API keys.
 class SettingsService {
   final Ref _ref;
   SettingsService(this._ref);
-
-  // --- MCP List Methods ---
-
-  // Loads the list from storage and updates the provider. Should be called on startup.
-  Future<void> loadMcpServerList(SharedPreferences prefs) async {
-    try {
-      final serverListJson = prefs.getString(PreferenceKeys.mcpServerListKey);
-      if (serverListJson != null && serverListJson.isNotEmpty) {
-        final decodedList = jsonDecode(serverListJson) as List;
-        final servers =
-            decodedList
-                .map(
-                  (item) =>
-                      McpServerConfig.fromJson(item as Map<String, dynamic>),
-                )
-                .toList();
-        _ref.read(mcpServerListProvider.notifier).state = servers;
-        if (kDebugMode) {
-          print(
-            "[SettingsService] MCP Server list loaded. Count: \${servers.length}",
-          );
-        }
-      } else {
-        _ref.read(mcpServerListProvider.notifier).state = [];
-        if (kDebugMode) {
-          print("[SettingsService] No MCP Server list found in storage.");
-        }
-      }
-    } catch (e) {
-      if (kDebugMode) {
-        print("[SettingsService] Error loading/parsing MCP server list: $e");
-      }
-      _ref.read(mcpServerListProvider.notifier).state = [];
-    }
-  }
-
-  // Saves the entire list (including isActive states) to storage and updates the provider.
-  // Takes SharedPreferences instance as an argument.
-  Future<void> saveMcpServerList(
-    SharedPreferences prefs,
-    List<McpServerConfig> servers,
-  ) async {
-    try {
-      final serverListJson = jsonEncode(
-        servers.map((s) => s.toJson()).toList(),
-      );
-      await prefs.setString(PreferenceKeys.mcpServerListKey, serverListJson);
-      _ref.read(mcpServerListProvider.notifier).state = servers;
-      if (kDebugMode) {
-        print(
-          "[SettingsService] MCP Server list saved. Count: \${servers.length}",
-        );
-      }
-    } catch (e) {
-      if (kDebugMode) {
-        print("[SettingsService] Error saving MCP server list: \$e");
-      }
-    }
-  }
-
-  // Method to toggle the isActive status of a specific server
-  Future<void> toggleMcpServerActive(String serverId, bool isActive) async {
-    // Get prefs instance within the method
-    final prefs = await SharedPreferences.getInstance();
-    final currentList = List<McpServerConfig>.from(
-      _ref.read(mcpServerListProvider),
-    ); // Create mutable copy
-    final index = currentList.indexWhere((s) => s.id == serverId);
-    if (index != -1) {
-      currentList[index] = currentList[index].copyWith(isActive: isActive);
-      await saveMcpServerList(prefs, currentList);
-      if (kDebugMode) {
-        print(
-          "[SettingsService] Toggled MCP server '\$serverId' isActive to: \$isActive",
-        );
-      }
-    } else {
-      if (kDebugMode) {
-        print(
-          "[SettingsService] Error: Tried to toggle non-existent MCP server ID '\$serverId'.",
-        );
-      }
-    }
-  }
-
-  // --- Convenience methods for managing the MCP list ---
-  Future<bool> addMcpServer(McpServerConfig newServer) async {
-    // Get prefs instance within the method
-    final prefs = await SharedPreferences.getInstance();
-    final currentList = _ref.read(mcpServerListProvider);
-    // Ensure new servers added via UI start inactive unless explicitly set
-    final serverToAdd = newServer.copyWith(isActive: newServer.isActive);
-    await saveMcpServerList(prefs, [...currentList, serverToAdd]);
-    return true; // Indicate success
-  }
-
-  Future<bool> updateMcpServer(McpServerConfig updatedServer) async {
-    // Get prefs instance within the method
-    final prefs = await SharedPreferences.getInstance();
-    final currentList = _ref.read(mcpServerListProvider);
-    final index = currentList.indexWhere((s) => s.id == updatedServer.id);
-    if (index != -1) {
-      final newList = List<McpServerConfig>.from(currentList);
-      newList[index] = updatedServer;
-      await saveMcpServerList(prefs, newList);
-      return true; // Indicate success
-    } else {
-      if (kDebugMode) {
-        print(
-          "[SettingsService] Error: Tried to update non-existent MCP server ID '\${updatedServer.id}'.",
-        );
-      }
-      return false; // Indicate failure
-    }
-  }
-
-  Future<bool> deleteMcpServer(String serverId) async {
-    // Get prefs instance within the method
-    final prefs = await SharedPreferences.getInstance();
-    final currentList = _ref.read(mcpServerListProvider);
-    final newList = currentList.where((s) => s.id != serverId).toList();
-    if (newList.length < currentList.length) {
-      // Pass prefs and newList correctly
-      await saveMcpServerList(prefs, newList);
-      return true; // Indicate success
-    } else {
-      if (kDebugMode) {
-        print(
-          "[SettingsService] Error: Tried to delete non-existent MCP server ID '\$serverId'.",
-        );
-      }
-      return false; // Indicate failure (server not found)
-    }
-  }
 
   // --- Other Settings Methods (Example: Show Code Blocks - if needed) ---
   // Future<void> saveShowCodeBlocks(bool showCodeBlocks) async {

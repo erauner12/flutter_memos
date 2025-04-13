@@ -1,7 +1,8 @@
 import 'package:flutter/cupertino.dart';
 // MODIFY: Ensure the model is imported
 import 'package:flutter_memos/models/mcp_server_config.dart';
-import 'package:flutter_memos/providers/settings_provider.dart';
+// ADD: Import the new MCP config provider
+import 'package:flutter_memos/providers/mcp_server_config_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
@@ -240,15 +241,20 @@ class _AddEditMcpServerScreenState extends ConsumerState<AddEditMcpServerScreen>
       isSecure: _isSecure,
     );
 
-    final settingsService = ref.read(settingsServiceProvider);
     bool success;
     String actionVerb = _isEditing ? 'updated' : 'added';
 
     try {
       if (_isEditing) {
-        success = await settingsService.updateMcpServer(config);
+        // MODIFY: Use the new notifier's updateServer method
+        success = await ref
+            .read(mcpServerConfigProvider.notifier)
+            .updateServer(config);
       } else {
-        success = await settingsService.addMcpServer(config);
+        // MODIFY: Use the new notifier's addServer method
+        success = await ref
+            .read(mcpServerConfigProvider.notifier)
+            .addServer(config);
       }
 
       if (!mounted) return;
@@ -263,7 +269,7 @@ class _AddEditMcpServerScreenState extends ConsumerState<AddEditMcpServerScreen>
       if (!mounted) return;
       _showResultDialog(
         'Error',
-        'An error occurred while saving: ${e.toString()}',
+        'An error occurred while saving: \${e.toString()}',
         isError: true,
       );
     }
@@ -484,8 +490,8 @@ class _AddEditMcpServerScreenState extends ConsumerState<AddEditMcpServerScreen>
                                 context: contextBeforeDialog,
                                 builder: (context) => CupertinoAlertDialog(
                                   title: const Text('Delete MCP Server?'),
-                                  content: Text(
-                                    'Are you sure you want to delete "${widget.serverToEdit!.name}"?',
+                                        content: const Text(
+                                          'Are you sure you want to delete "\${widget.serverToEdit!.name}"?',
                                   ),
                                   actions: [
                                     CupertinoDialogAction(
@@ -502,13 +508,15 @@ class _AddEditMcpServerScreenState extends ConsumerState<AddEditMcpServerScreen>
                               );
                               if (!mounted) return;
                               if (confirmed == true) {
-                                final success = await ref.read(settingsServiceProvider)
-                                    .deleteMcpServer(widget.serverToEdit!.id);
+                                  // MODIFY: Use the new notifier's removeServer method
+                                  final success = await ref
+                                      .read(mcpServerConfigProvider.notifier)
+                                      .removeServer(widget.serverToEdit!.id);
                                 if (!mounted) return;
                                 if (success) {
                                   _showResultDialog(
                                     'Deleted',
-                                    'MCP Server "${widget.serverToEdit!.name}" deleted.',
+                                      'MCP Server "\${widget.serverToEdit!.name}" deleted.',
                                   );
                                   if (mounted) Navigator.of(context).pop();
                                 } else {
