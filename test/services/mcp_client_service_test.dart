@@ -2,12 +2,10 @@ import 'dart:async';
 
 import 'package:flutter_memos/models/mcp_server_config.dart';
 import 'package:flutter_memos/providers/mcp_server_config_provider.dart';
-import 'package:flutter_memos/providers/service_providers.dart';
 import 'package:flutter_memos/services/gemini_service.dart';
 import 'package:flutter_memos/services/mcp_client_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
 
@@ -48,16 +46,19 @@ final mcpServerInactive = const McpServerConfig(
   McpServerConfigNotifier,
   GoogleMcpClient,
   GeminiService,
-  GenerativeModel, // Mock the model used by GoogleMcpClient
+  // GenerativeModel, // Removed: Cannot mock final class 'GenerativeModel'
 ])
 void main() {
   // --- Test Setup ---
   late MockMcpServerConfigNotifier mockMcpServerConfigNotifier;
   late MockGeminiService mockGeminiService;
-  late MockGenerativeModel mockGenerativeModel;
+  // late MockGenerativeModel mockGenerativeModel; // Removed
   late ProviderContainer container;
   // Keep track of mocked clients created during tests
   final Map<String, MockGoogleMcpClient> mockClients = {};
+  // Maps to capture callbacks for triggering in tests
+  final Map<String, Function(String, String)?> capturedOnErrorCallbacks = {};
+  final Map<String, Function(String)?> capturedOnCloseCallbacks = {};
 
   // Helper to create a mock client instance
   MockGoogleMcpClient createMockClient(String serverId, bool initiallyConnected) {
@@ -65,16 +66,16 @@ void main() {
     when(client.serverId).thenReturn(serverId);
     when(client.isConnected).thenReturn(initiallyConnected);
     when(client.availableTools).thenReturn([]); // Default to no tools
-    when(client.model).thenReturn(mockGenerativeModel); // Link to mocked model
+    // when(client.model).thenReturn(mockGenerativeModel); // Removed: Cannot mock final class
     // Default cleanup behavior
     when(client.cleanup()).thenAnswer((_) async {
-      return null;
+      return;
     });
     // Default connect behavior (can be overridden per test)
     when(client.connectToServer(any)).thenAnswer((_) async {
       // Simulate successful connection by default in mock
       when(client.isConnected).thenReturn(true);
-      return null;
+      return;
     });
     // Store callbacks for later triggering
     Function(String, String)? onErrorCallback;
@@ -85,10 +86,13 @@ void main() {
     )).thenAnswer((invocation) {
       onErrorCallback = invocation.namedArguments[#onError];
       onCloseCallback = invocation.namedArguments[#onClose];
+      // Capture callbacks for external triggering
+      capturedOnErrorCallbacks[serverId] = onErrorCallback;
+      capturedOnCloseCallbacks[serverId] = onCloseCallback;
     });
     // Add methods to trigger callbacks from tests if needed
-    client.triggerError = (String msg) => onErrorCallback?.call(serverId, msg);
-    client.triggerClose = () => onCloseCallback?.call(serverId);
+    // client.triggerError = (String msg) => onErrorCallback?.call(serverId, msg); // Removed: Use capturedOnErrorCallbacks map
+    // client.triggerClose = () => onCloseCallback?.call(serverId); // Removed: Use capturedOnCloseCallbacks map
 
     mockClients[serverId] = client;
     return client;
@@ -98,7 +102,7 @@ void main() {
     // Create fresh mocks for each test
     mockMcpServerConfigNotifier = MockMcpServerConfigNotifier();
     mockGeminiService = MockGeminiService();
-    mockGenerativeModel = MockGenerativeModel(); // Mock the Gemini model
+    // mockGenerativeModel = MockGenerativeModel(); // Removed
     mockClients.clear(); // Clear client map
 
     // Default behavior for mocks
@@ -108,23 +112,31 @@ void main() {
     final serverConfigStreamController = StreamController<List<McpServerConfig>>.broadcast();
     when(mockMcpServerConfigNotifier.stream).thenAnswer((_) => serverConfigStreamController.stream);
     // Provide a way to update the mock state and stream
-    mockMcpServerConfigNotifier.updateState = (List<McpServerConfig> newState) {
-      when(mockMcpServerConfigNotifier.state).thenReturn(newState);
-      serverConfigStreamController.add(newState);
-    };
+    // mockMcpServerConfigNotifier.updateState = (List<McpServerConfig> newState) { // Removed: Incorrect assignment to method
+    //   when(mockMcpServerConfigNotifier.state).thenReturn(newState);
+    //   serverConfigStreamController.add(newState);
+    // };
+    // Use when/controller directly to update state in tests:
+    // when(mockMcpServerConfigNotifier.state).thenReturn(newState);
+    // serverConfigStreamController.add(newState);
+
     // Initial state for the stream
     serverConfigStreamController.add([]);
 
-    // GeminiService: Assume initialized by default, provide the mocked model
+    // GeminiService: Assume initialized by default, provide null for the model
     when(mockGeminiService.isInitialized).thenReturn(true);
-    when(mockGeminiService.model).thenReturn(mockGenerativeModel);
+    when(
+      mockGeminiService.model,
+    ).thenReturn(null); // Return null as GenerativeModel can't be mocked
     when(mockGeminiService.initializationError).thenReturn(null);
 
     // Create ProviderContainer with overrides
     container = ProviderContainer(
       overrides: [
         // Override the config *provider* to return the *notifier* mock
-        mcpServerConfigProvider.overrideWithValue(mockMcpServerConfigNotifier),
+        mcpServerConfigProvider.overrideWith(
+          (_) => mockMcpServerConfigNotifier,
+        ), // Correct override for StateNotifierProvider
         geminiServiceProvider.overrideWithValue(mockGeminiService),
         // We don't override mcpClientProvider itself, but its dependencies
       ],
@@ -160,7 +172,8 @@ void main() {
       // Arrange
       final initialConfigs = [mcpServerStdio, mcpServerInactive];
       // Update the mock *before* reading the provider
-      mockMcpServerConfigNotifier.updateState(initialConfigs);
+      when(mockMcpServerConfigNotifier.state).thenReturn(initialConfigs);
+      serverConfigStreamController.add(initialConfigs);
 
       // Act: Re-read or trigger initialization if needed (depends on setup)
       // In this setup, the listener should trigger sync automatically.
@@ -188,9 +201,14 @@ void main() {
     test('connectServer successfully connects an active server', () async {
       // Arrange
       final config = mcpServerStdio.copyWith(isActive: true);
-      mockMcpServerConfigNotifier.updateState([config]); // Set initial config
+      when(mockMcpServerConfigNotifier.state).thenReturn([config]);
+      serverConfigStreamController.add([config]); // Set initial config
       final notifier = container.read(mcpClientProvider.notifier);
-      final mockClient = createMockClient(config.id, false); // Create mock client
+      // ignore: unused_local_variable
+      final mockClient = createMockClient(
+        config.id,
+        false,
+      ); // Create mock client (will be used for verification later)
 
       // Mock the factory/constructor or inject the mock client instance
       // This is tricky without direct injection. We might need to adjust the service
@@ -271,20 +289,20 @@ extension PumpExtension on ProviderContainer {
 }
 
 // Helper extension for MockMcpServerConfigNotifier
-extension MockNotifierExtension on MockMcpServerConfigNotifier {
-  // Define a setter-like method to update state for tests
-  void updateState(List<McpServerConfig> newState) {
-    // This function body is defined within the setUp method
-    // where the stream controller is accessible.
-  }
-}
+// extension MockNotifierExtension on MockMcpServerConfigNotifier { // Removed: Caused assignment_to_method error
+//   // Define a setter-like method to update state for tests
+//   void updateState(List<McpServerConfig> newState) {
+//     // This function body is defined within the setUp method
+//     // where the stream controller is accessible.
+//   }
+// }
 
 // Helper extension for MockGoogleMcpClient
-extension MockClientTriggerExtension on MockGoogleMcpClient {
-  void triggerError(String msg) {
-    // Defined in createMockClient
-  }
-  void triggerClose() {
-    // Defined in createMockClient
-  }
-}
+// extension MockClientTriggerExtension on MockGoogleMcpClient { // Removed: Caused assignment_to_method error
+//   void triggerError(String msg) {
+//     // Defined in createMockClient
+//   }
+//   void triggerClose() {
+//     // Defined in createMockClient
+//   }
+// }
