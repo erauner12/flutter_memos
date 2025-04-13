@@ -52,16 +52,15 @@ dependencies:
   flutter_cloud_kit: ^0.0.3 # Keep override version
 
   # MCP Integration
-  # Remove or comment out previous version/path entries
-  # mcp_dart: ^0.3.6
+  # Option 1: Git repository (uncomment to use)
   # mcp_dart:
-  #   path: ../mcp_dart
-  # Add the Git dependency
+  #   git:
+  #     url: git@github.com:erauner12/mcp_dart.git
+  #     ref: main
+
+  # Option 2: Local path (currently active)
   mcp_dart:
-    git:
-      url: git@github.com:erauner12/mcp_dart.git # Your SSH URL
-      ref: main # Point to the main branch
-      # path: ../mcp_dart # Assumes mcp_dart is cloned next to flutter_memos
+    path: ../mcp_dart # Assumes mcp_dart is cloned next to flutter_memos
 
   # Other existing dependencies
   flutter_slidable: ^4.0.0
@@ -92,12 +91,15 @@ dependency_overrides:
   flutter_cloud_kit: ^0.0.3 # Keep override
   openai_dart: ^0.4.5 # Keep override
   synchronized: ^3.1.0+1 # Keep override
-  # Replace the mcp_dart path override with the Git override
+  # Option 1: Git repository (currently commented out)
+  # mcp_dart:
+  #   git:
+  #     url: git@github.com:erauner12/mcp_dart.git
+  #     ref: main
+
+  # Option 2: Local path (currently active)
   mcp_dart:
-    git:
-      url: git@github.com:erauner12/mcp_dart.git # Your SSH URL
-      ref: main # Point to the main branch
-      # path: ../mcp_dart # Assumes mcp_dart is cloned next to flutter_memos
+    path: ../mcp_dart # Assumes mcp_dart is cloned next to flutter_memos
 
 dev_dependencies:
   flutter_test:
