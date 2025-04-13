@@ -463,6 +463,36 @@ class McpServerConfigNotifier extends StateNotifier<List<McpServerConfig>> {
     }
     return success;
   }
+
+  /// Resets the notifier state to default and clears associated local cache.
+  Future<void> resetStateAndCache() async {
+    if (kDebugMode) {
+      print('[McpServerConfigNotifier] Resetting state and clearing cache...');
+    }
+    if (mounted) {
+      state = []; // Reset state to empty list
+    } else {
+      if (kDebugMode) {
+        print(
+          '[McpServerConfigNotifier] Notifier unmounted during reset. State not reset.',
+        );
+      }
+    }
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_mcpServerConfigCacheKey); // Clear new cache key
+      await prefs.remove(_oldMcpServerListKey); // Clear old migration key
+      if (kDebugMode) {
+        print('[McpServerConfigNotifier] Local cache keys cleared.');
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('[McpServerConfigNotifier] Error clearing local cache: \$e');
+      }
+      // Logged error, but proceed. Reset is best-effort.
+    }
+  }
 }
 
 /// Provider for the MCP server configuration state and management

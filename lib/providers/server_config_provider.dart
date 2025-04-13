@@ -2,7 +2,6 @@ import 'package:collection/collection.dart'; // For firstWhereOrNull
 import 'package:flutter/foundation.dart';
 import 'package:flutter_memos/models/multi_server_config_state.dart'; // Import new state model
 import 'package:flutter_memos/models/server_config.dart';
-// ADD: Import the new MCP config provider
 import 'package:flutter_memos/providers/mcp_server_config_provider.dart';
 import 'package:flutter_memos/providers/service_providers.dart'; // Import service provider
 import 'package:flutter_memos/providers/settings_provider.dart';
@@ -587,6 +586,39 @@ class MultiServerConfigNotifier extends StateNotifier<MultiServerConfigState> {
       return _saveDefaultServerIdToPreferences(serverId);
     }
     return true;
+  }
+  
+  /// Resets the notifier state to default and clears associated local cache.
+  Future<void> resetStateAndCache() async {
+    if (kDebugMode) {
+      print(
+        '[MultiServerConfigNotifier] Resetting state and clearing cache...',
+      );
+    }
+    if (mounted) {
+      state = const MultiServerConfigState(); // Reset state
+    } else {
+      if (kDebugMode) {
+        print(
+          '[MultiServerConfigNotifier] Notifier unmounted during reset. State not reset.',
+        );
+      }
+    }
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_serverConfigCacheKey); // Clear new cache key
+      await prefs.remove(_multiServerConfigKey); // Clear old migration key
+      await prefs.remove('defaultServerId'); // Clear default ID key
+      if (kDebugMode) {
+        print('[MultiServerConfigNotifier] Local cache keys cleared.');
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('[MultiServerConfigNotifier] Error clearing local cache: \$e');
+      }
+      // Logged error, but proceed. Reset is best-effort.
+    }
   }
 }
 
