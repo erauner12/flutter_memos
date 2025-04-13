@@ -52,15 +52,13 @@ dependencies:
   flutter_cloud_kit: ^0.0.3 # Keep override version
 
   # MCP Integration
-  # Option 1: Git repository (uncomment to use)
+  # Ensure any git or hosted version is commented out
+  # mcp_dart: ^0.3.x
   # mcp_dart:
-  #   git:
-  #     url: git@github.com:erauner12/mcp_dart.git
-  #     ref: main
-
-  # Option 2: Local path (currently active)
+  #   git: ...
+  # Use the local path override
   mcp_dart:
-    path: ../mcp_dart # Assumes mcp_dart is cloned next to flutter_memos
+    path: ../mcp_dart # Verify this path is correct relative to pubspec.yaml
 
   # Other existing dependencies
   flutter_slidable: ^4.0.0
@@ -91,15 +89,12 @@ dependency_overrides:
   flutter_cloud_kit: ^0.0.3 # Keep override
   openai_dart: ^0.4.5 # Keep override
   synchronized: ^3.1.0+1 # Keep override
-  # Option 1: Git repository (currently commented out)
+  # Ensure any git or hosted version is commented out
   # mcp_dart:
-  #   git:
-  #     url: git@github.com:erauner12/mcp_dart.git
-  #     ref: main
-
-  # Option 2: Local path (currently active)
+  #   git: ...
+  # Use the local path override
   mcp_dart:
-    path: ../mcp_dart # Assumes mcp_dart is cloned next to flutter_memos
+    path: ../mcp_dart # Verify this path is correct relative to pubspec.yaml
 
 dev_dependencies:
   flutter_test:
