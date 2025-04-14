@@ -176,8 +176,10 @@ class _EditMemoFormState extends ConsumerState<EditMemoForm>
                   : NoteState.normal, // Use NoteState
         );
         if (kDebugMode) {
+          // Correctly convert NoteState enum to string for logging
+          final stateString = entityToSave.state.toString().split('.').last;
           print(
-            '[EditMemoForm] Saving Note: id=${entityToSave.id}, content="${entityToSave.content.substring(0, (entityToSave.content.length > 50 ? 50 : entityToSave.content.length))}...", pinned=${entityToSave.pinned}, state=${entityToSave.state.name}',
+            '[EditMemoForm] Saving Note: id=${entityToSave.id}, content="${entityToSave.content.substring(0, (entityToSave.content.length > 50 ? 50 : entityToSave.content.length))}...", pinned=${entityToSave.pinned}, state=$stateString',
           );
         }
       }
