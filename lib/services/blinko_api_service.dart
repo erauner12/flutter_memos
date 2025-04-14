@@ -218,15 +218,12 @@ class BlinkoApiService implements BaseApiService {
                     response.body,
                     'List<NotesList200ResponseInner>',
                   )
-                  as List;
+                  as List; // Cast to List<dynamic>
+
+          // The 'decoded' list already contains NotesList200ResponseInner objects.
+          // Directly cast the list elements.
           final notesResponse =
               decoded
-                  .map(
-                    (dynamic item) =>
-                        blinko_api.NotesList200ResponseInner.fromJson(
-                          item as Map<String, dynamic>,
-                        ),
-                  )
                   .whereType<blinko_api.NotesList200ResponseInner>()
                   .toList();
 
@@ -423,6 +420,20 @@ class BlinkoApiService implements BaseApiService {
     } catch (e) {
       throw Exception('Failed to load comments for note $noteId: $e');
     }
+  }
+
+  // Add the missing getNoteComment implementation
+  @override
+  Future<Comment> getNoteComment(
+    String commentId, {
+    ServerConfig? targetServerOverride,
+  }) async {
+    // Blinko API doesn't seem to have a direct getComment endpoint.
+    // We might need to infer the noteId or fetch all comments for a known note and filter.
+    // This is a placeholder implementation assuming we cannot directly fetch a comment by its ID.
+    throw UnimplementedError(
+      'BlinkoApiService does not support getting a single comment by ID without its parent note context.',
+    );
   }
 
   @override
