@@ -18,7 +18,7 @@ class BlinkoApiService implements BaseApiService {
 
   late blinko_api.ApiClient _apiClient;
   late blinko_api.NoteApi _noteApi;
-  late blinko_api.CommentApi _commentApi;
+  // Removed _commentApi field as it is unused
   late blinko_api.FileApi _fileApi; // Add FileApi instance
   // Add other Blinko API parts as needed (e.g., TagApi, FileApi)
 
@@ -32,7 +32,7 @@ class BlinkoApiService implements BaseApiService {
     // Initialize with dummy client; configureService will set it up properly
     _apiClient = blinko_api.ApiClient(basePath: '');
     _noteApi = blinko_api.NoteApi(_apiClient);
-    _commentApi = blinko_api.CommentApi(_apiClient);
+    // Removed initialization of _commentApi
     _fileApi = blinko_api.FileApi(_apiClient); // Initialize FileApi
     // Initialize other APIs...
   }
@@ -87,7 +87,7 @@ class BlinkoApiService implements BaseApiService {
         authentication: blinko_api.HttpBearerAuth()..accessToken = authToken,
       );
       _noteApi = blinko_api.NoteApi(_apiClient);
-      _commentApi = blinko_api.CommentApi(_apiClient);
+      // Removed initialization of _commentApi
       _fileApi = blinko_api.FileApi(
         _apiClient,
       ); // Initialize FileApi here as well
@@ -148,86 +148,59 @@ class BlinkoApiService implements BaseApiService {
       orderBy = blinko_api.NotesListRequestOrderByEnum.asc;
     }
     String searchText = ''; // TODO: Map filter if possible
-    num? tagId; // TODO: Map filter if possible
+    // Removed unused tagId variable
 
     // --- Direct API Call using invokeAPI ---
     const path = r'/v1/note/list'; // The endpoint path
-    final queryParams = <blinko_api.QueryParam>[];
+    final queryParams = <blinko_api.QueryParam>[]; // Use blinko_api.QueryParam
     final headerParams = <String, String>{};
     final formParams = <String, String>{};
-    const contentTypes = <String>[
-      'application/json',
-    ]; // Expected request content type (though body is null)
-    const accepts = <String>[
-      'application/json',
-    ]; // Expected response content type
+    // Define accepts based on what the server provides (usually JSON)
+    const accepts = ['application/json'];
+    // Define contentType for the request (null since no body, or 'application/json')
+    const requestContentType =
+        null; // Or 'application/json' if required by server even with null body
 
-    // Add query parameters
-    queryParams.addAll(
-      blinko_api.ApiClient.parameterToQueryParams('', 'page', pageNumber),
-    );
-    queryParams.addAll(
-      blinko_api.ApiClient.parameterToQueryParams('', 'size', pageSize ?? 30),
-    );
-    queryParams.addAll(
-      blinko_api.ApiClient.parameterToQueryParams(
-        '',
-        'orderBy',
-        orderBy.toJson(),
-      ),
-    ); // Send enum value as string
+    // Add query parameters manually using QueryParam constructor
+    queryParams.add(blinko_api.QueryParam('page', pageNumber.toString()));
+    queryParams.add(blinko_api.QueryParam('size', (pageSize ?? 30).toString()));
+    queryParams.add(
+      blinko_api.QueryParam('orderBy', orderBy.toJson()),
+    ); // Use toJson() for enum string value
+
     if (isArchivedFilter != null) {
-      queryParams.addAll(
-        blinko_api.ApiClient.parameterToQueryParams(
-          '',
-          'isArchived',
-          isArchivedFilter,
-        ),
+      queryParams.add(
+        blinko_api.QueryParam('isArchived', isArchivedFilter.toString()),
       );
     }
     // Always send isRecycle, defaulting to false if not explicitly ARCHIVED
-    queryParams.addAll(
-      blinko_api.ApiClient.parameterToQueryParams(
-        '',
-        'isRecycle',
-        isRecycleFilter,
-      ),
+    queryParams.add(
+      blinko_api.QueryParam('isRecycle', isRecycleFilter.toString()),
     );
 
     // Add other potential query params if mapped from 'filter'
     if (searchText.isNotEmpty) {
-      queryParams.addAll(
-        blinko_api.ApiClient.parameterToQueryParams(
-          '',
-          'searchText',
-          searchText,
-        ),
-      );
+      queryParams.add(blinko_api.QueryParam('searchText', searchText));
     }
-    // Add sort parameter if provided (Blinko might use a different param name)
-    // Assuming Blinko uses 'sort' and 'direction' or just 'orderBy' which we already handle
-    // If Blinko uses 'sort' separately:
-    // if (sort != null) {
-    //   queryParams.addAll(blinko_api.ApiClient.parameterToQueryParams('', 'sort', sort));
-    // }
+    // Add Accept header to headerParams
+    headerParams['Accept'] = accepts.join(',');
 
     try {
       if (kDebugMode) {
         print('[BlinkoApiService.listNotes] Calling invokeAPI POST $path');
         print('[BlinkoApiService.listNotes] Query Params: $queryParams');
+        print('[BlinkoApiService.listNotes] Header Params: $headerParams');
       }
 
-      // Make the API call using invokeAPI with null body
+      // Make the API call using invokeAPI with the correct 7 arguments
       final response = await apiClient.invokeAPI(
-        path,
-        'POST', // Use POST method as per original spec/curl
-        queryParams,
-        null, // Explicitly pass null for the body
-        headerParams,
-        formParams,
-        accepts.join(','), // Pass Accept header value
-        contentTypes.first, // Pass Content-Type header value
-        ['bearerAuth'], // Authentication names
+        path, // endpoint path
+        'POST', // method
+        queryParams, // query parameters
+        null, // body (explicitly null)
+        headerParams, // header parameters (includes Accept)
+        formParams, // form parameters (empty)
+        requestContentType, // contentType (null)
       );
 
       if (kDebugMode) {
@@ -239,9 +212,9 @@ class BlinkoApiService implements BaseApiService {
       // Process the response
       if (response.statusCode >= 200 && response.statusCode < 300) {
         if (response.body.isNotEmpty) {
-          // Deserialize the response body
+          // Deserialize the response body using deserializeAsync
           final decoded =
-              apiClient.deserialize(
+              await apiClient.deserializeAsync(
                     response.body,
                     'List<NotesList200ResponseInner>',
                   )
@@ -266,7 +239,6 @@ class BlinkoApiService implements BaseApiService {
                   : null;
           return ListNotesResponse(notes: notes, nextPageToken: nextPageToken);
         } else {
-          // Handle empty body case - return empty list
           if (kDebugMode) {
             print(
               '[BlinkoApiService.listNotes] invokeAPI returned successful status but empty body.',
@@ -275,7 +247,6 @@ class BlinkoApiService implements BaseApiService {
           return ListNotesResponse(notes: [], nextPageToken: null);
         }
       } else {
-        // Throw exception based on response status/body
         if (kDebugMode) {
           print(
             '[BlinkoApiService.listNotes] invokeAPI failed with status ${response.statusCode}, body: ${response.body}',
@@ -284,7 +255,6 @@ class BlinkoApiService implements BaseApiService {
         throw blinko_api.ApiException(response.statusCode, response.body);
       }
     } catch (e) {
-      // Keep enhanced logging
       if (kDebugMode) {
         print('[BlinkoApiService.listNotes] API call failed: $e');
       }
@@ -430,7 +400,10 @@ class BlinkoApiService implements BaseApiService {
 
   @override
   Future<List<Comment>> listNoteComments(String noteId, {ServerConfig? targetServerOverride}) async {
-    final commentApi = _getCommentApiForServer(targetServerOverride);
+    // Use _getApiClientForServer to create a temporary CommentApi instance
+    final commentApi = blinko_api.CommentApi(
+      _getApiClientForServer(targetServerOverride),
+    );
     final num? noteIdNum = num.tryParse(noteId);
     if (noteIdNum == null) {
       throw ArgumentError(
@@ -452,7 +425,6 @@ class BlinkoApiService implements BaseApiService {
     }
   }
 
-  // Change 2: Correct createNoteComment signature to include resources of type List<memos_api.V1Resource>
   @override
   Future<Comment> createNoteComment(
     String noteId,
@@ -460,7 +432,10 @@ class BlinkoApiService implements BaseApiService {
     ServerConfig? targetServerOverride,
     List<memos_api.V1Resource>? resources,
   }) async {
-    final commentApi = _getCommentApiForServer(targetServerOverride);
+    // Use _getApiClientForServer to create a temporary CommentApi instance
+    final commentApi = blinko_api.CommentApi(
+      _getApiClientForServer(targetServerOverride),
+    );
     final num? noteIdNum = num.tryParse(noteId);
     if (noteIdNum == null) {
       throw ArgumentError(
@@ -490,7 +465,6 @@ class BlinkoApiService implements BaseApiService {
     }
   }
 
-  // Change 3: Correct arguments for notesAddReference call in setNoteRelations
   @override
   Future<void> setNoteRelations(
     String noteId,
@@ -508,7 +482,12 @@ class BlinkoApiService implements BaseApiService {
       for (final relation in relations) {
         final num? relatedNoteIdNum = num.tryParse(relation.relatedMemoId);
         if (relatedNoteIdNum == null) {
-          continue;
+          if (kDebugMode) {
+            print(
+              "Skipping relation with invalid relatedMemoId: \${relation.relatedMemoId}",
+            );
+          }
+          continue; // Skip if related ID is invalid
         }
         final request = blinko_api.NotesAddReferenceRequest(
           fromNoteId: noteIdNum,
@@ -527,7 +506,10 @@ class BlinkoApiService implements BaseApiService {
     Comment comment, {
     ServerConfig? targetServerOverride,
   }) async {
-    final commentApi = _getCommentApiForServer(targetServerOverride);
+    // Use _getApiClientForServer to create a temporary CommentApi instance
+    final commentApi = blinko_api.CommentApi(
+      _getApiClientForServer(targetServerOverride),
+    );
     final num? commentIdNum = num.tryParse(commentId);
     if (commentIdNum == null) {
       throw ArgumentError(
@@ -552,7 +534,10 @@ class BlinkoApiService implements BaseApiService {
 
   @override
   Future<void> deleteNoteComment(String noteId, String commentId, {ServerConfig? targetServerOverride}) async {
-    final commentApi = _getCommentApiForServer(targetServerOverride);
+    // Use _getApiClientForServer to create a temporary CommentApi instance
+    final commentApi = blinko_api.CommentApi(
+      _getApiClientForServer(targetServerOverride),
+    );
     final num? commentIdNum = num.tryParse(commentId);
     if (commentIdNum == null) {
       throw ArgumentError(
@@ -560,6 +545,7 @@ class BlinkoApiService implements BaseApiService {
       );
     }
     try {
+      // Blinko delete comment uses NotesDetailRequest with the comment ID
       final request = blinko_api.NotesDetailRequest(id: commentIdNum);
       await commentApi.commentsDelete(request);
     } catch (e) {
@@ -569,27 +555,6 @@ class BlinkoApiService implements BaseApiService {
       throw Exception(
         'Failed to delete comment $commentId (note $noteId): $e',
       );
-    }
-  }
-
-  // Dummy Implementations for missing BaseApiService methods (Change 1)
-  @override
-  Future<Comment> getNoteComment(
-    String commentId, {
-    ServerConfig? targetServerOverride,
-  }) async {
-    final num? commentIdNum = num.tryParse(commentId);
-    if (commentIdNum == null) {
-      throw ArgumentError(
-        'Invalid numeric ID format for Blinko commentId: $commentId',
-      );
-    }
-    try {
-      throw UnimplementedError(
-        "Blinko API does not support getting a single comment directly.",
-      );
-    } catch (e) {
-      throw Exception('Failed to load comment $commentId: $e');
     }
   }
 
@@ -671,9 +636,7 @@ class BlinkoApiService implements BaseApiService {
     return blinko_api.NoteApi(_getApiClientForServer(serverConfig));
   }
 
-  blinko_api.CommentApi _getCommentApiForServer(ServerConfig? serverConfig) {
-    return blinko_api.CommentApi(_getApiClientForServer(serverConfig));
-  }
+  // Removed the unused _getCommentApiForServer method
 
   // Change 6: Implement _getFileApiForServer helper method
   blinko_api.FileApi _getFileApiForServer(ServerConfig? serverConfig) {
@@ -714,7 +677,7 @@ class BlinkoApiService implements BaseApiService {
       resources: blinkoNote.attachments.map((a) => a.toJson()).toList(),
       relations: blinkoNote.references.map((r) => r.toJson()).toList(),
       // accountId is nullable in the response model, handle appropriately
-      creatorId: blinkoNote.accountId?.toString(),
+      creatorId: blinkoNote.accountId.toString(),
     );
   }
 
@@ -750,7 +713,7 @@ class BlinkoApiService implements BaseApiService {
       resources: blinkoDetail.attachments.map((a) => a.toJson()).toList(),
       relations: blinkoDetail.references.map((r) => r.toJson()).toList(),
       // accountId is nullable in the response model, handle appropriately
-      creatorId: blinkoDetail.accountId?.toString(),
+      creatorId: blinkoDetail.accountId.toString(),
     );
   }
 
@@ -764,14 +727,14 @@ class BlinkoApiService implements BaseApiService {
       return DateTime.tryParse(dateString) ?? DateTime(1970);
     }
     CommentState state = CommentState.normal;
-    bool pinned = false;
+    bool pinned = false; // Blinko comments don't seem to have a pinned state
     return Comment(
       id: blinkoComment.id.toString(),
       content: blinkoComment.content ?? '',
       createTime: parseBlinkoDate(blinkoComment.createdAt).millisecondsSinceEpoch,
       updateTime: parseBlinkoDate(blinkoComment.updatedAt).millisecondsSinceEpoch,
       // accountId is nullable in the response model, handle appropriately
-      creatorId: blinkoComment.accountId?.toString(),
+      creatorId: blinkoComment.accountId.toString(),
       pinned: pinned,
       state: state,
     );
