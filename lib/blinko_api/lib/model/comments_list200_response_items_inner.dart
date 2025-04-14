@@ -217,7 +217,6 @@ class CommentsList200ResponseItemsInner {
   static const requiredKeys = <String>{
     'id',
     'content',
-    'accountId',
     'guestName',
     'guestIP',
     'guestUA',
@@ -229,4 +228,3 @@ class CommentsList200ResponseItemsInner {
     'note',
   };
 }
-
