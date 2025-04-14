@@ -647,7 +647,6 @@ Future<void> main(List<String> args) async {
     callback: ({Map<String, dynamic>? args, RequestHandlerExtra? extra}) =>
         _createErrorResult('Should not be called'),
   );
-  // The above is a dummy and will not be executed.
   // ADD: Register todoist_update_project tool
   server.tool(
     'todoist_update_project',
@@ -1390,8 +1389,9 @@ Future<mcp_dart.CallToolResult> _handleGetTodoistTasks({
             })
         .toList();
 
+    // Update the success message to use limitArg directly
     final successMsg =
-        'Successfully fetched ${resultTasks.length} Todoist tasks (limit applied: ${limitArg ?? 'None'}).';
+        'Successfully fetched ${resultTasks.length} Todoist tasks (limit applied: ${limitArg ?? \'None\'}).';
     stderr.writeln('[TodoistServer] $successMsg');
     return _createSuccessResult(
       successMsg,
@@ -1799,41 +1799,10 @@ Future<mcp_dart.CallToolResult> _handleGetProjects(
   }
 }
 
+// Change 2: Implement _handleCreateProject handler.
 Future<mcp_dart.CallToolResult> _handleCreateProject(
     {Map<String, dynamic>? args, RequestHandlerExtra? extra}) async {
   stderr.writeln('[TodoistServer] Received todoist_create_project request.');
-  stderr.writeln('[TodoistServer] Args: ${jsonEncode(args)}');
-  return _createErrorResult('Handler not implemented yet.');
-}
-
-Future<mcp_dart.CallToolResult> _handleUpdateProject(
-    {Map<String, dynamic>? args, RequestHandlerExtra? extra}) async {
-  stderr.writeln('[TodoistServer] Received todoist_update_project request.');
-  stderr.writeln('[TodoistServer] Args: ${jsonEncode(args)}');
-  return _createErrorResult('Handler not implemented yet.');
-}
-
-Future<mcp_dart.CallToolResult> _handleGetProjectSections(
-    {Map<String, dynamic>? args, RequestHandlerExtra? extra}) async {
-  stderr.writeln(
-      '[TodoistServer] Received todoist_get_project_sections request.');
-  stderr.writeln('[TodoistServer] Args: ${jsonEncode(args)}');
-  return _createErrorResult('Handler not implemented yet.');
-}
-
-Future<mcp_dart.CallToolResult> _handleCreateProjectSection(
-    {Map<String, dynamic>? args, RequestHandlerExtra? extra}) async {
-  stderr.writeln(
-      '[TodoistServer] Received todoist_create_project_section request.');
-  stderr.writeln('[TodoistServer] Args: ${jsonEncode(args)}');
-  return _createErrorResult('Handler not implemented yet.');
-}
-
-// Personal Label Handlers
-Future<mcp_dart.CallToolResult> _handleGetPersonalLabels(
-    {Map<String, dynamic>? args, RequestHandlerExtra? extra}) async {
-  stderr
-      .writeln('[TodoistServer] Received todoist_get_personal_labels request.');
   stderr.writeln('[TodoistServer] Args: ${jsonEncode(args)}');
 
   final apiClient = _configureApiClient();
@@ -1841,107 +1810,299 @@ Future<mcp_dart.CallToolResult> _handleGetPersonalLabels(
     return _createErrorResult(
         'TODOIST_API_TOKEN environment variable not set or empty.');
   }
-  final labelsApi = todoist.LabelsApi(apiClient);
+  final projectsApi = todoist.ProjectsApi(apiClient);
 
   try {
-    final labels = await labelsApi.getAllPersonalLabels();
-    if (labels == null) {
-      return _createErrorResult('API returned null label list.');
+    final name = args?['name'] as String?;
+    if (name == null || name.trim().isEmpty) {
+      return _createErrorResult('Project name cannot be empty.');
     }
 
-    final resultLabels = labels
-        .map((label) => {
-              'id': label.id,
-              'name': label.name,
-              'color': label.color,
-              'order': label.order,
-              'is_favorite': label.isFavorite,
-            })
-        .toList();
+    final request = todoist.CreateProjectRequest(
+      name: name,
+      parentId: args?['parent_id'] as String?,
+      color: args?['color'] as String?,
+      isFavorite: args?['is_favorite'] as bool?,
+      viewStyle: args?['view_style'] as String?,
+    );
+
+    final newProject = await projectsApi.createProject(request);
+    if (newProject == null) {
+      return _createErrorResult('API returned null for the new project.');
+    }
 
     final successMsg =
-        'Successfully fetched ${resultLabels.length} personal Todoist labels.';
-    stderr.writeln('[TodoistServer] $successMsg');
+        'Todoist project created successfully: "${newProject.name}"';
+    stderr.writeln('[TodoistServer] $successMsg (ID: ${newProject.id})');
     return _createSuccessResult(
       successMsg,
-      resultData: {'labels': resultLabels},
+      resultData: {
+        'project': {
+          'id': newProject.id,
+          'name': newProject.name,
+          'color': newProject.color,
+          'parent_id': newProject.parentId,
+          'order': newProject.order,
+          'comment_count': newProject.commentCount,
+          'is_shared': newProject.isShared,
+          'is_favorite': newProject.isFavorite,
+          'is_inbox_project': newProject.isInboxProject,
+          'is_team_inbox': newProject.isTeamInbox,
+          'view_style': newProject.viewStyle,
+          'url': newProject.url,
+        }
+      },
     );
   } catch (e) {
-    var apiErrorMsg = 'Error getting personal Todoist labels: ${e.toString()}';
+    var apiErrorMsg = 'Error creating Todoist project: ${e.toString()}';
     stderr.writeln('[TodoistServer] $apiErrorMsg');
     Map<String, dynamic>? errorData;
     if (e is todoist.ApiException) {
       stderr.writeln(
           '[TodoistServer] API Exception Details: Code=${e.code}, Message=${e.message}');
       apiErrorMsg =
-          'API Error getting personal labels (${e.code}): ${e.message ?? "Unknown API error"}';
+          'API Error creating project (${e.code}): ${e.message ?? "Unknown API error"}';
       errorData = {'apiCode': e.code, 'apiMessage': e.message};
     }
     return _createErrorResult(apiErrorMsg, errorData: errorData);
   }
 }
 
-Future<mcp_dart.CallToolResult> _handleCreatePersonalLabel(
+// Change 3: Implement _handleUpdateProject handler.
+Future<mcp_dart.CallToolResult> _handleUpdateProject(
+    {Map<String, dynamic>? args, RequestHandlerExtra? extra}) async {
+  stderr.writeln('[TodoistServer] Received todoist_update_project request.');
+  stderr.writeln('[TodoistServer] Args: ${jsonEncode(args)}');
+
+  final apiClient = _configureApiClient();
+  if (apiClient == null) {
+    return _createErrorResult(
+        'TODOIST_API_TOKEN environment variable not set or empty.');
+  }
+  final projectsApi = todoist.ProjectsApi(apiClient);
+
+  try {
+    final projectIdStr = args?['project_id'] as String?;
+    if (projectIdStr == null || projectIdStr.trim().isEmpty) {
+      return _createErrorResult('Project ID is required for update.');
+    }
+
+    final intId = int.tryParse(projectIdStr);
+    if (intId == null) {
+      return _createErrorResult('Invalid Project ID format: "$projectIdStr".');
+    }
+
+    // Check if project exists (optional but good practice)
+    try {
+      await projectsApi.getProject(intId);
+    } catch (e) {
+      if (e is todoist.ApiException && e.code == 404) {
+        return _createErrorResult('Project with ID "$projectIdStr" not found.');
+      }
+      rethrow;
+    }
+
+    final request = todoist.UpdateProjectRequest(
+      name: args?['name'] as String?,
+      color: args?['color'] as String?,
+      isFavorite: args?['is_favorite'] as bool?,
+      viewStyle: args?['view_style'] as String?,
+    );
+
+    if (request.name == null &&
+        request.color == null &&
+        request.isFavorite == null &&
+        request.viewStyle == null) {
+      return _createErrorResult(
+          'No update parameters provided for project ID $projectIdStr.');
+    }
+
+    await projectsApi.updateProject(intId, request);
+    final updatedProject = await projectsApi.getProject(intId);
+
+    if (updatedProject == null) {
+      return _createErrorResult(
+          'Project updated, but failed to re-fetch details for ID $projectIdStr.');
+    }
+
+    final successMsg =
+        'Todoist project "${updatedProject.name}" (ID: $projectIdStr) updated successfully.';
+    stderr.writeln('[TodoistServer] $successMsg');
+    return _createSuccessResult(
+      successMsg,
+      resultData: {
+        'project': {
+          'id': updatedProject.id,
+          'name': updatedProject.name,
+          'color': updatedProject.color,
+          'parent_id': updatedProject.parentId,
+          'order': updatedProject.order,
+          'comment_count': updatedProject.commentCount,
+          'is_shared': updatedProject.isShared,
+          'is_favorite': updatedProject.isFavorite,
+          'is_inbox_project': updatedProject.isInboxProject,
+          'is_team_inbox': updatedProject.isTeamInbox,
+          'view_style': updatedProject.viewStyle,
+          'url': updatedProject.url,
+        }
+      },
+    );
+  } catch (e) {
+    var apiErrorMsg = 'Error updating Todoist project: ${e.toString()}';
+    stderr.writeln('[TodoistServer] $apiErrorMsg');
+    Map<String, dynamic>? errorData;
+    if (e is todoist.ApiException) {
+      stderr.writeln(
+          '[TodoistServer] API Exception Details: Code=${e.code}, Message=${e.message}');
+      apiErrorMsg =
+          'API Error updating project (${e.code}): ${e.message ?? "Unknown API error"}';
+      errorData = {'apiCode': e.code, 'apiMessage': e.message};
+    }
+    return _createErrorResult(apiErrorMsg, errorData: errorData);
+  }
+}
+
+// Change 4: Implement _handleGetProjectSections handler.
+Future<mcp_dart.CallToolResult> _handleGetProjectSections(
     {Map<String, dynamic>? args, RequestHandlerExtra? extra}) async {
   stderr.writeln(
-      '[TodoistServer] Received todoist_create_personal_label request.');
+      '[TodoistServer] Received todoist_get_project_sections request.');
   stderr.writeln('[TodoistServer] Args: ${jsonEncode(args)}');
-  return _createErrorResult('Handler not implemented yet.');
+
+  final apiClient = _configureApiClient();
+  if (apiClient == null) {
+    return _createErrorResult(
+        'TODOIST_API_TOKEN environment variable not set or empty.');
+  }
+  final sectionsApi = todoist.SectionsApi(apiClient);
+
+  try {
+    final projectIdStr = args?['project_id'] as String?;
+    if (projectIdStr == null || projectIdStr.trim().isEmpty) {
+      return _createErrorResult('Project ID is required to get sections.');
+    }
+
+    final intProjectId = int.tryParse(projectIdStr);
+    if (intProjectId == null) {
+      return _createErrorResult(
+          'Invalid Project ID format: "$projectIdStr". Must be an integer.');
+    }
+
+    final sections = await sectionsApi.getAllSections(projectId: intProjectId);
+    if (sections == null) {
+      return _createErrorResult(
+          'API returned null section list for project ID $projectIdStr.');
+    }
+
+    final resultSections = sections
+        .map((sec) => {
+              'id': sec.id,
+              'project_id': sec.projectId,
+              'order': sec.order,
+              'name': sec.name,
+            })
+        .toList();
+
+    final successMsg =
+        'Successfully fetched ${resultSections.length} sections for project ID $projectIdStr.';
+    stderr.writeln('[TodoistServer] $successMsg');
+    return _createSuccessResult(
+      successMsg,
+      resultData: {'sections': resultSections},
+    );
+  } catch (e) {
+    var apiErrorMsg =
+        'Error getting Todoist project sections: ${e.toString()}';
+    stderr.writeln('[TodoistServer] $apiErrorMsg');
+    Map<String, dynamic>? errorData;
+    if (e is todoist.ApiException) {
+      stderr.writeln(
+          '[TodoistServer] API Exception Details: Code=${e.code}, Message=${e.message}');
+      if (e.code == 404) {
+        apiErrorMsg =
+            'Project not found for ID specified in project_id argument.';
+      } else {
+        apiErrorMsg =
+            'API Error getting project sections (${e.code}): ${e.message ?? "Unknown API error"}';
+      }
+      errorData = {'apiCode': e.code, 'apiMessage': e.message};
+    }
+    return _createErrorResult(apiErrorMsg, errorData: errorData);
+  }
 }
 
-Future<mcp_dart.CallToolResult> _handleGetPersonalLabel(
-    {Map<String, dynamic>? args, RequestHandlerExtra? extra}) async {
-  stderr
-      .writeln('[TodoistServer] Received todoist_get_personal_label request.');
-  stderr.writeln('[TodoistServer] Args: ${jsonEncode(args)}');
-  return _createErrorResult('Handler not implemented yet.');
-}
-
-Future<mcp_dart.CallToolResult> _handleUpdatePersonalLabel(
+// Change 5: Implement _handleCreateProjectSection handler.
+Future<mcp_dart.CallToolResult> _handleCreateProjectSection(
     {Map<String, dynamic>? args, RequestHandlerExtra? extra}) async {
   stderr.writeln(
-      '[TodoistServer] Received todoist_update_personal_label request.');
+      '[TodoistServer] Received todoist_create_project_section request.');
   stderr.writeln('[TodoistServer] Args: ${jsonEncode(args)}');
-  return _createErrorResult('Handler not implemented yet.');
-}
 
-Future<mcp_dart.CallToolResult> _handleDeletePersonalLabel(
-    {Map<String, dynamic>? args, RequestHandlerExtra? extra}) async {
-  stderr.writeln(
-      '[TodoistServer] Received todoist_delete_personal_label request.');
-  stderr.writeln('[TodoistServer] Args: ${jsonEncode(args)}');
-  return _createErrorResult('Handler not implemented yet.');
-}
+  final apiClient = _configureApiClient();
+  if (apiClient == null) {
+    return _createErrorResult(
+        'TODOIST_API_TOKEN environment variable not set or empty.');
+  }
+  final sectionsApi = todoist.SectionsApi(apiClient);
 
-// Shared Label Handlers
-Future<mcp_dart.CallToolResult> _handleGetSharedLabels(
-    {Map<String, dynamic>? args, RequestHandlerExtra? extra}) async {
-  stderr.writeln('[TodoistServer] Received todoist_get_shared_labels request.');
-  stderr.writeln('[TodoistServer] Args: ${jsonEncode(args)}');
-  return _createErrorResult('Handler not implemented yet.');
-}
+  try {
+    final projectIdStr = args?['project_id'] as String?;
+    final name = args?['name'] as String?;
 
-Future<mcp_dart.CallToolResult> _handleRenameSharedLabels(
-    {Map<String, dynamic>? args, RequestHandlerExtra? extra}) async {
-  stderr.writeln(
-      '[TodoistServer] Received todoist_rename_shared_labels request.');
-  stderr.writeln('[TodoistServer] Args: ${jsonEncode(args)}');
-  return _createErrorResult('Handler not implemented yet.');
-}
+    if (projectIdStr == null || projectIdStr.trim().isEmpty) {
+      return _createErrorResult('Project ID is required to create a section.');
+    }
+    if (name == null || name.trim().isEmpty) {
+      return _createErrorResult('Section name cannot be empty.');
+    }
 
-Future<mcp_dart.CallToolResult> _handleRemoveSharedLabels(
-    {Map<String, dynamic>? args, RequestHandlerExtra? extra}) async {
-  stderr.writeln(
-      '[TodoistServer] Received todoist_remove_shared_labels request.');
-  stderr.writeln('[TodoistServer] Args: ${jsonEncode(args)}');
-  return _createErrorResult('Handler not implemented yet.');
-}
+    final intProjectId = int.tryParse(projectIdStr);
+    if (intProjectId == null) {
+      return _createErrorResult(
+          'Invalid Project ID format: "$projectIdStr". Must be an integer.');
+    }
 
-// Task Label Handler
-Future<mcp_dart.CallToolResult> _handleUpdateTaskLabels(
-    {Map<String, dynamic>? args, RequestHandlerExtra? extra}) async {
-  stderr
-      .writeln('[TodoistServer] Received todoist_update_task_labels request.');
-  stderr.writeln('[TodoistServer] Args: ${jsonEncode(args)}');
-  return _createErrorResult('Handler not implemented yet.');
+    final request = todoist.CreateSectionRequest(
+      projectId: intProjectId,
+      name: name,
+      order: args?['order'] as int?,
+    );
+
+    final newSection = await sectionsApi.createSection(request);
+    if (newSection == null) {
+      return _createErrorResult('API returned null for the new section.');
+    }
+
+    final successMsg =
+        'Todoist section created successfully: "${newSection.name}" in project $projectIdStr';
+    stderr.writeln('[TodoistServer] $successMsg (ID: ${newSection.id})');
+    return _createSuccessResult(
+      successMsg,
+      resultData: {
+        'section': {
+          'id': newSection.id,
+          'project_id': newSection.projectId,
+          'order': newSection.order,
+          'name': newSection.name,
+        }
+      },
+    );
+  } catch (e) {
+    var apiErrorMsg = 'Error creating Todoist project section: ${e.toString()}';
+    stderr.writeln('[TodoistServer] $apiErrorMsg');
+    Map<String, dynamic>? errorData;
+    if (e is todoist.ApiException) {
+      stderr.writeln(
+          '[TodoistServer] API Exception Details: Code=${e.code}, Message=${e.message}');
+      if (e.code == 404) {
+        apiErrorMsg =
+            'Project not found for ID specified in project_id argument.';
+      } else {
+        apiErrorMsg =
+            'API Error creating project section (${e.code}): ${e.message ?? "Unknown API error"}';
+      }
+      errorData = {'apiCode': e.code, 'apiMessage': e.message};
+    }
+    return _createErrorResult(apiErrorMsg, errorData: errorData);
+  }
 }
