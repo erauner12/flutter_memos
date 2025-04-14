@@ -457,6 +457,11 @@ class BlinkoApiService implements BaseApiService {
     final request = blinko_api.CommentsCreateRequest(
       noteId: noteIdNum,
       content: comment.content,
+      // --- ADD DEFAULTS FOR REQUIRED STRING FIELDS ---
+      guestName: '', // Provide empty string instead of null
+      // guestIP: '',   // Provide empty string instead of null
+      // guestUA: '',   // Provide empty string instead of null
+      // --- END ADDED DEFAULTS ---
     );
     try {
       final bool? success = await commentApi.commentsCreate(request);
@@ -669,9 +674,9 @@ class BlinkoApiService implements BaseApiService {
       return DateTime.tryParse(dateString) ?? DateTime(1970);
     }
     NoteState state = NoteState.normal;
-    if (blinkoNote.isRecycle ?? false) {
+    if (blinkoNote.isRecycle) {
       state = NoteState.archived;
-    } else if (blinkoNote.isArchived ?? false) {
+    } else if (blinkoNote.isArchived) {
       state = NoteState.archived;
     }
     NoteVisibility visibility = NoteVisibility.private;
@@ -741,7 +746,7 @@ class BlinkoApiService implements BaseApiService {
     bool pinned = false; // Blinko comments don't seem to have a pinned state
     return Comment(
       id: blinkoComment.id.toString(),
-      content: blinkoComment.content ?? '',
+      content: blinkoComment.content,
       createTime: parseBlinkoDate(blinkoComment.createdAt).millisecondsSinceEpoch,
       updateTime: parseBlinkoDate(blinkoComment.updatedAt).millisecondsSinceEpoch,
       // accountId is nullable in the response model, handle appropriately
