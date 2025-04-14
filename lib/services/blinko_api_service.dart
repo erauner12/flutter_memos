@@ -304,49 +304,74 @@ class BlinkoApiService implements BaseApiService {
       content: note.content,
       isArchived: note.state == NoteState.archived,
       isTop: note.pinned,
-      // Map other relevant fields from NoteItem to NotesUpsertRequest if needed
-      // e.g., visibility, tags, etc. Blinko's upsert might support more fields.
+      // Ensure 'id' is not included in the request for creation
     );
+
     try {
       if (kDebugMode) {
         print(
-          '[BlinkoApiService.createNote] Calling notesUpsert with request: ${request.toJson()}',
+          '[BlinkoApiService.createNote] Calling noteApi.notesUpsert with request: ${request.toJson()}',
         );
-      }
-      // Call upsert and try to extract note ID from response when possible
-      if (kDebugMode) {
-        final dynamic upsertResponse = await noteApi.notesUpsert(request);
-        print(
-          '[BlinkoApiService.createNote] Received upsertResponse: $upsertResponse (Type: ${upsertResponse.runtimeType})',
-        );
-        
-        // Attempt to extract note ID from response if available
-        if (upsertResponse != null &&
-            upsertResponse is Map<String, dynamic> &&
-            upsertResponse.containsKey('id')) {
-          // If we got a note ID back, update our placeholder note with it
-          return note.copyWith(id: upsertResponse['id'].toString());
-        }
-        print(
-          '[BlinkoApiService.createNote] Could not extract note ID from response. Returning placeholder note.',
-        );
-      } else {
-        await noteApi.notesUpsert(request);
       }
 
-      // Since the upsert call succeeded without an API exception,
-      // return the original note object as a placeholder.
-      // The provider will handle refreshing the list.
-      return note;
-    } catch (e, stackTrace) {
-      // Log the specific error before rethrowing a generic one
+      // Call the generated method. It might throw the deserialization exception.
+      final dynamic upsertResponse = await noteApi.notesUpsert(request);
+
+      // This part might not be reached if the deserialization exception occurs,
+      // but handle defensively in case the API response changes.
       if (kDebugMode) {
-        // Use the stack trace to provide detailed error information
-        print('[BlinkoApiService.createNote] Error during notesUpsert: $e');
         print(
-          '[BlinkoApiService.createNote] Stack Trace: $stackTrace');
+          '[BlinkoApiService.createNote] notesUpsert completed without throwing. Response: $upsertResponse (Type: ${upsertResponse.runtimeType})',
+        );
       }
-      throw Exception('Failed to create note: $e'); // Propagate the error
+      // Defensively check if we somehow got an ID back.
+      if (upsertResponse is Map && upsertResponse.containsKey('id')) {
+        final num createdId = upsertResponse['id'];
+        // Fetch the newly created note to be safe
+        return await getNote(
+          createdId.toString(),
+          targetServerOverride: targetServerOverride,
+        );
+      }
+
+      // If the call succeeded but response wasn't useful, return placeholder
+      if (kDebugMode) {
+        print(
+          '[BlinkoApiService.createNote] notesUpsert succeeded but response was not a map with ID. Returning placeholder note.',
+        );
+      }
+      return note; // Return placeholder on unexpected success response format
+    } catch (e, stackTrace) {
+      // **Crucial Change:** Catch the specific deserialization ApiException and treat it as success
+      if (e is blinko_api.ApiException &&
+          e.message != null &&
+          e.message!.contains(
+            'Could not find a suitable class for deserialization',
+          ) &&
+          e.code == 500) {
+        if (kDebugMode) {
+          print(
+            '[BlinkoApiService.createNote] Caught specific deserialization ApiException ($e). Treating as successful creation. Returning placeholder note.',
+          );
+        }
+        return note; // Treat this specific error as success for create flow
+      }
+
+      // Handle other actual errors
+      if (kDebugMode) {
+        print(
+          '[BlinkoApiService.createNote] Error during notesUpsert call: $e',
+        );
+        print('[BlinkoApiService.createNote] Stack Trace: $stackTrace');
+      }
+      // Rethrow other exceptions
+      if (e is blinko_api.ApiException) {
+        // Potentially map specific Blinko errors to user-friendly messages
+        throw Exception(
+          'Failed to create note: API Error ${e.code} - ${e.message}',
+        );
+      }
+      throw Exception('Failed to create note: $e');
     }
   }
 
