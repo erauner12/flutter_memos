@@ -62,7 +62,7 @@ class NotesNoteReferenceListRequest {
 
       return NotesNoteReferenceListRequest(
         noteId: num.parse('${json[r'noteId']}'),
-        type: NotesNoteReferenceListRequestTypeEnum.fromJson(json[r'type']) ?? 'references',
+        type: NotesNoteReferenceListRequestTypeEnum.fromJson(json[r'type']) ?? NotesNoteReferenceListRequestTypeEnum.references,
       );
     }
     return null;
@@ -186,5 +186,3 @@ class NotesNoteReferenceListRequestTypeEnumTypeTransformer {
   /// Singleton [NotesNoteReferenceListRequestTypeEnumTypeTransformer] instance.
   static NotesNoteReferenceListRequestTypeEnumTypeTransformer? _instance;
 }
-
-

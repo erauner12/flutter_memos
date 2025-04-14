@@ -148,7 +148,7 @@ class NotesListRequest {
       json[r'startDate'] = null;
     }
     if (this.endDate != null) {
-      json[r'endDate'] = this.endDate;
+      json[r'endDate'] = null;
     } else {
       json[r'endDate'] = null;
     }
@@ -180,7 +180,7 @@ class NotesListRequest {
             : num.parse('${json[r'tagId']}'),
         page: num.parse('${json[r'page']}'),
         size: num.parse('${json[r'size']}'),
-        orderBy: NotesListRequestOrderByEnum.fromJson(json[r'orderBy']) ?? 'desc',
+        orderBy: NotesListRequestOrderByEnum.fromJson(json[r'orderBy']) ?? NotesListRequestOrderByEnum.desc, // Changed 'desc' to enum constant
         type: NotesListRequestType.fromJson(json[r'type']),
         isArchived: mapValueOfType<bool>(json, r'isArchived'),
         isShare: mapValueOfType<bool>(json, r'isShare'),
@@ -315,5 +315,3 @@ class NotesListRequestOrderByEnumTypeTransformer {
   /// Singleton [NotesListRequestOrderByEnumTypeTransformer] instance.
   static NotesListRequestOrderByEnumTypeTransformer? _instance;
 }
-
-

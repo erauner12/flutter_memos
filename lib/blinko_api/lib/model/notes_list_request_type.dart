@@ -12,15 +12,13 @@ part of openapi.api;
 
 class NotesListRequestType {
   /// Returns a new [NotesListRequestType] instance.
-  NotesListRequestType({
-  });
+  NotesListRequestType();
 
   @override
-  bool operator ==(Object other) => identical(this, other) || other is NotesListRequestType &&
+  bool operator ==(Object other) => identical(this, other) || other is NotesListRequestType;
 
   @override
-  int get hashCode =>
-    // ignore: unnecessary_parenthesis
+  int get hashCode => runtimeType.hashCode;
 
   @override
   String toString() => 'NotesListRequestType[]';
@@ -98,4 +96,3 @@ class NotesListRequestType {
   static const requiredKeys = <String>{
   };
 }
-

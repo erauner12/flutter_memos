@@ -12,15 +12,13 @@ part of openapi.api;
 
 class ConfigUpdateRequestKeyAnyOf {
   /// Returns a new [ConfigUpdateRequestKeyAnyOf] instance.
-  ConfigUpdateRequestKeyAnyOf({
-  });
+  ConfigUpdateRequestKeyAnyOf();
 
   @override
-  bool operator ==(Object other) => identical(this, other) || other is ConfigUpdateRequestKeyAnyOf &&
+  bool operator ==(Object other) => identical(this, other) || other is ConfigUpdateRequestKeyAnyOf;
 
   @override
-  int get hashCode =>
-    // ignore: unnecessary_parenthesis
+  int get hashCode => runtimeType.hashCode;
 
   @override
   String toString() => 'ConfigUpdateRequestKeyAnyOf[]';
@@ -98,4 +96,3 @@ class ConfigUpdateRequestKeyAnyOf {
   static const requiredKeys = <String>{
   };
 }
-

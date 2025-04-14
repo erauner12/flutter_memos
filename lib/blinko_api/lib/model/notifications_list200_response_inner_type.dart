@@ -12,15 +12,13 @@ part of openapi.api;
 
 class NotificationsList200ResponseInnerType {
   /// Returns a new [NotificationsList200ResponseInnerType] instance.
-  NotificationsList200ResponseInnerType({
-  });
+  NotificationsList200ResponseInnerType();
 
   @override
-  bool operator ==(Object other) => identical(this, other) || other is NotificationsList200ResponseInnerType &&
+  bool operator ==(Object other) => identical(this, other) || other is NotificationsList200ResponseInnerType;
 
   @override
-  int get hashCode =>
-    // ignore: unnecessary_parenthesis
+  int get hashCode => runtimeType.hashCode;
 
   @override
   String toString() => 'NotificationsList200ResponseInnerType[]';
@@ -98,4 +96,3 @@ class NotificationsList200ResponseInnerType {
   static const requiredKeys = <String>{
   };
 }
-

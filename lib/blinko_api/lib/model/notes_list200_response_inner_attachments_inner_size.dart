@@ -12,15 +12,13 @@ part of openapi.api;
 
 class NotesList200ResponseInnerAttachmentsInnerSize {
   /// Returns a new [NotesList200ResponseInnerAttachmentsInnerSize] instance.
-  NotesList200ResponseInnerAttachmentsInnerSize({
-  });
+  NotesList200ResponseInnerAttachmentsInnerSize();
 
   @override
-  bool operator ==(Object other) => identical(this, other) || other is NotesList200ResponseInnerAttachmentsInnerSize &&
+  bool operator ==(Object other) => identical(this, other) || other is NotesList200ResponseInnerAttachmentsInnerSize;
 
   @override
-  int get hashCode =>
-    // ignore: unnecessary_parenthesis
+  int get hashCode => runtimeType.hashCode;
 
   @override
   String toString() => 'NotesList200ResponseInnerAttachmentsInnerSize[]';
@@ -98,4 +96,3 @@ class NotesList200ResponseInnerAttachmentsInnerSize {
   static const requiredKeys = <String>{
   };
 }
-

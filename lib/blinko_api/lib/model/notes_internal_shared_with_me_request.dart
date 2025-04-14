@@ -69,7 +69,7 @@ class NotesInternalSharedWithMeRequest {
       return NotesInternalSharedWithMeRequest(
         page: num.parse('${json[r'page']}'),
         size: num.parse('${json[r'size']}'),
-        orderBy: NotesInternalSharedWithMeRequestOrderByEnum.fromJson(json[r'orderBy']) ?? 'desc',
+        orderBy: NotesInternalSharedWithMeRequestOrderByEnum.fromJson(json[r'orderBy']) ?? NotesInternalSharedWithMeRequestOrderByEnum.desc,
       );
     }
     return null;
@@ -192,5 +192,3 @@ class NotesInternalSharedWithMeRequestOrderByEnumTypeTransformer {
   /// Singleton [NotesInternalSharedWithMeRequestOrderByEnumTypeTransformer] instance.
   static NotesInternalSharedWithMeRequestOrderByEnumTypeTransformer? _instance;
 }
-
-

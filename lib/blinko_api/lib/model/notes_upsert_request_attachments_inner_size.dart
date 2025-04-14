@@ -12,15 +12,13 @@ part of openapi.api;
 
 class NotesUpsertRequestAttachmentsInnerSize {
   /// Returns a new [NotesUpsertRequestAttachmentsInnerSize] instance.
-  NotesUpsertRequestAttachmentsInnerSize({
-  });
+  NotesUpsertRequestAttachmentsInnerSize();
 
   @override
-  bool operator ==(Object other) => identical(this, other) || other is NotesUpsertRequestAttachmentsInnerSize &&
+  bool operator ==(Object other) => identical(this, other) || other is NotesUpsertRequestAttachmentsInnerSize;
 
   @override
-  int get hashCode =>
-    // ignore: unnecessary_parenthesis
+  int get hashCode => runtimeType.hashCode;
 
   @override
   String toString() => 'NotesUpsertRequestAttachmentsInnerSize[]';
@@ -98,4 +96,3 @@ class NotesUpsertRequestAttachmentsInnerSize {
   static const requiredKeys = <String>{
   };
 }
-

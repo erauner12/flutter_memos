@@ -12,15 +12,13 @@ part of openapi.api;
 
 class NotesListRequestStartDate {
   /// Returns a new [NotesListRequestStartDate] instance.
-  NotesListRequestStartDate({
-  });
+  NotesListRequestStartDate();
 
   @override
-  bool operator ==(Object other) => identical(this, other) || other is NotesListRequestStartDate &&
+  bool operator ==(Object other) => identical(this, other) || other is NotesListRequestStartDate;
 
   @override
-  int get hashCode =>
-    // ignore: unnecessary_parenthesis
+  int get hashCode => runtimeType.hashCode;
 
   @override
   String toString() => 'NotesListRequestStartDate[]';
@@ -98,4 +96,3 @@ class NotesListRequestStartDate {
   static const requiredKeys = <String>{
   };
 }
-
