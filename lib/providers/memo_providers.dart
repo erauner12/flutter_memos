@@ -830,8 +830,26 @@ final createNoteProvider = Provider<Future<void> Function(NoteItem)>((ref) {
   final BaseApiService apiService = ref.watch(api_p.apiServiceProvider);
 
   return (NoteItem note) async {
-    await apiService.createNote(note);
-    ref.invalidate(notesNotifierProvider);
+    try {
+      // Attempt to create the note. This might return the placeholder for Blinko.
+      await apiService.createNote(note);
+      // Optionally handle the returned placeholder if needed, though invalidation is key.
+    } catch (e) {
+      // Log the error if needed, but the finally block handles refresh
+      if (kDebugMode) {
+        print('[createNoteProvider] Error creating note: $e');
+      }
+      // Rethrow if the caller needs to know about the failure
+      rethrow;
+    } finally {
+      // Always invalidate after the attempt to refresh the list.
+      if (kDebugMode) {
+        print(
+          '[createNoteProvider] Invalidating notesNotifierProvider after create attempt.',
+        );
+      }
+      ref.invalidate(notesNotifierProvider);
+    }
   };
 });
 

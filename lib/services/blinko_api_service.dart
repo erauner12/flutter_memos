@@ -304,22 +304,38 @@ class BlinkoApiService implements BaseApiService {
       content: note.content,
       isArchived: note.state == NoteState.archived,
       isTop: note.pinned,
+      // Map other relevant fields from NoteItem to NotesUpsertRequest if needed
+      // e.g., visibility, tags, etc. Blinko's upsert might support more fields.
     );
     try {
-      final dynamic upsertResponse = await noteApi.notesUpsert(request);
-      if (upsertResponse is Map && upsertResponse.containsKey('id')) {
-        final num createdId = upsertResponse['id'];
-        return await getNote(
-          createdId.toString(),
-          targetServerOverride: targetServerOverride,
-        );
-      } else {
-        throw Exception(
-          'Blinko upsert succeeded but failed to retrieve created note details.',
+      if (kDebugMode) {
+        print(
+          '[BlinkoApiService.createNote] Calling notesUpsert with request: \${request.toJson()}',
         );
       }
+      // Call upsert. We don\'t need the response object itself if it\'s inconsistent.
+      final dynamic upsertResponse = await noteApi.notesUpsert(request);
+
+      if (kDebugMode) {
+        print(
+          '[BlinkoApiService.createNote] Received upsertResponse: \$upsertResponse (Type: \${upsertResponse.runtimeType})',
+        );
+        print(
+          '[BlinkoApiService.createNote] Assuming success as no API exception was thrown. Returning placeholder note.',
+        );
+      }
+
+      // Since the upsert call succeeded without an API exception,
+      // return the original note object as a placeholder.
+      // The provider will handle refreshing the list.
+      return note;
     } catch (e) {
-      throw Exception('Failed to create note: \$e');
+      // Catching any exception during upsert
+      // Log the specific error before rethrowing a generic one
+      if (kDebugMode) {
+        print('[BlinkoApiService.createNote] Error during notesUpsert: \$e');
+      }
+      throw Exception('Failed to create note: \$e'); // Propagate the error
     }
   }
 
@@ -373,7 +389,7 @@ class BlinkoApiService implements BaseApiService {
   }) async {
     final num? noteIdNum = num.tryParse(id);
     if (noteIdNum == null) {
-      throw ArgumentError('Invalid numeric ID format for Blinko: \$id');
+      throw ArgumentError('Invalid numeric ID format for Blinko noteId: \$id');
     }
     final request = blinko_api.NotesUpsertRequest(
       id: noteIdNum,
