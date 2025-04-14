@@ -18,7 +18,8 @@ class BlinkoApiService implements BaseApiService {
   factory BlinkoApiService() => _instance;
 
   late blinko_api.ApiClient _apiClient;
-  late blinko_api.NoteApi _noteApi;
+  // Removed the unused _noteApi field
+  // late blinko_api.NoteApi _noteApi;
   late blinko_api.FileApi _fileApi; // FileApi instance
 
   String _baseUrl = '';
@@ -30,7 +31,8 @@ class BlinkoApiService implements BaseApiService {
   BlinkoApiService._internal() {
     // Initialize with dummy client; configureService will set it up properly
     _apiClient = blinko_api.ApiClient(basePath: '');
-    _noteApi = blinko_api.NoteApi(_apiClient);
+    // Removed initialization of unused _noteApi
+    // _noteApi = blinko_api.NoteApi(_apiClient);
     _fileApi = blinko_api.FileApi(_apiClient); // Initialize FileApi
   }
 
@@ -86,7 +88,8 @@ class BlinkoApiService implements BaseApiService {
         basePath: effectiveBaseUrl,
         authentication: blinko_api.HttpBearerAuth()..accessToken = authToken,
       );
-      _noteApi = blinko_api.NoteApi(_apiClient);
+      // Removed initialization of unused _noteApi
+      // _noteApi = blinko_api.NoteApi(_apiClient);
       _fileApi = blinko_api.FileApi(_apiClient);
       if (kDebugMode) {
         print(
@@ -247,8 +250,6 @@ class BlinkoApiService implements BaseApiService {
                       ?.toString(), // Size from API response as String
               'externalLink':
                   uploadResponse.path!, // Blinko path likely serves as link
-              // Include Blinko specific path if needed by other parts of the app?
-              // 'blinkoPath': uploadResponse.path!,
             };
           } else {
             if (kDebugMode) {
@@ -287,7 +288,6 @@ class BlinkoApiService implements BaseApiService {
           'Failed to upload resource: API Error ${e.code} - ${e.message}',
         );
       }
-      // Catch potential ClientException from http package if needed
       if (e is http.ClientException) {
         throw Exception(
           'Failed to upload resource: Network error - ${e.message}',
@@ -691,8 +691,6 @@ class BlinkoApiService implements BaseApiService {
           '', // Blinko specific, maybe map from comment.creatorId if needed?
       parentId:
           null, // Blinko specific, maybe map from comment if it has parent info?
-      // Blinko's comment create request doesn't seem to support attaching resources directly.
-      // The 'resources' parameter is ignored here.
     );
     try {
       final response = await commentApi.commentsCreateWithHttpInfo(request);
@@ -935,9 +933,6 @@ class BlinkoApiService implements BaseApiService {
       state = NoteState.archived;
     }
     NoteVisibility visibility = NoteVisibility.private;
-    if (blinkoDetail.isShare == true) {
-      visibility = NoteVisibility.public;
-    }
     final String idStr =
         blinkoDetail.id.toString() ??
         'unknown_id_${DateTime.now().millisecondsSinceEpoch}';
@@ -955,18 +950,14 @@ class BlinkoApiService implements BaseApiService {
     // Map attachments to List<Map<String, dynamic>>
     final List<Map<String, dynamic>> resources =
         (blinkoDetail.attachments ?? []).map((a) {
-          // Assuming NotesUpsertRequestAttachmentsInner structure based on context
-          // Adjust property names if NotesDetail200ResponseAttachmentsInner differs
           return {
             'id': a.path, // Use path as ID
             'name': a.path, // Use path as name
             'filename': a.name, // Use name from attachment
             'externalLink': a.path, // Use path as external link
             'contentType': a.type, // Use 'type' instead of 'mime'
-            'size':
-                a.size
-                    ?.toString(), // Use size directly (convert to string if needed by NoteItem)
-            'createTime': a.createdAt, // Use createdAt if available
+            'size': a.size?.toString(),
+            'createTime': a.createdAt,
           };
         }).toList();
     // Map references to List<Map<String, dynamic>>
@@ -975,13 +966,10 @@ class BlinkoApiService implements BaseApiService {
             .map((r) {
               // Correctly access the related note's ID
               final relatedNoteId =
-                  r.toNote?.id
-                      ?.toString(); // Access ID safely using id property
+                  r.toNote?.noteId?.toString(); // Use noteId instead of id
               if (relatedNoteId != null) {
-                final type =
-                    'REFERENCE'; // Blinko seems to only have references
+                final type = 'REFERENCE';
                 return {
-                  // 'memoId': idStr, // This key might not be needed in the generic map
                   'relatedMemoId': relatedNoteId,
                   'type': type,
                 };
@@ -991,7 +979,6 @@ class BlinkoApiService implements BaseApiService {
             .whereType<Map<String, dynamic>>()
             .toList();
     return NoteItem(
-      id: idStr,
       id: idStr,
       content: contentStr,
       pinned: isPinned,
@@ -1039,37 +1026,29 @@ class BlinkoApiService implements BaseApiService {
         blinkoNote.accountId?.toString() ?? 'unknown_creator';
     final List<String> tags =
         (blinkoNote.tags ?? [])
-            .map((t) => t.tag.name) // Safely access nested name
+            .map((t) => t.tag.name)
             .whereType<String>()
             .toList();
-    // Map attachments to List<Map<String, dynamic>>
     final List<Map<String, dynamic>> resources =
         (blinkoNote.attachments ?? []).map((a) {
-          // Assuming NotesList200ResponseInnerAttachmentsInner structure
-          // Adjust property names if needed
           return {
-            'id': a.path, // Use path as ID
-            'name': a.path, // Use path as name
-            'filename': a.name, // Use name from attachment
-            'externalLink': a.path, // Use path as external link
-            'contentType': a.type, // Use 'type' instead of 'mime'
-            'size':
-                a.size
-                    ?.toString(), // Use size directly (convert to string if needed)
-            'createTime': a.createdAt, // Use createdAt if available
+            'id': a.path,
+            'name': a.path,
+            'filename': a.name,
+            'externalLink': a.path,
+            'contentType': a.type,
+            'size': a.size?.toString(),
+            'createTime': a.createdAt,
           };
         }).toList();
-    // Map references to List<Map<String, dynamic>>
     final List<Map<String, dynamic>> relations =
         (blinkoNote.references ?? [])
             .map((r) {
               // Correctly access the related note's ID - use noteId instead of id
-              final relatedNoteId = r.toNote?.id?.toString();
+              final relatedNoteId = r.toNote?.noteId?.toString();
               if (relatedNoteId != null) {
-                final type =
-                    'REFERENCE'; // Blinko seems to only have references
+                final type = 'REFERENCE';
                 return {
-                  // 'memoId': idStr, // This key might not be needed in the generic map
                   'relatedMemoId': relatedNoteId,
                   'type': type,
                 };
@@ -1124,11 +1103,9 @@ class BlinkoApiService implements BaseApiService {
       createTime: createdAt.millisecondsSinceEpoch,
       updateTime: updatedAt.millisecondsSinceEpoch,
       creatorId: creatorIdStr,
-      pinned: pinned, // Blinko comments don't seem to have a pinned state
-      state:
-          state, // Blinko comments don't seem to have a state (normal/archived)
-      resources:
-          [], // Blinko comments don't seem to have resources directly attached
+      pinned: pinned,
+      state: state,
+      resources: [],
     );
   }
 }
