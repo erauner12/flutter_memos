@@ -16,8 +16,8 @@ class NoteItem {
   final DateTime updateTime;
   final DateTime displayTime;
   final List<String> tags; // Assuming tags are simple strings for now
-  final List<dynamic> resources; // Placeholder - needs specific mapping
-  final List<dynamic> relations; // Placeholder - needs specific mapping
+  final List<Map<String, dynamic>>? resources;
+  final List<Map<String, dynamic>>? relations;
   final String? creatorId; // String ID of the creator user
   final String? parentId; // String ID of the parent memo/note
 
@@ -47,8 +47,8 @@ class NoteItem {
     DateTime? updateTime,
     DateTime? displayTime,
     List<String>? tags,
-    List<dynamic>? resources,
-    List<dynamic>? relations,
+    List<Map<String, dynamic>>? resources,
+    List<Map<String, dynamic>>? relations,
     String? creatorId,
     String? parentId,
   }) {
@@ -84,8 +84,8 @@ class NoteItem {
         other.updateTime == updateTime &&
         other.displayTime == displayTime &&
         listEquals(other.tags, tags) &&
-        listEquals(other.resources, resources) &&
-        listEquals(other.relations, relations) &&
+        listEquals(other.resources, other.resources) &&
+        listEquals(other.relations, other.relations) &&
         other.creatorId == creatorId &&
         other.parentId == parentId;
   }

@@ -1,7 +1,6 @@
 import 'package:flutter/foundation.dart'; // Import Uint8List
 import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/models/list_notes_response.dart';
-import 'package:flutter_memos/models/memo_relation.dart'; // Import MemoRelation model
 import 'package:flutter_memos/models/note_item.dart';
 import 'package:flutter_memos/models/server_config.dart';
 
@@ -76,9 +75,9 @@ abstract class BaseApiService {
   // Relations (Added)
   Future<void> setNoteRelations(
     String noteId,
-    List<MemoRelation> relations, {
-    ServerConfig? targetServerOverride,
-  });
+    List<Map<String, dynamic>> relations, // Change type here
+    {ServerConfig? targetServerOverride}
+  );
 
   // Resources (Added)
   Future<Map<String, dynamic>> uploadResource(
@@ -219,9 +218,9 @@ class DummyApiService implements BaseApiService {
   @override
   Future<void> setNoteRelations(
     String noteId,
-    List<MemoRelation> relations, {
-    ServerConfig? targetServerOverride,
-  }) async {
+    List<Map<String, dynamic>> relations, // Change type here
+    {ServerConfig? targetServerOverride}
+  ) async {
     // Added dummy implementation
     throw UnimplementedError("Service not configured");
   }

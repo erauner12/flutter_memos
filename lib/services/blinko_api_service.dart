@@ -1,15 +1,15 @@
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_memos/blinko_api/lib/api.dart'
     as blinko_api; // Alias Blinko API
 import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/models/list_notes_response.dart';
-import 'package:flutter_memos/models/memo_relation.dart';
+// import 'package:flutter_memos/models/memo_relation.dart'; // Removed unused import
 import 'package:flutter_memos/models/note_item.dart';
 import 'package:flutter_memos/models/server_config.dart';
 import 'package:flutter_memos/services/base_api_service.dart';
+import 'package:http/http.dart' as http; // Added http import
 import 'package:http_parser/http_parser.dart';
 
 class BlinkoApiService implements BaseApiService {
@@ -173,8 +173,10 @@ class BlinkoApiService implements BaseApiService {
     String commentId, {
     ServerConfig? targetServerOverride,
   }) async {
+    // Blinko API might not support fetching a single comment directly by its ID
+    // without knowing the note ID. Throwing error as per plan.
     throw UnimplementedError(
-      'BlinkoApiService does not support getting a single comment by ID without its parent note context.',
+      'BlinkoApiService does not support getting a single comment by ID.',
     );
   }
 
@@ -188,19 +190,48 @@ class BlinkoApiService implements BaseApiService {
   }) async {
     final fileApi = _getFileApiForServer(targetServerOverride);
     final apiClient = fileApi.apiClient;
-    final multipartFile = blinko_api.MultipartFile.fromBytes(
-      'file',
+    // Use http.MultipartFile instead of blinko_api.MultipartFile
+    final multipartFile = http.MultipartFile.fromBytes(
+      'file', // Field name expected by the Blinko API
       fileBytes,
       filename: filename,
       contentType: MediaType.parse(contentType),
     );
+
+    // Manually construct the request as FileApi.uploadFile expects blinko_api.MultipartFile
+    final path = r'/v1/file/upload'; // Adjust path if needed
+    final queryParams = <blinko_api.QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{}; // Not used for multipart
+    final nullableContentType = 'multipart/form-data';
+    final authNames = <String>['bearerAuth']; // Match auth name in Blinko spec
+
     try {
       if (kDebugMode) {
         print(
-          '[BlinkoApiService.uploadResource] Calling uploadFileWithHttpInfo for $filename ($contentType, ${fileBytes.lengthInBytes} bytes)',
+          '[BlinkoApiService.uploadResource] Calling invokeAPI POST $path for $filename ($contentType, ${fileBytes.lengthInBytes} bytes)',
         );
       }
-      final response = await fileApi.uploadFileWithHttpInfo(multipartFile);
+
+      // Use invokeAPI directly for multipart upload with http.MultipartFile
+      final response = await apiClient.invokeAPI(
+        path,
+        'POST',
+        queryParams,
+        null, // Body is handled by multipart request
+        headerParams,
+        formParams, // Not used
+        nullableContentType,
+        authNames,
+        extraField: multipartFile, // Pass the http.MultipartFile here
+      );
+
+      if (kDebugMode) {
+        print(
+          '[BlinkoApiService.uploadResource] invokeAPI response status: ${response.statusCode}',
+        );
+      }
+
       if (response.statusCode >= 200 && response.statusCode < 300) {
         if (response.body.isNotEmpty) {
           final uploadResponse =
@@ -215,11 +246,14 @@ class BlinkoApiService implements BaseApiService {
                 '[BlinkoApiService.uploadResource] Upload successful. Path: ${uploadResponse.path}, Name: ${uploadResponse.name}, Size: ${uploadResponse.size}',
               );
             }
+            // Return standard map structure
             return {
-              'id': uploadResponse.path,
+              'id': uploadResponse.path, // Use path as ID
+              'name':
+                  uploadResponse.path, // Also use path as name for consistency
               'filename': uploadResponse.name ?? filename,
-              'externalLink': uploadResponse.path,
-              'type': contentType,
+              'externalLink': uploadResponse.path, // Path is likely the link
+              'contentType': contentType, // Return original content type
               'size': uploadResponse.size?.toInt() ?? fileBytes.lengthInBytes,
             };
           } else {
@@ -257,6 +291,11 @@ class BlinkoApiService implements BaseApiService {
       if (e is blinko_api.ApiException) {
         throw Exception(
           'Failed to upload resource: API Error ${e.code} - ${e.message}',
+        );
+      }
+      if (e is http.ClientException) {
+        throw Exception(
+          'Failed to upload resource: Network error - ${e.message}',
         );
       }
       throw Exception('Failed to upload resource: $e');
@@ -633,13 +672,13 @@ class BlinkoApiService implements BaseApiService {
     }
   }
 
-  // Change 7: Refactored createNoteComment
+  // Change 7: Refactored createNoteComment to accept resources parameter (though ignored)
   @override
   Future<Comment> createNoteComment(
     String noteId,
     Comment comment, {
     ServerConfig? targetServerOverride,
-    List<Map<String, dynamic>>? resources,
+    List<Map<String, dynamic>>? resources, // Accept the parameter
   }) async {
     final commentApi = blinko_api.CommentApi(
       _getApiClientForServer(targetServerOverride),
@@ -653,8 +692,12 @@ class BlinkoApiService implements BaseApiService {
     final request = blinko_api.CommentsCreateRequest(
       noteId: noteIdNum,
       content: comment.content,
-      guestName: '',
-      parentId: null,
+      guestName:
+          '', // Blinko specific, maybe map from comment.creatorId if needed?
+      parentId:
+          null, // Blinko specific, maybe map from comment if it has parent info?
+      // Blinko's comment create request doesn't seem to support attaching resources directly.
+      // The 'resources' parameter is ignored here.
     );
     try {
       final response = await commentApi.commentsCreateWithHttpInfo(request);
@@ -762,11 +805,11 @@ class BlinkoApiService implements BaseApiService {
     }
   }
 
-  // Change 10: Refactored setNoteRelations
+  // Change 10: Refactored setNoteRelations to accept List<Map<String, dynamic>>
   @override
   Future<void> setNoteRelations(
     String noteId,
-    List<MemoRelation> relations, {
+    List<Map<String, dynamic>> relations, {
     ServerConfig? targetServerOverride,
   }) async {
     final noteApi = _getNoteApiForServer(targetServerOverride);
@@ -782,16 +825,21 @@ class BlinkoApiService implements BaseApiService {
       );
     }
     List<Exception> errors = [];
-    for (final relation in relations) {
-      final num? relatedNoteIdNum = num.tryParse(relation.relatedMemoId);
+    // Iterate through the generic map list
+    for (final relationMap in relations) {
+      // Extract related ID and type (Blinko only supports REFERENCE implicitly)
+      final String? relatedNoteIdStr = relationMap['relatedMemoId'] as String?;
+      final num? relatedNoteIdNum = num.tryParse(relatedNoteIdStr ?? '');
       if (relatedNoteIdNum == null) {
         if (kDebugMode) {
           print(
-            "[BlinkoApiService.setNoteRelations] Skipping relation with invalid relatedMemoId: ${relation.relatedMemoId}",
+            "[BlinkoApiService.setNoteRelations] Skipping relation with invalid relatedMemoId: $relatedNoteIdStr",
           );
         }
         continue;
       }
+
+      // Create Blinko request
       final request = blinko_api.NotesAddReferenceRequest(
         fromNoteId: noteIdNum,
         toNoteId: relatedNoteIdNum,
@@ -871,7 +919,7 @@ class BlinkoApiService implements BaseApiService {
     return blinko_api.NoteApi(_getApiClientForServer(serverConfig));
   }
 
-  // Change 16: Updated _convertBlinkoDetailToNoteItem helper method
+  // Change 16: Updated _convertBlinkoDetailToNoteItem helper method with null checks and mapping
   NoteItem _convertBlinkoDetailToNoteItem(
     blinko_api.NotesDetail200Response blinkoDetail,
   ) {
@@ -909,19 +957,31 @@ class BlinkoApiService implements BaseApiService {
             .map((t) => t.tag.name)
             .whereType<String>()
             .toList();
+    // Map attachments to List<Map<String, dynamic>>
     final List<Map<String, dynamic>> resources =
-        (blinkoDetail.attachments ?? []).map((a) => a.toJson()).toList();
+        (blinkoDetail.attachments ?? []).map((a) {
+          return {
+            'id': a.path,
+            'name': a.path,
+            'filename': a.name,
+            'externalLink': a.path,
+            'contentType': a.mime,
+            'size': a.size?.toInt(),
+            'createTime': a.createdAt,
+          };
+        }).toList();
+    // Map references to List<Map<String, dynamic>>
     final List<Map<String, dynamic>> relations =
         (blinkoDetail.references ?? [])
             .map((r) {
               final relatedNoteId = r.toNote?.id?.toString();
               if (relatedNoteId != null) {
-                final type = MemoRelationType.REFERENCE;
-                return MemoRelation(
-                  memoId: idStr,
-                  relatedMemoId: relatedNoteId,
-                  type: type,
-                ).toJson();
+                final type = 'REFERENCE';
+                return {
+                  'memoId': idStr,
+                  'relatedMemoId': relatedNoteId,
+                  'type': type,
+                };
               }
               return null;
             })
@@ -943,7 +1003,7 @@ class BlinkoApiService implements BaseApiService {
     );
   }
 
-  // Change 17: Updated _convertBlinkoNoteToNoteItem helper method
+  // Change 17: Updated _convertBlinkoNoteToNoteItem helper method with null checks and mapping
   NoteItem _convertBlinkoNoteToNoteItem(
     blinko_api.NotesList200ResponseInner blinkoNote,
   ) {
@@ -978,19 +1038,31 @@ class BlinkoApiService implements BaseApiService {
             .map((t) => t.tag.name)
             .whereType<String>()
             .toList();
+    // Map attachments to List<Map<String, dynamic>>
     final List<Map<String, dynamic>> resources =
-        (blinkoNote.attachments ?? []).map((a) => a.toJson()).toList();
+        (blinkoNote.attachments ?? []).map((a) {
+          return {
+            'id': a.path,
+            'name': a.path,
+            'filename': a.name,
+            'externalLink': a.path,
+            'contentType': a.mime,
+            'size': a.size?.toInt(),
+            'createTime': a.createdAt,
+          };
+        }).toList();
+    // Map references to List<Map<String, dynamic>>
     final List<Map<String, dynamic>> relations =
         (blinkoNote.references ?? [])
             .map((r) {
               final relatedNoteId = r.toNote?.id?.toString();
               if (relatedNoteId != null) {
-                final type = MemoRelationType.REFERENCE;
-                return MemoRelation(
-                  memoId: idStr,
-                  relatedMemoId: relatedNoteId,
-                  type: type,
-                ).toJson();
+                final type = 'REFERENCE';
+                return {
+                  'memoId': idStr,
+                  'relatedMemoId': relatedNoteId,
+                  'type': type,
+                };
               }
               return null;
             })
@@ -1042,8 +1114,11 @@ class BlinkoApiService implements BaseApiService {
       createTime: createdAt.millisecondsSinceEpoch,
       updateTime: updatedAt.millisecondsSinceEpoch,
       creatorId: creatorIdStr,
-      pinned: pinned,
-      state: state,
+      pinned: pinned, // Blinko comments don't seem to have a pinned state
+      state:
+          state, // Blinko comments don't seem to have a state (normal/archived)
+      resources:
+          [], // Blinko comments don't seem to have resources directly attached
     );
   }
 }

@@ -1,4 +1,3 @@
-import 'package:flutter_memos/api/lib/api.dart'; // Import V1Resource
 import 'package:flutter_memos/utils/deep_equality.dart'; // Import for deep equality check
 
 /// Enum for comment states
@@ -13,7 +12,7 @@ class Comment {
   final int? updateTime; // Milliseconds since epoch
   final CommentState state;
   final bool pinned;
-  final List<V1Resource>? resources; // Add resources field
+  final List<Map<String, dynamic>>? resources; // Change type here
 
   Comment({
     required this.id,
@@ -23,7 +22,7 @@ class Comment {
     this.updateTime,
     this.state = CommentState.normal,
     this.pinned = false,
-    this.resources, // Add to constructor
+    this.resources, // Update constructor parameter
   });
 
   /// Create a copy of this comment with some fields replaced
@@ -35,7 +34,7 @@ class Comment {
     int? updateTime, 
     CommentState? state,
     bool? pinned,
-    List<V1Resource>? resources, // Add resources parameter
+    List<Map<String, dynamic>>? resources, // Update resources parameter type
     bool clearUpdateTime = false, // Helper to explicitly nullify updateTime
   }) {
     return Comment(
@@ -63,11 +62,14 @@ class Comment {
       state: _parseState(json['state']),
       pinned: json['pinned'] as bool? ?? false,
       // Assuming resources are decoded elsewhere or handled during API conversion
+      // Ensure resources are correctly parsed as List<Map<String, dynamic>>
       resources:
           json['resources'] != null
-              ? (json['resources'] as List)
-                  .map((r) => V1Resource.fromJson(r)!)
-                  .toList()
+              ? List<Map<String, dynamic>>.from(
+                (json['resources'] as List).map(
+                  (r) => Map<String, dynamic>.from(r as Map),
+                ),
+              )
               : null,
     );
   }
@@ -83,8 +85,8 @@ class Comment {
       'state':
           state.toString().split('.').last, // Use simple string representation
       'pinned': pinned,
-      // Serialize resources if needed (convert V1Resource list to JSON)
-      'resources': resources?.map((r) => r.toJson()).toList(),
+      // Serialize resources (already List<Map<String, dynamic>>)
+      'resources': resources,
     };
   }
 
@@ -130,7 +132,7 @@ class Comment {
           updateTime == other.updateTime &&
           state == other.state &&
           pinned == other.pinned &&
-          deepEquality.equals(resources, other.resources); // Use deep equality for lists
+          deepEquality.equals(resources, other.resources); // Use deep equality for lists of maps
 
   @override
   int get hashCode => Object.hash(
@@ -141,6 +143,6 @@ class Comment {
     updateTime,
     state,
     pinned,
-    Object.hashAll(resources ?? []), // Hash list content
+    deepEquality.hash(resources), // Use deep equality hash for lists of maps
   );
 }
