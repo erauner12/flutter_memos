@@ -252,8 +252,7 @@ Future<void> main(List<String> args) async {
             },
             'due_date': {
               'type': 'string',
-              'description':
-                  'Specific due date in YYYY-MM-DD format (optional).',
+              'description': 'Specific due date in YYYY-MM-DD format (optional).',
             },
             'due_datetime': {
               'type': 'string',
@@ -426,190 +425,7 @@ Future<void> main(List<String> args) async {
     callback: _handleGetTodoistTasks, // Assign the handler
   );
 
-  // Change 2: Remove commented-out anyOf from update_todoist_task tool registration
-  server.tool(
-    'update_todoist_task',
-    description:
-        'Updates one or more existing tasks in Todoist. Requires either task_id or task_name for each task. task_id takes precedence. Returns the updated task details.',
-    inputSchemaProperties: {
-      'tasks': {
-        'type': 'array',
-        'description': 'Array of tasks to update (for batch operations).',
-        'items': {
-          'type': 'object',
-          'properties': {
-            'task_id': {
-              'type': 'string',
-              'description':
-                  'The specific ID of the task to update (optional, takes precedence over task_name).',
-            },
-            'task_name': {
-              'type': 'string',
-              'description':
-                  'The name/content of the task to search for and update (required if task_id is not provided).',
-            },
-            'content': {
-              'type': 'string',
-              'description': 'New content for the task (optional).',
-            },
-            'description': {
-              'type': 'string',
-              'description':
-                  'New detailed description for the task (optional).',
-            },
-            'project_id': {
-              'type': 'string',
-              'description': 'Move task to this project ID (optional).',
-            },
-            'section_id': {
-              'type': 'string',
-              'description': 'Move task to this section ID (optional).',
-            },
-            'labels': {
-              'type': 'array',
-              'description':
-                  'New list of label names to attach (optional, replaces existing).',
-              'items': {'type': 'string'},
-            },
-            'priority': {
-              'type': 'integer',
-              'description':
-                  'New task priority from 1 (normal) to 4 (urgent) (optional).',
-              'enum': [1, 2, 3, 4],
-            },
-            'due_string': {
-              'type': 'string',
-              'description': 'New human-readable due date (optional).',
-            },
-            'due_date': {
-              'type': 'string',
-              'description':
-                  'New specific due date in YYYY-MM-DD format (optional).',
-            },
-            'due_datetime': {
-              'type': 'string',
-              'description':
-                  'New specific due date/time in RFC3339 UTC format (optional).',
-            },
-            'due_lang': {
-              'type': 'string',
-              'description':
-                  'Language code if new due_string is not English (optional).',
-            },
-            'assignee_id': {
-              'type': 'string',
-              'description':
-                  'New ID of the user to assign the task to (optional).',
-            },
-            'duration': {
-              'type': 'integer',
-              'description':
-                  'A positive integer for the task duration, or null to unset. Requires duration_unit.',
-            },
-            'duration_unit': {
-              'type': 'string',
-              'description':
-                  "The unit for the duration ('minute' or 'day'). Requires duration.",
-              'enum': ['minute', 'day'],
-            },
-            'deadline_date': {
-              'type': 'string',
-              'description':
-                  'New deadline date in YYYY-MM-DD format (optional)',
-            },
-            'deadline_lang': {
-              'type': 'string',
-              'description':
-                  'New 2-letter language code for deadline parsing (optional)',
-            }
-          }
-        },
-      },
-      'task_id': {
-        'type': 'string',
-        'description':
-            'The specific ID of the task to update (optional, takes precedence over task_name).',
-      },
-      'task_name': {
-        'type': 'string',
-        'description':
-            'The name/content of the task to search for and update (required if task_id is not provided and "tasks" array is not used).',
-      },
-      'content': {
-        'type': 'string',
-        'description': 'New content for the task (optional).',
-      },
-      'description': {
-        'type': 'string',
-        'description': 'New detailed description for the task (optional).',
-      },
-      'project_id': {
-        'type': 'string',
-        'description': 'Move task to this project ID (optional).',
-      },
-      'section_id': {
-        'type': 'string',
-        'description': 'Move task to this section ID (optional).',
-      },
-      'labels': {
-        'type': 'array',
-        'description':
-            'New list of label names to attach (optional, replaces existing).',
-        'items': {'type': 'string'},
-      },
-      'priority': {
-        'type': 'integer',
-        'description':
-            'New task priority from 1 (normal) to 4 (urgent) (optional).',
-        'enum': [1, 2, 3, 4],
-      },
-      'due_string': {
-        'type': 'string',
-        'description': 'New human-readable due date (optional).',
-      },
-      'due_date': {
-        'type': 'string',
-        'description': 'New specific due date in YYYY-MM-DD format (optional).',
-      },
-      'due_datetime': {
-        'type': 'string',
-        'description':
-            'New specific due date/time in RFC3339 UTC format (optional).',
-      },
-      'due_lang': {
-        'type': 'string',
-        'description':
-            'Language code if new due_string is not English (optional).',
-      },
-      'assignee_id': {
-        'type': 'string',
-        'description': 'New ID of the user to assign the task to (optional).',
-      },
-      'duration': {
-        'type': 'integer',
-        'description':
-            'A positive integer for the task duration, or null to unset. Requires duration_unit.',
-      },
-      'duration_unit': {
-        'type': 'string',
-        'description':
-            "The unit for the duration ('minute' or 'day'). Requires duration.",
-        'enum': ['minute', 'day'],
-      },
-      'deadline_date': {
-        'type': 'string',
-        'description': 'New deadline date in YYYY-MM-DD format (optional)',
-      },
-      'deadline_lang': {
-        'type': 'string',
-        'description':
-            'New 2-letter language code for deadline parsing (optional)',
-      }
-    },
-    callback: _handleUpdateTodoistTask, // Direct function reference
-  );
-
-  // Change 1: Register todoist_create_project tool
+  // Change 1: Register todoist_create_project tool (dummy registration removed here)
   server.tool(
     'todoist_create_project',
     description: 'Creates a new project in Todoist.',
@@ -641,14 +457,6 @@ Future<void> main(List<String> args) async {
 
   // Change 2: Register todoist_update_project tool
   server.tool(
-    'todoist_create_project', // This closing parenthesis comes from previous block and is now closed.
-    description: 'dummy placeholder to maintain structure',
-    inputSchemaProperties: {},
-    callback: ({Map<String, dynamic>? args, RequestHandlerExtra? extra}) =>
-        _createErrorResult('Should not be called'),
-  );
-  // ADD: Register todoist_update_project tool
-  server.tool(
     'todoist_update_project',
     description: 'Updates an existing project in Todoist.',
     inputSchemaProperties: {
@@ -678,14 +486,6 @@ Future<void> main(List<String> args) async {
   );
 
   // Change 3: Register todoist_get_project_sections tool and todoist_create_project_section tool
-  server.tool(
-    'update_todoist_task',
-    description: 'dummy placeholder to maintain structure',
-    inputSchemaProperties: {},
-    callback: ({Map<String, dynamic>? args, RequestHandlerExtra? extra}) =>
-        _createErrorResult('Should not be called'),
-  );
-  // ADD: Register todoist_get_project_sections tool
   server.tool(
     'todoist_get_project_sections',
     description: 'Retrieves all sections for a given project.',
@@ -755,7 +555,7 @@ Future<void> main(List<String> args) async {
             'The name/content of the task to search for and delete (required if task_id is not provided and "tasks" array is not used).',
       },
     },
-    callback: _handleDeleteTodoistTask, // Direct function reference
+    callback: _handleDeleteTodoistTask,
   );
 
   server.tool(
@@ -794,21 +594,21 @@ Future<void> main(List<String> args) async {
             'The name/content of the task to search for and complete (required if task_id is not provided and "tasks" array is not used).',
       },
     },
-    callback: handleCompleteTodoistTask, // Direct function reference
+    callback: handleCompleteTodoistTask,
   );
 
   // Change 3 continued: ADD: Register todoist_get_projects tool
   server.tool(
     'todoist_get_projects',
     description: 'Get all projects from Todoist.',
-    inputSchemaProperties: {}, // No input parameters needed for getting all projects
+    inputSchemaProperties: {},
     callback: _handleGetProjects,
   );
 
-  // Change 1 and 2 already handled above; now continue with Change 4:
   // Change 4: Update the list of registered tools in the stderr log message
   stderr.writeln(
-    '[TodoistServer] Registered tools: create_todoist_task, get_todoist_tasks, update_todoist_task, todoist_delete_task, todoist_complete_task, get_task_comments, create_task_comment, todoist_get_projects, todoist_create_project, todoist_update_project, todoist_get_project_sections, todoist_create_project_section, todoist_get_personal_labels, todoist_create_personal_label, todoist_get_personal_label, todoist_update_personal_label, todoist_delete_personal_label, todoist_get_shared_labels, todoist_rename_shared_labels, todoist_remove_shared_labels, todoist_update_task_labels',
+    '[TodoistServer] Registered tools: create_todoist_task, get_todoist_tasks, update_todoist_task, todoist_delete_task, todoist_complete_task, todoist_get_projects, todoist_create_project, todoist_update_project, todoist_get_project_sections, todoist_create_project_section' // Removed unimplemented/stubbed tools for now
+    // TODO: Add back other tools as they are implemented: get_task_comments, create_task_comment, todoist_get_personal_labels, todoist_create_personal_label, todoist_get_personal_label, todoist_update_personal_label, todoist_delete_personal_label, todoist_get_shared_labels, todoist_rename_shared_labels, todoist_remove_shared_labels, todoist_update_task_labels
   );
 
   // 3. Connect to the Transport based on mode
@@ -1389,15 +1189,15 @@ Future<mcp_dart.CallToolResult> _handleGetTodoistTasks({
             })
         .toList();
 
-    // Update the success message to use limitArg directly
     final successMsg =
-        'Successfully fetched ${resultTasks.length} Todoist tasks (limit applied: ${limitArg ?? \'None\'}).';
+        'Successfully fetched ${resultTasks.length} Todoist tasks.';
     stderr.writeln('[TodoistServer] $successMsg');
     return _createSuccessResult(
       successMsg,
       resultData: {'tasks': resultTasks},
     );
   } catch (e) {
+    stderr.writeln('[TodoistServer] Error fetching tasks: $e');
     var apiErrorMsg = 'Error getting Todoist tasks: ${e.toString()}';
     stderr.writeln('[TodoistServer] $apiErrorMsg');
     Map<String, dynamic>? errorData;
@@ -1411,7 +1211,6 @@ Future<mcp_dart.CallToolResult> _handleGetTodoistTasks({
     return _createErrorResult(apiErrorMsg, errorData: errorData);
   }
 }
-
 // Change 14: Keep the extra parameter to match ToolCallback signature
 Future<mcp_dart.CallToolResult> _handleDeleteTodoistTask({
   Map<String, dynamic>? args,
@@ -1818,15 +1617,13 @@ Future<mcp_dart.CallToolResult> _handleCreateProject(
       return _createErrorResult('Project name cannot be empty.');
     }
 
-    final request = todoist.CreateProjectRequest(
-      name: name,
+    final newProject = await projectsApi.createProject(
+      name,
       parentId: args?['parent_id'] as String?,
       color: args?['color'] as String?,
       isFavorite: args?['is_favorite'] as bool?,
       viewStyle: args?['view_style'] as String?,
     );
-
-    final newProject = await projectsApi.createProject(request);
     if (newProject == null) {
       return _createErrorResult('API returned null for the new project.');
     }
@@ -1889,12 +1686,11 @@ Future<mcp_dart.CallToolResult> _handleUpdateProject(
 
     final intId = int.tryParse(projectIdStr);
     if (intId == null) {
-      return _createErrorResult('Invalid Project ID format: "$projectIdStr".');
+      return _createErrorResult('Invalid Project ID format: "$projectIdStr". Must be an integer.');
     }
 
-    // Check if project exists (optional but good practice)
     try {
-      await projectsApi.getProject(intId);
+      await projectsApi.getProject(projectIdStr);
     } catch (e) {
       if (e is todoist.ApiException && e.code == 404) {
         return _createErrorResult('Project with ID "$projectIdStr" not found.');
@@ -1902,7 +1698,7 @@ Future<mcp_dart.CallToolResult> _handleUpdateProject(
       rethrow;
     }
 
-    final request = todoist.UpdateProjectRequest(
+    final request = todoist.Project(
       name: args?['name'] as String?,
       color: args?['color'] as String?,
       isFavorite: args?['is_favorite'] as bool?,
@@ -1917,8 +1713,12 @@ Future<mcp_dart.CallToolResult> _handleUpdateProject(
           'No update parameters provided for project ID $projectIdStr.');
     }
 
-    await projectsApi.updateProject(intId, request);
-    final updatedProject = await projectsApi.getProject(intId);
+    await projectsApi.updateProject(projectIdStr,
+        name: request.name,
+        color: request.color,
+        isFavorite: request.isFavorite,
+        viewStyle: request.viewStyle);
+    final updatedProject = await projectsApi.getProject(projectIdStr);
 
     if (updatedProject == null) {
       return _createErrorResult(
@@ -1988,7 +1788,7 @@ Future<mcp_dart.CallToolResult> _handleGetProjectSections(
           'Invalid Project ID format: "$projectIdStr". Must be an integer.');
     }
 
-    final sections = await sectionsApi.getAllSections(projectId: intProjectId);
+    final sections = await sectionsApi.getAllSections(projectId: projectIdStr);
     if (sections == null) {
       return _createErrorResult(
           'API returned null section list for project ID $projectIdStr.');
@@ -2062,13 +1862,12 @@ Future<mcp_dart.CallToolResult> _handleCreateProjectSection(
           'Invalid Project ID format: "$projectIdStr". Must be an integer.');
     }
 
-    final request = todoist.CreateSectionRequest(
-      projectId: intProjectId,
-      name: name,
+    // Create section by passing parameters correctly
+    final newSection = await sectionsApi.createSection(
+      projectIdStr, // First positional argument - project ID
+      name, // Second positional argument - section name
       order: args?['order'] as int?,
     );
-
-    final newSection = await sectionsApi.createSection(request);
     if (newSection == null) {
       return _createErrorResult('API returned null for the new section.');
     }
