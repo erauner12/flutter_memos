@@ -132,9 +132,106 @@ Future<todoist.Task?> _findTaskByIdOrName(
   return null;
 }
 
+// ADD: Helper function to find a personal label by name
+/// Finds a single personal label by its name (case-insensitive exact match).
+Future<todoist.Label?> _findLabelByName(
+  todoist.ApiClient client,
+  String labelName,
+) async {
+  if (labelName.trim().isEmpty) {
+    stderr.writeln('[TodoistServer] _findLabelByName called with empty name.');
+    return null;
+  }
+  stderr.writeln(
+      '[TodoistServer] Searching for label exactly matching: "$labelName"');
+  try {
+    final labelsApi = todoist.LabelsApi(client);
+    final allLabels = await labelsApi.getAllPersonalLabels();
+    if (allLabels == null) {
+      stderr.writeln('[TodoistServer] Received null label list from API.');
+      return null;
+    }
+
+    // Fix: Don't use orElse to return null, use try/catch instead
+    try {
+      final match = allLabels.firstWhere(
+        (label) => label.name?.toLowerCase() == labelName.toLowerCase(),
+      );
+      stderr.writeln(
+          '[TodoistServer] Found label matching "$labelName": ID ${match.id}');
+      return match;
+    } catch (e) {
+      // This catches the StateError thrown when no element is found
+      stderr.writeln('[TodoistServer] No label found matching "$labelName".');
+      return null;
+    }
+  } catch (e) {
+    stderr.writeln(
+        '[TodoistServer] Error during _findLabelByName("$labelName"): $e');
+    if (e is todoist.ApiException) {
+      stderr.writeln(
+          '[TodoistServer] API Exception Details: Code=${e.code}, Message=${e.message}');
+    }
+    return null;
+  }
+}
+
+// ADD: Helper function to find a personal label by ID or name
+/// Finds a single personal label by ID (if provided) or name.
+/// ID takes precedence. Returns null if not found or on error.
+Future<todoist.Label?> _findLabelByIdOrName(
+  todoist.ApiClient client, {
+  String? labelId,
+  String? labelName,
+}) async {
+  final labelsApi = todoist.LabelsApi(client);
+
+  // 1. Try by ID first
+  if (labelId != null && labelId.isNotEmpty) {
+    stderr.writeln('[TodoistServer] Searching for label by ID: "$labelId"');
+    try {
+      final intId = int.tryParse(labelId);
+      if (intId == null) {
+        stderr.writeln(
+            '[TodoistServer] Invalid label ID format: "$labelId". Must be an integer.');
+        return null;
+      }
+      final label = await labelsApi.getPersonalLabel(intId);
+      if (label != null) {
+        stderr.writeln(
+            '[TodoistServer] Found label by ID "$labelId": Name "${label.name}"');
+        return label;
+      } else {
+        stderr.writeln('[TodoistServer] No label found with ID "$labelId".');
+      }
+    } catch (e) {
+      stderr
+          .writeln('[TodoistServer] Error fetching label by ID "$labelId": $e');
+      if (e is todoist.ApiException && e.code == 404) {
+        stderr.writeln('[TodoistServer] Label ID "$labelId" not found (404).');
+      } else if (e is todoist.ApiException) {
+        stderr.writeln(
+            '[TodoistServer] API Exception Details: Code=${e.code}, Message=${e.message}');
+        return null;
+      } else {
+        return null;
+      }
+    }
+  }
+
+  // 2. Try by Name if ID search failed or wasn't provided
+  if (labelName != null && labelName.trim().isNotEmpty) {
+    return await _findLabelByName(client, labelName);
+  }
+
+  stderr.writeln(
+      '[TodoistServer] Could not find label: No valid ID or name provided, or search failed.');
+  return null;
+}
+
+
 // --- Generic Result Helpers ---
 
-// Generic error result helper
 mcp_dart.CallToolResult _createErrorResult(String message,
     {Map<String, dynamic>? errorData}) {
   final payload = {
@@ -150,7 +247,6 @@ mcp_dart.CallToolResult _createErrorResult(String message,
   );
 }
 
-// ADD: Generic success result helper
 mcp_dart.CallToolResult _createSuccessResult(String message,
     {Map<String, dynamic>? resultData}) {
   final payload = {
@@ -394,7 +490,6 @@ Future<void> main(List<String> args) async {
               'description':
                   'The name/content of the task to search for and update (required if task_id is not provided).',
             },
-            // Updateable fields (mirror create, but all optional)
             'content': {
               'type': 'string',
               'description': 'New content for the task (optional).',
@@ -451,10 +546,9 @@ Future<void> main(List<String> args) async {
               'enum': ['minute', 'day'],
             },
           },
-          'required': [], // Identification (id/name) handled by logic
+          'required': [],
         },
       },
-      // Single task update fields (mirror batch item properties)
       'task_id': {
         'type': 'string',
         'description':
@@ -630,7 +724,7 @@ Future<void> main(List<String> args) async {
         'enum': ['list', 'board']
       }
     },
-    callback: _handleUpdateProject, // Updated handler without int parsing
+    callback: _handleUpdateProject,
   );
 
   // Change 3: Register todoist_get_project_sections tool and todoist_create_project_section tool
@@ -643,10 +737,9 @@ Future<void> main(List<String> args) async {
         'description': 'ID of the project to get sections for (required).'
       }
     },
-    callback: _handleGetProjectSections, // Updated handler without int parsing
+    callback: _handleGetProjectSections,
   );
 
-  // ADD: Register todoist_create_project_section tool
   server.tool(
     'todoist_create_project_section',
     description: 'Creates a new section within a project.',
@@ -664,11 +757,10 @@ Future<void> main(List<String> args) async {
         'description': 'Order of the section within the project (optional).'
       }
     },
-    callback:
-        _handleCreateProjectSection, // Updated handler without int parsing
+    callback: _handleCreateProjectSection,
   );
 
-  // Change 4: Register 'todoist_delete_task' remains unchanged then update log message
+  // Change 4: Register 'todoist_delete_task'
   server.tool(
     'todoist_delete_task',
     description:
@@ -754,10 +846,93 @@ Future<void> main(List<String> args) async {
     callback: _handleGetProjects,
   );
 
+  // ADD: Register personal label tools
+  server.tool(
+    'todoist_create_personal_label',
+    description: 'Creates a new personal label in Todoist.',
+    inputSchemaProperties: {
+      'name': {
+        'type': 'string',
+        'description': 'Name of the label (required).'
+      },
+      'order': {
+        'type': 'integer',
+        'description': 'Label order in the list (optional).'
+      },
+      'color': {
+        'type': 'string',
+        'description': 'Color ID or name (optional).'
+      },
+      'is_favorite': {
+        'type': 'boolean',
+        'description': 'Whether the label is a favorite (optional).'
+      }
+    },
+    callback: _handleCreatePersonalLabel,
+  );
+
+  server.tool(
+    'todoist_get_personal_label',
+    description: 'Retrieves a specific personal label by its ID.',
+    inputSchemaProperties: {
+      'label_id': {
+        'type': 'string',
+        'description': 'ID of the label to retrieve (required).'
+      }
+    },
+    callback: _handleGetPersonalLabel,
+  );
+
+  server.tool(
+    'todoist_update_personal_label',
+    description:
+        'Updates an existing personal label in Todoist. Requires label_id or label_name.',
+    inputSchemaProperties: {
+      'label_id': {
+        'type': 'string',
+        'description':
+            'ID of the label to update (optional, takes precedence over label_name).'
+      },
+      'label_name': {
+        'type': 'string',
+        'description':
+            'Name of the label to find and update (required if label_id is not provided).'
+      },
+      'name': {
+        'type': 'string',
+        'description': 'New name for the label (optional).'
+      },
+      'order': {
+        'type': 'integer',
+        'description': 'New label order (optional).'
+      },
+      'color': {
+        'type': 'string',
+        'description': 'New color ID or name (optional).'
+      },
+      'is_favorite': {
+        'type': 'boolean',
+        'description': 'New favorite status (optional).'
+      }
+    },
+    callback: _handleUpdatePersonalLabel,
+  );
+
+  server.tool(
+    'todoist_delete_personal_label',
+    description: 'Deletes a personal label by its ID.',
+    inputSchemaProperties: {
+      'label_id': {
+        'type': 'string',
+        'description': 'ID of the label to delete (required).'
+      }
+    },
+    callback: _handleDeletePersonalLabel,
+  );
+
   // Change 2: Update the list of registered tools in the stderr log message
   stderr.writeln(
-      '[TodoistServer] Registered tools: create_todoist_task, update_todoist_task, get_todoist_tasks, todoist_delete_task, todoist_complete_task, todoist_get_projects, todoist_create_project, todoist_update_project, todoist_get_project_sections, todoist_create_project_section' // Added update_todoist_task
-    // TODO: Add back other tools as they are implemented: get_task_comments, create_task_comment, todoist_get_personal_labels, todoist_create_personal_label, todoist_get_personal_label, todoist_update_personal_label, todoist_delete_personal_label, todoist_get_shared_labels, todoist_rename_shared_labels, todoist_remove_shared_labels, todoist_update_task_labels
+      '[TodoistServer] Registered tools: create_todoist_task, update_todoist_task, get_todoist_tasks, todoist_delete_task, todoist_complete_task, todoist_get_projects, todoist_create_project, todoist_update_project, todoist_get_project_sections, todoist_create_project_section, todoist_create_personal_label, todoist_get_personal_label, todoist_update_personal_label, todoist_delete_personal_label'
   );
 
   // 3. Connect to the Transport based on mode
@@ -865,7 +1040,6 @@ Future<void> main(List<String> args) async {
 
 // --- Tool Handlers (Refactored & New Stubs) ---
 
-// Change 6: Keep the extra parameter to match ToolCallback signature
 Future<mcp_dart.CallToolResult> _handleCreateTodoistTask({
   Map<String, dynamic>? args,
   RequestHandlerExtra? extra,
@@ -1025,7 +1199,6 @@ Future<mcp_dart.CallToolResult> _handleCreateTodoistTask({
   }
 }
 
-// Change 8: Keep the extra parameter to match ToolCallback signature
 Future<mcp_dart.CallToolResult> _handleUpdateTodoistTask({
   Map<String, dynamic>? args,
   RequestHandlerExtra? extra,
@@ -1227,7 +1400,6 @@ Future<mcp_dart.CallToolResult> _handleUpdateTodoistTask({
   }
 }
 
-// Change 10: Keep the extra parameter to match ToolCallback signature
 Future<mcp_dart.CallToolResult> _handleGetTodoistTasks({
   Map<String, dynamic>? args,
   RequestHandlerExtra? extra,
@@ -1360,7 +1532,7 @@ Future<mcp_dart.CallToolResult> _handleGetTodoistTasks({
     return _createErrorResult(apiErrorMsg, errorData: errorData);
   }
 }
-// Change 14: Keep the extra parameter to match ToolCallback signature
+
 Future<mcp_dart.CallToolResult> _handleDeleteTodoistTask({
   Map<String, dynamic>? args,
   RequestHandlerExtra? extra,
@@ -1501,7 +1673,6 @@ Future<mcp_dart.CallToolResult> _handleDeleteTodoistTask({
   }
 }
 
-// Change 16: Keep the extra parameter to match ToolCallback signature
 Future<mcp_dart.CallToolResult> handleCompleteTodoistTask({
   Map<String, dynamic>? args,
   RequestHandlerExtra? extra,
@@ -1667,7 +1838,6 @@ Future<mcp_dart.CallToolResult> handleCompleteTodoistTask({
   }
 }
 
-// Change 18: Keep the extra parameter to match ToolCallback signature
 Future<mcp_dart.CallToolResult> handleGetTaskComments({
   Map<String, dynamic>? args,
   RequestHandlerExtra? extra,
@@ -1677,7 +1847,6 @@ Future<mcp_dart.CallToolResult> handleGetTaskComments({
   return _createErrorResult('Handler not fully implemented yet.');
 }
 
-// Change 19: Keep the extra parameter to match ToolCallback signature
 Future<mcp_dart.CallToolResult> handleCreateTaskComment({
   Map<String, dynamic>? args,
   RequestHandlerExtra? extra,
@@ -1689,7 +1858,6 @@ Future<mcp_dart.CallToolResult> handleCreateTaskComment({
 
 // --- Stubs for New Handlers ---
 
-// Project Handlers
 Future<mcp_dart.CallToolResult> _handleGetProjects(
     {Map<String, dynamic>? args, RequestHandlerExtra? extra}) async {
   stderr.writeln('[TodoistServer] Received todoist_get_projects request.');
@@ -1747,7 +1915,6 @@ Future<mcp_dart.CallToolResult> _handleGetProjects(
   }
 }
 
-// Change 2: Implement _handleCreateProject handler.
 Future<mcp_dart.CallToolResult> _handleCreateProject(
     {Map<String, dynamic>? args, RequestHandlerExtra? extra}) async {
   stderr.writeln('[TodoistServer] Received todoist_create_project request.');
@@ -1814,7 +1981,6 @@ Future<mcp_dart.CallToolResult> _handleCreateProject(
   }
 }
 
-// Change 3: Implement _handleUpdateProject handler. Removed unnecessary int parsing.
 Future<mcp_dart.CallToolResult> _handleUpdateProject(
     {Map<String, dynamic>? args, RequestHandlerExtra? extra}) async {
   stderr.writeln('[TodoistServer] Received todoist_update_project request.');
@@ -1833,7 +1999,6 @@ Future<mcp_dart.CallToolResult> _handleUpdateProject(
       return _createErrorResult('Project ID is required for update.');
     }
 
-    // Check if project exists before attempting update
     try {
       await projectsApi.getProject(projectIdStr);
     } catch (e) {
@@ -1910,7 +2075,6 @@ Future<mcp_dart.CallToolResult> _handleUpdateProject(
   }
 }
 
-// Change 4: Implement _handleGetProjectSections handler. Removed unnecessary int parsing.
 Future<mcp_dart.CallToolResult> _handleGetProjectSections(
     {Map<String, dynamic>? args, RequestHandlerExtra? extra}) async {
   stderr.writeln(
@@ -1969,7 +2133,6 @@ Future<mcp_dart.CallToolResult> _handleGetProjectSections(
   }
 }
 
-// Change 5: Implement _handleCreateProjectSection handler. Removed unnecessary int parsing.
 Future<mcp_dart.CallToolResult> _handleCreateProjectSection(
     {Map<String, dynamic>? args, RequestHandlerExtra? extra}) async {
   stderr.writeln(
@@ -2027,6 +2190,324 @@ Future<mcp_dart.CallToolResult> _handleCreateProjectSection(
       apiErrorMsg =
           'API Error creating project section (${e.code}): ${e.message ?? "Unknown API error"}';
       errorData = {'apiCode': e.code, 'apiMessage': e.message};
+    }
+    return _createErrorResult(apiErrorMsg, errorData: errorData);
+  }
+}
+
+// ADD: Handler for creating personal labels
+Future<mcp_dart.CallToolResult> _handleCreatePersonalLabel(
+    {Map<String, dynamic>? args, RequestHandlerExtra? extra}) async {
+  stderr.writeln(
+      '[TodoistServer] Received todoist_create_personal_label request.');
+  stderr.writeln('[TodoistServer] Args: ${jsonEncode(args)}');
+
+  final apiClient = _configureApiClient();
+  if (apiClient == null) {
+    return _createErrorResult(
+        'TODOIST_API_TOKEN environment variable not set or empty.');
+  }
+  final labelsApi = todoist.LabelsApi(apiClient);
+
+  try {
+    final name = args?['name'] as String?;
+    if (name == null || name.trim().isEmpty) {
+      return _createErrorResult('Label name cannot be empty.');
+    }
+
+    final existingLabel = await _findLabelByName(apiClient, name);
+    if (existingLabel != null) {
+      return _createErrorResult(
+          'Label with name "$name" already exists (ID: ${existingLabel.id}).');
+    }
+
+    final newLabel = await labelsApi.createPersonalLabel(
+      name,
+      order: args?['order'] as int?,
+      color: args?['color'] as String?,
+      isFavorite: args?['is_favorite'] as bool?,
+    );
+    if (newLabel == null) {
+      return _createErrorResult('API returned null for the new label.');
+    }
+
+    final successMsg =
+        'Todoist personal label created successfully: "${newLabel.name}"';
+    stderr.writeln('[TodoistServer] $successMsg (ID: ${newLabel.id})');
+    return _createSuccessResult(
+      successMsg,
+      resultData: {
+        'label': {
+          'id': newLabel.id,
+          'name': newLabel.name,
+          'color': newLabel.color,
+          'order': newLabel.order,
+          'is_favorite': newLabel.isFavorite,
+        }
+      },
+    );
+  } catch (e) {
+    var apiErrorMsg = 'Error creating Todoist personal label: ${e.toString()}';
+    stderr.writeln('[TodoistServer] $apiErrorMsg');
+    Map<String, dynamic>? errorData;
+    if (e is todoist.ApiException) {
+      stderr.writeln(
+          '[TodoistServer] API Exception Details: Code=${e.code}, Message=${e.message}');
+      apiErrorMsg =
+          'API Error creating label (${e.code}): ${e.message ?? "Unknown API error"}';
+      errorData = {'apiCode': e.code, 'apiMessage': e.message};
+    }
+    return _createErrorResult(apiErrorMsg, errorData: errorData);
+  }
+}
+
+// ADD: Handler for getting a specific personal label
+Future<mcp_dart.CallToolResult> _handleGetPersonalLabel(
+    {Map<String, dynamic>? args, RequestHandlerExtra? extra}) async {
+  stderr
+      .writeln('[TodoistServer] Received todoist_get_personal_label request.');
+  stderr.writeln('[TodoistServer] Args: ${jsonEncode(args)}');
+
+  final apiClient = _configureApiClient();
+  if (apiClient == null) {
+    return _createErrorResult(
+        'TODOIST_API_TOKEN environment variable not set or empty.');
+  }
+  final labelsApi = todoist.LabelsApi(apiClient);
+
+  try {
+    final labelIdStr = args?['label_id'] as String?;
+    if (labelIdStr == null || labelIdStr.trim().isEmpty) {
+      return _createErrorResult('Label ID is required.');
+    }
+
+    final intId = int.tryParse(labelIdStr);
+    if (intId == null) {
+      return _createErrorResult(
+          'Invalid label ID format: "$labelIdStr". Must be an integer.');
+    }
+
+    final label = await labelsApi.getPersonalLabel(intId);
+    if (label == null) {
+      return _createErrorResult('Label with ID $intId not found.');
+    }
+
+    final successMsg =
+        'Successfully fetched personal label: "${label.name}" (ID: ${label.id})';
+    stderr.writeln('[TodoistServer] $successMsg');
+    return _createSuccessResult(
+      successMsg,
+      resultData: {
+        'label': {
+          'id': label.id,
+          'name': label.name,
+          'color': label.color,
+          'order': label.order,
+          'is_favorite': label.isFavorite,
+        }
+      },
+    );
+  } catch (e) {
+    var apiErrorMsg = 'Error getting Todoist personal label: ${e.toString()}';
+    stderr.writeln('[TodoistServer] $apiErrorMsg');
+    Map<String, dynamic>? errorData;
+    if (e is todoist.ApiException) {
+      stderr.writeln(
+          '[TodoistServer] API Exception Details: Code=${e.code}, Message=${e.message}');
+      if (e.code == 404) {
+        apiErrorMsg = 'Label with ID "${args?['label_id']}" not found.';
+      } else {
+        apiErrorMsg =
+            'API Error getting label (${e.code}): ${e.message ?? "Unknown API error"}';
+      }
+      errorData = {'apiCode': e.code, 'apiMessage': e.message};
+    } else if (e is FormatException) {
+      apiErrorMsg =
+          'Invalid label ID format: "${args?['label_id']}". Must be an integer.';
+      errorData = {'parsingError': e.message};
+    }
+    return _createErrorResult(apiErrorMsg, errorData: errorData);
+  }
+}
+
+// ADD: Handler for updating personal labels
+Future<mcp_dart.CallToolResult> _handleUpdatePersonalLabel(
+    {Map<String, dynamic>? args, RequestHandlerExtra? extra}) async {
+  stderr.writeln(
+      '[TodoistServer] Received todoist_update_personal_label request.');
+  stderr.writeln('[TodoistServer] Args: ${jsonEncode(args)}');
+
+  final apiClient = _configureApiClient();
+  if (apiClient == null) {
+    return _createErrorResult(
+        'TODOIST_API_TOKEN environment variable not set or empty.');
+  }
+  final labelsApi = todoist.LabelsApi(apiClient);
+
+  try {
+    final labelIdArg = args?['label_id'] as String?;
+    final labelNameArg = args?['label_name'] as String?;
+
+    if ((labelIdArg == null || labelIdArg.trim().isEmpty) &&
+        (labelNameArg == null || labelNameArg.trim().isEmpty)) {
+      return _createErrorResult(
+          'Either label_id or label_name is required for update.');
+    }
+
+    final targetLabel = await _findLabelByIdOrName(apiClient,
+        labelId: labelIdArg, labelName: labelNameArg);
+
+    if (targetLabel == null || targetLabel.id == null) {
+      return _createErrorResult(
+          'Target label not found using provided ID/Name.');
+    }
+
+    final labelIdToUpdate = targetLabel.id!;
+
+    final newName = args?['name'] as String?;
+    final newOrder = args?['order'] as int?;
+    final newColor = args?['color'] as String?;
+    final newIsFavorite = args?['is_favorite'] as bool?;
+
+    if (newName == null &&
+        newOrder == null &&
+        newColor == null &&
+        newIsFavorite == null) {
+      return _createErrorResult(
+          'No update parameters provided for label ID $labelIdToUpdate.');
+    }
+
+    if (newName != null &&
+        newName.toLowerCase() != targetLabel.name?.toLowerCase()) {
+      final conflictingLabel = await _findLabelByName(apiClient, newName);
+      if (conflictingLabel != null && conflictingLabel.id != labelIdToUpdate) {
+        return _createErrorResult(
+            'Another label with the name "$newName" already exists (ID: ${conflictingLabel.id}). Cannot update.');
+      }
+    }
+
+    await labelsApi.updatePersonalLabel(
+      labelIdToUpdate,
+      name: newName,
+      order: newOrder,
+      color: newColor,
+      isFavorite: newIsFavorite,
+    );
+
+    final updatedLabel =
+        await labelsApi.getPersonalLabel(int.parse(labelIdToUpdate));
+    if (updatedLabel == null) {
+      return _createErrorResult(
+          'Label updated, but failed to re-fetch details for ID $labelIdToUpdate.');
+    }
+
+    final successMsg =
+        'Todoist personal label "${updatedLabel.name}" (ID: $labelIdToUpdate) updated successfully.';
+    stderr.writeln('[TodoistServer] $successMsg');
+    return _createSuccessResult(
+      successMsg,
+      resultData: {
+        'label': {
+          'id': updatedLabel.id,
+          'name': updatedLabel.name,
+          'color': updatedLabel.color,
+          'order': updatedLabel.order,
+          'is_favorite': updatedLabel.isFavorite,
+        }
+      },
+    );
+  } catch (e) {
+    var apiErrorMsg = 'Error updating Todoist personal label: ${e.toString()}';
+    stderr.writeln('[TodoistServer] $apiErrorMsg');
+    Map<String, dynamic>? errorData;
+    if (e is todoist.ApiException) {
+      stderr.writeln(
+          '[TodoistServer] API Exception Details: Code=${e.code}, Message=${e.message}');
+      if (e.code == 404) {
+        apiErrorMsg =
+            'Label to update not found using ID "${args?['label_id']}" or name "${args?['label_name']}".';
+      } else {
+        apiErrorMsg =
+            'API Error updating label (${e.code}): ${e.message ?? "Unknown API error"}';
+      }
+      errorData = {'apiCode': e.code, 'apiMessage': e.message};
+    } else if (e is FormatException) {
+      apiErrorMsg =
+          'Invalid label ID format provided: "${args?['label_id']}". Must be an integer.';
+      errorData = {'parsingError': e.message};
+    }
+    return _createErrorResult(apiErrorMsg, errorData: errorData);
+  }
+}
+
+// ADD: Handler for deleting personal labels
+Future<mcp_dart.CallToolResult> _handleDeletePersonalLabel(
+    {Map<String, dynamic>? args, RequestHandlerExtra? extra}) async {
+  stderr.writeln(
+      '[TodoistServer] Received todoist_delete_personal_label request.');
+  stderr.writeln('[TodoistServer] Args: ${jsonEncode(args)}');
+
+  final apiClient = _configureApiClient();
+  if (apiClient == null) {
+    return _createErrorResult(
+        'TODOIST_API_TOKEN environment variable not set or empty.');
+  }
+  final labelsApi = todoist.LabelsApi(apiClient);
+
+  try {
+    final labelIdStr = args?['label_id'] as String?;
+    if (labelIdStr == null || labelIdStr.trim().isEmpty) {
+      return _createErrorResult('Label ID is required for deletion.');
+    }
+
+    final intId = int.tryParse(labelIdStr);
+    if (intId == null) {
+      return _createErrorResult(
+          'Invalid label ID format: "$labelIdStr". Must be an integer.');
+    }
+
+    String? labelNameBeforeDelete;
+    try {
+      final label = await labelsApi.getPersonalLabel(intId);
+      labelNameBeforeDelete = label?.name;
+    } catch (e) {
+      if (e is todoist.ApiException && e.code == 404) {
+        return _createErrorResult(
+            'Label with ID $intId not found. Cannot delete.');
+      }
+    }
+
+    await labelsApi.deletePersonalLabel(intId);
+
+    final successMsg =
+        'Todoist personal label (ID: $intId${labelNameBeforeDelete != null ? ', Name: "$labelNameBeforeDelete"' : ''}) deleted successfully.';
+    stderr.writeln('[TodoistServer] $successMsg');
+    return _createSuccessResult(
+      successMsg,
+      resultData: {
+        'deletedLabelId': intId,
+        'originalName': labelNameBeforeDelete,
+      },
+    );
+  } catch (e) {
+    var apiErrorMsg = 'Error deleting Todoist personal label: ${e.toString()}';
+    stderr.writeln('[TodoistServer] $apiErrorMsg');
+    Map<String, dynamic>? errorData;
+    if (e is todoist.ApiException) {
+      stderr.writeln(
+          '[TodoistServer] API Exception Details: Code=${e.code}, Message=${e.message}');
+      if (e.code == 404) {
+        apiErrorMsg =
+            'Label with ID "${args?['label_id']}" not found (or already deleted).';
+      } else {
+        apiErrorMsg =
+            'API Error deleting label (${e.code}): ${e.message ?? "Unknown API error"}';
+      }
+      errorData = {'apiCode': e.code, 'apiMessage': e.message};
+    } else if (e is FormatException) {
+      apiErrorMsg =
+          'Invalid label ID format: "${args?['label_id']}". Must be an integer.';
+      errorData = {'parsingError': e.message};
     }
     return _createErrorResult(apiErrorMsg, errorData: errorData);
   }
