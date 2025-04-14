@@ -297,7 +297,6 @@ class BlinkoApiService implements BaseApiService {
     }
   }
 
-
   // --- Implement BaseApiService Methods ---
   @override
   Future<ListNotesResponse> listNotes({
@@ -964,9 +963,9 @@ class BlinkoApiService implements BaseApiService {
     final List<Map<String, dynamic>> relations =
         (blinkoDetail.references ?? [])
             .map((r) {
-              // Correctly access the related note's ID
+              // Correctly access the related note's ID using 'id'
               final relatedNoteId =
-                  r.toNote?.noteId?.toString(); // Use noteId instead of id
+                  r.toNote?.id?.toString(); // Use id instead of noteId
               if (relatedNoteId != null) {
                 final type = 'REFERENCE';
                 return {
@@ -1044,8 +1043,9 @@ class BlinkoApiService implements BaseApiService {
     final List<Map<String, dynamic>> relations =
         (blinkoNote.references ?? [])
             .map((r) {
-              // Correctly access the related note's ID - use noteId instead of id
-              final relatedNoteId = r.toNote?.noteId?.toString();
+              // Correctly access the related note's ID using 'id'
+              final relatedNoteId =
+                  r.toNote?.id?.toString(); // Use id instead of noteId
               if (relatedNoteId != null) {
                 final type = 'REFERENCE';
                 return {
