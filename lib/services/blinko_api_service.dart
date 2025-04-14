@@ -438,7 +438,7 @@ class BlinkoApiService implements BaseApiService {
     try {
       if (kDebugMode) {
         print(
-          '[BlinkoApiService.createNote] Calling notesUpsertWithHttpInfo with request: ${request.toJson()}',
+          '[BlinkoApiService.createNote] Calling notesUpsertWithHttpInfo with request: \${request.toJson()}',
         );
       }
       final response = await noteApi.notesUpsertWithHttpInfo(request);
@@ -448,7 +448,7 @@ class BlinkoApiService implements BaseApiService {
               response.body.isNotEmpty ? jsonDecode(response.body) : null;
           if (kDebugMode) {
             print(
-              '[BlinkoApiService.createNote] Success response body: $responseBody',
+              '[BlinkoApiService.createNote] Success response body: \$responseBody',
             );
           }
           if (responseBody is Map<String, dynamic> &&
@@ -457,14 +457,14 @@ class BlinkoApiService implements BaseApiService {
             final String createdIdStr = createdIdNum.toString();
             if (kDebugMode) {
               print(
-                '[BlinkoApiService.createNote] Successfully created note with ID: $createdIdStr',
+                '[BlinkoApiService.createNote] Successfully created note with ID: \$createdIdStr',
               );
             }
             return note.copyWith(id: createdIdStr);
           } else {
             if (kDebugMode) {
               print(
-                '[BlinkoApiService.createNote] Upsert successful but response body did not contain expected ID. Body: ${response.body}',
+                '[BlinkoApiService.createNote] Upsert successful but response body did not contain expected ID. Body: \${response.body}',
               );
             }
             return note;
@@ -472,7 +472,7 @@ class BlinkoApiService implements BaseApiService {
         } catch (decodeError) {
           if (kDebugMode) {
             print(
-              '[BlinkoApiService.createNote] Upsert successful but failed to decode/parse response body: $decodeError. Body: ${response.body}',
+              '[BlinkoApiService.createNote] Upsert successful but failed to decode/parse response body: \$decodeError. Body: \${response.body}',
             );
           }
           return note;
@@ -483,16 +483,16 @@ class BlinkoApiService implements BaseApiService {
     } catch (e, stackTrace) {
       if (kDebugMode) {
         print(
-          '[BlinkoApiService.createNote] Error during notesUpsertWithHttpInfo call: $e',
+          '[BlinkoApiService.createNote] Error during notesUpsertWithHttpInfo call: \$e',
         );
-        print('[BlinkoApiService.createNote] Stack Trace: $stackTrace');
+        print('[BlinkoApiService.createNote] Stack Trace: \$stackTrace');
       }
       if (e is blinko_api.ApiException) {
         throw Exception(
-          'Failed to create note: API Error ${e.code} - ${e.message}',
+          'Failed to create note: API Error \${e.code} - \${e.message}',
         );
       }
-      throw Exception('Failed to create note: $e');
+      throw Exception('Failed to create note: \$e');
     }
   }
 
@@ -506,7 +506,7 @@ class BlinkoApiService implements BaseApiService {
     final noteApi = _getNoteApiForServer(targetServerOverride);
     final num? noteIdNum = num.tryParse(id);
     if (noteIdNum == null) {
-      throw ArgumentError('Invalid numeric ID format for Blinko: $id');
+      throw ArgumentError('Invalid numeric ID format for Blinko: \$id');
     }
     final request = blinko_api.NotesUpsertRequest(
       id: noteIdNum,
@@ -524,10 +524,10 @@ class BlinkoApiService implements BaseApiService {
     } catch (e) {
       if (e is blinko_api.ApiException) {
         throw Exception(
-          'Failed to update note $id: API Error ${e.code} - ${e.message}',
+          'Failed to update note \$id: API Error \${e.code} - \${e.message}',
         );
       }
-      throw Exception('Failed to update note $id: $e');
+      throw Exception('Failed to update note \$id: \$e');
     }
   }
 
@@ -540,7 +540,7 @@ class BlinkoApiService implements BaseApiService {
     final noteApi = _getNoteApiForServer(targetServerOverride);
     final num? noteIdNum = num.tryParse(id);
     if (noteIdNum == null) {
-      throw ArgumentError('Invalid numeric ID format for Blinko: $id');
+      throw ArgumentError('Invalid numeric ID format for Blinko: \$id');
     }
     final request = blinko_api.NotesListByIdsRequest(ids: [noteIdNum]);
     try {
@@ -551,10 +551,10 @@ class BlinkoApiService implements BaseApiService {
     } catch (e) {
       if (e is blinko_api.ApiException) {
         throw Exception(
-          'Failed to delete/trash note $id: API Error ${e.code} - ${e.message}',
+          'Failed to delete/trash note \$id: API Error \${e.code} - \${e.message}',
         );
       }
-      throw Exception('Failed to delete/trash note $id: $e');
+      throw Exception('Failed to delete/trash note \$id: \$e');
     }
   }
 
@@ -572,7 +572,7 @@ class BlinkoApiService implements BaseApiService {
       );
     } catch (e) {
       throw Exception(
-        'Failed to archive note $id: Could not fetch current state. Error: $e',
+        'Failed to archive note \$id: Could not fetch current state. Error: \$e',
       );
     }
     final targetNoteState = currentNote.copyWith(
@@ -587,7 +587,7 @@ class BlinkoApiService implements BaseApiService {
         targetServerOverride: targetServerOverride,
       );
     } catch (e) {
-      throw Exception('Failed to archive note $id: $e');
+      throw Exception('Failed to archive note \$id: \$e');
     }
   }
 
@@ -605,7 +605,7 @@ class BlinkoApiService implements BaseApiService {
       );
     } catch (e) {
       throw Exception(
-        'Failed to toggle pin for note $id: Could not fetch current state. Error: $e',
+        'Failed to toggle pin for note \$id: Could not fetch current state. Error: \$e',
       );
     }
     bool newPinState = !currentNote.pinned;
@@ -620,7 +620,7 @@ class BlinkoApiService implements BaseApiService {
         targetServerOverride: targetServerOverride,
       );
     } catch (e) {
-      throw Exception('Failed to toggle pin for note $id: $e');
+      throw Exception('Failed to toggle pin for note \$id: \$e');
     }
   }
 
@@ -635,7 +635,7 @@ class BlinkoApiService implements BaseApiService {
     final num? noteIdNum = num.tryParse(noteId);
     if (noteIdNum == null) {
       throw ArgumentError(
-        'Invalid numeric ID format for Blinko noteId: $noteId',
+        'Invalid numeric ID format for Blinko noteId: \$noteId',
       );
     }
     final request = blinko_api.CommentsListRequest(noteId: noteIdNum);
@@ -659,10 +659,10 @@ class BlinkoApiService implements BaseApiService {
     } catch (e) {
       if (e is blinko_api.ApiException) {
         throw Exception(
-          'Failed to load comments for note $noteId: API Error ${e.code} - ${e.message}',
+          'Failed to load comments for note \$noteId: API Error \${e.code} - \${e.message}',
         );
       }
-      throw Exception('Failed to load comments for note $noteId: $e');
+      throw Exception('Failed to load comments for note \$noteId: \$e');
     }
   }
 
@@ -680,7 +680,7 @@ class BlinkoApiService implements BaseApiService {
     final num? noteIdNum = num.tryParse(noteId);
     if (noteIdNum == null) {
       throw ArgumentError(
-        'Invalid numeric ID format for Blinko noteId: $noteId',
+        'Invalid numeric ID format for Blinko noteId: \$noteId',
       );
     }
     final request = blinko_api.CommentsCreateRequest(
@@ -706,10 +706,10 @@ class BlinkoApiService implements BaseApiService {
     } catch (e) {
       if (e is blinko_api.ApiException) {
         throw Exception(
-          'Failed to create comment for note $noteId: API Error ${e.code} - ${e.message}',
+          'Failed to create comment for note \$noteId: API Error \${e.code} - \${e.message}',
         );
       }
-      throw Exception('Failed to create comment for note $noteId: $e');
+      throw Exception('Failed to create comment for note \$noteId: \$e');
     }
   }
 
@@ -725,7 +725,7 @@ class BlinkoApiService implements BaseApiService {
     final num? commentIdNum = num.tryParse(commentId);
     if (commentIdNum == null) {
       throw ArgumentError(
-        'Invalid numeric ID format for Blinko commentId: $commentId',
+        'Invalid numeric ID format for Blinko commentId: \$commentId',
       );
     }
     final request = blinko_api.CommentsUpdateRequest(
@@ -737,7 +737,7 @@ class BlinkoApiService implements BaseApiService {
       if (response.statusCode >= 200 && response.statusCode < 300) {
         if (response.body.isEmpty) {
           throw Exception(
-            'Failed to update comment $commentId: Empty response body on success',
+            'Failed to update comment \$commentId: Empty response body on success',
           );
         }
         final blinko_api.CommentsList200ResponseItemsInner? updatedCommentData =
@@ -748,7 +748,7 @@ class BlinkoApiService implements BaseApiService {
                 as blinko_api.CommentsList200ResponseItemsInner?;
         if (updatedCommentData == null) {
           throw Exception(
-            'Failed to update comment $commentId: Could not deserialize response',
+            'Failed to update comment \$commentId: Could not deserialize response',
           );
         }
         return _convertBlinkoCommentToComment(updatedCommentData);
@@ -758,10 +758,10 @@ class BlinkoApiService implements BaseApiService {
     } catch (e) {
       if (e is blinko_api.ApiException) {
         throw Exception(
-          'Failed to update comment $commentId: API Error ${e.code} - ${e.message}',
+          'Failed to update comment \$commentId: API Error \${e.code} - \${e.message}',
         );
       }
-      throw Exception('Failed to update comment $commentId: $e');
+      throw Exception('Failed to update comment \$commentId: \$e');
     }
   }
 
@@ -778,7 +778,7 @@ class BlinkoApiService implements BaseApiService {
     final num? commentIdNum = num.tryParse(commentId);
     if (commentIdNum == null) {
       throw ArgumentError(
-        'Invalid numeric ID format for Blinko commentId: $commentId',
+        'Invalid numeric ID format for Blinko commentId: \$commentId',
       );
     }
     try {
@@ -790,10 +790,12 @@ class BlinkoApiService implements BaseApiService {
     } catch (e) {
       if (e is blinko_api.ApiException) {
         throw Exception(
-          'Failed to delete comment $commentId (note $noteId): API Error ${e.code} - ${e.message}',
+          'Failed to delete comment \$commentId (note \$noteId): API Error \${e.code} - \${e.message}',
         );
       }
-      throw Exception('Failed to delete comment $commentId (note $noteId): $e');
+      throw Exception(
+        'Failed to delete comment \$commentId (note \$noteId): \$e',
+      );
     }
   }
 
@@ -808,7 +810,7 @@ class BlinkoApiService implements BaseApiService {
     final num? noteIdNum = num.tryParse(noteId);
     if (noteIdNum == null) {
       throw ArgumentError(
-        'Invalid numeric ID format for Blinko noteId: $noteId',
+        'Invalid numeric ID format for Blinko noteId: \$noteId',
       );
     }
     if (kDebugMode) {
@@ -825,7 +827,7 @@ class BlinkoApiService implements BaseApiService {
       if (relatedNoteIdNum == null) {
         if (kDebugMode) {
           print(
-            "[BlinkoApiService.setNoteRelations] Skipping relation with invalid relatedMemoId: $relatedNoteIdStr",
+            "[BlinkoApiService.setNoteRelations] Skipping relation with invalid relatedMemoId: \$relatedNoteIdStr",
           );
         }
         continue;
@@ -842,20 +844,20 @@ class BlinkoApiService implements BaseApiService {
           errors.add(
             blinko_api.ApiException(
               response.statusCode,
-              'Failed to add relation to note $relatedNoteIdNum: ${response.body}',
+              'Failed to add relation to note \$relatedNoteIdNum: \${response.body}',
             ),
           );
         }
       } catch (e) {
         errors.add(
-          Exception('Failed to add relation to note $relatedNoteIdNum: $e'),
+          Exception('Failed to add relation to note \$relatedNoteIdNum: \$e'),
         );
       }
     }
     if (errors.isNotEmpty) {
       final errorMessages = errors.map((e) => e.toString()).join('\n');
       throw Exception(
-        'Failed to set some relations for note $noteId:\n$errorMessages',
+        'Failed to set some relations for note \$noteId:\n\$errorMessages',
       );
     }
   }
@@ -902,7 +904,7 @@ class BlinkoApiService implements BaseApiService {
       );
     } catch (e) {
       throw Exception(
-        'Failed to create Blinko API client for target server ${serverConfig.name ?? serverConfig.id}: $e',
+        'Failed to create Blinko API client for target server \${serverConfig.name ?? serverConfig.id}: \$e',
       );
     }
   }
@@ -934,7 +936,7 @@ class BlinkoApiService implements BaseApiService {
     NoteVisibility visibility = NoteVisibility.private;
     final String idStr =
         blinkoDetail.id.toString() ??
-        'unknown_id_${DateTime.now().millisecondsSinceEpoch}';
+        'unknown_id_\${DateTime.now().millisecondsSinceEpoch}';
     final String contentStr = blinkoDetail.content ?? '';
     final bool isPinned = blinkoDetail.isTop ?? false;
     final DateTime createdAt = parseBlinkoDate(blinkoDetail.createdAt);
@@ -963,16 +965,12 @@ class BlinkoApiService implements BaseApiService {
     final List<Map<String, dynamic>> relations =
         (blinkoDetail.references ?? [])
             .map((r) {
-              // Correctly access the related note's ID using 'id'
+              // Correctly access the related note's ID using 'toNoteId' from the reference object itself
               final relatedNoteId =
-                  r.toNote?.id?.toString(); // Use id instead of noteId
-              if (relatedNoteId != null) {
-                final type = 'REFERENCE';
-                return {
-                  'relatedMemoId': relatedNoteId,
-                  'type': type,
-                };
-              }
+                  r.toNoteId
+                      .toString(); // Use toNoteId instead of r.toNote?.id
+              final type = 'REFERENCE';
+              return {'relatedMemoId': relatedNoteId, 'type': type};
               return null;
             })
             .whereType<Map<String, dynamic>>()
@@ -1016,7 +1014,7 @@ class BlinkoApiService implements BaseApiService {
     NoteVisibility visibility = NoteVisibility.private;
     final String idStr =
         blinkoNote.id.toString() ??
-        'unknown_id_${DateTime.now().millisecondsSinceEpoch}';
+        'unknown_id_\${DateTime.now().millisecondsSinceEpoch}';
     final String contentStr = blinkoNote.content ?? '';
     final bool isPinned = blinkoNote.isTop ?? false;
     final DateTime createdAt = parseBlinkoDate(blinkoNote.createdAt);
@@ -1043,16 +1041,12 @@ class BlinkoApiService implements BaseApiService {
     final List<Map<String, dynamic>> relations =
         (blinkoNote.references ?? [])
             .map((r) {
-              // Correctly access the related note's ID using 'id'
+              // Correctly access the related note's ID using 'toNoteId' from the reference object itself
               final relatedNoteId =
-                  r.toNote?.id?.toString(); // Use id instead of noteId
-              if (relatedNoteId != null) {
-                final type = 'REFERENCE';
-                return {
-                  'relatedMemoId': relatedNoteId,
-                  'type': type,
-                };
-              }
+                  r.toNoteId
+                      .toString(); // Use toNoteId instead of r.toNote?.id
+              final type = 'REFERENCE';
+              return {'relatedMemoId': relatedNoteId, 'type': type};
               return null;
             })
             .whereType<Map<String, dynamic>>()
@@ -1091,7 +1085,7 @@ class BlinkoApiService implements BaseApiService {
     bool pinned = false;
     final String idStr =
         blinkoComment.id.toString() ??
-        'unknown_comment_id_${DateTime.now().millisecondsSinceEpoch}';
+        'unknown_comment_id_\${DateTime.now().millisecondsSinceEpoch}';
     final String contentStr = blinkoComment.content ?? '';
     final DateTime createdAt = parseBlinkoDate(blinkoComment.createdAt);
     final DateTime updatedAt = parseBlinkoDate(blinkoComment.updatedAt);
