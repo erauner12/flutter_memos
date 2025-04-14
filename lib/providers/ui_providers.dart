@@ -1,15 +1,16 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-/// Provider for selected memo ID (replacing index-based selection)
-final selectedMemoIdProvider = StateProvider<String?>(
+/// Provider for selected item ID (replacing index-based selection)
+final selectedItemIdProvider = StateProvider<String?>(
+  // Renamed from selectedMemoIdProvider
   (ref) => null,
-  name: 'selectedMemoIdProvider',
+  name: 'selectedItemIdProvider', // Renamed name
 );
 
 /// Legacy provider for selected memo index (kept for backward compatibility)
 /// This will be removed in a future update
-@Deprecated('Use selectedMemoIdProvider instead for more robust selection')
+@Deprecated('Use selectedItemIdProvider instead for more robust selection')
 final selectedMemoIndexProvider = StateProvider<int>(
   (ref) => -1,
   name: 'selectedMemoIndexProvider',
@@ -36,16 +37,18 @@ void toggleCaptureUtility(WidgetRef ref) {
       !ref.read(captureUtilityToggleProvider);
 }
 
-/// Provider for memo multi-select mode
-final memoMultiSelectModeProvider = StateProvider<bool>(
+/// Provider for item multi-select mode
+final itemMultiSelectModeProvider = StateProvider<bool>(
+  // Renamed from memoMultiSelectModeProvider
   (ref) => false,
-  name: 'memoMultiSelectMode',
+  name: 'itemMultiSelectMode', // Renamed name
 );
 
-/// Provider for storing selected memo IDs during multi-select
-final selectedMemoIdsForMultiSelectProvider = StateProvider<Set<String>>(
+/// Provider for storing selected item IDs during multi-select
+final selectedItemIdsForMultiSelectProvider = StateProvider<Set<String>>(
+  // Renamed from selectedMemoIdsForMultiSelectProvider
   (ref) => {},
-  name: 'selectedMemoIdsForMultiSelect',
+  name: 'selectedItemIdsForMultiSelect', // Renamed name
 );
 
 /// Provider for comment multi-select mode
@@ -61,30 +64,35 @@ final selectedCommentIdsForMultiSelectProvider = StateProvider<Set<String>>(
   name: 'selectedCommentIdsForMultiSelect',
 );
 
-/// Provider for toggling memo multi-select mode
-final toggleMemoMultiSelectModeProvider = Provider<void Function()>((ref) {
+/// Provider for toggling item multi-select mode
+final toggleItemMultiSelectModeProvider = Provider<void Function()>((ref) {
+  // Renamed from toggleMemoMultiSelectModeProvider
   return () {
     // Read the current state
-    final currentMode = ref.read(memoMultiSelectModeProvider);
-    
+    final currentMode = ref.read(
+      itemMultiSelectModeProvider,
+    ); // Use renamed provider
+
     // Toggle to the opposite state
     final newMode = !currentMode;
-    
+
     if (kDebugMode) {
       print(
-        '[toggleMemoMultiSelectModeProvider] Toggling from $currentMode to $newMode',
+        '[toggleItemMultiSelectModeProvider] Toggling from $currentMode to $newMode', // Updated log identifier
       );
     }
 
     // Update the mode
-    ref.read(memoMultiSelectModeProvider.notifier).state = newMode;
+    ref.read(itemMultiSelectModeProvider.notifier).state =
+        newMode; // Use renamed provider
 
     // If turning off multi-select mode, clear selections
     if (!newMode) {
-      ref.read(selectedMemoIdsForMultiSelectProvider.notifier).state = {};
+      ref.read(selectedItemIdsForMultiSelectProvider.notifier).state =
+          {}; // Use renamed provider
     }
   };
-}, name: 'toggleMemoMultiSelectMode');
+}, name: 'toggleItemMultiSelectMode'); // Renamed name
 
 /// Provider for toggling comment multi-select mode
 final toggleCommentMultiSelectModeProvider = Provider<void Function()>((ref) {

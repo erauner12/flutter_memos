@@ -40,10 +40,12 @@ class _NotesListBodyState extends ConsumerState<NotesListBody> { // Renamed clas
 
     // Use providers from note_providers and renamed ui_providers
     final notes = ref.read(note_providers.filteredNotesProvider);
+    // Use ui_providers.selectedItemIdProvider
     final selectedId = ref.read(ui_providers.selectedItemIdProvider);
 
     if (notes.isNotEmpty && selectedId == null) {
       final firstNoteId = notes.first.id; // Renamed variable
+      // Use ui_providers.selectedItemIdProvider
       ref.read(ui_providers.selectedItemIdProvider.notifier).state = firstNoteId;
       if (kDebugMode) {
         print(
@@ -122,7 +124,7 @@ class _NotesListBodyState extends ConsumerState<NotesListBody> { // Renamed clas
     // Use providers from note_providers
     final notesState = ref.watch(note_providers.notesNotifierProvider);
     final visibleNotes = ref.watch(note_providers.filteredNotesProvider);
-    final hasSearchResults = ref.watch(note_providers.hasSearchResultsProvider);
+    // final hasSearchResults = ref.watch(note_providers.hasSearchResultsProvider); // TODO: do we need this?
 
     // Loading State
     if (notesState.isLoading && notesState.notes.isEmpty) {

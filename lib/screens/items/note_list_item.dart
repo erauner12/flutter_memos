@@ -43,7 +43,8 @@ class NoteListItemState extends ConsumerState<NoteListItem> { // Renamed class
           .update((state) => state..remove(itemIdToToggle));
     } else {
       // --- Selection Update Logic ---
-      final currentSelectedId = ref.read(ui_providers.selectedItemIdProvider); // Use renamed provider
+      // Use renamed provider from ui_providers
+      final currentSelectedId = ref.read(ui_providers.selectedItemIdProvider);
       final notesBeforeAction = ref.read(
         note_providers.filteredNotesProvider, // Use provider from note_providers
       );
@@ -75,7 +76,8 @@ class NoteListItemState extends ConsumerState<NoteListItem> { // Renamed class
           .update((state) => state..add(itemIdToToggle));
 
       if (nextSelectedId != currentSelectedId) {
-        ref.read(ui_providers.selectedItemIdProvider.notifier).state = // Use renamed provider
+        // Use renamed provider from ui_providers
+        ref.read(ui_providers.selectedItemIdProvider.notifier).state =
             nextSelectedId;
       }
     }
@@ -86,7 +88,8 @@ class NoteListItemState extends ConsumerState<NoteListItem> { // Renamed class
 
   void _navigateToItemDetail(BuildContext context, WidgetRef ref) { // Renamed method
     // Set selected item ID
-    ref.read(ui_providers.selectedItemIdProvider.notifier).state = // Use renamed provider
+    // Use renamed provider from ui_providers
+    ref.read(ui_providers.selectedItemIdProvider.notifier).state =
         widget.note.id; // Use note.id
 
     Navigator.of(
@@ -97,8 +100,9 @@ class NoteListItemState extends ConsumerState<NoteListItem> { // Renamed class
 
   // Toggle selection of a note in multi-select mode
   void _toggleMultiSelection(String noteId) { // Keep noteId here as it's specific
+    // Use renamed provider from ui_providers
     final currentSelection = Set<String>.from(
-      ref.read(ui_providers.selectedItemIdsForMultiSelectProvider), // Use renamed provider
+      ref.read(ui_providers.selectedItemIdsForMultiSelectProvider),
     );
 
     if (currentSelection.contains(noteId)) {
@@ -107,8 +111,9 @@ class NoteListItemState extends ConsumerState<NoteListItem> { // Renamed class
       currentSelection.add(noteId);
     }
 
+    // Use renamed provider from ui_providers
     ref
-        .read(ui_providers.selectedItemIdsForMultiSelectProvider.notifier) // Use renamed provider
+        .read(ui_providers.selectedItemIdsForMultiSelectProvider.notifier)
         .state = currentSelection;
 
     if (kDebugMode) {
@@ -214,15 +219,18 @@ class NoteListItemState extends ConsumerState<NoteListItem> { // Renamed class
   @override
   Widget build(BuildContext context) {
     // Watch for selected item ID
-    final selectedItemId = ref.watch(ui_providers.selectedItemIdProvider); // Use renamed provider
+    // Use renamed provider from ui_providers
+    final selectedItemId = ref.watch(ui_providers.selectedItemIdProvider);
     final isSelected = selectedItemId == widget.note.id; // Use note.id
 
     // Watch for multi-select mode
+    // Use renamed provider from ui_providers
     final isMultiSelectMode = ref.watch(
-      ui_providers.itemMultiSelectModeProvider, // Use renamed provider
+      ui_providers.itemMultiSelectModeProvider,
     );
+    // Use renamed provider from ui_providers
     final selectedIds = ref.watch(
-      ui_providers.selectedItemIdsForMultiSelectProvider, // Use renamed provider
+      ui_providers.selectedItemIdsForMultiSelectProvider,
     );
     final isMultiSelected = selectedIds.contains(widget.note.id); // Use note.id
 

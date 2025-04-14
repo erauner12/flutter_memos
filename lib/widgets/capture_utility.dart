@@ -10,12 +10,9 @@ import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/models/note_item.dart';
 import 'package:flutter_memos/providers/comment_providers.dart'
     as comment_providers;
-import 'package:flutter_memos/providers/memo_detail_provider.dart'
-    show memoDetailProvider; // Import for memoDetailProvider
-import 'package:flutter_memos/providers/memo_providers.dart' as memo_providers;
+// Import note_providers instead of memo_providers
+import 'package:flutter_memos/providers/note_providers.dart' as note_providers;
 import 'package:flutter_memos/providers/ui_providers.dart' as ui_providers;
-import 'package:flutter_memos/screens/memo_detail/memo_detail_providers.dart'
-    show memoCommentsProvider; // Add this import
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 enum SubmitAction {
@@ -73,8 +70,8 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
   // Move these method definitions to the top of the class to fix reference errors
   Future<void> createNote(NoteItem note) async {
     // Changed Memo to NoteItem
-    // Use the renamed provider
-    await ref.read(memo_providers.createNoteProvider)(note);
+    // Use the renamed provider from note_providers
+    await ref.read(note_providers.createNoteProvider)(note);
   }
 
   Future<void> addComment(
@@ -683,7 +680,8 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
           creatorId: '1',
           parentId: null,
         );
-        await createNote(newNote);
+        // Use note_providers.createNoteProvider
+        await ref.read(note_providers.createNoteProvider)(newNote);
       } else if (widget.mode == CaptureMode.addComment &&
           widget.memoId != null) {
         // Add Comment logic (expanded)
@@ -692,15 +690,18 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
             _textController.text.trim(); // Content from text field
 
         // Fetch necessary data within the handler
-        final commentsAsync = ref.read(memoCommentsProvider(memoId));
+        // Use note_providers.noteCommentsProvider
+        final commentsAsync = ref.read(
+          note_providers.noteCommentsProvider(memoId),
+        );
         final comments = commentsAsync.valueOrNull ?? [];
         // Sort comments by createTime to reliably get the last one
         comments.sort((a, b) => a.createTime.compareTo(b.createTime));
         final lastComment = comments.isNotEmpty ? comments.last : null;
 
-        // FIX: Remove memo_providers. prefix here, call directly as imported via 'show'
+        // Use note_providers.noteDetailProvider
         final memoAsync = ref.read(
-          memoDetailProvider(memoId),
+          note_providers.noteDetailProvider(memoId),
         );
         final parentMemo = memoAsync.valueOrNull; // Use valueOrNull for safety
 
@@ -718,9 +719,8 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
               contentType: _selectedContentType,
             );
             // After adding a comment, also refresh the parent memo detail
-            // to potentially show updated comment counts or related info.
-            // Assign to _ to handle unused_result warning
-            final _ = ref.refresh(memoDetailProvider(memoId));
+            // Use note_providers.noteDetailProvider
+            final _ = ref.refresh(note_providers.noteDetailProvider(memoId));
             break;
           case SubmitAction.appendToLastComment:
             if (lastComment != null) {
@@ -734,7 +734,7 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
                 updatedContent,
               );
               // Refresh parent memo detail after comment update
-              final _ = ref.refresh(memoDetailProvider(memoId));
+              final _ = ref.refresh(note_providers.noteDetailProvider(memoId));
             } else {
               throw Exception("Cannot append: No last comment found.");
             }
@@ -751,7 +751,7 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
                 updatedContent,
               );
               // Refresh parent memo detail after comment update
-              final _ = ref.refresh(memoDetailProvider(memoId));
+              final _ = ref.refresh(note_providers.noteDetailProvider(memoId));
             } else {
               throw Exception("Cannot prepend: No last comment found.");
             }
@@ -763,54 +763,44 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
               final updatedContent = (currentAction == SubmitAction.appendToMemo)
                       ? "${parentMemo.content}\n\n$currentContent"
                       : "$currentContent\n\n${parentMemo.content}";
-              
+
               // Create a NoteItem from parentMemo properties
               final updatedNoteData = NoteItem(
                 id: parentMemo.id,
                 content: updatedContent,
                 pinned: parentMemo.pinned,
-                state: parentMemo.state, // Directly use the NoteState enum
-                visibility:
-                    parentMemo
-                        .visibility, // Directly use the NoteVisibility enum
-                createTime:
-                    parentMemo.createTime, // Use the existing DateTime object
-                updateTime: DateTime.now(), // Set new update time
-                displayTime:
-                    parentMemo.displayTime, // Use the existing DateTime object
-                tags: parentMemo.tags, // Use existing tags
-                resources: parentMemo.resources, // Use existing resources
-                relations: parentMemo.relations, // Use existing relations
-                creatorId: parentMemo.creatorId, // Use creatorId
-                parentId: parentMemo.parentId, // Use parentId
+                state: parentMemo.state,
+                visibility: parentMemo.visibility,
+                createTime: parentMemo.createTime,
+                updateTime: DateTime.now(),
+                displayTime: parentMemo.displayTime,
+                tags: parentMemo.tags,
+                resources: parentMemo.resources,
+                relations: parentMemo.relations,
+                creatorId: parentMemo.creatorId,
+                parentId: parentMemo.parentId,
               );
 
               // Call updateNoteProvider and store the result
               updatedMemoResult = await ref.read(
-                memo_providers.updateNoteProvider(memoId),
-              )(
-                updatedNoteData,
-              );
+                note_providers.updateNoteProvider(memoId),
+              )(updatedNoteData);
 
               // --- Manually update cache and refresh providers ---
-              if (ref.exists(memo_providers.noteDetailCacheProvider)) {
+              if (ref.exists(note_providers.noteDetailCacheProvider)) {
                 ref
-                    .read(
-                      memo_providers.noteDetailCacheProvider.notifier,
-                    )
-                     .update((state) => {...state, memoId: updatedMemoResult!});
-                  if (kDebugMode) {
+                    .read(note_providers.noteDetailCacheProvider.notifier)
+                    .update((state) => {...state, memoId: updatedMemoResult!});
+                if (kDebugMode) {
                   print(
                     '[CaptureUtility] Manually updated noteDetailCacheProvider for $memoId',
                   );
-                  }
+                }
               }
               final _ = await ref.refresh(
-                memoDetailProvider(memoId).future,
+                note_providers.noteDetailProvider(memoId).future,
               );
-              final _ = ref.refresh(
-                memo_providers.notesNotifierProvider,
-              );
+              final _ = ref.refresh(note_providers.notesNotifierProvider);
               if (kDebugMode) {
                 print(
                   '[CaptureUtility] Explicitly refreshed (and awaited detail) providers for $memoId',
@@ -1162,24 +1152,22 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
             ? 'Capture something...'
             : 'Add a comment...';
 
+    // Use note_providers.noteCommentsProvider
     final commentsAsync =
         widget.mode == CaptureMode.addComment && widget.memoId != null
-            ? ref.watch(memoCommentsProvider(widget.memoId!))
-            : const AsyncValue.data(
-              <Comment>[],
-            );
+            ? ref.watch(note_providers.noteCommentsProvider(widget.memoId!))
+            : const AsyncValue.data(<Comment>[]);
     final bool hasComments = commentsAsync.maybeWhen(
       data: (comments) => comments.isNotEmpty,
       orElse: () => false,
     );
     final bool hasAttachment = _selectedFileData != null;
 
+    // Use note_providers.noteDetailProvider
     final parentMemoAsyncValue =
         widget.mode == CaptureMode.addComment && widget.memoId != null
-            ? ref.watch(memoDetailProvider(widget.memoId!))
-            : const AsyncValue.data(
-              null,
-            );
+            ? ref.watch(note_providers.noteDetailProvider(widget.memoId!))
+            : const AsyncValue.data(null);
     final bool isParentMemoLoaded =
         parentMemoAsyncValue.hasValue && parentMemoAsyncValue.value != null;
     final bool canAppendPrependComment = hasComments && !hasAttachment;
@@ -1266,9 +1254,7 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
               ),
               boxShadow: [
                 BoxShadow(
-                  color: CupertinoColors.black.withAlpha(
-                    isDarkMode ? 77 : 26,
-                  ),
+                  color: CupertinoColors.black.withAlpha(isDarkMode ? 77 : 26),
                   blurRadius: 15,
                   spreadRadius: 0,
                   offset: const Offset(0, 3),

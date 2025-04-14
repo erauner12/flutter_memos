@@ -1,9 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/models/note_item.dart'; // Import NoteItem
-import 'package:flutter_memos/providers/memo_providers.dart'; // Keep for notesNotifierProvider etc.
-import 'package:flutter_memos/screens/memo_detail/memo_detail_providers.dart'
-    show memoCommentsProvider;
+// Import note_providers instead of memo_providers
+import 'package:flutter_memos/providers/note_providers.dart' as note_providers;
 import 'package:flutter_memos/services/base_api_service.dart'; // Import BaseApiService
 import 'package:flutter_memos/services/minimal_openai_service.dart'; // Import MinimalOpenAiService
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -48,7 +47,8 @@ final archiveCommentProvider = Provider.family<Future<void> Function(), String>(
 
         // Refresh comments for this memo
         if (memoId.isNotEmpty) {
-          ref.invalidate(memoCommentsProvider(memoId));
+          // Use note_providers.noteCommentsProvider
+          ref.invalidate(note_providers.noteCommentsProvider(memoId));
         }
 
         if (kDebugMode) {
@@ -86,7 +86,8 @@ final deleteCommentProvider = Provider.family<Future<void> Function(), String>((
 
       // Refresh comments for this memo
       if (memoId.isNotEmpty) {
-        ref.invalidate(memoCommentsProvider(memoId));
+        // Use note_providers.noteCommentsProvider
+        ref.invalidate(note_providers.noteCommentsProvider(memoId));
       }
 
       if (kDebugMode) {
@@ -102,10 +103,8 @@ final deleteCommentProvider = Provider.family<Future<void> Function(), String>((
 });
 
 /// Provider for toggling the pin state of a comment
-final togglePinCommentProvider = Provider.family<
-  Future<void> Function(),
-  String
->((ref, id) {
+final togglePinCommentProvider =
+    Provider.family<Future<void> Function(), String>((ref, id) {
   return () async {
     final apiService = ref.read(api_p.apiServiceProvider); // Use BaseApiService
 
@@ -113,31 +112,27 @@ final togglePinCommentProvider = Provider.family<
       // Extract memoId from combined ID (format: "memoId/commentId")
       final parts = id.split('/');
       final String memoId = parts.isNotEmpty ? parts[0] : '';
-      final String commentId =
-          parts.length > 1 ? parts.last : id; // Actual comment ID
+          final String commentId =
+              parts.length > 1 ? parts.last : id; // Actual comment ID
 
       // Get the comment using the actual comment ID
-      final comment = await apiService.getNoteComment(
-        commentId,
-      ); // Use getNoteComment
+          final comment = await apiService.getNoteComment(
+            commentId,
+          ); // Use getNoteComment
 
       // Toggle the pinned state
       final updatedComment = comment.copyWith(pinned: !comment.pinned);
 
       // Update through API using the actual comment ID
-      await apiService.updateNoteComment(
-        commentId,
-        updatedComment,
-      ); // Use updateNoteComment
+          await apiService.updateNoteComment(
+            commentId,
+            updatedComment,
+          ); // Use updateNoteComment
 
       // Invalidate the comments list to ensure UI refreshes
-      if (memoId.isNotEmpty) {
-        // Invalidate comments list - this will trigger a rebuild with the updated sort order
-        ref.invalidate(memoCommentsProvider(memoId));
-
-        // We don't need to invalidate the memo detail provider directly
-        // The line below was causing an error since apiServiceProvider doesn't have a notifier property
-        // ref.invalidate(ref.read(api_p.apiServiceProvider.notifier).memoDetailProvider(memoId));
+          if (memoId.isNotEmpty) {
+        // Use note_providers.noteCommentsProvider
+            ref.invalidate(note_providers.noteCommentsProvider(memoId));
       }
 
       if (kDebugMode) {
@@ -160,8 +155,7 @@ final isCommentHiddenProvider = Provider.family<bool, String>((ref, id) {
 
 /// Provider for converting a comment to a full note
 final convertCommentToNoteProvider = Provider.family<
-  // Renamed provider
-  Future<NoteItem> Function(), // Return NoteItem
+  Future<NoteItem> Function(),
   String
 >((ref, id) {
   return () async {
@@ -186,7 +180,6 @@ final convertCommentToNoteProvider = Provider.family<
 
       // Create a new note from the comment's content
       final newNote = NoteItem(
-        // Create NoteItem
         id: 'temp-${DateTime.now().millisecondsSinceEpoch}',
         content: comment.content,
         pinned: false, // Reset pinned state for the new note
@@ -206,43 +199,41 @@ final convertCommentToNoteProvider = Provider.family<
       // But continue even if this part fails
       if (memoId.isNotEmpty) {
         try {
-          // Create a Map representing the relation, matching setNoteRelations signature
           final Map<String, dynamic> relationMap = {
             'relatedMemoId': memoId, // Original note ID
             'type': 'COMMENT', // Type indicating the origin
-            // Add 'memoId': createdNote.id if your setNoteRelations implementation requires it
           };
 
           await apiService.setNoteRelations(createdNote.id, [
-            relationMap, // Pass the map
+            relationMap,
           ]); // Use setNoteRelations
         } catch (relationError) {
-          // Log but don't fail the whole conversion if relation setting fails
           if (kDebugMode) {
             print(
-              '[convertCommentToNoteProvider] Warning: Created note but failed to set relation: $relationError', // Updated log
+              '[convertCommentToNoteProvider] Warning: Created note but failed to set relation: $relationError'
             );
           }
         }
       }
 
       // Refresh notes list using the new notifier
+      // Use note_providers.notesNotifierProvider
       await ref
-          .read(notesNotifierProvider.notifier)
+          .read(note_providers.notesNotifierProvider.notifier)
           .refresh(); // Use renamed provider
 
       if (kDebugMode) {
         print(
-          '[convertCommentToNoteProvider] Converted comment to note: ${createdNote.id}', // Updated log
-        );
+          '[convertCommentToNoteProvider] Converted comment to note: ${createdNote.id}',
+        ); // Updated log
       }
 
       return createdNote; // Return NoteItem
     } catch (e) {
       if (kDebugMode) {
         print(
-          '[convertCommentToNoteProvider] Error converting comment to note: $e', // Updated log
-        );
+          '[convertCommentToNoteProvider] Error converting comment to note: $e',
+        ); // Updated log
       }
       rethrow;
     }
@@ -314,7 +305,7 @@ final createCommentProvider = Provider.family<
         }
         final Map<String, dynamic> uploadedResourceMap = await apiService
             .uploadResource(fileBytes, filename, contentType); // Expect map
-        uploadedResourceData = [uploadedResourceMap]; // Store the map in a list
+        uploadedResourceData = [uploadedResourceMap];
         if (kDebugMode) {
           print(
             "[createCommentProvider] Attachment uploaded: ${uploadedResourceMap['name']}",
@@ -344,7 +335,10 @@ final createCommentProvider = Provider.family<
             '[createCommentProvider] Bumping parent memo $memoId after comment creation.',
           );
         }
-        await ref.read(bumpNoteProvider(memoId))(); // Use renamed provider
+        // Use note_providers.bumpNoteProvider
+        await ref.read(
+          note_providers.bumpNoteProvider(memoId),
+        )(); // Use renamed provider
       } catch (e) {
         if (kDebugMode) {
           print(
@@ -354,7 +348,8 @@ final createCommentProvider = Provider.family<
       }
 
       // 4. Invalidate comments list for the specific memo
-      ref.invalidate(memoCommentsProvider(memoId));
+      // Use note_providers.noteCommentsProvider
+      ref.invalidate(note_providers.noteCommentsProvider(memoId));
 
       return createdComment;
     } catch (e, stackTrace) {
@@ -396,7 +391,8 @@ final updateCommentProvider = Provider<
       );
 
       // 4. Invalidate the comments list for the specific memo to refresh UI
-      ref.invalidate(memoCommentsProvider(memoId));
+      // Use note_providers.noteCommentsProvider
+      ref.invalidate(note_providers.noteCommentsProvider(memoId));
 
       if (kDebugMode) {
         print(
@@ -496,7 +492,8 @@ final fixCommentGrammarProvider = FutureProvider.family<void, String>((
     await apiService.updateNoteComment(actualCommentId, updatedCommentData);
 
     if (memoId.isNotEmpty) {
-      ref.invalidate(memoCommentsProvider(memoId));
+      // Use note_providers.noteCommentsProvider
+      ref.invalidate(note_providers.noteCommentsProvider(memoId));
     }
 
     if (kDebugMode) {

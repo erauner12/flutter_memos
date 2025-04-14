@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart'; // Import Cupertino
 import 'package:flutter_memos/providers/filter_providers.dart'; // Import filter providers
-import 'package:flutter_memos/providers/memo_providers.dart'; // Import memo providers
+// Import note_providers instead of memo_providers
+import 'package:flutter_memos/providers/note_providers.dart' as note_providers;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class MemosEmptyState extends ConsumerWidget {
@@ -15,7 +16,9 @@ class MemosEmptyState extends ConsumerWidget {
   // Helper method to apply filter preset and clear hidden memos
   void _applyFilterPreset(String presetKey, WidgetRef ref) {
     ref.read(quickFilterPresetProvider.notifier).state = presetKey;
-    ref.read(hiddenMemoIdsProvider.notifier).state = {}; // Clear hidden memos
+    // Use note_providers.hiddenItemIdsProvider
+    ref.read(note_providers.hiddenItemIdsProvider.notifier).state =
+        {}; // Clear hidden items
     // Save preferences using the new provider
     ref.read(filterPreferencesProvider)(presetKey);
   }
