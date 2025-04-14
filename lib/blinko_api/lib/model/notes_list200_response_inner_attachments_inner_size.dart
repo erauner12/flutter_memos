@@ -13,30 +13,20 @@ part of openapi.api;
 class NotesList200ResponseInnerAttachmentsInnerSize {
   /// Returns a new [NotesList200ResponseInnerAttachmentsInnerSize] instance.
   NotesList200ResponseInnerAttachmentsInnerSize({
-    this.dummyField, // Add a dummy field
   });
-
-  String? dummyField; // Add a dummy field
 
   @override
   bool operator ==(Object other) => identical(this, other) || other is NotesList200ResponseInnerAttachmentsInnerSize &&
-    other.dummyField == dummyField; // Compare dummy field
 
   @override
   int get hashCode =>
     // ignore: unnecessary_parenthesis
-     (dummyField == null ? 0 : dummyField!.hashCode); // Hash dummy field
 
   @override
-  String toString() => 'NotesList200ResponseInnerAttachmentsInnerSize[dummyField=$dummyField]';
+  String toString() => 'NotesList200ResponseInnerAttachmentsInnerSize[]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
-    if (this.dummyField != null) {
-      json[r'dummyField'] = this.dummyField;
-    } else {
-      json[r'dummyField'] = null;
-    }
     return json;
   }
 
@@ -52,17 +42,13 @@ class NotesList200ResponseInnerAttachmentsInnerSize {
       // Note 2: this code is stripped in release mode!
       assert(() {
         requiredKeys.forEach((key) {
-          // Allow dummyField to be missing
-          if (key != 'dummyField') {
-            assert(json.containsKey(key), 'Required key "NotesList200ResponseInnerAttachmentsInnerSize[$key]" is missing from JSON.');
-            assert(json[key] != null, 'Required key "NotesList200ResponseInnerAttachmentsInnerSize[$key]" has a null value in JSON.');
-          }
+          assert(json.containsKey(key), 'Required key "NotesList200ResponseInnerAttachmentsInnerSize[$key]" is missing from JSON.');
+          assert(json[key] != null, 'Required key "NotesList200ResponseInnerAttachmentsInnerSize[$key]" has a null value in JSON.');
         });
         return true;
       }());
 
       return NotesList200ResponseInnerAttachmentsInnerSize(
-        dummyField: mapValueOfType<String>(json, r'dummyField'),
       );
     }
     return null;
@@ -110,6 +96,6 @@ class NotesList200ResponseInnerAttachmentsInnerSize {
 
   /// The list of required keys that must be present in a JSON.
   static const requiredKeys = <String>{
-     // No required keys for this dummy implementation
   };
 }
+

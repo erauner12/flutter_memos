@@ -69,8 +69,7 @@ class NotesInternalSharedWithMeRequest {
       return NotesInternalSharedWithMeRequest(
         page: num.parse('${json[r'page']}'),
         size: num.parse('${json[r'size']}'),
-        // Cast the result of fromJson to the correct enum type or provide a default
-        orderBy: NotesInternalSharedWithMeRequestOrderByEnum.fromJson(json[r'orderBy']) ?? NotesInternalSharedWithMeRequestOrderByEnum.desc,
+        orderBy: NotesInternalSharedWithMeRequestOrderByEnum.fromJson(json[r'orderBy']) ?? 'desc',
       );
     }
     return null;
@@ -193,3 +192,5 @@ class NotesInternalSharedWithMeRequestOrderByEnumTypeTransformer {
   /// Singleton [NotesInternalSharedWithMeRequestOrderByEnumTypeTransformer] instance.
   static NotesInternalSharedWithMeRequestOrderByEnumTypeTransformer? _instance;
 }
+
+

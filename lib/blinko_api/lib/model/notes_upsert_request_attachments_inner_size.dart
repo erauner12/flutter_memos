@@ -13,30 +13,20 @@ part of openapi.api;
 class NotesUpsertRequestAttachmentsInnerSize {
   /// Returns a new [NotesUpsertRequestAttachmentsInnerSize] instance.
   NotesUpsertRequestAttachmentsInnerSize({
-    this.dummyField, // Add a dummy field
   });
-
-  String? dummyField; // Add a dummy field
 
   @override
   bool operator ==(Object other) => identical(this, other) || other is NotesUpsertRequestAttachmentsInnerSize &&
-    other.dummyField == dummyField; // Compare dummy field
 
   @override
   int get hashCode =>
     // ignore: unnecessary_parenthesis
-    (dummyField == null ? 0 : dummyField!.hashCode); // Hash dummy field
 
   @override
-  String toString() => 'NotesUpsertRequestAttachmentsInnerSize[dummyField=$dummyField]';
+  String toString() => 'NotesUpsertRequestAttachmentsInnerSize[]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
-    if (this.dummyField != null) {
-      json[r'dummyField'] = this.dummyField;
-    } else {
-      json[r'dummyField'] = null;
-    }
     return json;
   }
 
@@ -52,17 +42,13 @@ class NotesUpsertRequestAttachmentsInnerSize {
       // Note 2: this code is stripped in release mode!
       assert(() {
         requiredKeys.forEach((key) {
-          // Allow dummyField to be missing
-          if (key != 'dummyField') {
-            assert(json.containsKey(key), 'Required key "NotesUpsertRequestAttachmentsInnerSize[$key]" is missing from JSON.');
-            assert(json[key] != null, 'Required key "NotesUpsertRequestAttachmentsInnerSize[$key]" has a null value in JSON.');
-          }
+          assert(json.containsKey(key), 'Required key "NotesUpsertRequestAttachmentsInnerSize[$key]" is missing from JSON.');
+          assert(json[key] != null, 'Required key "NotesUpsertRequestAttachmentsInnerSize[$key]" has a null value in JSON.');
         });
         return true;
       }());
 
       return NotesUpsertRequestAttachmentsInnerSize(
-        dummyField: mapValueOfType<String>(json, r'dummyField'),
       );
     }
     return null;
@@ -110,6 +96,6 @@ class NotesUpsertRequestAttachmentsInnerSize {
 
   /// The list of required keys that must be present in a JSON.
   static const requiredKeys = <String>{
-     // No required keys for this dummy implementation
   };
 }
+

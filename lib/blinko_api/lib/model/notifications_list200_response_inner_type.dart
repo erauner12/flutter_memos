@@ -1,7 +1,7 @@
-// @dart=2.18
 //
 // AUTO-GENERATED FILE, DO NOT MODIFY!
 //
+// @dart=2.18
 
 // ignore_for_file: unused_element, unused_import
 // ignore_for_file: always_put_required_named_parameters_first
@@ -13,30 +13,20 @@ part of openapi.api;
 class NotificationsList200ResponseInnerType {
   /// Returns a new [NotificationsList200ResponseInnerType] instance.
   NotificationsList200ResponseInnerType({
-    this.dummyField, // Add a dummy field
   });
-
-  String? dummyField; // Add a dummy field
 
   @override
   bool operator ==(Object other) => identical(this, other) || other is NotificationsList200ResponseInnerType &&
-    other.dummyField == dummyField; // Compare dummy field
 
   @override
   int get hashCode =>
     // ignore: unnecessary_parenthesis
-    (dummyField == null ? 0 : dummyField!.hashCode); // Hash dummy field
 
   @override
-  String toString() => 'NotificationsList200ResponseInnerType[dummyField=$dummyField]';
+  String toString() => 'NotificationsList200ResponseInnerType[]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
-    if (this.dummyField != null) {
-      json[r'dummyField'] = this.dummyField;
-    } else {
-      json[r'dummyField'] = null;
-    }
     return json;
   }
 
@@ -52,17 +42,13 @@ class NotificationsList200ResponseInnerType {
       // Note 2: this code is stripped in release mode!
       assert(() {
         requiredKeys.forEach((key) {
-          // Allow dummyField to be missing
-          if (key != 'dummyField') {
-            assert(json.containsKey(key), 'Required key "NotificationsList200ResponseInnerType[$key]" is missing from JSON.');
-            assert(json[key] != null, 'Required key "NotificationsList200ResponseInnerType[$key]" has a null value in JSON.');
-          }
+          assert(json.containsKey(key), 'Required key "NotificationsList200ResponseInnerType[$key]" is missing from JSON.');
+          assert(json[key] != null, 'Required key "NotificationsList200ResponseInnerType[$key]" has a null value in JSON.');
         });
         return true;
       }());
 
       return NotificationsList200ResponseInnerType(
-        dummyField: mapValueOfType<String>(json, r'dummyField'),
       );
     }
     return null;
@@ -110,6 +96,6 @@ class NotificationsList200ResponseInnerType {
 
   /// The list of required keys that must be present in a JSON.
   static const requiredKeys = <String>{
-     // No required keys for this dummy implementation
   };
 }
+

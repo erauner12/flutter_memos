@@ -76,9 +76,7 @@ class CommentsListRequest {
         noteId: num.parse('${json[r'noteId']}'),
         page: num.parse('${json[r'page']}'),
         size: num.parse('${json[r'size']}'),
-        // Cast the result of fromJson to the correct enum type or provide a default
-        orderBy: CommentsListRequestOrderByEnum.fromJson(json[r'orderBy']) ??
-            CommentsListRequestOrderByEnum.desc,
+        orderBy: CommentsListRequestOrderByEnum.fromJson(json[r'orderBy']) ?? 'desc',
       );
     }
     return null;
@@ -202,3 +200,5 @@ class CommentsListRequestOrderByEnumTypeTransformer {
   /// Singleton [CommentsListRequestOrderByEnumTypeTransformer] instance.
   static CommentsListRequestOrderByEnumTypeTransformer? _instance;
 }
+
+

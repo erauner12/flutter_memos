@@ -120,7 +120,12 @@ class NotesListRequest {
     }
       json[r'page'] = this.page;
       json[r'size'] = this.size;
-    json[r'orderBy'] = this.orderBy;
+      json[r'orderBy'] = this.orderBy;
+    if (this.type != null) {
+      json[r'type'] = this.type;
+    } else {
+      json[r'type'] = null;
+    }
     if (this.isArchived != null) {
       json[r'isArchived'] = this.isArchived;
     } else {
@@ -175,8 +180,7 @@ class NotesListRequest {
             : num.parse('${json[r'tagId']}'),
         page: num.parse('${json[r'page']}'),
         size: num.parse('${json[r'size']}'),
-        // Cast the result of fromJson to the correct enum type or provide a default
-        orderBy: NotesListRequestOrderByEnum.fromJson(json[r'orderBy']) ?? NotesListRequestOrderByEnum.desc,
+        orderBy: NotesListRequestOrderByEnum.fromJson(json[r'orderBy']) ?? 'desc',
         type: NotesListRequestType.fromJson(json[r'type']),
         isArchived: mapValueOfType<bool>(json, r'isArchived'),
         isShare: mapValueOfType<bool>(json, r'isShare'),
@@ -311,3 +315,5 @@ class NotesListRequestOrderByEnumTypeTransformer {
   /// Singleton [NotesListRequestOrderByEnumTypeTransformer] instance.
   static NotesListRequestOrderByEnumTypeTransformer? _instance;
 }
+
+
