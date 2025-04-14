@@ -56,7 +56,7 @@ class BlinkoApiService implements BaseApiService {
     }
     if (kDebugMode) {
       print(
-        '[BlinkoApiService] configureService: Configuring with baseUrl=$baseUrl',
+        '[BlinkoApiService] configureService: Configuring with baseUrl=\$baseUrl',
       );
     }
 
@@ -75,7 +75,7 @@ class BlinkoApiService implements BaseApiService {
     // The user should provide the correct base URL for the API, e.g., https://host/api or https://host/api/v1
     if (kDebugMode) {
       print(
-        '[BlinkoApiService] configureService: Using effectiveBaseUrl for ApiClient: $effectiveBaseUrl',
+        '[BlinkoApiService] configureService: Using effectiveBaseUrl for ApiClient: \$effectiveBaseUrl',
       );
     }
     // --- END MODIFICATION ---
@@ -95,13 +95,13 @@ class BlinkoApiService implements BaseApiService {
       // TODO: Initialize FileApi if needed for uploads
       if (kDebugMode) {
         print(
-          '[BlinkoApiService] configureService: Blinko API client configured successfully for $effectiveBaseUrl',
+          '[BlinkoApiService] configureService: Blinko API client configured successfully for \$effectiveBaseUrl',
         );
       }
     } catch (e) {
       if (kDebugMode) {
         print(
-          '[BlinkoApiService] configureService: Error initializing Blinko API client: $e',
+          '[BlinkoApiService] configureService: Error initializing Blinko API client: \$e',
         );
       }
       // Reset internal state on failure to ensure isConfigured reflects reality
@@ -187,9 +187,9 @@ class BlinkoApiService implements BaseApiService {
 
     try {
       if (kDebugMode) {
-        print('[BlinkoApiService.listNotes] Calling invokeAPI POST $path');
-        print('[BlinkoApiService.listNotes] Query Params: $queryParams');
-        print('[BlinkoApiService.listNotes] Header Params: $headerParams');
+        print('[BlinkoApiService.listNotes] Calling invokeAPI POST \$path');
+        print('[BlinkoApiService.listNotes] Query Params: \$queryParams');
+        print('[BlinkoApiService.listNotes] Header Params: \$headerParams');
       }
 
       // Make the API call using invokeAPI with the correct 7 arguments
@@ -205,7 +205,7 @@ class BlinkoApiService implements BaseApiService {
 
       if (kDebugMode) {
         print(
-          '[BlinkoApiService.listNotes] invokeAPI response status: ${response.statusCode}',
+          '[BlinkoApiService.listNotes] invokeAPI response status: \${response.statusCode}',
         );
       }
 
@@ -246,24 +246,24 @@ class BlinkoApiService implements BaseApiService {
       } else {
         if (kDebugMode) {
           print(
-            '[BlinkoApiService.listNotes] invokeAPI failed with status ${response.statusCode}, body: ${response.body}',
+            '[BlinkoApiService.listNotes] invokeAPI failed with status \${response.statusCode}, body: \${response.body}',
           );
         }
         throw blinko_api.ApiException(response.statusCode, response.body);
       }
     } catch (e) {
       if (kDebugMode) {
-        print('[BlinkoApiService.listNotes] API call failed: $e');
+        print('[BlinkoApiService.listNotes] API call failed: \$e');
       }
       if (e is blinko_api.ApiException) {
         if (kDebugMode) {
-          print('[BlinkoApiService.listNotes] API Exception: ${e.message}');
+          print('[BlinkoApiService.listNotes] API Exception: \${e.message}');
         }
         throw Exception(
-          'Failed to load notes: ${e.message} (Status code: ${e.code})',
+          'Failed to load notes: \${e.message} (Status code: \${e.code})',
         );
       }
-      throw Exception('Failed to load notes: $e');
+      throw Exception('Failed to load notes: \$e');
     }
   }
 
@@ -272,17 +272,17 @@ class BlinkoApiService implements BaseApiService {
     final noteApi = _getNoteApiForServer(targetServerOverride);
     final num? noteIdNum = num.tryParse(id);
     if (noteIdNum == null) {
-      throw ArgumentError('Invalid numeric ID format for Blinko: $id');
+      throw ArgumentError('Invalid numeric ID format for Blinko: \$id');
     }
     final request = blinko_api.NotesDetailRequest(id: noteIdNum);
     try {
       final blinko_api.NotesDetail200Response? response = await noteApi.notesDetail(request);
       if (response == null) {
-        throw Exception('Note $id not found');
+        throw Exception('Note \$id not found');
       }
       return _convertBlinkoDetailToNoteItem(response);
     } catch (e) {
-      throw Exception('Failed to load note $id: $e');
+      throw Exception('Failed to load note \$id: \$e');
     }
   }
 
@@ -308,7 +308,7 @@ class BlinkoApiService implements BaseApiService {
         );
       }
     } catch (e) {
-      throw Exception('Failed to create note: $e');
+      throw Exception('Failed to create note: \$e');
     }
   }
 
@@ -317,7 +317,7 @@ class BlinkoApiService implements BaseApiService {
     final noteApi = _getNoteApiForServer(targetServerOverride);
     final num? noteIdNum = num.tryParse(id);
     if (noteIdNum == null) {
-      throw ArgumentError('Invalid numeric ID format for Blinko: $id');
+      throw ArgumentError('Invalid numeric ID format for Blinko: \$id');
     }
     final request = blinko_api.NotesUpsertRequest(
       id: noteIdNum,
@@ -329,7 +329,7 @@ class BlinkoApiService implements BaseApiService {
       await noteApi.notesUpsert(request);
       return await getNote(id, targetServerOverride: targetServerOverride);
     } catch (e) {
-      throw Exception('Failed to update note $id: $e');
+      throw Exception('Failed to update note \$id: \$e');
     }
   }
 
@@ -338,13 +338,13 @@ class BlinkoApiService implements BaseApiService {
     final noteApi = _getNoteApiForServer(targetServerOverride);
     final num? noteIdNum = num.tryParse(id);
     if (noteIdNum == null) {
-      throw ArgumentError('Invalid numeric ID format for Blinko: $id');
+      throw ArgumentError('Invalid numeric ID format for Blinko: \$id');
     }
     final request = blinko_api.NotesListByIdsRequest(ids: [noteIdNum]);
     try {
       await noteApi.notesTrashMany(request);
     } catch (e) {
-      throw Exception('Failed to delete/trash note $id: $e');
+      throw Exception('Failed to delete/trash note \$id: \$e');
     }
   }
 
@@ -355,7 +355,7 @@ class BlinkoApiService implements BaseApiService {
   }) async {
     final num? noteIdNum = num.tryParse(id);
     if (noteIdNum == null) {
-      throw ArgumentError('Invalid numeric ID format for Blinko: $id');
+      throw ArgumentError('Invalid numeric ID format for Blinko: \$id');
     }
     final request = blinko_api.NotesUpsertRequest(
       id: noteIdNum,
@@ -366,7 +366,7 @@ class BlinkoApiService implements BaseApiService {
       await _noteApi.notesUpsert(request);
       return await getNote(id, targetServerOverride: targetServerOverride);
     } catch (e) {
-      throw Exception('Failed to archive note $id: $e');
+      throw Exception('Failed to archive note \$id: \$e');
     }
   }
 
@@ -377,7 +377,7 @@ class BlinkoApiService implements BaseApiService {
   }) async {
     final num? noteIdNum = num.tryParse(id);
     if (noteIdNum == null) {
-      throw ArgumentError('Invalid numeric ID format for Blinko: $id');
+      throw ArgumentError('Invalid numeric ID format for Blinko: \$id');
     }
     NoteItem currentNote = await getNote(id, targetServerOverride: targetServerOverride);
     bool newPinState = !currentNote.pinned;
@@ -389,7 +389,7 @@ class BlinkoApiService implements BaseApiService {
       await _noteApi.notesUpsert(request);
       return await getNote(id, targetServerOverride: targetServerOverride);
     } catch (e) {
-      throw Exception('Failed to toggle pin for note $id: $e');
+      throw Exception('Failed to toggle pin for note \$id: \$e');
     }
   }
 
@@ -404,7 +404,7 @@ class BlinkoApiService implements BaseApiService {
     final num? noteIdNum = num.tryParse(noteId);
     if (noteIdNum == null) {
       throw ArgumentError(
-        'Invalid numeric ID format for Blinko noteId: $noteId',
+        'Invalid numeric ID format for Blinko noteId: \$noteId',
       );
     }
     final request = blinko_api.CommentsListRequest(noteId: noteIdNum);
@@ -418,7 +418,7 @@ class BlinkoApiService implements BaseApiService {
           response.items.map(_convertBlinkoCommentToComment).toList();
       return comments;
     } catch (e) {
-      throw Exception('Failed to load comments for note $noteId: $e');
+      throw Exception('Failed to load comments for note \$noteId: \$e');
     }
   }
 
@@ -441,7 +441,6 @@ class BlinkoApiService implements BaseApiService {
     String noteId,
     Comment comment, {
     ServerConfig? targetServerOverride,
-    List<memos_api.V1Resource>? resources,
   }) async {
     // Use _getApiClientForServer to create a temporary CommentApi instance
     final commentApi = blinko_api.CommentApi(
@@ -450,7 +449,7 @@ class BlinkoApiService implements BaseApiService {
     final num? noteIdNum = num.tryParse(noteId);
     if (noteIdNum == null) {
       throw ArgumentError(
-        'Invalid numeric ID format for Blinko noteId: $noteId',
+        'Invalid numeric ID format for Blinko noteId: \$noteId',
       );
     }
     // TODO: Map common V1Resource to Blinko's attachment format if needed for create request
@@ -479,7 +478,7 @@ class BlinkoApiService implements BaseApiService {
       if (e is blinko_api.ApiException || e is Exception) {
         rethrow;
       }
-      throw Exception('Failed to create comment for note $noteId: $e');
+      throw Exception('Failed to create comment for note \$noteId: \$e');
     }
   }
 
@@ -493,7 +492,7 @@ class BlinkoApiService implements BaseApiService {
     final num? noteIdNum = num.tryParse(noteId);
     if (noteIdNum == null) {
       throw ArgumentError(
-        'Invalid numeric ID format for Blinko noteId: $noteId',
+        'Invalid numeric ID format for Blinko noteId: \$noteId',
       );
     }
     try {
@@ -514,7 +513,7 @@ class BlinkoApiService implements BaseApiService {
         await noteApi.notesAddReference(request);
       }
     } catch (e) {
-      throw Exception('Failed to set relations for note $noteId: $e');
+      throw Exception('Failed to set relations for note \$noteId: \$e');
     }
   }
 
@@ -531,7 +530,7 @@ class BlinkoApiService implements BaseApiService {
     final num? commentIdNum = num.tryParse(commentId);
     if (commentIdNum == null) {
       throw ArgumentError(
-        'Invalid numeric ID format for Blinko commentId: $commentId',
+        'Invalid numeric ID format for Blinko commentId: \$commentId',
       );
     }
     final request = blinko_api.CommentsUpdateRequest(
@@ -542,11 +541,11 @@ class BlinkoApiService implements BaseApiService {
       final blinko_api.CommentsList200ResponseItemsInner? response =
           await commentApi.commentsUpdate(request);
       if (response == null) {
-        throw Exception('Failed to update comment $commentId: No response');
+        throw Exception('Failed to update comment \$commentId: No response');
       }
       return _convertBlinkoCommentToComment(response);
     } catch (e) {
-      throw Exception('Failed to update comment $commentId: $e');
+      throw Exception('Failed to update comment \$commentId: \$e');
     }
   }
 
@@ -559,7 +558,7 @@ class BlinkoApiService implements BaseApiService {
     final num? commentIdNum = num.tryParse(commentId);
     if (commentIdNum == null) {
       throw ArgumentError(
-        'Invalid numeric ID format for Blinko commentId: $commentId',
+        'Invalid numeric ID format for Blinko commentId: \$commentId',
       );
     }
     try {
@@ -571,7 +570,7 @@ class BlinkoApiService implements BaseApiService {
         rethrow;
       }
       throw Exception(
-        'Failed to delete comment $commentId (note $noteId): $e',
+        'Failed to delete comment \$commentId (note \$noteId): \$e',
       );
     }
   }
@@ -599,7 +598,7 @@ class BlinkoApiService implements BaseApiService {
       if (resourceName.startsWith('/api/file/')) {
         resourceName = resourceName.substring('/api/file/'.length);
       }
-      resourceName = 'blinkoResources/$resourceName';
+      resourceName = 'blinkoResources/\$resourceName';
       return memos_api.V1Resource(
         name: resourceName,
         filename: filename,
@@ -607,7 +606,7 @@ class BlinkoApiService implements BaseApiService {
         size: response.size?.toInt().toString(),
       );
     } catch (e) {
-      throw Exception('Failed to upload resource: $e');
+      throw Exception('Failed to upload resource: \$e');
     }
   }
 
@@ -645,7 +644,7 @@ class BlinkoApiService implements BaseApiService {
       );
     } catch (e) {
       throw Exception(
-        'Failed to create Blinko API client for target server \${serverConfig.name ?? serverConfig.id}: $e',
+        'Failed to create Blinko API client for target server \${serverConfig.name ?? serverConfig.id}: \$e',
       );
     }
   }

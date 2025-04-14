@@ -11,7 +11,10 @@ abstract class BaseApiService {
   // Configuration
   String get apiBaseUrl;
   bool get isConfigured; // Check if service has valid config (URL/token)
-  Future<void> configureService({required String baseUrl, required String authToken});
+  Future<void> configureService({
+    required String baseUrl,
+    required String authToken,
+  });
 
   // Core Note Operations
   Future<ListNotesResponse> listNotes({
@@ -24,33 +27,33 @@ abstract class BaseApiService {
     ServerConfig? targetServerOverride,
   });
 
-  Future<NoteItem> getNote(
-     String id, {
-     ServerConfig? targetServerOverride,
-  });
+  Future<NoteItem> getNote(String id, {ServerConfig? targetServerOverride});
 
   Future<NoteItem> createNote(
-     NoteItem note, {
-     ServerConfig? targetServerOverride,
+    NoteItem note, {
+    ServerConfig? targetServerOverride,
   });
 
   Future<NoteItem> updateNote(
-     String id,
-     NoteItem note, {
-     ServerConfig? targetServerOverride,
+    String id,
+    NoteItem note, {
+    ServerConfig? targetServerOverride,
   });
 
-  Future<void> deleteNote(
-     String id, {
-     ServerConfig? targetServerOverride,
-  });
+  Future<void> deleteNote(String id, {ServerConfig? targetServerOverride});
 
   // Common Actions (Optional - implement if both support similarly)
-  Future<NoteItem> archiveNote(String id, { ServerConfig? targetServerOverride });
-  Future<NoteItem> togglePinNote(String id, { ServerConfig? targetServerOverride });
+  Future<NoteItem> archiveNote(String id, {ServerConfig? targetServerOverride});
+  Future<NoteItem> togglePinNote(
+    String id, {
+    ServerConfig? targetServerOverride,
+  });
 
   // Comments (Optional - implement if both support similarly)
-  Future<List<Comment>> listNoteComments(String noteId, { ServerConfig? targetServerOverride });
+  Future<List<Comment>> listNoteComments(
+    String noteId, {
+    ServerConfig? targetServerOverride,
+  });
   Future<Comment> getNoteComment(
     String commentId, {
     ServerConfig? targetServerOverride,
@@ -66,7 +69,11 @@ abstract class BaseApiService {
     Comment comment, {
     ServerConfig? targetServerOverride,
   }); // Changed signature
-  Future<void> deleteNoteComment(String noteId, String commentId, { ServerConfig? targetServerOverride });
+  Future<void> deleteNoteComment(
+    String noteId,
+    String commentId, {
+    ServerConfig? targetServerOverride,
+  });
 
   // Relations (Added)
   Future<void> setNoteRelations(
@@ -97,40 +104,81 @@ class DummyApiService implements BaseApiService {
   bool get isConfigured => false;
 
   @override
-  Future<void> configureService({required String baseUrl, required String authToken}) async {}
+  Future<void> configureService({
+    required String baseUrl,
+    required String authToken,
+  }) async {}
 
   @override
-  Future<ListNotesResponse> listNotes({int? pageSize, String? pageToken, String? filter, String? state, String? sort, String? direction, ServerConfig? targetServerOverride}) async {
+  Future<ListNotesResponse> listNotes({
+    int? pageSize,
+    String? pageToken,
+    String? filter,
+    String? state,
+    String? sort,
+    String? direction,
+    ServerConfig? targetServerOverride,
+  }) async {
     throw UnimplementedError("Service not configured");
   }
+
   @override
-  Future<NoteItem> getNote(String id, {ServerConfig? targetServerOverride}) async {
+  Future<NoteItem> getNote(
+    String id, {
+    ServerConfig? targetServerOverride,
+  }) async {
     throw UnimplementedError("Service not configured");
   }
+
   @override
-  Future<NoteItem> createNote(NoteItem note, {ServerConfig? targetServerOverride}) async {
+  Future<NoteItem> createNote(
+    NoteItem note, {
+    ServerConfig? targetServerOverride,
+  }) async {
     throw UnimplementedError("Service not configured");
   }
+
   @override
-  Future<NoteItem> updateNote(String id, NoteItem note, {ServerConfig? targetServerOverride}) async {
+  Future<NoteItem> updateNote(
+    String id,
+    NoteItem note, {
+    ServerConfig? targetServerOverride,
+  }) async {
     throw UnimplementedError("Service not configured");
   }
+
   @override
-  Future<void> deleteNote(String id, {ServerConfig? targetServerOverride}) async {
+  Future<void> deleteNote(
+    String id, {
+    ServerConfig? targetServerOverride,
+  }) async {
     throw UnimplementedError("Service not configured");
   }
+
   @override
-  Future<NoteItem> archiveNote(String id, {ServerConfig? targetServerOverride}) async {
+  Future<NoteItem> archiveNote(
+    String id, {
+    ServerConfig? targetServerOverride,
+  }) async {
     throw UnimplementedError("Service not configured");
   }
+
   @override
-  Future<NoteItem> togglePinNote(String id, {ServerConfig? targetServerOverride}) async {
+  Future<NoteItem> togglePinNote(
+    String id, {
+    ServerConfig? targetServerOverride,
+  }) async {
     throw UnimplementedError("Service not configured");
   }
+
   @override
-  Future<List<Comment>> listNoteComments(String noteId, {ServerConfig? targetServerOverride}) async {
+  Future<List<Comment>> listNoteComments(
+    String noteId, {
+    ServerConfig? targetServerOverride,
+  }) async {
     throw UnimplementedError("Service not configured");
   }
+
   @override
   Future<Comment> getNoteComment(
     String commentId, {
@@ -139,6 +187,7 @@ class DummyApiService implements BaseApiService {
     // Added dummy implementation
     throw UnimplementedError("Service not configured");
   }
+
   @override
   Future<Comment> createNoteComment(
     String noteId,
@@ -159,10 +208,16 @@ class DummyApiService implements BaseApiService {
     // Changed signature
     throw UnimplementedError("Service not configured");
   }
+
   @override
-  Future<void> deleteNoteComment(String noteId, String commentId, {ServerConfig? targetServerOverride}) async {
+  Future<void> deleteNoteComment(
+    String noteId,
+    String commentId, {
+    ServerConfig? targetServerOverride,
+  }) async {
     throw UnimplementedError("Service not configured");
   }
+
   @override
   Future<void> setNoteRelations(
     String noteId,
