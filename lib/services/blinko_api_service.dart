@@ -1,8 +1,8 @@
 import 'package:flutter/foundation.dart'; // Import for kDebugMode
 import 'package:flutter_memos/api/lib/api.dart'
     as memos_api; // Import Memos API for V1Resource
-import 'package:flutter_memos/blinko_api/lib/api.dart' as blinko_api; // Alias Blinko API
-// Assuming memos_api and http packages are imported for resource upload
+import 'package:flutter_memos/blinko_api/lib/api.dart'
+    as blinko_api; // Alias Blinko API
 import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/models/list_notes_response.dart';
 import 'package:flutter_memos/models/memo_relation.dart';
@@ -457,18 +457,21 @@ class BlinkoApiService implements BaseApiService {
     final request = blinko_api.CommentsCreateRequest(
       noteId: noteIdNum,
       content: comment.content,
-      guestName: '',
-      // guestIP: '',
-      // guestUA: '',
+      guestName: '', // Required based on previous 400 error
+      // guestIP: '', // Not sending IP
+      // guestUA: '', // Not sending UA
       parentId: null, // Explicitly null for top-level comments
     );
     try {
+      // Ensure we use the correct commentApi instance created above
       final bool? success = await commentApi.commentsCreate(request);
       if (success == null || !success) {
         throw Exception(
           'Failed to create comment: API returned failure or null.',
         );
       }
+      // Since Blinko create doesn't return the created comment, we cannot return it directly.
+      // Throwing an exception to signal refresh is needed.
       throw Exception(
         "Comment created successfully, but refresh required to view.",
       );
