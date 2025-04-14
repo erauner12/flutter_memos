@@ -1,47 +1,40 @@
-import 'package:flutter/cupertino.dart'; // Import Cupertino
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart'; // Import Material for Tooltip
-import 'package:flutter/services.dart'; // Add import for keyboard events
-import 'package:flutter_memos/models/note_item.dart'; // Import NoteItem instead of Memo
-// Updated imports per Change 1:
-import 'package:flutter_memos/models/server_config.dart'; // Import ServerConfig model
+import 'package:flutter/material.dart'; // Keep for Tooltip
+import 'package:flutter/services.dart';
+import 'package:flutter_memos/models/note_item.dart'; // Import NoteItem
+import 'package:flutter_memos/models/server_config.dart';
 import 'package:flutter_memos/providers/filter_providers.dart';
-// Import MCP provider
 import 'package:flutter_memos/providers/mcp_server_config_provider.dart';
-import 'package:flutter_memos/providers/memo_providers.dart'; // Keep for now, might need specific providers
-import 'package:flutter_memos/providers/server_config_provider.dart'; // Import server config provider
-// Import CloudKit Service Provider
+// Import note_providers instead of memo_providers
+import 'package:flutter_memos/providers/note_providers.dart' as note_providers;
+import 'package:flutter_memos/providers/server_config_provider.dart';
 import 'package:flutter_memos/providers/service_providers.dart';
-// Import Settings providers (API Keys etc.)
 import 'package:flutter_memos/providers/settings_provider.dart';
-import 'package:flutter_memos/providers/ui_providers.dart' as ui_providers; // Add import
-// Import MemosBody
-import 'package:flutter_memos/screens/memos/memos_body.dart';
-import 'package:flutter_memos/utils/keyboard_navigation.dart'; // Add import
-import 'package:flutter_memos/widgets/advanced_filter_panel.dart'; // Add import for AdvancedFilterPanel
+import 'package:flutter_memos/providers/ui_providers.dart' as ui_providers;
+// Import notes_list_body instead of memos_body
+import 'package:flutter_memos/screens/items/notes_list_body.dart';
+import 'package:flutter_memos/utils/keyboard_navigation.dart';
+import 'package:flutter_memos/widgets/advanced_filter_panel.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class MemosScreen extends ConsumerStatefulWidget {
-  const MemosScreen({super.key});
+class ItemsScreen extends ConsumerStatefulWidget { // Renamed class
+  const ItemsScreen({super.key}); // Renamed constructor
 
   @override
-  ConsumerState<MemosScreen> createState() => _MemosScreenState();
+  ConsumerState<ItemsScreen> createState() => _ItemsScreenState(); // Renamed class
 }
 
-class _MemosScreenState extends ConsumerState<MemosScreen>
-    with KeyboardNavigationMixin<MemosScreen> {
-  // ScrollController and RefreshIndicatorKey are now managed within MemosBody
-  final FocusNode _focusNode =
-      FocusNode(); // Keep FocusNode for the screen level
-  // Add the ScrollController here
+class _ItemsScreenState extends ConsumerState<ItemsScreen> // Renamed class
+    with KeyboardNavigationMixin<ItemsScreen> { // Renamed class
+  final FocusNode _focusNode = FocusNode();
   final ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
     super.initState();
-    // Load initial preferences (including the quick filter preset)
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(loadFilterPreferencesProvider); // Load saved preset
+      ref.read(loadFilterPreferencesProvider);
       if (mounted) {
         FocusScope.of(context).requestFocus(_focusNode);
       }
@@ -50,44 +43,40 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
 
   @override
   void dispose() {
-    _focusNode.dispose(); // Dispose the focus node
-    _scrollController.dispose(); // Dispose the scroll controller
-    super.dispose(); // Must call super
+    _focusNode.dispose();
+    _scrollController.dispose();
+    super.dispose();
   }
 
-  // Build the CupertinoNavigationBar when in multi-select mode
   CupertinoNavigationBar _buildMultiSelectNavBar(int selectedCount) {
     return CupertinoNavigationBar(
-      transitionBetweenRoutes: false, // Disable default hero animation
-      // Use leading for the cancel button
+      transitionBetweenRoutes: false,
       leading: CupertinoButton(
         padding: EdgeInsets.zero,
         onPressed: () {
           if (kDebugMode) {
-            print('[MemosScreen] Exit multi-select via Cancel button');
+            print('[ItemsScreen] Exit multi-select via Cancel button'); // Updated log identifier
           }
-          ref.read(ui_providers.toggleMemoMultiSelectModeProvider)();
+          // Use renamed provider
+          ref.read(ui_providers.toggleItemMultiSelectModeProvider)();
         },
         child: const Icon(CupertinoIcons.clear),
       ),
-      middle: const Text('\$selectedCount Selected'),
-      // Use trailing for action buttons
+      middle: Text('$selectedCount Selected'), // Keep generic text
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Delete button
           CupertinoButton(
             padding: const EdgeInsets.symmetric(horizontal: 8.0),
             minSize: 0,
             onPressed: selectedCount > 0
                 ? () {
-                    // TODO: Implement multi-delete logic
-                    // Show confirmation dialog first
+                    // TODO: Implement multi-delete logic using batchNoteOperationsProvider
                     showCupertinoDialog(
                       context: context,
                       builder: (context) => CupertinoAlertDialog(
-                              title: const Text(
-                                'Delete \$selectedCount Memos?',
+                              title: Text(
+                                'Delete $selectedCount Notes?', // Updated text
                               ),
                         content: const Text(
                           'This action cannot be undone.',
@@ -102,10 +91,12 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
                             child: const Text('Delete'),
                             onPressed: () {
                               Navigator.pop(context);
-                              // TODO: Actual deletion logic here...
+                              final ids = ref.read(ui_providers.selectedItemIdsForMultiSelectProvider).toList(); // Use renamed provider
+                              ref.read(note_providers.batchNoteOperationsProvider)(ids, note_providers.BatchOperation.delete); // Use provider from note_providers
+                              ref.read(ui_providers.toggleItemMultiSelectModeProvider)(); // Exit multi-select mode
                               if (kDebugMode) {
                                 print(
-                                  '[MemosScreen] Multi-delete action triggered (not implemented)',
+                                  '[ItemsScreen] Multi-delete action triggered for IDs: ${ids.join(', ')}', // Updated log identifier
                                 );
                               }
                             },
@@ -122,16 +113,18 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
                   : CupertinoColors.inactiveGray,
             ),
           ),
-          // Archive button
           CupertinoButton(
             padding: const EdgeInsets.symmetric(horizontal: 8.0),
             minSize: 0,
             onPressed: selectedCount > 0
                 ? () {
-                    // TODO: Implement multi-archive logic
+                    // TODO: Implement multi-archive logic using batchNoteOperationsProvider
+                    final ids = ref.read(ui_providers.selectedItemIdsForMultiSelectProvider).toList(); // Use renamed provider
+                    ref.read(note_providers.batchNoteOperationsProvider)(ids, note_providers.BatchOperation.archive); // Use provider from note_providers
+                    ref.read(ui_providers.toggleItemMultiSelectModeProvider)(); // Exit multi-select mode
                     if (kDebugMode) {
                       print(
-                        '[MemosScreen] Multi-archive action triggered (not implemented)',
+                        '[ItemsScreen] Multi-archive action triggered for IDs: ${ids.join(', ')}', // Updated log identifier
                       );
                     }
                   }
@@ -148,89 +141,91 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
     );
   }
 
-  // Add keyboard navigation methods
-  void _selectNextMemo() {
-    final memos = ref.read(filteredNotesProvider); // Use renamed provider
+  void _selectNextNote() { // Renamed method
+    // Use providers from note_providers and renamed ui_providers
+    final notes = ref.read(note_providers.filteredNotesProvider);
     if (kDebugMode) {
       print(
-        '[MemosScreen _selectNextMemo] Called. Filtered notes count: \${memos.length}', // Updated log
+        '[ItemsScreen _selectNextNote] Called. Filtered notes count: ${notes.length}', // Updated log identifier
       );
     }
 
-    if (memos.isEmpty) return;
+    if (notes.isEmpty) return;
 
-    final currentId = ref.read(ui_providers.selectedMemoIdProvider);
+    final currentId = ref.read(ui_providers.selectedItemIdProvider);
     int currentIndex = -1;
     if (currentId != null) {
-      currentIndex = memos.indexWhere((memo) => memo.id == currentId);
+      currentIndex = notes.indexWhere((note) => note.id == currentId);
     }
 
-    // Use the mixin's helper function
-    final nextIndex = getNextIndex(currentIndex, memos.length);
+    final nextIndex = getNextIndex(currentIndex, notes.length);
 
     if (nextIndex != -1) {
-      final nextMemoId = memos[nextIndex].id;
-      ref.read(ui_providers.selectedMemoIdProvider.notifier).state = nextMemoId;
+      final nextNoteId = notes[nextIndex].id; // Renamed variable
+      ref.read(ui_providers.selectedItemIdProvider.notifier).state = nextNoteId;
       if (kDebugMode) {
         print(
-          '[MemosScreen _selectNextMemo] Updated selectedMemoIdProvider to: \$nextMemoId',
+          '[ItemsScreen _selectNextNote] Updated selectedItemIdProvider to: $nextNoteId', // Updated log identifier
         );
       }
     }
   }
 
-  void _selectPreviousMemo() {
-    final memos = ref.read(filteredNotesProvider); // Use renamed provider
+  void _selectPreviousNote() { // Renamed method
+    // Use providers from note_providers and renamed ui_providers
+    final notes = ref.read(note_providers.filteredNotesProvider);
     if (kDebugMode) {
       print(
-        '[MemosScreen _selectPreviousMemo] Called. Filtered notes count: \${memos.length}', // Updated log
+        '[ItemsScreen _selectPreviousNote] Called. Filtered notes count: ${notes.length}', // Updated log identifier
       );
     }
 
-    if (memos.isEmpty) return;
+    if (notes.isEmpty) return;
 
-    final currentId = ref.read(ui_providers.selectedMemoIdProvider);
+    final currentId = ref.read(ui_providers.selectedItemIdProvider);
     int currentIndex = -1;
     if (currentId != null) {
-      currentIndex = memos.indexWhere((memo) => memo.id == currentId);
+      currentIndex = notes.indexWhere((note) => note.id == currentId);
     }
 
-    // Use the mixin's helper function
-    final prevIndex = getPreviousIndex(currentIndex, memos.length);
+    final prevIndex = getPreviousIndex(currentIndex, notes.length);
 
     if (prevIndex != -1) {
-      final prevMemoId = memos[prevIndex].id;
-      ref.read(ui_providers.selectedMemoIdProvider.notifier).state = prevMemoId;
+      final prevNoteId = notes[prevIndex].id; // Renamed variable
+      ref.read(ui_providers.selectedItemIdProvider.notifier).state = prevNoteId;
       if (kDebugMode) {
         print(
-          '[MemosScreen _selectPreviousMemo] Updated selectedMemoIdProvider to: \$prevMemoId',
+          '[ItemsScreen _selectPreviousNote] Updated selectedItemIdProvider to: $prevNoteId', // Updated log identifier
         );
       }
     }
   }
 
-  void _viewSelectedMemo() {
-    final selectedId = ref.read(ui_providers.selectedMemoIdProvider);
+  void _viewSelectedItem() { // Renamed method
+    // Use renamed provider
+    final selectedId = ref.read(ui_providers.selectedItemIdProvider);
     if (selectedId != null) {
       if (kDebugMode) {
-        print('[MemosScreen] Viewing selected memo: ID \$selectedId');
+        print('[ItemsScreen] Viewing selected item: ID $selectedId'); // Updated log identifier
       }
       if (mounted) {
         Navigator.of(
           context,
           rootNavigator: true,
-        ).pushNamed('/memo-detail', arguments: {'memoId': selectedId});
+        ).pushNamed('/item-detail', arguments: {'itemId': selectedId}); // Use new route and argument name
       }
     }
   }
 
   void _clearSelectionOrUnfocus() {
-    final selectedId = ref.read(ui_providers.selectedMemoIdProvider);
+    // Use renamed provider
+    final selectedId = ref.read(ui_providers.selectedItemIdProvider);
     if (selectedId != null) {
       if (kDebugMode) {
-        print('[MemosScreen] Clearing selection via Escape');
+        print('[ItemsScreen] Clearing selection via Escape'); // Updated log identifier
       }
-      ref.read(ui_providers.selectedMemoIdProvider.notifier).state = null;
+      // Use renamed provider
+      ref.read(ui_providers.selectedItemIdProvider.notifier).state = null;
     } else {
       FocusScope.of(context).unfocus();
     }
@@ -241,25 +236,25 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
 
     if (kDebugMode) {
       print(
-        '[MemosScreen _handleKeyEvent] Received key: \${event.logicalKey.keyLabel}',
+        '[ItemsScreen _handleKeyEvent] Received key: ${event.logicalKey.keyLabel}', // Updated log identifier
       );
       print(
-        '[MemosScreen _handleKeyEvent] FocusNode has focus: \${node.hasFocus}',
+        '[ItemsScreen _handleKeyEvent] FocusNode has focus: ${node.hasFocus}', // Updated log identifier
       );
     }
 
     final result = handleKeyEvent(
       event,
       ref,
-      onUp: _selectPreviousMemo,
-      onDown: _selectNextMemo,
-      onSubmit: _viewSelectedMemo,
+      onUp: _selectPreviousNote, // Use renamed method
+      onDown: _selectNextNote, // Use renamed method
+      onSubmit: _viewSelectedItem, // Use renamed method
       onEscape: _clearSelectionOrUnfocus,
     );
 
     if (kDebugMode) {
       print(
-        '[MemosScreen _handleKeyEvent] Mixin handleKeyEvent result: \$result',
+        '[ItemsScreen _handleKeyEvent] Mixin handleKeyEvent result: $result', // Updated log identifier
       );
     }
     return result;
@@ -267,16 +262,15 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
 
   @override
   Widget build(BuildContext context) {
-    final notesState = ref.watch(notesNotifierProvider); // Use renamed provider
-    final visibleNotes = ref.watch(
-      visibleNotesListProvider,
-    ); // Use renamed provider
+    // Use providers from note_providers and renamed ui_providers
+    final notesState = ref.watch(note_providers.notesNotifierProvider);
+    final visibleNotes = ref.watch(note_providers.visibleNotesListProvider);
     final selectedPresetKey = ref.watch(quickFilterPresetProvider);
     final currentPresetLabel =
-        quickFilterPresets[selectedPresetKey]?.label ??
-        'Notes'; // Updated default label
-    final isMultiSelectMode = ref.watch(ui_providers.memoMultiSelectModeProvider);
-    final selectedIds = ref.watch(ui_providers.selectedMemoIdsForMultiSelectProvider);
+        quickFilterPresets[selectedPresetKey]?.label ?? 'Notes';
+    // Use renamed providers
+    final isMultiSelectMode = ref.watch(ui_providers.itemMultiSelectModeProvider);
+    final selectedIds = ref.watch(ui_providers.selectedItemIdsForMultiSelectProvider);
 
     return CupertinoPageScaffold(
       navigationBar: isMultiSelectMode
@@ -302,24 +296,21 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Multi-select button
                   CupertinoButton(
                     padding: const EdgeInsets.symmetric(horizontal: 8.0),
                     minSize: 0,
-                    onPressed: () =>
-                        ref.read(ui_providers.toggleMemoMultiSelectModeProvider)(),
+                    // Use renamed provider
+                    onPressed: () => ref.read(ui_providers.toggleItemMultiSelectModeProvider)(),
                     child: const Icon(
                       CupertinoIcons.checkmark_seal,
                     ),
                   ),
-                  // Advanced filter button
                   CupertinoButton(
                     padding: const EdgeInsets.symmetric(horizontal: 8.0),
                     minSize: 0,
                     onPressed: () => _showAdvancedFilterPanel(context),
                     child: const Icon(CupertinoIcons.tuningfork),
                   ),
-                  // Create new memo button
                   CupertinoButton(
                     padding: const EdgeInsets.symmetric(horizontal: 8.0),
                     minSize: 0,
@@ -327,11 +318,10 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
                       Navigator.of(
                         context,
                         rootNavigator: true,
-                      ).pushNamed('/new-memo');
+                      ).pushNamed('/new-note'); // Use new route
                     },
                     child: const Icon(CupertinoIcons.add),
                   ),
-                  // Add Reset Button (Temporary placement) per Change 2
                   CupertinoButton(
                     padding: const EdgeInsets.symmetric(horizontal: 8.0),
                     minSize: 0,
@@ -364,7 +354,8 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
                   padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 8.0),
                   child: _buildQuickFilterControl(),
                 ),
-              Expanded(child: _buildMemosList(notesState, visibleNotes)),
+              // Pass notesState and visibleNotes to the renamed body widget
+              Expanded(child: _buildNotesList(notesState, visibleNotes)),
             ],
           ),
         ),
@@ -406,7 +397,7 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
         onValueChanged: (String? newPresetKey) {
           if (newPresetKey != null) {
             if (kDebugMode) {
-              print('[MemosScreen] Quick filter selected: \$newPresetKey');
+              print('[ItemsScreen] Quick filter selected: $newPresetKey'); // Updated log identifier
             }
             ref.read(quickFilterPresetProvider.notifier).state = newPresetKey;
             if (ref.read(rawCelFilterProvider).isNotEmpty) {
@@ -444,7 +435,7 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
         activeServer?.name ?? activeServer?.serverUrl ?? 'No Server';
     final truncatedName =
         serverName.length > 15
-            ? '\${serverName.substring(0, 12)}...'
+            ? '${serverName.substring(0, 12)}...'
             : serverName;
 
     return CupertinoButton(
@@ -514,7 +505,7 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
               if (!isActive) {
                 if (kDebugMode) {
                   print(
-                            '[MemosScreen] Setting active server to: \${server.name ?? server.id}',
+                            '[ItemsScreen] Setting active server to: ${server.name ?? server.id}', // Updated log identifier
                   );
                 }
                         notifier.setActiveServer(server.id);
@@ -543,7 +534,7 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
 
     return CupertinoSearchTextField(
       controller: controller,
-      placeholder: 'Search memos...',
+      placeholder: 'Search notes...', // Updated placeholder
       style: TextStyle(color: CupertinoColors.label.resolveFrom(context)),
       decoration: BoxDecoration(
         color: CupertinoColors.systemFill.resolveFrom(context),
@@ -553,26 +544,24 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
         ref.read(searchQueryProvider.notifier).state = value;
         final isLocalSearch = ref.read(localSearchEnabledProvider);
         if (!isLocalSearch && value.isNotEmpty) {
-          ref
-              .read(notesNotifierProvider.notifier)
-              .refresh(); // Use renamed provider
+          // Use provider from note_providers
+          ref.read(note_providers.notesNotifierProvider.notifier).refresh();
         }
       },
       onSubmitted: (value) {
         final isLocalSearch = ref.read(localSearchEnabledProvider);
         if (!isLocalSearch) {
-          ref
-              .read(notesNotifierProvider.notifier)
-              .refresh(); // Use renamed provider
+          // Use provider from note_providers
+          ref.read(note_providers.notesNotifierProvider.notifier).refresh();
         }
       },
     );
   }
 
-  void _handleMoveMemoToServer(String memoId) {
+  void _handleMoveNoteToServer(String noteId) { // Renamed method and parameter
     if (kDebugMode) {
       print(
-        '[MemosScreen] _handleMoveMemoToServer called for memo ID: \$memoId',
+        '[ItemsScreen] _handleMoveNoteToServer called for note ID: $noteId', // Updated log identifier
       );
     }
 
@@ -584,7 +573,7 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
 
     if (kDebugMode) {
       print(
-        '[MemosScreen] Found \${availableTargetServers.length} target servers.',
+        '[ItemsScreen] Found ${availableTargetServers.length} target servers.', // Updated log identifier
       );
     }
 
@@ -594,7 +583,7 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
         builder: (ctx) => CupertinoAlertDialog(
           title: const Text('No Other Servers'),
           content: const Text(
-            'You need to configure at least one other server to move memos.',
+            'You need to configure at least one other server to move notes.', // Updated text
           ),
           actions: [
             CupertinoDialogAction(
@@ -611,14 +600,14 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
     showCupertinoModalPopup<ServerConfig>(
       context: context,
       builder: (sheetContext) => CupertinoActionSheet(
-        title: const Text('Move Memo To...'),
+        title: const Text('Move Note To...'), // Updated text
         actions: availableTargetServers.map(
           (server) => CupertinoActionSheetAction(
             child: Text(server.name ?? server.serverUrl),
             onPressed: () {
               if (kDebugMode) {
                 print(
-                              '[MemosScreen] Selected target server: \${server.name ?? server.id}',
+                              '[ItemsScreen] Selected target server: ${server.name ?? server.id}', // Updated log identifier
                 );
               }
               Navigator.pop(sheetContext, server);
@@ -634,27 +623,28 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
       if (selectedServer != null) {
         if (kDebugMode) {
           print(
-            '[MemosScreen] Calling moveNoteProvider for memo \$memoId to server \${selectedServer.id}',
+            '[ItemsScreen] Calling moveNoteProvider for note $noteId to server ${selectedServer.id}', // Updated log identifier
           );
         }
-        final moveParams = MoveMemoParams(
-          memoId: memoId,
+        // Use renamed params class and provider from note_providers
+        final moveParams = note_providers.MoveNoteParams(
+          noteId: noteId,
           targetServer: selectedServer,
         );
         ref
-            .read(moveNoteProvider(moveParams))()
+            .read(note_providers.moveNoteProvider(moveParams))()
             .then((_) {
           if (kDebugMode) {
                 print(
-              '[MemosScreen] Move successful for note \$memoId');
+              '[ItemsScreen] Move successful for note $noteId'); // Updated log identifier
           }
           if (mounted) {
             showCupertinoDialog(
               context: context,
               builder: (ctx) => CupertinoAlertDialog(
                 title: const Text('Move Successful'),
-                        content: const Text(
-                          'Memo moved to \${selectedServer.name ?? selectedServer.serverUrl}.',
+                        content: Text( // Updated text
+                          'Note moved to ${selectedServer.name ?? selectedServer.serverUrl}.',
                 ),
                 actions: [
                   CupertinoDialogAction(
@@ -668,7 +658,7 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
           }
         }).catchError((error, stackTrace) {
           if (kDebugMode) {
-                print('[MemosScreen] Move failed for memo \$memoId: \$error');
+                print('[ItemsScreen] Move failed for note $noteId: $error'); // Updated log identifier
             print(stackTrace);
           }
           if (mounted) {
@@ -676,8 +666,8 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
               context: context,
               builder: (ctx) => CupertinoAlertDialog(
                 title: const Text('Move Failed'),
-                        content: const Text(
-                          'Could not move memo. Error: \${error.toString()}',
+                        content: Text( // Updated text
+                          'Could not move note. Error: ${error.toString()}',
                 ),
                 actions: [
                   CupertinoDialogAction(
@@ -692,26 +682,23 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
         });
       } else {
         if (kDebugMode) {
-          print('[MemosScreen] No target server selected.');
+          print('[ItemsScreen] No target server selected.'); // Updated log identifier
         }
       }
     });
   }
 
-  Widget _buildMemosList(NotesState notesState, List<NoteItem> visibleNotes) {
-    // Renamed MemosState to NotesState, Memo to NoteItem
-    return MemosBody(
+  // Renamed method to reflect it builds the notes list
+  Widget _buildNotesList(note_providers.NotesState notesState, List<NoteItem> visibleNotes) {
+    return NotesListBody( // Use renamed body widget
       scrollController: _scrollController,
-      onMoveMemoToServer: _handleMoveMemoToServer,
+      onMoveNoteToServer: _handleMoveNoteToServer, // Pass renamed callback
     );
   }
 
   // --- Reset Logic ---
-  /// Shows a confirmation dialog before performing the full data reset.
   void _showResetConfirmationDialog() {
-    // Ensure context is valid before showing dialog
     if (!mounted) return;
-
     showCupertinoDialog(
       context: context,
       builder: (BuildContext dialogContext) => CupertinoAlertDialog(
@@ -728,8 +715,7 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
             isDestructiveAction: true,
             child: const Text('Reset Data'),
             onPressed: () {
-              Navigator.pop(dialogContext); // Close the dialog first
-              // Call the reset asynchronously without awaiting here
+              Navigator.pop(dialogContext);
               _performFullReset();
             },
           ),
@@ -738,17 +724,12 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
     );
   }
 
-  /// Performs the full reset of CloudKit and local data.
   Future<void> _performFullReset() async {
     if (kDebugMode) {
-      print('[MemosScreen] Starting full data reset...');
+      print('[ItemsScreen] Starting full data reset...'); // Updated log identifier
     }
-
-    // --- Read Notifiers BEFORE Await ---
-    // Store notifier instances in local variables to use after potential awaits
-    // Check if mounted before reading, although less critical here than before await
     if (!mounted) {
-      if (kDebugMode) print('[MemosScreen] Reset aborted: Widget unmounted before starting.');
+      if (kDebugMode) print('[ItemsScreen] Reset aborted: Widget unmounted before starting.'); // Updated log identifier
       return;
     }
     final cloudKitService = ref.read(cloudKitServiceProvider);
@@ -758,74 +739,67 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
     final openAiKeyNotifier = ref.read(openAiApiKeyProvider.notifier);
     final openAiModelNotifier = ref.read(openAiModelIdProvider.notifier);
     final geminiNotifier = ref.read(geminiApiKeyProvider.notifier);
-    // --- End Reading Notifiers ---
-
-    // Optional: Show a loading indicator (e.g., using a state variable and conditional UI)
-    // setState(() => _isResetting = true); // Example
 
     bool cloudSuccess = true;
     String cloudErrorMessage = '';
 
     try {
-      // Delete CloudKit Data - Await each deletion attempt
-      if (kDebugMode) print('[MemosScreen] Deleting CloudKit ServerConfig records...');
+      if (kDebugMode) print('[ItemsScreen] Deleting CloudKit ServerConfig records...'); // Updated log identifier
       bool deleteServersSuccess = await cloudKitService.deleteAllRecordsOfType('ServerConfig');
       if (!deleteServersSuccess) {
         cloudSuccess = false;
         cloudErrorMessage += 'Failed to delete ServerConfig records. ';
-        if (kDebugMode) print('[MemosScreen] Failed CloudKit ServerConfig deletion.');
+        if (kDebugMode) print('[ItemsScreen] Failed CloudKit ServerConfig deletion.'); // Updated log identifier
       }
 
-      if (kDebugMode) print('[MemosScreen] Deleting CloudKit McpServerConfig records...');
+      if (kDebugMode) print('[ItemsScreen] Deleting CloudKit McpServerConfig records...'); // Updated log identifier
       bool deleteMcpSuccess = await cloudKitService.deleteAllRecordsOfType('McpServerConfig');
       if (!deleteMcpSuccess) {
         cloudSuccess = false;
         cloudErrorMessage += 'Failed to delete McpServerConfig records. ';
-        if (kDebugMode) print('[MemosScreen] Failed CloudKit McpServerConfig deletion.');
+        if (kDebugMode) print('[ItemsScreen] Failed CloudKit McpServerConfig deletion.'); // Updated log identifier
       }
 
-      if (kDebugMode) print('[MemosScreen] Deleting CloudKit UserSettings record...');
+      if (kDebugMode) print('[ItemsScreen] Deleting CloudKit UserSettings record...'); // Updated log identifier
       bool deleteSettingsSuccess = await cloudKitService.deleteUserSettingsRecord();
       if (!deleteSettingsSuccess) {
         cloudSuccess = false;
         cloudErrorMessage += 'Failed to delete UserSettings record. ';
-        if (kDebugMode) print('[MemosScreen] Failed CloudKit UserSettings deletion.');
+        if (kDebugMode) print('[ItemsScreen] Failed CloudKit UserSettings deletion.'); // Updated log identifier
       }
 
       if (!cloudSuccess) {
         if (kDebugMode)
           print(
-            '[MemosScreen] CloudKit deletion finished with errors: \$cloudErrorMessage',
+            '[ItemsScreen] CloudKit deletion finished with errors: $cloudErrorMessage', // Updated log identifier
           );
       } else {
-        if (kDebugMode) print('[MemosScreen] CloudKit deletion finished successfully.');
+        if (kDebugMode) print('[ItemsScreen] CloudKit deletion finished successfully.'); // Updated log identifier
       }
     } catch (e, s) {
       if (kDebugMode) {
         print(
-          '[MemosScreen] Critical error during CloudKit deletion phase: \$e\n\$s',
+          '[ItemsScreen] Critical error during CloudKit deletion phase: $e\n$s', // Updated log identifier
         );
       }
       cloudSuccess = false;
       cloudErrorMessage =
-          'A critical error occurred during CloudKit deletion: \$e';
+          'A critical error occurred during CloudKit deletion: $e';
     }
 
-    // Reset Local Notifiers and Cache (always attempt this, even if CloudKit failed)
-    // Use the local variables captured before the awaits
     try {
-      if (kDebugMode) print('[MemosScreen] Resetting local notifiers and cache...');
+      if (kDebugMode) print('[ItemsScreen] Resetting local notifiers and cache...'); // Updated log identifier
       await multiServerNotifier.resetStateAndCache();
       await mcpServerNotifier.resetStateAndCache();
-      await todoistNotifier.clear(); // Uses set('') internally
+      await todoistNotifier.clear();
       await openAiKeyNotifier.clear();
       await openAiModelNotifier.clear();
       await geminiNotifier.clear();
-      if (kDebugMode) print('[MemosScreen] Local reset finished.');
+      if (kDebugMode) print('[ItemsScreen] Local reset finished.'); // Updated log identifier
     } catch (e, s) {
       if (kDebugMode) {
         print(
-          '[MemosScreen] Error during local notifier reset phase: \$e\n\$s',
+          '[ItemsScreen] Error during local notifier reset phase: $e\n$s', // Updated log identifier
         );
       }
       if (cloudErrorMessage.isNotEmpty) {
@@ -844,7 +818,7 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
           content: Text(
             cloudSuccess
                 ? 'All cloud and local configurations have been reset. Please restart the app or navigate to Settings to reconfigure.'
-                    : 'The reset process encountered errors:\n\$cloudErrorMessage\nPlease check your iCloud data manually via Settings > Apple ID > iCloud > Manage Account Storage, then restart the app.'
+                    : 'The reset process encountered errors:\n$cloudErrorMessage\nPlease check your iCloud data manually via Settings > Apple ID > iCloud > Manage Account Storage, then restart the app.'
           ),
           actions: [
             CupertinoDialogAction(
@@ -855,11 +829,11 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
                 if (mounted) {
                   ref.invalidate(loadServerConfigProvider);
                   if (kDebugMode) {
-                    print('[MemosScreen] Reset complete. Invalidated loadServerConfigProvider.');
+                    print('[ItemsScreen] Reset complete. Invalidated loadServerConfigProvider.'); // Updated log identifier
                   }
                 } else {
                   if (kDebugMode) {
-                    print('[MemosScreen] Widget unmounted before invalidating loadServerConfigProvider.');
+                    print('[ItemsScreen] Widget unmounted before invalidating loadServerConfigProvider.'); // Updated log identifier
                   }
                 }
               },
@@ -869,7 +843,7 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
       );
     } else {
       if (kDebugMode) {
-        print('[MemosScreen] Widget unmounted before final reset dialog could be shown.');
+        print('[ItemsScreen] Widget unmounted before final reset dialog could be shown.'); // Updated log identifier
       }
     }
   }

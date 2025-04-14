@@ -5,38 +5,32 @@ import 'package:flutter/foundation.dart'; // For kDebugMode
 import 'package:flutter_memos/api/lib/api.dart' as memos_api; // Alias Memos API
 import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/models/list_notes_response.dart';
-import 'package:flutter_memos/models/note_item.dart';
+import 'package:flutter_memos/models/note_item.dart'; // Use NoteItem
 import 'package:flutter_memos/models/server_config.dart';
 import 'package:flutter_memos/services/base_api_service.dart';
 import 'package:flutter_memos/utils/env.dart';
 import 'package:http/http.dart' as http;
 
-// Rename class and implement BaseApiService
+// Keep class name MemosApiService, implements BaseApiService
 class MemosApiService implements BaseApiService {
-  // Keep singleton pattern if desired
   static final MemosApiService _instance = MemosApiService._internal();
   factory MemosApiService() => _instance;
 
-  // Use aliased types
   late memos_api.MemoServiceApi _memoApi;
   late memos_api.ResourceServiceApi _resourceApi;
   late memos_api.ApiClient _apiClient;
 
-  // Keep internal state
   String _baseUrl = '';
   String _authToken = '';
 
-  // Implement BaseApiService properties
   @override
   String get apiBaseUrl => _baseUrl;
 
   @override
   bool get isConfigured => _baseUrl.isNotEmpty && _authToken.isNotEmpty;
 
-  // Keep static config flags or manage them differently
-  static bool verboseLogging = true; // Consider making this instance-based
+  static bool verboseLogging = true;
 
-  // For testing purposes
   static List<String>? _lastServerOrder;
   static List<String> get lastServerOrder => _lastServerOrder ?? [];
 
@@ -64,9 +58,8 @@ class MemosApiService implements BaseApiService {
   void _initializeClient(String baseUrl, String authToken) {
     try {
       if (baseUrl.isEmpty) {
-        baseUrl = Env.apiBaseUrl; // Fallback to environment variable if empty
+        baseUrl = Env.apiBaseUrl;
       }
-      // Clean up base URL
       if (baseUrl.toLowerCase().contains('/api/v1')) {
         final apiIndex = baseUrl.toLowerCase().indexOf('/api/v1');
         baseUrl = baseUrl.substring(0, apiIndex);
@@ -77,10 +70,7 @@ class MemosApiService implements BaseApiService {
         baseUrl = baseUrl.substring(0, baseUrl.length - 1);
       }
 
-      final token =
-          authToken.isNotEmpty
-              ? authToken
-              : Env.memosApiKey; // Use provided token or fallback
+      final token = authToken.isNotEmpty ? authToken : Env.memosApiKey;
       _apiClient = memos_api.ApiClient(
         basePath: baseUrl,
         authentication: memos_api.HttpBearerAuth()..accessToken = token,
@@ -92,7 +82,7 @@ class MemosApiService implements BaseApiService {
     }
   }
 
-  // --- MEMO/NOTE OPERATIONS ---
+  // --- NOTE OPERATIONS --- // Renamed section comment
 
   @override
   Future<ListNotesResponse> listNotes({
@@ -100,34 +90,30 @@ class MemosApiService implements BaseApiService {
     String? pageToken,
     String? filter,
     String? state,
-    String? sort = 'updateTime', // Default sort
-    String? direction = 'DESC', // Default direction
+    String? sort = 'updateTime',
+    String? direction = 'DESC',
     ServerConfig? targetServerOverride,
   }) async {
     final memoApi = _getMemoApiForServer(targetServerOverride);
     final serverIdForLog =
         targetServerOverride?.name ?? targetServerOverride?.id ?? 'active';
-    const parent = 'users/-'; // Memos API requirement
+    const parent = 'users/-';
     try {
-      final memos_api.V1ListMemosResponse? response = await memoApi
-          .memoServiceListMemos2(
-            parent,
-            state: state?.isNotEmpty ?? false ? state : null,
-            sort: sort,
-            direction: direction,
-            filter: filter,
-            pageSize: pageSize,
-            pageToken: pageToken,
-          );
+      final memos_api.V1ListMemosResponse? response = await memoApi.memoServiceListMemos2(
+        parent,
+        state: state?.isNotEmpty ?? false ? state : null,
+        sort: sort,
+        direction: direction,
+        filter: filter,
+        pageSize: pageSize,
+        pageToken: pageToken,
+      );
       if (response == null) {
         return ListNotesResponse(notes: [], nextPageToken: null);
       }
-      final notes = response.memos.map(_convertApiMemoToNoteItem).toList();
+      final notes = response.memos.map(_convertApiMemoToNoteItem).toList(); // Use NoteItem
       final nextToken = response.nextPageToken;
-      _lastServerOrder =
-          notes
-              .map((note) => note.id)
-              .toList(); // Store order for testing/debug
+      _lastServerOrder = notes.map((note) => note.id).toList();
       return ListNotesResponse(notes: notes, nextPageToken: nextToken);
     } catch (e) {
       throw Exception('Failed to load notes from $serverIdForLog: $e');
@@ -135,7 +121,7 @@ class MemosApiService implements BaseApiService {
   }
 
   @override
-  Future<NoteItem> getNote(
+  Future<NoteItem> getNote( // Return NoteItem
     String id, {
     ServerConfig? targetServerOverride,
   }) async {
@@ -144,20 +130,18 @@ class MemosApiService implements BaseApiService {
         targetServerOverride?.name ?? targetServerOverride?.id ?? 'active';
     try {
       final formattedId = _formatResourceName(id, 'memos');
-      final memos_api.Apiv1Memo? apiMemo = await memoApi.memoServiceGetMemo(
-        formattedId,
-      );
+      final memos_api.Apiv1Memo? apiMemo = await memoApi.memoServiceGetMemo(formattedId);
       if (apiMemo == null) {
         throw Exception('Note $id not found on $serverIdForLog');
       }
-      return _convertApiMemoToNoteItem(apiMemo);
+      return _convertApiMemoToNoteItem(apiMemo); // Use NoteItem
     } catch (e) {
       throw Exception('Failed to load note $id from $serverIdForLog: $e');
     }
   }
 
   @override
-  Future<NoteItem> createNote(
+  Future<NoteItem> createNote( // Accept and return NoteItem
     NoteItem note, {
     ServerConfig? targetServerOverride,
   }) async {
@@ -170,21 +154,21 @@ class MemosApiService implements BaseApiService {
         pinned: note.pinned,
         state: _getApiStateFromNoteState(note.state),
         visibility: _getApiVisibilityFromNoteVisibility(note.visibility),
+        // Add tags if needed: tags: note.tags,
+        // Add resources if needed: resources: _convertResourcesToApi(note.resources),
       );
-      final memos_api.Apiv1Memo? response = await memoApi.memoServiceCreateMemo(
-        apiMemo,
-      );
+      final memos_api.Apiv1Memo? response = await memoApi.memoServiceCreateMemo(apiMemo);
       if (response == null) {
         throw Exception('Failed to create note on $serverIdForLog: No response');
       }
-      return _convertApiMemoToNoteItem(response);
+      return _convertApiMemoToNoteItem(response); // Use NoteItem
     } catch (e) {
       throw Exception('Failed to create note on $serverIdForLog: $e');
     }
   }
 
   @override
-  Future<NoteItem> updateNote(
+  Future<NoteItem> updateNote( // Accept and return NoteItem
     String id,
     NoteItem note, {
     ServerConfig? targetServerOverride,
@@ -194,33 +178,26 @@ class MemosApiService implements BaseApiService {
         targetServerOverride?.name ?? targetServerOverride?.id ?? 'active';
     try {
       final formattedId = _formatResourceName(id, 'memos');
-      final originalCreateTime =
-          note.createTime; // Preserve original create time
-      final clientNow = DateTime.now().toUtc(); // Use client time for update
+      final originalCreateTime = note.createTime;
+      final clientNow = DateTime.now().toUtc();
 
       final updatePayload = memos_api.TheMemoToUpdateTheNameFieldIsRequired(
         content: note.content,
         pinned: note.pinned,
         state: _getApiStateFromNoteState(note.state),
         visibility: _getApiVisibilityFromNoteVisibility(note.visibility),
-        updateTime: clientNow, // Send client's update time
+        updateTime: clientNow,
+        // Add tags if needed: tags: note.tags,
+        // Add resources if needed: resources: _convertResourcesToApi(note.resources),
       );
-      final memos_api.Apiv1Memo? response = await memoApi.memoServiceUpdateMemo(
-        formattedId,
-        updatePayload,
-      );
+      final memos_api.Apiv1Memo? response = await memoApi.memoServiceUpdateMemo(formattedId, updatePayload);
       if (response == null) {
-        throw Exception(
-          'Failed to update note $id on $serverIdForLog: No response',
-        );
+        throw Exception('Failed to update note $id on $serverIdForLog: No response');
       }
-      NoteItem updatedAppNote = _convertApiMemoToNoteItem(response);
-      if (response.createTime != null &&
-          (response.createTime!.year == 1970 ||
-              response.createTime!.year == 1)) {
-        updatedAppNote = updatedAppNote.copyWith(
-          createTime: originalCreateTime,
-        );
+      NoteItem updatedAppNote = _convertApiMemoToNoteItem(response); // Use NoteItem
+      // Preserve original create time if server returns epoch/zero
+      if (response.createTime != null && (response.createTime!.year == 1970 || response.createTime!.year == 1)) {
+        updatedAppNote = updatedAppNote.copyWith(createTime: originalCreateTime);
       }
       return updatedAppNote;
     } catch (e) {
@@ -238,8 +215,7 @@ class MemosApiService implements BaseApiService {
         targetServerOverride?.name ?? targetServerOverride?.id ?? 'active';
     try {
       final formattedId = _formatResourceName(id, 'memos');
-      final http.Response response = await memoApi
-          .memoServiceDeleteMemoWithHttpInfo(formattedId);
+      final http.Response response = await memoApi.memoServiceDeleteMemoWithHttpInfo(formattedId);
       if (!(response.statusCode >= 200 && response.statusCode < 300)) {
         final errorBody = await _decodeBodyBytes(response);
         throw memos_api.ApiException(response.statusCode, errorBody);
@@ -251,7 +227,7 @@ class MemosApiService implements BaseApiService {
   }
 
   @override
-  Future<NoteItem> archiveNote(
+  Future<NoteItem> archiveNote( // Return NoteItem
     String id, {
     ServerConfig? targetServerOverride,
   }) async {
@@ -260,8 +236,7 @@ class MemosApiService implements BaseApiService {
         targetServerOverride?.name ?? targetServerOverride?.id ?? 'active';
     try {
       final formattedId = _formatResourceName(id, 'memos');
-      final memos_api.Apiv1Memo? currentApiMemo = await memoApi
-          .memoServiceGetMemo(formattedId);
+      final memos_api.Apiv1Memo? currentApiMemo = await memoApi.memoServiceGetMemo(formattedId);
       if (currentApiMemo == null) {
         throw Exception('Note $id not found on $serverIdForLog');
       }
@@ -269,26 +244,23 @@ class MemosApiService implements BaseApiService {
         content: currentApiMemo.content,
         visibility: currentApiMemo.visibility,
         state: memos_api.V1State.ARCHIVED,
-        pinned: false,
+        pinned: false, // Unpin when archiving
         updateTime: DateTime.now().toUtc(),
+        // tags: currentApiMemo.tags, // Preserve tags
+        // resources: currentApiMemo.resources, // Preserve resources
       );
-      final memos_api.Apiv1Memo? response = await memoApi.memoServiceUpdateMemo(
-        formattedId,
-        updatePayload,
-      );
+      final memos_api.Apiv1Memo? response = await memoApi.memoServiceUpdateMemo(formattedId, updatePayload);
       if (response == null) {
-        throw Exception(
-          'Failed to archive note $id on $serverIdForLog: No response',
-        );
+        throw Exception('Failed to archive note $id on $serverIdForLog: No response');
       }
-      return _convertApiMemoToNoteItem(response);
+      return _convertApiMemoToNoteItem(response); // Use NoteItem
     } catch (e) {
       throw Exception('Failed to archive note $id on $serverIdForLog: $e');
     }
   }
 
   @override
-  Future<NoteItem> togglePinNote(
+  Future<NoteItem> togglePinNote( // Return NoteItem
     String id, {
     ServerConfig? targetServerOverride,
   }) async {
@@ -297,8 +269,7 @@ class MemosApiService implements BaseApiService {
         targetServerOverride?.name ?? targetServerOverride?.id ?? 'active';
     try {
       final formattedId = _formatResourceName(id, 'memos');
-      final memos_api.Apiv1Memo? currentApiMemo = await memoApi
-          .memoServiceGetMemo(formattedId);
+      final memos_api.Apiv1Memo? currentApiMemo = await memoApi.memoServiceGetMemo(formattedId);
       if (currentApiMemo == null) {
         throw Exception('Note $id not found on $serverIdForLog');
       }
@@ -307,23 +278,18 @@ class MemosApiService implements BaseApiService {
         content: currentApiMemo.content,
         visibility: currentApiMemo.visibility,
         state: currentApiMemo.state,
-        pinned: !currentPinState,
+        pinned: !currentPinState, // Toggle pin state
         updateTime: DateTime.now().toUtc(),
+        // tags: currentApiMemo.tags, // Preserve tags
+        // resources: currentApiMemo.resources, // Preserve resources
       );
-      final memos_api.Apiv1Memo? response = await memoApi.memoServiceUpdateMemo(
-        formattedId,
-        updatePayload,
-      );
+      final memos_api.Apiv1Memo? response = await memoApi.memoServiceUpdateMemo(formattedId, updatePayload);
       if (response == null) {
-        throw Exception(
-          'Failed to toggle pin for note $id on $serverIdForLog: No response',
-        );
+        throw Exception('Failed to toggle pin for note $id on $serverIdForLog: No response');
       }
-      return _convertApiMemoToNoteItem(response);
+      return _convertApiMemoToNoteItem(response); // Use NoteItem
     } catch (e) {
-      throw Exception(
-        'Failed to toggle pin for note $id on $serverIdForLog: $e',
-      );
+      throw Exception('Failed to toggle pin for note $id on $serverIdForLog: $e');
     }
   }
 
@@ -339,40 +305,38 @@ class MemosApiService implements BaseApiService {
         targetServerOverride?.name ?? targetServerOverride?.id ?? 'active';
     try {
       final formattedId = _formatResourceName(noteId, 'memos');
-      final memos_api.V1ListMemoCommentsResponse? response = await memoApi
-          .memoServiceListMemoComments(formattedId);
+      final memos_api.V1ListMemoCommentsResponse? response = await memoApi.memoServiceListMemoComments(formattedId);
       if (response == null) {
         return [];
       }
       return _parseCommentsFromApiResponse(response);
     } catch (e) {
-      throw Exception(
-        'Failed to load comments for $noteId from $serverIdForLog: $e',
-      );
+      throw Exception('Failed to load comments for note $noteId from $serverIdForLog: $e');
     }
   }
 
   @override
   Future<Comment> getNoteComment(
-    String commentId, {
+    String commentId, { // commentId is expected to be "memos/{id}" or just "{id}"
     ServerConfig? targetServerOverride,
   }) async {
     final memoApi = _getMemoApiForServer(targetServerOverride);
     final serverIdForLog =
         targetServerOverride?.name ?? targetServerOverride?.id ?? 'active';
     try {
+      // Memos API uses the same endpoint for getting notes and comments
       final formattedId = _formatResourceName(commentId, 'memos');
-      final memos_api.Apiv1Memo? apiMemo = await memoApi.memoServiceGetMemo(
-        formattedId,
-      );
+      final memos_api.Apiv1Memo? apiMemo = await memoApi.memoServiceGetMemo(formattedId);
       if (apiMemo == null) {
         throw Exception('Comment $commentId not found on $serverIdForLog');
       }
+      // Ensure it's actually a comment (check parent field?) - Memos API doesn't enforce this well
+      if (apiMemo.parent == null || apiMemo.parent!.isEmpty) {
+        throw Exception('Resource $commentId is not a comment (missing parent) on $serverIdForLog');
+      }
       return _convertApiMemoToComment(apiMemo);
     } catch (e) {
-      throw Exception(
-        'Failed to load comment $commentId from $serverIdForLog: $e',
-      );
+      throw Exception('Failed to load comment $commentId from $serverIdForLog: $e');
     }
   }
 
@@ -381,7 +345,7 @@ class MemosApiService implements BaseApiService {
     String noteId,
     Comment comment, {
     ServerConfig? targetServerOverride,
-    List<Map<String, dynamic>>? resources, // Keep parameter type as is
+    List<Map<String, dynamic>>? resources,
   }) async {
     final memoApi = _getMemoApiForServer(targetServerOverride);
     final serverIdForLog =
@@ -389,43 +353,37 @@ class MemosApiService implements BaseApiService {
     try {
       final formattedMemoId = _formatResourceName(noteId, 'memos');
 
-      // Convert generic map back to Memos V1Resource if needed by API
-      final List<memos_api.V1Resource> effectiveResources =
-          (resources ?? [])
-              .map((resMap) {
-                return memos_api.V1Resource(
-                  name: resMap['name'] as String?,
-                  filename: resMap['filename'] as String?,
-                  type: resMap['type'] as String?,
-                );
-              })
-              .where((r) => r.name != null && r.name!.isNotEmpty)
-              .toList();
+      final List<memos_api.V1Resource> effectiveResources = (resources ?? [])
+          .map((resMap) {
+            return memos_api.V1Resource(
+              name: resMap['name'] as String?,
+              filename: resMap['filename'] as String?,
+              type: resMap['contentType'] as String?, // Map contentType to type
+            );
+          })
+          .where((r) => r.name != null && r.name!.isNotEmpty)
+          .toList();
 
       final apiMemo = memos_api.Apiv1Memo(
         content: comment.content,
         pinned: comment.pinned,
         state: _getApiStateFromCommentState(comment.state),
         resources: effectiveResources,
+        // parent: formattedMemoId, // Set parent to link it as a comment - API might handle this automatically
       );
-      final memos_api.Apiv1Memo? response = await memoApi
-          .memoServiceCreateMemoComment(formattedMemoId, apiMemo);
+      final memos_api.Apiv1Memo? response = await memoApi.memoServiceCreateMemoComment(formattedMemoId, apiMemo);
       if (response == null) {
-        throw Exception(
-          'Failed to create comment on $serverIdForLog: No response',
-        );
+        throw Exception('Failed to create comment on $serverIdForLog: No response');
       }
       return _convertApiMemoToComment(response);
     } catch (e) {
-      throw Exception(
-        'Failed to create comment for $noteId on $serverIdForLog: $e',
-      );
+      throw Exception('Failed to create comment for note $noteId on $serverIdForLog: $e');
     }
   }
 
   @override
   Future<Comment> updateNoteComment(
-    String commentId,
+    String commentId, // commentId is expected to be "memos/{id}" or just "{id}"
     Comment comment, {
     ServerConfig? targetServerOverride,
   }) async {
@@ -433,52 +391,49 @@ class MemosApiService implements BaseApiService {
     final serverIdForLog =
         targetServerOverride?.name ?? targetServerOverride?.id ?? 'active';
     try {
+      // Memos API uses the same endpoint for updating notes and comments
       final formattedCommentId = _formatResourceName(commentId, 'memos');
       final updateMemo = memos_api.TheMemoToUpdateTheNameFieldIsRequired(
         content: comment.content,
         pinned: comment.pinned,
         state: _getApiStateFromCommentState(comment.state),
         updateTime: DateTime.now().toUtc(),
+        // resources: _convertResourcesToApi(comment.resources), // Update resources if needed
       );
-      final memos_api.Apiv1Memo? response = await memoApi.memoServiceUpdateMemo(
-        formattedCommentId,
-        updateMemo,
-      );
+      final memos_api.Apiv1Memo? response = await memoApi.memoServiceUpdateMemo(formattedCommentId, updateMemo);
       if (response == null) {
-        throw Exception(
-          'Failed to update comment $commentId on $serverIdForLog: No response',
-        );
+        throw Exception('Failed to update comment $commentId on $serverIdForLog: No response');
+      }
+      // Ensure it's still a comment after update (check parent field?)
+      if (response.parent == null || response.parent!.isEmpty) {
+        throw Exception('Resource $commentId is not a comment after update (missing parent) on $serverIdForLog');
       }
       return _convertApiMemoToComment(response);
     } catch (e) {
-      throw Exception(
-        'Failed to update comment $commentId on $serverIdForLog: $e',
-      );
+      throw Exception('Failed to update comment $commentId on $serverIdForLog: $e');
     }
   }
 
   @override
   Future<void> deleteNoteComment(
-    String noteId,
-    String commentId, {
+    String noteId, // noteId is technically not needed by Memos API for deletion
+    String commentId, { // commentId is expected to be "memos/{id}" or just "{id}"
     ServerConfig? targetServerOverride,
   }) async {
     final memoApi = _getMemoApiForServer(targetServerOverride);
     final serverIdForLog =
         targetServerOverride?.name ?? targetServerOverride?.id ?? 'active';
     try {
+      // Memos API uses the same endpoint for deleting notes and comments
       final formattedCommentId = _formatResourceName(commentId, 'memos');
-      final http.Response response = await memoApi
-          .memoServiceDeleteMemoWithHttpInfo(formattedCommentId);
+      final http.Response response = await memoApi.memoServiceDeleteMemoWithHttpInfo(formattedCommentId);
       if (!(response.statusCode >= 200 && response.statusCode < 300)) {
         final errorBody = await _decodeBodyBytes(response);
         throw memos_api.ApiException(response.statusCode, errorBody);
       }
     } catch (e) {
       if (e is memos_api.ApiException) rethrow;
-      throw Exception(
-        'Failed to delete comment $commentId (note $noteId) on $serverIdForLog: $e',
-      );
+      throw Exception('Failed to delete comment $commentId (note $noteId) on $serverIdForLog: $e');
     }
   }
 
@@ -499,25 +454,21 @@ class MemosApiService implements BaseApiService {
       final resourcePayload = memos_api.V1Resource(
         filename: filename,
         type: contentType,
-        content: base64Content,
+        content: base64Content, // Send content as base64 string
       );
-      final memos_api.V1Resource? createdResource = await resourceApi
-          .resourceServiceCreateResource(resourcePayload);
+      final memos_api.V1Resource? createdResource = await resourceApi.resourceServiceCreateResource(resourcePayload);
       if (createdResource == null || createdResource.name == null) {
-        throw Exception(
-          'Failed to upload resource to $serverIdForLog: Server returned null or invalid resource',
-        );
+        throw Exception('Failed to upload resource to $serverIdForLog: Server returned null or invalid resource');
       }
+      // Map V1Resource fields to the expected Map structure
       return {
-        'name': createdResource.name!, // Memos uses 'name' as the identifier
-        'id': createdResource.name!, // Use 'name' also as 'id' for consistency
+        'id': _extractIdFromName(createdResource.name!), // Extract ID from name
+        'name': createdResource.name!, // Keep the full name
         'filename': createdResource.filename ?? filename,
         'contentType': createdResource.type ?? contentType,
-        'size':
-            createdResource.size != null
-                ? int.tryParse(createdResource.size!)
-                : null, // Parse size to int if possible
+        'size': createdResource.size != null ? int.tryParse(createdResource.size!) : null,
         'createTime': createdResource.createTime?.toIso8601String(),
+        'updateTime': createdResource.updateTime?.toIso8601String(),
         'externalLink': createdResource.externalLink,
       };
     } catch (e) {
@@ -530,7 +481,7 @@ class MemosApiService implements BaseApiService {
   @override
   Future<void> setNoteRelations(
     String noteId,
-    List<Map<String, dynamic>> relations, { // Change parameter type
+    List<Map<String, dynamic>> relations, {
     ServerConfig? targetServerOverride,
   }) async {
     final memoApi = _getMemoApiForServer(targetServerOverride);
@@ -538,52 +489,42 @@ class MemosApiService implements BaseApiService {
         targetServerOverride?.name ?? targetServerOverride?.id ?? 'active';
     try {
       final formattedId = _formatResourceName(noteId, 'memos');
-      final List<memos_api.V1MemoRelation> apiRelations =
-          relations
-              .map((relationMap) {
-                final String? relatedMemoId =
-                    relationMap['relatedMemoId'] as String?;
-                final String? typeString = relationMap['type'] as String?;
-                memos_api.V1MemoRelationType? relationType;
-                if (typeString != null) {
-                  switch (typeString.toUpperCase()) {
-                    case 'REFERENCE':
-                      relationType = memos_api.V1MemoRelationType.REFERENCE;
-                      break;
-                    case 'COMMENT':
-                      relationType = memos_api.V1MemoRelationType.COMMENT;
-                      break;
-                  }
-                }
-                final String? formattedRelatedMemoId =
-                    relatedMemoId != null
-                        ? _formatResourceName(relatedMemoId, 'memos')
-                        : null;
-                final relatedMemo =
-                    formattedRelatedMemoId != null
-                        ? memos_api.V1MemoRelationMemo(
-                          name: formattedRelatedMemoId,
-                        )
-                        : null;
-                final currentMemo = memos_api.V1MemoRelationMemo(
-                  name: formattedId,
-                );
-                return memos_api.V1MemoRelation(
-                  memo: currentMemo,
-                  relatedMemo: relatedMemo,
-                  type: relationType,
-                );
-              })
-              .where((rel) => rel.relatedMemo?.name != null && rel.type != null)
-              .toList();
+      final List<memos_api.V1MemoRelation> apiRelations = relations
+          .map((relationMap) {
+            final String? relatedMemoId = relationMap['relatedMemoId'] as String?;
+            final String? typeString = relationMap['type'] as String?;
+            memos_api.V1MemoRelationType? relationType;
+            if (typeString != null) {
+              switch (typeString.toUpperCase()) {
+                case 'REFERENCE':
+                  relationType = memos_api.V1MemoRelationType.REFERENCE;
+                  break;
+                case 'COMMENT':
+                  relationType = memos_api.V1MemoRelationType.COMMENT;
+                  break;
+              }
+            }
+            final String? formattedRelatedMemoId = relatedMemoId != null ? _formatResourceName(relatedMemoId, 'memos') : null;
+            if (formattedRelatedMemoId == null || relationType == null) {
+              return null;
+            }
+            final relatedMemo = memos_api.V1MemoRelationMemo(name: formattedRelatedMemoId);
+            final currentMemo = memos_api.V1MemoRelationMemo(name: formattedId);
+            return memos_api.V1MemoRelation(
+              memo: currentMemo,
+              relatedMemo: relatedMemo,
+              type: relationType,
+            );
+          })
+          .whereType<memos_api.V1MemoRelation>()
+          .toList();
+
       final requestBody = memos_api.MemoServiceSetMemoRelationsBody(
         relations: apiRelations,
       );
       await memoApi.memoServiceSetMemoRelations(formattedId, requestBody);
     } catch (e) {
-      throw Exception(
-        'Failed to set note relations for $noteId on $serverIdForLog: $e',
-      );
+      throw Exception('Failed to set note relations for $noteId on $serverIdForLog: $e');
     }
   }
 
@@ -593,9 +534,11 @@ class MemosApiService implements BaseApiService {
   Future<bool> checkHealth() async {
     if (!isConfigured) return false;
     try {
+      // Use a lightweight endpoint if available, otherwise listNotes is okay
       await listNotes(pageSize: 1);
       return true;
     } catch (e) {
+      if (kDebugMode) print('[MemosApiService] Health check failed: $e');
       return false;
     }
   }
@@ -605,18 +548,16 @@ class MemosApiService implements BaseApiService {
   memos_api.MemoServiceApi _getMemoApiForServer(ServerConfig? serverConfig) {
     if (serverConfig == null ||
         (serverConfig.serverUrl == _baseUrl &&
-            serverConfig.authToken == _authToken)) {
+         serverConfig.authToken == _authToken)) {
       return _memoApi;
     }
     return memos_api.MemoServiceApi(_getApiClientForServer(serverConfig));
   }
 
-  memos_api.ResourceServiceApi _getResourceApiForServer(
-    ServerConfig? serverConfig,
-  ) {
+  memos_api.ResourceServiceApi _getResourceApiForServer(ServerConfig? serverConfig) {
     if (serverConfig == null ||
         (serverConfig.serverUrl == _baseUrl &&
-            serverConfig.authToken == _authToken)) {
+         serverConfig.authToken == _authToken)) {
       return _resourceApi;
     }
     return memos_api.ResourceServiceApi(_getApiClientForServer(serverConfig));
@@ -626,10 +567,7 @@ class MemosApiService implements BaseApiService {
     try {
       String targetBaseUrl = serverConfig.serverUrl;
       if (targetBaseUrl.toLowerCase().contains('/api/v1')) {
-        targetBaseUrl = targetBaseUrl.substring(
-          0,
-          targetBaseUrl.toLowerCase().indexOf('/api/v1'),
-        );
+        targetBaseUrl = targetBaseUrl.substring(0, targetBaseUrl.toLowerCase().indexOf('/api/v1'));
       } else if (targetBaseUrl.toLowerCase().endsWith('/memos')) {
         targetBaseUrl = targetBaseUrl.substring(0, targetBaseUrl.length - 6);
       }
@@ -638,13 +576,10 @@ class MemosApiService implements BaseApiService {
       }
       return memos_api.ApiClient(
         basePath: targetBaseUrl,
-        authentication:
-            memos_api.HttpBearerAuth()..accessToken = serverConfig.authToken,
+        authentication: memos_api.HttpBearerAuth()..accessToken = serverConfig.authToken,
       );
     } catch (e) {
-      throw Exception(
-        'Failed to create API client for target server ${serverConfig.name ?? serverConfig.id}: $e',
-      );
+      throw Exception('Failed to create API client for target server ${serverConfig.name ?? serverConfig.id}: $e');
     }
   }
 
@@ -659,17 +594,16 @@ class MemosApiService implements BaseApiService {
     return name.split('/').last;
   }
 
+  // Updated converter to NoteItem
   NoteItem _convertApiMemoToNoteItem(memos_api.Apiv1Memo apiMemo) {
     DateTime parseDateTimeSafe(DateTime? dt) {
-      if (dt == null) return DateTime(1970);
-      if (dt.year == 1 || dt.year == 1970) return DateTime(1970);
+      if (dt == null || dt.year == 1 || dt.year == 1970) return DateTime(1970);
       return dt;
     }
     final createTime = parseDateTimeSafe(apiMemo.createTime);
     final updateTime = parseDateTimeSafe(apiMemo.updateTime);
-    final displayTime = parseDateTimeSafe(
-      apiMemo.displayTime ?? apiMemo.updateTime,
-    );
+    final displayTime = parseDateTimeSafe(apiMemo.displayTime ?? apiMemo.updateTime);
+
     return NoteItem(
       id: _extractIdFromName(apiMemo.name ?? ''),
       content: apiMemo.content ?? '',
@@ -680,58 +614,56 @@ class MemosApiService implements BaseApiService {
       updateTime: updateTime,
       displayTime: displayTime,
       tags: apiMemo.tags,
-      resources: apiMemo.resources.map((r) => r.toJson()).toList(),
-      relations:
-          apiMemo.relations.map((r) => _convertApiRelationToMap(r)).toList(),
-      creatorId:
-          apiMemo.creator != null ? _extractIdFromName(apiMemo.creator!) : null,
-      parentId:
-          apiMemo.parent != null ? _extractIdFromName(apiMemo.parent!) : null,
+      resources: apiMemo.resources.map(_convertApiResourceToMap).toList(),
+      relations: apiMemo.relations.map(_convertApiRelationToMap).toList(),
+      creatorId: apiMemo.creator != null ? _extractIdFromName(apiMemo.creator!) : null,
+      parentId: apiMemo.parent != null ? _extractIdFromName(apiMemo.parent!) : null,
     );
+  }
+
+  // Helper to convert V1Resource to a generic Map
+  Map<String, dynamic> _convertApiResourceToMap(memos_api.V1Resource apiResource) {
+    return {
+      'id': apiResource.name != null ? _extractIdFromName(apiResource.name!) : null,
+      'name': apiResource.name,
+      'filename': apiResource.filename,
+      'contentType': apiResource.type,
+      'size': apiResource.size != null ? int.tryParse(apiResource.size!) : null,
+      'createTime': apiResource.createTime?.toIso8601String(),
+      'updateTime': apiResource.updateTime?.toIso8601String(),
+      'externalLink': apiResource.externalLink,
+    };
   }
 
   Comment _convertApiMemoToComment(memos_api.Apiv1Memo apiMemo) {
     DateTime parseDateTimeSafe(DateTime? dt) {
-      if (dt == null) return DateTime(1970);
-      if (dt.year == 1 || dt.year == 1970) return DateTime(1970);
+      if (dt == null || dt.year == 1 || dt.year == 1970) return DateTime(1970);
       return dt;
     }
     final createTime = parseDateTimeSafe(apiMemo.createTime);
     final updateTime = parseDateTimeSafe(apiMemo.updateTime);
+
     return Comment(
       id: _extractIdFromName(apiMemo.name ?? ''),
       content: apiMemo.content ?? '',
-      creatorId:
-          apiMemo.creator != null ? _extractIdFromName(apiMemo.creator!) : null,
+      creatorId: apiMemo.creator != null ? _extractIdFromName(apiMemo.creator!) : null,
       createTime: createTime.millisecondsSinceEpoch,
       updateTime: updateTime.millisecondsSinceEpoch,
       state: _parseApiStateToCommentState(apiMemo.state),
       pinned: apiMemo.pinned ?? false,
-      resources: apiMemo.resources.map((r) => r.toJson()).toList(),
+      resources: apiMemo.resources.map(_convertApiResourceToMap).toList(),
     );
   }
 
-  List<Comment> _parseCommentsFromApiResponse(
-    memos_api.V1ListMemoCommentsResponse response,
-  ) {
+  List<Comment> _parseCommentsFromApiResponse(memos_api.V1ListMemoCommentsResponse response) {
     return response.memos.map(_convertApiMemoToComment).toList();
   }
 
-  // Helper to convert V1MemoRelation to a generic Map
-  Map<String, dynamic> _convertApiRelationToMap(
-    memos_api.V1MemoRelation apiRelation,
-  ) {
+  Map<String, dynamic> _convertApiRelationToMap(memos_api.V1MemoRelation apiRelation) {
     return {
-      'memoId':
-          apiRelation.memo?.name != null
-              ? _extractIdFromName(apiRelation.memo!.name!)
-              : null,
-      'relatedMemoId':
-          apiRelation.relatedMemo?.name != null
-              ? _extractIdFromName(apiRelation.relatedMemo!.name!)
-              : null,
+      'memoId': apiRelation.memo?.name != null ? _extractIdFromName(apiRelation.memo!.name!) : null,
+      'relatedMemoId': apiRelation.relatedMemo?.name != null ? _extractIdFromName(apiRelation.relatedMemo!.name!) : null,
       'type': apiRelation.type?.toJson().toUpperCase(),
-      'relatedMemoSnippet': apiRelation.relatedMemo?.snippet,
     };
   }
 
@@ -757,9 +689,7 @@ class MemosApiService implements BaseApiService {
     }
   }
 
-  NoteVisibility _parseApiVisibilityToNoteVisibility(
-    memos_api.V1Visibility? apiVisibility,
-  ) {
+  NoteVisibility _parseApiVisibilityToNoteVisibility(memos_api.V1Visibility? apiVisibility) {
     switch (apiVisibility) {
       case memos_api.V1Visibility.PRIVATE:
         return NoteVisibility.private;
@@ -792,9 +722,7 @@ class MemosApiService implements BaseApiService {
     }
   }
 
-  memos_api.V1Visibility _getApiVisibilityFromNoteVisibility(
-    NoteVisibility noteVisibility,
-  ) {
+  memos_api.V1Visibility _getApiVisibilityFromNoteVisibility(NoteVisibility noteVisibility) {
     switch (noteVisibility) {
       case NoteVisibility.private:
         return memos_api.V1Visibility.PRIVATE;

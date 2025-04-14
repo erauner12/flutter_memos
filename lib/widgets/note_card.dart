@@ -1,11 +1,11 @@
-import 'package:flutter/cupertino.dart'; // Import Cupertino
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_memos/utils/url_helper.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class MemoCard extends ConsumerStatefulWidget {
+class NoteCard extends ConsumerStatefulWidget { // Renamed class
   final String content;
   final bool pinned;
   final String? updatedAt;
@@ -18,11 +18,11 @@ class MemoCard extends ConsumerStatefulWidget {
   final VoidCallback? onDelete;
   final VoidCallback? onHide;
   final VoidCallback? onTogglePin;
-  final bool isSelected; // Add isSelected property for keyboard navigation
-  final VoidCallback? onBump; // Add onBump callback
-  final VoidCallback? onMoveToServer; // Add onMoveToServer callback
+  final bool isSelected;
+  final VoidCallback? onBump;
+  final VoidCallback? onMoveToServer;
 
-  const MemoCard({
+  const NoteCard({ // Renamed constructor
     super.key,
     required this.content,
     this.pinned = false,
@@ -36,46 +36,35 @@ class MemoCard extends ConsumerStatefulWidget {
     this.onDelete,
     this.onHide,
     this.onTogglePin,
-    this.isSelected = false, // Default to not selected
-    this.onBump, // Add onBump to constructor
-    this.onMoveToServer, // Add onMoveToServer to constructor
+    this.isSelected = false,
+    this.onBump,
+    this.onMoveToServer,
   });
 
   @override
-  ConsumerState<MemoCard> createState() => MemoCardState();
+  ConsumerState<NoteCard> createState() => NoteCardState(); // Renamed class
 }
 
-// Renamed from _MemoCardState to make it public for GlobalKey access
-class MemoCardState extends ConsumerState<MemoCard> {
+class NoteCardState extends ConsumerState<NoteCard> { // Renamed class
   Offset tapPosition = Offset.zero;
 
-  // Helper method to format date strings for display
   String formatDateTime(String dateTimeString) {
     try {
       final dateTime = DateTime.parse(dateTimeString);
       final now = DateTime.now();
       final difference = now.difference(dateTime);
 
-      // For very recent content (less than 1 hour)
       if (difference.inMinutes < 1) {
         return 'Just now';
       } else if (difference.inMinutes < 60) {
         return '${difference.inMinutes} ${difference.inMinutes == 1 ? 'minute' : 'minutes'} ago';
-      }
-      // For content from today (less than 24 hours)
-      else if (difference.inHours < 24) {
+      } else if (difference.inHours < 24) {
         return '${difference.inHours} ${difference.inHours == 1 ? 'hour' : 'hours'} ago';
-      }
-      // Yesterday
-      else if (difference.inDays == 1) {
+      } else if (difference.inDays == 1) {
         return 'Yesterday';
-      }
-      // Recent days
-      else if (difference.inDays < 7) {
+      } else if (difference.inDays < 7) {
         return '${difference.inDays} days ago';
-      }
-      // Older content
-      else {
+      } else {
         return '${dateTime.year}-${dateTime.month.toString().padLeft(2, '0')}-${dateTime.day.toString().padLeft(2, '0')}';
       }
     } catch (e) {
@@ -83,30 +72,25 @@ class MemoCardState extends ConsumerState<MemoCard> {
     }
   }
 
-  // Store position for context menu
   void storePosition(TapDownDetails details) {
     tapPosition = details.globalPosition;
   }
 
-  // Made public to be called via GlobalKey
   void showContextMenu() {
-    // Replace showModalBottomSheet with showCupertinoModalPopup
     showCupertinoModalPopup<void>(
       context: context,
       builder:
           (BuildContext context) => CupertinoActionSheet(
-            title: const Text('Memo Actions'), // Optional title
+            title: const Text('Note Actions'), // Updated text
             actions: <CupertinoActionSheetAction>[
-              // 1. Move to Server Action (Conditionally added first)
               if (widget.onMoveToServer != null)
                 CupertinoActionSheetAction(
                   child: const Text('Move to Server...'),
                   onPressed: () {
-                    Navigator.pop(context); // Close the sheet
-                    widget.onMoveToServer!(); // Call the provided callback
+                    Navigator.pop(context);
+                    widget.onMoveToServer!();
                   },
                 ),
-              // 2. View Action
               if (widget.onTap != null)
                 CupertinoActionSheetAction(
                   child: const Text('View'),
@@ -115,19 +99,17 @@ class MemoCardState extends ConsumerState<MemoCard> {
                     widget.onTap!();
                   },
                 ),
-              // 3. Edit Action
               CupertinoActionSheetAction(
                 child: const Text('Edit'),
                 onPressed: () {
                   Navigator.pop(context);
                   Navigator.pushNamed(
                     context,
-                    '/edit-entity',
-                    arguments: {'entityType': 'memo', 'entityId': widget.id},
+                    '/edit-entity', // Use generic route
+                    arguments: {'entityType': 'note', 'entityId': widget.id}, // Specify type as 'note'
                   );
                 },
               ),
-              // 4. Pin/Unpin Action
               CupertinoActionSheetAction(
                 child: Text(widget.pinned ? 'Unpin' : 'Pin'),
                 onPressed: () {
@@ -135,7 +117,6 @@ class MemoCardState extends ConsumerState<MemoCard> {
                   widget.onTogglePin?.call();
                 },
               ),
-              // 5. Bump Action
               if (widget.onBump != null)
                 CupertinoActionSheetAction(
                   child: const Text('Bump'),
@@ -144,27 +125,20 @@ class MemoCardState extends ConsumerState<MemoCard> {
                     widget.onBump!();
                   },
                 ),
-              // 6. Copy Content Action
               CupertinoActionSheetAction(
                 child: const Text('Copy Content'),
                 onPressed: () async {
-                  // Capture context before async gap
                   final BuildContext dialogContext = context;
-                  Navigator.pop(
-                    dialogContext,
-                  ); // Close sheet with original context
-
+                  Navigator.pop(dialogContext);
                   await Clipboard.setData(ClipboardData(text: widget.content));
-
-                  // Check mounted *before* using the captured context
                   if (mounted) {
                     showCupertinoDialog(
-                      context: dialogContext, // Use captured context
+                      context: dialogContext,
                       builder:
                           (ctx) => CupertinoAlertDialog(
                             title: const Text('Copied'),
                             content: const Text(
-                              'Memo content copied to clipboard.',
+                              'Note content copied to clipboard.', // Updated text
                             ),
                             actions: [
                               CupertinoDialogAction(
@@ -178,28 +152,22 @@ class MemoCardState extends ConsumerState<MemoCard> {
                   }
                 },
               ),
-              // 7. Copy Link Action
               CupertinoActionSheetAction(
                 child: const Text('Copy Link'),
                 onPressed: () async {
-                  // Capture context before async gap
                   final BuildContext dialogContext = context;
-                  Navigator.pop(
-                    dialogContext,
-                  ); // Close sheet with original context
-
-                  final url = 'flutter-memos://memo/${widget.id}';
+                  Navigator.pop(dialogContext);
+                  // Use note in deep link structure
+                  final url = 'flutter-memos://note/${widget.id}';
                   await Clipboard.setData(ClipboardData(text: url));
-
-                  // Check mounted *before* using the captured context
                   if (mounted) {
                     showCupertinoDialog(
-                      context: dialogContext, // Use captured context
+                      context: dialogContext,
                       builder:
                           (ctx) => CupertinoAlertDialog(
                             title: const Text('Copied'),
                             content: const Text(
-                              'Memo link copied to clipboard.',
+                              'Note link copied to clipboard.', // Updated text
                             ),
                             actions: [
                               CupertinoDialogAction(
@@ -213,7 +181,6 @@ class MemoCardState extends ConsumerState<MemoCard> {
                   }
                 },
               ),
-              // 8. Hide Action
               if (widget.onHide != null)
                 CupertinoActionSheetAction(
                   child: const Text('Hide'),
@@ -222,7 +189,6 @@ class MemoCardState extends ConsumerState<MemoCard> {
                     widget.onHide!();
                   },
                 ),
-              // 9. Archive Action
               if (widget.onArchive != null)
                 CupertinoActionSheetAction(
                   child: const Text('Archive'),
@@ -231,7 +197,6 @@ class MemoCardState extends ConsumerState<MemoCard> {
                     widget.onArchive!();
                   },
                 ),
-              // 10. Delete Action
               if (widget.onDelete != null)
                 CupertinoActionSheetAction(
                   isDestructiveAction: true,
@@ -259,7 +224,6 @@ class MemoCardState extends ConsumerState<MemoCard> {
     final isDarkMode = theme.brightness == Brightness.dark;
 
     final selectedStyle = (
-      // Use withAlpha instead of deprecated withOpacity
       color: CupertinoColors.systemGrey
           .resolveFrom(context)
           .withAlpha((255 * 0.3).round()),
@@ -294,28 +258,28 @@ class MemoCardState extends ConsumerState<MemoCard> {
     }
 
     if (kDebugMode && widget.isSelected) {
-      print('[MemoCard] Building selected memo card: ${widget.id}');
+      print('[NoteCard] Building selected note card: ${widget.id}'); // Updated log identifier
       if (widget.content.length < 100) {
-        print('[MemoCard] Content: "${widget.content}"');
+        print('[NoteCard] Content: "${widget.content}"'); // Updated log identifier
       } else {
         print(
-          '[MemoCard] Content preview: "${widget.content.substring(0, 97)}..."',
+          '[NoteCard] Content preview: "${widget.content.substring(0, 97)}..."', // Updated log identifier
         );
       }
 
       final urlRegex = RegExp(r'(https?://[^\s]+)|([\w-]+://[^\s]+)');
       final matches = urlRegex.allMatches(widget.content);
       if (matches.isNotEmpty) {
-        print('[MemoCard] URLs in content:');
+        print('[NoteCard] URLs in content:'); // Updated log identifier
         for (final match in matches) {
-          print('[MemoCard]   - ${match.group(0)}');
+          print('[NoteCard]   - ${match.group(0)}'); // Updated log identifier
         }
       }
     }
 
     return Container(
       key: ValueKey(
-        'memo-card-${widget.id}',
+        'note-card-${widget.id}', // Updated key prefix
       ),
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
@@ -337,12 +301,10 @@ class MemoCardState extends ConsumerState<MemoCard> {
         onTap: widget.onTap,
         onDoubleTap: kIsWeb ? showContextMenu : null,
         onTapDown: storePosition,
-        // Explicitly ignore vertical drags on this detector to let the parent scroll view handle them.
         onVerticalDragStart: null,
         onVerticalDragUpdate: null,
         onVerticalDragEnd: null,
-        behavior:
-            HitTestBehavior.opaque, // Ensure taps are still captured correctly
+        behavior: HitTestBehavior.opaque,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(
             16.0,
@@ -359,7 +321,7 @@ class MemoCardState extends ConsumerState<MemoCard> {
                     WidgetsBinding.instance.addPostFrameCallback((_) {
                       if (mounted) {
                         print(
-                          '[MemoCard] Rendering selected card: ${widget.id}',
+                          '[NoteCard] Rendering selected card: ${widget.id}', // Updated log identifier
                         );
                       }
                     });
@@ -368,9 +330,8 @@ class MemoCardState extends ConsumerState<MemoCard> {
                 ),
               MarkdownBody(
                 data: widget.content,
-                selectable: false, // Temporarily disable selection for testing
-                shrinkWrap: true, // Ensure this is true to fit content height
-                // physics: NeverScrollableScrollPhysics(), // REMOVED: MarkdownBody doesn't take physics
+                selectable: false,
+                shrinkWrap: true,
                 styleSheet: MarkdownStyleSheet.fromCupertinoTheme(theme)
                     .copyWith(
                   p: theme.textTheme.textStyle.copyWith(

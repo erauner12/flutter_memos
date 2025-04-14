@@ -2,12 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_memos/models/comment.dart'; // Import Comment model
 import 'package:flutter_memos/models/note_item.dart'; // Import NoteItem model
 import 'package:flutter_memos/providers/api_providers.dart';
-import 'package:flutter_memos/providers/memo_detail_provider.dart'
-    as detail_providers; // Alias detail providers
-import 'package:flutter_memos/providers/memo_providers.dart'
-    as list_providers; // Alias list providers
-import 'package:flutter_memos/screens/memo_detail/memo_detail_providers.dart'
-    show memoCommentsProvider; // Import memoCommentsProvider explicitly
+// Import note_providers instead of memo_detail_provider and memo_providers
+import 'package:flutter_memos/providers/note_providers.dart' as note_providers;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// Parameter class for entity providers to ensure consistent == checks.
@@ -94,10 +90,10 @@ final saveEntityProvider = Provider.family<
         if (kDebugMode) {
           print('[saveEntityProvider] Bumping parent note: $parentNoteId');
         }
-        // Assuming bumpNoteProvider exists (needs renaming if not done)
+        // Use bumpNoteProvider from note_providers
         await ref.read(
-          list_providers.bumpNoteProvider(parentNoteId),
-        )(); // Use renamed provider
+          note_providers.bumpNoteProvider(parentNoteId),
+        )();
         if (kDebugMode) {
           print(
             '[saveEntityProvider] Parent note $parentNoteId bumped successfully.',
@@ -115,12 +111,12 @@ final saveEntityProvider = Provider.family<
 
       // 3. Invalidate relevant providers
       ref.invalidate(
-        memoCommentsProvider(parentNoteId),
+        note_providers.noteCommentsProvider(parentNoteId), // Use provider from note_providers
       ); // Refresh comments for the parent note
       await ref
           .read(
-            list_providers.notesNotifierProvider.notifier,
-          ) // Use renamed provider
+            note_providers.notesNotifierProvider.notifier, // Use provider from note_providers
+          )
           .refresh(); // Refresh main note list because parent was bumped
     } else {
       // type == 'note'
@@ -133,30 +129,29 @@ final saveEntityProvider = Provider.family<
       }
 
       // Update note detail cache if it exists
-      if (ref.exists(detail_providers.noteDetailCacheProvider)) {
-        // Use renamed provider
+      if (ref.exists(note_providers.noteDetailCacheProvider)) { // Use provider from note_providers
         ref
             .read(
-              detail_providers.noteDetailCacheProvider.notifier,
-            ) // Use renamed provider
-            .update((state) => {...state, id: savedNote}); // Update with NoteItem directly, remove 'as Memo' cast
+              note_providers.noteDetailCacheProvider.notifier, // Use provider from note_providers
+            )
+            .update((state) => {...state, id: savedNote}); // Update with NoteItem directly
       }
 
       // Refresh all related providers to ensure UI is consistent
       await ref
           .read(
-            list_providers.notesNotifierProvider.notifier,
-          ) // Use renamed provider
+            note_providers.notesNotifierProvider.notifier, // Use provider from note_providers
+          )
           .refresh(); // Refresh the notes list
       ref.invalidate(
-        detail_providers.memoDetailProvider(id),
-      ); // Refresh note detail (keep name or rename)
+        note_providers.noteDetailProvider(id), // Use provider from note_providers
+      ); // Refresh note detail
 
-      // Clear any hidden note IDs for this note to ensure it's visible
+      // Clear any hidden item IDs for this note to ensure it's visible
       ref
           .read(
-            list_providers.hiddenMemoIdsProvider.notifier,
-          ) // Use correct provider name if renamed
+            note_providers.hiddenItemIdsProvider.notifier, // Use renamed provider from note_providers
+          )
           .update((state) => state.contains(id) ? (state..remove(id)) : state);
     }
   };

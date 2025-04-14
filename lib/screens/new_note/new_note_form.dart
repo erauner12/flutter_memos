@@ -1,58 +1,52 @@
-import 'package:flutter/cupertino.dart'; // Import Cupertino
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
-// TextDecoration is in dart:ui, usually implicitly imported
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_memos/models/note_item.dart'; // Import NoteItem model
-import 'package:flutter_memos/models/server_config.dart'; // Import ServerConfig
+import 'package:flutter_memos/models/server_config.dart';
 import 'package:flutter_memos/providers/api_providers.dart' as api_providers;
-import 'package:flutter_memos/providers/memo_providers.dart'
-    as memo_providers; // Add alias for list providers
-import 'package:flutter_memos/providers/server_config_provider.dart'; // Import server config provider
-import 'package:flutter_memos/utils/keyboard_navigation.dart'; // Import the mixin
+// Import note_providers instead of memo_providers
+import 'package:flutter_memos/providers/note_providers.dart' as note_providers;
+import 'package:flutter_memos/providers/server_config_provider.dart';
+import 'package:flutter_memos/utils/keyboard_navigation.dart';
 import 'package:flutter_memos/utils/url_helper.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 // Define the provider locally within the form file
-// Update the provider signature to accept targetServerOverride and use NoteItem
+// Keep name createNoteProvider, uses NoteItem
 final createNoteProvider = Provider<
   Future<NoteItem> Function(NoteItem note, {ServerConfig? targetServerOverride})
 >((ref) {
   final apiService = ref.watch(api_providers.apiServiceProvider);
-  // Return the function that takes the note and the override
   return (note, {targetServerOverride}) => apiService.createNote(
     note,
-    targetServerOverride: targetServerOverride, // Pass it here
+    targetServerOverride: targetServerOverride,
   );
 });
 
-class NewMemoForm extends ConsumerStatefulWidget {
-  const NewMemoForm({super.key});
+class NewNoteForm extends ConsumerStatefulWidget { // Renamed class
+  const NewNoteForm({super.key}); // Renamed constructor
 
   @override
-  ConsumerState<NewMemoForm> createState() => _NewMemoFormState();
+  ConsumerState<NewNoteForm> createState() => _NewNoteFormState(); // Renamed class
 }
 
-class _NewMemoFormState extends ConsumerState<NewMemoForm>
-    with KeyboardNavigationMixin<NewMemoForm> {
-  // Global key for the Form widget
+class _NewNoteFormState extends ConsumerState<NewNoteForm> // Renamed class
+    with KeyboardNavigationMixin<NewNoteForm> { // Renamed class
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   final TextEditingController _contentController = TextEditingController();
   final FocusNode _contentFocusNode = FocusNode();
-  final FocusNode _formFocusNode = FocusNode(debugLabel: 'NewMemoFormFocus');
+  final FocusNode _formFocusNode = FocusNode(debugLabel: 'NewNoteFormFocus'); // Renamed debug label
 
   bool _loading = false;
   String? _error;
   bool _showMarkdownHelp = false;
   bool _previewMode = false;
-
-  // State variable to hold the selected target server
   ServerConfig? _selectedServerConfig;
 
   @override
   void initState() {
     super.initState();
-    // Initialize selected server with the active one
     _selectedServerConfig = ref.read(activeServerConfigProvider);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
@@ -95,13 +89,11 @@ class _NewMemoFormState extends ConsumerState<NewMemoForm>
     );
   }
 
-  // Add method to show server selection action sheet
   void _showServerSelection() {
     final multiServerState = ref.read(multiServerConfigProvider);
     final servers = multiServerState.servers;
 
     if (servers.isEmpty) {
-      // Should not happen if navigated from main screen, but handle defensively
       showCupertinoDialog(
         context: context,
         builder:
@@ -137,7 +129,7 @@ class _NewMemoFormState extends ConsumerState<NewMemoForm>
                       setState(() {
                         _selectedServerConfig = server;
                       });
-                      Navigator.pop(context); // Close the action sheet
+                      Navigator.pop(context);
                     },
                     child: Text(server.name ?? server.serverUrl),
                   );
@@ -152,7 +144,7 @@ class _NewMemoFormState extends ConsumerState<NewMemoForm>
     );
   }
 
-  Future<void> _handleCreateMemo() async {
+  Future<void> _handleCreateNote() async { // Renamed method
     final content = _contentController.text.trim();
 
     if (_selectedServerConfig == null) {
@@ -163,7 +155,7 @@ class _NewMemoFormState extends ConsumerState<NewMemoForm>
               (context) => CupertinoAlertDialog(
                 title: const Text('No Server Selected'),
                 content: const Text(
-                  'Please select a target server for this memo.',
+                  'Please select a target server for this note.', // Updated text
                 ),
                 actions: [
                   CupertinoDialogAction(
@@ -184,8 +176,8 @@ class _NewMemoFormState extends ConsumerState<NewMemoForm>
           context: context,
           builder:
               (context) => CupertinoAlertDialog(
-                title: const Text('Empty Memo'),
-                content: const Text('Please enter some content for your memo.'),
+                title: const Text('Empty Note'), // Updated text
+                content: const Text('Please enter some content for your note.'), // Updated text
                 actions: [
                   CupertinoDialogAction(
                     isDefaultAction: true,
@@ -200,24 +192,24 @@ class _NewMemoFormState extends ConsumerState<NewMemoForm>
     }
 
     if (kDebugMode) {
-      print('[NewMemoForm] Creating new note via _handleCreateMemo');
+      print('[NewNoteForm] Creating new note via _handleCreateNote'); // Updated log identifier
       print(
-        '[NewMemoForm] Target Server: ${_selectedServerConfig?.name ?? _selectedServerConfig?.id}',
+        '[NewNoteForm] Target Server: ${_selectedServerConfig?.name ?? _selectedServerConfig?.id}', // Updated log identifier
       );
-      print('[NewMemoForm] Content length: ${content.length} characters');
+      print('[NewNoteForm] Content length: ${content.length} characters'); // Updated log identifier
       if (content.length < 200) {
-        print('[NewMemoForm] Content: "$content"');
+        print('[NewNoteForm] Content: "$content"'); // Updated log identifier
       } else {
         print(
-          '[NewMemoForm] Content preview: "${content.substring(0, 197)}..."',
+          '[NewNoteForm] Content preview: "${content.substring(0, 197)}..."', // Updated log identifier
         );
       }
       final urlRegex = RegExp(r'(https?://[^\s]+)|([\w-]+://[^\s]+)');
       final matches = urlRegex.allMatches(content);
       if (matches.isNotEmpty) {
-        print('[NewMemoForm] URLs in content:');
+        print('[NewNoteForm] URLs in content:'); // Updated log identifier
         for (final match in matches) {
-          print('[NewMemoForm]   - ${match.group(0)}');
+          print('[NewNoteForm]   - ${match.group(0)}'); // Updated log identifier
         }
       }
     }
@@ -230,19 +222,18 @@ class _NewMemoFormState extends ConsumerState<NewMemoForm>
     }
 
     try {
-      // Create a NoteItem instead of Memo
       final newNote = NoteItem(
-        id: 'temp', // ID is assigned by server
+        id: 'temp',
         content: content,
-        visibility: NoteVisibility.public, // Use enum
-        pinned: false, // Default value
-        state: NoteState.normal, // Default value
-        createTime: DateTime.now(), // Placeholder, server sets actual time
-        updateTime: DateTime.now(), // Placeholder
-        displayTime: DateTime.now(), // Placeholder
+        visibility: NoteVisibility.public,
+        pinned: false,
+        state: NoteState.normal,
+        createTime: DateTime.now(),
+        updateTime: DateTime.now(),
+        displayTime: DateTime.now(),
       );
 
-      // Call the renamed provider, passing the selected server config
+      // Use the locally defined createNoteProvider
       final createdNote = await ref.read(createNoteProvider)(
         newNote,
         targetServerOverride: _selectedServerConfig,
@@ -250,26 +241,26 @@ class _NewMemoFormState extends ConsumerState<NewMemoForm>
 
       if (kDebugMode) {
         print(
-          '[NewMemoForm] Note created successfully on server ${_selectedServerConfig?.id} with ID: ${createdNote.id}',
+          '[NewNoteForm] Note created successfully on server ${_selectedServerConfig?.id} with ID: ${createdNote.id}', // Updated log identifier
         );
       }
 
-      // Invalidate notes if the created note's server matches the active one
       final activeServerId = ref.read(activeServerConfigProvider)?.id;
       if (_selectedServerConfig?.id == activeServerId) {
-        ref.invalidate(memo_providers.notesNotifierProvider);
+        // Use provider from note_providers
+        ref.invalidate(note_providers.notesNotifierProvider);
       }
 
       if (mounted) {
         Navigator.pushReplacementNamed(
           context,
-          '/memo-detail',
-          arguments: {'memoId': createdNote.id},
+          '/item-detail', // Use new route
+          arguments: {'itemId': createdNote.id}, // Pass itemId
         );
       }
     } catch (e) {
       if (kDebugMode) {
-        print('[NewMemoForm] Error creating note: $e');
+        print('[NewNoteForm] Error creating note: $e'); // Updated log identifier
       }
       if (mounted) {
         setState(() {
@@ -309,7 +300,7 @@ class _NewMemoFormState extends ConsumerState<NewMemoForm>
       onKeyEvent: (node, event) {
         if (kDebugMode) {
           print(
-            '[NewMemoForm] Received key event: ${event.logicalKey.keyLabel}',
+            '[NewNoteForm] Received key event: ${event.logicalKey.keyLabel}', // Updated log identifier
           );
           if (event.logicalKey == LogicalKeyboardKey.enter) {
             final metaPressed =
@@ -323,7 +314,7 @@ class _NewMemoFormState extends ConsumerState<NewMemoForm>
                   LogicalKeyboardKey.metaRight,
                 );
             print(
-              '[NewMemoForm] Enter key pressed. Meta key pressed: $metaPressed',
+              '[NewNoteForm] Enter key pressed. Meta key pressed: $metaPressed', // Updated log identifier
             );
           }
         }
@@ -342,14 +333,14 @@ class _NewMemoFormState extends ConsumerState<NewMemoForm>
           if (!_loading) {
             if (kDebugMode) {
               print(
-                '[NewMemoForm] Command+Enter detected, calling _handleCreateMemo',
+                '[NewNoteForm] Command+Enter detected, calling _handleCreateNote', // Updated log identifier
               );
             }
-            _handleCreateMemo();
+            _handleCreateNote(); // Use renamed method
           } else {
             if (kDebugMode) {
               print(
-                '[NewMemoForm] Command+Enter detected, but already loading',
+                '[NewNoteForm] Command+Enter detected, but already loading', // Updated log identifier
               );
             }
           }
@@ -376,7 +367,6 @@ class _NewMemoFormState extends ConsumerState<NewMemoForm>
         child: ListView(
           padding: const EdgeInsets.all(16.0),
           children: [
-            // Server Selection Section
             CupertinoFormSection.insetGrouped(
               header: const Text('TARGET SERVER'),
               children: [
@@ -416,7 +406,6 @@ class _NewMemoFormState extends ConsumerState<NewMemoForm>
                 ),
               ],
             ),
-            // Content Section with Markdown help and preview toggle
             CupertinoFormSection.insetGrouped(
               header: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -509,7 +498,6 @@ class _NewMemoFormState extends ConsumerState<NewMemoForm>
                       ],
                     ),
                   ),
-                // Preview Toggle Button
                 Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
@@ -521,21 +509,21 @@ class _NewMemoFormState extends ConsumerState<NewMemoForm>
                           _previewMode = !_previewMode;
                           if (kDebugMode) {
                             print(
-                              '[NewMemoForm] Switched to ${_previewMode ? "preview" : "edit"} mode',
+                              '[NewNoteForm] Switched to ${_previewMode ? "preview" : "edit"} mode', // Updated log identifier
                             );
                             if (_previewMode) {
                               final content = _contentController.text;
                               print(
-                                '[NewMemoForm] Previewing content with ${content.length} chars',
+                                '[NewNoteForm] Previewing content with ${content.length} chars', // Updated log identifier
                               );
                               final urlRegex = RegExp(
                                 r'(https?://[^\s]+)|([\w-]+://[^\s]+)',
                               );
                               final matches = urlRegex.allMatches(content);
                               if (matches.isNotEmpty) {
-                                print('[NewMemoForm] URLs in preview content:');
+                                print('[NewNoteForm] URLs in preview content:'); // Updated log identifier
                                 for (final match in matches) {
-                                  print('[NewMemoForm]   - ${match.group(0)}');
+                                  print('[NewNoteForm]   - ${match.group(0)}'); // Updated log identifier
                                 }
                               }
                             }
@@ -574,7 +562,6 @@ class _NewMemoFormState extends ConsumerState<NewMemoForm>
                     ),
                   ],
                 ),
-                // Content Input/Preview Area
                 _previewMode
                     ? Container(
                       decoration: BoxDecoration(
@@ -610,7 +597,7 @@ class _NewMemoFormState extends ConsumerState<NewMemoForm>
                           onTapLink: (text, href, title) async {
                             if (kDebugMode) {
                               print(
-                                '[NewMemoForm] Link tapped in preview: text="$text", href="$href"',
+                                '[NewNoteForm] Link tapped in preview: text="$text", href="$href"', // Updated log identifier
                               );
                             }
                             if (href != null) {
@@ -621,7 +608,7 @@ class _NewMemoFormState extends ConsumerState<NewMemoForm>
                               );
                               if (kDebugMode) {
                                 print(
-                                  '[NewMemoForm] URL launch result: $success',
+                                  '[NewNoteForm] URL launch result: $success', // Updated log identifier
                                 );
                               }
                             }
@@ -632,7 +619,7 @@ class _NewMemoFormState extends ConsumerState<NewMemoForm>
                     : CupertinoTextField(
                       controller: _contentController,
                       focusNode: _contentFocusNode,
-                      placeholder: 'Enter your memo content...',
+                      placeholder: 'Enter your note content...', // Updated placeholder
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
                         color: CupertinoColors.systemFill.resolveFrom(context),
@@ -649,7 +636,6 @@ class _NewMemoFormState extends ConsumerState<NewMemoForm>
                     ),
               ],
             ),
-            // Error message display
             if (_error != null)
               Padding(
                 padding: const EdgeInsets.only(top: 8.0),
@@ -661,7 +647,6 @@ class _NewMemoFormState extends ConsumerState<NewMemoForm>
                 ),
               ),
             const SizedBox(height: 20),
-            // Create Button
             SizedBox(
               width: double.infinity,
               child: CupertinoButton.filled(
@@ -669,14 +654,14 @@ class _NewMemoFormState extends ConsumerState<NewMemoForm>
                 onPressed:
                     _loading || _selectedServerConfig == null
                         ? null
-                        : _handleCreateMemo,
+                        : _handleCreateNote, // Use renamed method
                 child:
                     _loading
                         ? const CupertinoActivityIndicator(
                           color: CupertinoColors.white,
                           radius: 10,
                         )
-                        : const Text('Create Memo'),
+                        : const Text('Create Note'), // Updated text
               ),
             ),
           ],

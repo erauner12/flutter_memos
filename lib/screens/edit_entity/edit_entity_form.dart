@@ -1,6 +1,5 @@
-import 'package:flutter/cupertino.dart'; // Import Cupertino
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
-// TextDecoration is in dart:ui, usually implicitly imported
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_memos/models/comment.dart'; // Import Comment model
@@ -9,14 +8,14 @@ import 'package:flutter_memos/utils/keyboard_navigation.dart'; // Import the mix
 import 'package:flutter_memos/utils/url_helper.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'edit_memo_providers.dart';
+import 'edit_entity_providers.dart'; // Updated import
 
-class EditMemoForm extends ConsumerStatefulWidget {
+class EditEntityForm extends ConsumerStatefulWidget { // Renamed class
   final dynamic entity; // Can be NoteItem or Comment
   final String entityId; // noteId or "noteId/commentId"
   final String entityType; // 'note' or 'comment'
 
-  const EditMemoForm({
+  const EditEntityForm({ // Renamed constructor
     super.key,
     required this.entity,
     required this.entityId,
@@ -24,14 +23,14 @@ class EditMemoForm extends ConsumerStatefulWidget {
   });
 
   @override
-  ConsumerState<EditMemoForm> createState() => _EditMemoFormState();
+  ConsumerState<EditEntityForm> createState() => _EditEntityFormState(); // Renamed class
 }
 
-class _EditMemoFormState extends ConsumerState<EditMemoForm>
-    with KeyboardNavigationMixin<EditMemoForm> {
+class _EditEntityFormState extends ConsumerState<EditEntityForm> // Renamed class
+    with KeyboardNavigationMixin<EditEntityForm> { // Renamed class
   final TextEditingController _contentController = TextEditingController();
   final FocusNode _contentFocusNode = FocusNode();
-  final FocusNode _formFocusNode = FocusNode(debugLabel: 'EditMemoFormFocus');
+  final FocusNode _formFocusNode = FocusNode(debugLabel: 'EditEntityFormFocus'); // Renamed debug label
 
   bool _saving = false;
   bool _pinned = false;
@@ -49,28 +48,28 @@ class _EditMemoFormState extends ConsumerState<EditMemoForm>
       _pinned = comment.pinned;
       _archived = comment.state == CommentState.archived;
       if (kDebugMode) {
-        print('[EditMemoForm] Initialized for Comment ID: ${widget.entityId}');
+        print('[EditEntityForm] Initialized for Comment ID: ${widget.entityId}'); // Updated log identifier
       }
     } else {
-      // 'note' (previously 'memo')
+      // 'note'
       final note = widget.entity as NoteItem; // Use NoteItem
       _contentController.text = note.content;
       _pinned = note.pinned;
       _archived = note.state == NoteState.archived; // Use NoteState
       if (kDebugMode) {
-        print('[EditMemoForm] Initialized for Note ID: ${widget.entityId}');
+        print('[EditEntityForm] Initialized for Note ID: ${widget.entityId}'); // Updated log identifier
       }
     }
 
     if (kDebugMode) {
       print(
-        '[EditMemoForm] Content length: ${_contentController.text.length} chars',
+        '[EditEntityForm] Content length: ${_contentController.text.length} chars', // Updated log identifier
       );
       if (_contentController.text.length < 200) {
-        print('[EditMemoForm] Content: "${_contentController.text}"');
+        print('[EditEntityForm] Content: "${_contentController.text}"'); // Updated log identifier
       } else {
         print(
-          '[EditMemoForm] Content preview: "${_contentController.text.substring(0, 197)}..."',
+          '[EditEntityForm] Content preview: "${_contentController.text.substring(0, 197)}..."', // Updated log identifier
         );
       }
     }
@@ -143,12 +142,12 @@ class _EditMemoFormState extends ConsumerState<EditMemoForm>
 
     if (kDebugMode) {
       print(
-        '[EditMemoForm] Saving ${widget.entityType} ${widget.entityId} via _handleSave',
+        '[EditEntityForm] Saving ${widget.entityType} ${widget.entityId} via _handleSave', // Updated log identifier
       );
       print(
-        '[EditMemoForm] Content length: ${_contentController.text.trim().length} characters',
+        '[EditEntityForm] Content length: ${_contentController.text.trim().length} characters', // Updated log identifier
       );
-      print('[EditMemoForm] Settings: pinned=$_pinned, archived=$_archived');
+      print('[EditEntityForm] Settings: pinned=$_pinned, archived=$_archived'); // Updated log identifier
     }
 
     try {
@@ -162,10 +161,10 @@ class _EditMemoFormState extends ConsumerState<EditMemoForm>
           state: _archived ? CommentState.archived : CommentState.normal,
         );
         if (kDebugMode) {
-          print('[EditMemoForm] Saving Comment: ${entityToSave.toJson()}');
+          print('[EditEntityForm] Saving Comment: ${entityToSave.toJson()}'); // Updated log identifier
         }
       } else {
-        // 'note' (previously 'memo')
+        // 'note'
         final originalNote = widget.entity as NoteItem; // Use NoteItem
         entityToSave = originalNote.copyWith(
           content: _contentController.text.trim(),
@@ -179,7 +178,7 @@ class _EditMemoFormState extends ConsumerState<EditMemoForm>
           // Correctly convert NoteState enum to string for logging
           final stateString = entityToSave.state.toString().split('.').last;
           print(
-            '[EditMemoForm] Saving Note: id=${entityToSave.id}, content="${entityToSave.content.substring(0, (entityToSave.content.length > 50 ? 50 : entityToSave.content.length))}...", pinned=${entityToSave.pinned}, state=$stateString',
+            '[EditEntityForm] Saving Note: id=${entityToSave.id}, content="${entityToSave.content.substring(0, (entityToSave.content.length > 50 ? 50 : entityToSave.content.length))}...", pinned=${entityToSave.pinned}, state=$stateString', // Updated log identifier
           );
         }
       }
@@ -192,13 +191,13 @@ class _EditMemoFormState extends ConsumerState<EditMemoForm>
 
       if (kDebugMode) {
         print(
-          '[EditMemoForm] ${widget.entityType} saved successfully: ${widget.entityId}',
+          '[EditEntityForm] ${widget.entityType} saved successfully: ${widget.entityId}', // Updated log identifier
         );
       }
       if (mounted) Navigator.pop(context);
     } catch (e, s) {
       if (kDebugMode) {
-        print('[EditMemoForm] Error saving ${widget.entityType}: $e\n$s');
+        print('[EditEntityForm] Error saving ${widget.entityType}: $e\n$s'); // Updated log identifier
       }
       if (mounted) {
         showCupertinoDialog(
@@ -235,7 +234,7 @@ class _EditMemoFormState extends ConsumerState<EditMemoForm>
       onKeyEvent: (node, event) {
         if (kDebugMode) {
           print(
-            '[EditMemoForm] Received key event: ${event.logicalKey.keyLabel}',
+            '[EditEntityForm] Received key event: ${event.logicalKey.keyLabel}', // Updated log identifier
           );
           if (event.logicalKey == LogicalKeyboardKey.enter) {
             final metaPressed =
@@ -249,7 +248,7 @@ class _EditMemoFormState extends ConsumerState<EditMemoForm>
                   LogicalKeyboardKey.metaRight,
                 );
             print(
-              '[EditMemoForm] Enter key pressed. Meta key pressed: $metaPressed',
+              '[EditEntityForm] Enter key pressed. Meta key pressed: $metaPressed', // Updated log identifier
             );
           }
         }
@@ -268,14 +267,14 @@ class _EditMemoFormState extends ConsumerState<EditMemoForm>
           if (!_saving) {
             if (kDebugMode) {
               print(
-                '[EditMemoForm] Command+Enter detected, calling _handleSave',
+                '[EditEntityForm] Command+Enter detected, calling _handleSave', // Updated log identifier
               );
             }
             _handleSave();
           } else {
             if (kDebugMode) {
               print(
-                '[EditMemoForm] Command+Enter detected, but already saving',
+                '[EditEntityForm] Command+Enter detected, but already saving', // Updated log identifier
               );
             }
           }
@@ -397,21 +396,21 @@ class _EditMemoFormState extends ConsumerState<EditMemoForm>
                       _previewMode = !_previewMode;
                       if (kDebugMode) {
                         print(
-                          '[EditMemoForm] Switched to ${_previewMode ? "preview" : "edit"} mode',
+                          '[EditEntityForm] Switched to ${_previewMode ? "preview" : "edit"} mode', // Updated log identifier
                         );
                         if (_previewMode) {
                           final content = _contentController.text;
                           print(
-                            '[EditMemoForm] Previewing content with ${content.length} chars',
+                            '[EditEntityForm] Previewing content with ${content.length} chars', // Updated log identifier
                           );
                           final urlRegex = RegExp(
                             r'(https?://[^\s]+)|([\w-]+://[^\s]+)',
                           );
                           final matches = urlRegex.allMatches(content);
                           if (matches.isNotEmpty) {
-                            print('[EditMemoForm] URLs in preview content:');
+                            print('[EditEntityForm] URLs in preview content:'); // Updated log identifier
                             for (final match in matches) {
-                              print('[EditMemoForm]   - ${match.group(0)}');
+                              print('[EditEntityForm]   - ${match.group(0)}'); // Updated log identifier
                             }
                           }
                         }
@@ -485,7 +484,7 @@ class _EditMemoFormState extends ConsumerState<EditMemoForm>
                       onTapLink: (text, href, title) async {
                         if (kDebugMode) {
                           print(
-                            '[EditMemoForm] Link tapped in preview: text="$text", href="$href"',
+                            '[EditEntityForm] Link tapped in preview: text="$text", href="$href"', // Updated log identifier
                           );
                         }
                         if (href != null) {
@@ -495,7 +494,7 @@ class _EditMemoFormState extends ConsumerState<EditMemoForm>
                             context: context,
                           );
                           if (kDebugMode) {
-                            print('[EditMemoForm] URL launch result: $success');
+                            print('[EditEntityForm] URL launch result: $success'); // Updated log identifier
                           }
                         }
                       },
@@ -505,7 +504,7 @@ class _EditMemoFormState extends ConsumerState<EditMemoForm>
                 : CupertinoTextField(
                   controller: _contentController,
                   focusNode: _contentFocusNode,
-                  placeholder: 'Enter memo content...',
+                  placeholder: 'Enter content...', // Updated placeholder
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
                     color: CupertinoColors.systemFill.resolveFrom(context),

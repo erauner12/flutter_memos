@@ -1,20 +1,22 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_memos/providers/comment_providers.dart';
+// Import note_providers instead of memo_detail_providers
+import 'package:flutter_memos/providers/note_providers.dart' as note_providers;
 import 'package:flutter_memos/providers/ui_providers.dart';
-import 'package:flutter_memos/screens/memo_detail/memo_detail_providers.dart';
-import 'package:flutter_memos/utils/comment_utils.dart'; // Add import for comment sorting utilities
-import 'package:flutter_memos/widgets/comment_card.dart'; // Import the widget directly
+import 'package:flutter_memos/utils/comment_utils.dart';
+import 'package:flutter_memos/widgets/comment_card.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 
-class MemoComments extends ConsumerWidget {
-  final String memoId;
+class NoteComments extends ConsumerWidget { // Renamed class
+  final String noteId; // Renamed from memoId
 
-  const MemoComments({super.key, required this.memoId});
+  const NoteComments({super.key, required this.noteId}); // Renamed constructor and parameter
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final commentsAsync = ref.watch(memoCommentsProvider(memoId));
+    // Use noteCommentsProvider from note_providers
+    final commentsAsync = ref.watch(note_providers.noteCommentsProvider(noteId));
     final selectedCommentIndex = ref.watch(selectedCommentIndexProvider);
     final hiddenCommentIds = ref.watch(hiddenCommentIdsProvider);
     final isMultiSelectMode = ref.watch(commentMultiSelectModeProvider);
@@ -23,7 +25,7 @@ class MemoComments extends ConsumerWidget {
       data: (comments) {
         final visibleComments =
             comments
-                .where((c) => !hiddenCommentIds.contains('$memoId/${c.id}'))
+                .where((c) => !hiddenCommentIds.contains('$noteId/${c.id}')) // Use noteId
                 .toList();
 
         // Always sort comments to ensure proper order after pin/unpin operations
@@ -58,7 +60,7 @@ class MemoComments extends ConsumerWidget {
               padding: const EdgeInsets.symmetric(horizontal: 16.0),
               child: CommentCard(
                 comment: comment,
-                memoId: memoId,
+                memoId: noteId, // Pass noteId as memoId prop (CommentCard might need update later)
                 isSelected: isSelected,
                 // Adding a key based on comment ID and pin status to force rebuild when pin status changes
                 key: ValueKey('${comment.id}_${comment.pinned}'),

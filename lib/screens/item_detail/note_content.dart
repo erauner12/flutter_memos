@@ -1,52 +1,44 @@
-import 'package:flutter/cupertino.dart'; // Import Cupertino
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
-// Remove the old Memo import
-// import 'package:flutter_memos/models/memo.dart';
-// Import the new NoteItem model
+// Import the NoteItem model
 import 'package:flutter_memos/models/note_item.dart';
 import 'package:flutter_memos/utils/url_helper.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
-class MemoContent extends ConsumerWidget {
-  // Change the type of the memo field
-  final NoteItem memo;
-  final String memoId;
+class NoteContent extends ConsumerWidget { // Renamed class
+  // Change the type of the note field
+  final NoteItem note; // Renamed from memo
+  final String noteId; // Renamed from memoId
 
   // Update the constructor parameter type
-  const MemoContent({super.key, required this.memo, required this.memoId});
+  const NoteContent({super.key, required this.note, required this.noteId}); // Renamed constructor and parameters
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Use CupertinoTheme for styling
     final theme = CupertinoTheme.of(context);
 
-    // Determine text color based on theme
     final Color textColor = CupertinoColors.label.resolveFrom(context);
     final Color secondaryTextColor = CupertinoColors.secondaryLabel.resolveFrom(
       context,
     );
 
-    // Format dates directly from DateTime objects
     final dateFormat = DateFormat('MMM d, yyyy h:mm a');
-    final DateTime createDate = memo.createTime; // Directly use DateTime
-    final DateTime updateDate = memo.updateTime; // Directly use DateTime
+    final DateTime createDate = note.createTime; // Use note
+    final DateTime updateDate = note.updateTime; // Use note
     final String formattedCreateDate = dateFormat.format(createDate);
     final String formattedUpdateDate = dateFormat.format(updateDate);
 
-    // Remove the complex date parsing try-catch block as it's no longer needed
-
-    // Log content details in debug mode
     if (kDebugMode) {
-      print('[MemoContent] Rendering memo $memoId');
-      final contentLength = memo.content.length;
-      print('[MemoContent] Content length: $contentLength chars');
+      print('[NoteContent] Rendering note $noteId'); // Updated log identifier
+      final contentLength = note.content.length;
+      print('[NoteContent] Content length: $contentLength chars'); // Updated log identifier
       if (contentLength < 200) {
-        print('[MemoContent] Content preview: "${memo.content}"');
+        print('[NoteContent] Content preview: "${note.content}"'); // Updated log identifier
       } else {
         print(
-          '[MemoContent] Content preview: "${memo.content.substring(0, 197)}..."',
+          '[NoteContent] Content preview: "${note.content.substring(0, 197)}..."', // Updated log identifier
         );
       }
     }
@@ -56,27 +48,24 @@ class MemoContent extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Memo Content using MarkdownBody
+          // Note Content using MarkdownBody
           MarkdownBody(
-            data: memo.content, // Access content from NoteItem
+            data: note.content, // Access content from NoteItem
             selectable: true,
-            // Use MarkdownStyleSheet.fromCupertinoTheme for base styling
             styleSheet: MarkdownStyleSheet.fromCupertinoTheme(theme).copyWith(
-              // Customize specific styles if needed
               p: theme.textTheme.textStyle.copyWith(
-                fontSize: 17, // Example customization
+                fontSize: 17,
                 height: 1.4,
-                color: textColor, // Ensure text color respects theme
+                color: textColor,
               ),
               a: theme.textTheme.textStyle.copyWith(
-                color: theme.primaryColor, // Use theme primary for links
+                color: theme.primaryColor,
                 decoration: TextDecoration.underline,
               ),
-              // Add other style customizations here (e.g., h1, code)
             ),
             onTapLink: (text, href, title) {
               if (kDebugMode) {
-                print('[MemoContent] Link tapped: text="$text", href="$href"');
+                print('[NoteContent] Link tapped: text="$text", href="$href"'); // Updated log identifier
               }
               if (href != null) {
                 UrlHelper.launchUrl(href, ref: ref, context: context);
@@ -86,7 +75,7 @@ class MemoContent extends ConsumerWidget {
           const SizedBox(height: 16),
 
           // Pinned Status
-          if (memo.pinned) // Access pinned from NoteItem
+          if (note.pinned) // Access pinned from NoteItem
             Padding(
               padding: const EdgeInsets.only(bottom: 8.0),
               child: Row(
@@ -119,13 +108,12 @@ class MemoContent extends ConsumerWidget {
               ),
               const SizedBox(width: 6),
               Text(
-                'Created: $formattedCreateDate', // Use formatted DateTime
+                'Created: $formattedCreateDate',
                 style: TextStyle(fontSize: 13, color: secondaryTextColor),
               ),
             ],
           ),
           const SizedBox(height: 4),
-          // Use the DateTime objects for comparison
           if (!updateDate.isAtSameMomentAs(createDate))
             Row(
               children: [
@@ -136,7 +124,7 @@ class MemoContent extends ConsumerWidget {
                 ),
                 const SizedBox(width: 6),
                 Text(
-                  'Updated: $formattedUpdateDate', // Use formatted DateTime
+                  'Updated: $formattedUpdateDate',
                   style: TextStyle(fontSize: 13, color: secondaryTextColor),
                 ),
               ],
@@ -147,28 +135,26 @@ class MemoContent extends ConsumerWidget {
           // Row(
           //   children: [
           //     Icon(
-          //       memo.visibility == NoteVisibility.private ? CupertinoIcons.lock_fill : CupertinoIcons.globe, // Use enum
+          //       note.visibility == NoteVisibility.private ? CupertinoIcons.lock_fill : CupertinoIcons.globe, // Use enum
           //       size: 14,
           //       color: secondaryTextColor,
           //     ),
           //     const SizedBox(width: 6),
           //     Text(
-          //       'Visibility: ${memo.visibility.name}', // Use enum name
+          //       'Visibility: ${note.visibility.name}', // Use enum name
           //       style: TextStyle(fontSize: 13, color: secondaryTextColor),
           //     ),
           //   ],
           // ),
 
           // Tags (if available in NoteItem model)
-          if (memo.tags.isNotEmpty) ...[
-            // Access tags from NoteItem
+          if (note.tags.isNotEmpty) ...[ // Access tags from NoteItem
             const SizedBox(height: 12),
             Wrap(
               spacing: 8.0,
               runSpacing: 4.0,
-              // Use CupertinoChip or similar if desired
               children:
-                  memo.tags
+                  note.tags
                       .map(
                         (tag) => Container(
                           padding: const EdgeInsets.symmetric(
