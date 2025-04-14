@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_memos/blinko_api/lib/api.dart'
     as blinko_api; // Alias Blinko API
@@ -7,7 +9,6 @@ import 'package:flutter_memos/models/memo_relation.dart';
 import 'package:flutter_memos/models/note_item.dart';
 import 'package:flutter_memos/models/server_config.dart';
 import 'package:flutter_memos/services/base_api_service.dart';
-import 'package:http/http.dart' as http;
 
 class BlinkoApiService implements BaseApiService {
   // Singleton pattern (optional)
@@ -271,29 +272,7 @@ class BlinkoApiService implements BaseApiService {
     }
   }
 
-  @override
-  Future<NoteItem> getNote(
-    String id, {
-    ServerConfig? targetServerOverride,
-  }) async {
-    final noteApi = _getNoteApiForServer(targetServerOverride);
-    final num? noteIdNum = num.tryParse(id);
-    if (noteIdNum == null) {
-      throw ArgumentError('Invalid numeric ID format for Blinko: $id');
-    }
-    final request = blinko_api.NotesDetailRequest(id: noteIdNum);
-    try {
-      final blinko_api.NotesDetail200Response? response = await noteApi
-          .notesDetail(request);
-      if (response == null) {
-        throw Exception('Note $id not found');
-      }
-      return _convertBlinkoDetailToNoteItem(response);
-    } catch (e) {
-      throw Exception('Failed to load note $id: $e');
-    }
-  }
-
+  // Change 1: Refactor createNote to use notesUpsertWithHttpInfo and handle response manually
   @override
   Future<NoteItem> createNote(
     NoteItem note, {
@@ -310,63 +289,66 @@ class BlinkoApiService implements BaseApiService {
     try {
       if (kDebugMode) {
         print(
-          '[BlinkoApiService.createNote] Calling noteApi.notesUpsert with request: ${request.toJson()}',
+          '[BlinkoApiService.createNote] Calling notesUpsertWithHttpInfo with request: ${request.toJson()}',
         );
       }
 
-      // Call the generated method. It might throw the deserialization exception.
-      final dynamic upsertResponse = await noteApi.notesUpsert(request);
+      // Use the WithHttpInfo variant to get the raw response
+      final response = await noteApi.notesUpsertWithHttpInfo(request);
 
-      // This part might not be reached if the deserialization exception occurs,
-      // but handle defensively in case the API response changes.
-      if (kDebugMode) {
-        print(
-          '[BlinkoApiService.createNote] notesUpsert completed without throwing. Response: $upsertResponse (Type: ${upsertResponse.runtimeType})',
-        );
-      }
-      // Defensively check if we somehow got an ID back.
-      if (upsertResponse is Map && upsertResponse.containsKey('id')) {
-        final num createdId = upsertResponse['id'];
-        // Fetch the newly created note to be safe
-        return await getNote(
-          createdId.toString(),
-          targetServerOverride: targetServerOverride,
-        );
-      }
-
-      // If the call succeeded but response wasn't useful, return placeholder
-      if (kDebugMode) {
-        print(
-          '[BlinkoApiService.createNote] notesUpsert succeeded but response was not a map with ID. Returning placeholder note.',
-        );
-      }
-      return note; // Return placeholder on unexpected success response format
-    } catch (e, stackTrace) {
-      // **Crucial Change:** Catch the specific deserialization ApiException and treat it as success
-      if (e is blinko_api.ApiException &&
-          e.message != null &&
-          e.message!.contains(
-            'Could not find a suitable class for deserialization',
-          ) &&
-          e.code == 500) {
-        if (kDebugMode) {
-          print(
-            '[BlinkoApiService.createNote] Caught specific deserialization ApiException ($e). Treating as successful creation. Returning placeholder note.',
-          );
+      // Check the status code directly from the response
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        // Success! Decode the body and extract the ID.
+        try {
+          final responseBody =
+              response.body.isNotEmpty ? jsonDecode(response.body) : null;
+          if (kDebugMode) {
+            print(
+              '[BlinkoApiService.createNote] Success response body: $responseBody',
+            );
+          }
+          if (responseBody is Map<String, dynamic> &&
+              responseBody.containsKey('id')) {
+            final num createdIdNum = responseBody['id'];
+            final String createdIdStr = createdIdNum.toString();
+            if (kDebugMode) {
+              print(
+                '[BlinkoApiService.createNote] Successfully created note with ID: $createdIdStr',
+              );
+            }
+            // Return a new NoteItem with the correct ID and original content details
+            return note.copyWith(id: createdIdStr);
+          } else {
+            if (kDebugMode) {
+              print(
+                '[BlinkoApiService.createNote] Upsert successful but response body did not contain expected ID. Body: ${response.body}',
+              );
+            }
+            // Fallback: Operation succeeded, but we couldn\'t get the ID.
+            // Return the placeholder. The list refresh will fix it.
+            return note;
+          }
+        } catch (decodeError) {
+          if (kDebugMode) {
+            print(
+              '[BlinkoApiService.createNote] Upsert successful but failed to decode/parse response body: $decodeError. Body: ${response.body}',
+            );
+          }
+          // Fallback: Operation succeeded, but we couldn\'t process the response.
+          return note;
         }
-        return note; // Treat this specific error as success for create flow
+      } else {
+        // Handle API error status codes
+        throw blinko_api.ApiException(response.statusCode, response.body);
       }
-
-      // Handle other actual errors
+    } catch (e, stackTrace) {
       if (kDebugMode) {
         print(
-          '[BlinkoApiService.createNote] Error during notesUpsert call: $e',
+          '[BlinkoApiService.createNote] Error during notesUpsertWithHttpInfo call: $e',
         );
         print('[BlinkoApiService.createNote] Stack Trace: $stackTrace');
       }
-      // Rethrow other exceptions
       if (e is blinko_api.ApiException) {
-        // Potentially map specific Blinko errors to user-friendly messages
         throw Exception(
           'Failed to create note: API Error ${e.code} - ${e.message}',
         );
@@ -375,6 +357,7 @@ class BlinkoApiService implements BaseApiService {
     }
   }
 
+  // Change 2: Refactor updateNote to use notesUpsertWithHttpInfo
   @override
   Future<NoteItem> updateNote(
     String id,
@@ -393,13 +376,25 @@ class BlinkoApiService implements BaseApiService {
       isTop: note.pinned,
     );
     try {
-      await noteApi.notesUpsert(request);
-      return await getNote(id, targetServerOverride: targetServerOverride);
+      // Use WithHttpInfo for update as well, for consistency, though we expect success.
+      final response = await noteApi.notesUpsertWithHttpInfo(request);
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        // Update succeeded, now fetch the definitive state.
+        return await getNote(id, targetServerOverride: targetServerOverride);
+      } else {
+        throw blinko_api.ApiException(response.statusCode, response.body);
+      }
     } catch (e) {
+      if (e is blinko_api.ApiException) {
+        throw Exception(
+          'Failed to update note $id: API Error ${e.code} - ${e.message}',
+        );
+      }
       throw Exception('Failed to update note $id: $e');
     }
   }
 
+  // Change 3: Refactor deleteNote to use notesTrashManyWithHttpInfo
   @override
   Future<void> deleteNote(
     String id, {
@@ -412,71 +407,106 @@ class BlinkoApiService implements BaseApiService {
     }
     final request = blinko_api.NotesListByIdsRequest(ids: [noteIdNum]);
     try {
-      await noteApi.notesTrashMany(request);
+      final response = await noteApi.notesTrashManyWithHttpInfo(request);
+      if (!(response.statusCode >= 200 && response.statusCode < 300)) {
+        throw blinko_api.ApiException(response.statusCode, response.body);
+      }
+      // Success, no return value needed.
     } catch (e) {
+      if (e is blinko_api.ApiException) {
+        throw Exception(
+          'Failed to delete/trash note $id: API Error ${e.code} - ${e.message}',
+        );
+      }
       throw Exception('Failed to delete/trash note $id: $e');
     }
   }
 
+  // Change 4: Refactor archiveNote to call the updated updateNote method
   @override
   Future<NoteItem> archiveNote(
     String id, {
     ServerConfig? targetServerOverride,
   }) async {
-    final num? noteIdNum = num.tryParse(id);
-    if (noteIdNum == null) {
-      throw ArgumentError('Invalid numeric ID format for Blinko noteId: $id');
-    }
-    final request = blinko_api.NotesUpsertRequest(
-      id: noteIdNum,
-      isArchived: true,
-      isTop: false,
-    );
+    NoteItem currentNote;
     try {
-      await _noteApi.notesUpsert(request);
-      return await getNote(id, targetServerOverride: targetServerOverride);
+      currentNote = await getNote(
+        id,
+        targetServerOverride: targetServerOverride,
+      );
+    } catch (e) {
+      throw Exception(
+        'Failed to archive note $id: Could not fetch current state. Error: $e',
+      );
+    }
+
+    final targetNoteState = currentNote.copyWith(
+      pinned: false, // Unpin on archive
+      state: NoteState.archived, // Target state
+      updateTime: DateTime.now(), // Update timestamp
+    );
+
+    try {
+      // Call updateNote, which handles the upsert and fetching the result
+      return await updateNote(
+        id,
+        targetNoteState,
+        targetServerOverride: targetServerOverride,
+      );
     } catch (e) {
       throw Exception('Failed to archive note $id: $e');
     }
   }
 
+  // Change 5: Refactor togglePinNote to call the updated updateNote method
   @override
   Future<NoteItem> togglePinNote(
     String id, {
     ServerConfig? targetServerOverride,
   }) async {
-    final num? noteIdNum = num.tryParse(id);
-    if (noteIdNum == null) {
-      throw ArgumentError('Invalid numeric ID format for Blinko: $id');
-    }
-    NoteItem currentNote = await getNote(
-      id,
-      targetServerOverride: targetServerOverride,
-    );
-    bool newPinState = !currentNote.pinned;
-    final request = blinko_api.NotesUpsertRequest(
-      id: noteIdNum,
-      isTop: newPinState,
-    );
+    NoteItem currentNote;
     try {
-      await _noteApi.notesUpsert(request);
-      return await getNote(id, targetServerOverride: targetServerOverride);
+      currentNote = await getNote(
+        id,
+        targetServerOverride: targetServerOverride,
+      );
+    } catch (e) {
+      throw Exception(
+        'Failed to toggle pin for note $id: Could not fetch current state. Error: $e',
+      );
+    }
+
+    bool newPinState = !currentNote.pinned;
+    final targetNoteState = currentNote.copyWith(
+      pinned: newPinState, // Set the new pin state
+      updateTime: DateTime.now(), // Update timestamp
+    );
+
+    try {
+      // Call updateNote to perform the upsert and fetch the result
+      return await updateNote(
+        id,
+        targetNoteState,
+        targetServerOverride: targetServerOverride,
+      );
     } catch (e) {
       throw Exception('Failed to toggle pin for note $id: $e');
     }
   }
 
-  // --- Comments ---
-
+  // Change 6: Refactor listNoteComments to use commentsListWithHttpInfo
   @override
   Future<List<Comment>> listNoteComments(
     String noteId, {
     ServerConfig? targetServerOverride,
   }) async {
-    // Use _getApiClientForServer to create a temporary CommentApi instance
+    final apiClient = _getApiClientForServer(
+      targetServerOverride,
+    ); // Get ApiClient first
     final commentApi = blinko_api.CommentApi(
-      _getApiClientForServer(targetServerOverride),
-    );
+      apiClient,
+    ); // Pass ApiClient to CommentApi
+
     final num? noteIdNum = num.tryParse(noteId);
     if (noteIdNum == null) {
       throw ArgumentError(
@@ -485,33 +515,33 @@ class BlinkoApiService implements BaseApiService {
     }
     final request = blinko_api.CommentsListRequest(noteId: noteIdNum);
     try {
-      final blinko_api.CommentsList200Response? response = await commentApi
-          .commentsList(request);
-      if (response == null) {
-        return [];
+      final response = await commentApi.commentsListWithHttpInfo(request);
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        if (response.body.isEmpty) return [];
+        final decodedResponse =
+            await apiClient.deserializeAsync(
+                  response.body,
+                  'CommentsList200Response',
+                )
+                as blinko_api.CommentsList200Response?;
+        if (decodedResponse == null) return [];
+        final comments =
+            decodedResponse.items.map(_convertBlinkoCommentToComment).toList();
+        return comments;
+      } else {
+        throw blinko_api.ApiException(response.statusCode, response.body);
       }
-      final comments =
-          response.items.map(_convertBlinkoCommentToComment).toList();
-      return comments;
     } catch (e) {
+      if (e is blinko_api.ApiException) {
+        throw Exception(
+          'Failed to load comments for note $noteId: API Error ${e.code} - ${e.message}',
+        );
+      }
       throw Exception('Failed to load comments for note $noteId: $e');
     }
   }
 
-  // Add the missing getNoteComment implementation
-  @override
-  Future<Comment> getNoteComment(
-    String commentId, {
-    ServerConfig? targetServerOverride,
-  }) async {
-    // Blinko API doesn't seem to have a direct getComment endpoint.
-    // We might need to infer the noteId or fetch all comments for a known note and filter.
-    // This is a placeholder implementation assuming we cannot directly fetch a comment by its ID.
-    throw UnimplementedError(
-      'BlinkoApiService does not support getting a single comment by ID without its parent note context.',
-    );
-  }
-
+  // Change 7: Refactor createNoteComment to use commentsCreateWithHttpInfo
   @override
   Future<Comment> createNoteComment(
     String noteId,
@@ -519,7 +549,6 @@ class BlinkoApiService implements BaseApiService {
     ServerConfig? targetServerOverride,
     List<Map<String, dynamic>>? resources, // <-- New optional parameter
   }) async {
-    // Use _getApiClientForServer to create a temporary CommentApi instance
     final commentApi = blinko_api.CommentApi(
       _getApiClientForServer(targetServerOverride),
     );
@@ -537,25 +566,112 @@ class BlinkoApiService implements BaseApiService {
       parentId: null, // Explicitly null for top-level comments
     );
     try {
-      // Ensure we use the correct commentApi instance created above
-      final bool? success = await commentApi.commentsCreate(request);
-      if (success == null || !success) {
-        throw Exception(
-          'Failed to create comment: API returned failure or null.',
-        );
+      final response = await commentApi.commentsCreateWithHttpInfo(request);
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        // Success, but API returns bool?. Return placeholder.
+        return comment;
+      } else {
+        throw blinko_api.ApiException(response.statusCode, response.body);
       }
-      // Blinko create succeeded, but doesn't return the created comment object.
-      // Return the original comment object passed in as a placeholder.
-      // The calling provider will invalidate the list to fetch the real data.
-      return comment;
     } catch (e) {
-      if (e is blinko_api.ApiException || e is Exception) {
-        rethrow;
+      if (e is blinko_api.ApiException) {
+        throw Exception(
+          'Failed to create comment for note $noteId: API Error ${e.code} - ${e.message}',
+        );
       }
       throw Exception('Failed to create comment for note $noteId: $e');
     }
   }
 
+  // Change 8: Refactor updateNoteComment to use commentsUpdateWithHttpInfo
+  @override
+  Future<Comment> updateNoteComment(
+    String commentId,
+    Comment comment, {
+    ServerConfig? targetServerOverride,
+  }) async {
+    final apiClient = _getApiClientForServer(
+      targetServerOverride,
+    ); // Get ApiClient
+    final commentApi = blinko_api.CommentApi(apiClient); // Pass ApiClient
+
+    final num? commentIdNum = num.tryParse(commentId);
+    if (commentIdNum == null) {
+      throw ArgumentError(
+        'Invalid numeric ID format for Blinko commentId: $commentId',
+      );
+    }
+    final request = blinko_api.CommentsUpdateRequest(
+      id: commentIdNum,
+      content: comment.content,
+    );
+    try {
+      final response = await commentApi.commentsUpdateWithHttpInfo(request);
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        if (response.body.isEmpty) {
+          throw Exception(
+            'Failed to update comment $commentId: Empty response body on success',
+          );
+        }
+        final blinko_api.CommentsList200ResponseItemsInner? updatedCommentData =
+            await apiClient.deserializeAsync(
+                  response.body,
+                  'CommentsList200ResponseItemsInner',
+                )
+                as blinko_api.CommentsList200ResponseItemsInner?;
+        if (updatedCommentData == null) {
+          throw Exception(
+            'Failed to update comment $commentId: Could not deserialize response',
+          );
+        }
+        return _convertBlinkoCommentToComment(updatedCommentData);
+      } else {
+        throw blinko_api.ApiException(response.statusCode, response.body);
+      }
+    } catch (e) {
+      if (e is blinko_api.ApiException) {
+        throw Exception(
+          'Failed to update comment $commentId: API Error ${e.code} - ${e.message}',
+        );
+      }
+      throw Exception('Failed to update comment $commentId: $e');
+    }
+  }
+
+  // Change 9: Refactor deleteNoteComment to use commentsDeleteWithHttpInfo
+  @override
+  Future<void> deleteNoteComment(
+    String noteId,
+    String commentId, {
+    ServerConfig? targetServerOverride,
+  }) async {
+    final commentApi = blinko_api.CommentApi(
+      _getApiClientForServer(targetServerOverride),
+    );
+    final num? commentIdNum = num.tryParse(commentId);
+    if (commentIdNum == null) {
+      throw ArgumentError(
+        'Invalid numeric ID format for Blinko commentId: $commentId',
+      );
+    }
+    try {
+      final request = blinko_api.NotesDetailRequest(id: commentIdNum);
+      final response = await commentApi.commentsDeleteWithHttpInfo(request);
+      if (!(response.statusCode >= 200 && response.statusCode < 300)) {
+        throw blinko_api.ApiException(response.statusCode, response.body);
+      }
+      // Success, no return value needed.
+    } catch (e) {
+      if (e is blinko_api.ApiException) {
+        throw Exception(
+          'Failed to delete comment $commentId (note $noteId): API Error ${e.code} - ${e.message}',
+        );
+      }
+      throw Exception('Failed to delete comment $commentId (note $noteId): $e');
+    }
+  }
+
+  // Change 10: Refactor setNoteRelations to use notesAddReferenceWithHttpInfo
   @override
   Future<void> setNoteRelations(
     String noteId,
@@ -575,7 +691,7 @@ class BlinkoApiService implements BaseApiService {
         if (relatedNoteIdNum == null) {
           if (kDebugMode) {
             print(
-              "Skipping relation with invalid relatedMemoId: ${relation.relatedMemoId}",
+              "[BlinkoApiService.setNoteRelations] Skipping relation with invalid relatedMemoId: ${relation.relatedMemoId}",
             );
           }
           continue; // Skip if related ID is invalid
@@ -584,124 +700,21 @@ class BlinkoApiService implements BaseApiService {
           fromNoteId: noteIdNum,
           toNoteId: relatedNoteIdNum,
         );
-        await noteApi.notesAddReference(request);
+        final response = await noteApi.notesAddReferenceWithHttpInfo(request);
+        if (!(response.statusCode >= 200 && response.statusCode < 300)) {
+          throw blinko_api.ApiException(
+            response.statusCode,
+            'Failed to add relation to note $relatedNoteIdNum: ${response.body}',
+          );
+        }
       }
     } catch (e) {
+      if (e is blinko_api.ApiException) {
+        throw Exception(
+          'Failed to set relations for note $noteId: API Error ${e.code} - ${e.message}',
+        );
+      }
       throw Exception('Failed to set relations for note $noteId: $e');
-    }
-  }
-
-  @override
-  Future<Comment> updateNoteComment(
-    String commentId,
-    Comment comment, {
-    ServerConfig? targetServerOverride,
-  }) async {
-    // Use _getApiClientForServer to create a temporary CommentApi instance
-    final commentApi = blinko_api.CommentApi(
-      _getApiClientForServer(targetServerOverride),
-    );
-    final num? commentIdNum = num.tryParse(commentId);
-    if (commentIdNum == null) {
-      throw ArgumentError(
-        'Invalid numeric ID format for Blinko commentId: $commentId',
-      );
-    }
-    final request = blinko_api.CommentsUpdateRequest(
-      id: commentIdNum,
-      content: comment.content,
-    );
-    try {
-      final blinko_api.CommentsList200ResponseItemsInner? response =
-          await commentApi.commentsUpdate(request);
-      if (response == null) {
-        throw Exception('Failed to update comment $commentId: No response');
-      }
-      return _convertBlinkoCommentToComment(response);
-    } catch (e) {
-      throw Exception('Failed to update comment $commentId: $e');
-    }
-  }
-
-  @override
-  Future<void> deleteNoteComment(
-    String noteId,
-    String commentId, {
-    ServerConfig? targetServerOverride,
-  }) async {
-    // Use _getApiClientForServer to create a temporary CommentApi instance
-    final commentApi = blinko_api.CommentApi(
-      _getApiClientForServer(targetServerOverride),
-    );
-    final num? commentIdNum = num.tryParse(commentId);
-    if (commentIdNum == null) {
-      throw ArgumentError(
-        'Invalid numeric ID format for Blinko commentId: $commentId',
-      );
-    }
-    try {
-      // Blinko delete comment uses NotesDetailRequest with the comment ID
-      final request = blinko_api.NotesDetailRequest(id: commentIdNum);
-      await commentApi.commentsDelete(request);
-    } catch (e) {
-      if (e is blinko_api.ApiException || e is Exception) {
-        rethrow;
-      }
-      throw Exception(
-        'Failed to delete comment $commentId (note $noteId): $e',
-      );
-    }
-  }
-
-  @override
-  Future<Map<String, dynamic>> uploadResource(
-    // <-- Changed return type
-    Uint8List fileBytes,
-    String filename,
-    String contentType, {
-    ServerConfig? targetServerOverride,
-  }) async {
-    final fileApi = _getFileApiForServer(targetServerOverride);
-    try {
-      final multipartFile = http.MultipartFile.fromBytes(
-        'file',
-        fileBytes,
-        filename: filename,
-      );
-      final blinko_api.UploadFile200Response? response = await fileApi
-          .uploadFile(multipartFile);
-      if (response == null || response.path == null) {
-        throw Exception('Failed to upload resource: Invalid response');
-      }
-      // Construct a unique name/id based on the path
-      String resourceName = 'blinkoResources/${response.path!.split('/').last}';
-
-      // Map to generic map before returning
-      return {
-        'name': resourceName, // Use constructed name as identifier
-        'path': response.path!, // Include original path for reference
-        'filename': filename,
-        'contentType': response.type ?? contentType,
-        'size': response.size?.toInt().toString(), // Convert size to String
-      };
-    } catch (e) {
-      throw Exception('Failed to upload resource: $e');
-    }
-  }
-
-  @override
-  Future<bool> checkHealth() async {
-    if (!isConfigured) {
-      return false;
-    }
-    try {
-      await listNotes(pageSize: 1);
-      return true;
-    } catch (e) {
-      if (e is blinko_api.ApiException && (e.code == 401 || e.code == 403)) {
-        return false;
-      }
-      return false;
     }
   }
 
@@ -738,13 +751,11 @@ class BlinkoApiService implements BaseApiService {
 
   // Change 6: Implement _getFileApiForServer helper method
   blinko_api.FileApi _getFileApiForServer(ServerConfig? serverConfig) {
-    // Return the instance member if no override or if override matches current config
     if (serverConfig == null ||
         (serverConfig.serverUrl == _baseUrl &&
             serverConfig.authToken == _authToken)) {
       return _fileApi;
     }
-    // Otherwise, create a temporary one
     return blinko_api.FileApi(_getApiClientForServer(serverConfig));
   }
 
@@ -777,7 +788,6 @@ class BlinkoApiService implements BaseApiService {
       tags: blinkoNote.tags.map((t) => t.tag.name).whereType<String>().toList(),
       resources: blinkoNote.attachments.map((a) => a.toJson()).toList(),
       relations: blinkoNote.references.map((r) => r.toJson()).toList(),
-      // accountId is nullable in the response model, handle appropriately
       creatorId: blinkoNote.accountId.toString(),
     );
   }
@@ -815,7 +825,6 @@ class BlinkoApiService implements BaseApiService {
           blinkoDetail.tags.map((t) => t.tag.name).whereType<String>().toList(),
       resources: blinkoDetail.attachments.map((a) => a.toJson()).toList(),
       relations: blinkoDetail.references.map((r) => r.toJson()).toList(),
-      // accountId is nullable in the response model, handle appropriately
       creatorId: blinkoDetail.accountId.toString(),
     );
   }
@@ -831,7 +840,7 @@ class BlinkoApiService implements BaseApiService {
     }
 
     CommentState state = CommentState.normal;
-    bool pinned = false; // Blinko comments don't seem to have a pinned state
+    bool pinned = false;
     return Comment(
       id: blinkoComment.id.toString(),
       content: blinkoComment.content,
@@ -839,7 +848,6 @@ class BlinkoApiService implements BaseApiService {
           parseBlinkoDate(blinkoComment.createdAt).millisecondsSinceEpoch,
       updateTime:
           parseBlinkoDate(blinkoComment.updatedAt).millisecondsSinceEpoch,
-      // accountId is nullable in the response model, handle appropriately
       creatorId: blinkoComment.accountId.toString(),
       pinned: pinned,
       state: state,
