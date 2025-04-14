@@ -190,45 +190,27 @@ class BlinkoApiService implements BaseApiService {
   }) async {
     final fileApi = _getFileApiForServer(targetServerOverride);
     final apiClient = fileApi.apiClient;
-    // Use http.MultipartFile instead of blinko_api.MultipartFile
+    // Use http.MultipartFile for creating the file part
     final multipartFile = http.MultipartFile.fromBytes(
-      'file', // Field name expected by the Blinko API
+      'file', // API likely expects the field name to be 'file'
       fileBytes,
       filename: filename,
       contentType: MediaType.parse(contentType),
     );
 
-    // Manually construct the request as FileApi.uploadFile expects blinko_api.MultipartFile
-    final path = r'/v1/file/upload'; // Adjust path if needed
-    final queryParams = <blinko_api.QueryParam>[];
-    final headerParams = <String, String>{};
-    final formParams = <String, String>{}; // Not used for multipart
-    final nullableContentType = 'multipart/form-data';
-    final authNames = <String>['bearerAuth']; // Match auth name in Blinko spec
-
     try {
       if (kDebugMode) {
         print(
-          '[BlinkoApiService.uploadResource] Calling invokeAPI POST $path for $filename ($contentType, ${fileBytes.lengthInBytes} bytes)',
+          '[BlinkoApiService.uploadResource] Calling fileApi.uploadFileWithHttpInfo for $filename ($contentType, ${fileBytes.lengthInBytes} bytes)',
         );
       }
 
-      // Use invokeAPI directly for multipart upload with http.MultipartFile
-      final response = await apiClient.invokeAPI(
-        path,
-        'POST',
-        queryParams,
-        null, // Body is handled by multipart request
-        headerParams,
-        formParams, // Not used
-        nullableContentType,
-        authNames,
-        extraField: multipartFile, // Pass the http.MultipartFile here
-      );
+      // Use the generated FileApi method which should handle multipart correctly
+      final response = await fileApi.uploadFileWithHttpInfo(multipartFile);
 
       if (kDebugMode) {
         print(
-          '[BlinkoApiService.uploadResource] invokeAPI response status: ${response.statusCode}',
+          '[BlinkoApiService.uploadResource] uploadFileWithHttpInfo response status: ${response.statusCode}',
         );
       }
 
@@ -237,24 +219,36 @@ class BlinkoApiService implements BaseApiService {
           final uploadResponse =
               await apiClient.deserializeAsync(
                     response.body,
-                    'UploadFile200Response',
+                    'UploadFile200Response', // Target Blinko response model
                   )
                   as blinko_api.UploadFile200Response?;
+
           if (uploadResponse != null && uploadResponse.path != null) {
+            // Blinko API response might not have a 'name' field, use 'path' or original filename.
+            String resourceName =
+                'blinkoResources/${uploadResponse.path!.split('/').last}'; // Construct a unique name
+            String? responseFilename; // Blinko API doesn't have a 'name' field
             if (kDebugMode) {
               print(
-                '[BlinkoApiService.uploadResource] Upload successful. Path: ${uploadResponse.path}, Name: ${uploadResponse.name}, Size: ${uploadResponse.size}',
+                '[BlinkoApiService.uploadResource] Upload successful. Path: ${uploadResponse.path}, Type: ${uploadResponse.type}, Size: ${uploadResponse.size}',
               );
             }
-            // Return standard map structure
+            // Map to the generic structure expected by BaseApiService
             return {
-              'id': uploadResponse.path, // Use path as ID
-              'name':
-                  uploadResponse.path, // Also use path as name for consistency
-              'filename': uploadResponse.name ?? filename,
-              'externalLink': uploadResponse.path, // Path is likely the link
-              'contentType': contentType, // Return original content type
-              'size': uploadResponse.size?.toInt() ?? fileBytes.lengthInBytes,
+              'name': resourceName, // Use constructed name as identifier
+              'filename':
+                  responseFilename ??
+                  filename, // Prefer API filename if available
+              'contentType':
+                  uploadResponse.type ??
+                  contentType, // Prefer API type if available
+              'size':
+                  uploadResponse.size
+                      ?.toString(), // Size from API response as String
+              'externalLink':
+                  uploadResponse.path!, // Blinko path likely serves as link
+              // Include Blinko specific path if needed by other parts of the app?
+              // 'blinkoPath': uploadResponse.path!,
             };
           } else {
             if (kDebugMode) {
@@ -293,6 +287,7 @@ class BlinkoApiService implements BaseApiService {
           'Failed to upload resource: API Error ${e.code} - ${e.message}',
         );
       }
+      // Catch potential ClientException from http package if needed
       if (e is http.ClientException) {
         throw Exception(
           'Failed to upload resource: Network error - ${e.message}',
@@ -302,8 +297,8 @@ class BlinkoApiService implements BaseApiService {
     }
   }
 
-  // --- Implement BaseApiService Methods ---
 
+  // --- Implement BaseApiService Methods ---
   @override
   Future<ListNotesResponse> listNotes({
     int? pageSize = 30,
@@ -954,31 +949,39 @@ class BlinkoApiService implements BaseApiService {
         blinkoDetail.accountId?.toString() ?? 'unknown_creator';
     final List<String> tags =
         (blinkoDetail.tags ?? [])
-            .map((t) => t.tag.name)
+            .map((t) => t.tag.name) // Safely access nested name
             .whereType<String>()
             .toList();
     // Map attachments to List<Map<String, dynamic>>
     final List<Map<String, dynamic>> resources =
         (blinkoDetail.attachments ?? []).map((a) {
+          // Assuming NotesUpsertRequestAttachmentsInner structure based on context
+          // Adjust property names if NotesDetail200ResponseAttachmentsInner differs
           return {
-            'id': a.path,
-            'name': a.path,
-            'filename': a.name,
-            'externalLink': a.path,
-            'contentType': a.mime,
-            'size': a.size?.toInt(),
-            'createTime': a.createdAt,
+            'id': a.path, // Use path as ID
+            'name': a.path, // Use path as name
+            'filename': a.name, // Use name from attachment
+            'externalLink': a.path, // Use path as external link
+            'contentType': a.type, // Use 'type' instead of 'mime'
+            'size':
+                a.size
+                    ?.toString(), // Use size directly (convert to string if needed by NoteItem)
+            'createTime': a.createdAt, // Use createdAt if available
           };
         }).toList();
     // Map references to List<Map<String, dynamic>>
     final List<Map<String, dynamic>> relations =
         (blinkoDetail.references ?? [])
             .map((r) {
-              final relatedNoteId = r.toNote?.id?.toString();
+              // Correctly access the related note's ID
+              final relatedNoteId =
+                  r.toNote?.noteId
+                      ?.toString(); // Access ID safely using noteId property
               if (relatedNoteId != null) {
-                final type = 'REFERENCE';
+                final type =
+                    'REFERENCE'; // Blinko seems to only have references
                 return {
-                  'memoId': idStr,
+                  // 'memoId': idStr, // This key might not be needed in the generic map
                   'relatedMemoId': relatedNoteId,
                   'type': type,
                 };
@@ -988,6 +991,7 @@ class BlinkoApiService implements BaseApiService {
             .whereType<Map<String, dynamic>>()
             .toList();
     return NoteItem(
+      id: idStr,
       id: idStr,
       content: contentStr,
       pinned: isPinned,
@@ -1035,31 +1039,37 @@ class BlinkoApiService implements BaseApiService {
         blinkoNote.accountId?.toString() ?? 'unknown_creator';
     final List<String> tags =
         (blinkoNote.tags ?? [])
-            .map((t) => t.tag.name)
+            .map((t) => t.tag.name) // Safely access nested name
             .whereType<String>()
             .toList();
     // Map attachments to List<Map<String, dynamic>>
     final List<Map<String, dynamic>> resources =
         (blinkoNote.attachments ?? []).map((a) {
+          // Assuming NotesList200ResponseInnerAttachmentsInner structure
+          // Adjust property names if needed
           return {
-            'id': a.path,
-            'name': a.path,
-            'filename': a.name,
-            'externalLink': a.path,
-            'contentType': a.mime,
-            'size': a.size?.toInt(),
-            'createTime': a.createdAt,
+            'id': a.path, // Use path as ID
+            'name': a.path, // Use path as name
+            'filename': a.name, // Use name from attachment
+            'externalLink': a.path, // Use path as external link
+            'contentType': a.type, // Use 'type' instead of 'mime'
+            'size':
+                a.size
+                    ?.toString(), // Use size directly (convert to string if needed)
+            'createTime': a.createdAt, // Use createdAt if available
           };
         }).toList();
     // Map references to List<Map<String, dynamic>>
     final List<Map<String, dynamic>> relations =
         (blinkoNote.references ?? [])
             .map((r) {
-              final relatedNoteId = r.toNote?.id?.toString();
+              // Correctly access the related note's ID - use noteId instead of id
+              final relatedNoteId = r.toNote?.noteId?.toString();
               if (relatedNoteId != null) {
-                final type = 'REFERENCE';
+                final type =
+                    'REFERENCE'; // Blinko seems to only have references
                 return {
-                  'memoId': idStr,
+                  // 'memoId': idStr, // This key might not be needed in the generic map
                   'relatedMemoId': relatedNoteId,
                   'type': type,
                 };
