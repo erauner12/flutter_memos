@@ -1,23 +1,23 @@
 import 'package:flutter/cupertino.dart'; // Import Cupertino
 import 'package:flutter/foundation.dart';
 // Removed Material imports: Colors, Icons, Theme, Dismissible, DismissDirection
-import 'package:flutter_memos/models/memo.dart';
+import 'package:flutter_memos/models/note_item.dart'; // Import NoteItem instead of Memo
 import 'package:flutter_memos/providers/memo_providers.dart';
 import 'package:flutter_memos/providers/ui_providers.dart' as ui_providers;
-import 'package:flutter_memos/utils/memo_utils.dart';
-import 'package:flutter_memos/widgets/memo_card.dart';
+import 'package:flutter_memos/utils/memo_utils.dart'; // Keep for formatting utils or rename/replace
+import 'package:flutter_memos/widgets/memo_card.dart'; // Keep MemoCard or rename/refactor
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_slidable/flutter_slidable.dart'; // Add this import for Slidable
 
 class MemoListItem extends ConsumerStatefulWidget {
-  final Memo memo;
+  final NoteItem memo; // Changed type to NoteItem
   final int index; // Add index for selection tracking
   // Add the callback parameter
   final VoidCallback? onMoveToServer;
 
   const MemoListItem({
     super.key,
-    required this.memo,
+    required this.memo, // Changed type to NoteItem
     required this.index,
     this.onMoveToServer, // Add to constructor
   });
@@ -43,7 +43,7 @@ class MemoListItemState extends ConsumerState<MemoListItem> {
       // --- New Selection Update Logic (Downward Preference) ---
       final currentSelectedId = ref.read(ui_providers.selectedMemoIdProvider);
       final memosBeforeAction = ref.read(
-        filteredMemosProvider,
+        filteredNotesProvider, // Use renamed provider
       ); // Read list BEFORE action
       final memoIdToAction =
           memoIdToToggle; // ID of the memo being removed/hidden
@@ -90,8 +90,8 @@ class MemoListItemState extends ConsumerState<MemoListItem> {
     }
 
     // Force UI refresh to update visibility - Keep this for now, might be removable
-    // if visibleMemosListProvider reacts correctly to hiddenMemoIdsProvider changes.
-    ref.read(memosNotifierProvider.notifier).refresh();
+    // if visibleNotesListProvider reacts correctly to hiddenMemoIdsProvider changes.
+    ref.read(notesNotifierProvider.notifier).refresh(); // Use renamed provider
   }
 
   void _navigateToMemoDetail(BuildContext context, WidgetRef ref) {
@@ -134,7 +134,7 @@ class MemoListItemState extends ConsumerState<MemoListItem> {
     Navigator.of(context, rootNavigator: true).pushNamed(
       '/edit-entity', // Use the generic route
       arguments: {
-        'entityType': 'memo',
+        'entityType': 'note', // Changed type to 'note'
         'entityId': widget.memo.id,
       }, // Specify type and ID
     );
@@ -147,7 +147,9 @@ class MemoListItemState extends ConsumerState<MemoListItem> {
       builder: (BuildContext dialogContext) {
         return CupertinoAlertDialog(
           title: const Text('Confirm Delete'),
-          content: const Text('Are you sure you want to delete this memo?'),
+          content: const Text(
+            'Are you sure you want to delete this note?',
+          ), // Updated text
           actions: <Widget>[
             CupertinoDialogAction(
               isDefaultAction: true,
@@ -168,7 +170,7 @@ class MemoListItemState extends ConsumerState<MemoListItem> {
       try {
         if (kDebugMode) {
           print(
-            '[MemoListItem] Calling deleteMemoProvider for memo ID: ${widget.memo.id}',
+            '[MemoListItem] Calling deleteNoteProvider for note ID: ${widget.memo.id}', // Updated log
           );
         }
 
@@ -177,8 +179,10 @@ class MemoListItemState extends ConsumerState<MemoListItem> {
             .read(hiddenMemoIdsProvider.notifier)
             .update((state) => state..add(widget.memo.id));
 
-        // Then perform the actual delete operation
-        await ref.read(deleteMemoProvider(widget.memo.id))();
+        // Then perform the actual delete operation using renamed provider
+        await ref.read(
+          deleteNoteProvider(widget.memo.id),
+        )(); // Use renamed provider
 
         // Success SnackBar removed
       } catch (e) {
@@ -195,7 +199,7 @@ class MemoListItemState extends ConsumerState<MemoListItem> {
             builder:
                 (ctx) => CupertinoAlertDialog(
                   title: const Text('Error'),
-                  content: Text('Failed to delete memo: $e'),
+                  content: Text('Failed to delete note: $e'), // Updated text
                   actions: [
                     CupertinoDialogAction(
                       isDefaultAction: true,
@@ -208,20 +212,22 @@ class MemoListItemState extends ConsumerState<MemoListItem> {
         }
 
         if (kDebugMode) {
-          print('[MemoListItem] Error deleting memo: $e');
+          print('[MemoListItem] Error deleting note: $e'); // Updated log
         }
       }
     }
   }
 
   void _onArchive(BuildContext context) {
-    ref.read(archiveMemoProvider(widget.memo.id))().then((_) {
+    // Use renamed provider
+    ref.read(archiveNoteProvider(widget.memo.id))().then((_) {
       // Success SnackBar removed
     });
   }
 
   void _onTogglePin(BuildContext context) {
-    ref.read(togglePinMemoProvider(widget.memo.id))().then((_) {
+    // Use renamed provider
+    ref.read(togglePinNoteProvider(widget.memo.id))().then((_) {
       // Confirmation SnackBar removed
     });
   }
@@ -243,22 +249,27 @@ class MemoListItemState extends ConsumerState<MemoListItem> {
 
     if (isSelected && kDebugMode) {
       print(
-        '[MemoListItem] Memo ID ${widget.memo.id} at index ${widget.index} is selected',
+        '[MemoListItem] Note ID ${widget.memo.id} at index ${widget.index} is selected', // Updated log
       );
     }
 
     // Create the main card content
     Widget cardContent = MemoCard(
+      // Keep MemoCard name or refactor later
       key: _memoCardKey, // Pass the key here
       id: widget.memo.id,
       content: widget.memo.content,
       pinned: widget.memo.pinned,
-      updatedAt: widget.memo.updateTime,
+      updatedAt:
+          widget.memo.updateTime
+              .toIso8601String(), // Convert DateTime to String
       showTimeStamps: true,
       isSelected:
           isSelected &&
           !isMultiSelectMode, // Only show selection style if not in multi-select
-      highlightTimestamp: MemoUtils.formatTimestamp(widget.memo.updateTime),
+      highlightTimestamp: MemoUtils.formatTimestamp(
+        widget.memo.updateTime.toIso8601String(),
+      ), // Pass String
       timestampType: 'Updated', // Always 'Updated'
       onTap:
           isMultiSelectMode
@@ -270,7 +281,8 @@ class MemoListItemState extends ConsumerState<MemoListItem> {
       onTogglePin: () => _onTogglePin(context),
       onBump: () async {
         try {
-          await ref.read(bumpMemoProvider(widget.memo.id))();
+          // Use renamed provider
+          await ref.read(bumpNoteProvider(widget.memo.id))();
           // Success SnackBar removed
         } catch (e) {
           if (mounted) {
@@ -281,7 +293,7 @@ class MemoListItemState extends ConsumerState<MemoListItem> {
                   (ctx) => CupertinoAlertDialog(
                     title: const Text('Error'),
                     content: Text(
-                      'Failed to bump memo: ${e.toString().substring(0, 50)}...',
+                      'Failed to bump note: ${e.toString().substring(0, 50)}...', // Updated text
                     ),
                     actions: [
                       CupertinoDialogAction(

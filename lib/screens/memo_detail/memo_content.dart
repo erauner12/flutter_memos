@@ -1,15 +1,20 @@
 import 'package:flutter/cupertino.dart'; // Import Cupertino
 import 'package:flutter/foundation.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
-import 'package:flutter_memos/models/memo.dart';
+// Remove the old Memo import
+// import 'package:flutter_memos/models/memo.dart';
+// Import the new NoteItem model
+import 'package:flutter_memos/models/note_item.dart';
 import 'package:flutter_memos/utils/url_helper.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 class MemoContent extends ConsumerWidget {
-  final Memo memo;
+  // Change the type of the memo field
+  final NoteItem memo;
   final String memoId;
 
+  // Update the constructor parameter type
   const MemoContent({super.key, required this.memo, required this.memoId});
 
   @override
@@ -23,61 +28,14 @@ class MemoContent extends ConsumerWidget {
       context,
     );
 
-    // Format dates safely
-    DateTime? createDate;
-    DateTime? updateDate;
+    // Format dates directly from DateTime objects
     final dateFormat = DateFormat('MMM d, yyyy h:mm a');
-    String formattedCreateDate = 'N/A';
-    String formattedUpdateDate = 'N/A';
+    final DateTime createDate = memo.createTime; // Directly use DateTime
+    final DateTime updateDate = memo.updateTime; // Directly use DateTime
+    final String formattedCreateDate = dateFormat.format(createDate);
+    final String formattedUpdateDate = dateFormat.format(updateDate);
 
-    try {
-      if (memo.createTime != null) {
-        // Try parsing as ISO 8601 string first
-        createDate = DateTime.tryParse(memo.createTime!);
-        if (createDate == null) {
-          // Fallback: Try parsing as milliseconds since epoch (integer string)
-          final ms = int.tryParse(memo.createTime!);
-          if (ms != null) {
-            createDate = DateTime.fromMillisecondsSinceEpoch(ms);
-          }
-        }
-      }
-      // Default to epoch if parsing fails or createTime is null
-      createDate ??= DateTime.fromMillisecondsSinceEpoch(0);
-      formattedCreateDate = dateFormat.format(createDate);
-
-      if (memo.updateTime != null) {
-        // Try parsing as ISO 8601 string first
-        updateDate = DateTime.tryParse(memo.updateTime!);
-        if (updateDate == null) {
-          // Fallback: Try parsing as milliseconds since epoch (integer string)
-          final ms = int.tryParse(memo.updateTime!);
-          if (ms != null) {
-            updateDate = DateTime.fromMillisecondsSinceEpoch(ms);
-          }
-        }
-      }
-      // Default to createDate if updateTime is null or parsing fails
-      updateDate ??= createDate;
-      formattedUpdateDate = dateFormat.format(updateDate);
-    } catch (e) {
-      if (kDebugMode) {
-        print('[MemoContent] Error parsing dates: $e');
-        print('[MemoContent] createTime string: ${memo.createTime}');
-        print('[MemoContent] updateTime string: ${memo.updateTime}');
-      }
-      // Leave dates as 'N/A' or epoch if error occurs
-      createDate ??= DateTime.fromMillisecondsSinceEpoch(0);
-      updateDate ??= createDate;
-      formattedCreateDate = dateFormat.format(
-        createDate,
-      ); // Show epoch date on error
-      formattedUpdateDate = dateFormat.format(updateDate);
-    }
-
-    // final dateFormat = DateFormat('MMM d, yyyy h:mm a'); // Moved up
-    // final formattedCreateDate = dateFormat.format(createDate); // Moved up
-    // final formattedUpdateDate = dateFormat.format(updateDate); // Removed duplicate declaration
+    // Remove the complex date parsing try-catch block as it's no longer needed
 
     // Log content details in debug mode
     if (kDebugMode) {
@@ -100,7 +58,7 @@ class MemoContent extends ConsumerWidget {
         children: [
           // Memo Content using MarkdownBody
           MarkdownBody(
-            data: memo.content,
+            data: memo.content, // Access content from NoteItem
             selectable: true,
             // Use MarkdownStyleSheet.fromCupertinoTheme for base styling
             styleSheet: MarkdownStyleSheet.fromCupertinoTheme(theme).copyWith(
@@ -128,7 +86,7 @@ class MemoContent extends ConsumerWidget {
           const SizedBox(height: 16),
 
           // Pinned Status
-          if (memo.pinned)
+          if (memo.pinned) // Access pinned from NoteItem
             Padding(
               padding: const EdgeInsets.only(bottom: 8.0),
               child: Row(
@@ -161,13 +119,13 @@ class MemoContent extends ConsumerWidget {
               ),
               const SizedBox(width: 6),
               Text(
-                'Created: $formattedCreateDate',
+                'Created: $formattedCreateDate', // Use formatted DateTime
                 style: TextStyle(fontSize: 13, color: secondaryTextColor),
               ),
             ],
           ),
           const SizedBox(height: 4),
-          // Use the parsed dates for comparison and display
+          // Use the DateTime objects for comparison
           if (!updateDate.isAtSameMomentAs(createDate))
             Row(
               children: [
@@ -178,38 +136,63 @@ class MemoContent extends ConsumerWidget {
                 ),
                 const SizedBox(width: 6),
                 Text(
-                  'Updated: $formattedUpdateDate',
+                  'Updated: $formattedUpdateDate', // Use formatted DateTime
                   style: TextStyle(fontSize: 13, color: secondaryTextColor),
                 ),
               ],
             ),
 
-          // Visibility (Optional - uncomment if needed)
+          // Visibility (Optional - uncomment if needed, adjust for NoteVisibility enum)
           // const SizedBox(height: 4),
           // Row(
           //   children: [
           //     Icon(
-          //       memo.visibility == 'PRIVATE' ? CupertinoIcons.lock_fill : CupertinoIcons.globe,
+          //       memo.visibility == NoteVisibility.private ? CupertinoIcons.lock_fill : CupertinoIcons.globe, // Use enum
           //       size: 14,
           //       color: secondaryTextColor,
           //     ),
           //     const SizedBox(width: 6),
           //     Text(
-          //       'Visibility: ${memo.visibility}',
+          //       'Visibility: ${memo.visibility.name}', // Use enum name
           //       style: TextStyle(fontSize: 13, color: secondaryTextColor),
           //     ),
           //   ],
           // ),
 
-          // Tags (if available in Memo model) - Placeholder
-          // if (memo.tags != null && memo.tags!.isNotEmpty) ...[
-          //   const SizedBox(height: 12),
-          //   Wrap(
-          //     spacing: 8.0,
-          //     runSpacing: 4.0,
-          //     children: memo.tags!.map((tag) => Chip(label: Text(tag))).toList(),
-          //   ),
-          // ],
+          // Tags (if available in NoteItem model)
+          if (memo.tags.isNotEmpty) ...[
+            // Access tags from NoteItem
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8.0,
+              runSpacing: 4.0,
+              // Use CupertinoChip or similar if desired
+              children:
+                  memo.tags
+                      .map(
+                        (tag) => Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: CupertinoColors.systemGrey5.resolveFrom(
+                              context,
+                            ),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            tag,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: secondaryTextColor,
+                            ),
+                          ),
+                        ),
+                      )
+                      .toList(),
+            ),
+          ],
         ],
       ),
     );

@@ -31,11 +31,13 @@ class EditMemoScreen extends ConsumerWidget {
       // When popping the screen, ensure we refresh the relevant lists
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) {
-          // Always refresh the main memos list (parent memo might have been bumped)
-          ref.read(memo_providers.memosNotifierProvider.notifier).refresh();
+          // Always refresh the main notes list (parent note might have been bumped)
+          ref
+              .read(memo_providers.notesNotifierProvider.notifier)
+              .refresh(); // Use renamed provider
 
           if (entityType == 'comment') {
-            // If a comment was edited, refresh the comments list for the parent memo
+            // If a comment was edited, refresh the comments list for the parent note
             final parts = entityId.split('/');
             if (parts.isNotEmpty) {
               final parentMemoId = parts[0];
@@ -43,12 +45,13 @@ class EditMemoScreen extends ConsumerWidget {
               ref.invalidate(memoCommentsProvider(parentMemoId));
             }
           } else {
-            // entityType == 'memo'
-            // If a memo was edited, refresh its detail view and cache
-            if (ref.exists(memo_providers.memoDetailCacheProvider)) {
+            // entityType == 'note'
+            // If a note was edited, refresh its detail view and cache
+            if (ref.exists(memo_providers.noteDetailCacheProvider)) {
+              // Use renamed provider
               ref.invalidate(memoDetailProvider(entityId));
             }
-            // Ensure the memo is not hidden (existing logic)
+            // Ensure the note is not hidden (existing logic)
             ref
                 .read(memo_providers.hiddenMemoIdsProvider.notifier)
                 .update(

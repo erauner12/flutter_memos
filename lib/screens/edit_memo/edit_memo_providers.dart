@@ -1,10 +1,11 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_memos/models/comment.dart'; // Import Comment model
-import 'package:flutter_memos/models/memo.dart';
+import 'package:flutter_memos/models/note_item.dart'; // Import NoteItem model
 import 'package:flutter_memos/providers/api_providers.dart';
 import 'package:flutter_memos/providers/memo_detail_provider.dart'
-    hide memoCommentsProvider; // Hide the ambiguous name
-import 'package:flutter_memos/providers/memo_providers.dart' as memo_providers;
+    as detail_providers; // Alias detail providers
+import 'package:flutter_memos/providers/memo_providers.dart'
+    as list_providers; // Alias list providers
 import 'package:flutter_memos/screens/memo_detail/memo_detail_providers.dart'
     show memoCommentsProvider; // Import memoCommentsProvider explicitly
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -12,7 +13,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 /// Parameter class for entity providers to ensure consistent == checks.
 class EntityProviderParams {
   final String id;
-  final String type;
+  final String type; // 'note' or 'comment'
 
   EntityProviderParams({required this.id, required this.type});
 
@@ -33,7 +34,7 @@ class EntityProviderParams {
 }
 
 
-// Provider to fetch the entity (memo or comment) to be edited
+// Provider to fetch the entity (note or comment) to be edited
 final editEntityProvider = FutureProvider.family<dynamic, EntityProviderParams>(
   (ref, params) async {
     final apiService = ref.read(apiServiceProvider);
@@ -45,14 +46,15 @@ final editEntityProvider = FutureProvider.family<dynamic, EntityProviderParams>(
   }
 
   if (type == 'comment') {
-    return apiService.getMemoComment(id); // id is "memoId/commentId"
+      // Assuming commentId format is "noteId/commentId" for getNoteComment
+      return apiService.getNoteComment(id); // Use getNoteComment
   } else {
-    // Default 'memo'
-    return apiService.getMemo(id); // id is memoId
+      // Default 'note'
+      return apiService.getNote(id); // Use getNote
   }
 }, name: 'editEntityProvider'); // Optional: Add name for debugging
 
-// Provider for saving entity (Memo or Comment) changes
+// Provider for saving entity (NoteItem or Comment) changes
 final saveEntityProvider = Provider.family<
   Future<void> Function(dynamic),
   EntityProviderParams // Use EntityProviderParams
@@ -73,68 +75,88 @@ final saveEntityProvider = Provider.family<
       if (parts.length < 2) {
         throw ArgumentError('Invalid comment ID format for saving: $id');
       }
-      final parentMemoId = parts[0];
+      final parentNoteId = parts[0];
+      final actualCommentId = parts[1]; // Use the actual comment ID for update
 
-      // 1. Update the comment
-      await apiService.updateMemoComment(id, comment);
+      // 1. Update the comment using the actual comment ID
+      await apiService.updateNoteComment(
+        actualCommentId,
+        comment,
+      ); // Use updateNoteComment
       if (kDebugMode) {
-        print('[saveEntityProvider] Comment $id updated successfully.');
+        print(
+          '[saveEntityProvider] Comment $actualCommentId updated successfully.',
+        );
       }
 
-      // 2. Bump the parent memo (try-catch to avoid failing the whole save)
+      // 2. Bump the parent note (try-catch to avoid failing the whole save)
       try {
         if (kDebugMode) {
-          print('[saveEntityProvider] Bumping parent memo: $parentMemoId');
+          print('[saveEntityProvider] Bumping parent note: $parentNoteId');
         }
-        await ref.read(memo_providers.bumpMemoProvider(parentMemoId))();
+        // Assuming bumpNoteProvider exists (needs renaming if not done)
+        await ref.read(
+          list_providers.bumpNoteProvider(parentNoteId),
+        )(); // Use renamed provider
         if (kDebugMode) {
           print(
-            '[saveEntityProvider] Parent memo $parentMemoId bumped successfully.',
+            '[saveEntityProvider] Parent note $parentNoteId bumped successfully.',
           );
         }
       } catch (e, s) {
         if (kDebugMode) {
           print(
-            '[saveEntityProvider] Failed to bump parent memo $parentMemoId: $e\n$s',
+            '[saveEntityProvider] Failed to bump parent note $parentNoteId: $e\n$s',
           );
         }
         // Optionally report error via error handler provider
-        // ref.read(errorHandlerProvider)('Failed to bump parent memo after comment update', source: 'saveEntityProvider', error: e, stackTrace: s);
+        // ref.read(errorHandlerProvider)('Failed to bump parent note after comment update', source: 'saveEntityProvider', error: e, stackTrace: s);
       }
 
       // 3. Invalidate relevant providers
       ref.invalidate(
-        memoCommentsProvider(parentMemoId),
-      ); // Refresh comments for the parent memo
+        memoCommentsProvider(parentNoteId),
+      ); // Refresh comments for the parent note
       await ref
-          .read(memo_providers.memosNotifierProvider.notifier)
-          .refresh(); // Refresh main memo list because parent was bumped
+          .read(
+            list_providers.notesNotifierProvider.notifier,
+          ) // Use renamed provider
+          .refresh(); // Refresh main note list because parent was bumped
     } else {
-      // type == 'memo'
-      final memo = updatedEntity as Memo;
+      // type == 'note'
+      final note = updatedEntity as NoteItem; // Use NoteItem
 
-      // Update memo in the backend
-      final savedMemo = await apiService.updateMemo(id, memo);
+      // Update note in the backend
+      final savedNote = await apiService.updateNote(id, note); // Use updateNote
       if (kDebugMode) {
-        print('[saveEntityProvider] Memo $id updated successfully.');
+        print('[saveEntityProvider] Note $id updated successfully.');
       }
 
-      // Update memo detail cache if it exists
-      if (ref.exists(memo_providers.memoDetailCacheProvider)) {
+      // Update note detail cache if it exists
+      if (ref.exists(detail_providers.noteDetailCacheProvider)) {
+        // Use renamed provider
         ref
-            .read(memo_providers.memoDetailCacheProvider.notifier)
-            .update((state) => {...state, id: savedMemo});
+            .read(
+              detail_providers.noteDetailCacheProvider.notifier,
+            ) // Use renamed provider
+            .update((state) => {...state, id: savedNote}); // Update with NoteItem directly, remove 'as Memo' cast
       }
 
       // Refresh all related providers to ensure UI is consistent
       await ref
-          .read(memo_providers.memosNotifierProvider.notifier)
-          .refresh(); // Refresh the memos list
-      ref.invalidate(memoDetailProvider(id)); // Refresh memo detail
+          .read(
+            list_providers.notesNotifierProvider.notifier,
+          ) // Use renamed provider
+          .refresh(); // Refresh the notes list
+      ref.invalidate(
+        detail_providers.memoDetailProvider(id),
+      ); // Refresh note detail (keep name or rename)
 
-      // Clear any hidden memo IDs for this memo to ensure it's visible
+      // Clear any hidden note IDs for this note to ensure it's visible
       ref
-          .read(memo_providers.hiddenMemoIdsProvider.notifier)
+          .read(
+            list_providers.hiddenMemoIdsProvider.notifier,
+          ) // Use correct provider name if renamed
           .update((state) => state.contains(id) ? (state..remove(id)) : state);
     }
   };

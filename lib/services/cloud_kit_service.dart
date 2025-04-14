@@ -60,6 +60,7 @@ class CloudKitService {
       'name': config.name ?? '', // Ensure null becomes empty string
       'serverUrl': config.serverUrl, // Already a string
       'authToken': config.authToken, // Already a string
+      'serverType': config.serverType.name, // <-- ADD serverType field
       // 'id' is the recordName, not stored as a field within the record data
     };
   }
@@ -83,6 +84,35 @@ class CloudKitService {
           recordData['serverUrl'] as String? ?? '', // Cast and handle null
       authToken:
           recordData['authToken'] as String? ?? '', // Cast and handle null
+      // --- START serverType Parsing ---
+      serverType: () {
+        ServerType type = ServerType.memos; // Default
+        final rawServerType = recordData['serverType'];
+        if (kDebugMode) {
+          print(
+            '[CloudKitService][_mapToServerConfig] Raw serverType from CloudKit data for $recordName: "$rawServerType" (Type: ${rawServerType?.runtimeType})',
+          );
+        }
+        if (rawServerType is String) {
+          type = ServerType.values.firstWhere(
+            (e) => e.name == rawServerType,
+            orElse: () {
+              if (kDebugMode)
+                print(
+                  '[CloudKitService][_mapToServerConfig] Warning: CloudKit serverType "$rawServerType" invalid for $recordName, defaulting to memos.',
+                );
+              return ServerType.memos;
+            },
+          );
+        } else if (rawServerType != null) {
+          if (kDebugMode)
+            print(
+              '[CloudKitService][_mapToServerConfig] Warning: CloudKit serverType field for $recordName was not a String (Type: ${rawServerType.runtimeType}), defaulting to memos.',
+            );
+        }
+        return type;
+      }(), // Immediately invoke the function to get the type
+      // --- END serverType Parsing ---
     );
     if (kDebugMode) {
       print(
@@ -96,11 +126,15 @@ class CloudKitService {
   Future<bool> saveServerConfig(ServerConfig config) async {
     try {
       final mapData = _serverConfigToMap(config);
+      // --- Add Logging Here ---
       if (kDebugMode) {
+        // Log the serverType being saved (it's part of the config object, but _serverConfigToMap might exclude it)
+        // Let's log the type from the original config object for clarity.
         print(
-          '[CloudKitService] Saving ServerConfig (ID: \${config.id}) to CloudKit with data: \$mapData',
+          '[CloudKitService] Preparing to save ServerConfig (ID: ${config.id}, Type: ${config.serverType.name}) to CloudKit with data: $mapData',
         );
       }
+      // --- End Logging ---
       await _cloudKit.saveRecord(
         scope: CloudKitDatabaseScope.private, // Use CloudKitDatabaseScope
         recordType: _serverConfigRecordType,
@@ -110,15 +144,18 @@ class CloudKitService {
       );
       if (kDebugMode) {
         print(
-          '[CloudKitService] Saved ServerConfig (ID: \${config.id}) successfully.',
+          '[CloudKitService] Saved ServerConfig (ID: ${config.id}) successfully.',
         );
       }
       return true;
-    } catch (e) {
+    } catch (e, s) {
+      // Add stack trace parameter 's'
       if (kDebugMode) {
+        // --- Enhance Error Logging ---
         print(
-          '[CloudKitService] Error saving ServerConfig (ID: \${config.id}): \$e',
+          '[CloudKitService] Error saving ServerConfig (ID: ${config.id}): $e\nStackTrace: $s',
         );
+        // --- End Enhancement ---
       }
       return false;
     }
@@ -166,8 +203,18 @@ class CloudKitService {
       );
       if (kDebugMode) {
         print(
-          '[CloudKitService] Found \${ckRecords.length} ServerConfig records raw from CloudKit.',
+          '[CloudKitService] Found ${ckRecords.length} ServerConfig records raw from CloudKit.',
         );
+      }
+      // Log raw data including inferred type before mapping
+      if (kDebugMode) {
+        for (final ckRecord in ckRecords) {
+          // Log the actual serverType field if present, otherwise indicate it's missing
+          final rawType = ckRecord.values['serverType'];
+          print(
+            '[CloudKitService] Raw Fetched ServerConfig Record: Name=${ckRecord.recordName}, Values=${ckRecord.values}, Raw Type Field="$rawType"',
+          );
+        }
       }
       return ckRecords
           .map(
@@ -213,7 +260,7 @@ class CloudKitService {
   Future<bool> deleteAllRecordsOfType(String recordType) async {
     if (kDebugMode) {
       print(
-        '[CloudKitService] Attempting to delete all records of type: $recordType',
+        '[CloudKitService] Attempting to delete all records of type: \$recordType',
       );
     }
     try {
@@ -242,7 +289,7 @@ class CloudKitService {
         try {
           if (kDebugMode) {
             print(
-              '[CloudKitService] Deleting record: $recordName (type: $recordType)',
+              '[CloudKitService] Deleting record: \$recordName (type: \$recordType)',
             );
           }
           await _cloudKit.deleteRecord(
@@ -252,7 +299,7 @@ class CloudKitService {
         } catch (deleteError) {
           if (kDebugMode) {
             print(
-              '[CloudKitService] Error deleting record $recordName (type: $recordType): $deleteError',
+              '[CloudKitService] Error deleting record \$recordName (type: \$recordType): \$deleteError',
             );
           }
           allSucceeded = false; // Mark failure but continue
@@ -261,7 +308,7 @@ class CloudKitService {
 
       if (kDebugMode) {
         print(
-          '[CloudKitService] Finished deleting records of type $recordType. Overall success: $allSucceeded',
+          '[CloudKitService] Finished deleting records of type \$recordType. Overall success: \$allSucceeded',
         );
       }
       // Return true if the process completed, even if individual deletions failed.
@@ -269,7 +316,7 @@ class CloudKitService {
     } catch (fetchError) {
       if (kDebugMode) {
         print(
-          '[CloudKitService] Error fetching records for deletion (type: $recordType): $fetchError',
+          '[CloudKitService] Error fetching records for deletion (type: \$recordType): \$fetchError',
         );
       }
       return false;
@@ -308,7 +355,7 @@ class CloudKitService {
         }
         if (kDebugMode) {
           print(
-            '[CloudKitService] Error deleting UserSettings record ($_userSettingsRecordName): $e',
+            '[CloudKitService] Error deleting UserSettings record ($_userSettingsRecordName): \$e',
           );
         }
         return false;
@@ -335,7 +382,7 @@ class CloudKitService {
     } catch (e) {
       if (kDebugMode) {
         print(
-          '[CloudKitService] Error getting UserSettings record (may not exist yet): $e',
+          '[CloudKitService] Error getting UserSettings record (may not exist yet): \$e',
         );
       }
       return null;
@@ -380,7 +427,7 @@ class CloudKitService {
 
         if (kDebugMode) {
           print(
-            '[CloudKitService] Preparing to save UserSettings with key "$keyName". Merged Data: $dataToSave',
+            '[CloudKitService] Preparing to save UserSettings with key "$keyName". Merged Data: \$dataToSave',
           );
         }
 
@@ -403,7 +450,7 @@ class CloudKitService {
           } catch (deleteError) {
             if (kDebugMode) {
               print(
-                '[CloudKitService] Error deleting existing UserSettings record (proceeding to save): $deleteError',
+                '[CloudKitService] Error deleting existing UserSettings record (proceeding to save): \$deleteError',
               );
             }
           }
@@ -428,7 +475,7 @@ class CloudKitService {
       } catch (e) {
         if (kDebugMode) {
           print(
-            '[CloudKitService] Error saving UserSettings for key "$keyName" (within synchronized block): $e',
+            '[CloudKitService] Error saving UserSettings for key "$keyName" (within synchronized block): \$e',
           );
         }
         return false;
@@ -492,7 +539,7 @@ class CloudKitService {
         parsedConnectionType = McpConnectionType.values.byName(typeString);
       } catch (_) {
         debugPrint(
-          "Invalid connectionType '\$typeString' found for server \$recordName, defaulting to stdio.",
+          "Invalid connectionType '$typeString' found for server \$recordName, defaulting to stdio.",
         );
       }
     } else {
@@ -527,7 +574,7 @@ class CloudKitService {
       parsedPort = int.tryParse(portString);
       if (parsedPort == null || parsedPort <= 0 || parsedPort > 65535) {
         debugPrint(
-          "Invalid port value '\$portString' found for server \$recordName, setting port to null.",
+          "Invalid port value '$portString' found for server \$recordName, setting port to null.",
         );
         parsedPort = null;
       }
@@ -557,7 +604,7 @@ class CloudKitService {
       final mapData = _mcpServerConfigToMap(config);
       if (kDebugMode) {
         print(
-          '[CloudKitService] Saving McpServerConfig (ID: \${config.id}) to CloudKit with data: \$mapData',
+          '[CloudKitService] Saving McpServerConfig (ID: ${config.id}) to CloudKit with data: $mapData',
         );
       }
       await _cloudKit.saveRecord(
@@ -568,14 +615,14 @@ class CloudKitService {
       );
       if (kDebugMode) {
         print(
-          '[CloudKitService] Saved McpServerConfig (ID: \${config.id}) successfully.',
+          '[CloudKitService] Saved McpServerConfig (ID: ${config.id}) successfully.',
         );
       }
       return true;
     } catch (e) {
       if (kDebugMode) {
         print(
-          '[CloudKitService] Error saving McpServerConfig (ID: \${config.id}): \$e',
+          '[CloudKitService] Error saving McpServerConfig (ID: ${config.id}): $e',
         );
       }
       return false;
@@ -596,7 +643,7 @@ class CloudKitService {
       );
       if (kDebugMode) {
         print(
-          '[CloudKitService] Found \${ckRecords.length} McpServerConfig records raw from CloudKit.',
+          '[CloudKitService] Found ${ckRecords.length} McpServerConfig records raw from CloudKit.',
         );
       }
       return ckRecords

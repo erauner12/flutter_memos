@@ -2,13 +2,13 @@ import 'package:flutter/cupertino.dart'; // Import Cupertino
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart'; // Import Material for Tooltip
 import 'package:flutter/services.dart'; // Add import for keyboard events
-import 'package:flutter_memos/models/memo.dart';
+import 'package:flutter_memos/models/note_item.dart'; // Import NoteItem instead of Memo
 // Updated imports per Change 1:
 import 'package:flutter_memos/models/server_config.dart'; // Import ServerConfig model
 import 'package:flutter_memos/providers/filter_providers.dart';
 // Import MCP provider
 import 'package:flutter_memos/providers/mcp_server_config_provider.dart';
-import 'package:flutter_memos/providers/memo_providers.dart';
+import 'package:flutter_memos/providers/memo_providers.dart'; // Keep for now, might need specific providers
 import 'package:flutter_memos/providers/server_config_provider.dart'; // Import server config provider
 // Import CloudKit Service Provider
 import 'package:flutter_memos/providers/service_providers.dart';
@@ -70,7 +70,7 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
         },
         child: const Icon(CupertinoIcons.clear),
       ),
-      middle: Text('$selectedCount Selected'),
+      middle: const Text('\$selectedCount Selected'),
       // Use trailing for action buttons
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
@@ -86,7 +86,9 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
                     showCupertinoDialog(
                       context: context,
                       builder: (context) => CupertinoAlertDialog(
-                        title: Text('Delete $selectedCount Memos?'),
+                              title: const Text(
+                                'Delete \$selectedCount Memos?',
+                              ),
                         content: const Text(
                           'This action cannot be undone.',
                         ),
@@ -148,10 +150,10 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
 
   // Add keyboard navigation methods
   void _selectNextMemo() {
-    final memos = ref.read(filteredMemosProvider);
+    final memos = ref.read(filteredNotesProvider); // Use renamed provider
     if (kDebugMode) {
       print(
-        '[MemosScreen _selectNextMemo] Called. Filtered memos count: ${memos.length}',
+        '[MemosScreen _selectNextMemo] Called. Filtered notes count: \${memos.length}', // Updated log
       );
     }
 
@@ -171,17 +173,17 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
       ref.read(ui_providers.selectedMemoIdProvider.notifier).state = nextMemoId;
       if (kDebugMode) {
         print(
-          '[MemosScreen _selectNextMemo] Updated selectedMemoIdProvider to: $nextMemoId',
+          '[MemosScreen _selectNextMemo] Updated selectedMemoIdProvider to: \$nextMemoId',
         );
       }
     }
   }
 
   void _selectPreviousMemo() {
-    final memos = ref.read(filteredMemosProvider);
+    final memos = ref.read(filteredNotesProvider); // Use renamed provider
     if (kDebugMode) {
       print(
-        '[MemosScreen _selectPreviousMemo] Called. Filtered memos count: ${memos.length}',
+        '[MemosScreen _selectPreviousMemo] Called. Filtered notes count: \${memos.length}', // Updated log
       );
     }
 
@@ -201,7 +203,7 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
       ref.read(ui_providers.selectedMemoIdProvider.notifier).state = prevMemoId;
       if (kDebugMode) {
         print(
-          '[MemosScreen _selectPreviousMemo] Updated selectedMemoIdProvider to: $prevMemoId',
+          '[MemosScreen _selectPreviousMemo] Updated selectedMemoIdProvider to: \$prevMemoId',
         );
       }
     }
@@ -211,7 +213,7 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
     final selectedId = ref.read(ui_providers.selectedMemoIdProvider);
     if (selectedId != null) {
       if (kDebugMode) {
-        print('[MemosScreen] Viewing selected memo: ID $selectedId');
+        print('[MemosScreen] Viewing selected memo: ID \$selectedId');
       }
       if (mounted) {
         Navigator.of(
@@ -239,10 +241,10 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
 
     if (kDebugMode) {
       print(
-        '[MemosScreen _handleKeyEvent] Received key: ${event.logicalKey.keyLabel}',
+        '[MemosScreen _handleKeyEvent] Received key: \${event.logicalKey.keyLabel}',
       );
       print(
-        '[MemosScreen _handleKeyEvent] FocusNode has focus: ${node.hasFocus}',
+        '[MemosScreen _handleKeyEvent] FocusNode has focus: \${node.hasFocus}',
       );
     }
 
@@ -257,7 +259,7 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
 
     if (kDebugMode) {
       print(
-        '[MemosScreen _handleKeyEvent] Mixin handleKeyEvent result: $result',
+        '[MemosScreen _handleKeyEvent] Mixin handleKeyEvent result: \$result',
       );
     }
     return result;
@@ -265,11 +267,14 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
 
   @override
   Widget build(BuildContext context) {
-    final memosState = ref.watch(memosNotifierProvider);
-    final visibleMemos = ref.watch(visibleMemosListProvider);
+    final notesState = ref.watch(notesNotifierProvider); // Use renamed provider
+    final visibleNotes = ref.watch(
+      visibleNotesListProvider,
+    ); // Use renamed provider
     final selectedPresetKey = ref.watch(quickFilterPresetProvider);
     final currentPresetLabel =
-        quickFilterPresets[selectedPresetKey]?.label ?? 'Memos';
+        quickFilterPresets[selectedPresetKey]?.label ??
+        'Notes'; // Updated default label
     final isMultiSelectMode = ref.watch(ui_providers.memoMultiSelectModeProvider);
     final selectedIds = ref.watch(ui_providers.selectedMemoIdsForMultiSelectProvider);
 
@@ -359,7 +364,7 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
                   padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 8.0),
                   child: _buildQuickFilterControl(),
                 ),
-              Expanded(child: _buildMemosList(memosState, visibleMemos)),
+              Expanded(child: _buildMemosList(notesState, visibleNotes)),
             ],
           ),
         ),
@@ -401,7 +406,7 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
         onValueChanged: (String? newPresetKey) {
           if (newPresetKey != null) {
             if (kDebugMode) {
-              print('[MemosScreen] Quick filter selected: $newPresetKey');
+              print('[MemosScreen] Quick filter selected: \$newPresetKey');
             }
             ref.read(quickFilterPresetProvider.notifier).state = newPresetKey;
             if (ref.read(rawCelFilterProvider).isNotEmpty) {
@@ -438,7 +443,9 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
     final serverName =
         activeServer?.name ?? activeServer?.serverUrl ?? 'No Server';
     final truncatedName =
-        serverName.length > 15 ? '${serverName.substring(0, 12)}...' : serverName;
+        serverName.length > 15
+            ? '\${serverName.substring(0, 12)}...'
+            : serverName;
 
     return CupertinoButton(
       padding: const EdgeInsets.only(left: 8.0),
@@ -507,16 +514,10 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
               if (!isActive) {
                 if (kDebugMode) {
                   print(
-                    '[MemosScreen] Setting active server to: ${server.name ?? server.id}',
+                            '[MemosScreen] Setting active server to: \${server.name ?? server.id}',
                   );
                 }
-                notifier.setActiveServer(server.id);
-                ref.invalidate(memosNotifierProvider);
-                if (kDebugMode) {
-                  print(
-                    '[MemosScreen] Invalidated memosNotifierProvider after server switch.',
-                  );
-                }
+                        notifier.setActiveServer(server.id);
               }
               Navigator.pop(context);
             },
@@ -552,13 +553,17 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
         ref.read(searchQueryProvider.notifier).state = value;
         final isLocalSearch = ref.read(localSearchEnabledProvider);
         if (!isLocalSearch && value.isNotEmpty) {
-          ref.read(memosNotifierProvider.notifier).refresh();
+          ref
+              .read(notesNotifierProvider.notifier)
+              .refresh(); // Use renamed provider
         }
       },
       onSubmitted: (value) {
         final isLocalSearch = ref.read(localSearchEnabledProvider);
         if (!isLocalSearch) {
-          ref.read(memosNotifierProvider.notifier).refresh();
+          ref
+              .read(notesNotifierProvider.notifier)
+              .refresh(); // Use renamed provider
         }
       },
     );
@@ -566,7 +571,9 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
 
   void _handleMoveMemoToServer(String memoId) {
     if (kDebugMode) {
-      print('[MemosScreen] _handleMoveMemoToServer called for memo ID: $memoId');
+      print(
+        '[MemosScreen] _handleMoveMemoToServer called for memo ID: \$memoId',
+      );
     }
 
     final multiServerState = ref.read(multiServerConfigProvider);
@@ -576,7 +583,9 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
         servers.where((s) => s.id != activeServerId).toList();
 
     if (kDebugMode) {
-      print('[MemosScreen] Found ${availableTargetServers.length} target servers.');
+      print(
+        '[MemosScreen] Found \${availableTargetServers.length} target servers.',
+      );
     }
 
     if (availableTargetServers.isEmpty) {
@@ -609,7 +618,7 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
             onPressed: () {
               if (kDebugMode) {
                 print(
-                  '[MemosScreen] Selected target server: ${server.name ?? server.id}',
+                              '[MemosScreen] Selected target server: \${server.name ?? server.id}',
                 );
               }
               Navigator.pop(sheetContext, server);
@@ -625,24 +634,27 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
       if (selectedServer != null) {
         if (kDebugMode) {
           print(
-            '[MemosScreen] Calling moveMemoProvider for memo $memoId to server ${selectedServer.id}',
+            '[MemosScreen] Calling moveNoteProvider for memo \$memoId to server \${selectedServer.id}',
           );
         }
         final moveParams = MoveMemoParams(
           memoId: memoId,
           targetServer: selectedServer,
         );
-        ref.read(moveMemoProvider(moveParams))().then((_) {
+        ref
+            .read(moveNoteProvider(moveParams))()
+            .then((_) {
           if (kDebugMode) {
-            print('[MemosScreen] Move successful for memo $memoId');
+                print(
+              '[MemosScreen] Move successful for note \$memoId');
           }
           if (mounted) {
             showCupertinoDialog(
               context: context,
               builder: (ctx) => CupertinoAlertDialog(
                 title: const Text('Move Successful'),
-                content: Text(
-                  'Memo moved to ${selectedServer.name ?? selectedServer.serverUrl}.',
+                        content: const Text(
+                          'Memo moved to \${selectedServer.name ?? selectedServer.serverUrl}.',
                 ),
                 actions: [
                   CupertinoDialogAction(
@@ -656,7 +668,7 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
           }
         }).catchError((error, stackTrace) {
           if (kDebugMode) {
-            print('[MemosScreen] Move failed for memo $memoId: $error');
+                print('[MemosScreen] Move failed for memo \$memoId: \$error');
             print(stackTrace);
           }
           if (mounted) {
@@ -664,8 +676,8 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
               context: context,
               builder: (ctx) => CupertinoAlertDialog(
                 title: const Text('Move Failed'),
-                content: Text(
-                  'Could not move memo. Error: ${error.toString()}',
+                        content: const Text(
+                          'Could not move memo. Error: \${error.toString()}',
                 ),
                 actions: [
                   CupertinoDialogAction(
@@ -686,7 +698,8 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
     });
   }
 
-  Widget _buildMemosList(MemosState memosState, List<Memo> visibleMemos) {
+  Widget _buildMemosList(NotesState notesState, List<NoteItem> visibleNotes) {
+    // Renamed MemosState to NotesState, Memo to NoteItem
     return MemosBody(
       scrollController: _scrollController,
       onMoveMemoToServer: _handleMoveMemoToServer,
@@ -780,16 +793,22 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
       }
 
       if (!cloudSuccess) {
-        if (kDebugMode) print('[MemosScreen] CloudKit deletion finished with errors: $cloudErrorMessage');
+        if (kDebugMode)
+          print(
+            '[MemosScreen] CloudKit deletion finished with errors: \$cloudErrorMessage',
+          );
       } else {
         if (kDebugMode) print('[MemosScreen] CloudKit deletion finished successfully.');
       }
     } catch (e, s) {
       if (kDebugMode) {
-        print('[MemosScreen] Critical error during CloudKit deletion phase: $e\n$s');
+        print(
+          '[MemosScreen] Critical error during CloudKit deletion phase: \$e\n\$s',
+        );
       }
       cloudSuccess = false;
-      cloudErrorMessage = 'A critical error occurred during CloudKit deletion: $e';
+      cloudErrorMessage =
+          'A critical error occurred during CloudKit deletion: \$e';
     }
 
     // Reset Local Notifiers and Cache (always attempt this, even if CloudKit failed)
@@ -805,23 +824,18 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
       if (kDebugMode) print('[MemosScreen] Local reset finished.');
     } catch (e, s) {
       if (kDebugMode) {
-        print('[MemosScreen] Error during local notifier reset phase: $e\n$s');
+        print(
+          '[MemosScreen] Error during local notifier reset phase: \$e\n\$s',
+        );
       }
-      // Log error, but don't necessarily mark overall success as false just for local errors
-      // Append to existing message if CloudKit also failed
       if (cloudErrorMessage.isNotEmpty) {
         cloudErrorMessage += '\nAn error also occurred during local data reset.';
       } else {
         cloudErrorMessage = 'An error occurred during local data reset.';
-        // If CloudKit succeeded but local failed, mark overall as failure for the dialog
         cloudSuccess = false;
       }
     }
 
-    // Optional: Hide loading indicator
-    // if (mounted) setState(() => _isResetting = false); // Example
-
-    // Show final feedback dialog only if the widget is still mounted
     if (mounted) {
       showCupertinoDialog(
         context: context,
@@ -830,17 +844,14 @@ class _MemosScreenState extends ConsumerState<MemosScreen>
           content: Text(
             cloudSuccess
                 ? 'All cloud and local configurations have been reset. Please restart the app or navigate to Settings to reconfigure.'
-                : 'The reset process encountered errors:\n$cloudErrorMessage\nPlease check your iCloud data manually via Settings > Apple ID > iCloud > Manage Account Storage, then restart the app.'
+                    : 'The reset process encountered errors:\n\$cloudErrorMessage\nPlease check your iCloud data manually via Settings > Apple ID > iCloud > Manage Account Storage, then restart the app.'
           ),
           actions: [
             CupertinoDialogAction(
               isDefaultAction: true,
               child: const Text('OK'),
               onPressed: () {
-                Navigator.pop(finalDialogContext);
-                // Invalidate the main loading provider to force a reload/redirect
-                // This assumes your app's startup logic handles the "no config" state.
-                // Check mounted again before invalidating ref
+                    Navigator.pop(finalDialogContext);
                 if (mounted) {
                   ref.invalidate(loadServerConfigProvider);
                   if (kDebugMode) {

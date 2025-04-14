@@ -3,7 +3,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_memos/models/server_config.dart';
 import 'package:flutter_memos/providers/server_config_provider.dart';
-import 'package:flutter_memos/services/api_service.dart'; // For testing connection
+import 'package:flutter_memos/services/api_service.dart'; // Import MemosApiService
+// Add imports for BaseApiService and BlinkoApiService
+import 'package:flutter_memos/services/base_api_service.dart';
+import 'package:flutter_memos/services/blinko_api_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
@@ -21,6 +24,8 @@ class _AddEditServerScreenState extends ConsumerState<AddEditServerScreen> {
   final _nameController = TextEditingController();
   final _urlController = TextEditingController();
   final _tokenController = TextEditingController();
+  // Add state for ServerType
+  ServerType _selectedServerType = ServerType.memos; // Default to memos
 
   bool _isTestingConnection = false;
   String? _urlError;
@@ -35,6 +40,8 @@ class _AddEditServerScreenState extends ConsumerState<AddEditServerScreen> {
       _nameController.text = widget.serverToEdit!.name ?? '';
       _urlController.text = widget.serverToEdit!.serverUrl;
       _tokenController.text = widget.serverToEdit!.authToken;
+      _selectedServerType =
+          widget.serverToEdit!.serverType; // Initialize server type
     }
   }
 
@@ -100,6 +107,8 @@ class _AddEditServerScreenState extends ConsumerState<AddEditServerScreen> {
     FocusScope.of(context).unfocus();
     final url = _urlController.text.trim();
     final token = _tokenController.text.trim();
+    // Get the currently selected server type from the state
+    final serverType = _selectedServerType;
 
     if (!_validateUrl(url)) {
       _showResultDialog('Invalid URL', _urlError ?? 'Please enter a valid server URL.', isError: true);
@@ -108,22 +117,52 @@ class _AddEditServerScreenState extends ConsumerState<AddEditServerScreen> {
 
     setState(() { _isTestingConnection = true; });
 
-    // Create a temporary ApiService instance for testing
-    final testApiService = ApiService();
+    // Declare variable with the BaseApiService type
+    BaseApiService testApiService;
+
+    // Instantiate the correct service based on the selected type
+    switch (serverType) {
+      case ServerType.memos:
+        testApiService = MemosApiService();
+        break;
+      case ServerType.blinko:
+        testApiService = BlinkoApiService();
+        break;
+      // Optional: Add default or error handling if ServerType could be null/unexpected
+      // default:
+      //   _showResultDialog('Error', 'Invalid server type selected.', isError: true);
+      //   setState(() { _isTestingConnection = false; });
+      //   return;
+    }
+
     try {
-      testApiService.configureService(baseUrl: url, authToken: token);
-      // Use a lightweight API call
-      await testApiService.listMemos(pageSize: 1, parent: 'users/1'); // Or another suitable endpoint
+      // Configure the selected service instance
+      await testApiService.configureService(baseUrl: url, authToken: token);
+
+      // Call the common health check method (preferred) or listNotes as fallback
+      // Using listNotes as the primary check for now as checkHealth might vary
+      await testApiService.listNotes(pageSize: 1);
+      bool isHealthy = true; // Assume success if listNotes doesn't throw
+
+      // Alternatively, use checkHealth if implemented consistently:
+      // bool isHealthy = await testApiService.checkHealth();
 
       if (mounted) {
-        _showResultDialog('Success', 'Connection successful!');
+        if (isHealthy) {
+          _showResultDialog('Success', 'Connection successful!');
+        }
+        // Removed the 'else' block causing dead code warning, as isHealthy is always true here
       }
     } catch (e) {
       if (kDebugMode) {
         print("[AddEditServerScreen] Test Connection Error: $e");
       }
       if (mounted) {
-        _showResultDialog('Connection Failed', 'Could not connect.\nCheck URL and Token.\n\nError: ${e.toString()}', isError: true);
+        _showResultDialog(
+          'Connection Failed',
+          'Could not connect.\nCheck URL, Token, and Server Type.\n\nError: ${e.toString()}',
+          isError: true,
+        );
       }
     } finally {
       if (mounted) {
@@ -146,12 +185,29 @@ class _AddEditServerScreenState extends ConsumerState<AddEditServerScreen> {
     final token = _tokenController.text.trim();
     final notifier = ref.read(multiServerConfigProvider.notifier);
 
+    // --- Add Logging Here ---
+    if (kDebugMode) {
+      print(
+        '[AddEditServerScreen] Saving config. UI _selectedServerType: ${_selectedServerType.name}',
+      );
+    }
+    // --- End Logging ---
+
     final config = ServerConfig(
       id: widget.serverToEdit?.id ?? const Uuid().v4(), // Use existing ID or generate new
       name: name.isNotEmpty ? name : null, // Store null if name is empty
       serverUrl: url,
       authToken: token,
+      serverType: _selectedServerType, // Include selected server type
     );
+
+    // --- Add Logging Here ---
+    if (kDebugMode) {
+      print(
+        '[AddEditServerScreen] Created ServerConfig object to save: ${config.toString()}',
+      );
+    }
+    // --- End Logging ---
 
     bool success;
     if (_isEditing) {
@@ -191,6 +247,30 @@ class _AddEditServerScreenState extends ConsumerState<AddEditServerScreen> {
                 CupertinoFormSection.insetGrouped(
                   header: const Text('SERVER DETAILS'),
                   children: [
+                    // Server Type Picker
+                    CupertinoFormRow(
+                      prefix: const Text('Type'),
+                      child: CupertinoSegmentedControl<ServerType>(
+                        children: const {
+                          ServerType.memos: Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 8),
+                            child: Text('Memos'),
+                          ),
+                          ServerType.blinko: Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 8),
+                            child: Text('Blinko'),
+                          ),
+                        },
+                        groupValue: _selectedServerType,
+                        onValueChanged: (ServerType? newValue) {
+                          if (newValue != null) {
+                            setState(() {
+                              _selectedServerType = newValue;
+                            });
+                          }
+                        },
+                      ),
+                    ),
                     CupertinoTextFormFieldRow(
                       controller: _nameController,
                       placeholder: 'My Memos Server (Optional)',
@@ -294,9 +374,10 @@ class _AddEditServerScreenState extends ConsumerState<AddEditServerScreen> {
 
                        if (confirmed == true) {
                          final success = await ref.read(multiServerConfigProvider.notifier).removeServer(widget.serverToEdit!.id);
-                         if (success && mounted) {
+                        if (!mounted) return; // Add mounted check here
+                        if (success) {
                            Navigator.of(context).pop(); // Pop back to settings
-                         } else if (!success && mounted) {
+                        } else {
                             _showResultDialog('Error', 'Failed to delete server.', isError: true);
                          }
                        }

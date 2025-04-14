@@ -1,12 +1,13 @@
 import 'package:flutter/foundation.dart';
-import 'package:flutter_memos/api/lib/api.dart'; // Add this import for V1Resource
+import 'package:flutter_memos/api/lib/api.dart'
+    as memos_api; // Import for V1Resource
 import 'package:flutter_memos/models/comment.dart';
-import 'package:flutter_memos/models/memo.dart';
-import 'package:flutter_memos/models/memo_relation.dart';
-import 'package:flutter_memos/providers/memo_providers.dart';
+import 'package:flutter_memos/models/memo_relation.dart'; // Import MemoRelation
+import 'package:flutter_memos/models/note_item.dart'; // Import NoteItem
+import 'package:flutter_memos/providers/memo_providers.dart'; // Keep for notesNotifierProvider etc.
 import 'package:flutter_memos/screens/memo_detail/memo_detail_providers.dart'
     show memoCommentsProvider;
-import 'package:flutter_memos/services/api_service.dart'; // Import ApiService
+import 'package:flutter_memos/services/base_api_service.dart'; // Import BaseApiService
 import 'package:flutter_memos/services/minimal_openai_service.dart'; // Import MinimalOpenAiService
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -19,33 +20,42 @@ final hiddenCommentIdsProvider = StateProvider<Set<String>>((ref) => {});
 /// Provider for archiving a comment
 final archiveCommentProvider = Provider.family<Future<void> Function(), String>((ref, id) {
   return () async {
-      final apiService = ref.read(api_p.apiServiceProvider);
-  
+      final apiService = ref.read(
+        api_p.apiServiceProvider,
+      ); // Use BaseApiService
+
     try {
         // Extract memoId from combined ID (format: "memoId/commentId")
         final parts = id.split('/');
         final String memoId = parts.isNotEmpty ? parts[0] : '';
-    
-      // Get the comment
-      final comment = await apiService.getMemoComment(id);
-    
-      // Update the comment to archived state
-      final updatedComment = comment.copyWith(
-        pinned: false,
-        state: CommentState.archived,
-      );
-    
-      // Save the updated comment
-      await apiService.updateMemoComment(id, updatedComment);
-    
+        final String commentId =
+            parts.length > 1 ? parts.last : id; // Actual comment ID
+
+        // Get the comment using the actual comment ID
+        final comment = await apiService.getNoteComment(
+          commentId,
+        ); // Use getNoteComment
+
+        // Update the comment to archived state
+        final updatedComment = comment.copyWith(
+          pinned: false,
+          state: CommentState.archived,
+        );
+
+        // Save the updated comment using the actual comment ID
+        await apiService.updateNoteComment(
+          commentId,
+          updatedComment,
+        ); // Use updateNoteComment
+
         // Refresh comments for this memo
-      if (memoId.isNotEmpty) {
-        ref.invalidate(memoCommentsProvider(memoId));
-      }
-    
-      if (kDebugMode) {
-        print('[archiveCommentProvider] Comment archived: $id');
-      }
+        if (memoId.isNotEmpty) {
+          ref.invalidate(memoCommentsProvider(memoId));
+        }
+
+        if (kDebugMode) {
+          print('[archiveCommentProvider] Comment archived: $id');
+        }
     } catch (e) {
       if (kDebugMode) {
         print('[archiveCommentProvider] Error archiving comment: $e');
@@ -58,22 +68,25 @@ final archiveCommentProvider = Provider.family<Future<void> Function(), String>(
 /// Provider for deleting a comment
 final deleteCommentProvider = Provider.family<Future<void> Function(), String>((ref, id) {
   return () async {
-    final apiService = ref.read(api_p.apiServiceProvider);
-  
+    final apiService = ref.read(api_p.apiServiceProvider); // Use BaseApiService
+
     try {
       // Extract parts from the combined ID (format: "memoId/commentId")
       final parts = id.split('/');
       final memoId = parts.isNotEmpty ? parts.first : '';
       final commentId = parts.length > 1 ? parts.last : id;
-    
-      // Delete the comment
-      await apiService.deleteMemoComment(memoId, commentId);
-    
+
+      // Delete the comment using BaseApiService
+      await apiService.deleteNoteComment(
+        memoId,
+        commentId,
+      ); // Use deleteNoteComment
+
       // Refresh comments for this memo
       if (memoId.isNotEmpty) {
         ref.invalidate(memoCommentsProvider(memoId));
       }
-    
+
       if (kDebugMode) {
         print('[deleteCommentProvider] Comment deleted: $id');
       }
@@ -89,32 +102,39 @@ final deleteCommentProvider = Provider.family<Future<void> Function(), String>((
 /// Provider for toggling the pin state of a comment
 final togglePinCommentProvider = Provider.family<Future<void> Function(), String>((ref, id) {
   return () async {
-    final apiService = ref.read(api_p.apiServiceProvider);
+    final apiService = ref.read(api_p.apiServiceProvider); // Use BaseApiService
 
     try {
       // Extract memoId from combined ID (format: "memoId/commentId")
       final parts = id.split('/');
       final String memoId = parts.isNotEmpty ? parts[0] : '';
-      
-      // Get the comment
-      final comment = await apiService.getMemoComment(id);
-      
+      final String commentId =
+          parts.length > 1 ? parts.last : id; // Actual comment ID
+
+      // Get the comment using the actual comment ID
+      final comment = await apiService.getNoteComment(
+        commentId,
+      ); // Use getNoteComment
+
       // Toggle the pinned state
       final updatedComment = comment.copyWith(pinned: !comment.pinned);
-      
-      // Update through API
-      await apiService.updateMemoComment(id, updatedComment);
-      
+
+      // Update through API using the actual comment ID
+      await apiService.updateNoteComment(
+        commentId,
+        updatedComment,
+      ); // Use updateNoteComment
+
       // Invalidate the comments list to ensure UI refreshes
       if (memoId.isNotEmpty) {
         // Invalidate comments list - this will trigger a rebuild with the updated sort order
         ref.invalidate(memoCommentsProvider(memoId));
-        
+
         // We don't need to invalidate the memo detail provider directly
         // The line below was causing an error since apiServiceProvider doesn't have a notifier property
         // ref.invalidate(ref.read(api_p.apiServiceProvider.notifier).memoDetailProvider(memoId));
       }
-      
+
       if (kDebugMode) {
         print('[togglePinCommentProvider] Comment pin toggled: $id');
       }
@@ -133,74 +153,90 @@ final isCommentHiddenProvider = Provider.family<bool, String>((ref, id) {
   return hiddenCommentIds.contains(id);
 });
 
-/// Provider for converting a comment to a full memo
-final convertCommentToMemoProvider = Provider.family<
-  Future<Memo> Function(),
+/// Provider for converting a comment to a full note
+final convertCommentToNoteProvider = Provider.family<
+  // Renamed provider
+  Future<NoteItem> Function(), // Return NoteItem
   String
 >((ref, id) {
   return () async {
-    final apiService = ref.read(api_p.apiServiceProvider);
-    
+    final apiService = ref.read(api_p.apiServiceProvider); // Use BaseApiService
+
     try {
       // Extract parts from the combined ID (format: "memoId/commentId")
       final parts = id.split('/');
       final memoId = parts.isNotEmpty ? parts.first : '';
-      
+      final commentId = parts.length > 1 ? parts.last : id; // Actual comment ID
+
       if (kDebugMode) {
-        print('[convertCommentToMemoProvider] Converting comment to memo: $id');
+        print(
+          '[convertCommentToNoteProvider] Converting comment to note: $id',
+        ); // Updated log
       }
-      
-      // Get the comment
-      final comment = await apiService.getMemoComment(id);
-      
-      // Create a new memo from the comment's content
-      final newMemo = Memo(
+
+      // Get the comment using the actual comment ID
+      final comment = await apiService.getNoteComment(
+        commentId,
+      ); // Use getNoteComment
+
+      // Create a new note from the comment's content
+      final newNote = NoteItem(
+        // Create NoteItem
         id: 'temp-${DateTime.now().millisecondsSinceEpoch}',
         content: comment.content,
-        // Reset pinned state for the new memo
-        pinned: false,
-        state: MemoState.normal,
-        visibility: 'PUBLIC', // Default visibility
+        pinned: false, // Reset pinned state for the new note
+        state: NoteState.normal, // Use enum
+        visibility: NoteVisibility.public, // Default visibility, use enum
+        createTime: DateTime.now(), // Placeholder
+        updateTime: DateTime.now(), // Placeholder
+        displayTime: DateTime.now(), // Placeholder
       );
-      
-      // Create the new memo
-      final createdMemo = await apiService.createMemo(newMemo);
-      
-      // Try to create a relation between the new memo and the original memo
+
+      // Create the new note using BaseApiService
+      final createdNote = await apiService.createNote(
+        newNote,
+      ); // Use createNote
+
+      // Try to create a relation between the new note and the original note
       // But continue even if this part fails
       if (memoId.isNotEmpty) {
         try {
           final relation = MemoRelation(
-            relatedMemoId: memoId,
-            type: MemoRelation.typeComment,
+            // Keep MemoRelation model for now
+            relatedMemoId:
+                memoId, // Assuming relation points to original note ID
+            type: MemoRelation.typeComment, // Keep type or adapt if needed
           );
-          
-          await apiService.setMemoRelations(createdMemo.id, [relation]);
+
+          await apiService.setNoteRelations(createdNote.id, [
+            relation,
+          ]); // Use setNoteRelations
         } catch (relationError) {
           // Log but don't fail the whole conversion if relation setting fails
           if (kDebugMode) {
             print(
-              '[convertCommentToMemoProvider] Warning: Created memo but failed to set relation: $relationError',
+              '[convertCommentToNoteProvider] Warning: Created note but failed to set relation: $relationError', // Updated log
             );
           }
         }
       }
-      
-      // Refresh memos list using the new notifier
-      // ref.invalidate(memosProvider); // Old way
-      await ref.read(memosNotifierProvider.notifier).refresh(); // New way
-      
+
+      // Refresh notes list using the new notifier
+      await ref
+          .read(notesNotifierProvider.notifier)
+          .refresh(); // Use renamed provider
+
       if (kDebugMode) {
         print(
-          '[convertCommentToMemoProvider] Converted comment to memo: ${createdMemo.id}',
+          '[convertCommentToNoteProvider] Converted comment to note: ${createdNote.id}', // Updated log
         );
       }
-      
-      return createdMemo;
+
+      return createdNote; // Return NoteItem
     } catch (e) {
       if (kDebugMode) {
         print(
-          '[convertCommentToMemoProvider] Error converting comment to memo: $e',
+          '[convertCommentToNoteProvider] Error converting comment to note: $e', // Updated log
         );
       }
       rethrow;
@@ -212,7 +248,7 @@ final convertCommentToMemoProvider = Provider.family<
 final toggleHideCommentProvider = Provider.family<void Function(), String>((ref, id) {
   return () {
     final hiddenCommentIds = ref.read(hiddenCommentIdsProvider);
-    
+
     if (hiddenCommentIds.contains(id)) {
       // Unhide the comment
       ref
@@ -258,11 +294,11 @@ final createCommentProvider = Provider.family<
       );
     }
 
-    final apiService = ref.read(api_p.apiServiceProvider);
-    List<V1Resource>? uploadedResources;
+    final apiService = ref.read(api_p.apiServiceProvider); // Use BaseApiService
+    List<memos_api.V1Resource>? uploadedResources; // Use memos_api namespace
 
     try {
-      // 1. Upload resource if provided
+      // 1. Upload resource if provided using BaseApiService
       if (fileBytes != null && filename != null && contentType != null) {
         if (kDebugMode) {
           print(
@@ -270,6 +306,7 @@ final createCommentProvider = Provider.family<
           );
         }
         final uploadedResource = await apiService.uploadResource(
+          // Use uploadResource
           fileBytes,
           filename,
           contentType,
@@ -282,13 +319,14 @@ final createCommentProvider = Provider.family<
         }
       }
 
-      // 2. Create the comment, passing uploaded resources
+      // 2. Create the comment, passing uploaded resources using BaseApiService
       if (kDebugMode) {
         print(
           '[createCommentProvider] Creating comment for memo $memoId with ${uploadedResources?.length ?? 0} attachments.',
         );
       }
-      final createdComment = await apiService.createMemoComment(
+      final createdComment = await apiService.createNoteComment(
+        // Use createNoteComment
         memoId,
         comment,
         resources: uploadedResources, // Pass resources here
@@ -304,8 +342,8 @@ final createCommentProvider = Provider.family<
             '[createCommentProvider] Bumping parent memo $memoId after comment creation.',
           );
         }
-        // Assuming bumpMemoProvider exists and works correctly
-        // await ref.read(bumpMemoProvider(memoId))();
+        // Assuming bumpNoteProvider exists (needs renaming if not done)
+        await ref.read(bumpNoteProvider(memoId))(); // Use renamed provider
       } catch (e) {
         // Log error but don't fail the comment creation
         if (kDebugMode) {
@@ -336,7 +374,7 @@ final updateCommentProvider = Provider<
   Future<Comment> Function(String memoId, String commentId, String newContent)
 >((ref) {
   return (String memoId, String commentId, String newContent) async {
-    final apiService = ref.read(api_p.apiServiceProvider);
+    final apiService = ref.read(api_p.apiServiceProvider); // Use BaseApiService
     if (kDebugMode) {
       print(
         '[updateCommentProvider] Updating comment $commentId for memo $memoId',
@@ -345,10 +383,10 @@ final updateCommentProvider = Provider<
 
     try {
       // 1. Get the existing comment to preserve other properties
-      // Use the combined ID format if necessary for getMemoComment
-      // The API service's getMemoComment should handle the combined ID format if needed.
-      // We pass the simple comment ID to updateMemoComment later.
-      final existingComment = await apiService.getMemoComment(commentId);
+      // Use the actual comment ID
+      final existingComment = await apiService.getNoteComment(
+        commentId,
+      ); // Use getNoteComment
 
       // 2. Create the updated comment object with new content
       final updatedCommentData = existingComment.copyWith(
@@ -357,8 +395,9 @@ final updateCommentProvider = Provider<
       );
 
       // 3. Call the API service to update the comment
-      // Pass the simple commentId (without memoId prefix) to updateMemoComment
-      final resultComment = await apiService.updateMemoComment(
+      // Pass the actual commentId
+      final resultComment = await apiService.updateNoteComment(
+        // Use updateNoteComment
         commentId, // Pass the actual comment ID
         updatedCommentData,
       );
@@ -390,11 +429,11 @@ final updateCommentProvider = Provider<
 /// Provider to fix grammar of a comment using OpenAI
 final fixCommentGrammarProvider = FutureProvider.family<void, String>((
   ref,
-  commentId,
+  commentIdWithMemoId, // Renamed parameter for clarity (e.g., "memoId/commentId")
 ) async {
   if (kDebugMode) {
     print(
-      '[fixCommentGrammarProvider] Starting grammar fix for comment: $commentId',
+      '[fixCommentGrammarProvider] Starting grammar fix for comment: $commentIdWithMemoId',
     );
   }
 
@@ -416,14 +455,21 @@ final fixCommentGrammarProvider = FutureProvider.family<void, String>((
   }
 
   try {
-    // 1. Fetch the current comment content
+    // Extract actual comment ID
+    final parts = commentIdWithMemoId.split('/');
+    final String memoId = parts.isNotEmpty ? parts[0] : '';
+    final String actualCommentId =
+        parts.length > 1 ? parts.last : commentIdWithMemoId;
+
+    // 1. Fetch the current comment content using BaseApiService
     if (kDebugMode) {
       print('[fixCommentGrammarProvider] Fetching comment content...');
     }
-    // Use the correct service variable name
-    final ApiService apiService = ref.read(api_p.apiServiceProvider);
-    final Comment currentComment = await apiService.getMemoComment(
-      commentId,
+    // Use BaseApiService
+    final BaseApiService apiService = ref.read(api_p.apiServiceProvider);
+    final Comment currentComment = await apiService.getNoteComment(
+      // Use getNoteComment
+      actualCommentId, // Use actual comment ID
     );
     final String originalContent = currentComment.content;
 
@@ -466,30 +512,30 @@ final fixCommentGrammarProvider = FutureProvider.family<void, String>((
       );
     }
 
-    // 4. Update the comment using Memos API
+    // 4. Update the comment using Memos API via BaseApiService
     final Comment updatedCommentData = currentComment.copyWith(
       content: correctedContent,
     );
-    // Use the correct service variable name
-    await apiService.updateMemoComment(commentId, updatedCommentData);
+    // Use BaseApiService and actual comment ID
+    await apiService.updateNoteComment(
+      actualCommentId,
+      updatedCommentData,
+    ); // Use updateNoteComment
 
     // 5. Invalidate the comments list for the specific memo to refresh UI
-    // Extract memoId from combined ID (format: "memoId/commentId")
-    final parts = commentId.split('/');
-    final String memoId = parts.isNotEmpty ? parts[0] : '';
     if (memoId.isNotEmpty) {
       ref.invalidate(memoCommentsProvider(memoId));
     }
 
     if (kDebugMode) {
       print(
-        '[fixCommentGrammarProvider] Comment $commentId updated successfully with corrected grammar.',
+        '[fixCommentGrammarProvider] Comment $actualCommentId updated successfully with corrected grammar.',
       );
     }
   } catch (e, stackTrace) {
     if (kDebugMode) {
       print(
-        '[fixCommentGrammarProvider] Error fixing grammar for comment $commentId: $e',
+        '[fixCommentGrammarProvider] Error fixing grammar for comment $commentIdWithMemoId: $e',
       );
       print(stackTrace);
     }

@@ -36,9 +36,21 @@ class MultiServerConfigNotifier extends StateNotifier<MultiServerConfigState> {
 
     // 1. Load initial state from local cache (or old prefs for migration)
     final cachedJsonString = prefs.getString(_serverConfigCacheKey);
+    if (kDebugMode) {
+      // Log raw cache string
+      print(
+        '[MultiServerConfigNotifier] Raw cache JSON string ($_serverConfigCacheKey): $cachedJsonString',
+      );
+    }
     final multiServerJsonString = prefs.getString(
       _multiServerConfigKey,
     ); // Old multi-key
+    if (kDebugMode) {
+      // Log raw old multi-server string
+      print(
+        '[MultiServerConfigNotifier] Raw old multi-server JSON string ($_multiServerConfigKey): $multiServerJsonString',
+      );
+    }
     final legacyUrl = prefs.getString(_legacyServerUrlKey); // Old legacy key
 
     if (cachedJsonString != null) {
@@ -49,6 +61,10 @@ class MultiServerConfigNotifier extends StateNotifier<MultiServerConfigState> {
         if (kDebugMode) {
           print(
             '[MultiServerConfigNotifier] Loaded initial state from cache: ${initialStateFromCache.servers.length} servers.',
+          );
+          // Log details of loaded servers from cache
+          print(
+            '[MultiServerConfigNotifier] Cache Load Details: ${initialStateFromCache.servers.map((s) => "ID=\${s.id}, Name=\${s.name}, Type=\${s.serverType.name}").join("; ")}',
           );
         }
       } catch (e) {
@@ -70,6 +86,12 @@ class MultiServerConfigNotifier extends StateNotifier<MultiServerConfigState> {
           print(
             '[MultiServerConfigNotifier] Cache empty, using old multi-server prefs for initial state. Migration needed.',
           );
+          // Log details of loaded servers from old prefs
+          for (var server in initialStateFromCache.servers) {
+            print(
+              '[MultiServerConfigNotifier] Old Prefs Load Detail: ID=${server.id}, Name=${server.name}, Type=${server.serverType.name}',
+            );
+          }
         }
       } catch (e) {
         if (kDebugMode) {
@@ -87,6 +109,7 @@ class MultiServerConfigNotifier extends StateNotifier<MultiServerConfigState> {
         name: 'Migrated Server',
         serverUrl: legacyUrl,
         authToken: legacyToken ?? '',
+        serverType: ServerType.memos, // Add default serverType
       );
       initialStateFromCache = MultiServerConfigState(
         servers: [migratedServer],
@@ -96,6 +119,10 @@ class MultiServerConfigNotifier extends StateNotifier<MultiServerConfigState> {
       if (kDebugMode) {
         print(
           '[MultiServerConfigNotifier] Cache empty, using legacy prefs for initial state. Migration needed.',
+        );
+        // Log details of migrated server
+        print(
+          '[MultiServerConfigNotifier] Legacy Prefs Migration Detail: ID=${migratedServer.id}, Name=${migratedServer.name}, Type=${migratedServer.serverType.name}',
         );
       }
     } else {
@@ -132,6 +159,24 @@ class MultiServerConfigNotifier extends StateNotifier<MultiServerConfigState> {
       activeServerId: initialActiveId,
     );
 
+    // Log the final computed initial state before setting it
+    if (kDebugMode) {
+      print(
+        '[MultiServerConfigNotifier] Computed Initial State Before Setting:',
+      );
+      for (var server in initialStateFromCache.servers) {
+        print(
+          '[MultiServerConfigNotifier]   Server: ID=${server.id}, Name=${server.name}, Type=${server.serverType.name}',
+        );
+      }
+      print(
+        '[MultiServerConfigNotifier]   Default ID: ${initialStateFromCache.defaultServerId}',
+      );
+      print(
+        '[MultiServerConfigNotifier]   Active ID: ${initialStateFromCache.activeServerId}',
+      );
+    }
+
     // Set initial state immediately from cache/migration source
     if (mounted) {
       state = initialStateFromCache;
@@ -161,6 +206,12 @@ class MultiServerConfigNotifier extends StateNotifier<MultiServerConfigState> {
         print(
           '[MultiServerConfigNotifier] CloudKit fetch successful: ${cloudServers.length} servers.',
         );
+        // Log details of servers fetched from CloudKit
+        for (var server in cloudServers) {
+          print(
+            '[MultiServerConfigNotifier] CloudKit Fetch Detail: ID=${server.id}, Name=${server.name}, Type=${server.serverType.name}',
+          );
+        }
       }
 
       final listEquals = const DeepCollectionEquality().equals;
@@ -215,6 +266,17 @@ class MultiServerConfigNotifier extends StateNotifier<MultiServerConfigState> {
             print(
               '[MultiServerConfigNotifier] State updated from CloudKit. Servers: ${state.servers.length}, ActiveId: ${state.activeServerId}, DefaultId: ${state.defaultServerId}',
             );
+          }
+          // Log servers being written to cache after CloudKit sync
+          if (kDebugMode) {
+            print(
+              '[MultiServerConfigNotifier] Updating local cache after CloudKit sync with these servers:',
+            );
+            for (var server in state.servers) {
+              print(
+                '[MultiServerConfigNotifier]   Cache Write Detail: ID=${server.id}, Name=${server.name}, Type=${server.serverType.name}',
+              );
+            }
           }
           await _updateLocalCache(state.servers);
         } else {
@@ -274,11 +336,22 @@ class MultiServerConfigNotifier extends StateNotifier<MultiServerConfigState> {
   // Helper to update the local SharedPreferences cache
   Future<bool> _updateLocalCache(List<ServerConfig> servers) async {
     try {
+      // Log details before serializing
+      if (kDebugMode) {
+        print(
+          '[MultiServerConfigNotifier][_updateLocalCache] Preparing to cache ${servers.length} servers:',
+        );
+        // Log details of servers being cached
+        print(
+          '[MultiServerConfigNotifier][_updateLocalCache] Caching Servers Details: ${servers.map((s) => "ID=\${s.id}, Name=\${s.name}, Type=\${s.serverType.name}").join("; ")}',
+        );
+      }
       final prefs = await SharedPreferences.getInstance();
+      // Pass only the servers list to the state constructor for caching
       final cacheState = MultiServerConfigState(servers: servers);
       final success = await prefs.setString(
         _serverConfigCacheKey,
-        cacheState.toJsonString(),
+        cacheState.toJsonString(), // Use the state's toJsonString method
       );
       if (kDebugMode) {
         print(
@@ -354,10 +427,17 @@ class MultiServerConfigNotifier extends StateNotifier<MultiServerConfigState> {
 
   /// Add a new server configuration locally and sync to CloudKit
   Future<bool> addServer(ServerConfig config) async {
+    // --- Add Logging Here ---
+    if (kDebugMode) {
+      print(
+        '[MultiServerConfigNotifier] addServer received config: \${config.toString()}',
+      );
+    }
+    // --- End Logging ---
     if (state.servers.any((s) => s.id == config.id)) {
       if (kDebugMode) {
         print(
-          '[MultiServerConfigNotifier] Attempted to add server with duplicate ID: ${config.id}',
+          '[MultiServerConfigNotifier] Attempted to add server with duplicate ID: \${config.id}',
         );
       }
       return false;
@@ -401,14 +481,14 @@ class MultiServerConfigNotifier extends StateNotifier<MultiServerConfigState> {
       }
       if (kDebugMode) {
         print(
-          '[MultiServerConfigNotifier] Added server ${config.id} locally and synced to CloudKit.',
+          '[MultiServerConfigNotifier] Added server \${config.id} locally and synced to CloudKit.',
         );
       }
       return true;
     } else {
       if (kDebugMode) {
         print(
-          '[MultiServerConfigNotifier] Failed to sync added server ${config.id} to CloudKit. Local state/cache not changed.',
+          '[MultiServerConfigNotifier] Failed to sync added server \${config.id} to CloudKit. Local state/cache not changed.',
         );
       }
       return false;
@@ -417,11 +497,18 @@ class MultiServerConfigNotifier extends StateNotifier<MultiServerConfigState> {
 
   /// Update an existing server configuration locally and sync to CloudKit
   Future<bool> updateServer(ServerConfig updatedConfig) async {
+    // --- Add Logging Here ---
+    if (kDebugMode) {
+      print(
+        '[MultiServerConfigNotifier] updateServer received config: \${updatedConfig.toString()}',
+      );
+    }
+    // --- End Logging ---
     final index = state.servers.indexWhere((s) => s.id == updatedConfig.id);
     if (index == -1) {
       if (kDebugMode) {
         print(
-          '[MultiServerConfigNotifier] UpdateServer: Server ID ${updatedConfig.id} not found.',
+          '[MultiServerConfigNotifier] UpdateServer: Server ID \${updatedConfig.id} not found.',
         );
       }
       return false;
@@ -447,14 +534,14 @@ class MultiServerConfigNotifier extends StateNotifier<MultiServerConfigState> {
       await _updateLocalCache(newServers);
       if (kDebugMode) {
         print(
-          '[MultiServerConfigNotifier] Updated server ${updatedConfig.id} locally and synced to CloudKit.',
+          '[MultiServerConfigNotifier] Updated server \${updatedConfig.id} locally and synced to CloudKit.',
         );
       }
       return true;
     } else {
       if (kDebugMode) {
         print(
-          '[MultiServerConfigNotifier] Failed to sync updated server ${updatedConfig.id} to CloudKit. Local state/cache not changed.',
+          '[MultiServerConfigNotifier] Failed to sync updated server \${updatedConfig.id} to CloudKit. Local state/cache not changed.',
         );
       }
       return false;

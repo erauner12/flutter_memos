@@ -46,7 +46,7 @@ class _MemosBodyState extends ConsumerState<MemosBody> {
     // Only run if mounted
     if (!mounted) return;
 
-    final memos = ref.read(filteredMemosProvider);
+    final memos = ref.read(filteredNotesProvider); // Use renamed provider
     final selectedId = ref.read(ui_providers.selectedMemoIdProvider);
 
     // Select the first memo only if the list is not empty AND nothing is currently selected
@@ -56,7 +56,7 @@ class _MemosBodyState extends ConsumerState<MemosBody> {
           firstMemoId;
       if (kDebugMode) {
         print(
-          '[MemosBody] Selected first memo (ID=$firstMemoId) after initial load/refresh.',
+          '[MemosBody] Selected first note (ID=$firstMemoId) after initial load/refresh.', // Updated log
         );
       }
     }
@@ -75,9 +75,9 @@ class _MemosBodyState extends ConsumerState<MemosBody> {
     if (widget.scrollController.position.pixels >=
         widget.scrollController.position.maxScrollExtent - 200) {
       // Trigger load more slightly before reaching the end
-      final notifier = ref.read(memosNotifierProvider.notifier);
+      final notifier = ref.read(notesNotifierProvider.notifier);
       // Check if we can load more before calling
-      if (ref.read(memosNotifierProvider).canLoadMore) {
+      if (ref.read(notesNotifierProvider).canLoadMore) {
         if (kDebugMode) {
           print(
             '[MemosBody] Reached near bottom, attempting to fetch more memos.',
@@ -101,7 +101,9 @@ class _MemosBodyState extends ConsumerState<MemosBody> {
     // Add light haptic feedback when refresh begins
     HapticFeedback.lightImpact();
 
-    await ref.read(memosNotifierProvider.notifier).refresh();
+    await ref
+        .read(notesNotifierProvider.notifier)
+        .refresh(); // Use renamed provider
 
     // Add success haptic feedback when refresh completes
     HapticFeedback.mediumImpact();
@@ -140,19 +142,21 @@ class _MemosBodyState extends ConsumerState<MemosBody> {
 
   @override
   Widget build(BuildContext context) {
-    final memosState = ref.watch(memosNotifierProvider);
-    final visibleMemos = ref.watch(
-      filteredMemosProvider,
-    ); // Use filtered memos for display
+    final notesState = ref.watch(notesNotifierProvider); // Use renamed provider
+    final visibleNotes = ref.watch(
+      filteredNotesProvider, // Use renamed provider
+    ); // Use filtered notes for display
     final hasSearchResults = ref.watch(hasSearchResultsProvider);
 
     // Loading State
-    if (memosState.isLoading && memosState.memos.isEmpty) {
+    if (notesState.isLoading && notesState.notes.isEmpty) {
+      // Use notesState.notes
       return const Center(child: CupertinoActivityIndicator());
     }
 
     // Error State
-    if (memosState.error != null && memosState.memos.isEmpty) {
+    if (notesState.error != null && notesState.notes.isEmpty) {
+      // Use notesState.notes
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -163,7 +167,10 @@ class _MemosBodyState extends ConsumerState<MemosBody> {
               color: CupertinoColors.systemRed,
             ),
             const SizedBox(height: 10),
-            Text('Error: ${memosState.error}', textAlign: TextAlign.center),
+            Text(
+              'Error: ${notesState.error}',
+              textAlign: TextAlign.center,
+            ), // Use notesState.error
             const SizedBox(height: 10),
             CupertinoButton(onPressed: _onRefresh, child: const Text('Retry')),
           ],
@@ -172,7 +179,8 @@ class _MemosBodyState extends ConsumerState<MemosBody> {
     }
 
     // Empty State (or No Search Results)
-    if (visibleMemos.isEmpty) {
+    if (visibleNotes.isEmpty) {
+      // Use visibleNotes
       // Delegate to MemosEmptyState widget
       return MemosEmptyState(onRefresh: _onRefresh);
     }
@@ -206,34 +214,37 @@ class _MemosBodyState extends ConsumerState<MemosBody> {
               sliver: SliverList(
                 delegate: SliverChildBuilderDelegate((context, index) {
                   // Memo List Item
-                  final memo = visibleMemos[index];
+                  final note = visibleNotes[index]; // Use visibleNotes and note
                   if (kDebugMode) {
                     // Log only when the specific callback is actually being passed
                     if (widget.onMoveMemoToServer != null) {
                       print(
-                        '[MemosBody] Building MemoListItem for ${memo.id}, passing onMoveToServer callback.',
+                        '[MemosBody] Building MemoListItem for ${note.id}, passing onMoveToServer callback.', // Updated log
                       );
                     }
                   }
                   return MemoListItem(
+                    // Keep MemoListItem name for now
                     key: ValueKey(
-                      memo.id,
+                      note.id, // Use note.id
                     ), // Use ValueKey for better list updates
-                    memo: memo,
+                    memo: note, // Pass NoteItem as memo prop
                     index: index,
                     // Pass the callback received by MemosBody down to MemoListItem
-                    // Use a lambda to capture the specific memo.id for the callback
+                    // Use a lambda to capture the specific note.id for the callback
                     onMoveToServer:
                         widget.onMoveMemoToServer != null
-                            ? () => widget.onMoveMemoToServer!(memo.id)
+                            ? () => widget.onMoveMemoToServer!(
+                              note.id,
+                            ) // Use note.id
                             : null,
                   );
-                }, childCount: visibleMemos.length),
+                }, childCount: visibleNotes.length), // Use visibleNotes.length
               ),
             ),
 
             // Loading More Indicator
-            if (memosState.isLoadingMore)
+            if (notesState.isLoadingMore) // Use notesState.isLoadingMore
               const SliverToBoxAdapter(
                 child: Padding(
                   padding: EdgeInsets.symmetric(vertical: 16.0),

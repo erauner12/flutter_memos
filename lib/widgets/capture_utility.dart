@@ -7,13 +7,12 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/physics.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_memos/models/comment.dart';
-import 'package:flutter_memos/models/memo.dart';
+import 'package:flutter_memos/models/note_item.dart';
 import 'package:flutter_memos/providers/comment_providers.dart'
     as comment_providers;
 import 'package:flutter_memos/providers/memo_detail_provider.dart'
     show memoDetailProvider; // Import for memoDetailProvider
-import 'package:flutter_memos/providers/memo_providers.dart'
-    as memo_providers;
+import 'package:flutter_memos/providers/memo_providers.dart' as memo_providers;
 import 'package:flutter_memos/providers/ui_providers.dart' as ui_providers;
 import 'package:flutter_memos/screens/memo_detail/memo_detail_providers.dart'
     show memoCommentsProvider; // Add this import
@@ -72,9 +71,10 @@ class CaptureUtility extends ConsumerStatefulWidget {
 class _CaptureUtilityState extends ConsumerState<CaptureUtility>
     with SingleTickerProviderStateMixin {
   // Move these method definitions to the top of the class to fix reference errors
-  Future<void> createMemo(String content) async {
-    final newMemo = Memo(id: 'temp', content: content, visibility: 'PUBLIC');
-    await ref.read(memo_providers.createMemoProvider)(newMemo);
+  Future<void> createNote(NoteItem note) async {
+    // Changed Memo to NoteItem
+    // Use the renamed provider
+    await ref.read(memo_providers.createNoteProvider)(note);
   }
 
   Future<void> addComment(
@@ -181,8 +181,6 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
     super.didChangeDependencies();
     _updateHeights(context);
   }
-
-
 
   @override
   void dispose() {
@@ -663,12 +661,29 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
     setState(() {
       _isSubmitting = true;
     });
-    // --- Define variable for the updated memo result ---
-    Memo? updatedMemoResult;
+    // --- Define variable for the updated note result ---
+    NoteItem? updatedMemoResult;
     try {
       if (widget.mode == CaptureMode.createMemo) {
         // Create Memo logic (remains unchanged, attachments handled separately if needed)
-        await createMemo(content);
+        // Here, use createNote with a NoteItem instead of a Memo
+        // This example assumes that NoteItem has similar fields to Memo.
+        final newNote = NoteItem(
+          id: 'temp',
+          content: content,
+          visibility: NoteVisibility.public,
+          pinned: false,
+          state: NoteState.normal,
+          createTime: DateTime.now(),
+          updateTime: DateTime.now(),
+          displayTime: DateTime.now(),
+          tags: [],
+          resources: [],
+          relations: [],
+          creatorId: '1',
+          parentId: null,
+        );
+        await createNote(newNote);
       } else if (widget.mode == CaptureMode.addComment &&
           widget.memoId != null) {
         // Add Comment logic (expanded)
@@ -719,7 +734,6 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
                 updatedContent,
               );
               // Refresh parent memo detail after comment update
-              // Assign to _ to handle unused_result warning
               final _ = ref.refresh(memoDetailProvider(memoId));
             } else {
               throw Exception("Cannot append: No last comment found.");
@@ -737,48 +751,71 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
                 updatedContent,
               );
               // Refresh parent memo detail after comment update
-              // Assign to _ to handle unused_result warning
               final _ = ref.refresh(memoDetailProvider(memoId));
             } else {
               throw Exception("Cannot prepend: No last comment found.");
             }
             break;
           case SubmitAction.appendToMemo:
-          case SubmitAction.prependToMemo: // Combine logic for append/prepend memo
+          case SubmitAction.prependToMemo:
             if (parentMemo != null) {
               // Ensure double newline is added between existing and new content
               final updatedContent = (currentAction == SubmitAction.appendToMemo)
-                      ? "${parentMemo.content}\n\n$currentContent" // Add double newline before new content
-                      : "$currentContent\n\n${parentMemo.content}"; // Add double newline after new content
-              final updatedMemoData = parentMemo.copyWith(content: updatedContent);
+                      ? "${parentMemo.content}\n\n$currentContent"
+                      : "$currentContent\n\n${parentMemo.content}";
+              
+              // Create a NoteItem from parentMemo properties
+              final updatedNoteData = NoteItem(
+                id: parentMemo.id,
+                content: updatedContent,
+                pinned: parentMemo.pinned,
+                state: parentMemo.state, // Directly use the NoteState enum
+                visibility:
+                    parentMemo
+                        .visibility, // Directly use the NoteVisibility enum
+                createTime:
+                    parentMemo.createTime, // Use the existing DateTime object
+                updateTime: DateTime.now(), // Set new update time
+                displayTime:
+                    parentMemo.displayTime, // Use the existing DateTime object
+                tags: parentMemo.tags, // Use existing tags
+                resources: parentMemo.resources, // Use existing resources
+                relations: parentMemo.relations, // Use existing relations
+                creatorId: parentMemo.creatorId, // Use creatorId
+                parentId: parentMemo.parentId, // Use parentId
+              );
 
-              // Call updateMemoProvider and store the result
-              updatedMemoResult = await ref.read(memo_providers.updateMemoProvider(memoId))(
-                updatedMemoData,
+              // Call updateNoteProvider and store the result
+              updatedMemoResult = await ref.read(
+                memo_providers.updateNoteProvider(memoId),
+              )(
+                updatedNoteData,
               );
 
               // --- Manually update cache and refresh providers ---
-               if (ref.exists(memo_providers.memoDetailCacheProvider)) {
-                  ref.read(memo_providers.memoDetailCacheProvider.notifier)
+              if (ref.exists(memo_providers.noteDetailCacheProvider)) {
+                ref
+                    .read(
+                      memo_providers.noteDetailCacheProvider.notifier,
+                    )
                      .update((state) => {...state, memoId: updatedMemoResult!});
                   if (kDebugMode) {
-                    print('[CaptureUtility] Manually updated memoDetailCacheProvider for $memoId');
+                  print(
+                    '[CaptureUtility] Manually updated noteDetailCacheProvider for $memoId',
+                  );
                   }
-               }
-              // Explicitly refresh the detail provider AFTER updating cache and AWAIT its completion
-              await ref.refresh(
+              }
+              final _ = await ref.refresh(
                 memoDetailProvider(memoId).future,
-              ); // Await the future
-              // Explicitly refresh the list provider (no need to await this one for immediate detail update)
-              // Assign to _ to handle unused_result warning
-              final _ = ref.refresh(memo_providers.memosNotifierProvider);
-               if (kDebugMode) {
+              );
+              final _ = ref.refresh(
+                memo_providers.notesNotifierProvider,
+              );
+              if (kDebugMode) {
                 print(
                   '[CaptureUtility] Explicitly refreshed (and awaited detail) providers for $memoId',
                 );
-               }
-              // --- End manual update and refresh ---
-
+              }
             } else {
               throw Exception(
                 "Cannot ${currentAction == SubmitAction.appendToMemo ? 'append' : 'prepend'}: Parent memo not loaded or available.",
@@ -792,8 +829,8 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
       if (mounted) {
         setState(() {
           _textController.clear();
-          _removeAttachment(); // Clear attachment regardless of action
-          _submitAction = SubmitAction.newComment; // Reset action
+          _removeAttachment();
+          _submitAction = SubmitAction.newComment;
           _isSubmitting = false;
         });
         _collapse();
@@ -893,8 +930,6 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
   }
 
   Widget buildExpandedContent(String hintText, String buttonText) {
-    // final isDarkMode = CupertinoTheme.of(context).brightness == Brightness.dark; // No longer needed here
-
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -918,7 +953,7 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
                 fontSize: 16,
               ),
               decoration: const BoxDecoration(
-                color: CupertinoColors.transparent, // Use transparent
+                color: CupertinoColors.transparent,
               ),
               padding: const EdgeInsets.symmetric(vertical: 8.0),
               cursorColor: CupertinoTheme.of(context).primaryColor,
@@ -1069,8 +1104,6 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
   }
 
   Widget buildCollapsedContent(String placeholderText) {
-    // final isDarkMode = CupertinoTheme.of(context).brightness == Brightness.dark; // No longer needed
-
     return Center(
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -1095,7 +1128,6 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
     );
   }
 
-  // **** Restored build method ****
   @override
   Widget build(BuildContext context) {
     final isDarkMode = CupertinoTheme.of(context).brightness == Brightness.dark;
@@ -1130,35 +1162,28 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
             ? 'Capture something...'
             : 'Add a comment...';
 
-    // Determine conditions for enabling/disabling segmented control options
-    // Use memoCommentsProvider from memo_detail_providers.dart
     final commentsAsync =
         widget.mode == CaptureMode.addComment && widget.memoId != null
             ? ref.watch(memoCommentsProvider(widget.memoId!))
             : const AsyncValue.data(
               <Comment>[],
-            ); // Default to empty if not in comment mode
+            );
     final bool hasComments = commentsAsync.maybeWhen(
       data: (comments) => comments.isNotEmpty,
       orElse: () => false,
     );
     final bool hasAttachment = _selectedFileData != null;
 
-    // --- Watch parent memo state ---
     final parentMemoAsyncValue =
         widget.mode == CaptureMode.addComment && widget.memoId != null
             ? ref.watch(memoDetailProvider(widget.memoId!))
             : const AsyncValue.data(
               null,
-            ); // Default to null if not in comment mode
+            );
     final bool isParentMemoLoaded =
         parentMemoAsyncValue.hasValue && parentMemoAsyncValue.value != null;
-    // --- End watch parent memo state ---
-
     final bool canAppendPrependComment = hasComments && !hasAttachment;
-    // Update canAppendPrependMemo to check if parent memo is loaded
     final bool canAppendPrependMemo = isParentMemoLoaded && !hasAttachment;
-    // --- Define segmentedControlChildren INSIDE build ---
     final Map<SubmitAction, Widget> segmentedControlChildren = {
       SubmitAction.newComment: const Padding(
         padding: EdgeInsets.symmetric(horizontal: 6),
@@ -1194,7 +1219,6 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
       ),
     };
 
-    // Recalculate heights based on context
     _updateHeights(context);
 
     double containerWidth;
@@ -1242,19 +1266,15 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
               ),
               boxShadow: [
                 BoxShadow(
-                  // Use withAlpha instead of deprecated withOpacity
                   color: CupertinoColors.black.withAlpha(
                     isDarkMode ? 77 : 26,
-                  ), // Approx 0.3 / 0.1 opacity
+                  ),
                   blurRadius: 15,
                   spreadRadius: 0,
                   offset: const Offset(0, 3),
                 ),
                 BoxShadow(
-                  // Use withAlpha instead of deprecated withOpacity
-                  color: CupertinoColors.black.withAlpha(
-                    13,
-                  ), // Approx 0.05 opacity
+                  color: CupertinoColors.black.withAlpha(13),
                   blurRadius: 1,
                   spreadRadius: 0,
                   offset: const Offset(0, 1),
@@ -1268,7 +1288,6 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   Container(
-                    // Drag handle
                     width: 32,
                     height: 4,
                     margin: const EdgeInsets.only(top: 8, bottom: 4),
@@ -1342,13 +1361,10 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
                                                 context,
                                               ).primaryColor,
                                           unselectedColor:
-                                              CupertinoColors
-                                                  .transparent, // Use CupertinoColors
+                                              CupertinoColors.transparent,
                                           pressedColor: CupertinoTheme.of(
                                             context,
-                                          ).primaryColor.withAlpha(
-                                            51,
-                                          ), // Use withAlpha (~20%)
+                                          ).primaryColor.withAlpha(51),
                                         ),
                                       ),
                                     ),

@@ -1,28 +1,27 @@
-// Import necessary packages and models
 import 'package:flutter/cupertino.dart'; // Import Cupertino
 import 'package:flutter/foundation.dart';
 // TextDecoration is in dart:ui, usually implicitly imported
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
-import 'package:flutter_memos/models/memo.dart'; // Import Memo model
+import 'package:flutter_memos/models/note_item.dart'; // Import NoteItem model
 import 'package:flutter_memos/models/server_config.dart'; // Import ServerConfig
 import 'package:flutter_memos/providers/api_providers.dart' as api_providers;
 import 'package:flutter_memos/providers/memo_providers.dart'
-    as memo_providers; // Add alias
+    as memo_providers; // Add alias for list providers
 import 'package:flutter_memos/providers/server_config_provider.dart'; // Import server config provider
 import 'package:flutter_memos/utils/keyboard_navigation.dart'; // Import the mixin
 import 'package:flutter_memos/utils/url_helper.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 // Define the provider locally within the form file
-// Update the provider signature to accept targetServerOverride
-final createMemoProvider = Provider<
-  Future<Memo> Function(Memo memo, {ServerConfig? targetServerOverride})
+// Update the provider signature to accept targetServerOverride and use NoteItem
+final createNoteProvider = Provider<
+  Future<NoteItem> Function(NoteItem note, {ServerConfig? targetServerOverride})
 >((ref) {
   final apiService = ref.watch(api_providers.apiServiceProvider);
-  // Return the function that takes the memo and the override
-  return (memo, {targetServerOverride}) => apiService.createMemo(
-    memo,
+  // Return the function that takes the note and the override
+  return (note, {targetServerOverride}) => apiService.createNote(
+    note,
     targetServerOverride: targetServerOverride, // Pass it here
   );
 });
@@ -201,7 +200,7 @@ class _NewMemoFormState extends ConsumerState<NewMemoForm>
     }
 
     if (kDebugMode) {
-      print('[NewMemoForm] Creating new memo via _handleCreateMemo');
+      print('[NewMemoForm] Creating new note via _handleCreateMemo');
       print(
         '[NewMemoForm] Target Server: ${_selectedServerConfig?.name ?? _selectedServerConfig?.id}',
       );
@@ -231,40 +230,46 @@ class _NewMemoFormState extends ConsumerState<NewMemoForm>
     }
 
     try {
-      final newMemo = Memo(
+      // Create a NoteItem instead of Memo
+      final newNote = NoteItem(
         id: 'temp', // ID is assigned by server
         content: content,
-        visibility: 'PUBLIC',
+        visibility: NoteVisibility.public, // Use enum
+        pinned: false, // Default value
+        state: NoteState.normal, // Default value
+        createTime: DateTime.now(), // Placeholder, server sets actual time
+        updateTime: DateTime.now(), // Placeholder
+        displayTime: DateTime.now(), // Placeholder
       );
 
-      // Call the provider, passing the selected server config
-      final createdMemo = await ref.read(createMemoProvider)(
-        newMemo,
+      // Call the renamed provider, passing the selected server config
+      final createdNote = await ref.read(createNoteProvider)(
+        newNote,
         targetServerOverride: _selectedServerConfig,
       );
 
       if (kDebugMode) {
         print(
-          '[NewMemoForm] Memo created successfully on server ${_selectedServerConfig?.id} with ID: ${createdMemo.id}',
+          '[NewMemoForm] Note created successfully on server ${_selectedServerConfig?.id} with ID: ${createdNote.id}',
         );
       }
 
-      // Invalidate memos if the created memo's server matches the active one
+      // Invalidate notes if the created note's server matches the active one
       final activeServerId = ref.read(activeServerConfigProvider)?.id;
       if (_selectedServerConfig?.id == activeServerId) {
-        ref.invalidate(memo_providers.memosNotifierProvider);
+        ref.invalidate(memo_providers.notesNotifierProvider);
       }
 
       if (mounted) {
         Navigator.pushReplacementNamed(
           context,
           '/memo-detail',
-          arguments: {'memoId': createdMemo.id},
+          arguments: {'memoId': createdNote.id},
         );
       }
     } catch (e) {
       if (kDebugMode) {
-        print('[NewMemoForm] Error creating memo: $e');
+        print('[NewMemoForm] Error creating note: $e');
       }
       if (mounted) {
         setState(() {
@@ -277,7 +282,7 @@ class _NewMemoFormState extends ConsumerState<NewMemoForm>
           builder:
               (context) => CupertinoAlertDialog(
                 title: const Text('Error'),
-                content: Text('Failed to create memo: ${e.toString()}'),
+                content: Text('Failed to create note: ${e.toString()}'),
                 actions: [
                   CupertinoDialogAction(
                     isDefaultAction: true,
@@ -285,7 +290,7 @@ class _NewMemoFormState extends ConsumerState<NewMemoForm>
                     onPressed: () => Navigator.of(context).pop(),
                   ),
                 ],
-          ),
+              ),
         );
       }
     } finally {

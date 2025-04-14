@@ -170,7 +170,6 @@ class _CommentCardState extends ConsumerState<CommentCard> {
     }
   }
 
-
   Future<void> _fixGrammar(BuildContext context) async {
     final fullId = '${widget.memoId}/${widget.comment.id}';
 
@@ -333,6 +332,7 @@ class _CommentCardState extends ConsumerState<CommentCard> {
       descriptionFocusNode.dispose();
     }
   }
+
   void _showContextMenu(BuildContext context) {
     final fullId = '${widget.memoId}/${widget.comment.id}';
 
@@ -411,7 +411,7 @@ class _CommentCardState extends ConsumerState<CommentCard> {
                   _showDialog('Copied', 'Comment link copied to clipboard.');
             },
           ),
-           CupertinoActionSheetAction(
+              CupertinoActionSheetAction(
             child: const Text('Convert to Memo'),
             onPressed: () {
               Navigator.pop(context);
@@ -425,7 +425,7 @@ class _CommentCardState extends ConsumerState<CommentCard> {
               _onHide(context);
             },
           ),
-           CupertinoActionSheetAction(
+              CupertinoActionSheetAction(
             child: const Text('Archive'),
             onPressed: () {
               Navigator.pop(context);
@@ -499,7 +499,7 @@ class _CommentCardState extends ConsumerState<CommentCard> {
       if (mounted) {
         setState(() {
           _isDeleting = false;
-        }); // Reset deleting state on error
+        });
       }
       _showDialog('Error', 'Failed to delete comment: $e', isError: true);
     }
@@ -518,7 +518,8 @@ class _CommentCardState extends ConsumerState<CommentCard> {
   void _onConvertToMemo(BuildContext context) async {
     final fullId = '${widget.memoId}/${widget.comment.id}';
     try {
-      final convertFunction = ref.read(convertCommentToMemoProvider(fullId));
+      // Use the correct provider name
+      final convertFunction = ref.read(convertCommentToNoteProvider(fullId));
       await convertFunction();
     } catch (e) {
       _showDialog(
@@ -631,13 +632,16 @@ class _CommentCardState extends ConsumerState<CommentCard> {
         color: cardBackgroundColor,
         borderRadius: BorderRadius.circular(8),
         border: Border.fromBorderSide(cardBorderStyle),
-        boxShadow: !isDarkMode && !widget.isSelected && !isHighlighted ? [
-          BoxShadow(
+        boxShadow:
+            !isDarkMode && !widget.isSelected && !isHighlighted
+                ? [
+                  BoxShadow(
                     color: CupertinoColors.black.withAlpha(25),
-            blurRadius: 4,
-            offset: const Offset(0, 1),
-          )
-        ] : null,
+                    blurRadius: 4,
+                    offset: const Offset(0, 1),
+                  )
+                ]
+                : null,
       ),
       child: GestureDetector(
         onLongPress: isMultiSelectMode ? () => _toggleMultiSelection() : () => _showContextMenu(context),
@@ -782,9 +786,7 @@ class _CommentCardState extends ConsumerState<CommentCard> {
                     children: [
                       if (widget.comment.pinned)
                         Padding(
-                          padding: const EdgeInsets.only(
-                            right: 8.0,
-                          ), // Add padding if needed
+                          padding: const EdgeInsets.only(right: 8.0),
                           child: Icon(
                             CupertinoIcons.pin_fill,
                             size: 16,
@@ -799,7 +801,7 @@ class _CommentCardState extends ConsumerState<CommentCard> {
                           padding: EdgeInsets.symmetric(horizontal: 4.0),
                           child: CupertinoActivityIndicator(
                             radius: 9,
-                          ), // Smaller radius
+                          ),
                         )
                       else
                         CupertinoButton(

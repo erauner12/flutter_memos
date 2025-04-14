@@ -120,12 +120,7 @@ class NotesListRequest {
     }
       json[r'page'] = this.page;
       json[r'size'] = this.size;
-      json[r'orderBy'] = this.orderBy;
-    if (this.type != null) {
-      json[r'type'] = this.type;
-    } else {
-      json[r'type'] = null;
-    }
+    json[r'orderBy'] = this.orderBy;
     if (this.isArchived != null) {
       json[r'isArchived'] = this.isArchived;
     } else {
@@ -148,7 +143,7 @@ class NotesListRequest {
       json[r'startDate'] = null;
     }
     if (this.endDate != null) {
-      json[r'endDate'] = null;
+      json[r'endDate'] = this.endDate;
     } else {
       json[r'endDate'] = null;
     }

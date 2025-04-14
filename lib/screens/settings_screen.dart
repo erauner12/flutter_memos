@@ -149,7 +149,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final apiService = ref.read(apiServiceProvider);
 
     try {
-      await apiService.listMemos(pageSize: 1, parent: 'users/-');
+      // Use listNotes with minimal parameters for health check
+      await apiService.listNotes(pageSize: 1);
       if (mounted) {
         _showResultDialog(
           'Success',

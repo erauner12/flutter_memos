@@ -203,9 +203,9 @@ class _MemoDetailScreenState extends ConsumerState<MemoDetailScreen>
                   if (confirmed == true) {
                     if (!mounted) return; // Check mounted before try block
                     try {
-                      // Call delete provider
+                      // Call delete provider using the correct name
                       await ref.read(
-                        memo_providers.deleteMemoProvider(widget.memoId),
+                        memo_providers.deleteNoteProvider(widget.memoId), // Use deleteNoteProvider
                       )();
                       // Pop back to previous screen after successful deletion
                       // Check mounted *again* before this context use
@@ -242,11 +242,11 @@ class _MemoDetailScreenState extends ConsumerState<MemoDetailScreen>
     HapticFeedback.mediumImpact();
 
     try {
-      // Call the provider
+      // Call the provider using the correct name
       // Check mounted before interacting with ref
       if (!mounted) return;
       await ref.read(
-        memo_providers.fixMemoGrammarProvider(widget.memoId).future,
+        memo_providers.fixNoteGrammarProvider(widget.memoId).future, // Use fixNoteGrammarProvider
       );
       // Show success message (optional)
       if (mounted) _showSuccessSnackbar('Grammar corrected successfully!');
@@ -388,7 +388,7 @@ class _MemoDetailScreenState extends ConsumerState<MemoDetailScreen>
     final memoAsync = ref.watch(memoDetailProvider(widget.memoId));
 
     return memoAsync.when(
-      data: (memo) {
+      data: (note) { // Changed variable name from memo to note
         // --- Use CustomScrollView with Refresh Control ---
         return CupertinoScrollbar(
           controller: _scrollController, // Pass controller
@@ -406,7 +406,10 @@ class _MemoDetailScreenState extends ConsumerState<MemoDetailScreen>
               ),
               // Memo content section wrapped in SliverToBoxAdapter
               SliverToBoxAdapter(
-                child: MemoContent(memo: memo, memoId: widget.memoId),
+                child: MemoContent(
+                  memo: note,
+                  memoId: widget.memoId,
+                ), // Pass NoteItem as 'memo'
               ),
               // Divider wrapped in SliverToBoxAdapter
               SliverToBoxAdapter(

@@ -1,13 +1,17 @@
 import 'package:flutter_memos/models/comment.dart';
-import 'package:flutter_memos/models/memo.dart';
+import 'package:flutter_memos/models/note_item.dart'; // Import NoteItem
 import 'package:flutter_memos/providers/api_providers.dart';
 import 'package:flutter_memos/utils/comment_utils.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 // Provider for memo details
-final memoDetailProvider = FutureProvider.family<Memo, String>((ref, id) async {
+final memoDetailProvider = FutureProvider.family<NoteItem, String>((
+  ref,
+  id,
+) async {
+  // Changed return type to NoteItem
   final apiService = ref.watch(apiServiceProvider);
-  return apiService.getMemo(id);
+  return apiService.getNote(id); // Use getNote
 });
 
 // Provider for memo comments
@@ -16,12 +20,14 @@ final memoCommentsProvider = FutureProvider.family<List<Comment>, String>((
   memoId,
 ) async {
   final apiService = ref.watch(apiServiceProvider);
-  final comments = await apiService.listMemoComments(memoId);
+  final comments = await apiService.listNoteComments(
+    memoId,
+  ); // Use listNoteComments
 
   // Sort comments with pinned first, then by *update* time
   CommentUtils.sortByPinnedThenUpdateTime(
     comments,
-  ); // <-- Apply requested change
+  ); // &lt;-- Apply requested change
 
   return comments;
 });
