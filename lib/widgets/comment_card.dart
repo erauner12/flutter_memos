@@ -692,20 +692,53 @@ class _CommentCardState extends ConsumerState<CommentCard> {
                     spacing: 8.0,
                     runSpacing: 8.0,
                     children:
-                        widget.comment.resources!
-                            .where((r) => r.type?.startsWith('image/') ?? false)
+                        (widget.comment.resources ?? [])
+                            // Access 'contentType' key in the map
+                            .where(
+                              (r) =>
+                                  (r['contentType'] as String?)?.startsWith(
+                                    'image/',
+                                  ) ??
+                                  false,
+                            )
                             .map((resource) {
-                              final resourceName =
-                                  resource.name?.split('/').last;
-                              final filename = resource.filename;
-                              if (baseUrl.isNotEmpty &&
-                                  resourceName != null &&
+                              // Access keys from the map
+                              final String? resourceName =
+                                  resource['name'] as String?;
+                              final String? filename =
+                                  resource['filename'] as String?;
+                              final String? externalLink =
+                                  resource['externalLink']
+                                      as String?; // Use externalLink or specific API path
+                              final String? memosResourceName =
+                                  resourceName?.startsWith('resources/') == true
+                                      ? resourceName?.split('/').last
+                                      : resourceName; // Extract Memos ID if needed
+                              final String? blinkoPath =
+                                  resource['blinkoPath']
+                                      as String?; // Example if Blinko path is stored
+
+                              // Construct URL based on available data (adjust logic as needed for different APIs)
+                              String? imageUrl;
+                              if (baseUrl.isNotEmpty && externalLink != null) {
+                                // Generic external link
+                                imageUrl = externalLink;
+                              } else if (baseUrl.isNotEmpty &&
+                                  memosResourceName != null &&
                                   filename != null) {
+                                // Memos specific URL structure
                                 final encodedFilename = Uri.encodeComponent(
                                   filename,
                                 );
-                                final imageUrl =
-                                    '$baseUrl/o/r/$resourceName/$encodedFilename';
+                                imageUrl =
+                                    '$baseUrl/o/r/$memosResourceName/$encodedFilename';
+                              } else if (baseUrl.isNotEmpty &&
+                                  blinkoPath != null) {
+                                // Blinko specific URL structure (if different)
+                                imageUrl = '$baseUrl$blinkoPath'; // Example
+                              }
+
+                              if (imageUrl != null) {
                                 return ConstrainedBox(
                                   constraints: const BoxConstraints(
                                     maxWidth: 200,

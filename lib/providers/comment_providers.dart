@@ -1,6 +1,5 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_memos/models/comment.dart';
-import 'package:flutter_memos/models/memo_relation.dart'; // Import MemoRelation
 import 'package:flutter_memos/models/note_item.dart'; // Import NoteItem
 import 'package:flutter_memos/providers/memo_providers.dart'; // Keep for notesNotifierProvider etc.
 import 'package:flutter_memos/screens/memo_detail/memo_detail_providers.dart'
@@ -207,15 +206,15 @@ final convertCommentToNoteProvider = Provider.family<
       // But continue even if this part fails
       if (memoId.isNotEmpty) {
         try {
-          final relation = MemoRelation(
-            // Keep MemoRelation model for now
-            relatedMemoId:
-                memoId, // Assuming relation points to original note ID
-            type: MemoRelation.typeComment, // Keep type or adapt if needed
-          );
+          // Create a Map representing the relation, matching setNoteRelations signature
+          final Map<String, dynamic> relationMap = {
+            'relatedMemoId': memoId, // Original note ID
+            'type': 'COMMENT', // Type indicating the origin
+            // Add 'memoId': createdNote.id if your setNoteRelations implementation requires it
+          };
 
           await apiService.setNoteRelations(createdNote.id, [
-            relation,
+            relationMap, // Pass the map
           ]); // Use setNoteRelations
         } catch (relationError) {
           // Log but don't fail the whole conversion if relation setting fails
