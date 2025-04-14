@@ -457,11 +457,10 @@ class BlinkoApiService implements BaseApiService {
     final request = blinko_api.CommentsCreateRequest(
       noteId: noteIdNum,
       content: comment.content,
-      // --- ADD DEFAULTS FOR REQUIRED STRING FIELDS ---
-      guestName: '', // Provide empty string instead of null
-      // guestIP: '',   // Provide empty string instead of null
-      // guestUA: '',   // Provide empty string instead of null
-      // --- END ADDED DEFAULTS ---
+      guestName: '',
+      // guestIP: '',
+      // guestUA: '',
+      parentId: null, // Explicitly null for top-level comments
     );
     try {
       final bool? success = await commentApi.commentsCreate(request);
