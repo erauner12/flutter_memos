@@ -975,8 +975,8 @@ class BlinkoApiService implements BaseApiService {
             .map((r) {
               // Correctly access the related note's ID
               final relatedNoteId =
-                  r.toNote?.noteId
-                      ?.toString(); // Access ID safely using noteId property
+                  r.toNote?.id
+                      ?.toString(); // Access ID safely using id property
               if (relatedNoteId != null) {
                 final type =
                     'REFERENCE'; // Blinko seems to only have references
@@ -1064,7 +1064,7 @@ class BlinkoApiService implements BaseApiService {
         (blinkoNote.references ?? [])
             .map((r) {
               // Correctly access the related note's ID - use noteId instead of id
-              final relatedNoteId = r.toNote?.noteId?.toString();
+              final relatedNoteId = r.toNote?.id?.toString();
               if (relatedNoteId != null) {
                 final type =
                     'REFERENCE'; // Blinko seems to only have references
