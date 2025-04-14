@@ -61,15 +61,13 @@ class CommentsCreateRequest {
     final json = <String, dynamic>{};
       json[r'content'] = this.content;
       json[r'noteId'] = this.noteId;
+    // Only include parentId in the JSON if it's not null
     if (this.parentId != null) {
       json[r'parentId'] = this.parentId;
-    } else {
-      json[r'parentId'] = null;
     }
+    // Only include guestName in the JSON if it's not null
     if (this.guestName != null) {
       json[r'guestName'] = this.guestName;
-    } else {
-      json[r'guestName'] = null;
     }
     return json;
   }
@@ -148,4 +146,3 @@ class CommentsCreateRequest {
     'noteId',
   };
 }
-

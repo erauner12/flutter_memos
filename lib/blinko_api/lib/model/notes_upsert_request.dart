@@ -111,57 +111,40 @@ class NotesUpsertRequest {
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
+    // Only include optional fields if they are not null
     if (this.content != null) {
       json[r'content'] = this.content;
-    } else {
-      json[r'content'] = null;
     }
     if (this.type != null) {
       json[r'type'] = this.type;
-    } else {
-      json[r'type'] = null;
     }
+    // Include lists even if empty, as they are not nullable in the model
       json[r'attachments'] = this.attachments;
     if (this.id != null) {
       json[r'id'] = this.id;
-    } else {
-      json[r'id'] = null;
     }
     if (this.isArchived != null) {
       json[r'isArchived'] = this.isArchived;
-    } else {
-      json[r'isArchived'] = null;
     }
     if (this.isTop != null) {
       json[r'isTop'] = this.isTop;
-    } else {
-      json[r'isTop'] = null;
     }
     if (this.isShare != null) {
       json[r'isShare'] = this.isShare;
-    } else {
-      json[r'isShare'] = null;
     }
     if (this.isRecycle != null) {
       json[r'isRecycle'] = this.isRecycle;
-    } else {
-      json[r'isRecycle'] = null;
     }
+    // Include lists even if empty
       json[r'references'] = this.references;
     if (this.createdAt != null) {
       json[r'createdAt'] = this.createdAt;
-    } else {
-      json[r'createdAt'] = null;
     }
     if (this.updatedAt != null) {
       json[r'updatedAt'] = this.updatedAt;
-    } else {
-      json[r'updatedAt'] = null;
     }
     if (this.metadata != null) {
       json[r'metadata'] = this.metadata;
-    } else {
-      json[r'metadata'] = null;
     }
     return json;
   }
@@ -248,4 +231,3 @@ class NotesUpsertRequest {
   static const requiredKeys = <String>{
   };
 }
-

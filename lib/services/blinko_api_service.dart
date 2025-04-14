@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart'; // Import for kDebugMode
+import 'package:flutter/foundation.dart';
 import 'package:flutter_memos/blinko_api/lib/api.dart'
     as blinko_api; // Alias Blinko API
 import 'package:flutter_memos/models/comment.dart';
@@ -42,7 +42,10 @@ class BlinkoApiService implements BaseApiService {
   bool get isConfigured => _baseUrl.isNotEmpty && _authToken.isNotEmpty;
 
   @override
-  Future<void> configureService({required String baseUrl, required String authToken}) async {
+  Future<void> configureService({
+    required String baseUrl,
+    required String authToken,
+  }) async {
     // Check if already configured with the exact same inputs and is valid
     if (_baseUrl == baseUrl && _authToken == authToken && isConfigured) {
       if (kDebugMode) {
@@ -66,7 +69,10 @@ class BlinkoApiService implements BaseApiService {
     String effectiveBaseUrl = baseUrl;
     // Ensure base URL doesn't end with '/'
     if (effectiveBaseUrl.endsWith('/')) {
-      effectiveBaseUrl = effectiveBaseUrl.substring(0, effectiveBaseUrl.length - 1);
+      effectiveBaseUrl = effectiveBaseUrl.substring(
+        0,
+        effectiveBaseUrl.length - 1,
+      );
     }
 
     // *** REMOVE AUTOMATIC /api APPENDING ***
@@ -266,7 +272,10 @@ class BlinkoApiService implements BaseApiService {
   }
 
   @override
-  Future<NoteItem> getNote(String id, {ServerConfig? targetServerOverride}) async {
+  Future<NoteItem> getNote(
+    String id, {
+    ServerConfig? targetServerOverride,
+  }) async {
     final noteApi = _getNoteApiForServer(targetServerOverride);
     final num? noteIdNum = num.tryParse(id);
     if (noteIdNum == null) {
@@ -274,7 +283,8 @@ class BlinkoApiService implements BaseApiService {
     }
     final request = blinko_api.NotesDetailRequest(id: noteIdNum);
     try {
-      final blinko_api.NotesDetail200Response? response = await noteApi.notesDetail(request);
+      final blinko_api.NotesDetail200Response? response = await noteApi
+          .notesDetail(request);
       if (response == null) {
         throw Exception('Note \$id not found');
       }
@@ -285,7 +295,10 @@ class BlinkoApiService implements BaseApiService {
   }
 
   @override
-  Future<NoteItem> createNote(NoteItem note, {ServerConfig? targetServerOverride}) async {
+  Future<NoteItem> createNote(
+    NoteItem note, {
+    ServerConfig? targetServerOverride,
+  }) async {
     final noteApi = _getNoteApiForServer(targetServerOverride);
     final request = blinko_api.NotesUpsertRequest(
       content: note.content,
@@ -311,7 +324,11 @@ class BlinkoApiService implements BaseApiService {
   }
 
   @override
-  Future<NoteItem> updateNote(String id, NoteItem note, {ServerConfig? targetServerOverride}) async {
+  Future<NoteItem> updateNote(
+    String id,
+    NoteItem note, {
+    ServerConfig? targetServerOverride,
+  }) async {
     final noteApi = _getNoteApiForServer(targetServerOverride);
     final num? noteIdNum = num.tryParse(id);
     if (noteIdNum == null) {
@@ -332,7 +349,10 @@ class BlinkoApiService implements BaseApiService {
   }
 
   @override
-  Future<void> deleteNote(String id, {ServerConfig? targetServerOverride}) async {
+  Future<void> deleteNote(
+    String id, {
+    ServerConfig? targetServerOverride,
+  }) async {
     final noteApi = _getNoteApiForServer(targetServerOverride);
     final num? noteIdNum = num.tryParse(id);
     if (noteIdNum == null) {
@@ -377,7 +397,10 @@ class BlinkoApiService implements BaseApiService {
     if (noteIdNum == null) {
       throw ArgumentError('Invalid numeric ID format for Blinko: \$id');
     }
-    NoteItem currentNote = await getNote(id, targetServerOverride: targetServerOverride);
+    NoteItem currentNote = await getNote(
+      id,
+      targetServerOverride: targetServerOverride,
+    );
     bool newPinState = !currentNote.pinned;
     final request = blinko_api.NotesUpsertRequest(
       id: noteIdNum,
@@ -394,7 +417,10 @@ class BlinkoApiService implements BaseApiService {
   // --- Comments ---
 
   @override
-  Future<List<Comment>> listNoteComments(String noteId, {ServerConfig? targetServerOverride}) async {
+  Future<List<Comment>> listNoteComments(
+    String noteId, {
+    ServerConfig? targetServerOverride,
+  }) async {
     // Use _getApiClientForServer to create a temporary CommentApi instance
     final commentApi = blinko_api.CommentApi(
       _getApiClientForServer(targetServerOverride),
@@ -466,11 +492,10 @@ class BlinkoApiService implements BaseApiService {
           'Failed to create comment: API returned failure or null.',
         );
       }
-      // Since Blinko create doesn't return the created comment, we cannot return it directly.
-      // Throwing an exception to signal refresh is needed.
-      throw Exception(
-        "Comment created successfully, but refresh required to view.",
-      );
+      // Blinko create succeeded, but doesn't return the created comment object.
+      // Return the original comment object passed in as a placeholder.
+      // The calling provider will invalidate the list to fetch the real data.
+      return comment;
     } catch (e) {
       if (e is blinko_api.ApiException || e is Exception) {
         rethrow;
@@ -547,7 +572,11 @@ class BlinkoApiService implements BaseApiService {
   }
 
   @override
-  Future<void> deleteNoteComment(String noteId, String commentId, {ServerConfig? targetServerOverride}) async {
+  Future<void> deleteNoteComment(
+    String noteId,
+    String commentId, {
+    ServerConfig? targetServerOverride,
+  }) async {
     // Use _getApiClientForServer to create a temporary CommentApi instance
     final commentApi = blinko_api.CommentApi(
       _getApiClientForServer(targetServerOverride),
@@ -627,7 +656,9 @@ class BlinkoApiService implements BaseApiService {
   // --- Helper & Mapping Methods ---
 
   blinko_api.ApiClient _getApiClientForServer(ServerConfig? serverConfig) {
-    if (serverConfig == null || (serverConfig.serverUrl == _baseUrl && serverConfig.authToken == _authToken)) {
+    if (serverConfig == null ||
+        (serverConfig.serverUrl == _baseUrl &&
+            serverConfig.authToken == _authToken)) {
       return _apiClient;
     }
     try {
@@ -665,13 +696,16 @@ class BlinkoApiService implements BaseApiService {
     return blinko_api.FileApi(_getApiClientForServer(serverConfig));
   }
 
-  NoteItem _convertBlinkoNoteToNoteItem(blinko_api.NotesList200ResponseInner blinkoNote) {
+  NoteItem _convertBlinkoNoteToNoteItem(
+    blinko_api.NotesList200ResponseInner blinkoNote,
+  ) {
     DateTime parseBlinkoDate(String? dateString) {
       if (dateString == null) {
         return DateTime(1970);
       }
       return DateTime.tryParse(dateString) ?? DateTime(1970);
     }
+
     NoteState state = NoteState.normal;
     if (blinkoNote.isRecycle) {
       state = NoteState.archived;
@@ -705,6 +739,7 @@ class BlinkoApiService implements BaseApiService {
       }
       return DateTime.tryParse(dateString) ?? DateTime(1970);
     }
+
     NoteState state = NoteState.normal;
     if (blinkoDetail.isRecycle) {
       state = NoteState.archived;
@@ -724,7 +759,8 @@ class BlinkoApiService implements BaseApiService {
       createTime: parseBlinkoDate(blinkoDetail.createdAt),
       updateTime: parseBlinkoDate(blinkoDetail.updatedAt),
       displayTime: parseBlinkoDate(blinkoDetail.createdAt),
-      tags: blinkoDetail.tags.map((t) => t.tag.name).whereType<String>().toList(),
+      tags:
+          blinkoDetail.tags.map((t) => t.tag.name).whereType<String>().toList(),
       resources: blinkoDetail.attachments.map((a) => a.toJson()).toList(),
       relations: blinkoDetail.references.map((r) => r.toJson()).toList(),
       // accountId is nullable in the response model, handle appropriately
@@ -741,13 +777,16 @@ class BlinkoApiService implements BaseApiService {
       }
       return DateTime.tryParse(dateString) ?? DateTime(1970);
     }
+
     CommentState state = CommentState.normal;
     bool pinned = false; // Blinko comments don't seem to have a pinned state
     return Comment(
       id: blinkoComment.id.toString(),
       content: blinkoComment.content,
-      createTime: parseBlinkoDate(blinkoComment.createdAt).millisecondsSinceEpoch,
-      updateTime: parseBlinkoDate(blinkoComment.updatedAt).millisecondsSinceEpoch,
+      createTime:
+          parseBlinkoDate(blinkoComment.createdAt).millisecondsSinceEpoch,
+      updateTime:
+          parseBlinkoDate(blinkoComment.updatedAt).millisecondsSinceEpoch,
       // accountId is nullable in the response model, handle appropriately
       creatorId: blinkoComment.accountId.toString(),
       pinned: pinned,
