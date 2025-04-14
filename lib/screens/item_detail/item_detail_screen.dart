@@ -92,8 +92,8 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> // Renamed 
   // --- Action Sheet Logic ---
   void _showActions() {
     if (!mounted) return;
-    // Use provider from note_providers
-    final isFixingGrammar = ref.read(note_providers._isFixingGrammarProvider);
+    // Use public provider from note_providers
+    final isFixingGrammar = ref.read(note_providers.isFixingGrammarProvider);
 
     showCupertinoModalPopup<void>(
       context: context,
@@ -207,8 +207,8 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> // Renamed 
   // --- Fix Grammar Handler ---
   Future<void> _fixGrammar() async {
     if (!mounted) return;
-    // Use provider from note_providers
-    ref.read(note_providers._isFixingGrammarProvider.notifier).state = true;
+    // Use public provider from note_providers
+    ref.read(note_providers.isFixingGrammarProvider.notifier).state = true;
     HapticFeedback.mediumImpact();
 
     try {
@@ -224,8 +224,8 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> // Renamed 
       if (kDebugMode) print('[ItemDetailScreen] Fix Grammar Error: $e'); // Updated log identifier
     } finally {
       if (mounted) {
-        // Use provider from note_providers
-        ref.read(note_providers._isFixingGrammarProvider.notifier).state = false;
+        // Use public provider from note_providers
+        ref.read(note_providers.isFixingGrammarProvider.notifier).state = false;
       }
     }
   }

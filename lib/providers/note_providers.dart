@@ -931,5 +931,8 @@ final noteCommentsProvider = FutureProvider.family<List<Comment>, String>((
   return comments;
 }, name: 'noteCommentsProvider');
 
-// Keep provider name _isFixingGrammarProvider
-final _isFixingGrammarProvider = StateProvider<bool>((ref) => false, name: '_isFixingGrammarProvider');
+// Rename _isFixingGrammarProvider to isFixingGrammarProvider to make it public
+final isFixingGrammarProvider = StateProvider<bool>(
+  (ref) => false,
+  name: 'isFixingGrammarProvider',
+);
