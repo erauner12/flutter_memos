@@ -229,7 +229,6 @@ Future<todoist.Label?> _findLabelByIdOrName(
   return null;
 }
 
-
 // --- Generic Result Helpers ---
 
 mcp_dart.CallToolResult _createErrorResult(String message,
@@ -1838,13 +1837,91 @@ Future<mcp_dart.CallToolResult> handleCompleteTodoistTask({
   }
 }
 
+// --- Updated Handlers for Task Comments ---
+
 Future<mcp_dart.CallToolResult> handleGetTaskComments({
   Map<String, dynamic>? args,
   RequestHandlerExtra? extra,
 }) async {
   stderr.writeln('[TodoistServer] Received get_task_comments request.');
   stderr.writeln('[TodoistServer] Args: ${jsonEncode(args)}');
-  return _createErrorResult('Handler not fully implemented yet.');
+
+  final apiClient = _configureApiClient();
+  if (apiClient == null) {
+    return _createErrorResult(
+        'TODOIST_API_TOKEN environment variable not set or empty.');
+  }
+  final commentsApi = todoist.CommentsApi(apiClient);
+
+  try {
+    final taskId = args?['task_id'] as String?;
+    if (taskId == null || taskId.trim().isEmpty) {
+      return _createErrorResult('Task ID (task_id) is required.');
+    }
+
+    // Note: getAllComments also accepts projectId, but we'll stick to taskId for this tool
+    stderr.writeln('[TodoistServer] Fetching comments for task ID: $taskId');
+    final comments = await commentsApi.getAllComments(taskId: taskId);
+
+    if (comments == null) {
+      stderr.writeln(
+          '[TodoistServer] API returned null comment list for task ID $taskId. Assuming empty.');
+      return _createSuccessResult(
+        'Successfully fetched 0 comments for task ID $taskId.',
+        resultData: {'comments': []},
+      );
+    }
+
+    final resultComments = comments
+        .map((comment) => {
+              'id': comment.id,
+              'task_id': comment.taskId,
+              'project_id': comment.projectId,
+              'posted_at': comment.postedAt,
+              'content': comment.content,
+              'attachment': comment.attachment != null
+                  ? {
+                      'resource_type': (comment.attachment
+                              as todoist.CreateCommentAttachmentParameter?)
+                          ?.resourceType,
+                      'file_name': (comment.attachment
+                              as todoist.CreateCommentAttachmentParameter?)
+                          ?.fileName,
+                      'file_type': (comment.attachment
+                              as todoist.CreateCommentAttachmentParameter?)
+                          ?.fileType,
+                      'file_url': (comment.attachment
+                              as todoist.CreateCommentAttachmentParameter?)
+                          ?.fileUrl,
+                    }
+                  : null,
+            })
+        .toList();
+
+    final successMsg =
+        'Successfully fetched ${resultComments.length} comments for task ID $taskId.';
+    stderr.writeln('[TodoistServer] $successMsg');
+    return _createSuccessResult(
+      successMsg,
+      resultData: {'comments': resultComments},
+    );
+  } catch (e) {
+    var apiErrorMsg = 'Error getting task comments: ${e.toString()}';
+    stderr.writeln('[TodoistServer] $apiErrorMsg');
+    Map<String, dynamic>? errorData;
+    if (e is todoist.ApiException) {
+      stderr.writeln(
+          '[TodoistServer] API Exception Details: Code=${e.code}, Message=${e.message}');
+      if (e.code == 404) {
+        apiErrorMsg = 'Task with ID "${args?['task_id']}" not found.';
+      } else {
+        apiErrorMsg =
+            'API Error getting comments (${e.code}): ${e.message ?? "Unknown API error"}';
+      }
+      errorData = {'apiCode': e.code, 'apiMessage': e.message};
+    }
+    return _createErrorResult(apiErrorMsg, errorData: errorData);
+  }
 }
 
 Future<mcp_dart.CallToolResult> handleCreateTaskComment({
@@ -1853,7 +1930,109 @@ Future<mcp_dart.CallToolResult> handleCreateTaskComment({
 }) async {
   stderr.writeln('[TodoistServer] Received create_task_comment request.');
   stderr.writeln('[TodoistServer] Args: ${jsonEncode(args)}');
-  return _createErrorResult('Handler not fully implemented yet.');
+
+  final apiClient = _configureApiClient();
+  if (apiClient == null) {
+    return _createErrorResult(
+        'TODOIST_API_TOKEN environment variable not set or empty.');
+  }
+  final commentsApi = todoist.CommentsApi(apiClient);
+
+  try {
+    final taskId = args?['task_id'] as String?;
+    final content = args?['content'] as String?;
+    // Optional attachment handling (basic structure)
+    final attachmentData = args?['attachment'] as Map<String, dynamic>?;
+
+    if (taskId == null || taskId.trim().isEmpty) {
+      return _createErrorResult('Task ID (task_id) is required.');
+    }
+    if (content == null || content.trim().isEmpty) {
+      return _createErrorResult('Comment content cannot be empty.');
+    }
+
+    todoist.CreateCommentAttachmentParameter? attachmentObject;
+    if (attachmentData != null) {
+      // Basic validation - more robust checks might be needed depending on usage
+      if (attachmentData.containsKey('file_name') &&
+          attachmentData.containsKey('file_url')) {
+        attachmentObject = todoist.CreateCommentAttachmentParameter(
+          resourceType: attachmentData['resource_type'] as String?,
+          fileName: attachmentData['file_name'] as String?,
+          fileType: attachmentData['file_type'] as String?,
+          fileUrl: attachmentData['file_url'] as String?,
+        );
+        stderr.writeln(
+            '[TodoistServer] Including attachment: ${attachmentData['file_name']}');
+      } else {
+        stderr.writeln(
+            '[TodoistServer] Warning: Attachment data provided but missing required fields (file_name, file_url). Ignoring attachment.');
+      }
+    }
+
+    stderr.writeln(
+        '[TodoistServer] Creating comment on task ID $taskId: "$content"');
+    final newComment = await commentsApi.createComment(
+      content,
+      taskId: taskId,
+      attachment: attachmentObject,
+    );
+
+    if (newComment == null) {
+      return _createErrorResult('API returned null for the new comment.');
+    }
+
+    final successMsg =
+        'Successfully created comment on task ID $taskId (Comment ID: ${newComment.id})';
+    stderr.writeln('[TodoistServer] $successMsg');
+    return _createSuccessResult(
+      successMsg,
+      resultData: {
+        'comment': {
+          'id': newComment.id,
+          'task_id': newComment.taskId,
+          'project_id': newComment.projectId,
+          'posted_at': newComment.postedAt,
+          'content': newComment.content,
+          'attachment': newComment.attachment != null
+              ? {
+                  'resource_type': (newComment.attachment
+                          as todoist.CreateCommentAttachmentParameter?)
+                      ?.resourceType,
+                  'file_name': (newComment.attachment
+                          as todoist.CreateCommentAttachmentParameter?)
+                      ?.fileName,
+                  'file_type': (newComment.attachment
+                          as todoist.CreateCommentAttachmentParameter?)
+                      ?.fileType,
+                  'file_url': (newComment.attachment
+                          as todoist.CreateCommentAttachmentParameter?)
+                      ?.fileUrl,
+                }
+              : null,
+        }
+      },
+    );
+  } catch (e) {
+    var apiErrorMsg = 'Error creating task comment: ${e.toString()}';
+    stderr.writeln('[TodoistServer] $apiErrorMsg');
+    Map<String, dynamic>? errorData;
+    if (e is todoist.ApiException) {
+      stderr.writeln(
+          '[TodoistServer] API Exception Details: Code=${e.code}, Message=${e.message}');
+      if (e.code == 404) {
+        apiErrorMsg = 'Task with ID "${args?['task_id']}" not found.';
+      } else if (e.code == 400) {
+        apiErrorMsg =
+            'Bad request creating comment (${e.code}): ${e.message ?? "Invalid parameters"}';
+      } else {
+        apiErrorMsg =
+            'API Error creating comment (${e.code}): ${e.message ?? "Unknown API error"}';
+      }
+      errorData = {'apiCode': e.code, 'apiMessage': e.message};
+    }
+    return _createErrorResult(apiErrorMsg, errorData: errorData);
+  }
 }
 
 // --- Stubs for New Handlers ---
