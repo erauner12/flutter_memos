@@ -314,26 +314,30 @@ class BlinkoApiService implements BaseApiService {
         );
       }
       // Call upsert. We don\'t need the response object itself if it\'s inconsistent.
-      final dynamic upsertResponse = await noteApi.notesUpsert(request);
-
       if (kDebugMode) {
+        final dynamic upsertResponse = await noteApi.notesUpsert(request);
         print(
           '[BlinkoApiService.createNote] Received upsertResponse: \$upsertResponse (Type: \${upsertResponse.runtimeType})',
         );
         print(
           '[BlinkoApiService.createNote] Assuming success as no API exception was thrown. Returning placeholder note.',
         );
+      } else {
+        await noteApi.notesUpsert(request);
       }
 
       // Since the upsert call succeeded without an API exception,
       // return the original note object as a placeholder.
       // The provider will handle refreshing the list.
       return note;
-    } catch (e) {
-      // Catching any exception during upsert
+    } catch (e, st) {
       // Log the specific error before rethrowing a generic one
       if (kDebugMode) {
+        // PRINT THE ACTUAL EXCEPTION AND STACK TRACE
         print('[BlinkoApiService.createNote] Error during notesUpsert: \$e');
+        print(
+          '[BlinkoApiService.createNote] Stack Trace: \$st',
+        ); // ADD THIS LINE
       }
       throw Exception('Failed to create note: \$e'); // Propagate the error
     }
