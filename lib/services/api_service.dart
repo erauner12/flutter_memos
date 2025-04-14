@@ -386,22 +386,29 @@ class MemosApiService implements BaseApiService {
     String noteId,
     Comment comment, {
     ServerConfig? targetServerOverride,
-    List<memos_api.V1Resource>? resources,
+    List<Map<String, dynamic>>? resources, // Changed parameter type
   }) async {
     final memoApi = _getMemoApiForServer(targetServerOverride);
     final serverIdForLog =
         targetServerOverride?.name ?? targetServerOverride?.id ?? 'active';
     try {
       final formattedMemoId = _formatResourceName(noteId, 'memos');
-      // Use the passed resources, or the ones from the comment object if available
+
+      // Convert generic map back to Memos V1Resource
       final List<memos_api.V1Resource> effectiveResources =
-          resources ?? comment.resources ?? [];
+          (resources ?? [])
+              .map(
+                (resMap) =>
+                    memos_api.V1Resource(name: resMap['name'] as String?),
+              )
+              .where((r) => r.name != null && r.name!.isNotEmpty)
+              .toList();
 
       final apiMemo = memos_api.Apiv1Memo(
         content: comment.content,
         pinned: comment.pinned,
         state: _getApiStateFromCommentState(comment.state),
-        resources: effectiveResources, // Pass resources
+        resources: effectiveResources, // Pass the reconstructed list
       );
       final memos_api.Apiv1Memo? response = await memoApi
           .memoServiceCreateMemoComment(formattedMemoId, apiMemo);
@@ -483,7 +490,8 @@ class MemosApiService implements BaseApiService {
   // --- RESOURCE OPERATIONS ---
 
   @override
-  Future<memos_api.V1Resource> uploadResource(
+  Future<Map<String, dynamic>> uploadResource(
+    // Changed return type
     Uint8List fileBytes,
     String filename,
     String contentType, {
@@ -506,7 +514,14 @@ class MemosApiService implements BaseApiService {
           'Failed to upload resource to $serverIdForLog: Server returned null or invalid resource',
         );
       }
-      return createdResource;
+      // --- ADD MAPPING TO Map<String, dynamic> ---
+      return {
+        'name': createdResource.name!, // Memos uses 'name' as the identifier
+        'filename': createdResource.filename ?? filename,
+        'contentType': createdResource.type ?? contentType,
+        'size': createdResource.size,
+      };
+      // --- END MAPPING ---
     } catch (e) {
       throw Exception('Failed to upload resource to $serverIdForLog: $e');
     }
@@ -644,7 +659,7 @@ class MemosApiService implements BaseApiService {
       updateTime: updateTime,
       displayTime: displayTime,
       tags:
-          apiMemo.tags ?? [], // Correctly assign List<String>? to List<String>
+          apiMemo.tags, // Using the tags from the API
       resources:
           apiMemo.resources
               .map((r) => r.toJson())
