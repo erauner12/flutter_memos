@@ -4,7 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_memos/models/comment.dart'; // Import Comment model
-import 'package:flutter_memos/models/memo.dart'; // Import Memo model
+import 'package:flutter_memos/models/note_item.dart'; // Import NoteItem model
 import 'package:flutter_memos/utils/keyboard_navigation.dart'; // Import the mixin
 import 'package:flutter_memos/utils/url_helper.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -12,9 +12,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'edit_memo_providers.dart';
 
 class EditMemoForm extends ConsumerStatefulWidget {
-  final dynamic entity; // Can be Memo or Comment
-  final String entityId; // memoId or "memoId/commentId"
-  final String entityType; // 'memo' or 'comment'
+  final dynamic entity; // Can be NoteItem or Comment
+  final String entityId; // noteId or "noteId/commentId"
+  final String entityType; // 'note' or 'comment'
 
   const EditMemoForm({
     super.key,
@@ -45,20 +45,20 @@ class _EditMemoFormState extends ConsumerState<EditMemoForm>
     // Initialize form with entity data based on type
     if (widget.entityType == 'comment') {
       final comment = widget.entity as Comment;
-      _contentController.text = comment.content;
+      _contentController.text = comment.content ?? '';
       _pinned = comment.pinned;
       _archived = comment.state == CommentState.archived;
       if (kDebugMode) {
         print('[EditMemoForm] Initialized for Comment ID: ${widget.entityId}');
       }
     } else {
-      // 'memo'
-      final memo = widget.entity as Memo;
-      _contentController.text = memo.content;
-      _pinned = memo.pinned;
-      _archived = memo.state == MemoState.archived;
+      // 'note' (previously 'memo')
+      final note = widget.entity as NoteItem; // Use NoteItem
+      _contentController.text = note.content;
+      _pinned = note.pinned;
+      _archived = note.state == NoteState.archived; // Use NoteState
       if (kDebugMode) {
-        print('[EditMemoForm] Initialized for Memo ID: ${widget.entityId}');
+        print('[EditMemoForm] Initialized for Note ID: ${widget.entityId}');
       }
     }
 
@@ -99,12 +99,11 @@ class _EditMemoFormState extends ConsumerState<EditMemoForm>
           Expanded(
             flex: 2,
             child: Text(
-              // Replace SelectableText with Text
               syntax,
               style: TextStyle(
                 fontFamily: 'monospace',
                 backgroundColor: CupertinoColors.secondarySystemFill
-                    .resolveFrom(context), // Use Cupertino color
+                    .resolveFrom(context),
               ),
             ),
           ),
@@ -120,7 +119,6 @@ class _EditMemoFormState extends ConsumerState<EditMemoForm>
 
   Future<void> _handleSave() async {
     if (_contentController.text.trim().isEmpty) {
-      // Replace SnackBar with CupertinoAlertDialog
       showCupertinoDialog(
         context: context,
         builder:
@@ -154,7 +152,7 @@ class _EditMemoFormState extends ConsumerState<EditMemoForm>
     }
 
     try {
-      // Create the correct entity type (Memo or Comment) to save
+      // Create the correct entity type (NoteItem or Comment) to save
       dynamic entityToSave;
       if (widget.entityType == 'comment') {
         final originalComment = widget.entity as Comment;
@@ -162,26 +160,28 @@ class _EditMemoFormState extends ConsumerState<EditMemoForm>
           content: _contentController.text.trim(),
           pinned: _pinned,
           state: _archived ? CommentState.archived : CommentState.normal,
-          // updateTime will be handled by the API/provider logic if needed
         );
         if (kDebugMode) {
           print('[EditMemoForm] Saving Comment: ${entityToSave.toJson()}');
         }
       } else {
-        // 'memo'
-        final originalMemo = widget.entity as Memo;
-        entityToSave = originalMemo.copyWith(
+        // 'note' (previously 'memo')
+        final originalNote = widget.entity as NoteItem; // Use NoteItem
+        entityToSave = originalNote.copyWith(
           content: _contentController.text.trim(),
           pinned: _pinned,
-          state: _archived ? MemoState.archived : MemoState.normal,
-          // Don't explicitly set createTime or updateTime - let the API/provider handle updateTime
+          state:
+              _archived
+                  ? NoteState.archived
+                  : NoteState.normal, // Use NoteState
         );
         if (kDebugMode) {
-          print('[EditMemoForm] Saving Memo: ${entityToSave.toJson()}');
+          print(
+            '[EditMemoForm] Saving Note: id=${entityToSave.id}, content="${entityToSave.content.substring(0, (entityToSave.content.length > 50 ? 50 : entityToSave.content.length))}...", pinned=${entityToSave.pinned}, state=${entityToSave.state.name}',
+          );
         }
       }
 
-      // Use the generalized provider to save the entity
       await ref.read(
         saveEntityProvider(
           EntityProviderParams(id: widget.entityId, type: widget.entityType),
@@ -199,7 +199,6 @@ class _EditMemoFormState extends ConsumerState<EditMemoForm>
         print('[EditMemoForm] Error saving ${widget.entityType}: $e\n$s');
       }
       if (mounted) {
-        // Replace SnackBar with CupertinoAlertDialog
         showCupertinoDialog(
           context: context,
           builder:
@@ -253,7 +252,6 @@ class _EditMemoFormState extends ConsumerState<EditMemoForm>
           }
         }
 
-        // First, explicitly check for Command+Enter
         if (event is KeyDownEvent &&
             event.logicalKey == LogicalKeyboardKey.enter &&
             (HardwareKeyboard.instance.isLogicalKeyPressed(
@@ -266,7 +264,6 @@ class _EditMemoFormState extends ConsumerState<EditMemoForm>
                   LogicalKeyboardKey.metaRight,
                 ))) {
           if (!_saving) {
-            // Prevent double submission
             if (kDebugMode) {
               print(
                 '[EditMemoForm] Command+Enter detected, calling _handleSave',
@@ -283,7 +280,6 @@ class _EditMemoFormState extends ConsumerState<EditMemoForm>
           return KeyEventResult.handled;
         }
 
-        // Handle other keys (like Escape) using the mixin
         final result = handleKeyEvent(
           event,
           ref,
@@ -292,13 +288,11 @@ class _EditMemoFormState extends ConsumerState<EditMemoForm>
               _contentFocusNode.unfocus();
               _formFocusNode.requestFocus();
             } else {
-              // If form has focus (not text field), pop screen on Escape
               Navigator.of(context).pop();
             }
           },
         );
 
-        // Return handled if the mixin handled it, otherwise ignore
         return result;
       },
       child: SingleChildScrollView(
@@ -314,12 +308,11 @@ class _EditMemoFormState extends ConsumerState<EditMemoForm>
                   style: TextStyle(
                     color: CupertinoColors.secondaryLabel.resolveFrom(
                       context,
-                    ), // Use Cupertino color
+                    ),
                     fontWeight: FontWeight.w600,
                     fontSize: 14,
                   ),
                 ),
-                // Replace TextButton.icon with CupertinoButton
                 CupertinoButton(
                   padding: EdgeInsets.zero,
                   minSize: 0,
@@ -351,9 +344,7 @@ class _EditMemoFormState extends ConsumerState<EditMemoForm>
                 ),
               ],
             ),
-
             if (_showMarkdownHelp)
-              // Replace Card with styled Container
               Container(
                 margin: const EdgeInsets.only(bottom: 16),
                 padding: const EdgeInsets.all(12),
@@ -392,13 +383,10 @@ class _EditMemoFormState extends ConsumerState<EditMemoForm>
                   ],
                 ),
               ),
-
             const SizedBox(height: 4),
-
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                // Replace TextButton.icon with CupertinoButton
                 CupertinoButton(
                   padding: EdgeInsets.zero,
                   minSize: 0,
@@ -409,7 +397,6 @@ class _EditMemoFormState extends ConsumerState<EditMemoForm>
                         print(
                           '[EditMemoForm] Switched to ${_previewMode ? "preview" : "edit"} mode',
                         );
-
                         if (_previewMode) {
                           final content = _contentController.text;
                           print(
@@ -427,7 +414,6 @@ class _EditMemoFormState extends ConsumerState<EditMemoForm>
                           }
                         }
                       }
-                      // Ensure correct focus when switching modes
                       if (!_previewMode) {
                         WidgetsBinding.instance.addPostFrameCallback((_) {
                           if (mounted) _contentFocusNode.requestFocus();
@@ -462,13 +448,12 @@ class _EditMemoFormState extends ConsumerState<EditMemoForm>
                 ),
               ],
             ),
-
             _previewMode
                 ? Container(
                   decoration: BoxDecoration(
                     border: Border.all(
                       color: CupertinoColors.separator.resolveFrom(context),
-                    ), // Use Cupertino color
+                    ),
                     borderRadius: BorderRadius.circular(4),
                   ),
                   padding: const EdgeInsets.all(12),
@@ -478,7 +463,6 @@ class _EditMemoFormState extends ConsumerState<EditMemoForm>
                     child: MarkdownBody(
                       data: _contentController.text,
                       selectable: true,
-                      // Apply Cupertino-based styling consistent with MemoContent
                       styleSheet: MarkdownStyleSheet.fromCupertinoTheme(
                         CupertinoTheme.of(context),
                       ).copyWith(
@@ -503,10 +487,9 @@ class _EditMemoFormState extends ConsumerState<EditMemoForm>
                           );
                         }
                         if (href != null) {
-                          // Pass the ref to UrlHelper.launchUrl
                           final success = await UrlHelper.launchUrl(
                             href,
-                            ref: ref, // Pass the ref
+                            ref: ref,
                             context: context,
                           );
                           if (kDebugMode) {
@@ -517,7 +500,6 @@ class _EditMemoFormState extends ConsumerState<EditMemoForm>
                     ),
                   ),
                 )
-                // Replace TextField with CupertinoTextField
                 : CupertinoTextField(
                   controller: _contentController,
                   focusNode: _contentFocusNode,
@@ -536,14 +518,10 @@ class _EditMemoFormState extends ConsumerState<EditMemoForm>
                   autofocus: true,
                   keyboardType: TextInputType.multiline,
                 ),
-
             const SizedBox(height: 20),
-
-            // Use CupertinoListSection for grouping toggles
             CupertinoListSection.insetGrouped(
-              margin: EdgeInsets.zero, // Remove default margin if needed
+              margin: EdgeInsets.zero,
               children: [
-                // Replace ListTile/Switch with CupertinoListTile/CupertinoSwitch
                 CupertinoListTile(
                   title: const Text('Pinned'),
                   trailing: CupertinoSwitch(
@@ -570,21 +548,17 @@ class _EditMemoFormState extends ConsumerState<EditMemoForm>
                 ),
               ],
             ),
-
             const SizedBox(height: 24),
-
             SizedBox(
               width: double.infinity,
-              // Replace ElevatedButton with CupertinoButton.filled
               child: CupertinoButton.filled(
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 onPressed: _saving ? null : _handleSave,
                 child:
                     _saving
-                        // Replace CircularProgressIndicator with CupertinoActivityIndicator
                         ? const CupertinoActivityIndicator(
-                          color: CupertinoColors.white, // Ensure contrast
-                          radius: 10, // Adjust size
+                          color: CupertinoColors.white,
+                          radius: 10,
                         )
                         : const Text('Save Changes'),
               ),
@@ -592,6 +566,6 @@ class _EditMemoFormState extends ConsumerState<EditMemoForm>
           ],
         ),
       ),
-    ); // Correctly close SingleChildScrollView
-  } // Correctly close build method
+    );
+  }
 }
