@@ -1,5 +1,4 @@
 import 'dart:convert'; // For base64Encode, utf8
-import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart'; // For kDebugMode
 import 'package:flutter_memos/api/lib/api.dart' as memos_api; // Alias Memos API
@@ -468,7 +467,6 @@ class MemosApiService implements BaseApiService {
         'contentType': createdResource.type ?? contentType,
         'size': createdResource.size != null ? int.tryParse(createdResource.size!) : null,
         'createTime': createdResource.createTime?.toIso8601String(),
-        'updateTime': createdResource.updateTime?.toIso8601String(),
         'externalLink': createdResource.externalLink,
       };
     } catch (e) {
@@ -630,7 +628,6 @@ class MemosApiService implements BaseApiService {
       'contentType': apiResource.type,
       'size': apiResource.size != null ? int.tryParse(apiResource.size!) : null,
       'createTime': apiResource.createTime?.toIso8601String(),
-      'updateTime': apiResource.updateTime?.toIso8601String(),
       'externalLink': apiResource.externalLink,
     };
   }

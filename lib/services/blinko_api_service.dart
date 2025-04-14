@@ -4,9 +4,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_memos/blinko_api/lib/api.dart'
     as blinko_api; // Alias Blinko API
 import 'package:flutter_memos/models/comment.dart';
-import 'package:flutter_memos/models/list_notes_response.dart';
+import 'package:flutter_memos/models/list_notes_response.dart'; // Ensure import
 // import 'package:flutter_memos/models/memo_relation.dart'; // Removed unused import
-import 'package:flutter_memos/models/note_item.dart';
+import 'package:flutter_memos/models/note_item.dart'; // Ensure import
 import 'package:flutter_memos/models/server_config.dart';
 import 'package:flutter_memos/services/base_api_service.dart';
 import 'package:http/http.dart' as http; // Added http import
@@ -455,19 +455,20 @@ class BlinkoApiService implements BaseApiService {
               responseBody.containsKey('id')) {
             final num createdIdNum = responseBody['id'];
             final String createdIdStr = createdIdNum.toString();
-            if (kDebugMode) {
-              print(
-                '[BlinkoApiService.createNote] Successfully created note with ID: $createdIdStr',
-              );
-            }
-            return note.copyWith(id: createdIdStr);
+            // Fetch the created note to get all details
+            return await getNote(
+              createdIdStr,
+              targetServerOverride: targetServerOverride,
+            );
           } else {
             if (kDebugMode) {
               print(
                 '[BlinkoApiService.createNote] Upsert successful but response body did not contain expected ID. Body: ${response.body}',
               );
             }
-            return note;
+            return note.copyWith(
+              id: 'temp_created_${DateTime.now().millisecondsSinceEpoch}',
+            );
           }
         } catch (decodeError) {
           if (kDebugMode) {
@@ -475,7 +476,9 @@ class BlinkoApiService implements BaseApiService {
               '[BlinkoApiService.createNote] Upsert successful but failed to decode/parse response body: $decodeError. Body: ${response.body}',
             );
           }
-          return note;
+          return note.copyWith(
+            id: 'temp_created_${DateTime.now().millisecondsSinceEpoch}',
+          );
         }
       } else {
         throw blinko_api.ApiException(response.statusCode, response.body);
@@ -517,6 +520,7 @@ class BlinkoApiService implements BaseApiService {
     try {
       final response = await noteApi.notesUpsertWithHttpInfo(request);
       if (response.statusCode >= 200 && response.statusCode < 300) {
+        // Fetch the updated note to ensure we have the latest state
         return await getNote(id, targetServerOverride: targetServerOverride);
       } else {
         throw blinko_api.ApiException(response.statusCode, response.body);
@@ -672,7 +676,7 @@ class BlinkoApiService implements BaseApiService {
     String noteId,
     Comment comment, {
     ServerConfig? targetServerOverride,
-    List<Map<String, dynamic>>? resources, // Accept the parameter
+    List<Map<String, dynamic>>? resources,
   }) async {
     final commentApi = blinko_api.CommentApi(
       _getApiClientForServer(targetServerOverride),
@@ -699,7 +703,9 @@ class BlinkoApiService implements BaseApiService {
             '[BlinkoApiService.createNoteComment] Succeeded, but Blinko does not return the created comment ID. Returning placeholder.',
           );
         }
-        return comment;
+        return comment.copyWith(
+          id: 'temp_comment_${DateTime.now().millisecondsSinceEpoch}',
+        );
       } else {
         throw blinko_api.ApiException(response.statusCode, response.body);
       }
@@ -793,9 +799,7 @@ class BlinkoApiService implements BaseApiService {
           'Failed to delete comment $commentId (note $noteId): API Error ${e.code} - ${e.message}',
         );
       }
-      throw Exception(
-        'Failed to delete comment $commentId (note $noteId): $e',
-      );
+      throw Exception('Failed to delete comment $commentId (note $noteId): $e');
     }
   }
 
@@ -832,7 +836,6 @@ class BlinkoApiService implements BaseApiService {
         }
         continue;
       }
-
       // Create Blinko request
       final request = blinko_api.NotesAddReferenceRequest(
         fromNoteId: noteIdNum,
@@ -957,11 +960,11 @@ class BlinkoApiService implements BaseApiService {
     final List<Map<String, dynamic>> resources =
         (blinkoDetail.attachments ?? []).map((a) {
           return {
-            'id': a.path, // Use path as ID
-            'name': a.path, // Use path as name
-            'filename': a.name, // Use name from attachment
-            'externalLink': a.path, // Use path as external link
-            'contentType': a.type, // Use 'type' instead of 'mime'
+            'id': a.path,
+            'name': a.path,
+            'filename': a.name,
+            'externalLink': a.path,
+            'contentType': a.type,
             'size': a.size?.toString(),
             'createTime': a.createdAt,
           };
@@ -970,13 +973,10 @@ class BlinkoApiService implements BaseApiService {
     final List<Map<String, dynamic>> relations =
         (blinkoDetail.references ?? [])
             .map((r) {
-              // Correctly access the related note's ID using 'toNoteId' from the reference object itself
               final relatedNoteId =
-                  r.toNoteId
-                      .toString(); // Use toNoteId instead of r.toNote?.id
+                  r.toNoteId.toString(); // Use toNoteId instead of r.toNote?.id
               final type = 'REFERENCE';
               return {'relatedMemoId': relatedNoteId, 'type': type};
-              return null;
             })
             .whereType<Map<String, dynamic>>()
             .toList();
@@ -1046,13 +1046,9 @@ class BlinkoApiService implements BaseApiService {
     final List<Map<String, dynamic>> relations =
         (blinkoNote.references ?? [])
             .map((r) {
-              // Correctly access the related note's ID using 'toNoteId' from the reference object itself
-              final relatedNoteId =
-                  r.toNoteId
-                      .toString(); // Use toNoteId instead of r.toNote?.id
+              final relatedNoteId = r.toNoteId.toString();
               final type = 'REFERENCE';
               return {'relatedMemoId': relatedNoteId, 'type': type};
-              return null;
             })
             .whereType<Map<String, dynamic>>()
             .toList();

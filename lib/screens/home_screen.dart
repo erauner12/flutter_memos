@@ -1,5 +1,5 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter_memos/screens/memos/memos_screen.dart';
+import 'package:flutter_memos/screens/items/items_screen.dart'; // Updated import
 import 'package:flutter_memos/screens/settings_screen.dart'; // Ensure this import is correct
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -38,7 +38,9 @@ class HomeScreen extends ConsumerWidget {
               builder: (context) {
                 // MemosScreen likely needs its own Scaffold/NavBar if it manages its own title etc.
                 // Keep this structure for MemosScreen for now.
-                return const CupertinoPageScaffold(child: MemosScreen());
+                return const CupertinoPageScaffold(
+                  child: ItemsScreen(),
+                ); // Use ItemsScreen
               },
             );
           case 1: // New index for Chat tab

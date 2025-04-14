@@ -10,13 +10,13 @@ import 'package:flutter_memos/providers/server_config_provider.dart';
 import 'package:flutter_memos/providers/settings_provider.dart'; // Import settings providers
 import 'package:flutter_memos/providers/theme_provider.dart';
 import 'package:flutter_memos/providers/ui_providers.dart'; // Import for UI providers including highlightedCommentIdProvider
-import 'package:flutter_memos/screens/edit_memo/edit_memo_screen.dart';
+import 'package:flutter_memos/screens/edit_entity/edit_entity_screen.dart'; // Updated import
 import 'package:flutter_memos/screens/home_screen.dart';
 // Remove import for the env file
 // import 'package:flutter_memos/utils/env.dart';
-import 'package:flutter_memos/screens/memo_detail/memo_detail_screen.dart';
-import 'package:flutter_memos/screens/memos/memos_screen.dart';
-import 'package:flutter_memos/screens/new_memo/new_memo_screen.dart'; // Import NewMemoScreen
+import 'package:flutter_memos/screens/item_detail/item_detail_screen.dart'; // Updated import
+import 'package:flutter_memos/screens/items/items_screen.dart'; // Updated import
+import 'package:flutter_memos/screens/new_note/new_note_screen.dart'; // Updated import
 import 'package:flutter_memos/utils/keyboard_shortcuts.dart'; // Import keyboard shortcuts
 import 'package:flutter_memos/utils/provider_logger.dart';
 import 'package:flutter_memos/widgets/config_check_wrapper.dart'; // Import the new wrapper
@@ -159,9 +159,6 @@ class _MyAppState extends ConsumerState<MyApp> {
 
   // New method to initialize all PersistentStringNotifiers
   void _initializePersistentNotifiers() {
-    // Use Future.wait to initialize them concurrently, but wait for all
-    // This ensures they are ready before the UI might need them or try to save.
-    // Explicitly type the list as List<Future<void>>
     Future.wait<void>([
           ref.read(todoistApiKeyProvider.notifier).init(),
           ref.read(openAiApiKeyProvider.notifier).init(),
@@ -172,14 +169,11 @@ class _MyAppState extends ConsumerState<MyApp> {
           if (kDebugMode) {
             print('[MyApp] All PersistentStringNotifiers initialized.');
           }
-          // Optionally, trigger a rebuild or update a flag if needed,
-          // but often just having the providers updated is sufficient.
         })
         .catchError((e) {
           if (kDebugMode) {
             print('[MyApp] Error initializing PersistentStringNotifiers: \$e');
           }
-          // Handle initialization error if necessary
         });
   }
 
@@ -201,7 +195,6 @@ class _MyAppState extends ConsumerState<MyApp> {
         }
       }
     } catch (e) {
-      // Handle potential errors during initialization
       if (kDebugMode) print('[AppLinks] Error getting initial link: \$e');
     }
   
@@ -214,7 +207,6 @@ class _MyAppState extends ConsumerState<MyApp> {
         _handleDeepLink(uri);
       },
       onError: (err) {
-        // Handle potential errors in the stream
         if (kDebugMode) {
           print('[AppLinks] Error listening to link stream: \$err');
         }
@@ -222,24 +214,23 @@ class _MyAppState extends ConsumerState<MyApp> {
     );
   }
   
-  // Handle the deep link URI (This method remains unchanged)
+  // Handle the deep link URI
   void _handleDeepLink(Uri? uri) {
     if (uri == null || uri.scheme != 'flutter-memos') {
       if (kDebugMode && uri != null) {
-        print('[DeepLink] Ignoring URI: ${uri.toString()}');
+        print('[DeepLink] Ignoring URI: \${uri.toString()}');
       }
       return;
     }
 
     if (kDebugMode) {
-      print('[DeepLink] Handling URI: ${uri.toString()}');
+      print('[DeepLink] Handling URI: \${uri.toString()}');
     }
 
-    final host = uri.host; // Get the host: 'memo' or 'comment'
+    final host = uri.host;
     final pathSegments = uri.pathSegments;
 
     if (host == 'memo' && pathSegments.isNotEmpty) {
-      // For memo links: flutter-memos://memo/memoId
       final memoId = pathSegments[0];
       if (kDebugMode) {
         print(
@@ -251,7 +242,6 @@ class _MyAppState extends ConsumerState<MyApp> {
         arguments: {'memoId': memoId, 'commentIdToHighlight': null},
       );
     } else if (host == 'comment' && pathSegments.length >= 2) {
-      // For comment links: flutter-memos://comment/memoId/commentId
       final memoId = pathSegments[0];
       final commentIdToHighlight = pathSegments[1];
       if (kDebugMode) {
@@ -269,7 +259,7 @@ class _MyAppState extends ConsumerState<MyApp> {
     } else {
       if (kDebugMode) {
         print(
-          '[DeepLink] Invalid URI structure: \$host/${pathSegments.join('/')}',
+          '[DeepLink] Invalid URI structure: \$uri',
         );
       }
       return;
@@ -278,22 +268,16 @@ class _MyAppState extends ConsumerState<MyApp> {
   
   @override
   Widget build(BuildContext context) {
-    // Watch the theme mode provider - Removed unused variable
     if (kDebugMode) {
-      // Use ref.watch directly where needed or read if only needed once
       print(
-        '[MyApp] Building with theme mode: ${ref.watch(themeModeProvider)}',
+        '[MyApp] Building with theme mode: \${ref.watch(themeModeProvider)}',
       );
     }
-
-    // Removed custom macOS keyboard handler as it seems to cause assertion errors.
-    // Relying on default Flutter keyboard handling for now.
     
     return Shortcuts(
       shortcuts: buildGlobalShortcuts(),
       child: Actions(
         actions: {
-          // Global action for back navigation
           NavigateBackIntent: CallbackAction<NavigateBackIntent>(
             onInvoke: (intent) {
               final focusContext = FocusManager.instance.primaryFocus?.context;
@@ -303,12 +287,9 @@ class _MyAppState extends ConsumerState<MyApp> {
               return null;
             },
           ),
-          
-          // Add action for toggling CaptureUtility
           ToggleCaptureUtilityIntent:
               CallbackAction<ToggleCaptureUtilityIntent>(
                 onInvoke: (intent) {
-                  // Trigger the toggle via the provider
                   toggleCaptureUtility(ref);
                   if (kDebugMode) {
                     print('[MyApp Actions] Handled ToggleCaptureUtilityIntent');
@@ -316,16 +297,15 @@ class _MyAppState extends ConsumerState<MyApp> {
                   return null;
                 },
               ),
-          
-          // Add action for creating a new memo
           NewMemoIntent: CallbackAction<NewMemoIntent>(
             onInvoke: (intent) {
-              // Navigate to new memo screen
-              _navigatorKey.currentState?.pushNamed('/new-memo');
+              _navigatorKey.currentState?.pushNamed(
+                '/new-note',
+              ); // Use new route
               if (kDebugMode) {
                 print(
-                  '[MyApp Actions] Handled NewMemoIntent - opening new memo screen',
-                );
+                  '[MyApp Actions] Handled NewMemoIntent - opening new note screen',
+                ); // Updated log message
               }
               return null;
             },
@@ -333,14 +313,10 @@ class _MyAppState extends ConsumerState<MyApp> {
         },
         child: GestureDetector(
           onTap: () {
-            // Unfocus when tapping outside of a text field
             FocusManager.instance.primaryFocus?.unfocus();
-            // Don't toggle theme on general taps
           },
           child: Builder(
-            // Use Builder to get context for MediaQuery
             builder: (context) {
-              // Determine Brightness based on provider and system setting
               final platformBrightness =
                   MediaQuery.of(context).platformBrightness;
               final themePreference = ref.watch(themeModeProvider);
@@ -358,20 +334,17 @@ class _MyAppState extends ConsumerState<MyApp> {
                   break;
               }
 
-              // Define base text style for mapping
               const TextStyle baseTextStyle = TextStyle(
-                fontFamily: '.SF Pro Text', // Standard iOS font
-                color: CupertinoColors.label, // Default label color
+                fontFamily: '.SF Pro Text',
+                color: CupertinoColors.label,
               );
               const TextStyle baseDarkTextStyle = TextStyle(
                 fontFamily: '.SF Pro Text',
-                color: CupertinoColors.label, // Default label color adapts
+                color: CupertinoColors.label,
               );
 
-              // Create CupertinoThemeData
               final cupertinoTheme = CupertinoThemeData(
                 brightness: finalBrightness,
-                // Map colors (example mapping, adjust as needed)
                 primaryColor:
                     finalBrightness == Brightness.dark
                         ? CupertinoColors.systemOrange
@@ -382,10 +355,8 @@ class _MyAppState extends ConsumerState<MyApp> {
                         : CupertinoColors.systemGroupedBackground,
                 barBackgroundColor:
                     finalBrightness == Brightness.dark
-                        ? const Color(0xFF1D1D1D) // Dark nav bar background
-                        : CupertinoColors
-                            .systemGrey6, // Light nav bar background
-                // Map text theme (basic example)
+                        ? const Color(0xFF1D1D1D)
+                        : CupertinoColors.systemGrey6,
                 textTheme: CupertinoTextThemeData(
                   textStyle:
                       finalBrightness == Brightness.dark
@@ -411,81 +382,89 @@ class _MyAppState extends ConsumerState<MyApp> {
                             fontSize: 17,
                             fontWeight: FontWeight.w600,
                           ),
-                  // Add other mappings as needed (navLargeTitleTextStyle, etc.)
                 ),
               );
 
               return CupertinoApp(
                 theme: cupertinoTheme,
-                navigatorKey:
-                    _navigatorKey, // Add navigator key for deep link navigation
+                navigatorKey: _navigatorKey,
                 title: 'Flutter Memos',
                 debugShowCheckedModeBanner: false,
-                // Provide Material localizations needed by widgets like AppBar, TextField etc.
                 localizationsDelegates: const [
                   GlobalMaterialLocalizations.delegate,
                   GlobalWidgetsLocalizations.delegate,
-                  GlobalCupertinoLocalizations
-                      .delegate, // Include Cupertino defaults too
+                  GlobalCupertinoLocalizations.delegate,
                 ],
                 supportedLocales: const [
-                  Locale('en', ''), // English, no country code
-                  // Add other locales your app supports here
+                  Locale('en', ''),
                 ],
-                // themeMode is handled by the brightness logic above
-                home:
-                    const ConfigCheckWrapper(), // Use ConfigCheckWrapper as home
+                home: const ConfigCheckWrapper(),
                 routes: {
-                  // Define explicit routes needed for navigation
-                  // '/' route is implicitly handled by 'home' now.
                   '/home': (context) => const HomeScreen(),
-                  '/memos': (context) => const MemosScreen(),
-                  '/new-memo':
-                      (context) => const NewMemoScreen(), // Add this route
-                  '/memo-detail': (context) {
+                  '/items':
+                      (context) =>
+                          const ItemsScreen(), // Updated route name and screen
+                  '/new-note':
+                      (context) =>
+                          const NewNoteScreen(), // Updated route name and screen
+                  '/item-detail': (context) {
                     final args =
                         ModalRoute.of(context)!.settings.arguments
                             as Map<String, dynamic>;
-                    return MemoDetailScreen(memoId: args['memoId'] as String);
+                    return ItemDetailScreen(
+                      itemId: args['itemId'] as String,
+                    ); // Updated screen and argument name
+                  },
+                  '/edit-entity': (context) {
+                    final args =
+                        ModalRoute.of(context)!.settings.arguments
+                            as Map<String, dynamic>;
+                    final entityType =
+                        args['entityType'] as String? ??
+                        'note'; // Default to note if needed
+                    final entityId = args['entityId'] as String;
+                    return EditEntityScreen(
+                      entityId: entityId,
+                      entityType: entityType,
+                    ); // Use EditEntityScreen
                   },
                 },
                 onGenerateRoute: (settings) {
-                  // Use CupertinoPageRoute for iOS-style transitions later (Phase 4)
-                  // For now, keep MaterialPageRoute to avoid breaking existing navigation until screens are migrated.
-                  if (settings.name == '/memo-detail') {
+                  if (settings.name == '/item-detail') {
+                    // Updated route name
                     final args = settings.arguments as Map<String, dynamic>;
                     return CupertinoPageRoute(
-                      // Use CupertinoPageRoute
                       builder:
-                          (context) => MemoDetailScreen(
-                            memoId: args['memoId'] as String,
+                          (context) => ItemDetailScreen(
+                            itemId: args['itemId'] as String,
                           ),
-                      settings: settings, // Pass settings
+                      settings: settings,
                     );
                   } else if (settings.name == '/edit-entity') {
                     final args = settings.arguments as Map<String, dynamic>;
-                    final entityType = args['entityType'] as String? ?? 'memo';
+                    final entityType =
+                        args['entityType'] as String? ??
+                        'note'; // Default to note
                     final entityId = args['entityId'] as String;
 
                     return CupertinoPageRoute(
-                      // Use CupertinoPageRoute
                       builder:
-                          (context) => EditMemoScreen(
+                          (context) => EditEntityScreen(
                             entityId: entityId,
                             entityType: entityType,
                           ),
-                      settings: settings, // Pass settings
+                      settings: settings,
                     );
                   } else if (settings.name == '/deep-link-target') {
                     final args =
                         settings.arguments as Map<String, dynamic>? ?? {};
-                    final memoId = args['memoId'] as String?;
+                    final itemId =
+                        args['itemId'] as String?; // Updated argument name
                     final commentIdToHighlight =
                         args['commentIdToHighlight'] as String?;
 
-                    if (memoId != null) {
+                    if (itemId != null) {
                       return CupertinoPageRoute(
-                        // Use CupertinoPageRoute
                         builder:
                             (context) => ProviderScope(
                               overrides: [
@@ -493,29 +472,28 @@ class _MyAppState extends ConsumerState<MyApp> {
                                   (ref) => commentIdToHighlight,
                                 ),
                               ],
-                              child: MemoDetailScreen(memoId: memoId),
+                              child: ItemDetailScreen(
+                                itemId: itemId,
+                              ), // Updated screen and argument name
                             ),
-                        settings: settings, // Pass settings
+                        settings: settings,
                       );
                     }
                     return null;
                   }
-                  // Fallback for unknown routes (maybe show a 404 screen)
-                  // Update fallback to use Cupertino widgets
                   return CupertinoPageRoute(
-                    // Use CupertinoPageRoute
                     builder:
-                        (context) => CupertinoPageScaffold(
-                          navigationBar: const CupertinoNavigationBar(
+                        (context) => const CupertinoPageScaffold(
+                          navigationBar: CupertinoNavigationBar(
                             middle: Text('Not Found'),
                           ),
                           child: Center(
                             child: Text(
-                              'No route defined for ${settings.name}',
+                              'No route defined for \${settings.name}',
                             ),
                           ),
                         ),
-                    settings: settings, // Pass settings
+                    settings: settings,
                   );
                 },
               );
