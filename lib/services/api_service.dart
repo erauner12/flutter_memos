@@ -386,7 +386,7 @@ class MemosApiService implements BaseApiService {
     String noteId,
     Comment comment, {
     ServerConfig? targetServerOverride,
-    List<memos_api.V1Resource>? resources, // Use V1Resource type
+    List<memos_api.V1Resource>? resources,
   }) async {
     final memoApi = _getMemoApiForServer(targetServerOverride);
     final serverIdForLog =

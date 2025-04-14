@@ -1,6 +1,4 @@
 import 'package:flutter/foundation.dart'; // Import for kDebugMode
-import 'package:flutter_memos/api/lib/api.dart'
-    as memos_api; // Import Memos API for V1Resource
 import 'package:flutter_memos/blinko_api/lib/api.dart'
     as blinko_api; // Alias Blinko API
 import 'package:flutter_memos/models/comment.dart';
@@ -441,6 +439,7 @@ class BlinkoApiService implements BaseApiService {
     String noteId,
     Comment comment, {
     ServerConfig? targetServerOverride,
+    List<Map<String, dynamic>>? resources, // <-- New optional parameter
   }) async {
     // Use _getApiClientForServer to create a temporary CommentApi instance
     final commentApi = blinko_api.CommentApi(
@@ -457,8 +456,6 @@ class BlinkoApiService implements BaseApiService {
       noteId: noteIdNum,
       content: comment.content,
       guestName: '', // Required based on previous 400 error
-      // guestIP: '', // Not sending IP
-      // guestUA: '', // Not sending UA
       parentId: null, // Explicitly null for top-level comments
     );
     try {
@@ -576,7 +573,8 @@ class BlinkoApiService implements BaseApiService {
   }
 
   @override
-  Future<memos_api.V1Resource> uploadResource(
+  Future<Map<String, dynamic>> uploadResource(
+    // <-- Changed return type
     Uint8List fileBytes,
     String filename,
     String contentType, {
@@ -594,17 +592,17 @@ class BlinkoApiService implements BaseApiService {
       if (response == null || response.path == null) {
         throw Exception('Failed to upload resource: Invalid response');
       }
-      String resourceName = response.path!;
-      if (resourceName.startsWith('/api/file/')) {
-        resourceName = resourceName.substring('/api/file/'.length);
-      }
-      resourceName = 'blinkoResources/\$resourceName';
-      return memos_api.V1Resource(
-        name: resourceName,
-        filename: filename,
-        type: response.type ?? contentType,
-        size: response.size?.toInt().toString(),
-      );
+      // Construct a unique name/id based on the path
+      String resourceName = 'blinkoResources/${response.path!.split('/').last}';
+
+      // Map to generic map before returning
+      return {
+        'name': resourceName, // Use constructed name as identifier
+        'path': response.path!, // Include original path for reference
+        'filename': filename,
+        'contentType': response.type ?? contentType,
+        'size': response.size?.toInt().toString(), // Convert size to String
+      };
     } catch (e) {
       throw Exception('Failed to upload resource: \$e');
     }

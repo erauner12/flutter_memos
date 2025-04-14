@@ -1,6 +1,4 @@
 import 'package:flutter/foundation.dart'; // Import Uint8List
-import 'package:flutter_memos/api/lib/api.dart'
-    as memos_api; // Import for V1Resource and MemoRelation
 import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/models/list_notes_response.dart';
 import 'package:flutter_memos/models/memo_relation.dart'; // Import MemoRelation model
@@ -62,7 +60,7 @@ abstract class BaseApiService {
     String noteId,
     Comment comment, {
     ServerConfig? targetServerOverride,
-    List<memos_api.V1Resource>? resources,
+    List<Map<String, dynamic>>? resources,
   }); // Added resources param
   Future<Comment> updateNoteComment(
     String commentId,
@@ -83,7 +81,7 @@ abstract class BaseApiService {
   });
 
   // Resources (Added)
-  Future<memos_api.V1Resource> uploadResource(
+  Future<Map<String, dynamic>> uploadResource(
     Uint8List fileBytes,
     String filename,
     String contentType, {
@@ -193,7 +191,7 @@ class DummyApiService implements BaseApiService {
     String noteId,
     Comment comment, {
     ServerConfig? targetServerOverride,
-    List<memos_api.V1Resource>? resources,
+    List<Map<String, dynamic>>? resources,
   }) async {
     // Added dummy implementation
     throw UnimplementedError("Service not configured");
@@ -229,7 +227,7 @@ class DummyApiService implements BaseApiService {
   }
 
   @override
-  Future<memos_api.V1Resource> uploadResource(
+  Future<Map<String, dynamic>> uploadResource(
     Uint8List fileBytes,
     String filename,
     String contentType, {
