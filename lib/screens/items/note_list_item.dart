@@ -521,7 +521,7 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
     }
 
     return Slidable(
-      key: const ValueKey('slidable-\${widget.note.id}'),
+      key: ValueKey('slidable-${widget.note.id}'),
       startActionPane: ActionPane(
         motion: const DrawerMotion(),
         children: [
@@ -555,7 +555,11 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
           ),
           if (widget.isInHiddenView)
             SlidableAction(
-              onPressed: (_) => ref.read(note_providers.unhideNoteProvider(widget.note.id))(),
+              onPressed:
+                  (_) =>
+                      ref.read(
+                        note_providers.unhideNoteProvider(widget.note.id),
+                      )(),
               backgroundColor: CupertinoColors.systemGreen,
               foregroundColor: CupertinoColors.white,
               icon: CupertinoIcons.eye_fill,
@@ -616,7 +620,9 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
                 child: Icon(
                   CupertinoIcons.archivebox,
                   size: 18,
-                  color: CupertinoColors.secondaryLabel.resolveFrom(scaffoldContext),
+                  color: CupertinoColors.secondaryLabel.resolveFrom(
+                    scaffoldContext,
+                  ),
                 ),
               ),
             ),
