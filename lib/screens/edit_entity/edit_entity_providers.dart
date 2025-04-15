@@ -4,6 +4,8 @@ import 'package:flutter_memos/models/note_item.dart'; // Import NoteItem model
 import 'package:flutter_memos/providers/api_providers.dart';
 // Import note_providers instead of memo_detail_provider and memo_providers
 import 'package:flutter_memos/providers/note_providers.dart' as note_providers;
+// Import settings_provider for manuallyHiddenNoteIdsProvider
+import 'package:flutter_memos/providers/settings_provider.dart' as settings_p;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// Parameter class for entity providers to ensure consistent == checks.
@@ -148,9 +150,10 @@ final saveEntityProvider = Provider.family<
       ); // Refresh note detail
 
       // Clear any hidden item IDs for this note to ensure it's visible
+      // Use the correct provider from settings_provider
       ref
           .read(
-            note_providers.hiddenItemIdsProvider.notifier, // Use renamed provider from note_providers
+            settings_p.manuallyHiddenNoteIdsProvider.notifier,
           )
           .update((state) => state.contains(id) ? (state..remove(id)) : state);
     }

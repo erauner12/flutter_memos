@@ -4,6 +4,8 @@ import 'package:flutter/material.dart'; // Keep for ScaffoldMessenger
 import 'package:flutter/services.dart';
 // Import note_providers instead of memo_providers
 import 'package:flutter_memos/providers/note_providers.dart' as note_providers;
+// Import settings_provider for manuallyHiddenNoteIdsProvider
+import 'package:flutter_memos/providers/settings_provider.dart' as settings_p;
 import 'package:flutter_memos/providers/ui_providers.dart';
 import 'package:flutter_memos/utils/keyboard_navigation.dart';
 import 'package:flutter_memos/widgets/capture_utility.dart';
@@ -118,9 +120,11 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> // Renamed 
                         // Use providers from note_providers
                         ref.invalidate(note_providers.noteDetailProvider(widget.itemId));
                         ref.invalidate(note_providers.noteCommentsProvider(widget.itemId));
-                        // Ensure item is not hidden after edit (using renamed provider)
+                        // Ensure item is not hidden after edit (using correct provider)
                         ref
-                            .read(note_providers.hiddenItemIdsProvider.notifier) // Use renamed provider
+                            .read(
+                              settings_p.manuallyHiddenNoteIdsProvider.notifier,
+                            )
                             .update(
                               (state) =>
                                   state.contains(widget.itemId)

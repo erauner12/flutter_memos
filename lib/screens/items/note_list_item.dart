@@ -3,6 +3,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_memos/models/note_item.dart';
 import 'package:flutter_memos/providers/note_providers.dart' as note_providers;
+// Import settings_provider for manuallyHiddenNoteIdsProvider
+import 'package:flutter_memos/providers/settings_provider.dart' as settings_p;
 import 'package:flutter_memos/providers/ui_providers.dart' as ui_providers;
 import 'package:flutter_memos/utils/note_utils.dart';
 import 'package:flutter_memos/widgets/note_card.dart';
@@ -174,13 +176,15 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
   // --- End Moved Helper Methods ---
 
   void _toggleHideItem(BuildContext context, WidgetRef ref) {
-    final hiddenItemIds = ref.read(note_providers.hiddenItemIdsProvider);
+    // Use the correct provider from settings_provider
+    final hiddenItemIds = ref.read(settings_p.manuallyHiddenNoteIdsProvider);
     final itemIdToToggle = widget.note.id;
 
     if (hiddenItemIds.contains(itemIdToToggle)) {
+      // Use the correct provider from settings_provider
       ref
-          .read(note_providers.hiddenItemIdsProvider.notifier)
-          .update((state) => state..remove(itemIdToToggle));
+          .read(settings_p.manuallyHiddenNoteIdsProvider.notifier)
+          .remove(itemIdToToggle); // Use remove method
     } else {
       final currentSelectedId = ref.read(ui_providers.selectedItemIdProvider);
       final notesBeforeAction = ref.read(note_providers.filteredNotesProvider);
@@ -205,9 +209,10 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
         }
       }
 
+      // Use the correct provider from settings_provider
       ref
-          .read(note_providers.hiddenItemIdsProvider.notifier)
-          .update((state) => state..add(itemIdToToggle));
+          .read(settings_p.manuallyHiddenNoteIdsProvider.notifier)
+          .add(itemIdToToggle); // Use add method
 
       if (nextSelectedId != currentSelectedId) {
         ref.read(ui_providers.selectedItemIdProvider.notifier).state =
@@ -215,7 +220,7 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
       }
     }
 
-    ref.read(note_providers.notesNotifierProvider.notifier).refresh();
+    // No need to refresh notesNotifierProvider here, filteredNotesProvider will react
   }
 
   void _navigateToItemDetail(BuildContext context, WidgetRef ref) {
@@ -281,20 +286,20 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
     // Check mounted *after* the await and *before* using context again
     if (confirm == true && mounted) {
       try {
-        // Optimistically hide
+        // Optimistically hide using the correct provider
         ref
-            .read(note_providers.hiddenItemIdsProvider.notifier)
-            .update((state) => state..add(widget.note.id));
+            .read(settings_p.manuallyHiddenNoteIdsProvider.notifier)
+            .add(widget.note.id); // Use add method
 
         // Perform deletion
         await ref.read(note_providers.deleteNoteProvider(widget.note.id))();
-        // No need to remove from hidden on success, it's gone
+        // The deleteNoteProvider already removes the ID from manuallyHiddenNoteIdsProvider on success
       } catch (e) {
-        // Revert optimistic hide on error
+        // Revert optimistic hide on error using the correct provider
         if (mounted) {
           ref
-              .read(note_providers.hiddenItemIdsProvider.notifier)
-              .update((state) => state..remove(widget.note.id));
+              .read(settings_p.manuallyHiddenNoteIdsProvider.notifier)
+              .remove(widget.note.id); // Use remove method
 
           // Show error dialog
           showCupertinoDialog(

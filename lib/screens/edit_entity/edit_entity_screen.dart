@@ -1,6 +1,8 @@
 import 'package:flutter/cupertino.dart';
 // Import note_providers instead of memo_detail_provider and memo_providers
 import 'package:flutter_memos/providers/note_providers.dart' as note_providers;
+// Import settings_provider for manuallyHiddenNoteIdsProvider
+import 'package:flutter_memos/providers/settings_provider.dart' as settings_p;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'edit_entity_form.dart'; // Updated import
@@ -46,9 +48,9 @@ class EditEntityScreen extends ConsumerWidget { // Renamed class
             if (ref.exists(note_providers.noteDetailCacheProvider)) { // Use provider from note_providers
               ref.invalidate(note_providers.noteDetailProvider(entityId)); // Use provider from note_providers
             }
-            // Ensure the item is not hidden (using renamed provider)
+            // Ensure the item is not hidden (using correct provider)
             ref
-                .read(note_providers.hiddenItemIdsProvider.notifier) // Use renamed provider from note_providers
+                .read(settings_p.manuallyHiddenNoteIdsProvider.notifier)
                 .update(
                   (state) =>
                       state.contains(entityId)
