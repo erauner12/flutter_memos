@@ -41,168 +41,197 @@ class WorkbenchItemTile extends ConsumerWidget {
     final preview = itemReference.previewContent ?? 'No preview available';
     final serverDisplayName =
         itemReference.serverName ?? itemReference.serverId;
-    // Format dates concisely
     final addedDate = DateFormat.yMd().add_jm().format(
       itemReference.addedTimestamp.toLocal(),
     );
-    // Use overallLastUpdateTime for display
     final lastActivityDate = DateFormat.yMd().add_jm().format(
       itemReference.overallLastUpdateTime.toLocal(),
     );
 
-    return CupertinoListTile(
-      // Remove leadingSize, let content determine size
-      leading: Padding(
-        padding: const EdgeInsets.only(
-          top: 4.0,
-        ), // Align icon better with multi-line text
-        child: Icon(
-          _getItemTypeIcon(itemReference.referencedItemType),
-          color: theme.primaryColor,
-          size: 22,
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: CupertinoColors.systemGroupedBackground.resolveFrom(context),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: CupertinoColors.separator.resolveFrom(context),
+          width: 0.7,
         ),
+        boxShadow: [
+          BoxShadow(
+            color: CupertinoColors.black.withOpacity(0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
-      title: Text(
-        preview,
-        maxLines: 2,
-        overflow: TextOverflow.ellipsis,
-        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w400),
-      ),
-      subtitle: Column(
-        // Use Column for multiple lines of subtitle info + comment preview
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SizedBox(height: 2), // Small space below title
-          Text(
-            'Server: $serverDisplayName • Added: $addedDate',
-            style: TextStyle(
-              fontSize: 12,
-              color: CupertinoColors.secondaryLabel.resolveFrom(context),
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          const SizedBox(height: 2),
-          Text(
-            // Display last activity time
-            'Last activity: $lastActivityDate',
-            style: TextStyle(
-              fontSize: 12,
-              color: CupertinoColors.secondaryLabel.resolveFrom(context),
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          const SizedBox(height: 6), // Space before comment preview
-          _buildCommentPreview(
-            context,
-            itemReference.latestComment,
-          ), // Add comment preview
-          const SizedBox(height: 4), // Space at the bottom
-        ],
-      ),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            _getServerTypeIcon(itemReference.serverType),
-            size: 18,
-            color: CupertinoColors.tertiaryLabel.resolveFrom(context),
-          ),
-          const SizedBox(width: 8),
-          CupertinoButton(
-            padding: const EdgeInsets.all(4.0),
-            minSize: 0,
-            child: const Icon(
-              CupertinoIcons.clear_circled,
-              size: 20,
-              color: CupertinoColors.systemGrey,
-            ),
-            onPressed: () {
-              // Show confirmation dialog before removing
-              showCupertinoDialog(
-                context: context,
-                builder:
-                    (dialogContext) => CupertinoAlertDialog(
-                      title: const Text('Remove from Workbench?'),
-                      content: Text(
-                        'Remove "${preview.substring(0, preview.length > 30 ? 30 : preview.length)}..." from your Workbench?',
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(top: 2.0, right: 10),
+                child: Icon(
+                  _getItemTypeIcon(itemReference.referencedItemType),
+                  color: theme.primaryColor,
+                  size: 24,
+                ),
+              ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      preview,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
                       ),
-                      actions: [
-                        CupertinoDialogAction(
-                          child: const Text('Cancel'),
-                          onPressed: () => Navigator.pop(dialogContext),
-                        ),
-                        CupertinoDialogAction(
-                          isDestructiveAction: true,
-                          child: const Text('Remove'),
-                          onPressed: () {
-                            Navigator.pop(dialogContext);
-                            // Fix: Call removeItem on the notifier and ignore the future
-                            unawaited(
-                              ref
-                                  .read(workbenchProvider.notifier)
-                                  .removeItem(itemReference.id),
-                            );
-                          },
-                        ),
-                      ],
                     ),
-              );
-            },
+                    const SizedBox(height: 6),
+                    Text(
+                      'Server: $serverDisplayName • Added: $addedDate',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        color: CupertinoColors.secondaryLabel.resolveFrom(
+                          context,
+                        ),
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Last activity: $lastActivityDate',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        color: CupertinoColors.secondaryLabel.resolveFrom(
+                          context,
+                        ),
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              // Trailing actions
+              Column(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  Icon(
+                    _getServerTypeIcon(itemReference.serverType),
+                    size: 18,
+                    color: CupertinoColors.tertiaryLabel.resolveFrom(context),
+                  ),
+                  const SizedBox(height: 8),
+                  CupertinoButton(
+                    padding: const EdgeInsets.all(4.0),
+                    minSize: 0,
+                    child: const Icon(
+                      CupertinoIcons.clear_circled,
+                      size: 20,
+                      color: CupertinoColors.systemGrey,
+                    ),
+                    onPressed: () {
+                      showCupertinoDialog(
+                        context: context,
+                        builder:
+                            (dialogContext) => CupertinoAlertDialog(
+                              title: const Text('Remove from Workbench?'),
+                              content: Text(
+                                'Remove "${preview.substring(0, preview.length > 30 ? 30 : preview.length)}..." from your Workbench?',
+                              ),
+                              actions: [
+                                CupertinoDialogAction(
+                                  child: const Text('Cancel'),
+                                  onPressed: () => Navigator.pop(dialogContext),
+                                ),
+                                CupertinoDialogAction(
+                                  isDestructiveAction: true,
+                                  child: const Text('Remove'),
+                                  onPressed: () {
+                                    Navigator.pop(dialogContext);
+                                    unawaited(
+                                      ref
+                                          .read(workbenchProvider.notifier)
+                                          .removeItem(itemReference.id),
+                                    );
+                                  },
+                                ),
+                              ],
+                            ),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ],
           ),
+          // Threaded comment preview
+          _buildCommentPreview(context, itemReference.latestComment),
         ],
       ),
-      onTap: () {
-        // --- Navigation Logic ---
-        final currentActiveServerId =
-            ref.read(multiServerConfigProvider).activeServerId;
-
-        if (itemReference.serverId == currentActiveServerId) {
-          // Navigate directly
-          _navigateToItem(context, ref, itemReference);
-        } else {
-          // Needs server switch
-          _showServerSwitchRequiredDialog(context, ref, itemReference);
-        }
-      },
     );
   }
 
   // Add helper widget for comment preview
   Widget _buildCommentPreview(BuildContext context, Comment? comment) {
-    // Fix: Remove unused theme variable
-    // final theme = CupertinoTheme.of(context);
     final textStyle = TextStyle(
-      fontSize: 13,
+      fontSize: 13.5,
       color: CupertinoColors.secondaryLabel.resolveFrom(context),
     );
     final italicStyle = textStyle.copyWith(fontStyle: FontStyle.italic);
 
+    // If no comment and the item is a comment itself, show nothing
     if (comment == null) {
-      // Check if the parent item is a comment itself, in which case no preview is needed
       if (itemReference.referencedItemType == WorkbenchItemType.comment) {
-        return const SizedBox.shrink(); // Don't show "No comments" for a comment item
+        return const SizedBox.shrink();
       }
-      return Text('No comments yet.', style: italicStyle);
+      return Container(
+        margin: const EdgeInsets.only(top: 14),
+        padding: const EdgeInsets.only(left: 18, top: 8, bottom: 8, right: 8),
+        decoration: BoxDecoration(
+          color: CupertinoColors.secondarySystemGroupedBackground.resolveFrom(
+            context,
+          ),
+          border: Border(
+            left: BorderSide(
+              color: CupertinoColors.systemGrey4.resolveFrom(context),
+              width: 3,
+            ),
+          ),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Text('No comments yet.', style: italicStyle),
+      );
     }
 
-    // Simple text preview for now
     return Container(
-      padding: const EdgeInsets.only(left: 8, top: 4, bottom: 4, right: 4),
+      margin: const EdgeInsets.only(top: 14),
+      padding: const EdgeInsets.only(left: 18, top: 8, bottom: 8, right: 8),
       decoration: BoxDecoration(
+        color: CupertinoColors.secondarySystemGroupedBackground.resolveFrom(
+          context,
+        ),
         border: Border(
           left: BorderSide(
             color: CupertinoColors.systemGrey4.resolveFrom(context),
-            width: 2,
+            width: 3,
           ),
         ),
+        borderRadius: BorderRadius.circular(8),
       ),
       child: Text(
         comment.content,
-        maxLines: 2,
+        maxLines: 3,
         overflow: TextOverflow.ellipsis,
-        style: textStyle,
+        style: textStyle.copyWith(fontStyle: FontStyle.italic),
       ),
     );
   }
