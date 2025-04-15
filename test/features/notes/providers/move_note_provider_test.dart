@@ -27,28 +27,8 @@ import 'move_note_provider_test.mocks.dart';
 
 // Re-use MockNotesNotifier from memo_providers_test.dart for consistency
 // (Assuming it's accessible or defined similarly here)
-class MockNotesNotifier extends StateNotifier<NotesState> with Mock implements NotesNotifier {
-  MockNotesNotifier(super.state);
-
-  // Mock methods that might be called
-  @override
-  void removeNoteOptimistically(String noteId) {
-    super.noSuchMethod(
-      Invocation.method(#removeNoteOptimistically, [noteId]),
-      returnValueForMissingStub: null,
-    );
-  }
-
-  @override
-  Future<void> refresh() async {
-     super.noSuchMethod(
-      Invocation.method(#refresh, []),
-      returnValue: Future.value(),
-      returnValueForMissingStub: Future.value(),
-    );
-  }
-}
-
+// REMOVE THE MANUAL CLASS DEFINITION BELOW
+// END REMOVAL
 
 void main() {
   group('moveNoteProvider Tests', () {
@@ -136,7 +116,13 @@ void main() {
       // Instantiate specific mocks
       mockSourceApiService = MockMemosApiService();
       mockTargetApiService = MockBlinkoApiService();
-      mockNotesNotifier = MockNotesNotifier(
+      // Use the generated mock's default constructor
+      mockNotesNotifier = MockNotesNotifier();
+
+      // Stub the initial state for the generated mock
+      when(
+        mockNotesNotifier.state,
+      ).thenReturn(
         NotesState(notes: [sourceNote], isLoading: false),
       );
 
