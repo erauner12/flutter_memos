@@ -598,36 +598,42 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
           ),
         ],
       ),
-      child: GestureDetector(
-        onLongPress: () {
-          // Pass both scaffoldContext and scaffoldMessenger
-          _showCustomContextMenu(scaffoldContext, scaffoldMessenger);
-        },
-        onTap:
-            isMultiSelectMode
+      // Wrap the GestureDetector in a Builder to ensure it gets a fresh context
+      child: Builder(
+        builder: (builderContext) {
+          // Use builderContext for any ScaffoldMessenger operations if needed
+          return GestureDetector(
+            onLongPress: () {
+              // Continue using the reliably captured scaffoldContext and scaffoldMessenger
+              _showCustomContextMenu(scaffoldContext, scaffoldMessenger);
+            },
+            onTap:
+                isMultiSelectMode
                 ? () => _toggleMultiSelection(widget.note.id)
                 : () => _navigateToItemDetail(scaffoldContext, ref),
-        child: Stack(
-          children: [
-            cardWithDateInfo,
-            Positioned(
-              top: 4,
-              right: 4,
-              child: CupertinoButton(
-                padding: const EdgeInsets.all(6),
-                minSize: 0,
-                onPressed: () => onArchive(scaffoldContext),
-                child: Icon(
-                  CupertinoIcons.archivebox,
-                  size: 18,
-                  color: CupertinoColors.secondaryLabel.resolveFrom(
-                    scaffoldContext,
+            child: Stack(
+              children: [
+                cardWithDateInfo,
+                Positioned(
+                  top: 4,
+                  right: 4,
+                  child: CupertinoButton(
+                    padding: const EdgeInsets.all(6),
+                    minSize: 0,
+                    onPressed: () => onArchive(scaffoldContext),
+                    child: Icon(
+                      CupertinoIcons.archivebox,
+                      size: 18,
+                      color: CupertinoColors.secondaryLabel.resolveFrom(
+                        scaffoldContext,
+                      ),
+                    ),
                   ),
                 ),
-              ),
+              ],
             ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
