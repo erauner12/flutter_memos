@@ -5,22 +5,33 @@ import 'package:flutter_memos/models/note_item.dart';
 import 'package:flutter_memos/models/server_config.dart';
 import 'package:flutter_memos/providers/api_providers.dart' as api_p;
 import 'package:flutter_memos/providers/filter_providers.dart';
-
 import 'package:flutter_memos/providers/server_config_provider.dart';
+import 'package:flutter_memos/providers/settings_provider.dart' as settings_p;
 import 'package:flutter_memos/providers/ui_providers.dart' as ui_providers;
 import 'package:flutter_memos/services/base_api_service.dart';
-import 'package:flutter_memos/services/minimal_openai_service.dart';
-import 'package:flutter_memos/utils/comment_utils.dart';
-import 'package:flutter_memos/utils/filter_builder.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_memos/providers/settings_provider.dart' as settings_p;
-
 // New imports for moveNoteProvider refactor
 import 'package:flutter_memos/services/blinko_api_service.dart';
 // Update this import path
 import 'package:flutter_memos/services/memos_api_service.dart';
+import 'package:flutter_memos/services/minimal_openai_service.dart';
+import 'package:flutter_memos/utils/comment_utils.dart';
+import 'package:flutter_memos/utils/filter_builder.dart';
 import 'package:flutter_memos/utils/migration_utils.dart';
-import 'dart:typed_data';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+// +++ Add new providers +++
+/// Provider that creates a MemosApiService instance.
+final memosApiServiceProvider = Provider<MemosApiService>((ref) {
+  // Could add logic here if needed, e.g., reading base config
+  return MemosApiService();
+}, name: 'memosApiServiceProvider');
+
+/// Provider that creates a BlinkoApiService instance.
+final blinkoApiServiceProvider = Provider<BlinkoApiService>((ref) {
+  // Could add logic here if needed
+  return BlinkoApiService();
+}, name: 'blinkoApiServiceProvider');
+// +++ End new providers +++
 
 // --- State and Notifier ---
 
@@ -878,18 +889,20 @@ final togglePinNoteProvider = Provider.family<
 // --- Move Note Logic ---
 
 // Helper function to get the correct API service instance based on config
-BaseApiService _getApiServiceForConfig(ServerConfig config) {
+BaseApiService _getApiServiceForConfig(ServerConfig config, Ref ref) {
   BaseApiService service;
   switch (config.serverType) {
     case ServerType.memos:
-      service = MemosApiService();
+      service = ref.read(memosApiServiceProvider);
       break;
     case ServerType.blinko:
-      service = BlinkoApiService();
+      service = ref.read(blinkoApiServiceProvider);
       break;
     default:
       throw Exception("Unsupported server type for API service: \${config.serverType}");
   }
+  // Configuration might be handled by the provider itself in the future,
+  // but for now, configure the instance obtained from the provider.
   service.configureService(baseUrl: config.serverUrl, authToken: config.authToken);
   return service;
 }
@@ -932,9 +945,15 @@ final moveNoteProvider = Provider.family<
       );
     }
 
-    // Instantiate API services for source and target
-    final BaseApiService sourceApiService = _getApiServiceForConfig(sourceServer);
-    final BaseApiService targetApiService = _getApiServiceForConfig(targetServer);
+    // Instantiate API services for source and target using the helper
+    final BaseApiService sourceApiService = _getApiServiceForConfig(
+      sourceServer,
+      ref,
+    );
+    final BaseApiService targetApiService = _getApiServiceForConfig(
+      targetServer,
+      ref,
+    );
 
     if (kDebugMode) {
       print(
@@ -1050,7 +1069,7 @@ final moveNoteProvider = Provider.family<
               targetServer.serverType,
             );
             await targetApiService.createNoteComment(
-              createdNoteOnTarget!.id,
+              createdNoteOnTarget.id,
               commentDataForTarget,
             );
           } catch (e) {

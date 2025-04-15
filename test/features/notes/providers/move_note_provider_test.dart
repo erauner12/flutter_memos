@@ -139,6 +139,11 @@ void main() {
           // Instead, we will stub the methods on mockSourceApiService and mockTargetApiService.
           // The test implicitly assumes the provider logic correctly selects
           // the right service instance based on the ServerConfig.
+
+          // +++ Override the new service providers to return our mocks +++
+          memosApiServiceProvider.overrideWithValue(mockSourceApiService),
+          blinkoApiServiceProvider.overrideWithValue(mockTargetApiService),
+          // +++ End overrides +++
         ],
       );
 
@@ -179,11 +184,9 @@ void main() {
        )).thenAnswer((_) async => adaptedCommentForTarget.copyWith(id: 'blinko-comment-789')); // Return a dummy created comment
 
 
-      // --- Mock the _getApiServiceForConfig behavior implicitly ---
-      // This is tricky without direct override. We rely on the provider's internal logic
-      // correctly using the source/target configs. The verification steps later will confirm this.
-      // If tests fail here, we might need a more complex setup involving mocking constructors
-      // or refactoring the provider to allow injecting service instances during tests.
+      // The test implicitly assumes the provider logic correctly selects
+      // the right service instance based on the ServerConfig.
+      // --- This assumption is removed as we now override the providers ---
     });
 
     tearDown(() {
