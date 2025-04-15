@@ -92,6 +92,7 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
         child: const Text('Copy Content'),
         onPressed: () {
           Clipboard.setData(ClipboardData(text: widget.note.content));
+          // Use the builder context to pop the modal
           Navigator.pop(context);
         },
       ),
@@ -106,6 +107,7 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
           ref
               .read(note_providers.notesNotifierProvider.notifier)
               .updateNoteStartDate(widget.note.id, newStartDate);
+          // Use the builder context to pop the modal
           Navigator.pop(context);
         },
       ),
@@ -117,6 +119,7 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
           ref
               .read(note_providers.notesNotifierProvider.notifier)
               .updateNoteStartDate(widget.note.id, newStartDate);
+          // Use the builder context to pop the modal
           Navigator.pop(context);
         },
       ),
@@ -127,6 +130,7 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
             ref
                 .read(note_providers.notesNotifierProvider.notifier)
                 .updateNoteStartDate(widget.note.id, null);
+            // Use the builder context to pop the modal
             Navigator.pop(context);
           },
           child: const Text('Clear Start Date'),
@@ -134,14 +138,17 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
     ];
 
     showCupertinoModalPopup<void>(
-      context: context,
+      context: context, // This context is fine for showing the popup
+      // The builder provides the correct context for actions *inside* the popup
       builder:
-          (BuildContext context) => CupertinoActionSheet(
+          (BuildContext builderContext) => CupertinoActionSheet(
+            // Combine both sets of actions
             actions: <Widget>[...standardActions, ...dateActions],
             cancelButton: CupertinoActionSheetAction(
               child: const Text('Cancel'),
               onPressed: () {
-                Navigator.pop(context);
+                // Use the builder context to pop the modal
+                Navigator.pop(builderContext);
               },
             ),
           ),
@@ -235,7 +242,6 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
   }
 
   void _onDelete(BuildContext context) async {
-    final navigator = Navigator.of(context);
     final confirm = await showCupertinoDialog<bool>(
       context: context,
       builder: (BuildContext dialogContext) {
@@ -258,21 +264,27 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
       },
     );
 
+    // Check mounted *after* the await and *before* using context again
     if (confirm == true && mounted) {
       try {
+        // Optimistically hide
         ref
             .read(note_providers.hiddenItemIdsProvider.notifier)
             .update((state) => state..add(widget.note.id));
 
+        // Perform deletion
         await ref.read(note_providers.deleteNoteProvider(widget.note.id))();
+        // No need to remove from hidden on success, it's gone
       } catch (e) {
+        // Revert optimistic hide on error
         ref
             .read(note_providers.hiddenItemIdsProvider.notifier)
             .update((state) => state..remove(widget.note.id));
 
+        // Check mounted again before showing the dialog
         if (mounted) {
           showCupertinoDialog(
-            context: context,
+            context: context, // Use the original context passed to _onDelete
             builder:
                 (ctx) => CupertinoAlertDialog(
                   title: const Text('Error'),
@@ -333,13 +345,13 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
       onHide: () => _toggleHideItem(context, ref),
       onTogglePin: () => _onTogglePin(context),
       onBump: () async {
-        final navigator = Navigator.of(context);
         try {
           await ref.read(note_providers.bumpNoteProvider(widget.note.id))();
         } catch (e) {
+          // Check mounted *after* the await and *before* using context
           if (mounted) {
             showCupertinoDialog(
-              context: context,
+              context: context, // Use the build context
               builder:
                   (ctx) => CupertinoAlertDialog(
                     title: const Text('Error'),
