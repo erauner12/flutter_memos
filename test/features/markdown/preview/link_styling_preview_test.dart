@@ -1,23 +1,23 @@
-import 'package:flutter/cupertino.dart'; // Use Cupertino
+import 'package:flutter/cupertino.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_memos/models/note_item.dart'; // Import NoteItem
 import 'package:flutter_memos/providers/api_providers.dart';
-import 'package:flutter_memos/providers/edit_entity_providers.dart'; // Updated import
-import 'package:flutter_memos/screens/edit_entity/edit_entity_form.dart'; // Updated import
-import 'package:flutter_memos/services/base_api_service.dart'; // Ensure this import exists
-import 'package:flutter_memos/services/url_launcher_service.dart'; // Import url launcher service
+import 'package:flutter_memos/providers/edit_entity_providers.dart'; // Correct import
+import 'package:flutter_memos/screens/edit_entity/edit_entity_form.dart'; // Correct import
+import 'package:flutter_memos/services/base_api_service.dart'; // Correct import
+import 'package:flutter_memos/services/url_launcher_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/annotations.dart';
-import 'package:mockito/mockito.dart'; // Import mockito
+import 'package:mockito/mockito.dart';
 
-import '../../../helpers/test_debug.dart'; // Go up two levels to reach test/helpers/
-import '../../../services/url_launcher_service_test.mocks.dart'; // Path to services mocks
-// Import mocks for ApiService generated for this file or a shared location if applicable
-import 'link_styling_preview_test.mocks.dart'; // Assuming ApiService mock is generated here
+import '../../../helpers/test_debug.dart';
+import '../../../services/url_launcher_service_test.mocks.dart';
+// Import the generated mocks for this file (name might change after build)
+import 'link_styling_preview_test.mocks.dart';
 
-// Ensure ApiService is mocked if needed by EditMemoForm tests
-@GenerateNiceMocks([MockSpec<api_service.ApiService>()])
+// Ensure BaseApiService is mocked
+@GenerateNiceMocks([MockSpec<BaseApiService>()]) // Use BaseApiService
 // Helper function to find text in RichText widgets
 bool findTextInRichText(WidgetTester tester, String textToFind) {
   final richTextWidgets = tester.widgetList<RichText>(find.byType(RichText));
@@ -36,38 +36,37 @@ void dumpRichTextContent(WidgetTester tester) {
   for (final widget in richTextWidgets) {
     debugMarkdown(
       'RichText content: "${widget.text.toPlainText()}"',
-    ); // Replace print with debugMarkdown
+    );
   }
 }
 
 void main() {
   group('Markdown Link Styling in Preview Mode', () {
-    late MockBaseApiService mockApiService; // Confirmed mock type
+    late MockBaseApiService mockApiService; // Use MockBaseApiService
     late MockUrlLauncherService mockUrlLauncherService;
 
     setUp(() {
-      mockApiService =
-          MockBaseApiService(); // Confirmed mock type instantiation
+      mockApiService = MockBaseApiService(); // Use MockBaseApiService
       mockUrlLauncherService = MockUrlLauncherService();
       when(mockApiService.apiBaseUrl).thenReturn('http://test-url.com');
       when(mockUrlLauncherService.launch(any)).thenAnswer((_) async => true);
     });
 
-    testWidgets('Links in preview are styled correctly', (WidgetTester tester) async {
-      // Enable debugging
+    testWidgets('Links in preview are styled correctly', (
+      WidgetTester tester,
+    ) async {
       markdownDebugEnabled = false;
 
-      // Build a form with a link in the content - use a more distinctive link text
+      // Use NoteItem
       final note = NoteItem(
-        // Updated type
         id: 'test-id',
         content: '# Test Heading\n\n[UNIQUE_EXAMPLE_LINK](https://example.com)',
         pinned: false,
-        state: NoteState.normal, // Updated enum
-        createTime: DateTime.now(), // Add required field
-        updateTime: DateTime.now(), // Add required field
-        displayTime: DateTime.now(), // Add required field
-        visibility: NoteVisibility.private, // Add required field
+        state: NoteState.normal,
+        createTime: DateTime.now(),
+        updateTime: DateTime.now(),
+        displayTime: DateTime.now(),
+        visibility: NoteVisibility.private,
       );
 
       await tester.pumpWidget(
@@ -77,84 +76,61 @@ void main() {
             urlLauncherServiceProvider.overrideWithValue(
               mockUrlLauncherService,
             ),
+            // Use correct provider and params
             editEntityProvider(
-              // Use provider from edit_entity_providers.dart
-              EntityProviderParams(id: 'test-id', type: 'note'), // Updated type
-            ).overrideWith((ref) => Future.value(note)), // Use note variable
+              EntityProviderParams(id: 'test-id', type: 'note'),
+            ).overrideWith((ref) => Future.value(note)),
           ],
           child: CupertinoApp(
-            // Use CupertinoApp
             home: CupertinoPageScaffold(
-              // Use CupertinoPageScaffold
+              // Use EditEntityForm
               child: EditEntityForm(
-                // Updated widget type
                 entityId: 'test-id',
-                entityType: 'note', // Updated type
-                entity: note, // Use note variable
+                entityType: 'note',
+                entity: note,
               ),
             ),
           ),
         ),
       );
 
-      // Wait for everything to render (FutureProvider needs time)
       await tester.pumpAndSettle();
 
-      // Make sure the content is fully loaded in the text field
       expect(
         find.byType(CupertinoTextField),
         findsOneWidget,
-      ); // Use CupertinoTextField
-      
-      // Get the text field to verify content was loaded correctly
+      );
+
       final textField = tester.widget<CupertinoTextField>(
         find.byType(CupertinoTextField),
-      ); // Use CupertinoTextField
+      );
       expect(textField.controller!.text, contains('UNIQUE_EXAMPLE_LINK'));
-      
-      // Switch to preview mode
+
       final previewButton = find.text('Preview');
       expect(previewButton, findsOneWidget);
-      
-      await tester.pump();  // First pump for the tap
-      await tester.pump(const Duration(milliseconds: 500)); // Second pump with delay
-      await tester.pumpAndSettle(); // Final settle
-      
+
       await tester.tap(previewButton);
-      await tester.pump();  // First pump for the tap
-      await tester.pump(const Duration(milliseconds: 500)); // Second pump with delay
-      await tester.pumpAndSettle(); // Final settle
-      
-      // Verify we've switched to preview mode
+      await tester.pumpAndSettle();
+
       expect(
         find.byType(CupertinoTextField),
         findsNothing,
-      ); // Use CupertinoTextField
-      expect(find.byType(MarkdownBody), findsOneWidget);
-      
-      // Debug logging of widget tree
-      debugMarkdown("All RichText widgets after preview toggle:");
-      final richTextWidgets = tester.widgetList<RichText>(
-        find.byType(RichText),
       );
-      for (final widget in richTextWidgets) {
-        debugMarkdown(" - '${widget.text.toPlainText()}'");
-      }
+      expect(find.byType(MarkdownBody), findsOneWidget);
 
-      // Get the MarkdownBody to confirm its data property
+      debugMarkdown("All RichText widgets after preview toggle:");
+      dumpRichTextContent(tester);
+
       final markdownBody = tester.widget<MarkdownBody>(
         find.byType(MarkdownBody),
       );
       debugMarkdown("MarkdownBody data: '${markdownBody.data}'");
-      
-      // Get the text of the MarkdownBody to verify it contains our content
       expect(markdownBody.data, contains('UNIQUE_EXAMPLE_LINK'));
-      
-      // More flexible approach to find content - look for any part of the content
+
       final possibleTextFragments = [
         'UNIQUE', 'EXAMPLE', 'LINK', 'Test', 'Heading'
       ];
-      
+
       bool foundAnyText = false;
       for (final fragment in possibleTextFragments) {
         if (findTextInRichText(tester, fragment)) {
@@ -162,15 +138,12 @@ void main() {
           break;
         }
       }
-      
-      // Check if we found any of our fragments
+
       if (!foundAnyText) {
-        // If standard approach fails, try a direct approach with more detailed error
         final allRichText = tester.widgetList<RichText>(find.byType(RichText));
-        final allTexts = allRichText.map((rt) => rt.text.toPlainText()).join(', ');
-        
-        // Use a looser expectation - if content isn't found, the test will
-        // still pass but print detailed failure info
+        final allTexts = allRichText
+            .map((rt) => rt.text.toPlainText())
+            .join(', ');
         expect(
           foundAnyText || markdownBody.data.contains('UNIQUE_EXAMPLE_LINK'),
           isTrue,
@@ -181,13 +154,13 @@ void main() {
       }
     });
 
-    testWidgets('Links with special characters render correctly', (WidgetTester tester) async {
-      // Enable debug logs
+    testWidgets('Links with special characters render correctly', (
+      WidgetTester tester,
+    ) async {
       markdownDebugEnabled = false;
-      
-      // Use more distinctive content with clear markers
+
+      // Use NoteItem
       final note = NoteItem(
-        // Updated type
         id: 'test-id',
         content: '''
 # MARKER_HEADING
@@ -196,11 +169,11 @@ void main() {
 [MARKER_FRAGMENT](https://example.com/page#section-2)
 ''',
         pinned: false,
-        state: NoteState.normal, // Updated enum
-        createTime: DateTime.now(), // Add required field
-        updateTime: DateTime.now(), // Add required field
-        displayTime: DateTime.now(), // Add required field
-        visibility: NoteVisibility.private, // Add required field
+        state: NoteState.normal,
+        createTime: DateTime.now(),
+        updateTime: DateTime.now(),
+        displayTime: DateTime.now(),
+        visibility: NoteVisibility.private,
       );
 
       await tester.pumpWidget(
@@ -210,63 +183,53 @@ void main() {
             urlLauncherServiceProvider.overrideWithValue(
               mockUrlLauncherService,
             ),
+            // Use correct provider and params
             editEntityProvider(
-              EntityProviderParams(id: 'test-id', type: 'memo'),
-            ).overrideWith((ref) => Future.value(memo)),
+              EntityProviderParams(id: 'test-id', type: 'note'),
+            ).overrideWith((ref) => Future.value(note)),
           ],
           child: CupertinoApp(
-            // Use CupertinoApp
             home: CupertinoPageScaffold(
-              // Use CupertinoPageScaffold
-              child: EditMemoForm(
+              // Use EditEntityForm
+              child: EditEntityForm(
                 entityId: 'test-id',
-                entityType: 'memo',
-                entity: memo,
+                entityType: 'note',
+                entity: note,
               ),
             ),
           ),
         ),
       );
 
-      // Wait for initial rendering and verify the TextField has our content (FutureProvider needs time)
       await tester.pumpAndSettle();
       final textField = tester.widget<CupertinoTextField>(
         find.byType(CupertinoTextField),
-      ); // Use CupertinoTextField
+      );
       expect(textField.controller!.text, contains('MARKER_HEADING'));
-      
-      // Tap the preview button with extra care for timing
+
       await tester.ensureVisible(find.text('Preview'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Preview'));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
       await tester.pumpAndSettle();
-      
-      // Verify we're now in preview mode
+
       expect(
         find.byType(CupertinoTextField),
         findsNothing,
-      ); // Use CupertinoTextField
+      );
       expect(find.byType(MarkdownBody), findsOneWidget);
 
-      // Debug log all RichText content
       if (markdownDebugEnabled) {
         debugMarkdown("All RichText widgets in preview mode:");
-        final richTextWidgets = tester.widgetList<RichText>(find.byType(RichText));
-        for (final widget in richTextWidgets) {
-          debugMarkdown(" - '${widget.text.toPlainText()}'");
-        }
+        dumpRichTextContent(tester);
       }
 
-      // Get the markdown body widget and check its data
-      final markdownBody = tester.widget<MarkdownBody>(find.byType(MarkdownBody));
-      
-      // Check if any of our marker keywords exist in the markdown data
+      final markdownBody = tester.widget<MarkdownBody>(
+        find.byType(MarkdownBody),
+      );
       final keywordsInContent = [
         'MARKER_HEADING', 'MARKER_SPACES', 'MARKER_PARAMS', 'MARKER_FRAGMENT'
       ];
-      
+
       bool contentHasKeywords = false;
       for (final keyword in keywordsInContent) {
         if (markdownBody.data.contains(keyword)) {
@@ -274,15 +237,14 @@ void main() {
           break;
         }
       }
-      
+
       expect(contentHasKeywords, isTrue,
         reason: 'None of the expected keywords found in MarkdownBody.data: "${markdownBody.data}"');
-      
-      // Check if any of our keywords appear in the rendered RichText widgets
+
       final possibleTextFragments = [
         'MARKER', 'HEADING', 'SPACES', 'PARAMS', 'FRAGMENT'
       ];
-      
+
       bool foundAnyText = false;
       for (final fragment in possibleTextFragments) {
         if (findTextInRichText(tester, fragment)) {
@@ -290,9 +252,7 @@ void main() {
           break;
         }
       }
-      
-      // Modified looser expectation - if either our data is in the MarkdownBody
-      // OR we found rendered text, consider the test a success
+
       expect(
         foundAnyText || contentHasKeywords,
         isTrue,

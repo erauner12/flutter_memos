@@ -215,17 +215,23 @@ void main() {
       );
     });
 
-    testWidgets('MemoContent renders markdown correctly', (
+    testWidgets('NoteContent renders markdown correctly', (
+      // Updated widget name
       WidgetTester tester,
     ) async {
-      // Set up memo and comments data
-      final memo = Memo(
+      // Set up note and comments data
+      final note = NoteItem(
+        // Updated type
         id: 'test-id',
         content: '# Test Heading\n**Bold text**\n*Italic text*',
         pinned: false,
-        state: MemoState.normal,
+        state: NoteState.normal, // Updated enum
+        createTime: DateTime.now(), // Add required field
+        updateTime: DateTime.now(), // Add required field
+        displayTime: DateTime.now(), // Add required field
+        visibility: NoteVisibility.private, // Add required field
       );
-      
+
       final comments = [
         Comment(
           id: 'comment-1',
@@ -235,26 +241,32 @@ void main() {
       ];
 
       // Configure the mock with Mockito
-      when(mockApiService.getMemo('test-id')).thenAnswer((_) async => memo);
       when(
-        mockApiService.listMemoComments('test-id'),
+        mockApiService.getNote('test-id'),
+      ).thenAnswer((_) async => note); // Updated method name
+      when(
+        mockApiService.listNoteComments('test-id'), // Updated method name
       ).thenAnswer((_) async => comments);
 
-      // Build the MemoContent widget with the provider overrides
+      // Build the NoteContent widget with the provider overrides
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
             apiServiceProvider.overrideWithValue(mockApiService),
             urlLauncherServiceProvider.overrideWithValue(mockUrlLauncherService), // Add override
-            memoCommentsProvider.overrideWith(
-              (ref, id) => Future.value(comments),
+            note_providers
+                .noteCommentsProvider('test-id')
+                .overrideWith(
+                  // Updated provider name
+                  (ref) => Future.value(comments),
             ),
           ],
           child: CupertinoApp(
-            // Use CupertinoApp
             home: CupertinoPageScaffold(
-              // Use CupertinoPageScaffold
-              child: MemoContent(memo: memo, memoId: 'test-id'),
+              child: NoteContent(
+                note: note,
+                noteId: 'test-id',
+              ), // Updated widget type and params
             ),
           ),
         ),
@@ -267,7 +279,7 @@ void main() {
       expect(find.textContaining('Test Heading'), findsOneWidget);
       expect(find.textContaining('Bold text'), findsOneWidget);
       expect(find.textContaining('Italic text'), findsOneWidget);
-      
+
       // Verify a MarkdownBody widget is present
       expect(find.byType(MarkdownBody), findsOneWidget);
     });
@@ -291,7 +303,7 @@ void main() {
               // Use CupertinoPageScaffold
               child: CommentCard(
                 comment: comment,
-                memoId: 'test-memo-id',
+                noteId: 'test-note-id', // Updated parameter name
               ),
             ),
           ),
@@ -310,21 +322,27 @@ void main() {
       expect(find.textContaining('Link'), findsOneWidget);
     });
 
-    testWidgets('MemoCard renders markdown correctly', (WidgetTester tester) async {
-      // Build the MemoCard widget
+    testWidgets('NoteCard renders markdown correctly', (
+      WidgetTester tester,
+    ) async {
+      // Updated widget name
+      // Build the NoteCard widget
       await tester.pumpWidget(
         ProviderScope( // Add ProviderScope for override
           overrides: [
             urlLauncherServiceProvider.overrideWithValue(mockUrlLauncherService), // Add override
           ],
-          child: const CupertinoApp(
+          child: CupertinoApp(
             // Use CupertinoApp
             home: CupertinoPageScaffold(
               // Use CupertinoPageScaffold
-              child: MemoCard(
+              child: NoteCard(
+                // Updated widget type
                 id: 'test-id',
                 content: '# Card Heading\n**Bold text**\n- List item',
                 pinned: false,
+                updatedAt:
+                    DateTime.now().toIso8601String(), // Pass required param
               ),
             ),
           ),
@@ -336,47 +354,53 @@ void main() {
 
       // Find the MarkdownBody widget
       expect(find.byType(MarkdownBody), findsOneWidget);
-      
+
       // Verify markdown elements are rendered
       expect(find.textContaining('Card Heading'), findsOneWidget);
       expect(find.textContaining('Bold text'), findsOneWidget);
       expect(find.textContaining('List item'), findsOneWidget);
     });
 
-    testWidgets('EditMemoForm toggles between edit and preview modes', (WidgetTester tester) async {
-      final memo = Memo(
+    testWidgets('EditEntityForm toggles between edit and preview modes', (
+      WidgetTester tester,
+    ) async {
+      // Updated widget name
+      final note = NoteItem(
+        // Updated type
         id: 'test-id',
         content: '# Test Heading\n**Bold text**',
         pinned: false,
-        state: MemoState.normal,
+        state: NoteState.normal, // Updated enum
+        createTime: DateTime.now(), // Add required field
+        updateTime: DateTime.now(), // Add required field
+        displayTime: DateTime.now(), // Add required field
+        visibility: NoteVisibility.private, // Add required field
       );
 
-      // Set up necessary provider overrides
-      final mockApiService = MockApiService();
-      
-      // Use Mockito stubbing instead of manual mock method
-      when(mockApiService.getMemo('test-id')).thenAnswer((_) async => memo);
+      // Use Mockito stubbing
+      when(
+        mockApiService.getNote('test-id'),
+      ).thenAnswer((_) async => note); // Updated method name
 
-      // Build the EditMemoForm widget
+      // Build the EditEntityForm widget
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
             apiServiceProvider.overrideWithValue(mockApiService),
             urlLauncherServiceProvider.overrideWithValue(mockUrlLauncherService), // Add override
-            // Mock the provider that EditMemoForm uses to fetch the entity
+            // Mock the provider that EditEntityForm uses to fetch the entity
             editEntityProvider(
-              EntityProviderParams(id: 'test-id', type: 'memo'),
-            ).overrideWith((ref) => Future.value(memo)),
+              // Use provider from edit_entity_providers.dart
+              EntityProviderParams(id: 'test-id', type: 'note'), // Updated type
+            ).overrideWith((ref) => Future.value(note)),
           ],
           child: CupertinoApp(
-            // Use CupertinoApp
             home: CupertinoPageScaffold(
-              // Use CupertinoPageScaffold
-              // Use the new constructor signature
-              child: EditMemoForm(
+              child: EditEntityForm(
+                // Updated widget type
                 entityId: 'test-id',
-                entityType: 'memo',
-                entity: memo,
+                entityType: 'note', // Updated type
+                entity: note,
               ),
             ),
           ),
