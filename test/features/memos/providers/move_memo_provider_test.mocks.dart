@@ -700,6 +700,23 @@ class MockNotesNotifier extends _i1.Mock implements _i5.NotesNotifier {
       );
 
   @override
+  _i8.Future<void> updateNoteStartDate(
+    String? noteId,
+    DateTime? newStartDate,
+  ) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #updateNoteStartDate,
+          [
+            noteId,
+            newStartDate,
+          ],
+        ),
+        returnValue: _i8.Future<void>.value(),
+        returnValueForMissingStub: _i8.Future<void>.value(),
+      ) as _i8.Future<void>);
+
+  @override
   bool updateShouldNotify(
     _i5.NotesState? old,
     _i5.NotesState? current,
