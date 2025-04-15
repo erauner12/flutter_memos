@@ -1,4 +1,5 @@
 import 'package:flutter_memos/models/comment.dart'; // Add Comment import
+import 'package:flutter_memos/models/multi_server_config_state.dart'; // Import MultiServerConfigState
 import 'package:flutter_memos/models/note_item.dart'; // Add NoteItem import
 import 'package:flutter_memos/models/server_config.dart';
 import 'package:flutter_memos/models/workbench_item_reference.dart';
@@ -36,6 +37,20 @@ final serverConfig1 = ServerConfig(
   serverType: ServerType.memos,
 );
 
+// Helper function to create mock items
+WorkbenchItemReference createMockItem(String id, DateTime addedTimestamp) {
+  return WorkbenchItemReference(
+    id: id,
+    referencedItemId: 'ref-\$id',
+    referencedItemType: WorkbenchItemType.note,
+    serverId: serverConfig1.id,
+    serverType: serverConfig1.serverType,
+    serverName: serverConfig1.name,
+    previewContent: 'Preview for \$id',
+    addedTimestamp: addedTimestamp,
+  );
+}
+
 void main() {
   // Initialize the current time for tests
   now = DateTime.now();
@@ -57,8 +72,13 @@ void main() {
         apiServiceProvider.overrideWithValue(mockApiService),
         // Override multiServerConfigProvider to provide a default state
         // This is needed because _fetchAndPopulateDetails reads it
-        multiServerConfigProvider.overrideWithValue(
-          MultiServerConfigState(servers: [serverConfig1], activeServerId: serverConfig1.id),
+        // Fix: Use .overrideWith for StateNotifierProvider
+        multiServerConfigProvider.overrideWith(
+          (ref) => MultiServerConfigNotifier(ref)
+            ..state = MultiServerConfigState(
+              servers: [serverConfig1],
+              activeServerId: serverConfig1.id,
+            ),
         ),
       ],
     );
@@ -77,8 +97,12 @@ void main() {
     // Default mock behavior for API calls (used in _fetchAndPopulateDetails)
     // Return empty lists/default objects to prevent null errors if not specifically mocked in a test
     when(mockApiService.getNote(any, targetServerOverride: anyNamed('targetServerOverride')))
-        .thenAnswer((_) async => NoteItem(
-              id: _.positionalArguments[0], // Use the passed ID
+        .thenAnswer(
+      (invocation) async => NoteItem(
+        // Fix: Use invocation object
+        id:
+            invocation.positionalArguments[0]
+                as String, // Fix: Access argument correctly
               content: 'Mock Note Content',
               pinned: false,
               state: NoteState.normal,
@@ -501,99 +525,284 @@ void main() {
   });
 
   group('refreshItemDetails', () {
-   setUp(() async {
-    // Arrange: Load initial items and fetch details
-    // Use the same mocks as the loadItems test for consistency
-    when(mockCloudKitService.getAllWorkbenchItemReferences())
-        .thenAnswer((_) async => [item1, item3, item2]); // Unsorted by time
-    final note1UpdateTime = now.subtract(const Duration(days: 1, hours: 1));
-    final note2UpdateTime = now.subtract(const Duration(hours: 12));
-    final note3UpdateTime = now.subtract(const Duration(hours: 1));
-    final commentForItem2 = Comment(id: 'comment1', content: 'Latest comment', createTime: now.millisecondsSinceEpoch);
-    when(mockApiService.getNote(item1.referencedItemId, targetServerOverride: serverConfig1))
-        .thenAnswer((_) async => NoteItem(id: item1.referencedItemId, content: '', pinned: false, state: NoteState.normal, visibility: NoteVisibility.public, createTime: note1UpdateTime, updateTime: note1UpdateTime, displayTime: note1UpdateTime));
-    when(mockApiService.getNote(item2.referencedItemId, targetServerOverride: serverConfig1))
-        .thenAnswer((_) async => NoteItem(id: item2.referencedItemId, content: '', pinned: false, state: NoteState.normal, visibility: NoteVisibility.public, createTime: note2UpdateTime, updateTime: note2UpdateTime, displayTime: note2UpdateTime));
-    when(mockApiService.getNote(item3.referencedItemId, targetServerOverride: serverConfig1))
-        .thenAnswer((_) async => NoteItem(id: item3.referencedItemId, content: '', pinned: false, state: NoteState.normal, visibility: NoteVisibility.public, createTime: note3UpdateTime, updateTime: note3UpdateTime, displayTime: note3UpdateTime));
-    when(mockApiService.listNoteComments(item1.referencedItemId, targetServerOverride: serverConfig1)).thenAnswer((_) async => []);
-    when(mockApiService.listNoteComments(item2.referencedItemId, targetServerOverride: serverConfig1)).thenAnswer((_) async => [commentForItem2]);
-    when(mockApiService.listNoteComments(item3.referencedItemId, targetServerOverride: serverConfig1)).thenAnswer((_) async => []);
+    setUp(() async {
+      // Arrange: Load initial items and fetch details
+      // Use the same mocks as the loadItems test for consistency
+      when(
+        mockCloudKitService.getAllWorkbenchItemReferences(),
+      ).thenAnswer((_) async => [item1, item3, item2]); // Unsorted by time
+      final note1UpdateTime = now.subtract(const Duration(days: 1, hours: 1));
+      final note2UpdateTime = now.subtract(const Duration(hours: 12));
+      final note3UpdateTime = now.subtract(const Duration(hours: 1));
+      final commentForItem2 = Comment(
+        id: 'comment1',
+        content: 'Latest comment',
+        createTime: now.millisecondsSinceEpoch,
+      );
+      when(
+        mockApiService.getNote(
+          item1.referencedItemId,
+          targetServerOverride: serverConfig1,
+        ),
+      ).thenAnswer(
+        (_) async => NoteItem(
+          id: item1.referencedItemId,
+          content: '',
+          pinned: false,
+          state: NoteState.normal,
+          visibility: NoteVisibility.public,
+          createTime: note1UpdateTime,
+          updateTime: note1UpdateTime,
+          displayTime: note1UpdateTime,
+        ),
+      );
+      when(
+        mockApiService.getNote(
+          item2.referencedItemId,
+          targetServerOverride: serverConfig1,
+        ),
+      ).thenAnswer(
+        (_) async => NoteItem(
+          id: item2.referencedItemId,
+          content: '',
+          pinned: false,
+          state: NoteState.normal,
+          visibility: NoteVisibility.public,
+          createTime: note2UpdateTime,
+          updateTime: note2UpdateTime,
+          displayTime: note2UpdateTime,
+        ),
+      );
+      when(
+        mockApiService.getNote(
+          item3.referencedItemId,
+          targetServerOverride: serverConfig1,
+        ),
+      ).thenAnswer(
+        (_) async => NoteItem(
+          id: item3.referencedItemId,
+          content: '',
+          pinned: false,
+          state: NoteState.normal,
+          visibility: NoteVisibility.public,
+          createTime: note3UpdateTime,
+          updateTime: note3UpdateTime,
+          displayTime: note3UpdateTime,
+        ),
+      );
+      when(
+        mockApiService.listNoteComments(
+          item1.referencedItemId,
+          targetServerOverride: serverConfig1,
+        ),
+      ).thenAnswer((_) async => []);
+      when(
+        mockApiService.listNoteComments(
+          item2.referencedItemId,
+          targetServerOverride: serverConfig1,
+        ),
+      ).thenAnswer((_) async => [commentForItem2]);
+      when(
+        mockApiService.listNoteComments(
+          item3.referencedItemId,
+          targetServerOverride: serverConfig1,
+        ),
+      ).thenAnswer((_) async => []);
 
-    await notifier.loadItems();
-    await Future.delayed(const Duration(milliseconds: 100)); // Wait for details
-    // Expected initial state after load/details: [id2, id3, id1]
-  });
+      await notifier.loadItems();
+      await Future.delayed(
+        const Duration(milliseconds: 100),
+      ); // Wait for details
+      // Expected initial state after load/details: [id2, id3, id1]
+    });
 
-  test('refreshItemDetails success - re-fetches details and updates state', () async {
-    // Arrange: Modify API mocks for the refresh call
-    final refreshedNote1UpdateTime = now.subtract(const Duration(minutes: 5)); // Much newer
-    final refreshedCommentForItem3 = Comment(id: 'comment2', content: 'Refreshed comment', createTime: now.add(const Duration(minutes: 1)).millisecondsSinceEpoch); // Newest overall
+    test(
+      'refreshItemDetails success - re-fetches details and updates state',
+      () async {
+        // Arrange: Modify API mocks for the refresh call
+        final refreshedNote1UpdateTime = now.subtract(
+          const Duration(minutes: 5),
+        ); // Much newer
+        final refreshedCommentForItem3 = Comment(
+          id: 'comment2',
+          content: 'Refreshed comment',
+          createTime:
+              now.add(const Duration(minutes: 1)).millisecondsSinceEpoch,
+        ); // Newest overall
 
-    when(mockApiService.getNote(item1.referencedItemId, targetServerOverride: serverConfig1))
-        .thenAnswer((_) async => NoteItem(id: item1.referencedItemId, content: '', pinned: false, state: NoteState.normal, visibility: NoteVisibility.public, createTime: refreshedNote1UpdateTime, updateTime: refreshedNote1UpdateTime, displayTime: refreshedNote1UpdateTime));
-    // Keep item2 mocks the same (no new comment/update)
-    when(mockApiService.listNoteComments(item3.referencedItemId, targetServerOverride: serverConfig1))
-        .thenAnswer((_) async => [refreshedCommentForItem3]); // New comment for item3
+        when(
+          mockApiService.getNote(
+            item1.referencedItemId,
+            targetServerOverride: serverConfig1,
+          ),
+        ).thenAnswer(
+          (_) async => NoteItem(
+            id: item1.referencedItemId,
+            content: '',
+            pinned: false,
+            state: NoteState.normal,
+            visibility: NoteVisibility.public,
+            createTime: refreshedNote1UpdateTime,
+            updateTime: refreshedNote1UpdateTime,
+            displayTime: refreshedNote1UpdateTime,
+          ),
+        );
+        // Keep item2 mocks the same (no new comment/update)
+        when(
+          mockApiService.listNoteComments(
+            item3.referencedItemId,
+            targetServerOverride: serverConfig1,
+          ),
+        ).thenAnswer(
+          (_) async => [refreshedCommentForItem3],
+        ); // New comment for item3
 
-    // Act
-    await notifier.refreshItemDetails();
-    // Wait briefly for async detail fetching to complete
-    await Future.delayed(const Duration(milliseconds: 100));
-    final state = container.read(workbenchProvider);
+        // Act
+        await notifier.refreshItemDetails();
+        // Wait briefly for async detail fetching to complete
+        await Future.delayed(const Duration(milliseconds: 100));
+        final state = container.read(workbenchProvider);
 
-    // Assert
-    expect(state.isLoading, false); // Should not be loading
-    expect(state.isRefreshingDetails, false); // Should be reset
-    expect(state.error, isNull);
-    expect(state.items.length, 3);
+        // Assert
+        expect(state.isLoading, false); // Should not be loading
+        expect(state.isRefreshingDetails, false); // Should be reset
+        expect(state.error, isNull);
+        expect(state.items.length, 3);
 
-    // Verify API calls were made again during refresh
-    verify(mockApiService.getNote(item1.referencedItemId, targetServerOverride: serverConfig1)).called(1); // Called once during load, once during refresh
-    verify(mockApiService.listNoteComments(item1.referencedItemId, targetServerOverride: serverConfig1)).called(1);
-    verify(mockApiService.getNote(item2.referencedItemId, targetServerOverride: serverConfig1)).called(1);
-    verify(mockApiService.listNoteComments(item2.referencedItemId, targetServerOverride: serverConfig1)).called(1);
-    verify(mockApiService.getNote(item3.referencedItemId, targetServerOverride: serverConfig1)).called(1);
-    verify(mockApiService.listNoteComments(item3.referencedItemId, targetServerOverride: serverConfig1)).called(1);
+        // Verify API calls were made again during refresh
+        verify(
+          mockApiService.getNote(
+            item1.referencedItemId,
+            targetServerOverride: serverConfig1,
+          ),
+        ).called(1); // Called once during load, once during refresh
+        verify(
+          mockApiService.listNoteComments(
+            item1.referencedItemId,
+            targetServerOverride: serverConfig1,
+          ),
+        ).called(1);
+        verify(
+          mockApiService.getNote(
+            item2.referencedItemId,
+            targetServerOverride: serverConfig1,
+          ),
+        ).called(1);
+        verify(
+          mockApiService.listNoteComments(
+            item2.referencedItemId,
+            targetServerOverride: serverConfig1,
+          ),
+        ).called(1);
+        verify(
+          mockApiService.getNote(
+            item3.referencedItemId,
+            targetServerOverride: serverConfig1,
+          ),
+        ).called(1);
+        verify(
+          mockApiService.listNoteComments(
+            item3.referencedItemId,
+            targetServerOverride: serverConfig1,
+          ),
+        ).called(1);
 
+        // Calculate expected overallLastUpdateTime after refresh
+        // item1: max(item1.added, refreshedNote1Update) = refreshedNote1Update (now - 5m)
+        // item2: max(item2.added, note2Update, commentCreate) = commentCreate (now)
+        // item3: max(item3.added, note3Update, refreshedCommentCreate) = refreshedCommentCreate (now + 1m)
+        // Expected order: item3 (now + 1m), item2 (now), item1 (now - 5m)
 
-    // Calculate expected overallLastUpdateTime after refresh
-    // item1: max(item1.added, refreshedNote1Update) = refreshedNote1Update (now - 5m)
-    // item2: max(item2.added, note2Update, commentCreate) = commentCreate (now)
-    // item3: max(item3.added, note3Update, refreshedCommentCreate) = refreshedCommentCreate (now + 1m)
-    // Expected order: item3 (now + 1m), item2 (now), item1 (now - 5m)
+        expect(
+          state.items[0].id,
+          'id3',
+        ); // Newest overall activity (refreshed comment)
+        expect(state.items[0].latestComment?.id, refreshedCommentForItem3.id);
+        expect(
+          state.items[0].overallLastUpdateTime.millisecondsSinceEpoch,
+          refreshedCommentForItem3.createTime,
+        );
 
-    expect(state.items[0].id, 'id3'); // Newest overall activity (refreshed comment)
-    expect(state.items[0].latestComment?.id, refreshedCommentForItem3.id);
-    expect(state.items[0].overallLastUpdateTime.millisecondsSinceEpoch, refreshedCommentForItem3.createTime);
+        expect(state.items[1].id, 'id2'); // Next newest (original comment)
+        expect(
+          state.items[1].latestComment?.id,
+          'comment1',
+        ); // Should still have original comment
+        expect(
+          state.items[1].overallLastUpdateTime.millisecondsSinceEpoch,
+          now.millisecondsSinceEpoch,
+        );
 
-    expect(state.items[1].id, 'id2'); // Next newest (original comment)
-    expect(state.items[1].latestComment?.id, 'comment1'); // Should still have original comment
-    expect(state.items[1].overallLastUpdateTime.millisecondsSinceEpoch, now.millisecondsSinceEpoch);
-
-    expect(state.items[2].id, 'id1'); // Oldest overall activity (refreshed note update)
-    expect(state.items[2].latestComment, isNull);
-    expect(state.items[2].overallLastUpdateTime, refreshedNote1UpdateTime);
-  });
-
-   test('refreshItemDetails handles API errors gracefully for individual items', () async {
-    // Arrange: Simulate API error for one item during refresh
-    final exception = Exception('API failed for item1');
-    when(mockApiService.getNote(item1.referencedItemId, targetServerOverride: serverConfig1))
-        .thenThrow(exception);
-    // Keep other mocks the same as initial load
-
-    // Act
-    await notifier.refreshItemDetails();
-    await Future.delayed(const Duration(milliseconds: 100));
-    final state = container.read(workbenchProvider);
-
-    // Assert
-    expect(state.isRefreshingDetails, false);
-    expect(state.error, isNull); // Error should not be set at the state level for partial failures
-    expect(state.items.length, 3);
+        expect(
+          state.items[2].id,
+          'id1',
+        ); // Oldest overall activity (refreshed note update)
+        expect(state.items[2].latestComment, isNull);
+        expect(state.items[2].overallLastUpdateTime, refreshedNote1UpdateTime);
       },
     );
+
+    test(
+      'refreshItemDetails handles API errors gracefully for individual items',
+      () async {
+        // Arrange: Simulate API error for one item during refresh
+        final exception = Exception('API failed for item1');
+        when(
+          mockApiService.getNote(
+            item1.referencedItemId,
+            targetServerOverride: serverConfig1,
+          ),
+        ).thenThrow(exception);
+        // Keep other mocks the same as initial load
+
+        // Act
+        await notifier.refreshItemDetails();
+        await Future.delayed(const Duration(milliseconds: 100));
+        final state = container.read(workbenchProvider);
+
+        // Assert
+        expect(state.isRefreshingDetails, false);
+        expect(
+          state.error,
+          isNull,
+        ); // Error should not be set at the state level for partial failures
+        expect(state.items.length, 3);
+
+        // Verify item1 retains its original data (or defaults if details couldn't be fetched initially)
+        final item1State = state.items.firstWhere((i) => i.id == 'id1');
+        // Its overallLastUpdateTime should be its addedTimestamp as the note fetch failed
+        expect(item1State.overallLastUpdateTime, item1.addedTimestamp);
+        expect(
+          item1State.referencedItemUpdateTime,
+          isNull,
+        ); // Should remain null or original value
+        expect(
+          item1State.latestComment,
+          isNull,
+        ); // Should remain null or original value
+
+        // Verify other items were updated correctly (order should still be based on available data)
+        // Expected order: item2 (now), item3 (now - 1h), item1 (now - 2d)
+        expect(state.items[0].id, 'id2');
+        expect(state.items[1].id, 'id3');
+        expect(state.items[2].id, 'id1');
+      },
+    );
+
+    test('refreshItemDetails does nothing if no items exist', () async {
+      // Arrange: Clear all items
+      // Assuming notifier exposes a method or mechanism to clear items for testing.
+      // For this test, we simulate a scenario with no items.
+      notifier.resetOrder(); // Reset to default order first
+      // Clearing items from notifier state for test
+      notifier.clearItems();
+
+      // Act
+      await notifier.refreshItemDetails();
+
+      // Assert
+      final state = container.read(workbenchProvider);
+      expect(state.items, isEmpty);
+    });
   });
-  
 }
