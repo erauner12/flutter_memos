@@ -5,13 +5,25 @@ import 'package:flutter_memos/models/note_item.dart';
 import 'package:flutter_memos/models/server_config.dart';
 import 'package:flutter_memos/providers/note_providers.dart';
 import 'package:flutter_memos/providers/server_config_provider.dart';
+import 'package:flutter_memos/services/blinko_api_service.dart';
+// Import specific services to mock
+import 'package:flutter_memos/services/memos_api_service.dart';
 import 'package:flutter_memos/utils/migration_utils.dart'; // Needed for adaptation logic verification
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mockito/annotations.dart'; // Import annotations
 import 'package:mockito/mockito.dart';
 
-// Import mocks from the existing generated file (adjust path if necessary)
-import '../../memos/providers/memo_providers_test.mocks.dart';
+// Import the generated mocks file (adjust path if necessary)
+// Assuming the build script generates mocks in the same directory or a standard location
+import 'move_note_provider_test.mocks.dart';
+
+// Annotation to generate mocks for specific services
+@GenerateNiceMocks([
+  MockSpec<MemosApiService>(),
+  MockSpec<BlinkoApiService>(),
+  MockSpec<NotesNotifier>(), // Keep existing mock for NotesNotifier
+])
 
 // Re-use MockNotesNotifier from memo_providers_test.dart for consistency
 // (Assuming it's accessible or defined similarly here)
@@ -41,8 +53,9 @@ class MockNotesNotifier extends StateNotifier<NotesState> with Mock implements N
 void main() {
   group('moveNoteProvider Tests', () {
     late ProviderContainer container;
-    late MockBaseApiService mockSourceApiService; // For Memos
-    late MockBaseApiService mockTargetApiService; // For Blinko
+    // Use specific mock types
+    late MockMemosApiService mockSourceApiService; // For Memos
+    late MockBlinkoApiService mockTargetApiService; // For Blinko
     late MockNotesNotifier mockNotesNotifier;
 
     // --- Sample Data ---
@@ -120,8 +133,9 @@ void main() {
     // --- End Sample Data ---
 
     setUp(() {
-      mockSourceApiService = MockBaseApiService();
-      mockTargetApiService = MockBaseApiService();
+      // Instantiate specific mocks
+      mockSourceApiService = MockMemosApiService();
+      mockTargetApiService = MockBlinkoApiService();
       mockNotesNotifier = MockNotesNotifier(
         NotesState(notes: [sourceNote], isLoading: false),
       );
@@ -140,9 +154,13 @@ void main() {
           // The test implicitly assumes the provider logic correctly selects
           // the right service instance based on the ServerConfig.
 
-          // +++ Override the new service providers to return our mocks +++
-          memosApiServiceProvider.overrideWithValue(mockSourceApiService),
-          blinkoApiServiceProvider.overrideWithValue(mockTargetApiService),
+          // +++ Override the new service providers to return our specific mocks +++
+          memosApiServiceProvider.overrideWithValue(
+            mockSourceApiService,
+          ), // Now type matches
+          blinkoApiServiceProvider.overrideWithValue(
+            mockTargetApiService,
+          ), // Now type matches
           // +++ End overrides +++
         ],
       );
