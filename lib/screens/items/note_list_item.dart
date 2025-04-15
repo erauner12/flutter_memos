@@ -56,10 +56,9 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
                 'Start: ${dateFormat.format(note.startDate!)}',
                 style: TextStyle(
                   fontSize: 12,
-                  color:
-                      isFutureStart
-                          ? CupertinoColors.systemOrange.resolveFrom(context)
-                          : CupertinoColors.secondaryLabel.resolveFrom(context),
+                  color: isFutureStart
+                      ? CupertinoColors.systemOrange.resolveFrom(context)
+                      : CupertinoColors.secondaryLabel.resolveFrom(context),
                   fontWeight:
                       isFutureStart ? FontWeight.w600 : FontWeight.normal,
                 ),
@@ -87,107 +86,89 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
 
   // Custom context menu including date actions
   void _showCustomContextMenu(BuildContext context) {
-    final noteActions = <Widget>[
-      CupertinoContextMenuAction(
-        child: const Text('Edit'),
-        onPressed: () {
-          Navigator.pop(context);
-          _onEdit(context);
-        },
-      ),
-      CupertinoContextMenuAction(
-        child: Text(widget.note.pinned ? 'Unpin' : 'Pin'),
-        onPressed: () {
-          Navigator.pop(context);
-          _onTogglePin(context);
-        },
-      ),
-      CupertinoContextMenuAction(
-        child: const Text('Archive'),
-        onPressed: () {
-          Navigator.pop(context);
-          _onArchive(context);
-        },
-      ),
-      CupertinoContextMenuAction(
-        isDestructiveAction: true,
-        child: const Text('Delete'),
-        onPressed: () {
-          Navigator.pop(context);
-          _onDelete(context);
-        },
-      ),
-    ];
-
-    final standardActions = <Widget>[
-      CupertinoContextMenuAction(
-        child: const Text('Copy Content'),
-        onPressed: () {
-          Clipboard.setData(ClipboardData(text: widget.note.content));
-          // Use the builder context to pop the modal
-          Navigator.pop(context);
-        },
-      ),
-    ];
-
-    final dateActions = <Widget>[
-      CupertinoContextMenuAction(
-        child: const Text('Kick Start +1 Day'),
-        onPressed: () {
-          final currentStart = widget.note.startDate ?? DateTime.now();
-          final newStartDate = currentStart.add(const Duration(days: 1));
-          ref
-              .read(note_providers.notesNotifierProvider.notifier)
-              .updateNoteStartDate(widget.note.id, newStartDate);
-          // Use the builder context to pop the modal
-          Navigator.pop(context);
-        },
-      ),
-      CupertinoContextMenuAction(
-        child: const Text('Kick Start +1 Week'),
-        onPressed: () {
-          final currentStart = widget.note.startDate ?? DateTime.now();
-          final newStartDate = currentStart.add(const Duration(days: 7));
-          ref
-              .read(note_providers.notesNotifierProvider.notifier)
-              .updateNoteStartDate(widget.note.id, newStartDate);
-          // Use the builder context to pop the modal
-          Navigator.pop(context);
-        },
-      ),
-      if (widget.note.startDate != null)
-        CupertinoContextMenuAction(
-          isDestructiveAction: true,
-          onPressed: () {
-            ref
-                .read(note_providers.notesNotifierProvider.notifier)
-                .updateNoteStartDate(widget.note.id, null);
-            // Use the builder context to pop the modal
-            Navigator.pop(context);
-          },
-          child: const Text('Clear Start Date'),
-        ),
-    ];
-
     showCupertinoModalPopup<void>(
-      context: context, // This context is fine for showing the popup
+      context: context,
       // The builder provides the correct context for actions *inside* the popup
-      builder:
-          (BuildContext builderContext) => CupertinoActionSheet(
-            // Combine all sets of actions
-            actions: <Widget>[
-              ...noteActions,
-              ...standardActions,
-              ...dateActions,
-            ],
-            cancelButton: CupertinoActionSheetAction(
-              child: const Text('Cancel'),
-              onPressed: () {
-                // Use the builder context to pop the modal
-                Navigator.pop(builderContext);
-              },
-            ),
+      builder: (BuildContext popupContext) => CupertinoActionSheet(
+        // Combine all sets of actions
+        actions: <Widget>[
+          CupertinoContextMenuAction(
+            child: const Text('Edit'),
+            onPressed: () {
+              Navigator.pop(popupContext);
+              onEdit(context);
+            },
           ),
+          CupertinoContextMenuAction(
+            child: Text(widget.note.pinned ? 'Unpin' : 'Pin'),
+            onPressed: () {
+              Navigator.pop(popupContext);
+              onTogglePin(context);
+            },
+          ),
+          CupertinoContextMenuAction(
+            child: const Text('Archive'),
+            onPressed: () {
+              Navigator.pop(popupContext);
+              onArchive(context);
+            },
+          ),
+          CupertinoContextMenuAction(
+            isDestructiveAction: true,
+            child: const Text('Delete'),
+            onPressed: () {
+              Navigator.pop(popupContext);
+              onDelete(context);
+            },
+          ),
+          CupertinoContextMenuAction(
+            child: const Text('Copy Content'),
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: widget.note.content));
+              Navigator.pop(popupContext);
+            },
+          ),
+          CupertinoContextMenuAction(
+            child: const Text('Kick Start +1 Day'),
+            onPressed: () {
+              final currentStart = widget.note.startDate ?? DateTime.now();
+              final newStartDate = currentStart.add(const Duration(days: 1));
+              ref
+                  .read(note_providers.notesNotifierProvider.notifier)
+                  .updateNoteStartDate(widget.note.id, newStartDate);
+              Navigator.pop(popupContext);
+            },
+          ),
+          CupertinoContextMenuAction(
+            child: const Text('Kick Start +1 Week'),
+            onPressed: () {
+              final currentStart = widget.note.startDate ?? DateTime.now();
+              final newStartDate = currentStart.add(const Duration(days: 7));
+              ref
+                  .read(note_providers.notesNotifierProvider.notifier)
+                  .updateNoteStartDate(widget.note.id, newStartDate);
+              Navigator.pop(popupContext);
+            },
+          ),
+          if (widget.note.startDate != null)
+            CupertinoContextMenuAction(
+              isDestructiveAction: true,
+              onPressed: () {
+                ref
+                    .read(note_providers.notesNotifierProvider.notifier)
+                    .updateNoteStartDate(widget.note.id, null);
+                Navigator.pop(popupContext);
+              },
+              child: const Text('Clear Start Date'),
+            ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          child: const Text('Cancel'),
+          onPressed: () {
+            Navigator.pop(popupContext);
+          },
+        ),
+      ),
     );
   }
   // --- End Moved Helper Methods ---
@@ -267,14 +248,14 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
     }
   }
 
-  void _onEdit(BuildContext context) {
+  void onEdit(BuildContext context) {
     Navigator.of(context, rootNavigator: true).pushNamed(
       '/edit-entity',
       arguments: {'entityType': 'note', 'entityId': widget.note.id},
     );
   }
 
-  void _onDelete(BuildContext context) async {
+  void onDelete(BuildContext context) async {
     final confirm = await showCupertinoDialog<bool>(
       context: context,
       builder: (BuildContext dialogContext) {
@@ -310,38 +291,36 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
         // No need to remove from hidden on success, it's gone
       } catch (e) {
         // Revert optimistic hide on error
-        ref
-            .read(note_providers.hiddenItemIdsProvider.notifier)
-            .update((state) => state..remove(widget.note.id));
-
-        // Check mounted again before showing the dialog, using the State's context
         if (mounted) {
+          ref
+              .read(note_providers.hiddenItemIdsProvider.notifier)
+              .update((state) => state..remove(widget.note.id));
+
+          // Show error dialog
           showCupertinoDialog(
-            context:
-                context, // Use the State's context (implicitly this.context)
-            builder:
-                (ctx) => CupertinoAlertDialog(
-                  title: const Text('Error'),
-                  content: Text('Failed to delete note: $e'),
-                  actions: [
-                    CupertinoDialogAction(
-                      isDefaultAction: true,
-                      child: const Text('OK'),
-                      onPressed: () => Navigator.of(ctx).pop(),
-                    ),
-                  ],
+            context: context,
+            builder: (ctx) => CupertinoAlertDialog(
+              title: const Text('Error'),
+              content: Text('Failed to delete note: ${e.toString()}'),
+              actions: [
+                CupertinoDialogAction(
+                  isDefaultAction: true,
+                  child: const Text('OK'),
+                  onPressed: () => Navigator.of(ctx).pop(),
                 ),
+              ],
+            ),
           );
         }
       }
     }
   }
 
-  void _onArchive(BuildContext context) {
+  void onArchive(BuildContext context) {
     ref.read(note_providers.archiveNoteProvider(widget.note.id))();
   }
 
-  void _onTogglePin(BuildContext context) {
+  void onTogglePin(BuildContext context) {
     ref.read(note_providers.togglePinNoteProvider(widget.note.id))();
   }
 
@@ -370,38 +349,33 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
         widget.note.updateTime.toIso8601String(),
       ),
       timestampType: 'Updated',
-      onTap:
-          isMultiSelectMode
-              ? () => _toggleMultiSelection(widget.note.id)
-              : () => _navigateToItemDetail(context, ref),
-      onArchive: () => _onArchive(context),
-      onDelete: () => _onDelete(context),
+      onTap: isMultiSelectMode
+          ? () => _toggleMultiSelection(widget.note.id)
+          : () => _navigateToItemDetail(context, ref),
+      onArchive: () => onArchive(context),
+      onDelete: () => onDelete(context),
       onHide: () => _toggleHideItem(context, ref),
-      onTogglePin: () => _onTogglePin(context),
+      onTogglePin: () => onTogglePin(context),
       onBump: () async {
         try {
           await ref.read(note_providers.bumpNoteProvider(widget.note.id))();
         } catch (e) {
-          // Check mounted *after* the await and *before* using the State's context
           if (mounted) {
             showCupertinoDialog(
-              context:
-                  context, // Use the State's context (implicitly this.context)
-              builder:
-                  (ctx) => CupertinoAlertDialog(
-                    title: const Text('Error'),
-                    content: const Text(
-                      // Ensure error message is concise and safe
-                      'Failed to bump note: \${e.toString().length > 100 ? e.toString().substring(0, 100) + "..." : e.toString()}',
-                    ),
-                    actions: [
-                      CupertinoDialogAction(
-                        isDefaultAction: true,
-                        child: const Text('OK'),
-                        onPressed: () => Navigator.of(ctx).pop(),
-                      ),
-                    ],
+              context: context,
+              builder: (ctx) => CupertinoAlertDialog(
+                title: const Text('Error'),
+                content: Text(
+                  'Failed to bump note: ${e.toString().length > 100 ? "${e.toString().substring(0, 100)}..." : e.toString()}',
+                ),
+                actions: [
+                  CupertinoDialogAction(
+                    isDefaultAction: true,
+                    child: const Text('OK'),
+                    onPressed: () => Navigator.of(ctx).pop(),
                   ),
+                ],
+              ),
             );
           }
         }
@@ -456,7 +430,7 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
         motion: const DrawerMotion(),
         children: [
           SlidableAction(
-            onPressed: (_) => _onEdit(context),
+            onPressed: (_) => onEdit(context),
             backgroundColor: CupertinoColors.systemBlue,
             foregroundColor: CupertinoColors.white,
             icon: CupertinoIcons.pencil,
@@ -464,13 +438,12 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
             autoClose: true,
           ),
           SlidableAction(
-            onPressed: (_) => _onTogglePin(context),
+            onPressed: (_) => onTogglePin(context),
             backgroundColor: CupertinoColors.systemOrange,
             foregroundColor: CupertinoColors.white,
-            icon:
-                widget.note.pinned
-                    ? CupertinoIcons.pin_slash_fill
-                    : CupertinoIcons.pin_fill,
+            icon: widget.note.pinned
+                ? CupertinoIcons.pin_slash_fill
+                : CupertinoIcons.pin_fill,
             label: widget.note.pinned ? 'Unpin' : 'Pin',
             autoClose: true,
           ),
@@ -488,7 +461,7 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
         motion: const DrawerMotion(),
         children: [
           SlidableAction(
-            onPressed: (_) => _onDelete(context),
+            onPressed: (_) => onDelete(context),
             backgroundColor: CupertinoColors.destructiveRed,
             foregroundColor: CupertinoColors.white,
             icon: CupertinoIcons.delete,
@@ -496,7 +469,7 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
             autoClose: true,
           ),
           SlidableAction(
-            onPressed: (_) => _onArchive(context),
+            onPressed: (_) => onArchive(context),
             backgroundColor: CupertinoColors.systemPurple,
             foregroundColor: CupertinoColors.white,
             icon: CupertinoIcons.archivebox_fill,
@@ -518,7 +491,7 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
               child: CupertinoButton(
                 padding: const EdgeInsets.all(6),
                 minSize: 0,
-                onPressed: () => _onArchive(context),
+                onPressed: () => onArchive(context),
                 child: Icon(
                   CupertinoIcons.archivebox,
                   size: 18,

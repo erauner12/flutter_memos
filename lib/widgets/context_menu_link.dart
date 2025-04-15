@@ -1,4 +1,4 @@
-import 'package:flutter/cupertino.dart'; // Import Cupertino
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 
 /// A widget that displays text as a link with a context menu on long press
@@ -26,9 +26,7 @@ class ContextMenuLink extends StatelessWidget {
       child: Text(
         text,
         style: TextStyle(
-          color: CupertinoColors.link.resolveFrom(
-            context,
-          ), // Use Cupertino link color
+          color: CupertinoColors.link.resolveFrom(context),
           decoration: TextDecoration.underline,
         ),
       ),
@@ -36,35 +34,38 @@ class ContextMenuLink extends StatelessWidget {
   }
 
   void _showContextMenu(BuildContext context) {
-    // Replace showModalBottomSheet with showCupertinoModalPopup
     showCupertinoModalPopup<void>(
       context: context,
-      builder: (BuildContext context) {
-        // Use CupertinoActionSheet
+      useRootNavigator: true, // Use root navigator to avoid empty stack issues
+      builder: (BuildContext popupContext) {
         return CupertinoActionSheet(
           actions: <CupertinoActionSheetAction>[
             CupertinoActionSheetAction(
-              // leading icon not directly supported, rely on text
               child: const Text('Open Link'),
               onPressed: () {
-                Navigator.pop(context);
+                Navigator.of(
+                  popupContext,
+                ).pop(); // Use the popup context explicitly
                 onTap();
               },
             ),
             CupertinoActionSheetAction(
-              // leading icon not directly supported, rely on text
               child: const Text('Copy Link'),
               onPressed: () {
                 Clipboard.setData(ClipboardData(text: url));
-                Navigator.pop(context);
-                onCopy(); // Assume onCopy might show confirmation (e.g., CupertinoAlertDialog)
+                Navigator.of(
+                  popupContext,
+                ).pop(); // Use the popup context explicitly
+                onCopy();
               },
             ),
           ],
           cancelButton: CupertinoActionSheetAction(
             isDefaultAction: true,
             onPressed: () {
-              Navigator.pop(context);
+              Navigator.of(
+                popupContext,
+              ).pop(); // Use the popup context explicitly
             },
             child: const Text('Cancel'),
           ),

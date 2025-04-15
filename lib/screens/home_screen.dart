@@ -1,6 +1,6 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter_memos/screens/items/items_screen.dart'; // Updated import
-import 'package:flutter_memos/screens/settings_screen.dart'; // Ensure this import is correct
+import 'package:flutter_memos/screens/items/items_screen.dart';
+import 'package:flutter_memos/screens/settings_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'chat_screen.dart';
@@ -10,9 +10,6 @@ class HomeScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Remove the line below as themeMode is not used directly here
-    // final themeMode = ref.watch(themeProvider);
-
     return CupertinoTabScaffold(
       tabBar: CupertinoTabBar(
         items: const <BottomNavigationBarItem>[
@@ -35,30 +32,46 @@ class HomeScreen extends ConsumerWidget {
         switch (index) {
           case 0:
             return CupertinoTabView(
-              onGenerateRoute: (RouteSettings settings) {
-                return CupertinoPageRoute(
-                  settings: settings,
-                  builder: (context) => const ItemsScreen(),
+              // Define a default route through builder to ensure navigation stack is not empty
+              builder: (context) {
+                return const CupertinoPageScaffold(child: ItemsScreen(),
                 );
+              },
+              // Routes for additional navigation
+              routes: {
+                '/':
+                    (context) =>
+                        const CupertinoPageScaffold(child: ItemsScreen()),
               },
             );
           case 1:
             return CupertinoTabView(
-              onGenerateRoute: (RouteSettings settings) {
-                return CupertinoPageRoute(
-                  settings: settings,
-                  builder: (context) => const ChatScreen(),
+              // Define a default route through builder to ensure navigation stack is not empty
+              builder: (context) {
+                return const CupertinoPageScaffold(child: ChatScreen(),
                 );
+              },
+              // Routes for additional navigation
+              routes: {
+                '/':
+                    (context) =>
+                        const CupertinoPageScaffold(child: ChatScreen()),
               },
             );
           case 2:
             return CupertinoTabView(
-              onGenerateRoute: (RouteSettings settings) {
-                return CupertinoPageRoute(
-                  settings: settings,
-                  builder:
-                      (context) => const SettingsScreen(isInitialSetup: false),
+              // Define a default route through builder to ensure navigation stack is not empty
+              builder: (context) {
+                return const CupertinoPageScaffold(
+                  child: SettingsScreen(isInitialSetup: false),
                 );
+              },
+              // Routes for additional navigation
+              routes: {
+                '/':
+                    (context) => const CupertinoPageScaffold(
+                      child: SettingsScreen(isInitialSetup: false),
+                    ),
               },
             );
           default:
