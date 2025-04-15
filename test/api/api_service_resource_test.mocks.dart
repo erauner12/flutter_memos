@@ -10,7 +10,7 @@ import 'package:flutter_memos/models/comment.dart' as _i4;
 import 'package:flutter_memos/models/list_notes_response.dart' as _i2;
 import 'package:flutter_memos/models/note_item.dart' as _i3;
 import 'package:flutter_memos/models/server_config.dart' as _i8;
-import 'package:flutter_memos/services/api_service.dart' as _i5;
+import 'package:flutter_memos/services/memos_api_service.dart' as _i5;
 import 'package:mockito/mockito.dart' as _i1;
 import 'package:mockito/src/dummies.dart' as _i6;
 
@@ -539,4 +539,20 @@ class MockMemosApiService extends _i1.Mock implements _i5.MemosApiService {
         returnValue: _i7.Future<bool>.value(false),
         returnValueForMissingStub: _i7.Future<bool>.value(false),
       ) as _i7.Future<bool>);
+
+  @override
+  _i7.Future<_i9.Uint8List> getResourceData(
+    String? resourceIdentifier, {
+    _i8.ServerConfig? targetServerOverride,
+  }) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #getResourceData,
+          [resourceIdentifier],
+          {#targetServerOverride: targetServerOverride},
+        ),
+        returnValue: _i7.Future<_i9.Uint8List>.value(_i9.Uint8List(0)),
+        returnValueForMissingStub:
+            _i7.Future<_i9.Uint8List>.value(_i9.Uint8List(0)),
+      ) as _i7.Future<_i9.Uint8List>);
 }

@@ -3,10 +3,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_memos/models/server_config.dart'; // Import ServerType
 import 'package:flutter_memos/providers/server_config_provider.dart';
 import 'package:flutter_memos/providers/settings_provider.dart';
-import 'package:flutter_memos/services/api_service.dart'; // Renamed to MemosApiService
 // Import BaseApiService and concrete implementations
 import 'package:flutter_memos/services/base_api_service.dart';
 import 'package:flutter_memos/services/blinko_api_service.dart'; // Import Blinko service
+import 'package:flutter_memos/services/memos_api_service.dart'; // Renamed to MemosApiService
 // Keep other service imports
 import 'package:flutter_memos/services/minimal_openai_service.dart';
 import 'package:flutter_memos/services/todoist_api_service.dart';
@@ -141,7 +141,6 @@ final apiStatusProvider = StateProvider<String>((ref) {
   return activeConfig == null ? 'unconfigured' : 'unknown';
 }, name: 'apiStatus');
 
-
 /// Provider that pings the active API periodically to check health
 final apiHealthCheckerProvider = Provider<void>((ref) {
   ref.watch(activeServerConfigProvider); // Rerun on server change
@@ -252,7 +251,6 @@ final todoistApiStatusProvider = StateProvider<String>((ref) {
   return token.isEmpty ? 'unconfigured' : 'unknown';
 }, name: 'todoistApiStatus');
 
-
 /// Provider that checks Todoist API health periodically
 final todoistApiHealthCheckerProvider = Provider<void>((ref) {
   // Rerun health check when the API key changes
@@ -289,7 +287,6 @@ Future<void> _checkTodoistApiHealth(Ref ref) async {
   if (currentStatus == 'checking') return; // Already checking
   ref.read(todoistApiStatusProvider.notifier).state = 'checking';
 
-
   try {
     // Call the health check method on the service instance
     final isHealthy = await todoistApiService.checkHealth();
@@ -304,7 +301,6 @@ Future<void> _checkTodoistApiHealth(Ref ref) async {
         ref.read(todoistApiStatusProvider.notifier).state = 'unavailable';
       }
     }
-
   } catch (e) {
     // Catch any exceptions during the health check (e.g., network error)
     if (kDebugMode) {
@@ -316,7 +312,6 @@ Future<void> _checkTodoistApiHealth(Ref ref) async {
     }
   }
 }
-
 
 // --- OpenAI API Providers (Keep as is) ---
 

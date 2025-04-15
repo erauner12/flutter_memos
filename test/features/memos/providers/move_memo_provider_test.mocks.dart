@@ -552,6 +552,22 @@ class MockBaseApiService extends _i1.Mock implements _i6.BaseApiService {
         returnValue: _i8.Future<bool>.value(false),
         returnValueForMissingStub: _i8.Future<bool>.value(false),
       ) as _i8.Future<bool>);
+
+  @override
+  _i8.Future<_i10.Uint8List> getResourceData(
+    String? resourceIdentifier, {
+    _i9.ServerConfig? targetServerOverride,
+  }) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #getResourceData,
+          [resourceIdentifier],
+          {#targetServerOverride: targetServerOverride},
+        ),
+        returnValue: _i8.Future<_i10.Uint8List>.value(_i10.Uint8List(0)),
+        returnValueForMissingStub:
+            _i8.Future<_i10.Uint8List>.value(_i10.Uint8List(0)),
+      ) as _i8.Future<_i10.Uint8List>);
 }
 
 /// A class which mocks [NotesNotifier].

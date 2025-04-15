@@ -2,7 +2,7 @@ import 'dart:typed_data';
 
 import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/models/note_item.dart'; // Updated import
-import 'package:flutter_memos/services/api_service.dart'; // Correct import path
+import 'package:flutter_memos/services/memos_api_service.dart'; // Updated import path
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/annotations.dart';
 

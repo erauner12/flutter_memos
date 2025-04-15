@@ -3,10 +3,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_memos/models/server_config.dart';
 import 'package:flutter_memos/providers/server_config_provider.dart';
-import 'package:flutter_memos/services/api_service.dart'; // Import MemosApiService
 // Add imports for BaseApiService and BlinkoApiService
 import 'package:flutter_memos/services/base_api_service.dart';
 import 'package:flutter_memos/services/blinko_api_service.dart';
+import 'package:flutter_memos/services/memos_api_service.dart'; // Import MemosApiService
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
