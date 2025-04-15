@@ -3,9 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// Provider for selected item ID (replacing index-based selection)
 final selectedItemIdProvider = StateProvider<String?>(
-  // Renamed from selectedMemoIdProvider
   (ref) => null,
-  name: 'selectedItemIdProvider', // Renamed name
+  name: 'selectedItemIdProvider',
 );
 
 /// Legacy provider for selected memo index (kept for backward compatibility)
@@ -39,16 +38,14 @@ void toggleCaptureUtility(WidgetRef ref) {
 
 /// Provider for item multi-select mode
 final itemMultiSelectModeProvider = StateProvider<bool>(
-  // Renamed from memoMultiSelectModeProvider
   (ref) => false,
-  name: 'itemMultiSelectMode', // Renamed name
+  name: 'itemMultiSelectMode',
 );
 
 /// Provider for storing selected item IDs during multi-select
 final selectedItemIdsForMultiSelectProvider = StateProvider<Set<String>>(
-  // Renamed from selectedMemoIdsForMultiSelectProvider
   (ref) => {},
-  name: 'selectedItemIdsForMultiSelect', // Renamed name
+  name: 'selectedItemIdsForMultiSelect',
 );
 
 /// Provider for comment multi-select mode
@@ -66,43 +63,38 @@ final selectedCommentIdsForMultiSelectProvider = StateProvider<Set<String>>(
 
 /// Provider for toggling item multi-select mode
 final toggleItemMultiSelectModeProvider = Provider<void Function()>((ref) {
-  // Renamed from toggleMemoMultiSelectModeProvider
   return () {
     // Read the current state
-    final currentMode = ref.read(
-      itemMultiSelectModeProvider,
-    ); // Use renamed provider
+    final currentMode = ref.read(itemMultiSelectModeProvider);
 
     // Toggle to the opposite state
     final newMode = !currentMode;
 
     if (kDebugMode) {
       print(
-        '[toggleItemMultiSelectModeProvider] Toggling from $currentMode to $newMode', // Updated log identifier
+        '[toggleItemMultiSelectModeProvider] Toggling from $currentMode to $newMode',
       );
     }
 
     // Update the mode
-    ref.read(itemMultiSelectModeProvider.notifier).state =
-        newMode; // Use renamed provider
+    ref.read(itemMultiSelectModeProvider.notifier).state = newMode;
 
     // If turning off multi-select mode, clear selections
     if (!newMode) {
-      ref.read(selectedItemIdsForMultiSelectProvider.notifier).state =
-          {}; // Use renamed provider
+      ref.read(selectedItemIdsForMultiSelectProvider.notifier).state = {};
     }
   };
-}, name: 'toggleItemMultiSelectMode'); // Renamed name
+}, name: 'toggleItemMultiSelectMode');
 
 /// Provider for toggling comment multi-select mode
 final toggleCommentMultiSelectModeProvider = Provider<void Function()>((ref) {
   return () {
     // Read the current state
     final currentMode = ref.read(commentMultiSelectModeProvider);
-    
+
     // Toggle to the opposite state
     final newMode = !currentMode;
-    
+
     if (kDebugMode) {
       print(
         '[toggleCommentMultiSelectModeProvider] Toggling from $currentMode to $newMode',
