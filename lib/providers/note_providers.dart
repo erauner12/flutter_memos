@@ -406,6 +406,7 @@ class NotesNotifier extends StateNotifier<NotesState> {
       return;
     }
 
+    // Create the note with the intended update for optimistic UI and API call
     final updatedNote = originalNote.copyWith(
       startDate: newStartDate,
       updateTime: DateTime.now(), // Bump update time
@@ -429,17 +430,24 @@ class NotesNotifier extends StateNotifier<NotesState> {
       // --- CRITICAL: Assumes _apiService.updateNote supports sending startDate ---
       // This relies on the BlinkoApiService.updateNote modification and API capability.
       final BaseApiService apiService = _ref.read(api_p.apiServiceProvider);
-      final NoteItem confirmedNote = await apiService.updateNote(
+      final NoteItem confirmedNoteFromApi = await apiService.updateNote(
         noteId,
-        updatedNote,
+        updatedNote, // Send the note with the intended newStartDate
       );
       // -------------------------------------------------------------------------
 
-      // Update state with confirmed data from API response
+      // *** START CHANGE ***
+      // Merge the confirmed API data with the intended startDate to ensure UI consistency
+      final NoteItem noteForStateUpdate = confirmedNoteFromApi.copyWith(
+        startDate: newStartDate, // Explicitly use the intended startDate
+      );
+      // *** END CHANGE ***
+
+      // Update state with confirmed data from API response (merged with intended date)
       final finalNotes = List<NoteItem>.from(state.notes);
       final confirmedIndex = finalNotes.indexWhere((n) => n.id == noteId);
       if (confirmedIndex != -1) {
-        finalNotes[confirmedIndex] = confirmedNote;
+        finalNotes[confirmedIndex] = noteForStateUpdate; // Use the merged note
         // Re-sort again after getting confirmed data
         finalNotes.sort((a, b) {
           if (a.pinned != b.pinned) return a.pinned ? -1 : 1;
@@ -448,7 +456,7 @@ class NotesNotifier extends StateNotifier<NotesState> {
         state = state.copyWith(notes: finalNotes);
         if (kDebugMode)
           print(
-            '[NotesNotifier] Confirmed start date update for note $noteId from API.',
+            '[NotesNotifier] Confirmed start date update for note $noteId from API (merged state).',
           );
       } else {
         if (kDebugMode)
@@ -464,11 +472,12 @@ class NotesNotifier extends StateNotifier<NotesState> {
         );
         print(stackTrace);
       }
-      // Revert optimistic update on failure
+      // Revert optimistic update on failure using the originalNote state
       final revertedNotes = List<NoteItem>.from(state.notes);
       final revertIndex = revertedNotes.indexWhere((n) => n.id == noteId);
       if (revertIndex != -1) {
-        revertedNotes[revertIndex] = originalNote;
+        revertedNotes[revertIndex] =
+            originalNote; // Revert to the state before optimistic update
         // Re-sort after reverting
         revertedNotes.sort((a, b) {
           if (a.pinned != b.pinned) return a.pinned ? -1 : 1;
