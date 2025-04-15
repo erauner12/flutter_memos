@@ -1,6 +1,7 @@
 import 'package:flutter_memos/models/comment.dart';
-import 'package:flutter_memos/models/note_item.dart'; // Updated import
-import 'package:flutter_memos/services/api_service.dart'; // Updated import
+import 'package:flutter_memos/models/note_item.dart';
+import 'package:flutter_memos/services/api_service.dart'; // Add import for ApiService
+import 'package:flutter_memos/services/base_api_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 // Set this to true to run integration tests against a real server
@@ -9,7 +10,7 @@ const bool RUN_INTEGRATION_TESTS = false;
 
 void main() {
   group('API Integration Tests', () {
-    late ApiService apiService; // Updated type
+    late BaseApiService apiService;
 
     setUpAll(() async {
       const baseUrl = String.fromEnvironment(
@@ -26,16 +27,15 @@ void main() {
           print(
             'WARNING: Integration test environment variables not set (MEMOS_TEST_API_BASE_URL, MEMOS_TEST_API_KEY). Skipping configuration.',
           );
-          apiService = ApiService(); // Instantiate to avoid null errors
+          apiService = DummyApiService(); // Changed to DummyApiService
         } else {
-          apiService = ApiService(); // Instantiate here
+          apiService = ApiService(); // Using ApiService
           print('Configuring ApiService for integration tests: $baseUrl');
           apiService.configureService(baseUrl: baseUrl, authToken: apiKey);
-          // BaseApiService.verboseLogging = true; // Cannot access static member on abstract class
-          ApiService.verboseLogging = true; // Access via concrete class
+          ApiService.verboseLogging = true; // Fixed: Access via ApiService
         }
       } else {
-        apiService = ApiService(); // Instantiate even if skipping
+        apiService = DummyApiService(); // Changed to DummyApiService
         print('RUN_INTEGRATION_TESTS is false. Skipping API configuration.');
       }
     });
@@ -49,7 +49,6 @@ void main() {
     });
 
     test('Create, retrieve, update, and delete note', () async {
-      // Updated test name
       if (!RUN_INTEGRATION_TESTS || apiService.apiBaseUrl.isEmpty) {
         print(
           'Skipping integration test - RUN_INTEGRATION_TESTS is false or ApiService not configured.',
@@ -59,12 +58,9 @@ void main() {
 
       // 1. Create a test note
       final testNote = NoteItem(
-        // Updated type
-        id: 'test', // API will assign ID
-        content:
-            'Test note ${DateTime.now().toIso8601String()}', // Updated content
-        // pinned: false, // Already present
-        // Add required fields for NoteItem constructor
+        id: 'test',
+        content: 'Test note ${DateTime.now().toIso8601String()}',
+        pinned: false, // Fixed: Add required pinned parameter
         createTime: DateTime.now(),
         updateTime: DateTime.now(),
         displayTime: DateTime.now(),
@@ -72,21 +68,17 @@ void main() {
         state: NoteState.normal,
       );
 
-      final createdNote = await apiService.createNote(
-        testNote,
-      ); // Updated method name
+      final createdNote = await apiService.createNote(testNote);
       expect(createdNote.content, equals(testNote.content));
-      print('Created note with ID: ${createdNote.id}'); // Updated log
+      print('Created note with ID: ${createdNote.id}');
 
       // 2. Retrieve the note
-      final retrievedNote = await apiService.getNote(
-        createdNote.id,
-      ); // Updated method name
+      final retrievedNote = await apiService.getNote(createdNote.id);
       expect(retrievedNote.id, equals(createdNote.id));
       expect(retrievedNote.content, equals(createdNote.content));
       final originalUpdateTime = retrievedNote.updateTime;
       print(
-        'Retrieved note successfully. Original updateTime: $originalUpdateTime', // Updated log
+        'Retrieved note successfully. Original updateTime: $originalUpdateTime',
       );
 
       // 3. Update the note
@@ -100,13 +92,13 @@ void main() {
       final updatedNote = await apiService.updateNote(
         retrievedNote.id,
         noteToUpdate,
-      ); // Updated method name
+      );
       expect(updatedNote.content, equals(updatedContent));
       expect(updatedNote.pinned, isTrue);
       final newUpdateTime = updatedNote.updateTime;
       print(
         'Updated note successfully. New updateTime: $newUpdateTime',
-      ); // Updated log
+      );
 
       expect(
         newUpdateTime,
@@ -125,9 +117,8 @@ void main() {
       );
 
       try {
-        // Compare DateTime objects directly
         expect(
-          newUpdateTime!.isAfter(originalUpdateTime!) ||
+          newUpdateTime.isAfter(originalUpdateTime) ||
               newUpdateTime.isAtSameMomentAs(originalUpdateTime),
           isTrue,
           reason: 'New updateTime should be later than or same as original',
@@ -137,24 +128,23 @@ void main() {
       }
 
       // 4. Delete the note
-      await apiService.deleteNote(updatedNote.id); // Updated method name
-      print('Deleted note successfully'); // Updated log
+      await apiService.deleteNote(updatedNote.id);
+      print('Deleted note successfully');
 
       // 5. Verify deletion (should throw)
       try {
-        await apiService.getNote(updatedNote.id); // Updated method name
-        fail('Note should have been deleted'); // Updated message
+        await apiService.getNote(updatedNote.id);
+        fail('Note should have been deleted');
       } catch (e) {
         expect(
           e.toString(),
           contains('Failed to load note'),
-        ); // Updated message
-        print('Verified deletion (note not found as expected)'); // Updated log
+        );
+        print('Verified deletion (note not found as expected)');
       }
     });
 
     test('List notes with different sort parameters', () async {
-      // Updated test name
       if (!RUN_INTEGRATION_TESTS || apiService.apiBaseUrl.isEmpty) {
         print(
           'Skipping integration test - RUN_INTEGRATION_TESTS is false or ApiService not configured.',
@@ -164,38 +154,34 @@ void main() {
 
       // Get notes sorted by update time
       final notesByUpdateTime = await apiService.listNotes(
-        // Updated method name
-        // parent: 'users/1', // Removed parent
         sort: 'updateTime',
         direction: 'DESC',
       );
 
       // Get notes sorted by create time
       final notesByCreateTime = await apiService.listNotes(
-        // Updated method name
-        // parent: 'users/1', // Removed parent
         sort: 'createTime',
         direction: 'DESC',
       );
 
       expect(
-        notesByUpdateTime.notes, // Access .notes list
+        notesByUpdateTime.notes,
         isNotEmpty,
         reason: "List sorted by updateTime should not be empty",
       );
       expect(
-        notesByCreateTime.notes, // Access .notes list
+        notesByCreateTime.notes,
         isNotEmpty,
         reason: "List sorted by createTime should not be empty",
       );
 
-      print('\nNotes sorted by updateTime:'); // Updated log
+      print('\nNotes sorted by updateTime:');
       for (int i = 0; i < 3 && i < notesByUpdateTime.notes.length; i++) {
         print('${i + 1}. ID: ${notesByUpdateTime.notes[i].id}');
         print('   UpdateTime: ${notesByUpdateTime.notes[i].updateTime}');
       }
 
-      print('\nNotes sorted by createTime:'); // Updated log
+      print('\nNotes sorted by createTime:');
       for (int i = 0; i < 3 && i < notesByCreateTime.notes.length; i++) {
         print('${i + 1}. ID: ${notesByCreateTime.notes[i].id}');
         print('   CreateTime: ${notesByCreateTime.notes[i].createTime}');
@@ -212,11 +198,9 @@ void main() {
 
       // 1. Create a test note to add comments to
       final testNote = NoteItem(
-        // Updated type
         id: 'test',
-        content:
-            'Test note for comments ${DateTime.now().toIso8601String()}', // Updated content
-        // pinned: false, // Already present
+        content: 'Test note for comments ${DateTime.now().toIso8601String()}',
+        pinned: false, // Fixed: Add required pinned parameter
         createTime: DateTime.now(),
         updateTime: DateTime.now(),
         displayTime: DateTime.now(),
@@ -224,10 +208,8 @@ void main() {
         state: NoteState.normal,
       );
 
-      final createdNote = await apiService.createNote(
-        testNote,
-      ); // Updated method name
-      print('Created note with ID: ${createdNote.id}'); // Updated log
+      final createdNote = await apiService.createNote(testNote);
+      print('Created note with ID: ${createdNote.id}');
 
       try {
         // 2. Create a comment on the note
@@ -238,7 +220,6 @@ void main() {
         );
 
         final createdComment = await apiService.createNoteComment(
-          // Updated method name
           createdNote.id,
           testComment,
         );
@@ -247,7 +228,6 @@ void main() {
 
         // 3. Retrieve the comment using the combined ID format
         final retrievedComment = await apiService.getNoteComment(
-          // Updated method name
           '${createdNote.id}/${createdComment.id}',
         );
         expect(retrievedComment.id, equals(createdComment.id));
@@ -256,7 +236,6 @@ void main() {
 
         // 3b. Also test retrieving with just the commentId
         final retrievedComment2 = await apiService.getNoteComment(
-          // Updated method name
           createdComment.id,
         );
         expect(retrievedComment2.id, equals(createdComment.id));
@@ -271,7 +250,6 @@ void main() {
         );
 
         final updatedComment = await apiService.updateNoteComment(
-          // Updated method name
           '${createdNote.id}/${createdComment.id}',
           commentToUpdate,
         );
@@ -282,7 +260,7 @@ void main() {
         // 5. List all comments
         final comments = await apiService.listNoteComments(
           createdNote.id,
-        ); // Updated method name
+        );
         expect(comments, isNotEmpty);
         expect(comments.any((c) => c.id == createdComment.id), isTrue);
         print(
@@ -293,12 +271,11 @@ void main() {
         await apiService.deleteNoteComment(
           createdNote.id,
           createdComment.id,
-        ); // Updated method name
+        );
         print('Deleted comment successfully');
 
         // 7. Verify deletion by listing comments again
         final commentsAfterDelete = await apiService.listNoteComments(
-          // Updated method name
           createdNote.id,
         );
         expect(
@@ -308,8 +285,8 @@ void main() {
         print('Verified comment deletion successfully');
       } finally {
         // Clean up - delete the test note
-        await apiService.deleteNote(createdNote.id); // Updated method name
-        print('Cleaned up by deleting test note'); // Updated log
+        await apiService.deleteNote(createdNote.id);
+        print('Cleaned up by deleting test note');
       }
     });
 
@@ -323,10 +300,9 @@ void main() {
 
       // 1. Create a test note
       final testNote = NoteItem(
-        // Updated type
         id: 'test',
         content:
-            'Test note for special comment states ${DateTime.now().toIso8601String()}', // Updated content
+            'Test note for special comment states ${DateTime.now().toIso8601String()}',
         pinned: false, // Add required field
         createTime: DateTime.now(),
         updateTime: DateTime.now(),
@@ -335,10 +311,8 @@ void main() {
         state: NoteState.normal,
       );
 
-      final createdNote = await apiService.createNote(
-        testNote,
-      ); // Updated method name
-      print('Created note with ID: ${createdNote.id}'); // Updated log
+      final createdNote = await apiService.createNote(testNote);
+      print('Created note with ID: ${createdNote.id}');
 
       try {
         // 2. Create a pinned comment
@@ -350,7 +324,6 @@ void main() {
         );
 
         final createdPinnedComment = await apiService.createNoteComment(
-          // Updated method name
           createdNote.id,
           pinnedComment,
         );
@@ -359,7 +332,6 @@ void main() {
         );
         // Explicitly update to ensure pinned=true
         final updatedPinnedComment = await apiService.updateNoteComment(
-          // Updated method name
           '${createdNote.id}/${createdPinnedComment.id}',
           createdPinnedComment.copyWith(pinned: true),
         );
@@ -378,7 +350,6 @@ void main() {
         );
 
         final createdCommentToArchive1 = await apiService.createNoteComment(
-          // Updated method name
           createdNote.id,
           commentToArchive1,
         );
@@ -387,7 +358,6 @@ void main() {
 
         // Update to archived state
         final updatedArchivedComment1 = await apiService.updateNoteComment(
-          // Updated method name
           archivedCommentId1,
           createdCommentToArchive1.copyWith(state: CommentState.archived),
         );
@@ -408,20 +378,17 @@ void main() {
         );
 
         final createdArchivedComment2 = await apiService.createNoteComment(
-          // Updated method name
           createdNote.id,
           archivedComment2,
         );
         // Check if the created comment retained the archived state
         final retrievedArchivedComment2 = await apiService.getNoteComment(
-          // Updated method name
           '${createdNote.id}/${createdArchivedComment2.id}',
         );
         print('Comment 2 archived state: ${retrievedArchivedComment2.state}');
 
         // Explicitly update and verify
         final updatedArchivedComment2 = await apiService.updateNoteComment(
-          // Updated method name
           '${createdNote.id}/${createdArchivedComment2.id}',
           retrievedArchivedComment2.copyWith(state: CommentState.archived),
         );
@@ -434,24 +401,21 @@ void main() {
 
         // 5. Clean up
         await apiService.deleteNoteComment(
-          // Updated method name
           createdNote.id,
           createdPinnedComment.id,
         );
         await apiService.deleteNoteComment(
-          // Updated method name
           createdNote.id,
           createdCommentToArchive1.id,
         );
         await apiService.deleteNoteComment(
-          // Updated method name
           createdNote.id,
           createdArchivedComment2.id,
         );
       } finally {
         // Delete the test note
-        await apiService.deleteNote(createdNote.id); // Updated method name
-        print('Cleaned up by deleting test note'); // Updated log
+        await apiService.deleteNote(createdNote.id);
+        print('Cleaned up by deleting test note');
       }
     });
   });
