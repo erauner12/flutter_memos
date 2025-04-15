@@ -967,7 +967,6 @@ class BlinkoApiService implements BaseApiService {
     if (blinkoDetail.isRecycle == true) {
       state = NoteState.archived;
     } else if (blinkoDetail.isArchived == true) {
-      // Consider if Blinko 'isArchived' maps directly to our 'archived' state
       state = NoteState.archived;
     }
 
@@ -975,28 +974,31 @@ class BlinkoApiService implements BaseApiService {
         NoteVisibility
             .private; // Blinko doesn't seem to have public/protected distinction easily available here
 
-    final String idStr =
-        blinkoDetail.id.toString() ??
-        'unknown_id_${DateTime.now().millisecondsSinceEpoch}';
-    final String contentStr = blinkoDetail.content ?? '';
-    final bool isPinned = blinkoDetail.isTop ?? false;
+    // Remove unnecessary null-aware operators
+    final String idStr = blinkoDetail.id.toString();
+    final String contentStr = blinkoDetail.content;
+    final bool isPinned = blinkoDetail.isTop;
     final DateTime createdAt = parseBlinkoDate(blinkoDetail.createdAt);
     final DateTime updatedAt = parseBlinkoDate(blinkoDetail.updatedAt);
+    // Keep ?? for accountId as it's nullable num?
     final String creatorIdStr =
         blinkoDetail.accountId?.toString() ?? 'unknown_creator';
 
     // --- Parse Start/End Dates ---
     // Verify the actual field names in the Blinko API spec (e.g., startDate, start_date)
+    // Access directly, tryParseDateTime handles nulls
     final DateTime? startDate = tryParseDateTime(blinkoDetail.startDate);
     final DateTime? endDate = tryParseDateTime(blinkoDetail.endDate);
     // ---------------------------
 
+    // Keep ?? for tags as it's nullable list?
     final List<String> tags =
         (blinkoDetail.tags ?? [])
             .map((t) => t.tag.name) // Safely access nested name
             .whereType<String>()
             .toList();
 
+    // Keep ?? for attachments as it's nullable list?
     final List<Map<String, dynamic>> resources =
         (blinkoDetail.attachments ?? []).map((a) {
           return {
@@ -1006,12 +1008,14 @@ class BlinkoApiService implements BaseApiService {
             'filename': a.name,
             'externalLink': a.path, // Assuming path is the link
             'contentType': a.type,
-            'size': a.size?.toString(),
+            'size':
+                a.size?.toString(), // Keep ?? for size as it's nullable num?
             'createTime':
                 a.createdAt, // Assuming this is a parsable date string
           };
         }).toList();
 
+    // Keep ?? for references as it's nullable list?
     final List<Map<String, dynamic>> relations =
         (blinkoDetail.references ?? [])
             .map((r) {
@@ -1064,7 +1068,6 @@ class BlinkoApiService implements BaseApiService {
     if (blinkoNote.isRecycle == true) {
       state = NoteState.archived;
     } else if (blinkoNote.isArchived == true) {
-      // Consider if Blinko 'isArchived' maps directly to our 'archived' state
       state = NoteState.archived;
     }
 
@@ -1072,28 +1075,31 @@ class BlinkoApiService implements BaseApiService {
         NoteVisibility
             .private; // Blinko doesn't seem to have public/protected distinction easily available here
 
-    final String idStr =
-        blinkoNote.id.toString() ??
-        'unknown_id_${DateTime.now().millisecondsSinceEpoch}';
-    final String contentStr = blinkoNote.content ?? '';
-    final bool isPinned = blinkoNote.isTop ?? false;
+    // Remove unnecessary null-aware operators
+    final String idStr = blinkoNote.id.toString();
+    final String contentStr = blinkoNote.content;
+    final bool isPinned = blinkoNote.isTop;
     final DateTime createdAt = parseBlinkoDate(blinkoNote.createdAt);
     final DateTime updatedAt = parseBlinkoDate(blinkoNote.updatedAt);
+    // Keep ?? for accountId as it's nullable num?
     final String creatorIdStr =
         blinkoNote.accountId?.toString() ?? 'unknown_creator';
 
     // --- Parse Start/End Dates ---
     // Verify the actual field names in the Blinko API spec (e.g., startDate, start_date)
+    // Access directly, tryParseDateTime handles nulls
     final DateTime? startDate = tryParseDateTime(blinkoNote.startDate);
     final DateTime? endDate = tryParseDateTime(blinkoNote.endDate);
     // ---------------------------
 
+    // Keep ?? for tags as it's nullable list?
     final List<String> tags =
         (blinkoNote.tags ?? [])
             .map((t) => t.tag.name)
             .whereType<String>()
             .toList();
 
+    // Keep ?? for attachments as it's nullable list?
     final List<Map<String, dynamic>> resources =
         (blinkoNote.attachments ?? []).map((a) {
           return {
@@ -1103,12 +1109,14 @@ class BlinkoApiService implements BaseApiService {
             'filename': a.name,
             'externalLink': a.path, // Assuming path is the link
             'contentType': a.type,
-            'size': a.size?.toString(),
+            'size':
+                a.size?.toString(), // Keep ?? for size as it's nullable num?
             'createTime':
                 a.createdAt, // Assuming this is a parsable date string
           };
         }).toList();
 
+    // Keep ?? for references as it's nullable list?
     final List<Map<String, dynamic>> relations =
         (blinkoNote.references ?? [])
             .map((r) {
@@ -1154,12 +1162,12 @@ class BlinkoApiService implements BaseApiService {
     }
     CommentState state = CommentState.normal;
     bool pinned = false;
-    final String idStr =
-        blinkoComment.id.toString() ??
-        'unknown_comment_id_${DateTime.now().millisecondsSinceEpoch}';
-    final String contentStr = blinkoComment.content ?? '';
+    // Remove unnecessary null-aware operators
+    final String idStr = blinkoComment.id.toString();
+    final String contentStr = blinkoComment.content;
     final DateTime createdAt = parseBlinkoDate(blinkoComment.createdAt);
     final DateTime updatedAt = parseBlinkoDate(blinkoComment.updatedAt);
+    // Keep ?? for accountId as it's nullable num?
     final String creatorIdStr =
         blinkoComment.accountId?.toString() ?? 'unknown_creator';
     return Comment(

@@ -1,68 +1,171 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter_memos/models/note_item.dart'; // Import NoteItem
-// Import note_providers instead of memo_providers
+import 'package:flutter/services.dart';
+import 'package:flutter_memos/models/note_item.dart';
 import 'package:flutter_memos/providers/note_providers.dart' as note_providers;
 import 'package:flutter_memos/providers/ui_providers.dart' as ui_providers;
-// Import note_utils instead of memo_utils
 import 'package:flutter_memos/utils/note_utils.dart';
-// Import note_card instead of memo_card
 import 'package:flutter_memos/widgets/note_card.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
-import 'package:intl/intl.dart'; // Import intl package
+import 'package:intl/intl.dart';
 
 class NoteListItem extends ConsumerStatefulWidget {
-  // Renamed class
-  final NoteItem note; // Changed type to NoteItem, renamed from memo
+  final NoteItem note;
   final int index;
   final VoidCallback? onMoveToServer;
 
   const NoteListItem({
-    // Renamed constructor
     super.key,
-    required this.note, // Renamed parameter
+    required this.note,
     required this.index,
     this.onMoveToServer,
   });
 
   @override
-  NoteListItemState createState() => NoteListItemState(); // Renamed class
+  NoteListItemState createState() => NoteListItemState();
 }
 
 class NoteListItemState extends ConsumerState<NoteListItem> {
-  // Renamed class
-  // Use NoteCardState
-  final GlobalKey<NoteCardState> _noteCardKey =
-      GlobalKey<NoteCardState>(); // Renamed key type and variable
+  final GlobalKey<NoteCardState> _noteCardKey = GlobalKey<NoteCardState>();
+
+  // --- Moved Helper Methods ---
+  // Helper widget to display start/end dates
+  Widget? _buildDateInfo(BuildContext context, NoteItem note) {
+    if (note.startDate == null && note.endDate == null) {
+      return null; // Don't show anything if no dates are set
+    }
+
+    final now = DateTime.now();
+    final bool isFutureStart = note.startDate?.isAfter(now) ?? false;
+    final dateFormat = DateFormat.yMd().add_jm(); // Example format
+
+    return Padding(
+      padding: const EdgeInsets.only(
+        top: 6.0,
+        left: 12.0,
+        right: 12.0,
+        bottom: 4.0,
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          if (note.startDate != null)
+            Expanded(
+              child: Text(
+                'Start: ${dateFormat.format(note.startDate!)}',
+                style: TextStyle(
+                  fontSize: 12,
+                  color:
+                      isFutureStart
+                          ? CupertinoColors.systemOrange.resolveFrom(context)
+                          : CupertinoColors.secondaryLabel.resolveFrom(context),
+                  fontWeight:
+                      isFutureStart ? FontWeight.w600 : FontWeight.normal,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          if (note.startDate != null && note.endDate != null)
+            const SizedBox(width: 8),
+          if (note.endDate != null)
+            Expanded(
+              child: Text(
+                'End: ${dateFormat.format(note.endDate!)}',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: CupertinoColors.secondaryLabel.resolveFrom(context),
+                ),
+                textAlign: TextAlign.right,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  // Custom context menu including date actions
+  void _showCustomContextMenu(BuildContext context) {
+    final standardActions = <Widget>[
+      CupertinoContextMenuAction(
+        child: const Text('Copy Content'),
+        onPressed: () {
+          Clipboard.setData(ClipboardData(text: widget.note.content));
+          Navigator.pop(context);
+        },
+      ),
+    ];
+
+    final dateActions = <Widget>[
+      CupertinoContextMenuAction(
+        child: const Text('Kick Start +1 Day'),
+        onPressed: () {
+          final currentStart = widget.note.startDate ?? DateTime.now();
+          final newStartDate = currentStart.add(const Duration(days: 1));
+          ref
+              .read(note_providers.notesNotifierProvider.notifier)
+              .updateNoteStartDate(widget.note.id, newStartDate);
+          Navigator.pop(context);
+        },
+      ),
+      CupertinoContextMenuAction(
+        child: const Text('Kick Start +1 Week'),
+        onPressed: () {
+          final currentStart = widget.note.startDate ?? DateTime.now();
+          final newStartDate = currentStart.add(const Duration(days: 7));
+          ref
+              .read(note_providers.notesNotifierProvider.notifier)
+              .updateNoteStartDate(widget.note.id, newStartDate);
+          Navigator.pop(context);
+        },
+      ),
+      if (widget.note.startDate != null)
+        CupertinoContextMenuAction(
+          isDestructiveAction: true,
+          onPressed: () {
+            ref
+                .read(note_providers.notesNotifierProvider.notifier)
+                .updateNoteStartDate(widget.note.id, null);
+            Navigator.pop(context);
+          },
+          child: const Text('Clear Start Date'),
+        ),
+    ];
+
+    showCupertinoModalPopup<void>(
+      context: context,
+      builder:
+          (BuildContext context) => CupertinoActionSheet(
+            actions: <Widget>[...standardActions, ...dateActions],
+            cancelButton: CupertinoActionSheetAction(
+              child: const Text('Cancel'),
+              onPressed: () {
+                Navigator.pop(context);
+              },
+            ),
+          ),
+    );
+  }
+  // --- End Moved Helper Methods ---
 
   void _toggleHideItem(BuildContext context, WidgetRef ref) {
-    // Renamed method
-    // Use renamed provider
     final hiddenItemIds = ref.read(note_providers.hiddenItemIdsProvider);
-    final itemIdToToggle = widget.note.id; // Use note.id, renamed variable
+    final itemIdToToggle = widget.note.id;
 
     if (hiddenItemIds.contains(itemIdToToggle)) {
-      // Unhide item
       ref
-          .read(
-            note_providers.hiddenItemIdsProvider.notifier,
-          ) // Use renamed provider
+          .read(note_providers.hiddenItemIdsProvider.notifier)
           .update((state) => state..remove(itemIdToToggle));
     } else {
-      // --- Selection Update Logic ---
-      // Use renamed provider from ui_providers
       final currentSelectedId = ref.read(ui_providers.selectedItemIdProvider);
-      final notesBeforeAction = ref.read(
-        note_providers
-            .filteredNotesProvider, // Use provider from note_providers
-      );
-      final itemIdToAction = itemIdToToggle; // Renamed variable
+      final notesBeforeAction = ref.read(note_providers.filteredNotesProvider);
+      final itemIdToAction = itemIdToToggle;
       String? nextSelectedId = currentSelectedId;
 
       if (currentSelectedId == itemIdToAction && notesBeforeAction.isNotEmpty) {
         final actionIndex = notesBeforeAction.indexWhere(
-          (n) => n.id == itemIdToAction, // Use n for note
+          (n) => n.id == itemIdToAction,
         );
 
         if (actionIndex != -1) {
@@ -76,171 +179,31 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
         } else {
           nextSelectedId = null;
         }
-
-        // Helper widget to display start/end dates
-        Widget? buildDateInfo(BuildContext context, NoteItem note) {
-          if (note.startDate == null && note.endDate == null) {
-            return null; // Don't show anything if no dates are set
-          }
-
-          final now = DateTime.now();
-          final bool isFutureStart = note.startDate?.isAfter(now) ?? false;
-          final dateFormat = DateFormat.yMd().add_jm(); // Example format
-
-          return Padding(
-            padding: const EdgeInsets.only(
-              top: 6.0,
-              left: 12.0,
-              right: 12.0,
-              bottom: 4.0,
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                if (note.startDate != null)
-                  Expanded(
-                    // Allow text to wrap if needed
-                    child: Text(
-                      'Start: ${dateFormat.format(note.startDate!)}',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color:
-                            isFutureStart
-                                ? CupertinoColors.systemOrange.resolveFrom(
-                                  context,
-                                ) // Highlight future dates
-                                : CupertinoColors.secondaryLabel.resolveFrom(
-                                  context,
-                                ),
-                        fontWeight:
-                            isFutureStart ? FontWeight.w600 : FontWeight.normal,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                if (note.startDate != null && note.endDate != null)
-                  const SizedBox(width: 8), // Spacer if both dates exist
-                if (note.endDate != null)
-                  Expanded(
-                    // Allow text to wrap if needed
-                    child: Text(
-                      'End: ${dateFormat.format(note.endDate!)}',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: CupertinoColors.secondaryLabel.resolveFrom(
-                          context,
-                        ),
-                      ),
-                      textAlign: TextAlign.right, // Align end date to the right
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-              ],
-            ),
-          );
-        }
-
-        // Custom context menu including date actions
-        void showCustomContextMenu(BuildContext context) {
-          // Get standard actions from NoteCard
-          final standardActions =
-              _noteCardKey.currentState?.getContextMenuItems() ?? [];
-
-          // Define date actions
-          final dateActions = <Widget>[
-            CupertinoContextMenuAction(
-              child: const Text('Kick Start +1 Day'),
-              onPressed: () {
-                final currentStart = widget.note.startDate ?? DateTime.now();
-                final newStartDate = currentStart.add(const Duration(days: 1));
-                ref
-                    .read(note_providers.notesNotifierProvider.notifier)
-                    .updateNoteStartDate(widget.note.id, newStartDate);
-                Navigator.pop(context); // Close context menu
-              },
-            ),
-            CupertinoContextMenuAction(
-              child: const Text('Kick Start +1 Week'),
-              onPressed: () {
-                final currentStart = widget.note.startDate ?? DateTime.now();
-                final newStartDate = currentStart.add(const Duration(days: 7));
-                ref
-                    .read(note_providers.notesNotifierProvider.notifier)
-                    .updateNoteStartDate(widget.note.id, newStartDate);
-                Navigator.pop(context);
-              },
-            ),
-            // Add more kick options (e.g., +1 Hour) if desired
-            if (widget.note.startDate != null) // Only show clear if date exists
-              CupertinoContextMenuAction(
-                isDestructiveAction: true,
-                onPressed: () {
-                  ref
-                      .read(note_providers.notesNotifierProvider.notifier)
-                      .updateNoteStartDate(widget.note.id, null); // Pass null
-                  Navigator.pop(context);
-                },
-                child: const Text('Clear Start Date'),
-              ),
-            // TODO: Add "Set Start Date..." action (requires date picker)
-            // TODO: Add actions for End Date if needed
-          ];
-
-          showCupertinoModalPopup<void>(
-            context: context,
-            builder:
-                (BuildContext context) => CupertinoActionSheet(
-                  // title: Text(widget.note.content.substring(0, min(widget.note.content.length, 30)) + '...'), // Optional title
-                  actions: <Widget>[...standardActions, ...dateActions],
-                  cancelButton: CupertinoActionSheetAction(
-                    child: const Text('Cancel'),
-                    onPressed: () {
-                      Navigator.pop(context);
-                    },
-                  ),
-                ),
-          );
-        }
       }
-      // --- End Selection Update Logic ---
 
-      // Hide item
       ref
-          .read(
-            note_providers.hiddenItemIdsProvider.notifier,
-          ) // Use renamed provider
+          .read(note_providers.hiddenItemIdsProvider.notifier)
           .update((state) => state..add(itemIdToToggle));
 
       if (nextSelectedId != currentSelectedId) {
-        // Use renamed provider from ui_providers
         ref.read(ui_providers.selectedItemIdProvider.notifier).state =
             nextSelectedId;
       }
     }
 
-    // Force UI refresh (consider if still needed)
-    ref
-        .read(note_providers.notesNotifierProvider.notifier)
-        .refresh(); // Use provider from note_providers
+    ref.read(note_providers.notesNotifierProvider.notifier).refresh();
   }
 
   void _navigateToItemDetail(BuildContext context, WidgetRef ref) {
-    // Renamed method
-    // Set selected item ID
-    // Use renamed provider from ui_providers
     ref.read(ui_providers.selectedItemIdProvider.notifier).state =
-        widget.note.id; // Use note.id
-
+        widget.note.id;
     Navigator.of(context, rootNavigator: true).pushNamed(
       '/item-detail',
       arguments: {'itemId': widget.note.id},
-    ); // Use new route and argument name
+    );
   }
 
-  // Toggle selection of a note in multi-select mode
   void _toggleMultiSelection(String noteId) {
-    // Keep noteId here as it's specific
-    // Use renamed provider from ui_providers
     final currentSelection = Set<String>.from(
       ref.read(ui_providers.selectedItemIdsForMultiSelectProvider),
     );
@@ -251,18 +214,13 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
       currentSelection.add(noteId);
     }
 
-    // Use renamed provider from ui_providers
     ref
         .read(ui_providers.selectedItemIdsForMultiSelectProvider.notifier)
         .state = currentSelection;
 
     if (kDebugMode) {
-      print(
-        '[NoteListItem] Multi-selection toggled for note ID: $noteId',
-      ); // Updated log identifier
-      print(
-        '[NoteListItem] Current selection: ${currentSelection.join(', ')}',
-      ); // Updated log identifier
+      print('[NoteListItem] Multi-selection toggled for note ID: $noteId');
+      print('[NoteListItem] Current selection: ${currentSelection.join(', ')}');
     }
   }
 
@@ -271,12 +229,13 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
       '/edit-entity',
       arguments: {
         'entityType': 'note',
-        'entityId': widget.note.id, // Use note.id
+        'entityId': widget.note.id,
       },
     );
   }
 
   void _onDelete(BuildContext context) async {
+    final navigator = Navigator.of(context);
     final confirm = await showCupertinoDialog<bool>(
       context: context,
       builder: (BuildContext dialogContext) {
@@ -301,30 +260,15 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
 
     if (confirm == true && mounted) {
       try {
-        if (kDebugMode) {
-          print(
-            '[NoteListItem] Calling deleteNoteProvider for note ID: ${widget.note.id}', // Updated log identifier
-          );
-        }
-
-        // Immediately add the item to hidden IDs
         ref
-            .read(
-              note_providers.hiddenItemIdsProvider.notifier,
-            ) // Use renamed provider
-            .update((state) => state..add(widget.note.id)); // Use note.id
+            .read(note_providers.hiddenItemIdsProvider.notifier)
+            .update((state) => state..add(widget.note.id));
 
-        // Perform actual delete using provider from note_providers
-        await ref.read(
-          note_providers.deleteNoteProvider(widget.note.id), // Use note.id
-        )();
+        await ref.read(note_providers.deleteNoteProvider(widget.note.id))();
       } catch (e) {
-        // If deletion fails, remove from hidden IDs
         ref
-            .read(
-              note_providers.hiddenItemIdsProvider.notifier,
-            ) // Use renamed provider
-            .update((state) => state..remove(widget.note.id)); // Use note.id
+            .read(note_providers.hiddenItemIdsProvider.notifier)
+            .update((state) => state..remove(widget.note.id));
 
         if (mounted) {
           showCupertinoDialog(
@@ -343,84 +287,55 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
                 ),
           );
         }
-
-        if (kDebugMode) {
-          print(
-            '[NoteListItem] Error deleting note: $e',
-          ); // Updated log identifier
-        }
       }
     }
   }
 
   void _onArchive(BuildContext context) {
-    // Use provider from note_providers
-    ref.read(
-      note_providers.archiveNoteProvider(widget.note.id),
-    )(); // Use note.id
+    ref.read(note_providers.archiveNoteProvider(widget.note.id))();
   }
 
   void _onTogglePin(BuildContext context) {
-    // Use provider from note_providers
-    ref.read(
-      note_providers.togglePinNoteProvider(widget.note.id),
-    )(); // Use note.id
+    ref.read(note_providers.togglePinNoteProvider(widget.note.id))();
   }
 
   @override
   Widget build(BuildContext context) {
-    // Watch for selected item ID
-    // Use renamed provider from ui_providers
     final selectedItemId = ref.watch(ui_providers.selectedItemIdProvider);
-    final isSelected = selectedItemId == widget.note.id; // Use note.id
+    final isSelected = selectedItemId == widget.note.id;
 
-    // Watch for multi-select mode
-    // Use renamed provider from ui_providers
     final isMultiSelectMode = ref.watch(
       ui_providers.itemMultiSelectModeProvider,
     );
-    // Use renamed provider from ui_providers
     final selectedIds = ref.watch(
       ui_providers.selectedItemIdsForMultiSelectProvider,
     );
-    final isMultiSelected = selectedIds.contains(widget.note.id); // Use note.id
+    final isMultiSelected = selectedIds.contains(widget.note.id);
 
-    if (isSelected && kDebugMode) {
-      print(
-        '[NoteListItem] Note ID ${widget.note.id} at index ${widget.index} is selected', // Updated log identifier
-      );
-    }
-
-    // Create the main card content using NoteCard
-    Widget cardContent = NoteCard(
-      // Use renamed widget
-      key: _noteCardKey, // Pass the key
-      id: widget.note.id, // Use note.id
-      content: widget.note.content, // Use note.content
-      pinned: widget.note.pinned, // Use note.pinned
-      updatedAt:
-          widget.note.updateTime.toIso8601String(), // Use note.updateTime
+    Widget noteCardWidget = NoteCard(
+      key: _noteCardKey,
+      id: widget.note.id,
+      content: widget.note.content,
+      pinned: widget.note.pinned,
+      updatedAt: widget.note.updateTime.toIso8601String(),
       showTimeStamps: true,
       isSelected: isSelected && !isMultiSelectMode,
       highlightTimestamp: NoteUtils.formatTimestamp(
-        // Use renamed util class
-        widget.note.updateTime.toIso8601String(), // Use note.updateTime
+        widget.note.updateTime.toIso8601String(),
       ),
       timestampType: 'Updated',
       onTap:
           isMultiSelectMode
-              ? () => _toggleMultiSelection(widget.note.id) // Use note.id
-              : () => _navigateToItemDetail(context, ref), // Use renamed method
+              ? () => _toggleMultiSelection(widget.note.id)
+              : () => _navigateToItemDetail(context, ref),
       onArchive: () => _onArchive(context),
       onDelete: () => _onDelete(context),
-      onHide: () => _toggleHideItem(context, ref), // Use renamed method
+      onHide: () => _toggleHideItem(context, ref),
       onTogglePin: () => _onTogglePin(context),
       onBump: () async {
+        final navigator = Navigator.of(context);
         try {
-          // Use provider from note_providers
-          await ref.read(
-            note_providers.bumpNoteProvider(widget.note.id),
-          )(); // Use note.id
+          await ref.read(note_providers.bumpNoteProvider(widget.note.id))();
         } catch (e) {
           if (mounted) {
             showCupertinoDialog(
@@ -444,23 +359,28 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
         }
       },
       onMoveToServer: widget.onMoveToServer,
-      // Add start/end date display below the main card content
-      childBelowCard: _buildDateInfo(context, widget.note),
+    );
+
+    final dateInfoWidget = _buildDateInfo(context, widget.note);
+
+    Widget cardWithDateInfo = Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [noteCardWidget, if (dateInfoWidget != null) dateInfoWidget],
     );
 
     if (isMultiSelectMode) {
       if (isMultiSelected) {
-        cardContent = Container(
+        cardWithDateInfo = Container(
           decoration: BoxDecoration(
             border: Border.all(
               color: CupertinoTheme.of(context).primaryColor,
               width: 2,
             ),
-            borderRadius: BorderRadius.circular(10), // Match NoteCard radius
+            borderRadius: BorderRadius.circular(10),
           ),
-          // Clip the content to the rounded border
           clipBehavior: Clip.antiAlias,
-          child: cardContent,
+          child: cardWithDateInfo,
         );
       }
 
@@ -473,19 +393,17 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
               padding: const EdgeInsets.only(top: 12.0, right: 8.0),
               child: CupertinoCheckbox(
                 value: isMultiSelected,
-                onChanged:
-                    (value) =>
-                        _toggleMultiSelection(widget.note.id), // Use note.id
+                onChanged: (value) => _toggleMultiSelection(widget.note.id),
               ),
             ),
-            Expanded(child: cardContent),
+            Expanded(child: cardWithDateInfo),
           ],
         ),
       );
     }
 
     return Slidable(
-      key: ValueKey('slidable-${widget.note.id}'), // Use note.id
+      key: ValueKey('slidable-${widget.note.id}'),
       startActionPane: ActionPane(
         motion: const DrawerMotion(),
         children: [
@@ -502,17 +420,14 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
             backgroundColor: CupertinoColors.systemOrange,
             foregroundColor: CupertinoColors.white,
             icon:
-                widget
-                        .note
-                        .pinned // Use note.pinned
+                widget.note.pinned
                     ? CupertinoIcons.pin_slash_fill
                     : CupertinoIcons.pin_fill,
-            label: widget.note.pinned ? 'Unpin' : 'Pin', // Use note.pinned
+            label: widget.note.pinned ? 'Unpin' : 'Pin',
             autoClose: true,
           ),
           SlidableAction(
-            onPressed:
-                (_) => _toggleHideItem(context, ref), // Use renamed method
+            onPressed: (_) => _toggleHideItem(context, ref),
             backgroundColor: CupertinoColors.systemGrey,
             foregroundColor: CupertinoColors.white,
             icon: CupertinoIcons.eye_slash_fill,
@@ -544,12 +459,11 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
       ),
       child: GestureDetector(
         onLongPress: () {
-          // Access public method via GlobalKey
-          _showCustomContextMenu(context); // Show custom context menu
+          _showCustomContextMenu(context);
         },
         child: Stack(
           children: [
-            cardContent, // The NoteCard widget
+            cardWithDateInfo,
             Positioned(
               top: 4,
               right: 4,
