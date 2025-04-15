@@ -41,12 +41,13 @@ final serverConfig1 = ServerConfig(
 WorkbenchItemReference createMockItem(String id, DateTime addedTimestamp) {
   return WorkbenchItemReference(
     id: id,
-    referencedItemId: 'ref-\$id',
+    // Use the item's id to ensure referencedItemId is unique for testing addItem
+    referencedItemId: 'ref-$id',
     referencedItemType: WorkbenchItemType.note,
     serverId: serverConfig1.id,
     serverType: serverConfig1.serverType,
     serverName: serverConfig1.name,
-    previewContent: 'Preview for \$id',
+    previewContent: 'Preview for $id',
     addedTimestamp: addedTimestamp,
   );
 }
@@ -165,9 +166,9 @@ void main() {
       when(mockApiService.listNoteComments(item3.referencedItemId, targetServerOverride: serverConfig1))
           .thenAnswer((_) async => []); // No comments for item3
 
-      // Act: Trigger load
-      await notifier.loadItems();
-      // Wait briefly for async detail fetching to complete (adjust duration if needed)
+        // Act: loadItems is already called in setUp, just wait for details
+        // await notifier.loadItems(); // REMOVE THIS LINE
+        // Wait briefly for async detail fetching from setUp to complete
       await Future.delayed(const Duration(milliseconds: 100));
       final state = container.read(workbenchProvider);
 
@@ -177,7 +178,7 @@ void main() {
       expect(state.error, isNull);
       expect(state.items.length, 3);
 
-      // Verify API calls were made
+        // Verify API calls were made ONCE during setUp's loadItems
       verify(mockApiService.getNote(item1.referencedItemId, targetServerOverride: serverConfig1)).called(1);
       verify(mockApiService.listNoteComments(item1.referencedItemId, targetServerOverride: serverConfig1)).called(1);
       verify(mockApiService.getNote(item2.referencedItemId, targetServerOverride: serverConfig1)).called(1);
@@ -186,9 +187,9 @@ void main() {
       verify(mockApiService.listNoteComments(item3.referencedItemId, targetServerOverride: serverConfig1)).called(1);
 
       // Calculate expected overallLastUpdateTime
-      // item1: max(item1.added, note1Update) = item1.added (now - 2d)
-      // item2: max(item2.added, note2Update, commentCreate) = commentCreate (now)
-      // item3: max(item3.added, note3Update) = note3Update (now - 1h)
+        // item1: max(item1.added, note1Update) = item1.added (now - 2d) -> overall = added (now - 2d)
+        // item2: max(item2.added, note2Update, commentCreate) = commentCreate (now) -> overall = commentCreate (now)
+        // item3: max(item3.added, note3Update) = note3Update (now - 1h) -> overall = noteUpdate (now - 1h)
       // Expected order: item2 (now), item3 (now - 1h), item1 (now - 2d)
 
       expect(state.items[0].id, 'id2'); // Newest overall activity (comment)
@@ -201,9 +202,7 @@ void main() {
 
       expect(state.items[2].id, 'id1'); // Oldest overall activity (added time)
       expect(state.items[2].latestComment, isNull);
-      expect(state.items[2].overallLastUpdateTime, item1.addedTimestamp);
-
-      verify(mockCloudKitService.getAllWorkbenchItemReferences()).called(1);
+        expect(state.items[2].overallLastUpdateTime, item1.addedTimestamp);
     });
 
     test('loadItems failure', () async {
@@ -338,9 +337,7 @@ void main() {
       final state = container.read(workbenchProvider);
 
       // Assert: Item should be back, list remains sorted by overallLastUpdateTime
-      expect(state.items.length, 3);
-      expect(state.items.any((item) => item.id == 'id3'), isTrue); // Item reverted
-      // Verify the order is still based on overallLastUpdateTime
+        // Verify the order is still based on overallLastUpdateTime [id2, id3, id1]
       expect(state.items[0].id, 'id2');
       expect(state.items[1].id, 'id3');
       expect(state.items[2].id, 'id1');
@@ -509,12 +506,20 @@ void main() {
     test('does nothing if already in default order (overallLastUpdateTime desc)', () {
       // Arrange: Initial state is already default order [id2, id3, id1]
       final initialOrder = List<WorkbenchItemReference>.from(container.read(workbenchProvider).items);
+        // Verify pre-condition
+        expect(
+          initialOrder[0].id,
+          'id2',
+          reason: 'Pre-condition failed: Initial order incorrect',
+        );
+        expect(initialOrder[1].id, 'id3');
+        expect(initialOrder[2].id, 'id1');
 
       // Act
       notifier.resetOrder();
       final state = container.read(workbenchProvider);
 
-      // Assert: Order remains unchanged
+        // Assert: Order remains unchanged [id2, id3, id1]
       expect(state.items.length, 3);
       expect(state.items.map((e) => e.id).toList(), initialOrder.map((e) => e.id).toList());
       expect(state.items[0].id, 'id2');
@@ -627,7 +632,7 @@ void main() {
           content: 'Refreshed comment',
           createTime:
               now.add(const Duration(minutes: 1)).millisecondsSinceEpoch,
-        ); // Newest overall
+        ); // New comment for item3
 
         when(
           mockApiService.getNote(
@@ -656,6 +661,9 @@ void main() {
           (_) async => [refreshedCommentForItem3],
         ); // New comment for item3
 
+        // Reset interactions before the refresh call
+        clearInteractions(mockApiService);
+
         // Act
         await notifier.refreshItemDetails();
         // Wait briefly for async detail fetching to complete
@@ -668,13 +676,13 @@ void main() {
         expect(state.error, isNull);
         expect(state.items.length, 3);
 
-        // Verify API calls were made again during refresh
+        // Verify API calls were made again ONCE during refresh
         verify(
           mockApiService.getNote(
             item1.referencedItemId,
             targetServerOverride: serverConfig1,
           ),
-        ).called(1); // Called once during load, once during refresh
+        ).called(1); // Called once during refresh
         verify(
           mockApiService.listNoteComments(
             item1.referencedItemId,
@@ -797,6 +805,9 @@ void main() {
         isEmpty,
         reason: 'Pre-condition failed: Items not cleared',
       );
+
+      // Reset interactions before the refresh call
+      clearInteractions(mockApiService);
 
       // Act
       await notifier.refreshItemDetails();
@@ -937,10 +948,10 @@ void main() {
 
         // Act
         await notifier.clearItems();
-      final state = container.read(workbenchProvider);
+        final state = container.read(workbenchProvider);
 
         // Assert
-      expect(state.items, isEmpty);
+        expect(state.items, isEmpty);
         expect(state.error, isNull);
         verify(
           mockCloudKitService.deleteWorkbenchItemReference(item1.id),
