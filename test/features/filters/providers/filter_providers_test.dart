@@ -6,7 +6,7 @@ import 'package:flutter_memos/providers/settings_provider.dart' as settings_p;
 import 'package:flutter_memos/utils/filter_presets.dart'; // Import FilterPresets
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mocktail/mocktail.dart'; // Import mocktail
+import 'package:mockito/mockito.dart'; // <-- Replaced mocktail with mockito
 import 'package:shared_preferences/shared_preferences.dart';
 
 // Mock NotesState if needed for overriding notesNotifierProvider

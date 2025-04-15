@@ -3,7 +3,7 @@ import 'package:flutter_memos/providers/note_providers.dart' as note_providers;
 import 'package:flutter_memos/providers/settings_provider.dart' as settings_p;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mocktail/mocktail.dart';
+import 'package:mockito/mockito.dart'; // &lt;-- Replaced mocktail with mockito
 
 // Mock PersistentSetNotifier
 class MockPersistentSetNotifier extends Mock implements settings_p.PersistentSetNotifier<String> {
