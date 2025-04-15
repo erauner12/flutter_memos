@@ -7,17 +7,17 @@ import 'package:flutter_cloud_kit/types/database_scope.dart';
 import 'package:flutter_memos/models/mcp_server_config.dart';
 import 'package:flutter_memos/models/server_config.dart';
 import 'package:flutter_memos/models/workbench_item_reference.dart';
-// Add any other necessary model or utility imports
+// Add Env import
+import 'package:flutter_memos/utils/env.dart';
 
 /// Service class for interacting with Apple CloudKit.
 ///
 /// This class handles saving, fetching, and deleting records related to
 /// server configurations, workbench items, and user settings stored in CloudKit.
 class CloudKitService {
-  // TODO: Replace 'YOUR_CONTAINER_ID' with the actual ID from config/constants
-  // Example: 'iCloud.com.yourcompany.yourapp'
+  // Use the container ID from Env
   final FlutterCloudKit _cloudKit = FlutterCloudKit(
-    containerId: 'YOUR_CONTAINER_ID',
+    containerId: Env.cloudKitContainerId, // Use the constant from Env
   );
   final String _userSettingsRecordName =
       'currentUserSettings'; // Fixed name for settings record

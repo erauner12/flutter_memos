@@ -22,4 +22,12 @@ class Env {
     'TODOIST_API_KEY',
     defaultValue: '', // Add your Todoist API token here for development
   );
+
+  // CloudKit Container ID
+  static const String cloudKitContainerId = String.fromEnvironment(
+    'CLOUDKIT_CONTAINER_ID',
+    // Provide the actual ID as the default for easier local development,
+    // but ideally set via --dart-define in build/run commands.
+    defaultValue: 'iCloud.com.erauner.fluttermemos',
+  );
 }
