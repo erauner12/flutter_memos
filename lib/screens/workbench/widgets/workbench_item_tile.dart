@@ -39,7 +39,8 @@ class WorkbenchItemTile extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = CupertinoTheme.of(context);
     final preview = itemReference.previewContent ?? 'No preview available';
-    final serverDisplayName = itemReference.serverName ?? itemReference.serverId;
+    final serverDisplayName =
+        itemReference.serverName ?? itemReference.serverId;
     // Format dates concisely
     final addedDate = DateFormat.yMd().add_jm().format(
       itemReference.addedTimestamp.toLocal(),
@@ -112,34 +113,41 @@ class WorkbenchItemTile extends ConsumerWidget {
           CupertinoButton(
             padding: const EdgeInsets.all(4.0),
             minSize: 0,
-            child: const Icon(CupertinoIcons.clear_circled, size: 20, color: CupertinoColors.systemGrey),
+            child: const Icon(
+              CupertinoIcons.clear_circled,
+              size: 20,
+              color: CupertinoColors.systemGrey,
+            ),
             onPressed: () {
               // Show confirmation dialog before removing
               showCupertinoDialog(
                 context: context,
-                builder: (dialogContext) => CupertinoAlertDialog(
-                  title: const Text('Remove from Workbench?'),
-                  content: Text('Remove "${preview.substring(0, preview.length > 30 ? 30 : preview.length)}..." from your Workbench?'),
-                  actions: [
-                    CupertinoDialogAction(
-                      child: const Text('Cancel'),
-                      onPressed: () => Navigator.pop(dialogContext),
-                    ),
-                    CupertinoDialogAction(
-                      isDestructiveAction: true,
-                      child: const Text('Remove'),
-                      onPressed: () {
-                        Navigator.pop(dialogContext);
+                builder:
+                    (dialogContext) => CupertinoAlertDialog(
+                      title: const Text('Remove from Workbench?'),
+                      content: Text(
+                        'Remove "${preview.substring(0, preview.length > 30 ? 30 : preview.length)}..." from your Workbench?',
+                      ),
+                      actions: [
+                        CupertinoDialogAction(
+                          child: const Text('Cancel'),
+                          onPressed: () => Navigator.pop(dialogContext),
+                        ),
+                        CupertinoDialogAction(
+                          isDestructiveAction: true,
+                          child: const Text('Remove'),
+                          onPressed: () {
+                            Navigator.pop(dialogContext);
                             // Fix: Call removeItem on the notifier and ignore the future
                             unawaited(
                               ref
                                   .read(workbenchProvider.notifier)
                                   .removeItem(itemReference.id),
                             );
-                      },
+                          },
+                        ),
+                      ],
                     ),
-                  ],
-                ),
               );
             },
           ),
@@ -147,7 +155,8 @@ class WorkbenchItemTile extends ConsumerWidget {
       ),
       onTap: () {
         // --- Navigation Logic ---
-        final currentActiveServerId = ref.read(multiServerConfigProvider).activeServerId;
+        final currentActiveServerId =
+            ref.read(multiServerConfigProvider).activeServerId;
 
         if (itemReference.serverId == currentActiveServerId) {
           // Navigate directly
@@ -250,37 +259,55 @@ class WorkbenchItemTile extends ConsumerWidget {
   }
 
   // Placeholder dialog for server switch requirement
-  void _showServerSwitchRequiredDialog(BuildContext context, WidgetRef ref, WorkbenchItemReference itemRef) {
-     showCupertinoDialog(
-       context: context,
-       builder: (dialogContext) => CupertinoAlertDialog(
-         title: const Text('Server Switch Required'),
-         content: Text('This item is on server "${itemRef.serverName ?? itemRef.serverId}". Switch to this server to view the item?'),
-         actions: [
-           CupertinoDialogAction(
-             child: const Text('Cancel'),
-             onPressed: () => Navigator.pop(dialogContext),
-           ),
-           CupertinoDialogAction(
-             isDefaultAction: true,
-             child: const Text('Switch & View'),
-             onPressed: () async {
-               Navigator.pop(dialogContext);
+  void _showServerSwitchRequiredDialog(
+    BuildContext context,
+    WidgetRef ref,
+    WorkbenchItemReference itemRef,
+  ) {
+    showCupertinoDialog(
+      context: context,
+      builder:
+          (dialogContext) => CupertinoAlertDialog(
+            title: const Text('Server Switch Required'),
+            content: Text(
+              'This item is on server "${itemRef.serverName ?? itemRef.serverId}". Switch to this server to view the item?',
+            ),
+            actions: [
+              CupertinoDialogAction(
+                child: const Text('Cancel'),
+                onPressed: () => Navigator.pop(dialogContext),
+              ),
+              CupertinoDialogAction(
+                isDefaultAction: true,
+                child: const Text('Switch & View'),
+                onPressed: () async {
+                  Navigator.pop(dialogContext);
                   // --- Actual Switch Logic ---
-               ref.read(multiServerConfigProvider.notifier).setActiveServer(itemRef.serverId);
+                  ref
+                      .read(multiServerConfigProvider.notifier)
+                      .setActiveServer(itemRef.serverId);
                   // Wait for the activeServerConfigProvider to reflect the change
                   // This uses ref.listen for a more robust state propagation check
                   final completer = Completer<void>();
-                  // Explicitly type the subscription variable
-                  final ProviderSubscription<ServerConfig?> sub = ref
-                      .listen<ServerConfig?>(
+                  // Variable to hold the subscription, captured by the listener
+                  ProviderSubscription<ServerConfig?>? sub;
+                  // Call ref.listen without assigning its void result
+                  // Capture the subscription object passed to the listener
+                  ref.listen<ServerConfig?>(
                     activeServerConfigProvider,
-                    (prev, next) {
-                      if (next?.id == itemRef.serverId &&
-                          !completer.isCompleted) {
-                        completer.complete();
-                      }
-                    },
+                    (prev, next, subscription) {
+                          // Accept the subscription object here
+                          // Store the subscription so it can be closed later
+                          sub = subscription;
+                          if (next?.id == itemRef.serverId &&
+                              !completer.isCompleted) {
+                            completer.complete();
+                          }
+                        }
+                        as void Function(
+                          ServerConfig? previous,
+                          ServerConfig? next,
+                        ),
                   );
                   // Add a timeout to prevent waiting indefinitely
                   try {
@@ -295,13 +322,14 @@ class WorkbenchItemTile extends ConsumerWidget {
                     }
                     // Optionally show an error message to the user
                   } finally {
-                    sub.close(); // Clean up the listener
-               }
-               // --- End Switch Logic ---
-             },
-           ),
-         ],
-       ),
-     );
+                    // Close the subscription using the captured variable
+                    sub?.close(); // Clean up the listener
+                  }
+                  // --- End Switch Logic ---
+                },
+              ),
+            ],
+          ),
+    );
   }
 }
