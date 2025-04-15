@@ -35,24 +35,23 @@ class _WorkbenchScreenState extends ConsumerState<WorkbenchScreen> {
         !workbenchState.isLoading && !workbenchState.isRefreshingDetails;
 
     return CupertinoPageScaffold(
+      backgroundColor: CupertinoColors.systemGroupedBackground.resolveFrom(
+        context,
+      ),
       navigationBar: CupertinoNavigationBar(
         middle: const Text('Workbench'),
-        // Keep Reset Order button
         leading: CupertinoButton(
           padding: EdgeInsets.zero,
           child: const Icon(CupertinoIcons.arrow_up_arrow_down),
           onPressed: () => ref.read(workbenchProvider.notifier).resetOrder(),
         ),
-        // Add Refresh button
         trailing: CupertinoButton(
           padding: EdgeInsets.zero,
-          // Disable while loading OR refreshing details
           onPressed:
               canRefresh
                   ? () =>
                       ref.read(workbenchProvider.notifier).refreshItemDetails()
                   : null,
-          // Show activity indicator when busy
           child:
               canRefresh
                   ? const Icon(CupertinoIcons.refresh)
@@ -60,9 +59,8 @@ class _WorkbenchScreenState extends ConsumerState<WorkbenchScreen> {
         ),
       ),
       child: SafeArea(
-        child: Builder( // Use Builder to get context with theme
+        child: Builder(
           builder: (context) {
-            // Show loading indicator only on initial load when items are empty
             if (workbenchState.isLoading && items.isEmpty) {
               return const Center(child: CupertinoActivityIndicator());
             }
@@ -93,7 +91,6 @@ class _WorkbenchScreenState extends ConsumerState<WorkbenchScreen> {
             }
 
             if (items.isEmpty && !workbenchState.isLoading) {
-              // Ensure not loading when showing empty state
               return const Center(
                 child: Text(
                   'Your Workbench is empty.\nAdd items via long-press or actions.',
@@ -103,39 +100,26 @@ class _WorkbenchScreenState extends ConsumerState<WorkbenchScreen> {
               );
             }
 
-            // Use ReorderableListView for drag-and-drop
+            // Remove vertical padding here, as each tile has its own margin
             return ReorderableListView.builder(
-              padding: const EdgeInsets.symmetric(
-                vertical: 8.0,
-              ), // Add some padding
-              buildDefaultDragHandles: false, // Disable the default handle
+              buildDefaultDragHandles: false,
               itemCount: items.length,
               itemBuilder: (context, index) {
                 final item = items[index];
-                // IMPORTANT: Key MUST be present and unique for ReorderableListView
-                // Wrap the tile in a listener to make it draggable
                 return ReorderableDragStartListener(
                   index: index,
-                  key: ValueKey(
-                    'drag-${item.id}',
-                  ), // Add a key to the listener too
+                  key: ValueKey('drag-${item.id}'),
                   child: WorkbenchItemTile(
-                    // Pass the item reference which might contain populated details
-                    key: ValueKey(
-                      item.id,
-                    ), // Keep key on the tile itself as well
+                    key: ValueKey(item.id),
                     itemReference: item,
                   ),
                 );
               },
               onReorder: (oldIndex, newIndex) {
-                // Fix: Call reorderItems on the notifier
                 ref
                     .read(workbenchProvider.notifier)
                     .reorderItems(oldIndex, newIndex);
               },
-              // Remove the header loading indicator, use the trailing button instead
-              // header: workbenchState.isLoading ? ... : null,
             );
           }
         ),
