@@ -1,10 +1,8 @@
 import 'dart:typed_data';
 
-import 'package:flutter_memos/api/lib/api.dart'; // Keep for V1Resource if still used by API
 import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/models/note_item.dart'; // Updated import
-import 'package:flutter_memos/services/base_api_service.dart'; // Keep for verboseLogging
-import 'package:flutter_memos/services/memos_api_service.dart'; // Confirmed import exists
+import 'package:flutter_memos/services/api_service.dart'; // Correct import path
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/annotations.dart';
 
@@ -16,7 +14,7 @@ const bool runIntegrationTests =
 // Mocking the concrete class might be easier for integration-like tests
 // Generate nice mock for MemosApiService (or BaseApiService if preferred)
 // Mocking the concrete class might be easier for integration-like tests
-@GenerateNiceMocks([MockSpec<MemosApiService>()]) // Confirmed MemosApiService
+@GenerateNiceMocks([MockSpec<MemosApiService>()]) // Verified MockSpec
 void main() {
   group('ApiService Resource Integration Tests', () {
     late MemosApiService apiService; // Use concrete type
@@ -50,7 +48,8 @@ void main() {
 
       apiService = MemosApiService(); // Instantiate concrete class
       apiService.configureService(baseUrl: baseUrl, authToken: apiKey);
-      MemosApiService.verboseLogging = true; // Correct static access
+      // Access static member via MemosApiService where it's likely defined
+      MemosApiService.verboseLogging = true;
 
       // Create a temporary note for attaching comments
       try {
@@ -64,6 +63,7 @@ void main() {
           visibility: NoteVisibility.private, // Keep test notes private
           createTime: DateTime.now(), // Add required field
           updateTime: DateTime.now(), // Add required field
+          // Removed duplicate updateTime
           displayTime: DateTime.now(), // Add required field
           state: NoteState.normal, // Add required field
         );
