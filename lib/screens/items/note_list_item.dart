@@ -94,13 +94,17 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
 
   // Custom context menu including date actions
   void _showCustomContextMenu(BuildContext context) {
+    // Capture the context from the widget tree *before* the modal popup
+    // This context is guaranteed to have ScaffoldMessenger/Scaffold ancestors
+    final BuildContext scaffoldContext = context;
+
     // Check if the note is manually hidden (needed for context menu logic)
     final isManuallyHidden = ref.read(settings_p.manuallyHiddenNoteIdsProvider).contains(widget.note.id);
     final now = DateTime.now();
     final isFutureDated = widget.note.startDate?.isAfter(now) ?? false;
 
     showCupertinoModalPopup<void>(
-      context: context,
+      context: context, // Use the original context to show the popup
       // The builder provides the correct context for actions *inside* the popup
       builder: (BuildContext popupContext) => CupertinoActionSheet(
         // Combine all sets of actions
@@ -173,8 +177,12 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
             child: const Text('Add to Workbench'),
             onPressed: () {
               Navigator.pop(popupContext); // Close the action sheet first
-                  // Pass the main widget's context, not popupContext
-              _addNoteToWorkbenchFromList(context, ref, widget.note); // Call helper
+                  // Pass the captured scaffoldContext, not popupContext or the builder's context
+                  _addNoteToWorkbenchFromList(
+                    scaffoldContext,
+                    ref,
+                    widget.note,
+                  ); // Call helper with correct context
             },
           ),
           // --- End of added action ---
@@ -227,7 +235,7 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
   // --- Add this helper method within NoteListItemState ---
   // Modify the function signature to accept the main BuildContext
   void _addNoteToWorkbenchFromList(
-    BuildContext scaffoldContext,
+    BuildContext scaffoldContext, // This context should now be correct
     WidgetRef ref,
     NoteItem note,
   ) {
@@ -251,7 +259,7 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
       serverName: activeServer.name,
       previewContent: preview.length > 100 ? '${preview.substring(0, 97)}...' : preview,
       addedTimestamp: DateTime.now(),
-      // parentNoteId is null for notes
+      parentNoteId: null, // Explicitly set parentNoteId to null for notes
     );
 
     ref.read(workbenchProvider.notifier).addItem(reference);
