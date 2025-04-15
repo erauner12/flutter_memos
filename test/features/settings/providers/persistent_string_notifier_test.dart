@@ -193,7 +193,7 @@ void main() {
       // Assert Migration actions:
       // 1. Upload to CloudKit
       verify(mockCloudKitService.saveSetting(testPrefKey, prefsValue)).called(1);
-      // 2. Write to Secure Storage (happens during migration cleanup)
+        // 2. Write to Secure Storage (happens during migration cleanup AFTER successful upload)
       verify(mockSecureStorage.write(key: testPrefKey, value: prefsValue)).called(1);
       // 3. Remove from SharedPreferences
       final prefs = await SharedPreferences.getInstance();

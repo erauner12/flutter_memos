@@ -33,6 +33,27 @@ import 'package:mockito/mockito.dart';
 ])
 import 'chat_providers_test.mocks.dart';
 
+// Define context locally for the test
+const String testTodoistContext = """
+Todoist Filter Reference (Examples):
+- `today`: Tasks due today.
+- `overdue`: Tasks past their due date.
+- `p1`, `p2`, `p3`, `p4`: Filter by priority.
+- `#ProjectName`: Tasks in a specific project.
+- `##ParentProject`: Tasks in a project and its sub-projects.
+- `@labelName`: Tasks with a specific label.
+- `7 days`: Tasks due in the next 7 days.
+- `no date`: Tasks without a due date.
+- `search: keyword`: Tasks containing a keyword.
+- Combine with `&` (AND), `|` (OR), `!` (NOT), `()` (grouping). Example: `(today | overdue) & #Work`
+
+Todoist Date Reference (Examples):
+- `today`, `tomorrow`, `next monday`, `Jan 27`, `in 3 weeks`
+- `every day`, `every other week`, `every 3rd friday`, `every! day` (repeats from completion date)
+- `starting tomorrow`, `until Dec 31`, `for 3 weeks`
+- `at 5pm`, `for 2h` (duration)
+""";
+
 // Mock for PersistentStringNotifier (Keep as is)
 class MockPersistentStringNotifier extends StateNotifier<String>
     implements PersistentStringNotifier {
@@ -308,7 +329,7 @@ void main() {
       // Verify calls on the *delegate* mock, capturing history
       // Construct the full expected query string using the static context
       final fullExpectedQuery =
-          "${ChatNotifier.todoistContext}\\n\\nUser query: $userQuery";
+          "$testTodoistContext\\n\\nUser query: $userQuery"; // Use local constant
       final verification = verify(
         mockMcpClientNotifierDelegate.processQuery(
           fullExpectedQuery,
@@ -413,7 +434,7 @@ void main() {
       // Verify calls on the *delegate* mock
       // Construct the full expected query string using the static context
       final fullExpectedQuery =
-          "${ChatNotifier.todoistContext}\\n\\nUser query: $userQuery";
+          "$testTodoistContext\\n\\nUser query: $userQuery"; // Use local constant
       verify(
         mockMcpClientNotifierDelegate.processQuery(fullExpectedQuery, any),
       ).called(1);
@@ -499,7 +520,7 @@ void main() {
       );
       // Construct the full expected query string using the static context
       final fullExpectedQuery =
-          "${ChatNotifier.todoistContext}\\n\\nUser query: $userQuery";
+        "$testTodoistContext\\n\\nUser query: $userQuery"; // Use local constant
       verify(
         mockGeminiService.sendMessageStream(fullExpectedQuery, any),
       ).called(1);

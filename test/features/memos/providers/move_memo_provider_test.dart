@@ -317,8 +317,7 @@ void main() {
       // Assert
       verify(
         mockNotesNotifierInstance.removeNoteOptimistically(
-          noteToMove.id,
-        ), // Updated method name
+          noteToMove.id),
       ).called(1);
 
       verify(
@@ -365,8 +364,6 @@ void main() {
     });
   });
 }
-
-// Updated helper class
 class TestNotesNotifier extends StateNotifier<NotesState>
     implements NotesNotifier {
   final MockNotesNotifier mock;

@@ -140,7 +140,7 @@ void main() {
               hasReachedEnd: true, // Assume initial load is done
               totalLoaded: initialNotes.length,
             );
-            return notifier;
+            return notifier; // Return the REAL notifier, but initialized manually
           },
         ),
       ],

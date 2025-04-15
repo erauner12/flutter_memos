@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart'; // Import for kDebugMode
 import 'package:flutter_memos/models/list_notes_response.dart'; // Updated import
 import 'package:flutter_memos/models/note_item.dart'; // Updated import
 import 'package:flutter_memos/providers/api_providers.dart';
@@ -14,68 +13,10 @@ import 'memo_update_sorting_test.mocks.dart';
 
 // Annotation to generate nice mock for BaseApiService
 @GenerateNiceMocks([MockSpec<BaseApiService>()])
-// Mock Notifier extending the actual Notifier
-class MockNotesNotifier extends NotesNotifier {
-  // Update to use the non-deprecated Ref type
-  final Ref ref; // Keep ref if needed by super or methods
+// Mock Notifier extending the actual Notifier - Use the real one for simplicity here
+// or define a proper mock if more complex behavior is needed.
+// class MockNotesNotifier extends NotesNotifier { ... }
 
-  MockNotesNotifier(
-    this.ref, // Pass ref
-    NotesState initialState)
-    : super(ref, skipInitialFetchForTesting: true) {
-    // Pass ref to super
-    // Explicitly set the initial state in the constructor
-    state = initialState;
-  }
-
-  @override
-  Future<void> refresh() async {
-    if (kDebugMode) {
-      print(
-        '[MockNotesNotifier] Refresh called, fetching from mock API',
-      );
-    }
-
-    // Simulate refresh by calling the mock API service again
-    final apiService =
-        ref.read(apiServiceProvider) as MockBaseApiService;
-    // Use the mocked API service response for refresh, explicitly using null pageToken
-    final response = await apiService.listNotes(
-      pageToken: null, // First page for refresh
-      // Add other default parameters if needed by the mock setup
-      filter: anyNamed('filter'),
-      state: anyNamed('state'),
-      sort: anyNamed('sort'),
-      direction: anyNamed('direction'),
-      pageSize: anyNamed('pageSize'),
-    );
-
-    // Update state with the response
-    state = state.copyWith(
-      notes: response.notes,
-      isLoading: false,
-      hasReachedEnd: response.nextPageToken == null,
-      nextPageToken: response.nextPageToken,
-      totalLoaded: response.notes.length,
-    );
-
-    if (kDebugMode) {
-      print(
-        '[MockNotesNotifier] Refresh completed with ${response.notes.length} notes',
-      );
-    }
-  }
-
-  @override
-  Future<void> fetchMoreNotes() async {
-    if (kDebugMode) {
-      print(
-        '[MockNotesNotifier] fetchMoreNotes called - no-op for this test',
-      );
-    }
-    /* No-op for this test */
-  }
-}
 
 /// This unit test focuses specifically on the data flow and logic involved
 /// when a note is updated, ensuring that:
@@ -164,6 +105,7 @@ void main() {
 
       // --- Mock Setup ---
       // 1. Initial listNotes call response (used if notifier fetches initially)
+      // Use pageToken: null for the initial call
       when(
         mockApiService.listNotes(
           filter: anyNamed('filter'),
@@ -219,6 +161,7 @@ void main() {
 
       // 3. listNotes call *after* update (used by notifier's refresh)
       // This simulates the server list response containing the epoch createTime
+      // Use pageToken: null again for the refresh call
       when(
         mockApiService.listNotes(
           filter: anyNamed('filter'),
@@ -240,7 +183,7 @@ void main() {
       container = ProviderContainer(
         overrides: [
           apiServiceProvider.overrideWithValue(mockApiService),
-          // Override the notifier to set initial state manually
+          // Override the notifier to set initial state manually and use the real notifier
           notesNotifierProvider.overrideWith((ref) {
             final initialState = const NotesState().copyWith(
               notes: initialNotes,
@@ -248,8 +191,13 @@ void main() {
               hasReachedEnd: true,
               totalLoaded: initialNotes.length,
             );
-            // Use the MockNotesNotifier which overrides refresh
-            return MockNotesNotifier(ref, initialState);
+            // Return the REAL notifier, initialized manually
+            final notifier = NotesNotifier(
+              ref,
+              skipInitialFetchForTesting: true,
+            );
+            notifier.state = initialState;
+            return notifier;
           }),
         ],
       );
@@ -298,7 +246,7 @@ void main() {
           state: NoteState.normal,
           pinned: false,
         );
-        // updateNoteProvider calls apiService.updateNote and updates notifier state
+        // updateNoteProvider calls apiService.updateNote and invalidates notesNotifierProvider
         await container.read(
           updateNoteProvider(noteToUpdateId),
         )(noteDataForUpdate);
@@ -312,15 +260,14 @@ void main() {
           ),
         ).called(1);
 
-        // The refresh triggered by updateNoteProvider uses the *second* mock response
-        // for listNotes (notesFromServerAfterUpdate)
+        // The invalidation caused by updateNoteProvider will trigger a refetch
+        // which uses the *second* mock response for listNotes (notesFromServerAfterUpdate)
 
         // 3. Read the final state from notesNotifierProvider
         print(
           '[Test Flow] Reading final notesNotifierProvider state after refresh...',
         );
-        // Allow time for the async refresh within the mock notifier to complete
-        // The refresh is triggered internally by the updateNoteProvider invalidation
+        // Allow time for the provider to refetch after invalidation
         await container.pump(); // Allow invalidation and refresh to process
 
         final finalState = container.read(

@@ -168,7 +168,13 @@ void main() {
               hasReachedEnd: true,
               totalLoaded: notes.length,
             );
-            return MockNotesNotifier(ref, initialState); // Updated mock type
+            // Return the REAL notifier, initialized manually
+            final notifier = NotesNotifier(
+              ref,
+              skipInitialFetchForTesting: true,
+            );
+            notifier.state = initialState;
+            return notifier;
           }),
           filters.filterKeyProvider.overrideWith(
             (ref) => 'inbox',

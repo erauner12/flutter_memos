@@ -134,10 +134,10 @@ void main() {
 
   testWidgets('App loads and displays title', (WidgetTester tester) async {
     // Mock SharedPreferences platform channel
-    TestWidgetsFlutterBinding.ensureInitialized(); // Ensure binding is initialized
+    TestWidgetsFlutterBinding.ensureInitialized(); // Ensure binding is initialized first
     SharedPreferencesStorePlatform.instance =
-        InMemorySharedPreferencesStore.empty();
-    SharedPreferences.setMockInitialValues({}); // Add this line
+        InMemorySharedPreferencesStore.empty(); // Then mock the platform instance
+    SharedPreferences.setMockInitialValues({}); // Finally set initial values
 
     // Define initial states for mocks
     final initialMultiServerState = MultiServerConfigState(

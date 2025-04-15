@@ -192,11 +192,11 @@ void main() {
           content: updatedCommentData.content,
           updateTime: DateTime.now().millisecondsSinceEpoch,
           pinned: updatedCommentData.pinned,
-          state: updatedCommentData.state,
+          state: updatedCommentData.state, // Use the state from the input
           resources: updatedCommentData.resources ?? originalComment.resources,
         );
-        commentsList[index] = updated;
-        return updated;
+        commentsList[index] = updated; // *** Update the map ***
+        return updated; // Return the updated comment
       });
 
       // Stub deleteNoteComment (replaces deleteMemoComment)
