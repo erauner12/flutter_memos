@@ -4,6 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_memos/models/comment.dart'; // Import Comment
 import 'package:flutter_memos/models/server_config.dart';
 import 'package:flutter_memos/models/workbench_item_reference.dart';
+import 'package:flutter_memos/providers/server_config_provider.dart'; // &lt;-- Add this import for activeServerConfigProvider and multiServerConfigProvider
 import 'package:flutter_memos/providers/workbench_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart'; // For date formatting
@@ -92,7 +93,7 @@ class WorkbenchItemTile extends ConsumerWidget {
           ),
           boxShadow: [
             BoxShadow(
-              color: CupertinoColors.black.withOpacity(0.04),
+              color: CupertinoColors.black.withAlpha((0.04 * 255).toInt()),
               blurRadius: 8,
               offset: const Offset(0, 2),
             ),
