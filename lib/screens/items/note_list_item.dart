@@ -2,7 +2,8 @@ import 'dart:math'; // For min
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart'; // Needed for ScaffoldMessenger/SnackBar
+// Remove Material import if Tooltip or other Material widgets are not used here
+// import 'package:flutter/material.dart'; // Needed for ScaffoldMessenger/SnackBar
 import 'package:flutter/services.dart';
 import 'package:flutter_memos/models/note_item.dart';
 import 'package:flutter_memos/models/workbench_item_reference.dart'; // Needed for Workbench
@@ -95,10 +96,9 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
   }
 
   // Custom context menu including date actions
-  // Modify the signature to accept the scaffoldContext and scaffoldMessenger
+  // Modify the signature to accept the scaffoldContext only and pass BuildContext to _addNoteToWorkbenchFromList
   void _showCustomContextMenu(
-    BuildContext scaffoldContext,
-    ScaffoldMessengerState scaffoldMessenger,
+    BuildContext scaffoldContext, // Keep BuildContext
   ) {
     final isManuallyHidden = ref.read(settings_p.manuallyHiddenNoteIdsProvider).contains(widget.note.id);
     final now = DateTime.now();
@@ -172,9 +172,9 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
             child: const Text('Add to Workbench'),
             onPressed: () {
                   Navigator.pop(popupContext);
-                  // Pass scaffoldMessenger instead of scaffoldContext
+                  // Pass scaffoldContext instead of scaffoldMessenger
                   _addNoteToWorkbenchFromList(
-                    scaffoldMessenger,
+                    scaffoldContext, // Pass the BuildContext
                     ref,
                     widget.note,
                   );
@@ -225,19 +225,28 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
   }
 
   // Helper method to add note to workbench
-  // Modify signature to accept ScaffoldMessengerState instead of BuildContext
+  // Modify signature to accept BuildContext instead of ScaffoldMessengerState and show CupertinoAlertDialog
   void _addNoteToWorkbenchFromList(
-    ScaffoldMessengerState scaffoldMessenger, // Use ScaffoldMessengerState
+    BuildContext context, // Use BuildContext
     WidgetRef ref,
     NoteItem note,
   ) {
     final activeServer = ref.read(activeServerConfigProvider);
     if (activeServer == null) {
-      // Use the passed scaffoldMessenger directly
-      scaffoldMessenger.showSnackBar(
-        const SnackBar(
-          content: Text("Cannot add to workbench: No active server."),
-          backgroundColor: CupertinoColors.systemRed,
+      // Use the passed context to show a dialog
+      showCupertinoDialog(
+        context: context,
+        builder:
+            (dialogContext) => CupertinoAlertDialog(
+              title: const Text('Error'),
+              content: const Text("Cannot add to workbench: No active server."),
+              actions: [
+                CupertinoDialogAction(
+                  isDefaultAction: true,
+                  child: const Text('OK'),
+                  onPressed: () => Navigator.pop(dialogContext),
+                ),
+              ],
         ),
       );
       return;
@@ -260,17 +269,24 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
 
     ref.read(workbenchProvider.notifier).addItem(reference);
 
-    // Use the passed scaffoldMessenger directly
-    // Handle potential null previewContent
+    // Use the passed context to show a CupertinoAlertDialog
     final previewText = reference.previewContent ?? 'Item';
-    final snackBarContent =
+    final dialogContent =
         'Added "${previewText.substring(0, min(30, previewText.length))}${previewText.length > 30 ? '...' : ''}" to Workbench';
 
-    scaffoldMessenger.showSnackBar(
-      SnackBar(
-        content: Text(snackBarContent),
-        duration: const Duration(seconds: 2),
-        backgroundColor: CupertinoColors.systemGreen,
+    showCupertinoDialog(
+      context: context, // Use the passed context
+      builder:
+          (dialogContext) => CupertinoAlertDialog(
+            title: const Text('Success'),
+            content: Text(dialogContent),
+            actions: [
+              CupertinoDialogAction(
+                isDefaultAction: true,
+                child: const Text('OK'),
+                onPressed: () => Navigator.pop(dialogContext),
+              ),
+            ],
       ),
     );
   }
@@ -421,10 +437,8 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
   Widget build(BuildContext context) {
     // Capture the build context here - THIS is the reliable context
     final BuildContext scaffoldContext = context;
-    // Get the ScaffoldMessengerState using the reliable context
-    final ScaffoldMessengerState scaffoldMessenger = ScaffoldMessenger.of(
-      scaffoldContext,
-    );
+    // REMOVE the ScaffoldMessengerState retrieval
+    // final ScaffoldMessengerState scaffoldMessenger = ScaffoldMessenger.of(scaffoldContext);
 
     final selectedItemId = ref.watch(ui_providers.selectedItemIdProvider);
     final isSelected = selectedItemId == widget.note.id;
@@ -601,11 +615,11 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
       // Wrap the GestureDetector in a Builder to ensure it gets a fresh context
       child: Builder(
         builder: (builderContext) {
-          // Use builderContext for any ScaffoldMessenger operations if needed
+          // Use builderContext for any operations if needed
           return GestureDetector(
             onLongPress: () {
-              // Continue using the reliably captured scaffoldContext and scaffoldMessenger
-              _showCustomContextMenu(scaffoldContext, scaffoldMessenger);
+              // Pass the reliably captured scaffoldContext directly
+              _showCustomContextMenu(scaffoldContext);
             },
             onTap:
                 isMultiSelectMode
