@@ -1,16 +1,21 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart'; // Needed for ScaffoldMessenger/SnackBar
 import 'package:flutter/services.dart';
 import 'package:flutter_memos/models/note_item.dart';
+import 'package:flutter_memos/models/workbench_item_reference.dart'; // Needed for Workbench
 import 'package:flutter_memos/providers/note_providers.dart' as note_providers;
+import 'package:flutter_memos/providers/server_config_provider.dart'; // Needed for activeServerConfigProvider
 // Import settings_provider for manuallyHiddenNoteIdsProvider
 import 'package:flutter_memos/providers/settings_provider.dart' as settings_p;
 import 'package:flutter_memos/providers/ui_providers.dart' as ui_providers;
+import 'package:flutter_memos/providers/workbench_provider.dart'; // Needed for Workbench
 import 'package:flutter_memos/utils/note_utils.dart';
 import 'package:flutter_memos/widgets/note_card.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:intl/intl.dart';
+import 'package:uuid/uuid.dart'; // Needed for Workbench item ID generation
 
 class NoteListItem extends ConsumerStatefulWidget {
   final NoteItem note;
@@ -108,15 +113,15 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
               onEdit(context);
             },
           ),
-              // Add Move to Server action conditionally
-              if (widget.onMoveToServer != null)
-                CupertinoContextMenuAction(
-                  child: const Text('Move to Server...'),
-                  onPressed: () {
-                    Navigator.pop(popupContext); // Close the action sheet
-                    widget.onMoveToServer!(); // Trigger the callback
-                  },
-                ),
+          // Add Move to Server action conditionally
+          if (widget.onMoveToServer != null)
+            CupertinoContextMenuAction(
+              child: const Text('Move to Server...'),
+              onPressed: () {
+                Navigator.pop(popupContext); // Close the action sheet
+                widget.onMoveToServer!(); // Trigger the callback
+              },
+            ),
           CupertinoContextMenuAction(
             child: Text(widget.note.pinned ? 'Unpin' : 'Pin'),
             onPressed: () {
@@ -163,6 +168,15 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
                 Navigator.pop(popupContext);
               },
             ),
+          // --- Add this action ---
+          CupertinoContextMenuAction(
+            child: const Text('Add to Workbench'),
+            onPressed: () {
+              Navigator.pop(popupContext); // Close the action sheet first
+              _addNoteToWorkbenchFromList(context, ref, widget.note); // Call helper
+            },
+          ),
+          // --- End of added action ---
           // Date Actions
           CupertinoContextMenuAction(
             child: const Text('Kick Start +1 Day'),
@@ -208,6 +222,40 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
     );
   }
   // --- End Moved Helper Methods ---
+
+  // --- Add this helper method within NoteListItemState ---
+  void _addNoteToWorkbenchFromList(BuildContext context, WidgetRef ref, NoteItem note) {
+    final activeServer = ref.read(activeServerConfigProvider);
+    if (activeServer == null) {
+      // Optionally show an error message if needed
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Cannot add to workbench: No active server."), backgroundColor: CupertinoColors.systemRed),
+      );
+      return;
+    }
+
+    final preview = note.content.split('\n').first; // Simple preview
+
+    final reference = WorkbenchItemReference(
+      id: const Uuid().v4(),
+      referencedItemId: note.id,
+      referencedItemType: WorkbenchItemType.note, // Explicitly note
+      serverId: activeServer.id,
+      serverType: activeServer.serverType,
+      serverName: activeServer.name,
+      previewContent: preview.length > 100 ? '${preview.substring(0, 97)}...' : preview,
+      addedTimestamp: DateTime.now(),
+      // parentNoteId is null for notes
+    );
+
+    ref.read(workbenchProvider.notifier).addItem(reference);
+
+    // Show confirmation
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Added to Workbench"), backgroundColor: CupertinoColors.systemGreen),
+    );
+  }
+  // --- End of helper method ---
 
   void _toggleHideItem(BuildContext context, WidgetRef ref) {
     // Use the correct provider from settings_provider
@@ -281,7 +329,7 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
 
     if (kDebugMode) {
       print('[NoteListItem] Multi-selection toggled for note ID: $noteId');
-      print('[NoteListItem] Current selection: ${currentSelection.join(', ')}');
+      print('[NoteListItem] Current selection: ${currentSelection.join(", ")}');
     }
   }
 
@@ -480,9 +528,7 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
               onPressed: (_) => widget.onMoveToServer!(), // Trigger callback
               backgroundColor: CupertinoColors.systemIndigo, // Choose a color
               foregroundColor: CupertinoColors.white,
-              icon:
-                  CupertinoIcons
-                      .arrow_right_arrow_left_square, // Choose an icon
+              icon: CupertinoIcons.arrow_right_arrow_left_square, // Choose an icon
               label: 'Move',
               autoClose: true, // Close slidable after action
             ),

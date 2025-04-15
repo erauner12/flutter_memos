@@ -119,6 +119,7 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> // Renamed 
               ? '${preview.substring(0, 97)}...'
               : preview, // Limit preview length
       addedTimestamp: DateTime.now(),
+      // parentNoteId is null for notes
     );
 
     ref.read(workbenchProvider.notifier).addItem(reference);
@@ -183,6 +184,7 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> // Renamed 
                     ); // Call the add function
                   },
                 ),
+              // --- End Add Note to Workbench Action ---
               CupertinoActionSheetAction(
                 isDefaultAction: !isFixingGrammar,
                 onPressed: isFixingGrammar ? () {} : () {
