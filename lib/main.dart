@@ -164,6 +164,8 @@ class _MyAppState extends ConsumerState<MyApp> {
           ref.read(openAiApiKeyProvider.notifier).init(),
           ref.read(openAiModelIdProvider.notifier).init(),
           ref.read(geminiApiKeyProvider.notifier).init(),
+          // Add initialization for the new PersistentSetNotifier
+          ref.read(manuallyHiddenNoteIdsProvider.notifier).init(),
         ])
         .then((_) {
           if (kDebugMode) {

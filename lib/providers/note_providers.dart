@@ -477,6 +477,8 @@ final notesNotifierProvider = StateNotifierProvider<NotesNotifier, NotesState>((
 
 // --- Start Hidden Count Providers ---
 
+// Helper provider to get the base list matching the primary filter (inbox/archive/tag)
+// This ignores pinning, manual hiding, future dates, and search for accurate counting.
 final _baseFilteredNotesProvider = Provider<List<NoteItem>>((ref) {
   final notesState = ref.watch(notesNotifierProvider);
   final filterKey = ref.watch(filterKeyProvider);
@@ -484,11 +486,11 @@ final _baseFilteredNotesProvider = Provider<List<NoteItem>>((ref) {
   return notesState.notes.where((note) {
     switch (filterKey) {
       case 'inbox':
-      case 'all':
+      case 'all': // Assuming 'all' means non-archived for counting purposes
         return note.state != NoteState.archived;
       case 'archive':
         return note.state == NoteState.archived;
-      default:
+      default: // Tag filter
         if (!['inbox', 'all', 'archive'].contains(filterKey)) {
           return note.tags.contains(filterKey) &&
               note.state != NoteState.archived;
@@ -498,12 +500,14 @@ final _baseFilteredNotesProvider = Provider<List<NoteItem>>((ref) {
   }).toList();
 }, name: '_baseFilteredNotesProvider');
 
+// Count manually hidden notes within the base filtered list
 final manuallyHiddenNoteCountProvider = Provider<int>((ref) {
   final baseNotes = ref.watch(_baseFilteredNotesProvider);
   final manuallyHiddenIds = ref.watch(settings_p.manuallyHiddenNoteIdsProvider);
   return baseNotes.where((note) => manuallyHiddenIds.contains(note.id)).length;
 }, name: 'manuallyHiddenNoteCountProvider');
 
+// Count future-dated hidden notes (that aren't also manually hidden) within the base filtered list
 final futureDatedHiddenNoteCountProvider = Provider<int>((ref) {
   final baseNotes = ref.watch(_baseFilteredNotesProvider);
   final manuallyHiddenIds = ref.watch(settings_p.manuallyHiddenNoteIdsProvider);
@@ -515,28 +519,69 @@ final futureDatedHiddenNoteCountProvider = Provider<int>((ref) {
   }).length;
 }, name: 'futureDatedHiddenNoteCountProvider');
 
+// Total hidden count for display (sum of manual and future-dated)
 final totalHiddenNoteCountProvider = Provider<int>((ref) {
   final manualCount = ref.watch(manuallyHiddenNoteCountProvider);
   final futureCount = ref.watch(futureDatedHiddenNoteCountProvider);
   final total = manualCount + futureCount;
   if (kDebugMode) {
-    // print('[totalHiddenNoteCountProvider] Manual: \$manualCount, Future: \$futureCount, Total: \$total');
+    // print('[totalHiddenNoteCountProvider] Manual: $manualCount, Future: $futureCount, Total: $total');
   }
   return total;
 }, name: 'totalHiddenNoteCountProvider');
 
 // --- End Hidden Count Providers ---
 
-// Refactored filteredNotesProvider
+// Rename isNoteHiddenProvider to isItemHiddenProvider
+final isItemHiddenProvider = Provider.family<bool, String>((ref, id) {
+  // Use the new persistent provider from settings_provider
+  final hiddenItemIds = ref.watch(settings_p.manuallyHiddenNoteIdsProvider);
+  return hiddenItemIds.contains(id);
+}, name: 'isItemHiddenProvider');
+
+// Rename toggleNoteVisibilityProvider to toggleItemVisibilityProvider
+final toggleItemVisibilityProvider = Provider.family<void Function(), String>((
+  ref,
+  id,
+) {
+  return () {
+    // Use the new persistent provider's notifier
+    final manuallyHiddenIdsNotifier = ref.read(
+      settings_p.manuallyHiddenNoteIdsProvider.notifier,
+    );
+    // Read current state to decide whether to add or remove
+    final currentHiddenIds = ref.read(settings_p.manuallyHiddenNoteIdsProvider);
+
+    if (currentHiddenIds.contains(id)) {
+      manuallyHiddenIdsNotifier.remove(id);
+      if (kDebugMode)
+        print('[toggleItemVisibilityProvider] Unhid item (manual): $id');
+    } else {
+      manuallyHiddenIdsNotifier.add(id);
+      if (kDebugMode)
+        print('[toggleItemVisibilityProvider] Hid item (manual): $id');
+    }
+    // No need to update local state provider as we\'re using the persistent one directly
+  };
+}, name: 'toggleItemVisibilityProvider');
+
+// --- Derived Providers ---
+
+// Keep provider name filteredNotesProvider
 final filteredNotesProvider = Provider<List<NoteItem>>((ref) {
   final notesState = ref.watch(notesNotifierProvider);
   final filterKey = ref.watch(filterKeyProvider);
   final hidePinned = ref.watch(hidePinnedProvider);
-  final showHidden = ref.watch(showHiddenNotesProvider);
-  final manuallyHiddenIds = ref.watch(settings_p.manuallyHiddenNoteIdsProvider);
+  final showHidden = ref.watch(
+    showHiddenNotesProvider,
+  ); // Read the toggle state
+  final manuallyHiddenIds = ref.watch(
+    settings_p.manuallyHiddenNoteIdsProvider,
+  ); // Read manual hidden IDs
   final searchQuery = ref.watch(searchQueryProvider).trim().toLowerCase();
   final now = DateTime.now();
 
+  // 1. Apply primary filter (inbox/archive/tag) and hidePinned
   List<NoteItem> currentList =
       notesState.notes.where((note) {
         if (hidePinned && note.pinned) return false;
@@ -544,13 +589,13 @@ final filteredNotesProvider = Provider<List<NoteItem>>((ref) {
         bool matchesFilterKey = false;
         switch (filterKey) {
           case 'inbox':
-          case 'all':
+          case 'all': // Treat 'all' as non-archived for display
             matchesFilterKey = note.state != NoteState.archived;
             break;
           case 'archive':
             matchesFilterKey = note.state == NoteState.archived;
             break;
-          default:
+          default: // Assume it\'s a tag filter
             if (!['inbox', 'all', 'archive'].contains(filterKey)) {
               matchesFilterKey =
                   note.tags.contains(filterKey) &&
@@ -563,6 +608,7 @@ final filteredNotesProvider = Provider<List<NoteItem>>((ref) {
         return matchesFilterKey;
       }).toList();
 
+  // 2. Apply visibility filter (manual hide / future date) unless showHidden is true
   if (!showHidden) {
     currentList =
         currentList.where((note) {
@@ -572,14 +618,15 @@ final filteredNotesProvider = Provider<List<NoteItem>>((ref) {
           return !isManuallyHidden && !isFutureDated;
         }).toList();
     if (kDebugMode) {
-      // print('[filteredNotesProvider] Hiding hidden notes. Count after filter: \${currentList.length}');
+      // print('[filteredNotesProvider] Hiding hidden notes. Count after filter: ${currentList.length}');
     }
   } else {
     if (kDebugMode) {
-      // print('[filteredNotesProvider] Showing hidden notes. Count before search: \${currentList.length}');
+      // print('[filteredNotesProvider] Showing hidden notes. Count before search: ${currentList.length}');
     }
   }
 
+  // 3. Apply search query
   if (searchQuery.isNotEmpty) {
     final initialCount = currentList.length;
     currentList =
@@ -588,11 +635,12 @@ final filteredNotesProvider = Provider<List<NoteItem>>((ref) {
         }).toList();
     if (kDebugMode) {
       print(
-        '[filteredNotesProvider] Filtered by search query "\$searchQuery" from \$initialCount to \${currentList.length} notes.',
+        '[filteredNotesProvider] Filtered by search query "$searchQuery" from $initialCount to ${currentList.length} notes.',
       );
     }
   }
 
+  // 4. Sort final list (pinned first, then by update time descending)
   currentList.sort((a, b) {
     if (a.pinned != b.pinned) return a.pinned ? -1 : 1;
     final timeA = a.displayTime;
@@ -601,11 +649,12 @@ final filteredNotesProvider = Provider<List<NoteItem>>((ref) {
   });
 
   if (kDebugMode) {
-    // print('[filteredNotesProvider] Final sorted list count: \${currentList.length}');
+    // print('[filteredNotesProvider] Final sorted list count: ${currentList.length}');
   }
   return currentList;
 }, name: 'filteredNotesProvider');
 
+// Keep provider name hasSearchResultsProvider
 final hasSearchResultsProvider = Provider<bool>((ref) {
   final searchQuery = ref.watch(searchQueryProvider);
   final filteredNotes = ref.watch(filteredNotesProvider);
@@ -621,6 +670,7 @@ final archiveNoteProvider = Provider.family<Future<void> Function(), String>((
   return () async {
     final BaseApiService apiService = ref.read(api_p.apiServiceProvider);
     final currentSelectedId = ref.read(ui_providers.selectedItemIdProvider);
+    // Use filteredNotesProvider instead of visibleNotesListProvider
     final notesBeforeAction = ref.read(filteredNotesProvider);
     String? nextSelectedId = currentSelectedId;
 
@@ -661,6 +711,7 @@ final deleteNoteProvider = Provider.family<Future<void> Function(), String>((
     if (kDebugMode) print('[deleteNoteProvider] Deleting note: \$id');
     final BaseApiService apiService = ref.read(api_p.apiServiceProvider);
     final currentSelectedId = ref.read(ui_providers.selectedItemIdProvider);
+    // Use filteredNotesProvider instead of visibleNotesListProvider
     final notesBeforeAction = ref.read(filteredNotesProvider);
     String? nextSelectedId = currentSelectedId;
 
@@ -687,6 +738,7 @@ final deleteNoteProvider = Provider.family<Future<void> Function(), String>((
       await apiService.deleteNote(id);
       if (kDebugMode)
         print('[deleteNoteProvider] Successfully deleted note: \$id');
+      // Remove from the persistent hidden set if it was there
       ref.read(settings_p.manuallyHiddenNoteIdsProvider.notifier).remove(id);
     } catch (e, stackTrace) {
       if (kDebugMode) {
@@ -935,87 +987,6 @@ final moveNoteProvider = Provider.family<
     }
   };
 }, name: 'moveNoteProvider');
-
-// --- Item Visibility ---
-
-// REMOVED: hiddenItemIdsProvider (replaced by settings_provider.manuallyHiddenNoteIdsProvider)
-
-// Rename isNoteHiddenProvider to isItemHiddenProvider
-final isItemHiddenProvider = Provider.family<bool, String>((ref, id) {
-  // Use the new persistent provider from settings_provider
-  final hiddenItemIds = ref.watch(settings_p.manuallyHiddenNoteIdsProvider);
-  return hiddenItemIds.contains(id);
-}, name: 'isItemHiddenProvider');
-
-// Rename toggleNoteVisibilityProvider to toggleItemVisibilityProvider
-final toggleItemVisibilityProvider = Provider.family<void Function(), String>((
-  ref,
-  id,
-) {
-  return () {
-    // Use the new persistent provider's notifier
-    final manuallyHiddenIdsNotifier = ref.read(
-      settings_p.manuallyHiddenNoteIdsProvider.notifier,
-    );
-    final currentHiddenIds = ref.read(settings_p.manuallyHiddenNoteIdsProvider);
-
-    if (currentHiddenIds.contains(id)) {
-      manuallyHiddenIdsNotifier.remove(id);
-      if (kDebugMode)
-        print('[toggleItemVisibilityProvider] Unhid item (manual): \$id');
-    } else {
-      manuallyHiddenIdsNotifier.add(id);
-      if (kDebugMode)
-        print('[toggleItemVisibilityProvider] Hid item (manual): \$id');
-    }
-  };
-}, name: 'toggleItemVisibilityProvider');
-
-// --- Batch Operations ---
-
-enum BatchOperation { archive, delete, pin, unpin }
-
-final batchNoteOperationsProvider = Provider<
-  Future<void> Function(List<String> ids, BatchOperation operation)
->((ref) {
-  return (List<String> ids, BatchOperation operation) async {
-    if (ids.isEmpty) return;
-    if (kDebugMode)
-      print(
-        '[batchNoteOperationsProvider] Performing \$operation on \${ids.length} notes',
-      );
-    final BaseApiService apiService = ref.read(api_p.apiServiceProvider);
-
-    try {
-      await Future.wait(
-        ids.map((id) async {
-          switch (operation) {
-            case BatchOperation.archive:
-              await apiService.archiveNote(id);
-              break;
-            case BatchOperation.delete:
-              await apiService.deleteNote(id);
-              break;
-            case BatchOperation.pin:
-              await apiService.togglePinNote(id);
-              break;
-            case BatchOperation.unpin:
-              await apiService.togglePinNote(id);
-              break;
-          }
-        }),
-      );
-
-      await ref.read(notesNotifierProvider.notifier).refresh();
-    } catch (e, stackTrace) {
-      if (kDebugMode)
-        print(
-          '[batchNoteOperationsProvider] Error during batch operation: \$e\n\$stackTrace',
-        );
-      rethrow;
-    }
-  };
-}, name: 'batchNoteOperationsProvider');
 
 // --- Multi-Select ---
 

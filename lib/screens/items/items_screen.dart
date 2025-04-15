@@ -25,8 +25,8 @@ class ItemsScreen extends ConsumerStatefulWidget { // Renamed class
   ConsumerState<ItemsScreen> createState() => _ItemsScreenState(); // Renamed class
 }
 
-class _ItemsScreenState extends ConsumerState<ItemsScreen> // Renamed class
-    with KeyboardNavigationMixin<ItemsScreen> { // Renamed class
+class _ItemsScreenState extends ConsumerState<ItemsScreen>
+    with KeyboardNavigationMixin<ItemsScreen> {
   final FocusNode _focusNode = FocusNode();
   final ScrollController _scrollController = ScrollController();
 
@@ -55,14 +55,13 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen> // Renamed class
         padding: EdgeInsets.zero,
         onPressed: () {
           if (kDebugMode) {
-            print('[ItemsScreen] Exit multi-select via Cancel button'); // Updated log identifier
+            print('[ItemsScreen] Exit multi-select via Cancel button');
           }
-          // Use renamed provider from ui_providers
           ref.read(ui_providers.toggleItemMultiSelectModeProvider)();
         },
         child: const Icon(CupertinoIcons.clear),
       ),
-      middle: Text('$selectedCount Selected'), // Keep generic text
+      middle: Text('$selectedCount Selected'),
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -71,41 +70,12 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen> // Renamed class
             minSize: 0,
             onPressed: selectedCount > 0
                 ? () {
-                    // TODO: Implement multi-delete logic using batchNoteOperationsProvider
-                    showCupertinoDialog(
-                      context: context,
-                      builder: (context) => CupertinoAlertDialog(
-                        title: Text(
-                          'Delete $selectedCount Notes?', // Updated text
-                        ),
-                        content: const Text(
-                          'This action cannot be undone.',
-                        ),
-                        actions: [
-                          CupertinoDialogAction(
-                            child: const Text('Cancel'),
-                            onPressed: () => Navigator.pop(context),
-                          ),
-                          CupertinoDialogAction(
-                            isDestructiveAction: true,
-                            child: const Text('Delete'),
-                            onPressed: () {
-                              Navigator.pop(context);
-                              // Use renamed provider from ui_providers
-                              final ids = ref.read(ui_providers.selectedItemIdsForMultiSelectProvider).toList();
-                              ref.read(note_providers.batchNoteOperationsProvider)(ids, note_providers.BatchOperation.delete); // Use provider from note_providers
-                              // Use renamed provider from ui_providers
-                              ref.read(ui_providers.toggleItemMultiSelectModeProvider)(); // Exit multi-select mode
-                              if (kDebugMode) {
-                                print(
-                                        '[ItemsScreen] Multi-delete action triggered for IDs: ${ids.join(", ")}', // Updated log identifier
-                                );
-                              }
-                            },
-                          ),
-                        ],
-                      ),
-                    );
+                      // Removed unimplemented multi-delete logic
+                      if (kDebugMode) {
+                        print(
+                          '[ItemsScreen] Multi-delete action placeholder triggered for $selectedCount items.',
+                        );
+                      }
                   }
                 : null,
             child: Icon(
@@ -120,16 +90,11 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen> // Renamed class
             minSize: 0,
             onPressed: selectedCount > 0
                 ? () {
-                    // TODO: Implement multi-archive logic using batchNoteOperationsProvider
-                    // Use renamed provider from ui_providers
-                    final ids = ref.read(ui_providers.selectedItemIdsForMultiSelectProvider).toList();
-                    ref.read(note_providers.batchNoteOperationsProvider)(ids, note_providers.BatchOperation.archive); // Use provider from note_providers
-                    // Use renamed provider from ui_providers
-                    ref.read(ui_providers.toggleItemMultiSelectModeProvider)(); // Exit multi-select mode
+                      // Removed unimplemented multi-archive logic
                     if (kDebugMode) {
-                      print(
-                          '[ItemsScreen] Multi-archive action triggered for IDs: ${ids.join(", ")}', // Updated log identifier
-                      );
+                        print(
+                          '[ItemsScreen] Multi-archive action placeholder triggered for $selectedCount items.',
+                        );
                     }
                   }
                 : null,
@@ -145,18 +110,16 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen> // Renamed class
     );
   }
 
-  void _selectNextNote() { // Renamed method
-    // Use providers from note_providers and renamed ui_providers
+  void _selectNextNote() {
     final notes = ref.read(note_providers.filteredNotesProvider);
     if (kDebugMode) {
       print(
-        '[ItemsScreen _selectNextNote] Called. Filtered notes count: ${notes.length}', // Updated log identifier
+        '[ItemsScreen _selectNextNote] Called. Filtered notes count: ${notes.length}',
       );
     }
 
     if (notes.isEmpty) return;
 
-    // Use ui_providers.selectedItemIdProvider
     final currentId = ref.read(ui_providers.selectedItemIdProvider);
     int currentIndex = -1;
     if (currentId != null) {
@@ -166,29 +129,26 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen> // Renamed class
     final nextIndex = getNextIndex(currentIndex, notes.length);
 
     if (nextIndex != -1) {
-      final nextNoteId = notes[nextIndex].id; // Renamed variable
-      // Use ui_providers.selectedItemIdProvider
+      final nextNoteId = notes[nextIndex].id;
       ref.read(ui_providers.selectedItemIdProvider.notifier).state = nextNoteId;
       if (kDebugMode) {
         print(
-          '[ItemsScreen _selectNextNote] Updated selectedItemIdProvider to: $nextNoteId', // Updated log identifier
+          '[ItemsScreen _selectNextNote] Updated selectedItemIdProvider to: $nextNoteId',
         );
       }
     }
   }
 
-  void _selectPreviousNote() { // Renamed method
-    // Use providers from note_providers and renamed ui_providers
+  void _selectPreviousNote() {
     final notes = ref.read(note_providers.filteredNotesProvider);
     if (kDebugMode) {
       print(
-        '[ItemsScreen _selectPreviousNote] Called. Filtered notes count: ${notes.length}', // Updated log identifier
+        '[ItemsScreen _selectPreviousNote] Called. Filtered notes count: ${notes.length}',
       );
     }
 
     if (notes.isEmpty) return;
 
-    // Use ui_providers.selectedItemIdProvider
     final currentId = ref.read(ui_providers.selectedItemIdProvider);
     int currentIndex = -1;
     if (currentId != null) {
@@ -198,41 +158,37 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen> // Renamed class
     final prevIndex = getPreviousIndex(currentIndex, notes.length);
 
     if (prevIndex != -1) {
-      final prevNoteId = notes[prevIndex].id; // Renamed variable
-      // Use ui_providers.selectedItemIdProvider
+      final prevNoteId = notes[prevIndex].id;
       ref.read(ui_providers.selectedItemIdProvider.notifier).state = prevNoteId;
       if (kDebugMode) {
         print(
-          '[ItemsScreen _selectPreviousNote] Updated selectedItemIdProvider to: $prevNoteId', // Updated log identifier
+          '[ItemsScreen _selectPreviousNote] Updated selectedItemIdProvider to: $prevNoteId',
         );
       }
     }
   }
 
-  void _viewSelectedItem() { // Renamed method
-    // Use renamed provider from ui_providers
+  void _viewSelectedItem() {
     final selectedId = ref.read(ui_providers.selectedItemIdProvider);
     if (selectedId != null) {
       if (kDebugMode) {
-        print('[ItemsScreen] Viewing selected item: ID $selectedId'); // Updated log identifier
+        print('[ItemsScreen] Viewing selected item: ID $selectedId');
       }
       if (mounted) {
         Navigator.of(
           context,
           rootNavigator: true,
-        ).pushNamed('/item-detail', arguments: {'itemId': selectedId}); // Use new route and argument name
+        ).pushNamed('/item-detail', arguments: {'itemId': selectedId});
       }
     }
   }
 
   void _clearSelectionOrUnfocus() {
-    // Use renamed provider from ui_providers
     final selectedId = ref.read(ui_providers.selectedItemIdProvider);
     if (selectedId != null) {
       if (kDebugMode) {
-        print('[ItemsScreen] Clearing selection via Escape'); // Updated log identifier
+        print('[ItemsScreen] Clearing selection via Escape');
       }
-      // Use renamed provider from ui_providers
       ref.read(ui_providers.selectedItemIdProvider.notifier).state = null;
     } else {
       FocusScope.of(context).unfocus();
@@ -244,25 +200,25 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen> // Renamed class
 
     if (kDebugMode) {
       print(
-        '[ItemsScreen _handleKeyEvent] Received key: ${event.logicalKey.keyLabel}', // Updated log identifier
+        '[ItemsScreen _handleKeyEvent] Received key: ${event.logicalKey.keyLabel}',
       );
       print(
-        '[ItemsScreen _handleKeyEvent] FocusNode has focus: ${node.hasFocus}', // Updated log identifier
+        '[ItemsScreen _handleKeyEvent] FocusNode has focus: ${node.hasFocus}',
       );
     }
 
     final result = handleKeyEvent(
       event,
       ref,
-      onUp: _selectPreviousNote, // Use renamed method
-      onDown: _selectNextNote, // Use renamed method
-      onSubmit: _viewSelectedItem, // Use renamed method
+      onUp: _selectPreviousNote,
+      onDown: _selectNextNote,
+      onSubmit: _viewSelectedItem,
       onEscape: _clearSelectionOrUnfocus,
     );
 
     if (kDebugMode) {
       print(
-        '[ItemsScreen _handleKeyEvent] Mixin handleKeyEvent result: $result', // Updated log identifier
+        '[ItemsScreen _handleKeyEvent] Mixin handleKeyEvent result: $result',
       );
     }
     return result;
@@ -283,7 +239,7 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen> // Renamed class
     // Watch new providers for hidden notes
     final hiddenCount = ref.watch(note_providers.totalHiddenNoteCountProvider);
     final showHidden = ref.watch(showHiddenNotesProvider);
-    final theme = CupertinoTheme.of(context); // Get theme for button color
+    final theme = CupertinoTheme.of(context);
 
     return CupertinoPageScaffold(
       navigationBar: isMultiSelectMode
@@ -311,9 +267,12 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen> // Renamed class
                 children: [
                   CupertinoButton(
                     padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                    minSize: 0,
-                    // Use renamed provider from ui_providers
-                    onPressed: () => ref.read(ui_providers.toggleItemMultiSelectModeProvider)(),
+                      minSize: 0,
+                      onPressed:
+                          () =>
+                              ref.read(
+                                ui_providers.toggleItemMultiSelectModeProvider,
+                              )(),
                     child: const Icon(
                       CupertinoIcons.checkmark_seal,
                     ),
@@ -348,7 +307,8 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen> // Renamed class
                     CupertinoButton(
                       padding: const EdgeInsets.symmetric(horizontal: 8.0),
                       minSize: 0,
-                      onPressed: _showAdvancedFilterPanel,
+                      // FIX: Wrap the call in a lambda to match VoidCallback type
+                      onPressed: () => _showAdvancedFilterPanel(context),
                     child: const Icon(CupertinoIcons.tuningfork),
                   ),
                   CupertinoButton(
@@ -358,7 +318,7 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen> // Renamed class
                       Navigator.of(
                         context,
                         rootNavigator: true,
-                      ).pushNamed('/new-note'); // Use new route
+                        ).pushNamed('/new-note');
                     },
                     child: const Icon(CupertinoIcons.add),
                   ),
@@ -411,8 +371,6 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen> // Renamed class
                     ),
                   ),
                 ),
-              // Pass notesState and visibleNotes to the renamed body widget
-              // Pass the filtered notes directly to the body
               Expanded(child: _buildNotesList(notesState, visibleNotes)),
             ],
           ),
@@ -455,7 +413,7 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen> // Renamed class
         onValueChanged: (String? newPresetKey) {
           if (newPresetKey != null) {
             if (kDebugMode) {
-              print('[ItemsScreen] Quick filter selected: $newPresetKey'); // Updated log identifier
+              print('[ItemsScreen] Quick filter selected: $newPresetKey');
             }
             ref.read(quickFilterPresetProvider.notifier).state = newPresetKey;
             if (ref.read(rawCelFilterProvider).isNotEmpty) {
@@ -526,9 +484,9 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen> // Renamed class
         context: context,
         builder: (context) => CupertinoAlertDialog(
           title: const Text('No Servers'),
-          content: const Text(
-            'Please add a server configuration in Settings.',
-          ),
+              content: const Text(
+                'Please add a server configuration in Settings.',
+              ),
           actions: [
             CupertinoDialogAction(
               child: const Text('Settings'),
@@ -562,9 +520,9 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen> // Renamed class
             onPressed: () {
               if (!isActive) {
                 if (kDebugMode) {
-                  print(
-                    '[ItemsScreen] Setting active server to: ${server.name ?? server.id}', // Updated log identifier
-                  );
+                          print(
+                            '[ItemsScreen] Setting active server to: ${server.name ?? server.id}',
+                          );
                 }
                 notifier.setActiveServer(server.id);
               }
@@ -592,7 +550,7 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen> // Renamed class
 
     return CupertinoSearchTextField(
       controller: controller,
-      placeholder: 'Search notes...', // Updated placeholder
+      placeholder: 'Search notes...',
       style: TextStyle(color: CupertinoColors.label.resolveFrom(context)),
       decoration: BoxDecoration(
         color: CupertinoColors.systemFill.resolveFrom(context),
@@ -602,24 +560,22 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen> // Renamed class
         ref.read(searchQueryProvider.notifier).state = value;
         final isLocalSearch = ref.read(localSearchEnabledProvider);
         if (!isLocalSearch && value.isNotEmpty) {
-          // Use provider from note_providers
           ref.read(note_providers.notesNotifierProvider.notifier).refresh();
         }
       },
       onSubmitted: (value) {
         final isLocalSearch = ref.read(localSearchEnabledProvider);
         if (!isLocalSearch) {
-          // Use provider from note_providers
           ref.read(note_providers.notesNotifierProvider.notifier).refresh();
         }
       },
     );
   }
 
-  void _handleMoveNoteToServer(String noteId) { // Renamed method and parameter
+  void _handleMoveNoteToServer(String noteId) {
     if (kDebugMode) {
       print(
-        '[ItemsScreen] _handleMoveNoteToServer called for note ID: $noteId', // Updated log identifier
+        '[ItemsScreen] _handleMoveNoteToServer called for note ID: $noteId',
       );
     }
 
@@ -631,7 +587,7 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen> // Renamed class
 
     if (kDebugMode) {
       print(
-        '[ItemsScreen] Found ${availableTargetServers.length} target servers.', // Updated log identifier
+        '[ItemsScreen] Found ${availableTargetServers.length} target servers.',
       );
     }
 
@@ -641,7 +597,7 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen> // Renamed class
         builder: (ctx) => CupertinoAlertDialog(
           title: const Text('No Other Servers'),
           content: const Text(
-            'You need to configure at least one other server to move notes.', // Updated text
+                'You need to configure at least one other server to move notes.',
           ),
           actions: [
             CupertinoDialogAction(
@@ -658,15 +614,15 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen> // Renamed class
     showCupertinoModalPopup<ServerConfig>(
       context: context,
       builder: (sheetContext) => CupertinoActionSheet(
-        title: const Text('Move Note To...'), // Updated text
+            title: const Text('Move Note To...'),
         actions: availableTargetServers.map(
           (server) => CupertinoActionSheetAction(
             child: Text(server.name ?? server.serverUrl),
             onPressed: () {
               if (kDebugMode) {
-                print(
-                  '[ItemsScreen] Selected target server: ${server.name ?? server.id}', // Updated log identifier
-                );
+                            print(
+                              '[ItemsScreen] Selected target server: ${server.name ?? server.id}',
+                            );
               }
               Navigator.pop(sheetContext, server);
             },
@@ -681,10 +637,9 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen> // Renamed class
       if (selectedServer != null) {
         if (kDebugMode) {
           print(
-            '[ItemsScreen] Calling moveNoteProvider for note $noteId to server ${selectedServer.id}', // Updated log identifier
+            '[ItemsScreen] Calling moveNoteProvider for note $noteId to server ${selectedServer.id}',
           );
         }
-        // Use renamed params class and provider from note_providers
         final moveParams = note_providers.MoveNoteParams(
           noteId: noteId,
           targetServer: selectedServer,
@@ -693,18 +648,16 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen> // Renamed class
             .read(note_providers.moveNoteProvider(moveParams))()
             .then((_) {
           if (kDebugMode) {
-            print(
-              '[ItemsScreen] Move successful for note $noteId', // Updated log identifier
-            );
+                print('[ItemsScreen] Move successful for note $noteId');
           }
           if (mounted) {
             showCupertinoDialog(
               context: context,
               builder: (ctx) => CupertinoAlertDialog(
                 title: const Text('Move Successful'),
-                content: Text(
-                  'Note moved to ${selectedServer.name ?? selectedServer.serverUrl}.',
-                ),
+                        content: Text(
+                          'Note moved to ${selectedServer.name ?? selectedServer.serverUrl}.',
+                        ),
                 actions: [
                   CupertinoDialogAction(
                     isDefaultAction: true,
@@ -717,7 +670,7 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen> // Renamed class
           }
         }).catchError((error, stackTrace) {
           if (kDebugMode) {
-            print('[ItemsScreen] Move failed for note $noteId: $error'); // Updated log identifier
+                print('[ItemsScreen] Move failed for note $noteId: $error');
             print(stackTrace);
           }
           if (mounted) {
@@ -725,9 +678,9 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen> // Renamed class
               context: context,
               builder: (ctx) => CupertinoAlertDialog(
                 title: const Text('Move Failed'),
-                content: Text(
-                  'Could not move note. Error: ${error.toString()}',
-                ),
+                        content: Text(
+                          'Could not move note. Error: ${error.toString()}',
+                        ),
                 actions: [
                   CupertinoDialogAction(
                     isDefaultAction: true,
@@ -741,7 +694,7 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen> // Renamed class
         });
       } else {
         if (kDebugMode) {
-          print('[ItemsScreen] No target server selected.'); // Updated log identifier
+          print('[ItemsScreen] No target server selected.');
         }
       }
     });
@@ -753,13 +706,10 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen> // Renamed class
     note_providers.NotesState notesState,
     List<NoteItem> filteredNotes,
   ) {
-    // Pass the filtered notes down to the body
     return NotesListBody(
       scrollController: _scrollController,
       onMoveNoteToServer: _handleMoveNoteToServer,
-      // Pass the filtered notes list directly
       notes: filteredNotes,
-      // Pass the overall notes state for loading/error indicators
       notesState: notesState,
     );
   }
@@ -794,61 +744,71 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen> // Renamed class
 
   Future<void> _performFullReset() async {
     if (kDebugMode) {
-      print('[ItemsScreen] Starting full data reset...'); // Updated log identifier
+      print('[ItemsScreen] Starting full data reset...');
     }
     if (!mounted) {
-      if (kDebugMode) print('[ItemsScreen] Reset aborted: Widget unmounted before starting.'); // Updated log identifier
+      if (kDebugMode) {
+        print('[ItemsScreen] Reset aborted: Widget unmounted before starting.');
+      }
       return;
     }
     final cloudKitService = ref.read(cloudKitServiceProvider);
-    final multiServerNotifier = ref.read(multiServerConfigProvider.notifier);
-    final mcpServerNotifier = ref.read(mcpServerConfigProvider.notifier);
-    final todoistNotifier = ref.read(todoistApiKeyProvider.notifier);
-    final openAiKeyNotifier = ref.read(openAiApiKeyProvider.notifier);
-    final openAiModelNotifier = ref.read(openAiModelIdProvider.notifier);
-    final geminiNotifier = ref.read(geminiApiKeyProvider.notifier);
 
     bool cloudSuccess = true;
     String cloudErrorMessage = '';
 
     try {
-      if (kDebugMode) print('[ItemsScreen] Deleting CloudKit ServerConfig records...'); // Updated log identifier
+      if (kDebugMode) {
+        print('[ItemsScreen] Deleting CloudKit ServerConfig records...');
+      }
       bool deleteServersSuccess = await cloudKitService.deleteAllRecordsOfType('ServerConfig');
       if (!deleteServersSuccess) {
         cloudSuccess = false;
         cloudErrorMessage += 'Failed to delete ServerConfig records. ';
-        if (kDebugMode) print('[ItemsScreen] Failed CloudKit ServerConfig deletion.'); // Updated log identifier
+        if (kDebugMode) {
+          print('[ItemsScreen] Failed CloudKit ServerConfig deletion.');
+        }
       }
 
-      if (kDebugMode) print('[ItemsScreen] Deleting CloudKit McpServerConfig records...'); // Updated log identifier
+      if (kDebugMode) {
+        print('[ItemsScreen] Deleting CloudKit McpServerConfig records...');
+      }
       bool deleteMcpSuccess = await cloudKitService.deleteAllRecordsOfType('McpServerConfig');
       if (!deleteMcpSuccess) {
         cloudSuccess = false;
         cloudErrorMessage += 'Failed to delete McpServerConfig records. ';
-        if (kDebugMode) print('[ItemsScreen] Failed CloudKit McpServerConfig deletion.'); // Updated log identifier
+        if (kDebugMode) {
+          print('[ItemsScreen] Failed CloudKit McpServerConfig deletion.');
+        }
       }
 
-      if (kDebugMode) print('[ItemsScreen] Deleting CloudKit UserSettings record...'); // Updated log identifier
+      if (kDebugMode) {
+        print('[ItemsScreen] Deleting CloudKit UserSettings record...');
+      }
       bool deleteSettingsSuccess = await cloudKitService.deleteUserSettingsRecord();
       if (!deleteSettingsSuccess) {
         cloudSuccess = false;
         cloudErrorMessage += 'Failed to delete UserSettings record. ';
-        if (kDebugMode) print('[ItemsScreen] Failed CloudKit UserSettings deletion.'); // Updated log identifier
+        if (kDebugMode) {
+          print('[ItemsScreen] Failed CloudKit UserSettings deletion.');
+        }
       }
 
       if (!cloudSuccess) {
         if (kDebugMode) {
           print(
-            '[ItemsScreen] CloudKit deletion finished with errors: $cloudErrorMessage', // Updated log identifier
+            '[ItemsScreen] CloudKit deletion finished with errors: $cloudErrorMessage',
           );
         }
       } else {
-        if (kDebugMode) print('[ItemsScreen] CloudKit deletion finished successfully.'); // Updated log identifier
+        if (kDebugMode) {
+          print('[ItemsScreen] CloudKit deletion finished successfully.');
+        }
       }
     } catch (e, s) {
       if (kDebugMode) {
         print(
-          '[ItemsScreen] Critical error during CloudKit deletion phase: $e\n$s', // Updated log identifier
+          '[ItemsScreen] Critical error during CloudKit deletion phase: $e\n$s',
         );
       }
       cloudSuccess = false;
@@ -856,20 +816,29 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen> // Renamed class
           'A critical error occurred during CloudKit deletion: $e';
     }
 
+    final multiServerNotifier = ref.read(multiServerConfigProvider.notifier);
+    final mcpServerNotifier = ref.read(mcpServerConfigProvider.notifier);
+    final todoistNotifier = ref.read(todoistApiKeyProvider.notifier);
+    final openAiKeyNotifier = ref.read(openAiApiKeyProvider.notifier);
+    final openAiModelNotifier = ref.read(openAiModelIdProvider.notifier);
+    final geminiNotifier = ref.read(geminiApiKeyProvider.notifier);
+
     try {
-      if (kDebugMode) print('[ItemsScreen] Resetting local notifiers and cache...'); // Updated log identifier
+      if (kDebugMode) {
+        print('[ItemsScreen] Resetting local notifiers and cache...');
+      }
       await multiServerNotifier.resetStateAndCache();
       await mcpServerNotifier.resetStateAndCache();
       await todoistNotifier.clear();
       await openAiKeyNotifier.clear();
       await openAiModelNotifier.clear();
       await geminiNotifier.clear();
-      if (kDebugMode) print('[ItemsScreen] Local reset finished.'); // Updated log identifier
+      if (kDebugMode) {
+        print('[ItemsScreen] Local reset finished.');
+      }
     } catch (e, s) {
       if (kDebugMode) {
-        print(
-          '[ItemsScreen] Error during local notifier reset phase: $e\n$s', // Updated log identifier
-        );
+        print('[ItemsScreen] Error during local notifier reset phase: $e\n$s');
       }
       if (cloudErrorMessage.isNotEmpty) {
         cloudErrorMessage += '\nAn error also occurred during local data reset.';
@@ -898,11 +867,15 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen> // Renamed class
                 if (mounted) {
                   ref.invalidate(loadServerConfigProvider);
                   if (kDebugMode) {
-                    print('[ItemsScreen] Reset complete. Invalidated loadServerConfigProvider.'); // Updated log identifier
+                        print(
+                          '[ItemsScreen] Reset complete. Invalidated loadServerConfigProvider.',
+                        );
                   }
                 } else {
                   if (kDebugMode) {
-                    print('[ItemsScreen] Widget unmounted before invalidating loadServerConfigProvider.'); // Updated log identifier
+                        print(
+                          '[ItemsScreen] Widget unmounted before invalidating loadServerConfigProvider.',
+                        );
                   }
                 }
               },
@@ -912,7 +885,9 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen> // Renamed class
       );
     } else {
       if (kDebugMode) {
-        print('[ItemsScreen] Widget unmounted before final reset dialog could be shown.'); // Updated log identifier
+        print(
+          '[ItemsScreen] Widget unmounted before final reset dialog could be shown.',
+        );
       }
     }
   }

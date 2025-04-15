@@ -76,12 +76,11 @@ final manuallyHiddenNoteIdsProvider =
     StateNotifierProvider<PersistentSetNotifier<String>, Set<String>>(
       (ref) => PersistentSetNotifier<String>(
         ref,
-        {}, // Initial empty set
+        <String>{}, // Initial empty set
         PreferenceKeys.manuallyHiddenNoteIds,
       ),
       name: 'manuallyHiddenNoteIdsProvider',
     );
-
 
 /// A StateNotifier that persists string values to SharedPreferences
 class PersistentStringNotifier extends StateNotifier<String> {
@@ -397,7 +396,7 @@ class PersistentSetNotifier<T> extends StateNotifier<Set<T>> {
     await _lock.synchronized(() async {
       if (_initialized) return; // Double check inside lock
 
-      Set<T> loadedState = {};
+      Set<T> loadedState = <T>{};
       String? secureValue;
       String? cloudValueJson;
 
@@ -532,7 +531,8 @@ class PersistentSetNotifier<T> extends StateNotifier<Set<T>> {
   Future<bool> clear() async {
     return _lock.synchronized(() async {
       if (state.isNotEmpty) {
-        const newState = <T>{};
+        // FIX: Cannot use const with type parameter T
+        final newState = <T>{};
         if (mounted) {
           state = newState;
         } else {

@@ -949,12 +949,8 @@ class _SyntaxHighlightTextFieldState extends State<SyntaxHighlightTextField> {
     final Color keywordColor = CupertinoColors.systemBlue.resolveFrom(context);
     final Color stringColor = CupertinoColors.systemGreen.resolveFrom(context);
     final Color normalColor = CupertinoColors.label.resolveFrom(context);
-    final Color functionColor = CupertinoColors.systemPurple.resolveFrom(
-      context,
-    );
-    final Color commentColor = CupertinoColors.secondaryLabel.resolveFrom(
-      context,
-    );
+    final Color functionColor = CupertinoColors.systemPurple.resolveFrom(context);
+    final Color commentColor = CupertinoColors.secondaryLabel.resolveFrom(context);
     final Color numberColor = CupertinoColors.systemRed.resolveFrom(context);
 
     final operatorRegex = RegExp(r'&&|\|\||!|==|!=|<=|>=|<|>|\bin\b');
