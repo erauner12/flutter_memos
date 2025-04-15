@@ -663,16 +663,29 @@ class CloudKitService {
   Map<String, String> _workbenchItemReferenceToMap(
     WorkbenchItemReference item,
   ) {
-    return {
+    final map = {
+      // 'id' is the recordName, not stored as a field
       'referencedItemId': item.referencedItemId,
-      'referencedItemType': item.referencedItemType.name,
+      'referencedItemType':
+          item.referencedItemType.name, // Store enum name as String
       'serverId': item.serverId,
-      'serverType': item.serverType.name,
-      'serverName': item.serverName ?? '',
-      'previewContent': item.previewContent ?? '',
-      'addedTimestamp': item.addedTimestamp.toIso8601String(),
-      'lastOpenedTimestamp': item.lastOpenedTimestamp?.toIso8601String() ?? '',
+      'serverType': item.serverType.name, // Store enum name as String
+      'serverName':
+          item.serverName ?? '', // Store String, default to empty if null
+      'previewContent':
+          item.previewContent ?? '', // Store String, default to empty if null
+      'addedTimestamp':
+          item.addedTimestamp.toIso8601String(), // Store DateTime as ISO String
+      // Add parentNoteId if needed in the future
+      // 'parentNoteId': item.parentNoteId ?? '',
     };
+
+    // Conditionally add lastOpenedTimestamp only if it's not null
+    if (item.lastOpenedTimestamp != null) {
+      map['lastOpenedTimestamp'] = item.lastOpenedTimestamp!.toIso8601String();
+    }
+
+    return map;
   }
 
   /// Convert CloudKit record data (`Map<String, dynamic>`) back to a WorkbenchItemReference object.
@@ -762,27 +775,32 @@ class CloudKitService {
     try {
       final Map<String, String> mapData = _workbenchItemReferenceToMap(item);
       if (kDebugMode) {
+        // Log the exact data being sent
         print(
-          '[CloudKitService] Saving WorkbenchItemReference (ID: \${item.id}) to CloudKit with data: \$mapData',
+          '[CloudKitService] Saving WorkbenchItemReference (ID: ${item.id}) to CloudKit with data: $mapData',
         );
       }
       await _cloudKit.saveRecord(
         scope: CloudKitDatabaseScope.private,
         recordType: _workbenchItemReferenceRecordType,
-        recordName: item.id,
-        record: mapData,
+        recordName:
+            item.id, // Use WorkbenchItemReference\'s ID as the CloudKit recordName
+        record: mapData, // Pass the Map<String, String>
       );
       if (kDebugMode) {
         print(
-          '[CloudKitService] Saved WorkbenchItemReference (ID: \${item.id}) successfully.',
+          '[CloudKitService] Saved WorkbenchItemReference (ID: ${item.id}) successfully.',
         );
       }
       return true;
     } catch (e) {
+      // Removed unused stack trace variable 's'
+      // Add stack trace logging if needed, but variable 's' is removed if unused
       if (kDebugMode) {
         print(
-          '[CloudKitService] Error saving WorkbenchItemReference (ID: \${item.id}): \$e',
+          '[CloudKitService] Error saving WorkbenchItemReference (ID: ${item.id}): $e', // Log error only
         );
+        // If stack trace is needed: print('[CloudKitService] Error saving WorkbenchItemReference (ID: ${item.id}): $e\n$s');
       }
       return false;
     }
@@ -865,34 +883,52 @@ class CloudKitService {
     try {
       if (kDebugMode) {
         print(
-          '[CloudKitService] Updating lastOpenedTimestamp for WorkbenchItemReference (ID: \$referenceId)...',
+          '[CloudKitService] Updating lastOpenedTimestamp for WorkbenchItemReference (ID: $referenceId)...',
         );
       }
+      // 1. Fetch the existing record.
       final CloudKitRecord ckRecord = await _cloudKit.getRecord(
         scope: CloudKitDatabaseScope.private,
         recordName: referenceId,
       );
+
+      // 2. Convert fetched values (Map<String, dynamic>) to Map<String, String>
+      //    Handle potential null values during conversion.
       final Map<String, String> dataToSave = ckRecord.values.map(
         (key, value) => MapEntry(key, value?.toString() ?? ''),
       );
-      dataToSave['lastOpenedTimestamp'] = DateTime.now().toIso8601String();
+      // Update the timestamp field with an ISO 8601 string.
+      dataToSave['lastOpenedTimestamp'] =
+          DateTime.now().toIso8601String(); // Use ISO String
+
+      if (kDebugMode) {
+        print(
+          '[CloudKitService] updateWorkbenchItemLastOpened: Saving data: $dataToSave',
+        );
+      }
+
+      // 3. Save the record with the modified Map<String, String>.
       await _cloudKit.saveRecord(
         scope: CloudKitDatabaseScope.private,
         recordType: _workbenchItemReferenceRecordType,
-        recordName: referenceId,
-        record: dataToSave,
+        recordName: referenceId, // Use the ID as the record name
+        record: dataToSave, // Save the map with the updated timestamp string
       );
+
       if (kDebugMode) {
         print(
-          '[CloudKitService] Updated lastOpenedTimestamp for WorkbenchItemReference (ID: \$referenceId) successfully.',
+          '[CloudKitService] Updated lastOpenedTimestamp for WorkbenchItemReference (ID: $referenceId) successfully.',
         );
       }
       return true;
     } catch (e) {
+      // Removed unused stack trace variable 's'
+      // Log specific CloudKit errors if possible
       if (kDebugMode) {
         print(
-          '[CloudKitService] Error updating lastOpenedTimestamp for WorkbenchItemReference (ID: \$referenceId): \$e',
+          '[CloudKitService] Error updating lastOpenedTimestamp for WorkbenchItemReference (ID: $referenceId): $e', // Log error only
         );
+        // If stack trace is needed: print('[CloudKitService] Error updating lastOpenedTimestamp for WorkbenchItemReference (ID: $referenceId): $e\n$s');
       }
       return false;
     }
