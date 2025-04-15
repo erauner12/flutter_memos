@@ -35,33 +35,33 @@ class HomeScreen extends ConsumerWidget {
         switch (index) {
           case 0:
             return CupertinoTabView(
-              builder: (context) {
-                // MemosScreen likely needs its own Scaffold/NavBar if it manages its own title etc.
-                // Keep this structure for MemosScreen for now.
-                return const CupertinoPageScaffold(
-                  child: ItemsScreen(),
-                ); // Use ItemsScreen
+              onGenerateRoute: (RouteSettings settings) {
+                return CupertinoPageRoute(
+                  settings: settings,
+                  builder: (context) => const ItemsScreen(),
+                );
               },
             );
-          case 1: // New index for Chat tab
+          case 1:
             return CupertinoTabView(
-              builder: (context) {
-                // Wrap ChatScreen in CupertinoPageScaffold to ensure Navigator has a route
-                return const CupertinoPageScaffold(child: ChatScreen());
+              onGenerateRoute: (RouteSettings settings) {
+                return CupertinoPageRoute(
+                  settings: settings,
+                  builder: (context) => const ChatScreen(),
+                );
               },
             );
-          case 2: // Updated index for Settings tab
-            // Simplify the Settings tab - remove nested Scaffold/NavBar
+          case 2:
             return CupertinoTabView(
-              builder: (context) {
-                // Wrap SettingsScreen in CupertinoPageScaffold to ensure Navigator has a route
-                return const CupertinoPageScaffold(
-                  child: SettingsScreen(isInitialSetup: false),
+              onGenerateRoute: (RouteSettings settings) {
+                return CupertinoPageRoute(
+                  settings: settings,
+                  builder:
+                      (context) => const SettingsScreen(isInitialSetup: false),
                 );
               },
             );
           default:
-            // Should not happen with 3 tabs, but good practice
             return const SizedBox.shrink();
         }
       },
