@@ -48,37 +48,26 @@ class WorkbenchState {
 class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
   final Ref _ref;
   late final CloudKitService _cloudKitService;
-  // Keep track if initial load was triggered by constructor
-  bool _initialLoadTriggered = false;
+  // Remove _initialLoadTriggered flag
+  // bool _initialLoadTriggered = false;
 
-  WorkbenchNotifier(this._ref, {bool loadOnInit = true})
-    : super(const WorkbenchState(isLoading: false)) {
-    // Default isLoading to false
+  // Remove loadOnInit parameter and automatic call
+  WorkbenchNotifier(this._ref) : super(const WorkbenchState(isLoading: false)) {
+    // Always start with isLoading: false
     _cloudKitService = _ref.read(cloudKitServiceProvider);
-    if (loadOnInit) {
-      _initialLoadTriggered = true;
-      // Use unawaited only if loading on init
-      unawaited(loadItems());
-    }
+    // DO NOT call loadItems automatically here
   }
 
   Future<void> loadItems() async {
-    // Prevent concurrent loads, especially during init vs manual refresh
+    // Prevent concurrent loads
     if (state.isLoading) return;
-
     if (!mounted) return;
-    // Set loading true only if not the initial auto-load or if already loaded once
-    final bool setLoading =
-        !_initialLoadTriggered || state.items.isNotEmpty || state.error != null;
-    if (setLoading) {
-      state = state.copyWith(isLoading: true, clearError: true);
-    } else {
-      // For the very first auto-load, clear error but don't show loading indicator yet
-      state = state.copyWith(clearError: true);
-    }
 
-    // Mark that a load attempt has happened
-    _initialLoadTriggered = true;
+    // Always set loading true when manually called
+    state = state.copyWith(isLoading: true, clearError: true);
+
+    // Remove _initialLoadTriggered logic
+
 
     try {
       final items = await _cloudKitService.getAllWorkbenchItemReferences();
@@ -102,10 +91,11 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
     }
   }
 
+  // --- addItem ---
   Future<void> addItem(WorkbenchItemReference item) async {
     if (!mounted) return;
 
-    // --- Check for Duplicates ---
+    // Check for Duplicates
     final exists = state.items.any((existingItem) =>
         existingItem.referencedItemId == item.referencedItemId &&
         existingItem.serverId == item.serverId);
@@ -116,17 +106,12 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
           '[WorkbenchNotifier] Item with referencedItemId ${item.referencedItemId} on server ${item.serverId} already exists. Skipping add.',
         );
       }
-      // Optionally: Show a message to the user via a different mechanism
-      // (e.g., return false, throw specific exception, use a separate state field)
-      // For now, just silently prevent the duplicate add.
       return;
     }
-    // --- End Check for Duplicates ---
 
-
-    // Optimistic Update (only if not a duplicate)
-    final optimisticItems = List<WorkbenchItemReference>.from(state.items)..add(item);
-    // Sort by default order (newest first) after adding
+    // Optimistic Update
+    final optimisticItems = List<WorkbenchItemReference>.from(state.items)
+      ..add(item);
     optimisticItems.sort((a, b) => b.addedTimestamp.compareTo(a.addedTimestamp));
     state = state.copyWith(items: optimisticItems);
     if (kDebugMode) {
@@ -138,8 +123,7 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
       if (!success) {
         throw Exception('Failed to save item to CloudKit');
       }
-      // If successful, state is already correct
-       if (kDebugMode) {
+      if (kDebugMode) {
          print('[WorkbenchNotifier] Successfully saved item ${item.id} to CloudKit.');
        }
     } catch (e, s) {
@@ -149,8 +133,7 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
       // Revert optimistic update on failure
       if (mounted) {
         final revertedItems = state.items.where((i) => i.id != item.id).toList();
-        // No need to re-sort here as we just removed the optimistically added one
-        state = state.copyWith(items: revertedItems, error: e); // Keep the error state
+        state = state.copyWith(items: revertedItems, error: e);
          if (kDebugMode) {
            print('[WorkbenchNotifier] Reverted optimistic add for item: ${item.id}');
          }
@@ -158,27 +141,26 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
     }
   }
 
+  // --- removeItem ---
   Future<void> removeItem(String referenceId) async {
     if (!mounted) return;
 
     WorkbenchItemReference? originalItem;
     final optimisticItems = state.items.where((i) {
       if (i.id == referenceId) {
-        originalItem = i; // Keep track of the item being removed
-        return false; // Exclude the item
+            originalItem = i;
+            return false;
       }
       return true;
     }).toList();
 
-    // Check if the item was actually found and removed
     if (originalItem == null) {
        if (kDebugMode) {
          print('[WorkbenchNotifier] Item $referenceId not found for removal.');
        }
-      return; // Item wasn't in the list, nothing to do
+      return;
     }
 
-    // Add logging here
     if (kDebugMode) {
       print('[WorkbenchNotifier] Attempting to remove item with reference ID: $referenceId');
       print('[WorkbenchNotifier] Found item to remove: ${originalItem.toString()}');
@@ -193,13 +175,10 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
     try {
       final success = await _cloudKitService.deleteWorkbenchItemReference(referenceId);
       if (!success) {
-        // Even if CloudKit reports failure (e.g., already deleted), keep the optimistic removal
         if (kDebugMode) {
           print('[WorkbenchNotifier] CloudKit delete reported failure for $referenceId, but keeping optimistic removal.');
         }
-        // Optionally, re-fetch from CloudKit here to be absolutely sure, but might be overkill
       } else {
-        // If successful, state is already correct
         if (kDebugMode) {
           print('[WorkbenchNotifier] Successfully deleted item $referenceId from CloudKit.');
         }
@@ -208,15 +187,14 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
       if (kDebugMode) {
         print('[WorkbenchNotifier] Error deleting item $referenceId from CloudKit: $e\n$s');
       }
-      // Revert optimistic update ONLY if CloudKit deletion fails AND the item still exists locally
-      // (It might have been removed by another device in the meantime)
+      // Revert optimistic update ONLY if CloudKit deletion fails
       if (mounted && originalItem != null) {
         // Check if the item is *still* gone from the current state before reverting
         if (!state.items.any((i) => i.id == referenceId)) {
-          final revertedItems = List<WorkbenchItemReference>.from(state.items)..add(originalItem!);
-          // Sort by default order (newest first) after reverting
+          final revertedItems = List<WorkbenchItemReference>.from(state.items)
+            ..add(originalItem!);
           revertedItems.sort((a, b) => b.addedTimestamp.compareTo(a.addedTimestamp));
-          state = state.copyWith(items: revertedItems, error: e); // Keep the error state
+          state = state.copyWith(items: revertedItems, error: e);
           if (kDebugMode) {
             print('[WorkbenchNotifier] Reverted optimistic remove for item: $referenceId due to CloudKit error.');
           }
@@ -229,40 +207,58 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
     }
   }
 
-  /// Reorders items locally based on user drag-and-drop.
-  /// This change is not persisted to CloudKit.
+  // --- reorderItems ---
   void reorderItems(int oldIndex, int newIndex) {
     if (!mounted) return;
     if (oldIndex < 0 || oldIndex >= state.items.length) return;
+    // Allow inserting at the very end (index == length)
     if (newIndex < 0 || newIndex > state.items.length) {
-      return; // Allow inserting at the end
+      return;
     }
 
     final List<WorkbenchItemReference> currentItems = List.from(state.items);
 
-    // Adjust newIndex if item is moved downwards in the list
-    if (oldIndex < newIndex) {
-      newIndex -= 1;
+    // Adjust newIndex if item is moved downwards in the list before removal
+    final int effectiveNewIndex =
+        (oldIndex < newIndex) ? newIndex - 1 : newIndex;
+
+    // Ensure effectiveNewIndex is within bounds after potential adjustment
+    if (effectiveNewIndex < 0 || effectiveNewIndex > currentItems.length - 1) {
+      // This case handles moving the single item to index 1 when length is 1,
+      // or other edge cases resulting from the adjustment.
+      // If moving to the end, newIndex == length, effectiveNewIndex == length - 1.
+      if (newIndex == currentItems.length && oldIndex < newIndex) {
+        // This is okay, it means move to the end.
+      } else {
+        if (kDebugMode) {
+          print(
+            '[WorkbenchNotifier] Invalid effectiveNewIndex $effectiveNewIndex after adjustment. old=$oldIndex, new=$newIndex, len=${currentItems.length}',
+          );
+        }
+        return; // Avoid index out of bounds after adjustment
+      }
     }
 
+
     final WorkbenchItemReference item = currentItems.removeAt(oldIndex);
-    currentItems.insert(newIndex, item);
+    // Insert at the potentially adjusted index
+    // If newIndex was length, effectiveNewIndex is length-1, insert happens correctly after removal.
+    currentItems.insert(effectiveNewIndex, item);
+
 
     state = state.copyWith(items: currentItems);
     if (kDebugMode) {
       print(
-        '[WorkbenchNotifier] Reordered items locally. Moved item from $oldIndex to $newIndex.',
+        '[WorkbenchNotifier] Reordered items locally. Moved item from $oldIndex to $effectiveNewIndex (original newIndex: $newIndex).',
       );
     }
   }
 
-  /// Resets the item order to the default (newest added first).
-  /// This change is not persisted to CloudKit.
+  // --- resetOrder ---
   void resetOrder() {
     if (!mounted) return;
 
     final List<WorkbenchItemReference> currentItems = List.from(state.items);
-    // Apply default sort: newest added first
     currentItems.sort((a, b) => b.addedTimestamp.compareTo(a.addedTimestamp));
 
     state = state.copyWith(items: currentItems);
@@ -273,10 +269,11 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
 
 } // End of WorkbenchNotifier class
 
-// Provider definition remains the same
+// Provider definition - constructor signature changed
 final workbenchProvider = StateNotifierProvider<WorkbenchNotifier, WorkbenchState>((ref) {
-  // Pass loadOnInit: true for normal operation
-  final notifier = WorkbenchNotifier(ref, loadOnInit: true);
-  // Initial load is now handled within the constructor if loadOnInit is true
+      // Constructor no longer takes loadOnInit
+      final notifier = WorkbenchNotifier(ref);
+      // IMPORTANT: The application UI (e.g., WorkbenchScreen) will now need
+      // to trigger the initial loadItems call if it wasn't already.
   return notifier;
 });
