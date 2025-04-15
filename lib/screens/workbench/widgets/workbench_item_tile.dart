@@ -60,7 +60,6 @@ class WorkbenchItemTile extends ConsumerWidget {
     final preview = itemReference.previewContent ?? 'No preview available';
     final serverDisplayName =
         itemReference.serverName ?? itemReference.serverId;
-    // Use relative time formatting
     final addedRelative = _formatRelativeTime(
       itemReference.addedTimestamp.toLocal(),
     );
@@ -68,134 +67,149 @@ class WorkbenchItemTile extends ConsumerWidget {
       itemReference.overallLastUpdateTime.toLocal(),
     );
 
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: CupertinoColors.systemGroupedBackground.resolveFrom(context),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: CupertinoColors.separator.resolveFrom(context),
-          width: 0.7,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: CupertinoColors.black.withOpacity(0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+    // Get the current active serverId
+    final activeServer = ref.watch(activeServerConfigProvider);
+    final isOnActiveServer = activeServer?.id == itemReference.serverId;
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () {
+        if (isOnActiveServer) {
+          _navigateToItem(context, ref, itemReference);
+        } else {
+          _showServerSwitchRequiredDialog(context, ref, itemReference);
+        }
+      },
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: CupertinoColors.systemGroupedBackground.resolveFrom(context),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: CupertinoColors.separator.resolveFrom(context),
+            width: 0.7,
           ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(top: 2.0, right: 10),
-                child: Icon(
-                  _getItemTypeIcon(itemReference.referencedItemType),
-                  color: theme.primaryColor,
-                  size: 24,
+          boxShadow: [
+            BoxShadow(
+              color: CupertinoColors.black.withOpacity(0.04),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(top: 2.0, right: 10),
+                  child: Icon(
+                    _getItemTypeIcon(itemReference.referencedItemType),
+                    color: theme.primaryColor,
+                    size: 24,
+                  ),
                 ),
-              ),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        preview,
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Server: $serverDisplayName • Added: $addedRelative',
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          color: CupertinoColors.secondaryLabel.resolveFrom(
+                            context,
+                          ),
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Last activity: $lastActivityRelative',
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          color: CupertinoColors.secondaryLabel.resolveFrom(
+                            context,
+                          ),
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+                // Trailing actions
+                Column(
+                  mainAxisAlignment: MainAxisAlignment.end,
                   children: [
-                    Text(
-                      preview,
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
+                    Icon(
+                      _getServerTypeIcon(itemReference.serverType),
+                      size: 18,
+                      color: CupertinoColors.tertiaryLabel.resolveFrom(context),
                     ),
-                    const SizedBox(height: 6),
-                    Text(
-                      'Server: $serverDisplayName • Added: $addedRelative',
-                      style: TextStyle(
-                        fontSize: 12.5,
-                        color: CupertinoColors.secondaryLabel.resolveFrom(
-                          context,
-                        ),
+                    const SizedBox(height: 8),
+                    CupertinoButton(
+                      padding: const EdgeInsets.all(4.0),
+                      minSize: 0,
+                      child: const Icon(
+                        CupertinoIcons.clear_circled,
+                        size: 20,
+                        color: CupertinoColors.systemGrey,
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Last activity: $lastActivityRelative',
-                      style: TextStyle(
-                        fontSize: 12.5,
-                        color: CupertinoColors.secondaryLabel.resolveFrom(
-                          context,
-                        ),
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                      onPressed: () {
+                        showCupertinoDialog(
+                          context: context,
+                          builder:
+                              (dialogContext) => CupertinoAlertDialog(
+                                title: const Text('Remove from Workbench?'),
+                                content: Text(
+                                  'Remove "${preview.substring(0, preview.length > 30 ? 30 : preview.length)}..." from your Workbench?',
+                                ),
+                                actions: [
+                                  CupertinoDialogAction(
+                                    child: const Text('Cancel'),
+                                    onPressed:
+                                        () => Navigator.pop(dialogContext),
+                                  ),
+                                  CupertinoDialogAction(
+                                    isDestructiveAction: true,
+                                    child: const Text('Remove'),
+                                    onPressed: () {
+                                      Navigator.pop(dialogContext);
+                                      unawaited(
+                                        ref
+                                            .read(workbenchProvider.notifier)
+                                            .removeItem(itemReference.id),
+                                      );
+                                    },
+                                  ),
+                                ],
+                              ),
+                        );
+                      },
                     ),
                   ],
                 ),
-              ),
-              // Trailing actions
-              Column(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  Icon(
-                    _getServerTypeIcon(itemReference.serverType),
-                    size: 18,
-                    color: CupertinoColors.tertiaryLabel.resolveFrom(context),
-                  ),
-                  const SizedBox(height: 8),
-                  CupertinoButton(
-                    padding: const EdgeInsets.all(4.0),
-                    minSize: 0,
-                    child: const Icon(
-                      CupertinoIcons.clear_circled,
-                      size: 20,
-                      color: CupertinoColors.systemGrey,
-                    ),
-                    onPressed: () {
-                      showCupertinoDialog(
-                        context: context,
-                        builder:
-                            (dialogContext) => CupertinoAlertDialog(
-                              title: const Text('Remove from Workbench?'),
-                              content: Text(
-                                'Remove "${preview.substring(0, preview.length > 30 ? 30 : preview.length)}..." from your Workbench?',
-                              ),
-                              actions: [
-                                CupertinoDialogAction(
-                                  child: const Text('Cancel'),
-                                  onPressed: () => Navigator.pop(dialogContext),
-                                ),
-                                CupertinoDialogAction(
-                                  isDestructiveAction: true,
-                                  child: const Text('Remove'),
-                                  onPressed: () {
-                                    Navigator.pop(dialogContext);
-                                    unawaited(
-                                      ref
-                                          .read(workbenchProvider.notifier)
-                                          .removeItem(itemReference.id),
-                                    );
-                                  },
-                                ),
-                              ],
-                            ),
-                      );
-                    },
-                  ),
-                ],
-              ),
-            ],
-          ),
-          // Threaded comment preview
-          _buildCommentPreview(context, itemReference.latestComment),
-        ],
+              ],
+            ),
+            // Threaded comment preview
+            _buildCommentPreview(context, itemReference.latestComment),
+          ],
+        ),
       ),
     );
   }
@@ -305,5 +319,68 @@ class WorkbenchItemTile extends ConsumerWidget {
         }
         break;
     }
+  }
+
+  // Add this method back below _navigateToItem:
+
+  void _showServerSwitchRequiredDialog(
+    BuildContext context,
+    WidgetRef ref,
+    WorkbenchItemReference itemRef,
+  ) {
+    showCupertinoDialog(
+      context: context,
+      builder:
+          (dialogContext) => CupertinoAlertDialog(
+            title: const Text('Server Switch Required'),
+            content: Text(
+              'This item is on server "${itemRef.serverName ?? itemRef.serverId}". Switch to this server to view the item?',
+            ),
+            actions: [
+              CupertinoDialogAction(
+                child: const Text('Cancel'),
+                onPressed: () => Navigator.pop(dialogContext),
+              ),
+              CupertinoDialogAction(
+                isDefaultAction: true,
+                child: const Text('Switch & View'),
+                onPressed: () async {
+                  Navigator.pop(dialogContext);
+                  // --- Actual Switch Logic ---
+                  ref
+                      .read(multiServerConfigProvider.notifier)
+                      .setActiveServer(itemRef.serverId);
+                  final completer = Completer<void>();
+                  ProviderSubscription<ServerConfig?>? sub;
+                  ref.listen<ServerConfig?>(
+                    activeServerConfigProvider,
+                    (prev, next, subscription) {
+                          sub = subscription;
+                          if (next?.id == itemRef.serverId &&
+                              !completer.isCompleted) {
+                            completer.complete();
+                          }
+                        }
+                        as void Function(
+                          ServerConfig? previous,
+                          ServerConfig? next,
+                        ),
+                  );
+                  try {
+                    await completer.future.timeout(const Duration(seconds: 3));
+                    if (context.mounted) {
+                      _navigateToItem(context, ref, itemRef);
+                    }
+                  } catch (e) {
+                    // Optionally show an error message to the user
+                  } finally {
+                    sub?.close();
+                  }
+                  // --- End Switch Logic ---
+                },
+              ),
+            ],
+          ),
+    );
   }
 }
