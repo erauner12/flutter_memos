@@ -54,7 +54,8 @@ class NotesState {
   }) {
     return NotesState(
       notes: notes ?? this.notes,
-      nextPageToken: clearNextPageToken ? null : (nextPageToken ?? this.nextPageToken),
+      nextPageToken:
+          clearNextPageToken ? null : (nextPageToken ?? this.nextPageToken),
       isLoading: isLoading ?? this.isLoading,
       isLoadingMore: isLoadingMore ?? this.isLoadingMore,
       error: clearError ? null : (error ?? this.error),
@@ -101,8 +102,8 @@ class NotesNotifier extends StateNotifier<NotesState> {
   final bool _skipInitialFetchForTesting;
 
   NotesNotifier(this._ref, {bool skipInitialFetchForTesting = false})
-      : _skipInitialFetchForTesting = skipInitialFetchForTesting,
-        super(const NotesState(isLoading: true)) {
+    : _skipInitialFetchForTesting = skipInitialFetchForTesting,
+      super(const NotesState(isLoading: true)) {
     // Ensure BaseApiService is read
     _ref.read(api_p.apiServiceProvider);
     _initialize();
@@ -125,8 +126,7 @@ class NotesNotifier extends StateNotifier<NotesState> {
         }
         refresh();
       }
-    },
-    );
+    });
     _ref.listen(combinedFilterProvider, (_, __) {
       if (mounted) refresh();
     });
@@ -208,8 +208,13 @@ class NotesNotifier extends StateNotifier<NotesState> {
       var newNotes = response.notes;
       final nextPageToken = response.nextPageToken;
 
-      final bool hasReachedEnd = (nextPageToken == null || nextPageToken.isEmpty) && newNotes.length < _pageSize;
-      final newTotalLoaded = (pageToken == null) ? newNotes.length : state.totalLoaded + newNotes.length;
+      final bool hasReachedEnd =
+          (nextPageToken == null || nextPageToken.isEmpty) &&
+          newNotes.length < _pageSize;
+      final newTotalLoaded =
+          (pageToken == null)
+              ? newNotes.length
+              : state.totalLoaded + newNotes.length;
 
       if (kDebugMode) {
         print('[NotesNotifier] Fetched ${newNotes.length} new notes.');
@@ -263,10 +268,13 @@ class NotesNotifier extends StateNotifier<NotesState> {
     await _fetchPage(pageToken: null);
   }
 
-  Future<void> fetchMoreNotes() async { // Renamed from fetchMoreMemos
+  Future<void> fetchMoreNotes() async {
+    // Renamed from fetchMoreMemos
     if (!state.canLoadMore && state.nextPageToken == null) {
       if (kDebugMode) {
-        print('[NotesNotifier] Cannot load more notes (no token or already loading/ended).');
+        print(
+          '[NotesNotifier] Cannot load more notes (no token or already loading/ended).',
+        );
       }
       return;
     }
@@ -278,7 +286,9 @@ class NotesNotifier extends StateNotifier<NotesState> {
     }
 
     if (kDebugMode) {
-      print('[NotesNotifier] Fetching more notes with token: ${state.nextPageToken}');
+      print(
+        '[NotesNotifier] Fetching more notes with token: ${state.nextPageToken}',
+      );
     }
     state = state.copyWith(isLoadingMore: true, clearError: true);
     await _fetchPage(pageToken: state.nextPageToken);
@@ -291,9 +301,10 @@ class NotesNotifier extends StateNotifier<NotesState> {
 
   // Optimistic update methods using NoteItem
   void updateNoteOptimistically(NoteItem updatedNote) {
-    final updatedNotes = state.notes.map((note) {
-      return note.id == updatedNote.id ? updatedNote : note;
-    }).toList();
+    final updatedNotes =
+        state.notes.map((note) {
+          return note.id == updatedNote.id ? updatedNote : note;
+        }).toList();
 
     updatedNotes.sort((a, b) {
       if (a.pinned != b.pinned) return a.pinned ? -1 : 1;
@@ -305,13 +316,18 @@ class NotesNotifier extends StateNotifier<NotesState> {
 
   void removeNoteOptimistically(String noteId) {
     final initialLength = state.notes.length;
-    final updatedNotes = state.notes.where((note) => note.id != noteId).toList();
+    final updatedNotes =
+        state.notes.where((note) => note.id != noteId).toList();
 
     if (kDebugMode) {
       if (updatedNotes.length < initialLength) {
-        print('[NotesNotifier] removeNoteOptimistically: Removed note $noteId.');
+        print(
+          '[NotesNotifier] removeNoteOptimistically: Removed note $noteId.',
+        );
       } else {
-        print('[NotesNotifier] removeNoteOptimistically: Note $noteId not found.');
+        print(
+          '[NotesNotifier] removeNoteOptimistically: Note $noteId not found.',
+        );
       }
     }
 
@@ -322,22 +338,24 @@ class NotesNotifier extends StateNotifier<NotesState> {
 
   void archiveNoteOptimistically(String noteId) {
     state = state.copyWith(
-      notes: state.notes.map((note) {
-        if (note.id == noteId) {
-          return note.copyWith(state: NoteState.archived, pinned: false);
-        }
-        return note;
-      }).toList(),
+      notes:
+          state.notes.map((note) {
+            if (note.id == noteId) {
+              return note.copyWith(state: NoteState.archived, pinned: false);
+            }
+            return note;
+          }).toList(),
     );
   }
 
   void togglePinOptimistically(String noteId) {
-    final updatedNotes = state.notes.map((note) {
-      if (note.id == noteId) {
-        return note.copyWith(pinned: !note.pinned);
-      }
-      return note;
-    }).toList();
+    final updatedNotes =
+        state.notes.map((note) {
+          if (note.id == noteId) {
+            return note.copyWith(pinned: !note.pinned);
+          }
+          return note;
+        }).toList();
 
     updatedNotes.sort((a, b) {
       if (a.pinned != b.pinned) return a.pinned ? -1 : 1;
@@ -361,10 +379,122 @@ class NotesNotifier extends StateNotifier<NotesState> {
       state = state.copyWith(notes: updatedNotes);
     }
   }
+
+  // Method to update the start date of a note
+  Future<void> updateNoteStartDate(
+    String noteId,
+    DateTime? newStartDate,
+  ) async {
+    final noteIndex = state.notes.indexWhere((n) => n.id == noteId);
+    if (noteIndex == -1) {
+      if (kDebugMode)
+        print('[NotesNotifier] Note $noteId not found for start date update.');
+      // Optionally throw an error or notify the user
+      return;
+    }
+
+    final originalNote = state.notes[noteIndex];
+    // Ensure we don't try to set a start date after an existing end date
+    if (newStartDate != null &&
+        originalNote.endDate != null &&
+        newStartDate.isAfter(originalNote.endDate!)) {
+      if (kDebugMode)
+        print(
+          '[NotesNotifier] Cannot set start date ($newStartDate) after end date (${originalNote.endDate}) for note $noteId.',
+        );
+      // Optionally show an error message to the user
+      return;
+    }
+
+    final updatedNote = originalNote.copyWith(
+      startDate: newStartDate,
+      updateTime: DateTime.now(), // Bump update time
+    );
+
+    // Optimistic UI update
+    final currentNotes = List<NoteItem>.from(state.notes);
+    currentNotes[noteIndex] = updatedNote;
+    // Re-sort based on pin/updateTime after optimistic update
+    currentNotes.sort((a, b) {
+      if (a.pinned != b.pinned) return a.pinned ? -1 : 1;
+      return b.updateTime.compareTo(a.updateTime);
+    });
+    state = state.copyWith(notes: currentNotes);
+    if (kDebugMode)
+      print(
+        '[NotesNotifier] Optimistically updated start date for note $noteId to $newStartDate.',
+      );
+
+    try {
+      // --- CRITICAL: Assumes _apiService.updateNote supports sending startDate ---
+      // This relies on the BlinkoApiService.updateNote modification and API capability.
+      final BaseApiService apiService = _ref.read(api_p.apiServiceProvider);
+      final NoteItem confirmedNote = await apiService.updateNote(
+        noteId,
+        updatedNote,
+      );
+      // -------------------------------------------------------------------------
+
+      // Update state with confirmed data from API response
+      final finalNotes = List<NoteItem>.from(state.notes);
+      final confirmedIndex = finalNotes.indexWhere((n) => n.id == noteId);
+      if (confirmedIndex != -1) {
+        finalNotes[confirmedIndex] = confirmedNote;
+        // Re-sort again after getting confirmed data
+        finalNotes.sort((a, b) {
+          if (a.pinned != b.pinned) return a.pinned ? -1 : 1;
+          return b.updateTime.compareTo(a.updateTime);
+        });
+        state = state.copyWith(notes: finalNotes);
+        if (kDebugMode)
+          print(
+            '[NotesNotifier] Confirmed start date update for note $noteId from API.',
+          );
+      } else {
+        if (kDebugMode)
+          print(
+            '[NotesNotifier] Note $noteId disappeared after API update confirmation? Refreshing list.',
+          );
+        refresh(); // Refresh if the note somehow disappeared
+      }
+    } catch (e, stackTrace) {
+      if (kDebugMode) {
+        print(
+          '[NotesNotifier] Failed to update start date via API for note $noteId: $e',
+        );
+        print(stackTrace);
+      }
+      // Revert optimistic update on failure
+      final revertedNotes = List<NoteItem>.from(state.notes);
+      final revertIndex = revertedNotes.indexWhere((n) => n.id == noteId);
+      if (revertIndex != -1) {
+        revertedNotes[revertIndex] = originalNote;
+        // Re-sort after reverting
+        revertedNotes.sort((a, b) {
+          if (a.pinned != b.pinned) return a.pinned ? -1 : 1;
+          return b.updateTime.compareTo(a.updateTime);
+        });
+        state = state.copyWith(notes: revertedNotes);
+        if (kDebugMode)
+          print(
+            '[NotesNotifier] Reverted optimistic start date update for note $noteId.',
+          );
+      }
+      // TODO: Show error message to user (e.g., using a dedicated error handling service/provider)
+      // Example: _ref.read(errorServiceProvider).showError('Failed to update note start date: $e');
+      // Rethrow if the caller needs to know about the failure
+      // rethrow;
+    }
+  }
+
+  // TODO: Add similar updateNoteEndDate method if needed
 }
 
 // Keep provider name notesNotifierProvider
-final notesNotifierProvider = StateNotifierProvider<NotesNotifier, NotesState>((ref) {
+final notesNotifierProvider = StateNotifierProvider<NotesNotifier, NotesState>((
+  ref,
+) {
+  // Pass the ref to the notifier
   return NotesNotifier(ref);
 }, name: 'notesNotifierProvider');
 
@@ -373,25 +503,28 @@ final notesNotifierProvider = StateNotifierProvider<NotesNotifier, NotesState>((
 // Keep provider name visibleNotesListProvider
 final visibleNotesListProvider = Provider<List<NoteItem>>((ref) {
   final notesState = ref.watch(notesNotifierProvider);
-  final hiddenItemIds = ref.watch(hiddenItemIdsProvider); // Use renamed provider
+  final hiddenItemIds = ref.watch(
+    hiddenItemIdsProvider,
+  ); // Use renamed provider
   final hidePinned = ref.watch(hidePinnedProvider);
   final filterKey = ref.watch(filterKeyProvider);
 
-  final visibleNotes = notesState.notes.where((note) {
-    if (hiddenItemIds.contains(note.id)) return false; // Use hiddenItemIds
-    if (hidePinned && note.pinned) return false;
+  final visibleNotes =
+      notesState.notes.where((note) {
+        if (hiddenItemIds.contains(note.id)) return false; // Use hiddenItemIds
+        if (hidePinned && note.pinned) return false;
 
-    switch (filterKey) {
-      case 'inbox':
-      case 'all':
-        if (note.state == NoteState.archived) return false;
-        break;
-      case 'archive':
-        if (note.state != NoteState.archived) return false;
-        break;
-    }
-    return true;
-  }).toList();
+        switch (filterKey) {
+          case 'inbox':
+          case 'all':
+            if (note.state == NoteState.archived) return false;
+            break;
+          case 'archive':
+            if (note.state != NoteState.archived) return false;
+            break;
+        }
+        return true;
+      }).toList();
 
   visibleNotes.sort((a, b) {
     if (a.pinned != b.pinned) return a.pinned ? -1 : 1;
@@ -405,17 +538,47 @@ final visibleNotesListProvider = Provider<List<NoteItem>>((ref) {
 final filteredNotesProvider = Provider<List<NoteItem>>((ref) {
   final visibleNotes = ref.watch(visibleNotesListProvider);
   final searchQuery = ref.watch(searchQueryProvider).trim().toLowerCase();
+  final hideFuture = ref.watch(
+    hideFutureStartDateProvider,
+  ); // Read the new filter state
 
-  if (searchQuery.isEmpty) return visibleNotes;
-
-  final filteredNotes = visibleNotes.where((note) {
-    return note.content.toLowerCase().contains(searchQuery);
-  }).toList();
-
-  if (kDebugMode) {
-    print('[filteredNotesProvider] Filtered to ${filteredNotes.length} notes with query: "$searchQuery"');
+  List<NoteItem> notesAfterSearch;
+  if (searchQuery.isEmpty) {
+    notesAfterSearch = visibleNotes;
+  } else {
+    notesAfterSearch =
+        visibleNotes.where((note) {
+          return note.content.toLowerCase().contains(searchQuery);
+        }).toList();
+    if (kDebugMode) {
+      print(
+        '[filteredNotesProvider] Filtered by search query "$searchQuery" to ${notesAfterSearch.length} notes.',
+      );
+    }
   }
-  return filteredNotes;
+
+  // Apply the start date filter *after* the search filter
+  if (hideFuture) {
+    final now = DateTime.now();
+    final notesAfterDateFilter =
+        notesAfterSearch.where((note) {
+          // Keep notes that have no start date OR have a start date in the past/present
+          return note.startDate == null || !note.startDate!.isAfter(now);
+        }).toList();
+    if (kDebugMode) {
+      print(
+        '[filteredNotesProvider] Filtered by hideFuture=true to ${notesAfterDateFilter.length} notes.',
+      );
+    }
+    return notesAfterDateFilter;
+  } else {
+    if (kDebugMode) {
+      print(
+        '[filteredNotesProvider] Skipping future date filter (hideFuture=false).',
+      );
+    }
+    return notesAfterSearch; // Return notes after search if not hiding future ones
+  }
 }, name: 'filteredNotesProvider');
 
 // Keep provider name hasSearchResultsProvider
@@ -428,10 +591,15 @@ final hasSearchResultsProvider = Provider<bool>((ref) {
 // --- Action Providers ---
 
 // Keep provider name archiveNoteProvider
-final archiveNoteProvider = Provider.family<Future<void> Function(), String>((ref, id) {
+final archiveNoteProvider = Provider.family<Future<void> Function(), String>((
+  ref,
+  id,
+) {
   return () async {
     final BaseApiService apiService = ref.read(api_p.apiServiceProvider);
-    final currentSelectedId = ref.read(ui_providers.selectedItemIdProvider); // Use renamed provider
+    final currentSelectedId = ref.read(
+      ui_providers.selectedItemIdProvider,
+    ); // Use renamed provider
     final notesBeforeAction = ref.read(filteredNotesProvider);
     String? nextSelectedId = currentSelectedId;
 
@@ -451,7 +619,8 @@ final archiveNoteProvider = Provider.family<Future<void> Function(), String>((re
     }
 
     ref.read(notesNotifierProvider.notifier).archiveNoteOptimistically(id);
-    ref.read(ui_providers.selectedItemIdProvider.notifier).state = nextSelectedId; // Use renamed provider
+    ref.read(ui_providers.selectedItemIdProvider.notifier).state =
+        nextSelectedId; // Use renamed provider
 
     try {
       await apiService.archiveNote(id);
@@ -464,11 +633,16 @@ final archiveNoteProvider = Provider.family<Future<void> Function(), String>((re
 });
 
 // Keep provider name deleteNoteProvider
-final deleteNoteProvider = Provider.family<Future<void> Function(), String>((ref, id) {
+final deleteNoteProvider = Provider.family<Future<void> Function(), String>((
+  ref,
+  id,
+) {
   return () async {
     if (kDebugMode) print('[deleteNoteProvider] Deleting note: $id');
     final BaseApiService apiService = ref.read(api_p.apiServiceProvider);
-    final currentSelectedId = ref.read(ui_providers.selectedItemIdProvider); // Use renamed provider
+    final currentSelectedId = ref.read(
+      ui_providers.selectedItemIdProvider,
+    ); // Use renamed provider
     final notesBeforeAction = ref.read(filteredNotesProvider);
     String? nextSelectedId = currentSelectedId;
 
@@ -488,12 +662,18 @@ final deleteNoteProvider = Provider.family<Future<void> Function(), String>((ref
     }
 
     ref.read(notesNotifierProvider.notifier).removeNoteOptimistically(id);
-    ref.read(ui_providers.selectedItemIdProvider.notifier).state = nextSelectedId; // Use renamed provider
+    ref.read(ui_providers.selectedItemIdProvider.notifier).state =
+        nextSelectedId; // Use renamed provider
 
     try {
       await apiService.deleteNote(id);
-      if (kDebugMode) print('[deleteNoteProvider] Successfully deleted note: $id');
-      ref.read(hiddenItemIdsProvider.notifier).update((state) => state.contains(id) ? (state..remove(id)) : state); // Use renamed provider
+      if (kDebugMode)
+        print('[deleteNoteProvider] Successfully deleted note: $id');
+      ref
+          .read(hiddenItemIdsProvider.notifier)
+          .update(
+            (state) => state.contains(id) ? (state..remove(id)) : state,
+          ); // Use renamed provider
     } catch (e, stackTrace) {
       if (kDebugMode) {
         print('[deleteNoteProvider] Error deleting note $id: $e');
@@ -506,7 +686,10 @@ final deleteNoteProvider = Provider.family<Future<void> Function(), String>((ref
 });
 
 // Keep provider name bumpNoteProvider
-final bumpNoteProvider = Provider.family<Future<void> Function(), String>((ref, id) {
+final bumpNoteProvider = Provider.family<Future<void> Function(), String>((
+  ref,
+  id,
+) {
   return () async {
     if (kDebugMode) print('[bumpNoteProvider] Bumping note: $id');
     final BaseApiService apiService = ref.read(api_p.apiServiceProvider);
@@ -528,40 +711,52 @@ final bumpNoteProvider = Provider.family<Future<void> Function(), String>((ref, 
 }, name: 'bumpNote');
 
 // Keep provider name updateNoteProvider
-final updateNoteProvider = Provider.family<Future<NoteItem> Function(NoteItem), String>((ref, id) {
-  return (NoteItem updatedNote) async {
-    if (kDebugMode) print('[updateNoteProvider] Updating note: $id');
-    final BaseApiService apiService = ref.read(api_p.apiServiceProvider);
+final updateNoteProvider =
+    Provider.family<Future<NoteItem> Function(NoteItem), String>((ref, id) {
+      return (NoteItem updatedNote) async {
+        if (kDebugMode) print('[updateNoteProvider] Updating note: $id');
+        final BaseApiService apiService = ref.read(api_p.apiServiceProvider);
 
-    try {
-      final NoteItem result = await apiService.updateNote(id, updatedNote);
-      ref.read(notesNotifierProvider.notifier).updateNoteOptimistically(result);
-      ref.read(noteDetailCacheProvider.notifier).update((state) => {...state, result.id: result});
+        try {
+          final NoteItem result = await apiService.updateNote(id, updatedNote);
+          ref
+              .read(notesNotifierProvider.notifier)
+              .updateNoteOptimistically(result);
+          ref
+              .read(noteDetailCacheProvider.notifier)
+              .update((state) => {...state, result.id: result});
 
-      if (kDebugMode) print('[updateNoteProvider] Note $id updated successfully.');
-      return result;
-    } catch (e, stackTrace) {
-      if (kDebugMode) {
-        print('[updateNoteProvider] Error updating note: $e\n$stackTrace');
-      }
-      ref.invalidate(notesNotifierProvider);
-      ref.invalidate(noteDetailProvider(id)); // Use consolidated provider
-      rethrow;
-    }
-  };
-});
+          if (kDebugMode)
+            print('[updateNoteProvider] Note $id updated successfully.');
+          return result;
+        } catch (e, stackTrace) {
+          if (kDebugMode) {
+            print('[updateNoteProvider] Error updating note: $e\n$stackTrace');
+          }
+          ref.invalidate(notesNotifierProvider);
+          ref.invalidate(noteDetailProvider(id)); // Use consolidated provider
+          rethrow;
+        }
+      };
+    });
 
 // Keep provider name togglePinNoteProvider
-final togglePinNoteProvider = Provider.family<Future<NoteItem> Function(), String>((ref, id) {
+final togglePinNoteProvider = Provider.family<
+  Future<NoteItem> Function(),
+  String
+>((ref, id) {
   return () async {
-    if (kDebugMode) print('[togglePinNoteProvider] Toggling pin state for note: $id');
+    if (kDebugMode)
+      print('[togglePinNoteProvider] Toggling pin state for note: $id');
     final BaseApiService apiService = ref.read(api_p.apiServiceProvider);
 
     ref.read(notesNotifierProvider.notifier).togglePinOptimistically(id);
 
     try {
       final NoteItem result = await apiService.togglePinNote(id);
-      ref.read(noteDetailCacheProvider.notifier).update((state) => {...state, result.id: result});
+      ref
+          .read(noteDetailCacheProvider.notifier)
+          .update((state) => {...state, result.id: result});
       return result;
     } catch (e, stackTrace) {
       if (kDebugMode) {
@@ -598,7 +793,10 @@ class MoveNoteParams {
 }
 
 // Keep provider name moveNoteProvider, update param type
-final moveNoteProvider = Provider.family<Future<void> Function(), MoveNoteParams>((ref, params) {
+final moveNoteProvider = Provider.family<
+  Future<void> Function(),
+  MoveNoteParams
+>((ref, params) {
   return () async {
     final noteId = params.noteId; // Use noteId
     final targetServer = params.targetServer;
@@ -610,11 +808,15 @@ final moveNoteProvider = Provider.family<Future<void> Function(), MoveNoteParams
       throw Exception('Cannot move note: No active source server.');
     }
     if (sourceServer.id == targetServer.id) {
-      throw Exception('Cannot move note: Source and target servers are the same.');
+      throw Exception(
+        'Cannot move note: Source and target servers are the same.',
+      );
     }
 
     if (kDebugMode) {
-      print('[moveNoteProvider] Starting move for note $noteId from ${sourceServer.name ?? sourceServer.id} (${sourceServer.serverType.name}) to ${targetServer.name ?? targetServer.id} (${targetServer.serverType.name})');
+      print(
+        '[moveNoteProvider] Starting move for note $noteId from ${sourceServer.name ?? sourceServer.id} (${sourceServer.serverType.name}) to ${targetServer.name ?? targetServer.id} (${targetServer.serverType.name})',
+      );
     }
 
     notifier.removeNoteOptimistically(noteId);
@@ -624,19 +826,28 @@ final moveNoteProvider = Provider.family<Future<void> Function(), MoveNoteParams
     NoteItem? createdNoteOnTarget;
 
     try {
-      if (kDebugMode) print('[moveNoteProvider] Fetching note details from source...');
+      if (kDebugMode)
+        print('[moveNoteProvider] Fetching note details from source...');
       sourceNote = await sourceApiService.getNote(noteId);
 
-      if (kDebugMode) print('[moveNoteProvider] Fetching comments from source...');
+      if (kDebugMode)
+        print('[moveNoteProvider] Fetching comments from source...');
       try {
         sourceComments = await sourceApiService.listNoteComments(noteId);
-        if (kDebugMode) print('[moveNoteProvider] Found ${sourceComments.length} comments on source.');
+        if (kDebugMode)
+          print(
+            '[moveNoteProvider] Found ${sourceComments.length} comments on source.',
+          );
       } catch (e) {
-        if (kDebugMode) print('[moveNoteProvider] Warning: Failed to fetch comments from source: $e. Proceeding without comments.');
+        if (kDebugMode)
+          print(
+            '[moveNoteProvider] Warning: Failed to fetch comments from source: $e. Proceeding without comments.',
+          );
         sourceComments = [];
       }
 
-      if (kDebugMode) print('[moveNoteProvider] Creating note on target server...');
+      if (kDebugMode)
+        print('[moveNoteProvider] Creating note on target server...');
       final noteToCreate = NoteItem(
         id: '',
         content: sourceNote.content,
@@ -656,10 +867,16 @@ final moveNoteProvider = Provider.family<Future<void> Function(), MoveNoteParams
         noteToCreate,
         targetServerOverride: targetServer,
       );
-      if (kDebugMode) print('[moveNoteProvider] Note created on target with ID: ${createdNoteOnTarget.id}');
+      if (kDebugMode)
+        print(
+          '[moveNoteProvider] Note created on target with ID: ${createdNoteOnTarget.id}',
+        );
 
       if (sourceComments.isNotEmpty) {
-        if (kDebugMode) print('[moveNoteProvider] Creating ${sourceComments.length} comments on target...');
+        if (kDebugMode)
+          print(
+            '[moveNoteProvider] Creating ${sourceComments.length} comments on target...',
+          );
         for (final comment in sourceComments) {
           try {
             final commentToCreate = Comment(
@@ -677,20 +894,33 @@ final moveNoteProvider = Provider.family<Future<void> Function(), MoveNoteParams
               targetServerOverride: targetServer,
             );
           } catch (e) {
-            if (kDebugMode) print('[moveNoteProvider] Warning: Failed to create comment (original ID: ${comment.id}) on target: $e');
+            if (kDebugMode)
+              print(
+                '[moveNoteProvider] Warning: Failed to create comment (original ID: ${comment.id}) on target: $e',
+              );
           }
         }
-        if (kDebugMode) print('[moveNoteProvider] Finished creating comments on target.');
+        if (kDebugMode)
+          print('[moveNoteProvider] Finished creating comments on target.');
       }
 
-      if (kDebugMode) print('[moveNoteProvider] Deleting note from source server...');
+      if (kDebugMode)
+        print('[moveNoteProvider] Deleting note from source server...');
       await sourceApiService.deleteNote(noteId);
-      if (kDebugMode) print('[moveNoteProvider] Note $noteId successfully deleted from source.');
+      if (kDebugMode)
+        print(
+          '[moveNoteProvider] Note $noteId successfully deleted from source.',
+        );
 
-      if (kDebugMode) print('[moveNoteProvider] Move completed successfully for note $noteId.');
+      if (kDebugMode)
+        print(
+          '[moveNoteProvider] Move completed successfully for note $noteId.',
+        );
     } catch (e, st) {
       if (kDebugMode) {
-        print('[moveNoteProvider] Error during move operation for note $noteId: $e');
+        print(
+          '[moveNoteProvider] Error during move operation for note $noteId: $e',
+        );
         print(st);
       }
       await notifier.refresh();
@@ -702,7 +932,10 @@ final moveNoteProvider = Provider.family<Future<void> Function(), MoveNoteParams
 // --- Item Visibility ---
 
 // Rename hiddenMemoIdsProvider to hiddenItemIdsProvider
-final hiddenItemIdsProvider = StateProvider<Set<String>>((ref) => {}, name: 'hiddenItemIdsProvider');
+final hiddenItemIdsProvider = StateProvider<Set<String>>(
+  (ref) => {},
+  name: 'hiddenItemIdsProvider',
+);
 
 // Rename isNoteHiddenProvider to isItemHiddenProvider
 final isItemHiddenProvider = Provider.family<bool, String>((ref, id) {
@@ -711,14 +944,21 @@ final isItemHiddenProvider = Provider.family<bool, String>((ref, id) {
 }, name: 'isItemHiddenProvider');
 
 // Rename toggleNoteVisibilityProvider to toggleItemVisibilityProvider
-final toggleItemVisibilityProvider = Provider.family<void Function(), String>((ref, id) {
+final toggleItemVisibilityProvider = Provider.family<void Function(), String>((
+  ref,
+  id,
+) {
   return () {
     final hiddenItemIds = ref.read(hiddenItemIdsProvider);
     if (hiddenItemIds.contains(id)) {
-      ref.read(hiddenItemIdsProvider.notifier).update((state) => state..remove(id));
+      ref
+          .read(hiddenItemIdsProvider.notifier)
+          .update((state) => state..remove(id));
       if (kDebugMode) print('[toggleItemVisibilityProvider] Unhid item: $id');
     } else {
-      ref.read(hiddenItemIdsProvider.notifier).update((state) => state..add(id));
+      ref
+          .read(hiddenItemIdsProvider.notifier)
+          .update((state) => state..add(id));
       if (kDebugMode) print('[toggleItemVisibilityProvider] Hid item: $id');
     }
   };
@@ -729,33 +969,43 @@ final toggleItemVisibilityProvider = Provider.family<void Function(), String>((r
 enum BatchOperation { archive, delete, pin, unpin }
 
 // Keep provider name batchNoteOperationsProvider (actions are note-specific)
-final batchNoteOperationsProvider = Provider<Future<void> Function(List<String> ids, BatchOperation operation)>((ref) {
+final batchNoteOperationsProvider = Provider<
+  Future<void> Function(List<String> ids, BatchOperation operation)
+>((ref) {
   return (List<String> ids, BatchOperation operation) async {
     if (ids.isEmpty) return;
-    if (kDebugMode) print('[batchNoteOperationsProvider] Performing $operation on ${ids.length} notes');
+    if (kDebugMode)
+      print(
+        '[batchNoteOperationsProvider] Performing $operation on ${ids.length} notes',
+      );
     final BaseApiService apiService = ref.read(api_p.apiServiceProvider);
 
     try {
-      await Future.wait(ids.map((id) async {
-        switch (operation) {
-          case BatchOperation.archive:
-            await apiService.archiveNote(id);
-            break;
-          case BatchOperation.delete:
-            await apiService.deleteNote(id);
-            break;
-          case BatchOperation.pin:
-            await apiService.togglePinNote(id);
-            break;
-          case BatchOperation.unpin:
-            await apiService.togglePinNote(id);
-            break;
-        }
-      }));
+      await Future.wait(
+        ids.map((id) async {
+          switch (operation) {
+            case BatchOperation.archive:
+              await apiService.archiveNote(id);
+              break;
+            case BatchOperation.delete:
+              await apiService.deleteNote(id);
+              break;
+            case BatchOperation.pin:
+              await apiService.togglePinNote(id);
+              break;
+            case BatchOperation.unpin:
+              await apiService.togglePinNote(id);
+              break;
+          }
+        }),
+      );
 
       await ref.read(notesNotifierProvider.notifier).refresh();
     } catch (e, stackTrace) {
-      if (kDebugMode) print('[batchNoteOperationsProvider] Error during batch operation: $e\n$stackTrace');
+      if (kDebugMode)
+        print(
+          '[batchNoteOperationsProvider] Error during batch operation: $e\n$stackTrace',
+        );
       rethrow;
     }
   };
@@ -783,7 +1033,10 @@ final toggleItemSelectionModeProvider = Provider<void Function()>((ref) {
       ref.read(selectedItemIdsProvider.notifier).state = {};
     }
     ref.read(itemSelectionModeProvider.notifier).state = !currentMode;
-    if (kDebugMode) print('[toggleItemSelectionModeProvider] Selection mode: ${!currentMode}');
+    if (kDebugMode)
+      print(
+        '[toggleItemSelectionModeProvider] Selection mode: ${!currentMode}',
+      );
   };
 }, name: 'toggleItemSelectionModeProvider');
 
@@ -796,10 +1049,13 @@ final noteDetailCacheProvider = StateProvider<Map<String, NoteItem>>(
 );
 
 // Keep provider name prefetchNoteDetailsProvider
-final prefetchNoteDetailsProvider = Provider<Future<void> Function(List<String>)>((ref) {
+final prefetchNoteDetailsProvider = Provider<
+  Future<void> Function(List<String>)
+>((ref) {
   return (List<String> ids) async {
     if (ids.isEmpty) return;
-    if (kDebugMode) print('[prefetchNoteDetailsProvider] Prefetching ${ids.length} notes');
+    if (kDebugMode)
+      print('[prefetchNoteDetailsProvider] Prefetching ${ids.length} notes');
     final BaseApiService apiService = ref.read(api_p.apiServiceProvider);
     final cache = ref.read(noteDetailCacheProvider);
 
@@ -808,19 +1064,26 @@ final prefetchNoteDetailsProvider = Provider<Future<void> Function(List<String>)
 
     const batchSize = 5;
     for (var i = 0; i < uncachedIds.length; i += batchSize) {
-      final end = (i + batchSize < uncachedIds.length) ? i + batchSize : uncachedIds.length;
+      final end =
+          (i + batchSize < uncachedIds.length)
+              ? i + batchSize
+              : uncachedIds.length;
       final batch = uncachedIds.sublist(i, end);
       try {
-        final List<NoteItem> notes = await Future.wait(batch.map((id) => apiService.getNote(id)));
+        final List<NoteItem> notes = await Future.wait(
+          batch.map((id) => apiService.getNote(id)),
+        );
         final updatedCache = Map<String, NoteItem>.from(cache);
         for (var note in notes) {
           updatedCache[note.id] = note;
         }
         ref.read(noteDetailCacheProvider.notifier).state = updatedCache;
       } catch (e) {
-        if (kDebugMode) print('[prefetchNoteDetailsProvider] Error prefetching batch: $e');
+        if (kDebugMode)
+          print('[prefetchNoteDetailsProvider] Error prefetching batch: $e');
       }
-      if (end < uncachedIds.length) await Future.delayed(const Duration(milliseconds: 100));
+      if (end < uncachedIds.length)
+        await Future.delayed(const Duration(milliseconds: 100));
     }
   };
 }, name: 'prefetchNoteDetailsProvider');
@@ -851,15 +1114,24 @@ final createNoteProvider = Provider<Future<void> Function(NoteItem)>((ref) {
 });
 
 // Keep provider name fixNoteGrammarProvider
-final fixNoteGrammarProvider = FutureProvider.family<void, String>((ref, noteId) async {
-  if (kDebugMode) print('[fixNoteGrammarProvider] Starting grammar fix for note: $noteId');
+final fixNoteGrammarProvider = FutureProvider.family<void, String>((
+  ref,
+  noteId,
+) async {
+  if (kDebugMode)
+    print('[fixNoteGrammarProvider] Starting grammar fix for note: $noteId');
 
   final BaseApiService notesApiService = ref.read(api_p.apiServiceProvider);
-  final MinimalOpenAiService openaiApiService = ref.read(api_p.openaiApiServiceProvider);
+  final MinimalOpenAiService openaiApiService = ref.read(
+    api_p.openaiApiServiceProvider,
+  );
   final String selectedModelId = ref.read(settings_p.openAiModelIdProvider);
 
   if (!openaiApiService.isConfigured) {
-    if (kDebugMode) print('[fixNoteGrammarProvider] OpenAI service not configured. Aborting.');
+    if (kDebugMode)
+      print(
+        '[fixNoteGrammarProvider] OpenAI service not configured. Aborting.',
+      );
     throw Exception('OpenAI API key is not configured in settings.');
   }
 
@@ -869,33 +1141,56 @@ final fixNoteGrammarProvider = FutureProvider.family<void, String>((ref, noteId)
     final String originalContent = currentNote.content;
 
     if (originalContent.trim().isEmpty) {
-      if (kDebugMode) print('[fixNoteGrammarProvider] Note content is empty. Skipping.');
+      if (kDebugMode)
+        print('[fixNoteGrammarProvider] Note content is empty. Skipping.');
       return;
     }
 
-    if (kDebugMode) print('[fixNoteGrammarProvider] Calling OpenAI API with model: $selectedModelId...');
+    if (kDebugMode)
+      print(
+        '[fixNoteGrammarProvider] Calling OpenAI API with model: $selectedModelId...',
+      );
     final String correctedContent = await openaiApiService.fixGrammar(
       originalContent,
       modelId: selectedModelId,
     );
 
-    if (correctedContent == originalContent || correctedContent.trim().isEmpty) {
-      if (kDebugMode) print('[fixNoteGrammarProvider] Content unchanged or correction empty. No update needed.');
+    if (correctedContent == originalContent ||
+        correctedContent.trim().isEmpty) {
+      if (kDebugMode)
+        print(
+          '[fixNoteGrammarProvider] Content unchanged or correction empty. No update needed.',
+        );
       return;
     }
 
-    if (kDebugMode) print('[fixNoteGrammarProvider] Content corrected. Updating note...');
-    final NoteItem updatedNoteData = currentNote.copyWith(content: correctedContent);
-    final NoteItem resultNote = await notesApiService.updateNote(noteId, updatedNoteData);
+    if (kDebugMode)
+      print('[fixNoteGrammarProvider] Content corrected. Updating note...');
+    final NoteItem updatedNoteData = currentNote.copyWith(
+      content: correctedContent,
+    );
+    final NoteItem resultNote = await notesApiService.updateNote(
+      noteId,
+      updatedNoteData,
+    );
 
-    ref.read(notesNotifierProvider.notifier).updateNoteOptimistically(resultNote);
-    ref.read(noteDetailCacheProvider.notifier).update((state) => {...state, noteId: resultNote});
+    ref
+        .read(notesNotifierProvider.notifier)
+        .updateNoteOptimistically(resultNote);
+    ref
+        .read(noteDetailCacheProvider.notifier)
+        .update((state) => {...state, noteId: resultNote});
     ref.invalidate(noteDetailProvider(noteId)); // Use consolidated provider
 
-    if (kDebugMode) print('[fixNoteGrammarProvider] Note $noteId updated successfully with corrected grammar.');
+    if (kDebugMode)
+      print(
+        '[fixNoteGrammarProvider] Note $noteId updated successfully with corrected grammar.',
+      );
   } catch (e, stackTrace) {
     if (kDebugMode) {
-      print('[fixNoteGrammarProvider] Error fixing grammar for note $noteId: $e');
+      print(
+        '[fixNoteGrammarProvider] Error fixing grammar for note $noteId: $e',
+      );
       print(stackTrace);
     }
     rethrow;
@@ -919,14 +1214,10 @@ final noteCommentsProvider = FutureProvider.family<List<Comment>, String>((
   noteId, // Renamed from memoId
 ) async {
   final apiService = ref.watch(api_p.apiServiceProvider);
-  final comments = await apiService.listNoteComments(
-    noteId,
-  );
+  final comments = await apiService.listNoteComments(noteId);
 
   // Sort comments with pinned first, then by update time
-  CommentUtils.sortByPinnedThenUpdateTime(
-    comments,
-  );
+  CommentUtils.sortByPinnedThenUpdateTime(comments);
 
   return comments;
 }, name: 'noteCommentsProvider');

@@ -609,6 +609,35 @@ class _AdvancedFilterPanelState extends ConsumerState<AdvancedFilterPanel> {
                                       setState(() => _contentFilter = value),
                             ),
                           ),
+                        // --- Add Hide Future Notes Toggle ---
+                        Consumer(
+                          builder: (context, ref, child) {
+                            final hideFuture = ref.watch(
+                              hideFutureStartDateProvider,
+                            );
+                            return CupertinoListTile(
+                              title: const Text('Hide Future Notes'),
+                              subtitle: const Text(
+                                'Hide notes where start date is in the future',
+                              ),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 0,
+                                vertical: 4,
+                              ), // Adjust padding
+                              trailing: CupertinoSwitch(
+                                value: hideFuture,
+                                onChanged: (value) {
+                                  ref
+                                      .read(
+                                        hideFutureStartDateProvider.notifier,
+                                      )
+                                      .state = value;
+                                },
+                              ),
+                            );
+                          },
+                        ),
+                        // ------------------------------------
                         // REMOVED: Time Filter UI Section
                         const SizedBox(height: 16),
                         // Apply Builder Button

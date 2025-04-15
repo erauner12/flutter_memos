@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 
 // Enums matching Memos structure for simplicity, adapt if Blinko differs significantly
 enum NoteState { normal, archived }
+
 enum NoteVisibility { public, private, protected }
 
 @immutable
@@ -20,6 +21,8 @@ class NoteItem {
   final List<Map<String, dynamic>>? relations;
   final String? creatorId; // String ID of the creator user
   final String? parentId; // String ID of the parent memo/note
+  final DateTime? startDate; // Added start date
+  final DateTime? endDate; // Added end date
 
   const NoteItem({
     required this.id,
@@ -35,6 +38,8 @@ class NoteItem {
     this.relations = const [],
     this.creatorId,
     this.parentId,
+    this.startDate, // Added start date
+    this.endDate, // Added end date
   });
 
   NoteItem copyWith({
@@ -51,6 +56,8 @@ class NoteItem {
     List<Map<String, dynamic>>? relations,
     String? creatorId,
     String? parentId,
+    DateTime? startDate, // Added start date
+    DateTime? endDate, // Added end date
   }) {
     return NoteItem(
       id: id ?? this.id,
@@ -66,6 +73,8 @@ class NoteItem {
       relations: relations ?? this.relations,
       creatorId: creatorId ?? this.creatorId,
       parentId: parentId ?? this.parentId,
+      startDate: startDate ?? this.startDate, // Added start date
+      endDate: endDate ?? this.endDate, // Added end date
     );
   }
 
@@ -87,31 +96,36 @@ class NoteItem {
         listEquals(other.resources, other.resources) &&
         listEquals(other.relations, other.relations) &&
         other.creatorId == creatorId &&
-        other.parentId == parentId;
+        other.parentId == parentId &&
+        other.startDate == startDate && // Added start date check
+        other.endDate == endDate; // Added end date check
   }
 
   @override
   int get hashCode {
-     final listEquality = const DeepCollectionEquality();
-     return Object.hash(
-        id,
-        content,
-        pinned,
-        state,
-        visibility,
-        createTime,
-        updateTime,
-        displayTime,
-        listEquality.hash(tags),
-        listEquality.hash(resources),
-        listEquality.hash(relations),
-        creatorId,
-        parentId,
-      );
+    final listEquality = const DeepCollectionEquality();
+    return Object.hash(
+      id,
+      content,
+      pinned,
+      state,
+      visibility,
+      createTime,
+      updateTime,
+      displayTime,
+      listEquality.hash(tags),
+      listEquality.hash(resources),
+      listEquality.hash(relations),
+      creatorId,
+      parentId,
+      startDate, // Added start date
+      endDate, // Added end date
+    );
   }
 
   @override
   String toString() {
-    return 'NoteItem(id: $id, state: ${state.name}, pinned: $pinned, content: ${content.substring(0, (content.length > 20 ? 20 : content.length))}...)';
+    // Optionally add startDate/endDate to toString
+    return 'NoteItem(id: $id, state: ${state.name}, pinned: $pinned, startDate: $startDate, content: ${content.substring(0, (content.length > 20 ? 20 : content.length))}...)';
   }
 }

@@ -309,3 +309,9 @@ void _addToHistory(Ref ref) {
     print('[filterHistory] Added state: $config');
   }
 }
+
+/// Provider to control hiding notes where startDate is in the future.
+final hideFutureStartDateProvider = StateProvider<bool>((ref) {
+  // TODO: Load this preference from SharedPreferences if needed
+  return true; // Default to hiding future notes
+}, name: 'hideFutureStartDateProvider');

@@ -516,16 +516,39 @@ class BlinkoApiService implements BaseApiService {
       content: note.content,
       isArchived: note.state == NoteState.archived,
       isTop: note.pinned,
+      // --- Add these lines (CRITICAL: Assumes Blinko API supports these fields in NotesUpsertRequest) ---
+      // Verify the actual field names and expected format (e.g., String ISO 8601) in the Blinko API spec.
+      // If the API uses a different structure (like NotesListRequestStartDate), adapt accordingly.
+      // If the API does *not* support updating these fields here, remove these lines.
+      // startDate: note.startDate?.toIso8601String(), // Example if API expects ISO String
+      // endDate: note.endDate?.toIso8601String(),     // Example if API expects ISO String
+      // --- End of potentially added lines ---
     );
     try {
+      if (kDebugMode) {
+        print(
+          '[BlinkoApiService.updateNote] Calling notesUpsertWithHttpInfo for ID $id with request: ${request.toJson()}',
+        );
+      }
       final response = await noteApi.notesUpsertWithHttpInfo(request);
       if (response.statusCode >= 200 && response.statusCode < 300) {
-        // Fetch the updated note to ensure we have the latest state
+        // Fetch the updated note to ensure we have the latest state, including potentially updated dates
         return await getNote(id, targetServerOverride: targetServerOverride);
       } else {
+        if (kDebugMode) {
+          print(
+            '[BlinkoApiService.updateNote] notesUpsertWithHttpInfo failed for ID $id. Status: ${response.statusCode}, Body: ${response.body}',
+          );
+        }
         throw blinko_api.ApiException(response.statusCode, response.body);
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      if (kDebugMode) {
+        print(
+          '[BlinkoApiService.updateNote] Error during notesUpsertWithHttpInfo call for ID $id: $e',
+        );
+        print('[BlinkoApiService.updateNote] Stack Trace: $stackTrace');
+      }
       if (e is blinko_api.ApiException) {
         throw Exception(
           'Failed to update note $id: API Error ${e.code} - ${e.message}',
@@ -925,23 +948,33 @@ class BlinkoApiService implements BaseApiService {
   NoteItem _convertBlinkoDetailToNoteItem(
     blinko_api.NotesDetail200Response blinkoDetail,
   ) {
-    DateTime parseBlinkoDate(String? dateString) {
-      if (dateString == null) {
-        return DateTime(1970);
+    DateTime? tryParseDateTime(String? dateString) {
+      if (dateString == null || dateString.isEmpty) {
+        return null;
       }
-      try {
-        return DateTime.parse(dateString);
-      } catch (_) {
-        return DateTime.tryParse(dateString) ?? DateTime(1970);
+      // Handle potential '0001-01-01T00:00:00Z' or similar zero dates from API
+      if (dateString.startsWith('0001-')) {
+        return null;
       }
+      return DateTime.tryParse(dateString);
     }
+
+    DateTime parseBlinkoDate(String? dateString) {
+      return tryParseDateTime(dateString) ?? DateTime(1970);
+    }
+
     NoteState state = NoteState.normal;
     if (blinkoDetail.isRecycle == true) {
       state = NoteState.archived;
     } else if (blinkoDetail.isArchived == true) {
+      // Consider if Blinko 'isArchived' maps directly to our 'archived' state
       state = NoteState.archived;
     }
-    NoteVisibility visibility = NoteVisibility.private;
+
+    NoteVisibility visibility =
+        NoteVisibility
+            .private; // Blinko doesn't seem to have public/protected distinction easily available here
+
     final String idStr =
         blinkoDetail.id.toString() ??
         'unknown_id_${DateTime.now().millisecondsSinceEpoch}';
@@ -951,35 +984,45 @@ class BlinkoApiService implements BaseApiService {
     final DateTime updatedAt = parseBlinkoDate(blinkoDetail.updatedAt);
     final String creatorIdStr =
         blinkoDetail.accountId?.toString() ?? 'unknown_creator';
+
+    // --- Parse Start/End Dates ---
+    // Verify the actual field names in the Blinko API spec (e.g., startDate, start_date)
+    final DateTime? startDate = tryParseDateTime(blinkoDetail.startDate);
+    final DateTime? endDate = tryParseDateTime(blinkoDetail.endDate);
+    // ---------------------------
+
     final List<String> tags =
         (blinkoDetail.tags ?? [])
             .map((t) => t.tag.name) // Safely access nested name
             .whereType<String>()
             .toList();
-    // Map attachments to List<Map<String, dynamic>>
+
     final List<Map<String, dynamic>> resources =
         (blinkoDetail.attachments ?? []).map((a) {
           return {
-            'id': a.path,
-            'name': a.path,
+            'id':
+                a.path, // Use path as a unique identifier if no specific ID is available
+            'name': a.path, // Use path or filename as name
             'filename': a.name,
-            'externalLink': a.path,
+            'externalLink': a.path, // Assuming path is the link
             'contentType': a.type,
             'size': a.size?.toString(),
-            'createTime': a.createdAt,
+            'createTime':
+                a.createdAt, // Assuming this is a parsable date string
           };
         }).toList();
-    // Map references to List<Map<String, dynamic>>
+
     final List<Map<String, dynamic>> relations =
         (blinkoDetail.references ?? [])
             .map((r) {
-              final relatedNoteId =
-                  r.toNoteId.toString(); // Use toNoteId instead of r.toNote?.id
-              final type = 'REFERENCE';
+              final relatedNoteId = r.toNoteId.toString(); // Use toNoteId
+              final type =
+                  'REFERENCE'; // Blinko references are likely this type
               return {'relatedMemoId': relatedNoteId, 'type': type};
             })
             .whereType<Map<String, dynamic>>()
             .toList();
+
     return NoteItem(
       id: idStr,
       content: contentStr,
@@ -988,11 +1031,13 @@ class BlinkoApiService implements BaseApiService {
       visibility: visibility,
       createTime: createdAt,
       updateTime: updatedAt,
-      displayTime: createdAt,
+      displayTime: createdAt, // Or maybe updatedAt? Decide display logic.
       tags: tags,
       resources: resources,
       relations: relations,
       creatorId: creatorIdStr,
+      startDate: startDate, // Assign parsed start date
+      endDate: endDate, // Assign parsed end date
     );
   }
 
@@ -1000,23 +1045,33 @@ class BlinkoApiService implements BaseApiService {
   NoteItem _convertBlinkoNoteToNoteItem(
     blinko_api.NotesList200ResponseInner blinkoNote,
   ) {
-    DateTime parseBlinkoDate(String? dateString) {
-      if (dateString == null) {
-        return DateTime(1970);
+    DateTime? tryParseDateTime(String? dateString) {
+      if (dateString == null || dateString.isEmpty) {
+        return null;
       }
-      try {
-        return DateTime.parse(dateString);
-      } catch (_) {
-        return DateTime.tryParse(dateString) ?? DateTime(1970);
+      // Handle potential '0001-01-01T00:00:00Z' or similar zero dates from API
+      if (dateString.startsWith('0001-')) {
+        return null;
       }
+      return DateTime.tryParse(dateString);
     }
+
+    DateTime parseBlinkoDate(String? dateString) {
+      return tryParseDateTime(dateString) ?? DateTime(1970);
+    }
+
     NoteState state = NoteState.normal;
     if (blinkoNote.isRecycle == true) {
       state = NoteState.archived;
     } else if (blinkoNote.isArchived == true) {
+      // Consider if Blinko 'isArchived' maps directly to our 'archived' state
       state = NoteState.archived;
     }
-    NoteVisibility visibility = NoteVisibility.private;
+
+    NoteVisibility visibility =
+        NoteVisibility
+            .private; // Blinko doesn't seem to have public/protected distinction easily available here
+
     final String idStr =
         blinkoNote.id.toString() ??
         'unknown_id_${DateTime.now().millisecondsSinceEpoch}';
@@ -1026,32 +1081,45 @@ class BlinkoApiService implements BaseApiService {
     final DateTime updatedAt = parseBlinkoDate(blinkoNote.updatedAt);
     final String creatorIdStr =
         blinkoNote.accountId?.toString() ?? 'unknown_creator';
+
+    // --- Parse Start/End Dates ---
+    // Verify the actual field names in the Blinko API spec (e.g., startDate, start_date)
+    final DateTime? startDate = tryParseDateTime(blinkoNote.startDate);
+    final DateTime? endDate = tryParseDateTime(blinkoNote.endDate);
+    // ---------------------------
+
     final List<String> tags =
         (blinkoNote.tags ?? [])
             .map((t) => t.tag.name)
             .whereType<String>()
             .toList();
+
     final List<Map<String, dynamic>> resources =
         (blinkoNote.attachments ?? []).map((a) {
           return {
-            'id': a.path,
-            'name': a.path,
+            'id':
+                a.path, // Use path as a unique identifier if no specific ID is available
+            'name': a.path, // Use path or filename as name
             'filename': a.name,
-            'externalLink': a.path,
+            'externalLink': a.path, // Assuming path is the link
             'contentType': a.type,
             'size': a.size?.toString(),
-            'createTime': a.createdAt,
+            'createTime':
+                a.createdAt, // Assuming this is a parsable date string
           };
         }).toList();
+
     final List<Map<String, dynamic>> relations =
         (blinkoNote.references ?? [])
             .map((r) {
-              final relatedNoteId = r.toNoteId.toString();
-              final type = 'REFERENCE';
+              final relatedNoteId = r.toNoteId.toString(); // Use toNoteId
+              final type =
+                  'REFERENCE'; // Blinko references are likely this type
               return {'relatedMemoId': relatedNoteId, 'type': type};
             })
             .whereType<Map<String, dynamic>>()
             .toList();
+
     return NoteItem(
       id: idStr,
       content: contentStr,
@@ -1060,11 +1128,13 @@ class BlinkoApiService implements BaseApiService {
       visibility: visibility,
       createTime: createdAt,
       updateTime: updatedAt,
-      displayTime: createdAt,
+      displayTime: createdAt, // Or maybe updatedAt? Decide display logic.
       tags: tags,
       resources: resources,
       relations: relations,
       creatorId: creatorIdStr,
+      startDate: startDate, // Assign parsed start date
+      endDate: endDate, // Assign parsed end date
     );
   }
 
