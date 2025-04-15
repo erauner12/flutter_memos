@@ -1,6 +1,6 @@
 import 'dart:math' show min;
 
-import 'package:flutter_memos/services/api_service.dart';
+import 'package:flutter_memos/services/api_service.dart'; // Import MemosApiService
 import 'package:flutter_memos/utils/filter_builder.dart'; // Import FilterBuilder
 import 'package:flutter_test/flutter_test.dart';
 
@@ -11,7 +11,7 @@ const bool RUN_FILTER_API_TESTS =
 
 void main() {
   group('Filter Expression API Tests', () {
-    late ApiService apiService;
+    late MemosApiService apiService; // Use MemosApiService
 
     setUp(() async {
       // Make setUp async if loading env vars
@@ -32,10 +32,10 @@ void main() {
         );
       }
 
-      apiService = ApiService();
+      apiService = MemosApiService(); // Use MemosApiService
       // Configure the service *before* any tests run
       apiService.configureService(baseUrl: baseUrl, authToken: apiKey);
-      ApiService.verboseLogging = true;
+      MemosApiService.verboseLogging = true; // Access via concrete class
       // ApiService.useFilterExpressions = true; // This flag is likely removed/obsolete
     });
 
@@ -57,54 +57,65 @@ void main() {
       // Test basic tag filter using FilterBuilder
       final tagFilter = FilterBuilder.byTags(['test']);
       print('\n[TEST] Filtering by tag using CEL: "$tagFilter"');
-      final memosByTag = await apiService.listMemos(
-        parent: 'users/-', // Use 'users/-' for current user
+      final memosByTag = await apiService.listNotes(
+        // Use listNotes
+        // parent: 'users/-', // Removed parent
         filter: tagFilter,
       );
-      print('[RESULT] Found ${memosByTag.memos.length} memos with tag "test"');
+      print(
+        '[RESULT] Found ${memosByTag.notes.length} memos with tag "test"',
+      ); // Use .notes
 
       // Test filtering by visibility using FilterBuilder
       final visibilityFilter = FilterBuilder.byVisibility('PUBLIC');
       print('\n[TEST] Filtering by visibility using CEL: "$visibilityFilter"');
-      final memosByVisibility = await apiService.listMemos(
-        parent: 'users/-',
+      final memosByVisibility = await apiService.listNotes(
+        // Use listNotes
+        // parent: 'users/-', // Removed parent
         filter: visibilityFilter,
       );
-      print('[RESULT] Found ${memosByVisibility.memos.length} PUBLIC memos');
+      print(
+        '[RESULT] Found ${memosByVisibility.notes.length} PUBLIC memos',
+      ); // Use .notes
 
       // Test filtering by content using FilterBuilder
       final searchTerm = 'test';
       final contentFilter = FilterBuilder.byContent(searchTerm);
       print('\n[TEST] Filtering by content using CEL: "$contentFilter"');
-      final memosByContent = await apiService.listMemos(
-        parent: 'users/-',
+      final memosByContent = await apiService.listNotes(
+        // Use listNotes
+        // parent: 'users/-', // Removed parent
         filter: contentFilter,
       );
       print(
-        '[RESULT] Found ${memosByContent.memos.length} memos containing "$searchTerm"',
+        '[RESULT] Found ${memosByContent.notes.length} memos containing "$searchTerm"', // Use .notes
       );
 
       // Print a sample memo from each result
-      if (memosByTag.memos.isNotEmpty) {
+      if (memosByTag.notes.isNotEmpty) {
+        // Use .notes
         print('\nExample memo with tag "test":');
-        print('ID: ${memosByTag.memos[0].id}');
+        print('ID: ${memosByTag.notes[0].id}'); // Use .notes
         print(
-          'Content: ${memosByTag.memos[0].content.substring(0, min(50, memosByTag.memos[0].content.length))}...',
+          'Content: ${memosByTag.notes[0].content.substring(0, min(50, memosByTag.notes[0].content.length))}...', // Use .notes
         );
       }
 
-      if (memosByContent.memos.isNotEmpty) {
+      if (memosByContent.notes.isNotEmpty) {
+        // Use .notes
         print('\nExample memo containing "$searchTerm":');
-        print('ID: ${memosByContent.memos[0].id}');
+        print('ID: ${memosByContent.notes[0].id}'); // Use .notes
         print(
-          'Content: ${memosByContent.memos[0].content.substring(0, min(50, memosByContent.memos[0].content.length))}...',
+          'Content: ${memosByContent.notes[0].content.substring(0, min(50, memosByContent.notes[0].content.length))}...', // Use .notes
         );
       }
 
       // Verify that the content filter works as expected
-      if (memosByContent.memos.isNotEmpty) {
+      if (memosByContent.notes.isNotEmpty) {
+        // Use .notes
         bool foundMatch = false;
-        for (var memo in memosByContent.memos) {
+        for (var memo in memosByContent.notes) {
+          // Use .notes
           if (memo.content.toLowerCase().contains(searchTerm.toLowerCase())) {
             foundMatch = true;
             break;
@@ -139,23 +150,27 @@ void main() {
         print(
           '\n[TEST] Filtering by time expression using CEL: "$todayFilter"',
         );
-      final memosFromToday = await apiService.listMemos(
-          parent: 'users/-',
+        final memosFromToday = await apiService.listNotes(
+          // Use listNotes
+          // parent: 'users/-', // Removed parent
           filter: todayFilter,
       );
-      print('[RESULT] Found ${memosFromToday.memos.length} memos from today');
+        print(
+          '[RESULT] Found ${memosFromToday.notes.length} memos from today',
+        ); // Use .notes
 
         // Test filtering by time expression "this week" using FilterBuilder
         final thisWeekFilter = FilterBuilder.byTimeExpression('this week');
         print(
           '\n[TEST] Filtering by time expression using CEL: "$thisWeekFilter"',
         );
-      final memosFromThisWeek = await apiService.listMemos(
-          parent: 'users/-',
+        final memosFromThisWeek = await apiService.listNotes(
+          // Use listNotes
+          // parent: 'users/-', // Removed parent
           filter: thisWeekFilter,
       );
       print(
-        '[RESULT] Found ${memosFromThisWeek.memos.length} memos from this week',
+          '[RESULT] Found ${memosFromThisWeek.notes.length} memos from this week', // Use .notes
       );
 
         // Test filtering by time range (created after) using FilterBuilder
@@ -165,30 +180,37 @@ void main() {
           operator: '>',
         );
         print('\n[TEST] Filtering by created after using CEL: "$recentFilter"');
-      final recentMemos = await apiService.listMemos(
-          parent: 'users/-',
+        final recentMemos = await apiService.listNotes(
+          // Use listNotes
+          // parent: 'users/-', // Removed parent
           filter: recentFilter,
       );
       print(
-        '[RESULT] Found ${recentMemos.memos.length} memos created in the last 7 days',
+          '[RESULT] Found ${recentMemos.notes.length} memos created in the last 7 days', // Use .notes
       );
 
       // Print a sample memo from each result
-      if (memosFromToday.memos.isNotEmpty) {
+        if (memosFromToday.notes.isNotEmpty) {
+          // Use .notes
         print('\nExample memo from today:');
-        print('ID: ${memosFromToday.memos[0].id}');
-        print('Create Time: ${memosFromToday.memos[0].createTime}');
-        print(
-          'Content: ${memosFromToday.memos[0].content.substring(0, min(50, memosFromToday.memos[0].content.length))}...',
+          print('ID: ${memosFromToday.notes[0].id}'); // Use .notes
+          print(
+            'Create Time: ${memosFromToday.notes[0].createTime}',
+          ); // Use .notes
+          print(
+            'Content: ${memosFromToday.notes[0].content.substring(0, min(50, memosFromToday.notes[0].content.length))}...', // Use .notes
         );
       }
 
-      if (recentMemos.memos.isNotEmpty) {
+        if (recentMemos.notes.isNotEmpty) {
+          // Use .notes
         print('\nExample memo from last 7 days:');
-        print('ID: ${recentMemos.memos[0].id}');
-        print('Create Time: ${recentMemos.memos[0].createTime}');
-        print(
-          'Content: ${recentMemos.memos[0].content.substring(0, min(50, recentMemos.memos[0].content.length))}...',
+          print('ID: ${recentMemos.notes[0].id}'); // Use .notes
+          print(
+            'Create Time: ${recentMemos.notes[0].createTime}',
+          ); // Use .notes
+          print(
+            'Content: ${recentMemos.notes[0].content.substring(0, min(50, recentMemos.notes[0].content.length))}...', // Use .notes
         );
       }
       },
@@ -219,12 +241,13 @@ void main() {
         visibilityFilter,
       ]);
       print('\n[TEST] Filtering using combined CEL: "$combinedAndFilter"');
-      final combinedFilterResponse = await apiService.listMemos(
-        parent: 'users/-',
+      final combinedFilterResponse = await apiService.listNotes(
+        // Use listNotes
+        // parent: 'users/-', // Removed parent
         filter: combinedAndFilter,
       );
       print(
-        '[RESULT] Found ${combinedFilterResponse.memos.length} PUBLIC memos containing "$searchTerm"',
+        '[RESULT] Found ${combinedFilterResponse.notes.length} PUBLIC memos containing "$searchTerm"', // Use .notes
       );
 
       // Test filtering by content and time expression "this month"
@@ -234,28 +257,37 @@ void main() {
         thisMonthFilter,
       ]);
       print('\n[TEST] Filtering using combined CEL: "$contentAndTimeFilter"');
-      final contentAndTimeMemos = await apiService.listMemos(
-        parent: 'users/-',
+      final contentAndTimeMemos = await apiService.listNotes(
+        // Use listNotes
+        // parent: 'users/-', // Removed parent
         filter: contentAndTimeFilter,
       );
       print(
-        '[RESULT] Found ${contentAndTimeMemos.memos.length} memos from this month containing "$searchTerm"',
+        '[RESULT] Found ${contentAndTimeMemos.notes.length} memos from this month containing "$searchTerm"', // Use .notes
       );
 
       // Print a sample memo from each result
-      if (combinedFilterResponse.memos.isNotEmpty) {
+      if (combinedFilterResponse.notes.isNotEmpty) {
+        // Use .notes
         print('\nExample memo matching combined filter:');
-        print('ID: ${combinedFilterResponse.memos[0].id}');
-        print('Visibility: ${combinedFilterResponse.memos[0].visibility}');
+        print('ID: ${combinedFilterResponse.notes[0].id}'); // Use .notes
         print(
-          'Content: ${combinedFilterResponse.memos[0].content.substring(0, min(50, combinedFilterResponse.memos[0].content.length))}...',
+          'Visibility: ${combinedFilterResponse.notes[0].visibility}',
+        ); // Use .notes
+        print(
+          'Content: ${combinedFilterResponse.notes[0].content.substring(0, min(50, combinedFilterResponse.notes[0].content.length))}...', // Use .notes
         );
       }
 
       // Verify that the combined filter works as expected
-      if (combinedFilterResponse.memos.isNotEmpty) {
-        for (var memo in combinedFilterResponse.memos) {
-          expect(memo.visibility, equals('PUBLIC'));
+      if (combinedFilterResponse.notes.isNotEmpty) {
+        // Use .notes
+        for (var memo in combinedFilterResponse.notes) {
+          // Use .notes
+          expect(
+            memo.visibility.toString().split('.').last.toUpperCase(),
+            equals('PUBLIC'),
+          ); // Compare enum string representation
           expect(
             memo.content.toLowerCase().contains(searchTerm.toLowerCase()),
             isTrue,
@@ -285,28 +317,33 @@ void main() {
       final rawCelFilter = 'content.contains("test") && visibility == "PUBLIC"';
       print('\n[TEST] Using raw CEL filter: "$rawCelFilter"');
 
-      final response = await apiService.listMemos(
-        parent: 'users/-',
+      final response = await apiService.listNotes(
+        // Use listNotes
+        // parent: 'users/-', // Removed parent
         filter: rawCelFilter,
       );
 
       print(
-        '[RESULT] Found ${response.memos.length} memos matching raw CEL filter',
+        '[RESULT] Found ${response.notes.length} memos matching raw CEL filter', // Use .notes
       );
 
       // Print a sample memo
-      if (response.memos.isNotEmpty) {
+      if (response.notes.isNotEmpty) {
+        // Use .notes
         print('\nExample memo matching raw CEL filter:');
-        print('ID: ${response.memos[0].id}');
-        print('Visibility: ${response.memos[0].visibility}');
+        print('ID: ${response.notes[0].id}'); // Use .notes
+        print('Visibility: ${response.notes[0].visibility}'); // Use .notes
         print(
-          'Content: ${response.memos[0].content.substring(0, min(50, response.memos[0].content.length))}...',
+          'Content: ${response.notes[0].content.substring(0, min(50, response.notes[0].content.length))}...', // Use .notes
         );
 
         // Verify it matches the filter criteria
-        expect(response.memos[0].visibility, equals('PUBLIC'));
         expect(
-          response.memos[0].content.toLowerCase().contains('test'),
+          response.notes[0].visibility.toString().split('.').last.toUpperCase(),
+          equals('PUBLIC'),
+        ); // Compare enum string representation
+        expect(
+          response.notes[0].content.toLowerCase().contains('test'),
           isTrue,
         );
       }
@@ -316,31 +353,35 @@ void main() {
       final formattedDate = yesterday.toUtc().toIso8601String();
 
       final dateFilter =
-          'update_time > "$formattedDate" && visibility == "PUBLIC"';
+          'update_time > timestamp("$formattedDate") && visibility == "PUBLIC"'; // Use timestamp() for CEL
       print('\n[TEST] Using date-based CEL filter: "$dateFilter"');
 
-      final dateFilterResponse = await apiService.listMemos(
-        parent: 'users/-',
+      final dateFilterResponse = await apiService.listNotes(
+        // Use listNotes
+        // parent: 'users/-', // Removed parent
         filter: dateFilter,
       );
 
       print(
-        '[RESULT] Found ${dateFilterResponse.memos.length} PUBLIC memos updated since yesterday',
+        '[RESULT] Found ${dateFilterResponse.notes.length} PUBLIC memos updated since yesterday', // Use .notes
       );
 
-      if (dateFilterResponse.memos.isNotEmpty) {
+      if (dateFilterResponse.notes.isNotEmpty) {
+        // Use .notes
         print('\nExample recently updated memo:');
-        print('ID: ${dateFilterResponse.memos[0].id}');
-        print('Updated: ${dateFilterResponse.memos[0].updateTime}');
+        print('ID: ${dateFilterResponse.notes[0].id}'); // Use .notes
         print(
-          'Content: ${dateFilterResponse.memos[0].content.substring(0, min(50, dateFilterResponse.memos[0].content.length))}...',
+          'Updated: ${dateFilterResponse.notes[0].updateTime}',
+        ); // Use .notes
+        print(
+          'Content: ${dateFilterResponse.notes[0].content.substring(0, min(50, dateFilterResponse.notes[0].content.length))}...', // Use .notes
         );
       }
 
       // Basic assertion: Expect some results if the filter is valid and data exists
       // Note: This might fail if your test server has no matching data.
-      // expect(response.memos, isNotEmpty, reason: 'Expected results for raw CEL filter');
-      // expect(dateFilterResponse.memos, isNotEmpty, reason: 'Expected results for date-based CEL filter');
+      // expect(response.notes, isNotEmpty, reason: 'Expected results for raw CEL filter');
+      // expect(dateFilterResponse.notes, isNotEmpty, reason: 'Expected results for date-based CEL filter');
 
     }, skip: !RUN_FILTER_API_TESTS); // Add skip condition directly to test
   });

@@ -66,12 +66,16 @@ class MockMultiServerConfigNotifier
   }
 }
 
-
 void main() {
   late MockBaseApiService mockApiService; // Updated mock type
   late List<NoteItem> testNotes; // Updated type
 
-  setUp(() {
+  setUp(() async {
+    // Clear shared preferences at setup
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('server_config_cache');
+    await prefs.remove('defaultServerId');
+    
     mockApiService = MockBaseApiService(); // Updated mock type
 
     when(mockApiService.apiBaseUrl).thenReturn('http://test-url.com');
@@ -90,6 +94,7 @@ void main() {
         displayTime: DateTime.now(), // Add required field
         visibility: NoteVisibility.private, // Add required field
         state: NoteState.normal, // Add required field
+        pinned: false, // Add required field
       ),
       NoteItem(
         // Updated type
@@ -102,6 +107,7 @@ void main() {
         ), // Add required field
         visibility: NoteVisibility.private, // Add required field
         state: NoteState.normal, // Add required field
+        pinned: false, // Add required field
       ),
     ];
 
@@ -109,7 +115,7 @@ void main() {
     when(
       mockApiService.listNotes(
         // Updated method name
-        parent: anyNamed('parent'),
+        // parent: anyNamed('parent'), // Removed parent
         filter: anyNamed('filter'),
         state: anyNamed('state'),
         sort: anyNamed('sort'),

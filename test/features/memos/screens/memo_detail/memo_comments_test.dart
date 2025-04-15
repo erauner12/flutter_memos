@@ -4,10 +4,10 @@ import 'package:flutter_memos/providers/api_providers.dart';
 import 'package:flutter_memos/providers/comment_providers.dart'
     as comment_providers;
 import 'package:flutter_memos/providers/filter_providers.dart';
+import 'package:flutter_memos/providers/note_providers.dart' as note_providers; // Added import
 import 'package:flutter_memos/providers/ui_providers.dart' as ui_providers;
-import 'package:flutter_memos/screens/memo_detail/memo_comments.dart';
-import 'package:flutter_memos/screens/memo_detail/memo_detail_providers.dart';
-import 'package:flutter_memos/services/api_service.dart' as api_service;
+import 'package:flutter_memos/screens/item_detail/note_comments.dart'; // Updated import
+// import 'package:flutter_memos/screens/memo_detail/memo_detail_providers.dart'; // Removed import
 import 'package:flutter_memos/services/base_api_service.dart'; // Added import
 // Remove the direct import of ApiService if it causes ambiguity
 // import 'package:flutter_memos/services/api_service.dart';
@@ -16,6 +16,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_slidable/flutter_slidable.dart'; // Keep if Slidable is used
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/annotations.dart';
+import 'package:mockito/mockito.dart'; // Added import
 
 import 'memo_comments_test.mocks.dart';
 
@@ -56,7 +57,7 @@ Widget buildTestableWidget(Widget child, ProviderContainer container) {
 }
 
 void main() {
-  const testMemoId = 'test-memo-1';
+  const testMemoId = 'test-memo-1'; // Keep as memoId for comment context
   // Generate dummy comments
   final initialDummyComments = createDummyComments(3);
   // Sort dummy comments by createTime (descending)
@@ -75,7 +76,7 @@ void main() {
 
     // Create stub responses for the mock API service
     when(
-      mockApiService.listMemoComments(any),
+      mockApiService.listNoteComments(any), // Updated method name
       // Use the pre-sorted list here
     ).thenAnswer((_) async => sortedDummyComments);
 
@@ -83,7 +84,7 @@ void main() {
       overrides: [
         // Override the comments provider for the specific memoId
         // Provide the pre-sorted list directly
-        memoCommentsProvider(testMemoId).overrideWith(
+        note_providers.noteCommentsProvider(testMemoId).overrideWith( // Updated provider name
           (ref) => Future.value(sortedDummyComments),
         ),
         // Ensure UI providers start in a known state
@@ -106,11 +107,11 @@ void main() {
     container.dispose();
   });
 
-  testWidgets('MemoComments displays list of comments', (WidgetTester tester) async {
+  testWidgets('NoteComments displays list of comments', (WidgetTester tester) async { // Updated widget name
     // Arrange
     // Pass the container to the helper
     await tester.pumpWidget(
-      buildTestableWidget(const MemoComments(memoId: testMemoId), container),
+      buildTestableWidget(const NoteComments(memoId: testMemoId), container), // Updated widget name
     );
     await tester.pumpAndSettle(); // Wait for FutureProvider
 
@@ -143,11 +144,11 @@ void main() {
   });
 
   testWidgets(
-    'MemoComments enters multi-select mode and shows checkboxes/switches',
+    'NoteComments enters multi-select mode and shows checkboxes/switches', // Updated widget name
     (WidgetTester tester) async {
     // Arrange
     await tester.pumpWidget(
-      buildTestableWidget(const MemoComments(memoId: testMemoId), container),
+      buildTestableWidget(const NoteComments(memoId: testMemoId), container), // Updated widget name
     );
     await tester.pumpAndSettle();
 
@@ -182,11 +183,11 @@ void main() {
   });
 
 testWidgets(
-    'MemoComments selects/deselects comment via Checkbox/Switch tap',
+    'NoteComments selects/deselects comment via Checkbox/Switch tap', // Updated widget name
     (WidgetTester tester) async {
     // Arrange
     await tester.pumpWidget(
-      buildTestableWidget(const MemoComments(memoId: testMemoId), container),
+      buildTestableWidget(const NoteComments(memoId: testMemoId), container), // Updated widget name
     );
     await tester.pumpAndSettle();
 
@@ -254,11 +255,11 @@ testWidgets(
   );
 
 testWidgets(
-    'MemoComments selects/deselects comment via item tap in multi-select mode',
+    'NoteComments selects/deselects comment via item tap in multi-select mode', // Updated widget name
     (WidgetTester tester) async {
       // Arrange
       await tester.pumpWidget(
-        buildTestableWidget(const MemoComments(memoId: testMemoId), container),
+        buildTestableWidget(const NoteComments(memoId: testMemoId), container), // Updated widget name
       );
       await tester.pumpAndSettle();
 
@@ -328,11 +329,11 @@ testWidgets(
   );
 
 testWidgets(
-    'MemoComments exits multi-select mode and hides checkboxes/switches',
+    'NoteComments exits multi-select mode and hides checkboxes/switches', // Updated widget name
     (WidgetTester tester) async {
       // Arrange
       await tester.pumpWidget(
-        buildTestableWidget(const MemoComments(memoId: testMemoId), container),
+        buildTestableWidget(const NoteComments(memoId: testMemoId), container), // Updated widget name
       );
       await tester.pumpAndSettle();
 

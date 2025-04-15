@@ -1,7 +1,6 @@
 import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/models/note_item.dart'; // Updated import
-import 'package:flutter_memos/services/base_api_service.dart'; // Keep for verboseLogging if needed
-import 'package:flutter_memos/services/memos_api_service.dart'; // Updated import
+import 'package:flutter_memos/services/api_service.dart'; // Updated import
 import 'package:flutter_test/flutter_test.dart';
 
 // Set this to true to run integration tests against a real server
@@ -10,7 +9,7 @@ const bool RUN_INTEGRATION_TESTS = false;
 
 void main() {
   group('API Integration Tests', () {
-    late MemosApiService apiService; // Updated type
+    late ApiService apiService; // Updated type
 
     setUpAll(() async {
       const baseUrl = String.fromEnvironment(
@@ -27,15 +26,16 @@ void main() {
           print(
             'WARNING: Integration test environment variables not set (MEMOS_TEST_API_BASE_URL, MEMOS_TEST_API_KEY). Skipping configuration.',
           );
-          apiService = MemosApiService(); // Instantiate to avoid null errors
+          apiService = ApiService(); // Instantiate to avoid null errors
         } else {
-          apiService = MemosApiService(); // Instantiate here
-          print('Configuring MemosApiService for integration tests: $baseUrl');
+          apiService = ApiService(); // Instantiate here
+          print('Configuring ApiService for integration tests: $baseUrl');
           apiService.configureService(baseUrl: baseUrl, authToken: apiKey);
-          BaseApiService.verboseLogging = true; // Optional
+          // BaseApiService.verboseLogging = true; // Cannot access static member on abstract class
+          ApiService.verboseLogging = true; // Access via concrete class
         }
       } else {
-        apiService = MemosApiService(); // Instantiate even if skipping
+        apiService = ApiService(); // Instantiate even if skipping
         print('RUN_INTEGRATION_TESTS is false. Skipping API configuration.');
       }
     });
@@ -43,7 +43,7 @@ void main() {
     setUp(() {
       if (RUN_INTEGRATION_TESTS && apiService.apiBaseUrl.isEmpty) {
         print(
-          "Warning: MemosApiService not configured in setUp, integration tests might fail.",
+          "Warning: ApiService not configured in setUp, integration tests might fail.",
         );
       }
     });
@@ -52,7 +52,7 @@ void main() {
       // Updated test name
       if (!RUN_INTEGRATION_TESTS || apiService.apiBaseUrl.isEmpty) {
         print(
-          'Skipping integration test - RUN_INTEGRATION_TESTS is false or MemosApiService not configured.',
+          'Skipping integration test - RUN_INTEGRATION_TESTS is false or ApiService not configured.',
         );
         return;
       }
@@ -157,7 +157,7 @@ void main() {
       // Updated test name
       if (!RUN_INTEGRATION_TESTS || apiService.apiBaseUrl.isEmpty) {
         print(
-          'Skipping integration test - RUN_INTEGRATION_TESTS is false or MemosApiService not configured.',
+          'Skipping integration test - RUN_INTEGRATION_TESTS is false or ApiService not configured.',
         );
         return;
       }
@@ -165,7 +165,7 @@ void main() {
       // Get notes sorted by update time
       final notesByUpdateTime = await apiService.listNotes(
         // Updated method name
-        parent: 'users/1', // Assuming user ID 1 for testing
+        // parent: 'users/1', // Removed parent
         sort: 'updateTime',
         direction: 'DESC',
       );
@@ -173,7 +173,7 @@ void main() {
       // Get notes sorted by create time
       final notesByCreateTime = await apiService.listNotes(
         // Updated method name
-        parent: 'users/1', // Assuming user ID 1 for testing
+        // parent: 'users/1', // Removed parent
         sort: 'createTime',
         direction: 'DESC',
       );
@@ -205,7 +205,7 @@ void main() {
     test('Create, retrieve, update, and delete comment', () async {
       if (!RUN_INTEGRATION_TESTS || apiService.apiBaseUrl.isEmpty) {
         print(
-          'Skipping integration test - RUN_INTEGRATION_TESTS is false or MemosApiService not configured.',
+          'Skipping integration test - RUN_INTEGRATION_TESTS is false or ApiService not configured.',
         );
         return;
       }
@@ -316,7 +316,7 @@ void main() {
     test('Comment with special states and attributes', () async {
       if (!RUN_INTEGRATION_TESTS || apiService.apiBaseUrl.isEmpty) {
         print(
-          'Skipping integration test - RUN_INTEGRATION_TESTS is false or MemosApiService not configured.',
+          'Skipping integration test - RUN_INTEGRATION_TESTS is false or ApiService not configured.',
         );
         return;
       }

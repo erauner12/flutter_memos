@@ -1,9 +1,9 @@
 import 'package:flutter/foundation.dart';
-import 'package:flutter_memos/api/lib/api.dart'; // For V1Resource (assuming this is still correct)
+import 'package:flutter_memos/api/lib/api.dart'; // Import for NoteRelation and other API models
 import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/models/list_notes_response.dart'; // Updated import
 import 'package:flutter_memos/models/note_item.dart'; // Updated import
-// import 'package:flutter_memos/models/note_relation.dart'; // Updated import
+import 'package:flutter_memos/models/note_relation.dart'; // Updated import
 import 'package:flutter_memos/providers/api_providers.dart';
 import 'package:flutter_memos/providers/comment_providers.dart' as comment_providers;
 import 'package:flutter_memos/providers/note_providers.dart'
@@ -43,13 +43,23 @@ void main() {
       // Stub listNotes (replaces listMemos)
       when(
         mockApiService.listNotes(
-          parent: anyNamed('parent'),
+          // No parent parameter
           filter: anyNamed('filter'),
           state: anyNamed('state'),
           sort: anyNamed('sort'),
           direction: anyNamed('direction'),
           pageSize: anyNamed('pageSize'),
           pageToken: anyNamed('pageToken'),
+          // Add other potential parameters used by providers if necessary
+          tags: anyNamed('tags'),
+          visibility: anyNamed('visibility'),
+          contentSearch: anyNamed('contentSearch'),
+          createdAfter: anyNamed('createdAfter'),
+          createdBefore: anyNamed('createdBefore'),
+          updatedAfter: anyNamed('updatedAfter'),
+          updatedBefore: anyNamed('updatedBefore'),
+          timeExpression: anyNamed('timeExpression'),
+          useUpdateTimeForExpression: anyNamed('useUpdateTimeForExpression'),
         ),
       ).thenAnswer((invocation) async {
         // Return empty list for any listNotes call
@@ -70,6 +80,11 @@ void main() {
           id: newId,
           createTime: DateTime.now(),
           updateTime: DateTime.now(),
+          // Ensure all required fields are present if copyWith doesn't handle them
+          displayTime: note.displayTime ?? DateTime.now(),
+          visibility: note.visibility ?? NoteVisibility.private,
+          state: note.state ?? NoteState.normal,
+          pinned: note.pinned ?? false,
         );
         createdNotes[createdNote.id] = createdNote;
         return createdNote;
@@ -99,10 +114,10 @@ void main() {
           id: newId,
           content: comment.content,
           creatorId: comment.creatorId ?? 'mock-user',
-          createTime: comment.createTime,
+          createTime: comment.createTime ?? now, // Provide default if null
           updateTime: now,
-          state: comment.state,
-          pinned: comment.pinned,
+          state: comment.state ?? CommentState.normal, // Provide default
+          pinned: comment.pinned ?? false, // Provide default
           resources: resources, // Store the map list
         );
         createdComments.putIfAbsent(noteId, () => []).add(createdComment);
@@ -184,12 +199,10 @@ void main() {
           );
         }
         final originalComment = commentsList[index];
-        final updated = Comment(
-          id: originalComment.id,
+        // Use copyWith for cleaner update logic
+        final updated = originalComment.copyWith(
           content: updatedCommentData.content,
-          createTime: originalComment.createTime,
           updateTime: DateTime.now().millisecondsSinceEpoch,
-          creatorId: originalComment.creatorId,
           pinned: updatedCommentData.pinned,
           state: updatedCommentData.state,
           resources: updatedCommentData.resources ?? originalComment.resources,
@@ -215,6 +228,7 @@ void main() {
             'Comment not found for delete: $commentId in note $noteId',
           );
         }
+        // Return type is void, so return null or nothing
         return;
       });
 
@@ -245,6 +259,7 @@ void main() {
         final formattedId =
             noteId.contains('/') ? noteId.split('/').last : noteId;
         createdRelations[formattedId] = List.from(relations);
+        // Return type is void, so return null or nothing
         return;
       });
 
@@ -261,7 +276,7 @@ void main() {
         return {
           'name': resourceName,
           'filename': filename,
-          'type': contentType,
+          'type': contentType, // Key should be 'type'
           'size': bytes.length.toString(),
           'createTime': DateTime.now().toIso8601String(), // Use ISO string
         };
@@ -288,6 +303,7 @@ void main() {
           displayTime: DateTime.now(),
           visibility: NoteVisibility.private,
           state: NoteState.normal,
+          pinned: false, // Added missing required field
         ),
       );
       final comment = await mockApiService.createNoteComment(
@@ -327,6 +343,7 @@ void main() {
           displayTime: DateTime.now(),
           visibility: NoteVisibility.private,
           state: NoteState.normal,
+          pinned: false, // Added missing required field
         ),
       );
       final comment = await mockApiService.createNoteComment(
@@ -367,6 +384,7 @@ void main() {
           displayTime: DateTime.now(),
           visibility: NoteVisibility.private,
           state: NoteState.normal,
+          pinned: false, // Added missing required field
         ),
       );
       final comment = await mockApiService.createNoteComment(
@@ -421,12 +439,10 @@ void main() {
           );
         }
         final originalComment = commentsList[index];
-        final updated = Comment(
-          id: originalComment.id,
+        // Use copyWith for cleaner update logic
+        final updated = originalComment.copyWith(
           content: updatedCommentData.content,
-          createTime: originalComment.createTime,
           updateTime: DateTime.now().millisecondsSinceEpoch,
-          creatorId: originalComment.creatorId,
           pinned: updatedCommentData.pinned,
           state: updatedCommentData.state,
           resources: updatedCommentData.resources ?? originalComment.resources,
@@ -480,6 +496,7 @@ void main() {
             displayTime: DateTime.now(),
             visibility: NoteVisibility.private,
             state: NoteState.normal,
+            pinned: false, // Added missing required field
           ),
         );
         final comment = await mockApiService.createNoteComment(
@@ -552,6 +569,7 @@ void main() {
             displayTime: DateTime.now(),
             visibility: NoteVisibility.private,
             state: NoteState.normal,
+            pinned: false, // Added missing required field
           ),
         );
         final comment = await mockApiService.createNoteComment(
@@ -580,6 +598,7 @@ void main() {
           final formattedId =
               noteId.contains('/') ? noteId.split('/').last : noteId;
           createdRelations[formattedId] = List.from(relations);
+          // Return type is void
           return;
         });
 
@@ -625,7 +644,7 @@ void main() {
         final mockExpectedResourceMap = {
           'name': mockResourceName,
           'filename': mockFilename,
-          'type': mockContentType,
+          'type': mockContentType, // Key should be 'type'
           'size': '3',
           'createTime': DateTime.now().toIso8601String(),
         };
@@ -678,7 +697,10 @@ void main() {
         final passedResource = capturedResourcesArg!.first;
         expect(passedResource['name'], equals(mockResourceName));
         expect(passedResource['filename'], equals(mockFilename));
-        expect(passedResource['type'], equals(mockContentType));
+        expect(
+          passedResource['type'],
+          equals(mockContentType),
+        ); // Check 'type' key
 
         // Verify the final result returned by the provider
         expect(resultComment, isNotNull);
@@ -688,7 +710,10 @@ void main() {
         final finalResource = resultComment.resources!.first;
         expect(finalResource['name'], equals(mockResourceName));
         expect(finalResource['filename'], equals(mockFilename));
-        expect(finalResource['type'], equals(mockContentType));
+        expect(
+          finalResource['type'],
+          equals(mockContentType),
+        ); // Check 'type' key
       },
     );
 
@@ -705,6 +730,7 @@ void main() {
             displayTime: DateTime.now(),
             visibility: NoteVisibility.private,
             state: NoteState.normal,
+            pinned: false, // Added missing required field
           ),
         );
         final newComment = Comment(
@@ -740,6 +766,10 @@ void main() {
         // For now, we'll assume the provider handles the bump internally.
         // verify(mockApiService.getNote(note.id)).called(1); // Might not be called directly
         // verify(mockApiService.updateNote(note.id, any)).called(1); // Might not be called directly
+        // Check if bumpNoteProvider was called (indirect verification)
+        // This requires mocking the provider itself or checking its side effects.
+        // A simpler check is that createNoteComment was called.
+        expect(createCommentVerification.called(1), isTrue);
       },
     );
     // --- Tests for updateCommentProvider ---
@@ -755,6 +785,7 @@ void main() {
             displayTime: DateTime.now(),
             visibility: NoteVisibility.private,
             state: NoteState.normal,
+            pinned: false, // Added missing required field
           ),
         );
         final originalComment = await mockApiService.createNoteComment(
@@ -871,6 +902,7 @@ void main() {
             displayTime: DateTime.now(),
             visibility: NoteVisibility.private,
             state: NoteState.normal,
+            pinned: false, // Added missing required field
           ),
         );
         final nowMillis = DateTime.now().millisecondsSinceEpoch;
@@ -901,9 +933,10 @@ void main() {
           (_) async => [comment2, comment1],
         ); // <-- Return sorted list [newer, older]
         // Cast the future result to the expected type
+        // Need to await the future and cast
         final initialComments = await container.read(
           note_providers.noteCommentsProvider(note.id).future,
-        );
+        ); // Cast here
 
         expect(
           initialComments.first.id,
@@ -953,9 +986,10 @@ void main() {
         await container.pump(); // Allow time for the provider to rebuild
 
         // Cast the future result to the expected type
+        // Need to await the future and cast
         final finalComments = await container.read(
           note_providers.noteCommentsProvider(note.id).future,
-        );
+        ); // Cast here
 
         // Verify the sorting: The updated comment (originally comment1) should now be first
         // The provider itself applies the sorting (sortByPinnedThenUpdateTime)

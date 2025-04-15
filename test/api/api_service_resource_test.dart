@@ -10,10 +10,7 @@ import 'package:mockito/annotations.dart';
 const bool runIntegrationTests =
     false; // Set to true to enable integration tests
 
-// Generate nice mock for MemosApiService (or BaseApiService if preferred)
-// Mocking the concrete class might be easier for integration-like tests
-// Generate nice mock for MemosApiService (or BaseApiService if preferred)
-// Mocking the concrete class might be easier for integration-like tests
+// Generate nice mock for MemosApiService
 @GenerateNiceMocks([MockSpec<MemosApiService>()]) // Verified MockSpec
 void main() {
   group('ApiService Resource Integration Tests', () {
@@ -176,7 +173,14 @@ void main() {
           mockFilename,
           mockContentType,
         );
-        uploadedResourceId = uploadedResourceMap['name']; // Store for cleanup
+        // Handle potential null return from uploadResource
+        expect(
+          uploadedResourceMap,
+          isNotNull,
+          reason: 'uploadResource should return a map',
+        );
+        uploadedResourceId =
+            uploadedResourceMap['name']; // Store for cleanup, use ! after null check
         print(
           '[Test Action] Resource uploaded successfully: ID ${uploadedResourceMap['name']}',
         );
@@ -191,7 +195,7 @@ void main() {
         reason: 'uploadResource should return a resource map',
       );
       expect(
-        uploadedResourceMap['name'],
+        uploadedResourceMap['name'], // Use ! after null check
         isNotNull,
         reason: 'Uploaded resource map should have a name (ID)',
       );
@@ -206,7 +210,7 @@ void main() {
         reason: 'Filename mismatch in uploaded resource map',
       );
       expect(
-        uploadedResourceMap['type'],
+        uploadedResourceMap['type'], // Key is 'type'
         equals(mockContentType),
         reason: 'Content type mismatch in uploaded resource map',
       );
@@ -223,7 +227,13 @@ void main() {
           tempComment,
           resources: [uploadedResourceMap], // Pass the uploaded resource map
         );
-        createdCommentId = resultComment.id;
+        // Handle potential null return
+        expect(
+          resultComment,
+          isNotNull,
+          reason: 'createNoteComment should return a comment',
+        );
+        createdCommentId = resultComment.id; // Use ! after null check
         print(
           '[Test Action] Comment created successfully: ID ${resultComment.id}',
         );
@@ -238,7 +248,7 @@ void main() {
         reason: 'createNoteComment should return a comment', // Updated message
       );
       expect(
-        resultComment.id,
+        resultComment.id, // Use ! after null check
         isNotNull,
         reason: 'Created comment should have an ID',
       );
@@ -276,7 +286,7 @@ void main() {
         reason: 'Resource filename mismatch in comment',
       );
       expect(
-        resourceInComment['type'],
+        resourceInComment['type'], // Key is 'type'
         equals(mockContentType),
         reason: 'Resource type mismatch in comment',
       );
@@ -314,7 +324,7 @@ void main() {
           reason: 'Resource filename mismatch in fetched comment',
         );
         expect(
-          fetchedResource['type'],
+          fetchedResource['type'], // Key is 'type'
           equals(mockContentType),
           reason: 'Resource type mismatch in fetched comment',
         );

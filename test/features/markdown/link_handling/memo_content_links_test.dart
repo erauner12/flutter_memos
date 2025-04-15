@@ -86,7 +86,7 @@ void main() {
             home: CupertinoPageScaffold(
               child: NoteContent(
                 note: note,
-                noteId: 'test-id',
+                noteId: 'test-id', // Pass noteId here
               ), // Updated widget type and params
             ),
           ),
@@ -188,7 +188,7 @@ void main() {
               home: CupertinoPageScaffold(
                 child: NoteContent(
                   note: note,
-                  noteId: 'test-id',
+                  noteId: 'test-id', // Pass noteId here
                 ), // Updated widget type and params
             ),
           ),

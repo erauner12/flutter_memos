@@ -285,9 +285,15 @@ void main() {
       expect(fakeNotifier.state.hasActiveConnections, isTrue);
 
       // Ensure the delegate mock is stubbed correctly for this test case
-      // Use the result with the matching server ID using copyWith method
-      final expectedResult = successfulMcpResult.copyWith(
-        sourceServerId: expectedServerId,
+      // Create a new result with the matching server ID instead of using copyWith
+      final expectedResult = McpProcessResult(
+        modelCallContent: mockModelCallContent,
+        toolResponseContent: mockToolResponseContent,
+        finalModelContent: mockFinalModelContent,
+        toolName: 'create_todoist_task',
+        toolArgs: {'content': 'buy milk'},
+        toolResult: '{"status":"success","taskId":"12345"}',
+        sourceServerId: expectedServerId, // Set the correct server ID
       );
       when(
         mockMcpClientNotifierDelegate.processQuery(userQuery, any),
@@ -373,9 +379,15 @@ void main() {
       expect(fakeNotifier.state.hasActiveConnections, isTrue);
 
       // Ensure the delegate mock is stubbed correctly for this test case
-      // Use the result with the matching SSE server ID using copyWith method
-      final expectedResult = successfulSseMcpResult.copyWith(
-        sourceServerId: expectedServerId,
+      // Create a new result with the matching SSE server ID instead of using copyWith
+      final expectedResult = McpProcessResult(
+        modelCallContent: mockModelCallContent,
+        toolResponseContent: mockToolResponseContent,
+        finalModelContent: mockFinalModelContent,
+        toolName: 'create_todoist_task',
+        toolArgs: {'content': 'buy milk'},
+        toolResult: '{"status":"success","taskId":"12345"}',
+        sourceServerId: expectedServerId, // Set the correct server ID
       );
       when(
         mockMcpClientNotifierDelegate.processQuery(userQuery, any),

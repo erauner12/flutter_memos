@@ -3,10 +3,10 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/models/note_item.dart'; // Use NoteItem
 import 'package:flutter_memos/providers/api_providers.dart';
-import 'package:flutter_memos/providers/edit_entity_providers.dart'; // Use edit_entity_providers
 import 'package:flutter_memos/providers/note_providers.dart'
     as note_providers; // Use note_providers
 import 'package:flutter_memos/screens/edit_entity/edit_entity_form.dart'; // Use EditEntityForm
+import 'package:flutter_memos/screens/edit_entity/edit_entity_providers.dart'; // Use edit_entity_providers
 import 'package:flutter_memos/screens/item_detail/note_content.dart'; // Use NoteContent
 import 'package:flutter_memos/services/base_api_service.dart'; // Use BaseApiService
 import 'package:flutter_memos/services/url_launcher_service.dart';
@@ -254,7 +254,7 @@ void main() {
             home: CupertinoPageScaffold(
               child: CommentCard(
                 comment: comment,
-                noteId: 'test-note-id', // Use noteId
+                memoId: 'test-note-id', // Use memoId
               ),
             ),
           ),

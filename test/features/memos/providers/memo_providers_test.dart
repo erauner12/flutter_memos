@@ -88,7 +88,7 @@ void main() {
       // Set up mock response for listNotes
       when(
         mockApiService.listNotes( // Updated method name
-          parent: anyNamed('parent'),
+          // parent: anyNamed('parent'), // Removed parent
           filter: anyNamed('filter'),
           state: anyNamed('state'),
           sort: anyNamed('sort'),
@@ -147,7 +147,9 @@ void main() {
           filters.filterKeyProvider.overrideWith(
             (ref) => 'inbox',
           ),
-          hiddenNoteIdsProvider.overrideWith((ref) => {}), // Updated provider name
+          hiddenItemIdsProvider.overrideWith(
+            (ref) => {},
+          ), // Updated provider name
           filters.hidePinnedProvider.overrideWith((ref) => false),
         ],
       );
@@ -166,7 +168,9 @@ void main() {
 
     test('visibleNotesListProvider filters out hidden note IDs', () { // Updated provider name
       // Hide note with ID '2'
-      container.read(hiddenNoteIdsProvider.notifier).state = {'2'}; // Updated provider name
+      container.read(hiddenItemIdsProvider.notifier).state = {
+        '2',
+      }; // Updated provider name
 
       // Read the derived provider
       final visibleNotes = container.read(visibleNotesListProvider); // Updated provider name
@@ -190,7 +194,8 @@ void main() {
             .copyWith(notes: pinnedNotes); // Updated field name
 
         // Enable hidePinned
-        container.read(hidePinnedProvider.notifier).state = true;
+        container.read(filters.hidePinnedProvider.notifier).state =
+            true; // Use filters.hidePinnedProvider
 
         await tester.pump();
 

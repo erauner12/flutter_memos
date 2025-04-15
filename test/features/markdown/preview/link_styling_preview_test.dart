@@ -2,8 +2,8 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_memos/models/note_item.dart'; // Import NoteItem
 import 'package:flutter_memos/providers/api_providers.dart';
-import 'package:flutter_memos/providers/edit_entity_providers.dart'; // Correct import
 import 'package:flutter_memos/screens/edit_entity/edit_entity_form.dart'; // Correct import
+import 'package:flutter_memos/screens/edit_entity/edit_entity_providers.dart'; // Correct import
 import 'package:flutter_memos/services/base_api_service.dart'; // Correct import
 import 'package:flutter_memos/services/url_launcher_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';

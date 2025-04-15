@@ -613,6 +613,7 @@ void main() {
       );
 
       // Act
+      // Act
       final success = await notifier.updateServer(nonExistentServer);
       await container.pump();
 

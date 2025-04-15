@@ -16,7 +16,8 @@ void main() {
     test('sortByUpdateTime correctly sorts notes', () {
       // Create test notes with different update times
       final now = DateTime.now();
-      final notes = [
+      // Explicitly type the list
+      final List<NoteItem> notes = [
         NoteItem(
           id: '1',
           content: 'Oldest update',
@@ -25,6 +26,7 @@ void main() {
           displayTime: now.subtract(const Duration(days: 2)),
           visibility: NoteVisibility.private, // Add required fields
           state: NoteState.normal,
+          pinned: false, // Add required field
         ),
         NoteItem(
           id: '2',
@@ -34,6 +36,7 @@ void main() {
           displayTime: now.subtract(const Duration(days: 1)),
           visibility: NoteVisibility.private,
           state: NoteState.normal,
+          pinned: false, // Add required field
         ),
         NoteItem(
           id: '3',
@@ -43,6 +46,7 @@ void main() {
           displayTime: now,
           visibility: NoteVisibility.private,
           state: NoteState.normal,
+          pinned: false, // Add required field
         ),
       ];
 
@@ -74,7 +78,8 @@ void main() {
     test('sortNotes handles null timestamps gracefully', () {
       // Create test notes with some null timestamps
       final now = DateTime.now();
-      final notes = [
+      // Explicitly type the list
+      final List<NoteItem> notes = [
         NoteItem(
           id: '1',
           content: 'Null update time',
@@ -83,6 +88,7 @@ void main() {
           displayTime: now.subtract(const Duration(days: 2)),
           visibility: NoteVisibility.private,
           state: NoteState.normal,
+          pinned: false, // Add required field
         ),
         NoteItem(
           id: '2',
@@ -92,6 +98,7 @@ void main() {
           displayTime: now.subtract(const Duration(days: 1)),
           visibility: NoteVisibility.private,
           state: NoteState.normal,
+          pinned: false, // Add required field
         ),
         NoteItem(
           id: '3',
@@ -101,6 +108,7 @@ void main() {
           displayTime: now,
           visibility: NoteVisibility.private,
           state: NoteState.normal,
+          pinned: false, // Add required field
         ),
       ];
 
