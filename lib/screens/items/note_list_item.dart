@@ -204,10 +204,10 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
   void _navigateToItemDetail(BuildContext context, WidgetRef ref) {
     ref.read(ui_providers.selectedItemIdProvider.notifier).state =
         widget.note.id;
-    Navigator.of(context, rootNavigator: true).pushNamed(
-      '/item-detail',
-      arguments: {'itemId': widget.note.id},
-    );
+    Navigator.of(
+      context,
+      rootNavigator: true,
+    ).pushNamed('/item-detail', arguments: {'itemId': widget.note.id});
   }
 
   void _toggleMultiSelection(String noteId) {
@@ -234,10 +234,7 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
   void _onEdit(BuildContext context) {
     Navigator.of(context, rootNavigator: true).pushNamed(
       '/edit-entity',
-      arguments: {
-        'entityType': 'note',
-        'entityId': widget.note.id,
-      },
+      arguments: {'entityType': 'note', 'entityId': widget.note.id},
     );
   }
 
@@ -281,10 +278,11 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
             .read(note_providers.hiddenItemIdsProvider.notifier)
             .update((state) => state..remove(widget.note.id));
 
-        // Check mounted again before showing the dialog
+        // Check mounted again before showing the dialog, using the State's context
         if (mounted) {
           showCupertinoDialog(
-            context: context, // Use the original context passed to _onDelete
+            context:
+                context, // Use the State's context (implicitly this.context)
             builder:
                 (ctx) => CupertinoAlertDialog(
                   title: const Text('Error'),
@@ -348,15 +346,17 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
         try {
           await ref.read(note_providers.bumpNoteProvider(widget.note.id))();
         } catch (e) {
-          // Check mounted *after* the await and *before* using context
+          // Check mounted *after* the await and *before* using the State's context
           if (mounted) {
             showCupertinoDialog(
-              context: context, // Use the build context
+              context:
+                  context, // Use the State's context (implicitly this.context)
               builder:
                   (ctx) => CupertinoAlertDialog(
                     title: const Text('Error'),
-                    content: Text(
-                      'Failed to bump note: ${e.toString().substring(0, 50)}...',
+                    content: const Text(
+                      // Ensure error message is concise and safe
+                      'Failed to bump note: \${e.toString().length > 100 ? e.toString().substring(0, 100) + "..." : e.toString()}',
                     ),
                     actions: [
                       CupertinoDialogAction(
