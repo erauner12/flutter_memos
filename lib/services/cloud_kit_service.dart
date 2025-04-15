@@ -57,12 +57,12 @@ class CloudKitService {
     try {
       final status = await _cloudKit.getAccountStatus();
       if (kDebugMode) {
-        print('[CloudKitService] CloudKit Account Status: \${status.name}');
+        print('[CloudKitService] CloudKit Account Status: ${status.name}');
       }
       return status;
     } catch (e, s) {
       if (kDebugMode) {
-        print('[CloudKitService] Error getting account status: \$e\n\$s');
+        print('[CloudKitService] Error getting account status: $e\n$s');
       }
       return CloudKitAccountStatus.couldNotDetermine;
     }
@@ -74,7 +74,7 @@ class CloudKitService {
   /// Returns true if successful, false otherwise.
   Future<bool> saveServerConfig(ServerConfig config) async {
     if (kDebugMode) {
-      print('[CloudKitService] saveServerConfig called for \${config.id}');
+      print('[CloudKitService] saveServerConfig called for ${config.id}');
     }
     try {
       final recordData = _serializeMap(config.toJson());
@@ -86,14 +86,14 @@ class CloudKitService {
       );
       if (kDebugMode) {
         print(
-          '[CloudKitService] Successfully saved ServerConfig \${config.id}',
+          '[CloudKitService] Successfully saved ServerConfig ${config.id}',
         );
       }
       return true;
     } catch (e, s) {
       if (kDebugMode) {
         print(
-          '[CloudKitService] Error saving ServerConfig \${config.id}: \$e\n\$s',
+          '[CloudKitService] Error saving ServerConfig ${config.id}: $e\n$s',
         );
       }
       return false;
@@ -103,7 +103,7 @@ class CloudKitService {
   /// Retrieves a specific Memos server configuration from CloudKit by its ID.
   /// Returns the ServerConfig if found, null otherwise.
   Future<ServerConfig?> getServerConfig(String id) async {
-    if (kDebugMode) print('[CloudKitService] getServerConfig called for \$id');
+    if (kDebugMode) print('[CloudKitService] getServerConfig called for $id');
     try {
       final record = await _cloudKit.getRecord(
         scope: _scope,
@@ -114,13 +114,13 @@ class CloudKitService {
       if (record.recordType == serverConfigRecordType) {
         final config = ServerConfig.fromJson(record.values);
         if (kDebugMode) {
-          print('[CloudKitService] Successfully fetched ServerConfig \$id');
+          print('[CloudKitService] Successfully fetched ServerConfig $id');
         }
         return config;
       } else {
         if (kDebugMode) {
           print(
-            '[CloudKitService] Fetched record \$id but type was \${record.recordType}, expected \$serverConfigRecordType',
+            '[CloudKitService] Fetched record $id but type was ${record.recordType}, expected $serverConfigRecordType',
           );
         }
         return null; // Wrong type fetched
@@ -128,7 +128,7 @@ class CloudKitService {
     } catch (e, s) {
       // Handle specific "record not found" errors if the plugin provides them, otherwise treat all errors as failure.
       if (kDebugMode) {
-        print('[CloudKitService] Error fetching ServerConfig \$id: \$e\n\$s');
+        print('[CloudKitService] Error fetching ServerConfig $id: $e\n$s');
       }
       return null;
     }
@@ -154,7 +154,7 @@ class CloudKitService {
                 } catch (e) {
                   if (kDebugMode) {
                     print(
-                      '[CloudKitService] Error parsing ServerConfig record \${record.recordName}: \$e',
+                      '[CloudKitService] Error parsing ServerConfig record ${record.recordName}: $e',
                     );
                   }
                   return null; // Skip records that fail parsing
@@ -164,13 +164,13 @@ class CloudKitService {
               .toList();
       if (kDebugMode) {
         print(
-          '[CloudKitService] Successfully fetched \${configs.length} ServerConfigs',
+          '[CloudKitService] Successfully fetched ${configs.length} ServerConfigs',
         );
       }
       return configs;
     } catch (e, s) {
       if (kDebugMode) {
-        print('[CloudKitService] Error fetching all ServerConfigs: \$e\n\$s');
+        print('[CloudKitService] Error fetching all ServerConfigs: $e\n$s');
       }
       return []; // Return empty list on error
     }
@@ -180,19 +180,19 @@ class CloudKitService {
   /// Returns true if successful, false otherwise.
   Future<bool> deleteServerConfig(String id) async {
     if (kDebugMode) {
-      print('[CloudKitService] deleteServerConfig called for \$id');
+      print('[CloudKitService] deleteServerConfig called for $id');
     }
     try {
       // Assuming deleteRecord uses recordName. The plugin interface doesn't specify recordType for delete.
       await _cloudKit.deleteRecord(scope: _scope, recordName: id);
       if (kDebugMode) {
-        print('[CloudKitService] Successfully deleted ServerConfig \$id');
+        print('[CloudKitService] Successfully deleted ServerConfig $id');
       }
       return true;
     } catch (e, s) {
       // Handle specific "record not found" errors if needed, otherwise treat all errors as failure.
       if (kDebugMode) {
-        print('[CloudKitService] Error deleting ServerConfig \$id: \$e\n\$s');
+        print('[CloudKitService] Error deleting ServerConfig $id: $e\n$s');
       }
       return false;
     }
@@ -204,7 +204,7 @@ class CloudKitService {
   /// Returns true if successful, false otherwise.
   Future<bool> saveMcpServerConfig(McpServerConfig config) async {
     if (kDebugMode) {
-      print('[CloudKitService] saveMcpServerConfig called for \${config.id}');
+      print('[CloudKitService] saveMcpServerConfig called for ${config.id}');
     }
     try {
       final recordData = _serializeMap(config.toJson());
@@ -216,14 +216,14 @@ class CloudKitService {
       );
       if (kDebugMode) {
         print(
-          '[CloudKitService] Successfully saved McpServerConfig \${config.id}',
+          '[CloudKitService] Successfully saved McpServerConfig ${config.id}',
         );
       }
       return true;
     } catch (e, s) {
       if (kDebugMode) {
         print(
-          '[CloudKitService] Error saving McpServerConfig \${config.id}: \$e\n\$s',
+          '[CloudKitService] Error saving McpServerConfig ${config.id}: $e\n$s',
         );
       }
       return false;
@@ -250,7 +250,7 @@ class CloudKitService {
                 } catch (e) {
                   if (kDebugMode) {
                     print(
-                      '[CloudKitService] Error parsing McpServerConfig record \${record.recordName}: \$e',
+                      '[CloudKitService] Error parsing McpServerConfig record ${record.recordName}: $e',
                     );
                   }
                   return null;
@@ -260,7 +260,7 @@ class CloudKitService {
               .toList();
       if (kDebugMode) {
         print(
-          '[CloudKitService] Successfully fetched \${configs.length} McpServerConfigs',
+          '[CloudKitService] Successfully fetched ${configs.length} McpServerConfigs',
         );
       }
       return configs;
@@ -271,12 +271,12 @@ class CloudKitService {
           e.message!.contains('is not marked queryable')) {
         if (kDebugMode) {
           print(
-            '[CloudKitService] Schema Error: A field (likely recordName or creationDate) for \$mcpServerConfigRecordType needs to be marked Queryable with Sort enabled in CloudKit Dashboard.',
+            '[CloudKitService] Schema Error: A field (likely recordName or creationDate) for $mcpServerConfigRecordType needs to be marked Queryable with Sort enabled in CloudKit Dashboard.',
           );
         }
       } else if (kDebugMode) {
         print(
-          '[CloudKitService] Error fetching all McpServerConfigs: \$e\n\$s',
+          '[CloudKitService] Error fetching all McpServerConfigs: $e\n$s',
         );
       }
       return [];
@@ -287,18 +287,18 @@ class CloudKitService {
   /// Returns true if successful, false otherwise.
   Future<bool> deleteMcpServerConfig(String id) async {
     if (kDebugMode) {
-      print('[CloudKitService] deleteMcpServerConfig called for \$id');
+      print('[CloudKitService] deleteMcpServerConfig called for $id');
     }
     try {
       await _cloudKit.deleteRecord(scope: _scope, recordName: id);
       if (kDebugMode) {
-        print('[CloudKitService] Successfully deleted McpServerConfig \$id');
+        print('[CloudKitService] Successfully deleted McpServerConfig $id');
       }
       return true;
     } catch (e, s) {
       if (kDebugMode) {
         print(
-          '[CloudKitService] Error deleting McpServerConfig \$id: \$e\n\$s',
+          '[CloudKitService] Error deleting McpServerConfig $id: $e\n$s',
         );
       }
       return false;
@@ -312,7 +312,7 @@ class CloudKitService {
   Future<bool> saveWorkbenchItemReference(WorkbenchItemReference item) async {
     if (kDebugMode) {
       print(
-        '[CloudKitService] saveWorkbenchItemReference called for \${item.id}',
+        '[CloudKitService] saveWorkbenchItemReference called for ${item.id}',
       );
     }
     try {
@@ -325,14 +325,14 @@ class CloudKitService {
       );
       if (kDebugMode) {
         print(
-          '[CloudKitService] Successfully saved WorkbenchItemReference \${item.id}',
+          '[CloudKitService] Successfully saved WorkbenchItemReference ${item.id}',
         );
       }
       return true;
     } catch (e, s) {
       if (kDebugMode) {
         print(
-          '[CloudKitService] Error saving WorkbenchItemReference \${item.id}: \$e\n\$s',
+          '[CloudKitService] Error saving WorkbenchItemReference ${item.id}: $e\n$s',
         );
       }
       return false;
@@ -361,7 +361,7 @@ class CloudKitService {
                 } catch (e) {
                   if (kDebugMode) {
                     print(
-                      '[CloudKitService] Error parsing WorkbenchItemReference record \${record.recordName}: \$e',
+                      '[CloudKitService] Error parsing WorkbenchItemReference record ${record.recordName}: $e',
                     );
                   }
                   return null;
@@ -371,14 +371,14 @@ class CloudKitService {
               .toList();
       if (kDebugMode) {
         print(
-          '[CloudKitService] Successfully fetched \${items.length} WorkbenchItemReferences',
+          '[CloudKitService] Successfully fetched ${items.length} WorkbenchItemReferences',
         );
       }
       return items;
     } catch (e, s) {
       if (kDebugMode) {
         print(
-          '[CloudKitService] Error fetching all WorkbenchItemReferences: \$e\n\$s',
+          '[CloudKitService] Error fetching all WorkbenchItemReferences: $e\n$s',
         );
       }
       return [];
@@ -390,21 +390,21 @@ class CloudKitService {
   Future<bool> deleteWorkbenchItemReference(String referenceId) async {
     if (kDebugMode) {
       print(
-        '[CloudKitService] deleteWorkbenchItemReference called for \$referenceId',
+        '[CloudKitService] deleteWorkbenchItemReference called for $referenceId',
       );
     }
     try {
       await _cloudKit.deleteRecord(scope: _scope, recordName: referenceId);
       if (kDebugMode) {
         print(
-          '[CloudKitService] Successfully deleted WorkbenchItemReference \$referenceId',
+          '[CloudKitService] Successfully deleted WorkbenchItemReference $referenceId',
         );
       }
       return true;
     } catch (e, s) {
       if (kDebugMode) {
         print(
-          '[CloudKitService] Error deleting WorkbenchItemReference \$referenceId: \$e\n\$s',
+          '[CloudKitService] Error deleting WorkbenchItemReference $referenceId: $e\n$s',
         );
       }
       return false;
@@ -416,7 +416,7 @@ class CloudKitService {
   Future<bool> updateWorkbenchItemLastOpened(String referenceId) async {
     if (kDebugMode) {
       print(
-        '[CloudKitService] updateWorkbenchItemLastOpened called for \$referenceId',
+        '[CloudKitService] updateWorkbenchItemLastOpened called for $referenceId',
       );
     }
     try {
@@ -430,7 +430,7 @@ class CloudKitService {
       if (record.recordType != workbenchItemRecordType) {
         if (kDebugMode) {
           print(
-            '[CloudKitService] Fetched record \$referenceId but type was \${record.recordType}, expected \$workbenchItemRecordType. Cannot update timestamp.',
+            '[CloudKitService] Fetched record $referenceId but type was ${record.recordType}, expected $workbenchItemRecordType. Cannot update timestamp.',
           );
         }
         return false;
@@ -453,14 +453,14 @@ class CloudKitService {
       );
       if (kDebugMode) {
         print(
-          '[CloudKitService] Successfully updated lastOpenedTimestamp for \$referenceId',
+          '[CloudKitService] Successfully updated lastOpenedTimestamp for $referenceId',
         );
       }
       return true;
     } catch (e, s) {
       if (kDebugMode) {
         print(
-          '[CloudKitService] Error updating lastOpenedTimestamp for \$referenceId: \$e\n\$s',
+          '[CloudKitService] Error updating lastOpenedTimestamp for $referenceId: $e\n$s',
         );
       }
       return false;
@@ -472,7 +472,7 @@ class CloudKitService {
   /// Retrieves a specific setting value from the UserSettings record in CloudKit.
   /// Returns the setting value as a String if found, null otherwise.
   Future<String?> getSetting(String keyName) async {
-    if (kDebugMode) print('[CloudKitService] getSetting called for \$keyName');
+    if (kDebugMode) print('[CloudKitService] getSetting called for $keyName');
     try {
       final record = await _cloudKit.getRecord(
         scope: _scope,
@@ -483,7 +483,7 @@ class CloudKitService {
       if (record.recordType != userSettingsRecordType) {
         if (kDebugMode) {
           print(
-            '[CloudKitService] Fetched settings record but type was \${record.recordType}.',
+            '[CloudKitService] Fetched settings record but type was ${record.recordType}.',
           );
         }
         return null;
@@ -493,14 +493,14 @@ class CloudKitService {
       final value = record.values[keyName];
       if (value != null) {
         if (kDebugMode) {
-          print('[CloudKitService] Successfully fetched setting \$keyName');
+          print('[CloudKitService] Successfully fetched setting $keyName');
         }
         // Ensure it's returned as a String
         return value.toString();
       } else {
         if (kDebugMode) {
           print(
-            '[CloudKitService] Setting \$keyName not found in UserSettings record.',
+            '[CloudKitService] Setting $keyName not found in UserSettings record.',
           );
         }
         return null;
@@ -508,7 +508,7 @@ class CloudKitService {
     } catch (e, s) {
       // Handle "record not found" specifically if possible, otherwise treat as error
       if (kDebugMode) {
-        print('[CloudKitService] Error fetching setting \$keyName: \$e\n\$s');
+        print('[CloudKitService] Error fetching setting $keyName: $e\n$s');
       }
       return null;
     }
@@ -517,7 +517,7 @@ class CloudKitService {
   /// Saves a specific setting key-value pair to the UserSettings record in CloudKit.
   /// Returns true if successful, false otherwise.
   Future<bool> saveSetting(String keyName, String value) async {
-    if (kDebugMode) print('[CloudKitService] saveSetting called for \$keyName');
+    if (kDebugMode) print('[CloudKitService] saveSetting called for $keyName');
     try {
       Map<String, dynamic> currentSettings = {};
       // 1. Try to fetch the existing record
@@ -537,7 +537,7 @@ class CloudKitService {
         } else {
           if (kDebugMode) {
             print(
-              '[CloudKitService] Found record \$_userSettingsRecordName but it was wrong type: \${existingRecord.recordType}. Overwriting.',
+              '[CloudKitService] Found record $_userSettingsRecordName but it was wrong type: ${existingRecord.recordType}. Overwriting.',
             );
           }
         }
@@ -552,7 +552,7 @@ class CloudKitService {
             );
           } else {
             print(
-              '[CloudKitService] Error fetching UserSettings record during saveSetting (will attempt create): \$e',
+              '[CloudKitService] Error fetching UserSettings record during saveSetting (will attempt create): $e',
             );
           }
         }
@@ -572,7 +572,7 @@ class CloudKitService {
         record: recordData,
       );
       if (kDebugMode) {
-        print('[CloudKitService] Successfully saved setting \$keyName');
+        print('[CloudKitService] Successfully saved setting $keyName');
       }
       return true;
     } catch (e, s) {
@@ -581,16 +581,21 @@ class CloudKitService {
           e.message != null &&
           e.message!.contains('record to insert already exists')) {
         if (kDebugMode) {
+          // More specific log message
           print(
-            '[CloudKitService] saveSetting: Record "\$_userSettingsRecordName" already exists (likely race condition during init). Treating as success.',
+            '[CloudKitService] saveSetting: Handled "record already exists" for "$_userSettingsRecordName" when saving key "$keyName". Treating as success (likely concurrent init).',
           );
         }
+        // If the record already exists, the goal of having *a* settings record
+        // is met, even if this specific call didn't create it.
+        // We might want to fetch and merge again here for absolute certainty,
+        // but for initialization, treating as success is often sufficient.
         return true;
       }
       // *** End specific handling ***
 
       if (kDebugMode) {
-        print('[CloudKitService] Error saving setting \$keyName: \$e\n\$s');
+        print('[CloudKitService] Error saving setting $keyName: $e\n$s');
       }
       return false;
     }
@@ -602,7 +607,7 @@ class CloudKitService {
   /// Returns true if successful, false otherwise.
   Future<bool> deleteAllRecordsOfType(String recordType) async {
     if (kDebugMode) {
-      print('[CloudKitService] deleteAllRecordsOfType called for \$recordType');
+      print('[CloudKitService] deleteAllRecordsOfType called for $recordType');
     }
     try {
       // 1. Fetch all records of the given type
@@ -614,7 +619,7 @@ class CloudKitService {
       if (records.isEmpty) {
         if (kDebugMode) {
           print(
-            '[CloudKitService] No records found for type \$recordType to delete.',
+            '[CloudKitService] No records found for type $recordType to delete.',
           );
         }
         return true; // Nothing to delete, considered success
@@ -622,7 +627,7 @@ class CloudKitService {
 
       if (kDebugMode) {
         print(
-          '[CloudKitService] Found \${records.length} records of type \$recordType to delete.',
+          '[CloudKitService] Found ${records.length} records of type $recordType to delete.',
         );
       }
 
@@ -636,13 +641,13 @@ class CloudKitService {
           );
           if (kDebugMode) {
             print(
-              '[CloudKitService] Deleted record \${record.recordName} of type \$recordType',
+              '[CloudKitService] Deleted record ${record.recordName} of type $recordType',
             );
           }
         } catch (e) {
           if (kDebugMode) {
             print(
-              '[CloudKitService] Error deleting record \${record.recordName} of type \$recordType: \$e',
+              '[CloudKitService] Error deleting record ${record.recordName} of type $recordType: $e',
             );
           }
           allSucceeded = false; // Mark failure if any deletion fails
@@ -652,7 +657,7 @@ class CloudKitService {
     } catch (e, s) {
       if (kDebugMode) {
         print(
-          '[CloudKitService] Error fetching records for deletion (type \$recordType): \$e\n\$s',
+          '[CloudKitService] Error fetching records for deletion (type $recordType): $e\n$s',
         );
       }
       return false;
@@ -674,7 +679,7 @@ class CloudKitService {
       return true;
     } catch (e, s) {
       if (kDebugMode) {
-        print('[CloudKitService] Error deleting UserSettings record: \$e\n\$s');
+        print('[CloudKitService] Error deleting UserSettings record: $e\n$s');
       }
       return false;
     }
