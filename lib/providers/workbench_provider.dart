@@ -60,22 +60,8 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
     try {
       final items = await _cloudKitService.getAllWorkbenchItemReferences();
 
-      // Sort by lastOpenedTimestamp (desc, nulls last), then addedTimestamp (desc)
-      items.sort((a, b) {
-        final aOpened = a.lastOpenedTimestamp;
-        final bOpened = b.lastOpenedTimestamp;
-
-        if (aOpened != null && bOpened != null) {
-          return bOpened.compareTo(aOpened); // Both opened, sort by opened desc
-        } else if (aOpened != null) {
-          return -1; // a opened, b didn't -> a comes first
-        } else if (bOpened != null) {
-          return 1; // b opened, a didn't -> b comes first
-        } else {
-          // Neither opened, sort by added desc
-          return b.addedTimestamp.compareTo(a.addedTimestamp);
-        }
-      });
+      // Default sort: newest added first
+      items.sort((a, b) => b.addedTimestamp.compareTo(a.addedTimestamp));
 
       if (mounted) {
         state = state.copyWith(items: items, isLoading: false);
@@ -117,6 +103,7 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
 
     // Optimistic Update (only if not a duplicate)
     final optimisticItems = List<WorkbenchItemReference>.from(state.items)..add(item);
+    // Sort by default order (newest first) after adding
     optimisticItems.sort((a, b) => b.addedTimestamp.compareTo(a.addedTimestamp));
     state = state.copyWith(items: optimisticItems);
     if (kDebugMode) {
@@ -204,6 +191,7 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
         // Check if the item is *still* gone from the current state before reverting
         if (!state.items.any((i) => i.id == referenceId)) {
           final revertedItems = List<WorkbenchItemReference>.from(state.items)..add(originalItem!);
+          // Sort by default order (newest first) after reverting
           revertedItems.sort((a, b) => b.addedTimestamp.compareTo(a.addedTimestamp));
           state = state.copyWith(items: revertedItems, error: e); // Keep the error state
           if (kDebugMode) {
@@ -218,112 +206,44 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
     }
   }
 
-  /// Marks an item as opened by updating its lastOpenedTimestamp.
-  Future<void> markItemOpened(String referenceId) async {
+  /// Reorders items locally based on user drag-and-drop.
+  /// This change is not persisted to CloudKit.
+  void reorderItems(int oldIndex, int newIndex) {
     if (!mounted) return;
+    if (oldIndex < 0 || oldIndex >= state.items.length) return;
+    if (newIndex < 0 || newIndex > state.items.length)
+      return; // Allow inserting at the end
 
-    final index = state.items.indexWhere((item) => item.id == referenceId);
-    if (index == -1) {
-      if (kDebugMode) {
-        print(
-          '[WorkbenchNotifier] markItemOpened: Item $referenceId not found in state.',
-        );
-      }
-      return; // Item not found
+    final List<WorkbenchItemReference> currentItems = List.from(state.items);
+
+    // Adjust newIndex if item is moved downwards in the list
+    if (oldIndex < newIndex) {
+      newIndex -= 1;
     }
 
-    final originalItem = state.items[index];
-    final now = DateTime.now();
+    final WorkbenchItemReference item = currentItems.removeAt(oldIndex);
+    currentItems.insert(newIndex, item);
 
-    // Avoid unnecessary updates if already opened very recently (e.g., within a second)
-    if (originalItem.lastOpenedTimestamp != null &&
-        now.difference(originalItem.lastOpenedTimestamp!).inSeconds < 1) {
-      if (kDebugMode) {
-        print(
-          '[WorkbenchNotifier] markItemOpened: Item $referenceId already marked opened recently. Skipping.',
-        );
-      }
-      return;
-    }
-
-    final updatedItem = originalItem.copyWith(lastOpenedTimestamp: now);
-
-    // Optimistic UI Update (update the item in the list)
-    final optimisticItems = List<WorkbenchItemReference>.from(state.items);
-    optimisticItems[index] = updatedItem;
-    // Re-sort based on the new timestamp
-    optimisticItems.sort((a, b) {
-      final aOpened = a.lastOpenedTimestamp;
-      final bOpened = b.lastOpenedTimestamp;
-      if (aOpened != null && bOpened != null) {
-        return bOpened.compareTo(aOpened);
-      }
-      if (aOpened != null) {
-        return -1;
-      }
-      if (bOpened != null) {
-        return 1;
-      }
-      return b.addedTimestamp.compareTo(a.addedTimestamp);
-    });
-    state = state.copyWith(items: optimisticItems);
+    state = state.copyWith(items: currentItems);
     if (kDebugMode) {
       print(
-        '[WorkbenchNotifier] Optimistically marked item $referenceId as opened.',
+        '[WorkbenchNotifier] Reordered items locally. Moved item from $oldIndex to $newIndex.',
       );
     }
+  }
 
-    // Persist change to CloudKit (fire and forget or await with error handling)
-    try {
-      final success = await _cloudKitService.updateWorkbenchItemLastOpened(
-        referenceId,
-      );
-      if (!success) {
-        throw Exception('CloudKit update failed');
-      }
-      if (kDebugMode) {
-        print(
-          '[WorkbenchNotifier] Successfully synced lastOpenedTimestamp for $referenceId to CloudKit.',
-        );
-      }
-    } catch (e, s) {
-      if (kDebugMode) {
-        print(
-          '[WorkbenchNotifier] Error syncing lastOpenedTimestamp for $referenceId: $e\n$s',
-        );
-      }
-      // Revert optimistic update on failure
-      if (mounted) {
-        final revertedItems = List<WorkbenchItemReference>.from(state.items);
-        final revertIndex = revertedItems.indexWhere(
-          (item) => item.id == referenceId,
-        );
-        if (revertIndex != -1) {
-          revertedItems[revertIndex] =
-              originalItem; // Put the original item back
-          // Re-sort again after reverting
-          revertedItems.sort((a, b) {
-            final aOpened = a.lastOpenedTimestamp;
-            final bOpened = b.lastOpenedTimestamp;
-            if (aOpened != null && bOpened != null) {
-              return bOpened.compareTo(aOpened);
-            }
-            if (aOpened != null) {
-              return -1;
-            }
-            if (bOpened != null) {
-              return 1;
-            }
-            return b.addedTimestamp.compareTo(a.addedTimestamp);
-          });
-          state = state.copyWith(items: revertedItems, error: e);
-          if (kDebugMode) {
-            print(
-              '[WorkbenchNotifier] Reverted optimistic mark opened for item: $referenceId',
-            );
-          }
-        }
-      }
+  /// Resets the item order to the default (newest added first).
+  /// This change is not persisted to CloudKit.
+  void resetOrder() {
+    if (!mounted) return;
+
+    final List<WorkbenchItemReference> currentItems = List.from(state.items);
+    // Apply default sort: newest added first
+    currentItems.sort((a, b) => b.addedTimestamp.compareTo(a.addedTimestamp));
+
+    state = state.copyWith(items: currentItems);
+    if (kDebugMode) {
+      print('[WorkbenchNotifier] Reset item order to default (newest first).');
     }
   }
 

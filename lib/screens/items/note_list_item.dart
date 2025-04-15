@@ -264,7 +264,6 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
       previewContent: preview.length > 100 ? '${preview.substring(0, 97)}...' : preview,
       addedTimestamp: DateTime.now(),
       parentNoteId: null,
-      lastOpenedTimestamp: null, // Initialize new field as null
     );
 
     ref.read(workbenchProvider.notifier).addItem(reference);

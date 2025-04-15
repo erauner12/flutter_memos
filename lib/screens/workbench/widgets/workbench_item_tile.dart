@@ -99,10 +99,6 @@ class WorkbenchItemTile extends ConsumerWidget {
         ],
       ),
       onTap: () {
-        // --- Mark Item Opened FIRST ---
-        ref.read(workbenchProvider.notifier).markItemOpened(itemReference.id);
-        // --- End Mark Item Opened ---
-
         // --- Navigation Logic ---
         final currentActiveServerId = ref.read(multiServerConfigProvider).activeServerId;
 

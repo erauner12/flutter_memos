@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart'; // Import Material for ReorderableListView
 import 'package:flutter_memos/providers/workbench_provider.dart';
 import 'package:flutter_memos/screens/workbench/widgets/workbench_item_tile.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -15,6 +16,12 @@ class WorkbenchScreen extends ConsumerWidget {
     return CupertinoPageScaffold(
       navigationBar: CupertinoNavigationBar(
         middle: const Text('Workbench'),
+        // Add Reset Order button to leading
+        leading: CupertinoButton(
+          padding: EdgeInsets.zero,
+          child: const Icon(CupertinoIcons.arrow_up_arrow_down),
+          onPressed: () => ref.read(workbenchProvider.notifier).resetOrder(),
+        ),
         trailing: CupertinoButton(
           padding: EdgeInsets.zero,
           onPressed: workbenchState.isLoading
@@ -65,16 +72,32 @@ class WorkbenchScreen extends ConsumerWidget {
               );
             }
 
-            // Use CupertinoListSection for better iOS styling
-            return CupertinoListSection.insetGrouped(
+            // Use ReorderableListView for drag-and-drop
+            // Note: This is a Material widget. Styling might need adjustment for pure Cupertino look.
+            return ReorderableListView.builder(
+              padding: const EdgeInsets.symmetric(
+                vertical: 8.0,
+              ), // Add some padding
+              itemCount: items.length,
+              itemBuilder: (context, index) {
+                final item = items[index];
+                // IMPORTANT: Key MUST be present and unique for ReorderableListView
+                return WorkbenchItemTile(
+                  key: ValueKey(item.id), // Use reference ID as key
+                  itemReference: item,
+                );
+              },
+              onReorder: (oldIndex, newIndex) {
+                ref
+                    .read(workbenchProvider.notifier)
+                    .reorderItems(oldIndex, newIndex);
+              },
+              // Optional: Add header for loading indicator when refreshing
               header: workbenchState.isLoading ? const Padding(
-                padding: EdgeInsets.all(8.0),
+                        padding: EdgeInsets.all(12.0),
                 child: Center(child: CupertinoActivityIndicator()),
-              ) : null, // Show loading indicator in header if loading more
-              children: items.map((item) => WorkbenchItemTile(
-                key: ValueKey(item.id), // Use reference ID as key
-                itemReference: item,
-              )).toList(),
+                      )
+                      : null,
             );
           }
         ),

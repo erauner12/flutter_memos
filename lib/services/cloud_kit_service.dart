@@ -333,14 +333,7 @@ class CloudKitService {
       }
       return true;
     } catch (e, s) {
-      // Log the specific error related to TIMESTAMP if it occurs
-      if (e is PlatformException &&
-          e.message != null &&
-          e.message!.contains('TIMESTAMP')) {
-        print(
-          '[CloudKitService] WORKAROUND WARNING: Encountered expected TIMESTAMP type mismatch error for WorkbenchItemReference ${item.id}. The flutter_cloud_kit plugin needs modification for proper DateTime handling. Error: $e',
-        );
-      } else if (kDebugMode) {
+      if (kDebugMode) {
         print(
           '[CloudKitService] Error saving WorkbenchItemReference ${item.id}: $e\n$s',
         );
@@ -415,69 +408,6 @@ class CloudKitService {
       if (kDebugMode) {
         print(
           '[CloudKitService] Error deleting WorkbenchItemReference $referenceId: $e\n$s',
-        );
-      }
-      return false;
-    }
-  }
-
-  /// Updates the last opened timestamp for a specific workbench item in CloudKit.
-  /// Returns true if successful, false otherwise.
-  Future<bool> updateWorkbenchItemLastOpened(String referenceId) async {
-    if (kDebugMode) {
-      print(
-        '[CloudKitService] updateWorkbenchItemLastOpened called for $referenceId',
-      );
-    }
-    try {
-      // 1. Fetch the existing record
-      final record = await _cloudKit.getRecord(
-        scope: _scope,
-        recordName: referenceId,
-      );
-
-      // Check if the fetched record is of the correct type
-      if (record.recordType != workbenchItemRecordType) {
-        if (kDebugMode) {
-          print(
-            '[CloudKitService] Fetched record $referenceId but type was ${record.recordType}, expected $workbenchItemRecordType. Cannot update timestamp.',
-          );
-        }
-        return false;
-      }
-
-      // 2. Prepare updated data (convert existing dynamic map to object for updating)
-      final currentItem = WorkbenchItemReference.fromJson(record.values);
-      final updatedItem = currentItem.copyWith(
-        lastOpenedTimestamp: DateTime.now(),
-      );
-
-      // 3. Save the modified record back
-      // Serialize the updated data before sending
-      final updatedRecordData = _serializeMap(updatedItem.toJson());
-      await _cloudKit.saveRecord(
-        scope: _scope,
-        recordType: workbenchItemRecordType, // Must specify type on save
-        recordName: referenceId,
-        record: updatedRecordData, // Pass serialized Map<String, String>
-      );
-      if (kDebugMode) {
-        print(
-          '[CloudKitService] Successfully updated lastOpenedTimestamp for $referenceId',
-        );
-      }
-      return true;
-    } catch (e, s) {
-      // Log the specific error related to TIMESTAMP if it occurs
-      if (e is PlatformException &&
-          e.message != null &&
-          e.message!.contains('TIMESTAMP')) {
-        print(
-          '[CloudKitService] WORKAROUND WARNING: Encountered expected TIMESTAMP type mismatch error when updating lastOpenedTimestamp for $referenceId. The flutter_cloud_kit plugin needs modification for proper DateTime handling. Error: $e',
-        );
-      } else if (kDebugMode) {
-        print(
-          '[CloudKitService] Error updating lastOpenedTimestamp for $referenceId: $e\n$s',
         );
       }
       return false;

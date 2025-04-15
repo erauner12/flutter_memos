@@ -16,8 +16,8 @@ class WorkbenchItemReference {
   final DateTime addedTimestamp; // When the item was added
   final String?
   parentNoteId; // Optional: ID of the parent note (useful for comments)
-  final DateTime?
-  lastOpenedTimestamp; // Optional: When the item was last opened via Workbench
+  // Remove lastOpenedTimestamp field
+  // final DateTime? lastOpenedTimestamp;
 
   const WorkbenchItemReference({
     required this.id,
@@ -29,7 +29,8 @@ class WorkbenchItemReference {
     this.previewContent,
     required this.addedTimestamp,
     this.parentNoteId,
-    this.lastOpenedTimestamp, // Add to constructor
+    // Remove lastOpenedTimestamp from constructor
+    // this.lastOpenedTimestamp,
   });
 
   WorkbenchItemReference copyWith({
@@ -42,8 +43,9 @@ class WorkbenchItemReference {
     String? previewContent,
     DateTime? addedTimestamp,
     String? parentNoteId,
-    DateTime? lastOpenedTimestamp, // Add lastOpenedTimestamp
-    bool clearLastOpenedTimestamp = false, // Helper to explicitly nullify
+    // Remove lastOpenedTimestamp parameters from copyWith
+    // DateTime? lastOpenedTimestamp,
+    // bool clearLastOpenedTimestamp = false,
   }) {
     return WorkbenchItemReference(
       id: id ?? this.id,
@@ -55,11 +57,11 @@ class WorkbenchItemReference {
       previewContent: previewContent ?? this.previewContent,
       addedTimestamp: addedTimestamp ?? this.addedTimestamp,
       parentNoteId: parentNoteId ?? this.parentNoteId,
-      // Handle copying/clearing lastOpenedTimestamp
-      lastOpenedTimestamp:
-          clearLastOpenedTimestamp
-              ? null
-              : (lastOpenedTimestamp ?? this.lastOpenedTimestamp),
+      // Remove lastOpenedTimestamp handling from copyWith
+      // lastOpenedTimestamp:
+      //     clearLastOpenedTimestamp
+      //         ? null
+      //         : (lastOpenedTimestamp ?? this.lastOpenedTimestamp),
     );
   }
 
@@ -74,8 +76,8 @@ class WorkbenchItemReference {
       'previewContent': previewContent,
       'addedTimestamp': addedTimestamp.toIso8601String(), // Store DateTime as ISO string
       'parentNoteId': parentNoteId,
-      // Add lastOpenedTimestamp, store as ISO string or null
-      'lastOpenedTimestamp': lastOpenedTimestamp?.toIso8601String(),
+      // Remove lastOpenedTimestamp from toJson
+      // 'lastOpenedTimestamp': lastOpenedTimestamp?.toIso8601String(),
     };
   }
 
@@ -100,10 +102,10 @@ class WorkbenchItemReference {
       previewContent: json['previewContent'] as String?,
       addedTimestamp: DateTime.tryParse(json['addedTimestamp'] as String? ?? '') ?? DateTime.now(), // Default to now
       parentNoteId: json['parentNoteId'] as String?,
-      // Parse lastOpenedTimestamp from ISO string or null
-      lastOpenedTimestamp: DateTime.tryParse(
-        json['lastOpenedTimestamp'] as String? ?? '',
-      ),
+      // Remove lastOpenedTimestamp parsing from fromJson
+      // lastOpenedTimestamp: DateTime.tryParse(
+      //   json['lastOpenedTimestamp'] as String? ?? '',
+      // ),
     );
   }
 
@@ -120,9 +122,9 @@ class WorkbenchItemReference {
         other.serverName == serverName &&
         other.previewContent == previewContent &&
         other.addedTimestamp == addedTimestamp &&
-        other.parentNoteId == parentNoteId &&
-        other.lastOpenedTimestamp ==
-            lastOpenedTimestamp; // Add lastOpenedTimestamp check
+        other.parentNoteId == parentNoteId;
+    // Remove lastOpenedTimestamp check
+    // && other.lastOpenedTimestamp == lastOpenedTimestamp;
   }
 
   @override
@@ -137,13 +139,14 @@ class WorkbenchItemReference {
       previewContent,
       addedTimestamp,
       parentNoteId,
-      lastOpenedTimestamp, // Add lastOpenedTimestamp
+      // Remove lastOpenedTimestamp from hash
+      // lastOpenedTimestamp,
     );
   }
 
   @override
   String toString() {
-    // Include lastOpenedTimestamp in toString
-    return 'WorkbenchItemReference(id: $id, refId: $referencedItemId, type: ${referencedItemType.name}, serverId: $serverId, serverType: ${serverType.name}, parentId: $parentNoteId, added: $addedTimestamp, lastOpened: $lastOpenedTimestamp)';
+    // Remove lastOpenedTimestamp from toString
+    return 'WorkbenchItemReference(id: $id, refId: $referencedItemId, type: ${referencedItemType.name}, serverId: $serverId, serverType: ${serverType.name}, parentId: $parentNoteId, added: $addedTimestamp)';
   }
 }
