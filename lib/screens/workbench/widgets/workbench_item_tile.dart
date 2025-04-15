@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:flutter_memos/models/comment.dart'; // Import Comment
 import 'package:flutter_memos/models/server_config.dart';
 import 'package:flutter_memos/models/workbench_item_reference.dart';
 import 'package:flutter_memos/providers/server_config_provider.dart';
@@ -36,15 +37,26 @@ class WorkbenchItemTile extends ConsumerWidget {
     final theme = CupertinoTheme.of(context);
     final preview = itemReference.previewContent ?? 'No preview available';
     final serverDisplayName = itemReference.serverName ?? itemReference.serverId;
-    // Format date more concisely
-    final formattedDate = DateFormat.yMd().add_jm().format(itemReference.addedTimestamp.toLocal());
+    // Format dates concisely
+    final addedDate = DateFormat.yMd().add_jm().format(
+      itemReference.addedTimestamp.toLocal(),
+    );
+    // Use overallLastUpdateTime for display
+    final lastActivityDate = DateFormat.yMd().add_jm().format(
+      itemReference.overallLastUpdateTime.toLocal(),
+    );
 
     return CupertinoListTile(
-      leadingSize: 24, // Adjust leading icon size
-      leading: Icon(
-        _getItemTypeIcon(itemReference.referencedItemType),
-        color: theme.primaryColor,
-        size: 22, // Match leadingSize approximately
+      // Remove leadingSize, let content determine size
+      leading: Padding(
+        padding: const EdgeInsets.only(
+          top: 4.0,
+        ), // Align icon better with multi-line text
+        child: Icon(
+          _getItemTypeIcon(itemReference.referencedItemType),
+          color: theme.primaryColor,
+          size: 22,
+        ),
       ),
       title: Text(
         preview,
@@ -52,11 +64,38 @@ class WorkbenchItemTile extends ConsumerWidget {
         overflow: TextOverflow.ellipsis,
         style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w400),
       ),
-      subtitle: Text(
-        'Server: $serverDisplayName • Added: $formattedDate',
-        style: TextStyle(fontSize: 12, color: CupertinoColors.secondaryLabel.resolveFrom(context)),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
+      subtitle: Column(
+        // Use Column for multiple lines of subtitle info + comment preview
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 2), // Small space below title
+          Text(
+            'Server: $serverDisplayName • Added: $addedDate',
+            style: TextStyle(
+              fontSize: 12,
+              color: CupertinoColors.secondaryLabel.resolveFrom(context),
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 2),
+          Text(
+            // Display last activity time
+            'Last activity: $lastActivityDate',
+            style: TextStyle(
+              fontSize: 12,
+              color: CupertinoColors.secondaryLabel.resolveFrom(context),
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 6), // Space before comment preview
+          _buildCommentPreview(
+            context,
+            itemReference.latestComment,
+          ), // Add comment preview
+          const SizedBox(height: 4), // Space at the bottom
+        ],
       ),
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
@@ -110,6 +149,43 @@ class WorkbenchItemTile extends ConsumerWidget {
           _showServerSwitchRequiredDialog(context, ref, itemReference);
         }
       },
+    );
+  }
+
+  // Add helper widget for comment preview
+  Widget _buildCommentPreview(BuildContext context, Comment? comment) {
+    final theme = CupertinoTheme.of(context);
+    final textStyle = TextStyle(
+      fontSize: 13,
+      color: CupertinoColors.secondaryLabel.resolveFrom(context),
+    );
+    final italicStyle = textStyle.copyWith(fontStyle: FontStyle.italic);
+
+    if (comment == null) {
+      // Check if the parent item is a comment itself, in which case no preview is needed
+      if (itemReference.referencedItemType == WorkbenchItemType.comment) {
+        return const SizedBox.shrink(); // Don't show "No comments" for a comment item
+      }
+      return Text('No comments yet.', style: italicStyle);
+    }
+
+    // Simple text preview for now
+    return Container(
+      padding: const EdgeInsets.only(left: 8, top: 4, bottom: 4, right: 4),
+      decoration: BoxDecoration(
+        border: Border(
+          left: BorderSide(
+            color: CupertinoColors.systemGrey4.resolveFrom(context),
+            width: 2,
+          ),
+        ),
+      ),
+      child: Text(
+        comment.content,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+        style: textStyle,
+      ),
     );
   }
 

@@ -12,27 +12,39 @@ class WorkbenchScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final workbenchState = ref.watch(workbenchProvider);
     final items = workbenchState.items;
+    // Determine if refresh can be triggered
+    final bool canRefresh =
+        !workbenchState.isLoading && !workbenchState.isRefreshingDetails;
 
     return CupertinoPageScaffold(
       navigationBar: CupertinoNavigationBar(
         middle: const Text('Workbench'),
-        // Add Reset Order button to leading
+        // Keep Reset Order button
         leading: CupertinoButton(
           padding: EdgeInsets.zero,
           child: const Icon(CupertinoIcons.arrow_up_arrow_down),
           onPressed: () => ref.read(workbenchProvider.notifier).resetOrder(),
         ),
+        // Add Refresh button
         trailing: CupertinoButton(
           padding: EdgeInsets.zero,
-          onPressed: workbenchState.isLoading
-              ? null // Disable refresh while loading
-              : () => ref.read(workbenchProvider.notifier).loadItems(),
-          child: const Icon(CupertinoIcons.refresh),
+          // Disable while loading OR refreshing details
+          onPressed:
+              canRefresh
+                  ? () =>
+                      ref.read(workbenchProvider.notifier).refreshItemDetails()
+                  : null,
+          // Show activity indicator when busy
+          child:
+              canRefresh
+                  ? const Icon(CupertinoIcons.refresh)
+                  : const CupertinoActivityIndicator(radius: 10),
         ),
       ),
       child: SafeArea(
         child: Builder( // Use Builder to get context with theme
           builder: (context) {
+            // Show loading indicator only on initial load when items are empty
             if (workbenchState.isLoading && items.isEmpty) {
               return const Center(child: CupertinoActivityIndicator());
             }
@@ -62,7 +74,8 @@ class WorkbenchScreen extends ConsumerWidget {
               );
             }
 
-            if (items.isEmpty) {
+            if (items.isEmpty && !workbenchState.isLoading) {
+              // Ensure not loading when showing empty state
               return const Center(
                 child: Text(
                   'Your Workbench is empty.\nAdd items via long-press or actions.',
@@ -73,7 +86,6 @@ class WorkbenchScreen extends ConsumerWidget {
             }
 
             // Use ReorderableListView for drag-and-drop
-            // Note: This is a Material widget. Styling might need adjustment for pure Cupertino look.
             return ReorderableListView.builder(
               padding: const EdgeInsets.symmetric(
                 vertical: 8.0,
@@ -90,6 +102,7 @@ class WorkbenchScreen extends ConsumerWidget {
                     'drag-${item.id}',
                   ), // Add a key to the listener too
                   child: WorkbenchItemTile(
+                    // Pass the item reference which might contain populated details
                     key: ValueKey(
                       item.id,
                     ), // Keep key on the tile itself as well
@@ -102,12 +115,8 @@ class WorkbenchScreen extends ConsumerWidget {
                     .read(workbenchProvider.notifier)
                     .reorderItems(oldIndex, newIndex);
               },
-              // Optional: Add header for loading indicator when refreshing
-              header: workbenchState.isLoading ? const Padding(
-                        padding: EdgeInsets.all(12.0),
-                child: Center(child: CupertinoActivityIndicator()),
-                      )
-                      : null,
+              // Remove the header loading indicator, use the trailing button instead
+              // header: workbenchState.isLoading ? ... : null,
             );
           }
         ),
