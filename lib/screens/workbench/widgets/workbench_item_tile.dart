@@ -130,8 +130,12 @@ class WorkbenchItemTile extends ConsumerWidget {
                       child: const Text('Remove'),
                       onPressed: () {
                         Navigator.pop(dialogContext);
-                            // Fix: Call removeItem on the notifier
-                        ref.read(workbenchProvider.notifier).removeItem(itemReference.id);
+                            // Fix: Call removeItem on the notifier and ignore the future
+                            unawaited(
+                              ref
+                                  .read(workbenchProvider.notifier)
+                                  .removeItem(itemReference.id),
+                            );
                       },
                     ),
                   ],
@@ -267,7 +271,9 @@ class WorkbenchItemTile extends ConsumerWidget {
                   // Wait for the activeServerConfigProvider to reflect the change
                   // This uses ref.listen for a more robust state propagation check
                   final completer = Completer<void>();
-                  final sub = ref.listen<ServerConfig?>(
+                  // Explicitly type the subscription variable
+                  final ProviderSubscription<ServerConfig?> sub = ref
+                      .listen<ServerConfig?>(
                     activeServerConfigProvider,
                     (prev, next) {
                       if (next?.id == itemRef.serverId &&

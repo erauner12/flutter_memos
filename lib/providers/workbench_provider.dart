@@ -357,10 +357,17 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
   Future<void> removeItem(String itemId) async {
     if (!mounted) return;
 
-    final itemToRemove = state.items.firstWhere(
-      (item) => item.id == itemId,
-      orElse: () => null, // Use orElse to return null if not found
-    );
+    // Check if the item exists before proceeding
+    final itemExists = state.items.any((item) => item.id == itemId);
+
+    if (!itemExists) {
+      if (kDebugMode) {
+        print(
+          '[WorkbenchNotifier] Item with ID $itemId not found. Skipping remove.',
+        );
+      }
+      return; // Item not found, do nothing
+    }
 
     // Optimistic update
     final originalItems = List<WorkbenchItemReference>.from(state.items);
