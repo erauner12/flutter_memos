@@ -985,10 +985,11 @@ class BlinkoApiService implements BaseApiService {
         blinkoDetail.accountId?.toString() ?? 'unknown_creator';
 
     // --- Parse Start/End Dates ---
-    // Verify the actual field names in the Blinko API spec (e.g., startDate, start_date)
-    // Access directly, tryParseDateTime handles nulls
-    final DateTime? startDate = tryParseDateTime(blinkoDetail.startDate);
-    final DateTime? endDate = tryParseDateTime(blinkoDetail.endDate);
+    // REMOVED: Access to potentially non-existent startDate/endDate fields
+    // final DateTime? startDate = tryParseDateTime(blinkoDetail.startDate);
+    // final DateTime? endDate = tryParseDateTime(blinkoDetail.endDate);
+    final DateTime? startDate = null; // Assume null for now
+    final DateTime? endDate = null; // Assume null for now
     // ---------------------------
 
     // Keep ?? for tags as it's nullable list?
@@ -1040,8 +1041,8 @@ class BlinkoApiService implements BaseApiService {
       resources: resources,
       relations: relations,
       creatorId: creatorIdStr,
-      startDate: startDate, // Assign parsed start date
-      endDate: endDate, // Assign parsed end date
+      startDate: startDate, // Assign parsed start date (now null)
+      endDate: endDate, // Assign parsed end date (now null)
     );
   }
 
@@ -1086,10 +1087,11 @@ class BlinkoApiService implements BaseApiService {
         blinkoNote.accountId?.toString() ?? 'unknown_creator';
 
     // --- Parse Start/End Dates ---
-    // Verify the actual field names in the Blinko API spec (e.g., startDate, start_date)
-    // Access directly, tryParseDateTime handles nulls
-    final DateTime? startDate = tryParseDateTime(blinkoNote.startDate);
-    final DateTime? endDate = tryParseDateTime(blinkoNote.endDate);
+    // REMOVED: Access to potentially non-existent startDate/endDate fields
+    // final DateTime? startDate = tryParseDateTime(blinkoNote.startDate);
+    // final DateTime? endDate = tryParseDateTime(blinkoNote.endDate);
+    final DateTime? startDate = null; // Assume null for now
+    final DateTime? endDate = null; // Assume null for now
     // ---------------------------
 
     // Keep ?? for tags as it's nullable list?
@@ -1141,8 +1143,8 @@ class BlinkoApiService implements BaseApiService {
       resources: resources,
       relations: relations,
       creatorId: creatorIdStr,
-      startDate: startDate, // Assign parsed start date
-      endDate: endDate, // Assign parsed end date
+      startDate: startDate, // Assign parsed start date (now null)
+      endDate: endDate, // Assign parsed end date (now null)
     );
   }
 
@@ -1155,6 +1157,10 @@ class BlinkoApiService implements BaseApiService {
         return DateTime(1970);
       }
       try {
+        // Handle potential '0001-01-01T00:00:00Z' or similar zero dates from API
+        if (dateString.startsWith('0001-')) {
+          return DateTime(1970);
+        }
         return DateTime.parse(dateString);
       } catch (_) {
         return DateTime.tryParse(dateString) ?? DateTime(1970);
