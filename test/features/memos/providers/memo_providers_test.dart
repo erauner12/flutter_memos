@@ -296,19 +296,8 @@ void main() {
         final visibleNotes = container.read(visibleNotesListProvider); // Updated provider name
         expect(visibleNotes.any((m) => m.id == noteIdToArchive), isFalse);
 
-        // Verify API calls using Mockito verification
-        verify(mockApiService.getNote(noteIdToArchive)).called(1); // Updated method name
-
-        final verificationResult = verify(
-          mockApiService.updateNote( // Updated method name
-            argThat(equals(noteIdToArchive)),
-            captureAny,
-          ),
-        );
-        verificationResult.called(1);
-
-        final capturedNote = verificationResult.captured.single as NoteItem; // Updated type
-        expect(capturedNote.state, equals(NoteState.archived)); // Updated enum
+        // Verify archiveNote API call
+        verify(mockApiService.archiveNote(noteIdToArchive)).called(1);
       },
     );
 

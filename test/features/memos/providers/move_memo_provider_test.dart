@@ -105,6 +105,14 @@ void main() {
         ),
       ).thenAnswer((_) async => noteToMove);
 
+      // Add specific stub for the note being moved
+      when(
+        mockApiService.getNote(
+          noteToMove.id,
+          // No targetServerOverride needed here as it defaults to active
+        ),
+      ).thenAnswer((_) async => noteToMove);
+
       when(
         mockApiService.listNoteComments(
           // Updated method name

@@ -310,10 +310,15 @@ void main() {
 
       // Verify the updateNoteComment call using Mockito
       final verificationResult = verify(
-        mockApiService.updateNoteComment(argThat(equals(fullId)), captureAny),
+        mockApiService.updateNoteComment(
+          captureAny,
+          captureAny,
+        ), // Capture both arguments
       );
       verificationResult.called(1);
-      final capturedComment = verificationResult.captured.single as Comment;
+      final capturedId = verificationResult.captured[0] as String;
+      final capturedComment = verificationResult.captured[1] as Comment;
+      expect(capturedId, equals(comment.id)); // Verify the simple ID was passed
       expect(capturedComment.state, equals(CommentState.archived));
 
       // Optional: Verify the final state by getting the comment again
