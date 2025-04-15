@@ -31,6 +31,23 @@ class CloudKitService {
   static const String workbenchItemRecordType = 'WorkbenchItemReference';
   static const String userSettingsRecordType = 'UserSettings';
 
+  // Helper function to serialize Map<String, dynamic> to Map<String, String>
+  // This is a workaround for the flutter_cloud_kit plugin expecting Map<String, String>.
+  Map<String, String> _serializeMap(Map<String, dynamic> data) {
+    return data.map((key, value) {
+      if (value == null) {
+        // Convert null to empty string as plugin expects String values
+        return MapEntry(key, '');
+      } else if (value is DateTime) {
+        // Convert DateTime to ISO 8601 string
+        return MapEntry(key, value.toIso8601String());
+      } else {
+        // Convert other types (bool, int, double, String) to string
+        return MapEntry(key, value.toString());
+      }
+    });
+  }
+
   /// Initializes the CloudKit service, potentially checking account status.
   /// Returns the current CloudKit account status.
   Future<CloudKitAccountStatus> initialize() async {
@@ -60,11 +77,13 @@ class CloudKitService {
       print('[CloudKitService] saveServerConfig called for ${config.id}');
     }
     try {
+      // Serialize the data before sending
+      final recordData = _serializeMap(config.toJson());
       await _cloudKit.saveRecord(
         scope: _scope,
         recordType: serverConfigRecordType,
         recordName: config.id,
-        record: config.toJson(), // Pass Map<String, dynamic> directly
+        record: recordData, // Pass serialized Map<String, String>
       );
       if (kDebugMode) {
         print(
@@ -189,11 +208,13 @@ class CloudKitService {
       print('[CloudKitService] saveMcpServerConfig called for ${config.id}');
     }
     try {
+      // Serialize the data before sending
+      final recordData = _serializeMap(config.toJson());
       await _cloudKit.saveRecord(
         scope: _scope,
         recordType: mcpServerConfigRecordType,
         recordName: config.id,
-        record: config.toJson(), // Pass Map<String, dynamic> directly
+        record: recordData, // Pass serialized Map<String, String>
       );
       if (kDebugMode) {
         print(
@@ -297,11 +318,13 @@ class CloudKitService {
       );
     }
     try {
+      // Serialize the data before sending
+      final recordData = _serializeMap(item.toJson());
       await _cloudKit.saveRecord(
         scope: _scope,
         recordType: workbenchItemRecordType,
         recordName: item.id,
-        record: item.toJson(), // Pass Map<String, dynamic> directly
+        record: recordData, // Pass serialized Map<String, String>
       );
       if (kDebugMode) {
         print(
@@ -310,7 +333,14 @@ class CloudKitService {
       }
       return true;
     } catch (e, s) {
-      if (kDebugMode) {
+      // Log the specific error related to TIMESTAMP if it occurs
+      if (e is PlatformException &&
+          e.message != null &&
+          e.message!.contains('TIMESTAMP')) {
+        print(
+          '[CloudKitService] WORKAROUND WARNING: Encountered expected TIMESTAMP type mismatch error for WorkbenchItemReference ${item.id}. The flutter_cloud_kit plugin needs modification for proper DateTime handling. Error: $e',
+        );
+      } else if (kDebugMode) {
         print(
           '[CloudKitService] Error saving WorkbenchItemReference ${item.id}: $e\n$s',
         );
@@ -423,11 +453,13 @@ class CloudKitService {
       );
 
       // 3. Save the modified record back
+      // Serialize the updated data before sending
+      final updatedRecordData = _serializeMap(updatedItem.toJson());
       await _cloudKit.saveRecord(
         scope: _scope,
         recordType: workbenchItemRecordType, // Must specify type on save
         recordName: referenceId,
-        record: updatedItem.toJson(), // Pass Map<String, dynamic> directly
+        record: updatedRecordData, // Pass serialized Map<String, String>
       );
       if (kDebugMode) {
         print(
@@ -436,7 +468,14 @@ class CloudKitService {
       }
       return true;
     } catch (e, s) {
-      if (kDebugMode) {
+      // Log the specific error related to TIMESTAMP if it occurs
+      if (e is PlatformException &&
+          e.message != null &&
+          e.message!.contains('TIMESTAMP')) {
+        print(
+          '[CloudKitService] WORKAROUND WARNING: Encountered expected TIMESTAMP type mismatch error when updating lastOpenedTimestamp for $referenceId. The flutter_cloud_kit plugin needs modification for proper DateTime handling. Error: $e',
+        );
+      } else if (kDebugMode) {
         print(
           '[CloudKitService] Error updating lastOpenedTimestamp for $referenceId: $e\n$s',
         );
@@ -537,14 +576,16 @@ class CloudKitService {
       }
 
       // 2. Update the specific key
-      currentSettings[keyName] = value;
+      currentSettings[keyName] = value; // Note: value is already String here
 
       // 3. Save the record
+      // Serialize the potentially mixed-type map (though unlikely for settings)
+      final recordData = _serializeMap(currentSettings);
       await _cloudKit.saveRecord(
         scope: _scope,
         recordType: userSettingsRecordType,
         recordName: _userSettingsRecordName,
-        record: currentSettings, // Pass Map<String, dynamic> directly
+        record: recordData, // Pass serialized Map<String, String>
       );
       if (kDebugMode) {
         print('[CloudKitService] Successfully saved setting $keyName');
