@@ -31,23 +31,6 @@ class CloudKitService {
   static const String workbenchItemRecordType = 'WorkbenchItemReference';
   static const String userSettingsRecordType = 'UserSettings';
 
-  // Helper to convert Map<String, dynamic> to Map<String, String> for saving
-  Map<String, String> _serializeMap(Map<String, dynamic> data) {
-    return data.map((key, value) {
-      if (value == null) {
-        // CloudKit might not support null, represent as empty string or handle differently
-        return MapEntry(key, '');
-      } else if (value is DateTime) {
-        return MapEntry(key, value.toIso8601String());
-      } else if (value is Enum) {
-        return MapEntry(key, value.name);
-      } else {
-        // Convert numbers, booleans, etc., to string
-        return MapEntry(key, value.toString());
-      }
-    });
-  }
-
   /// Initializes the CloudKit service, potentially checking account status.
   /// Returns the current CloudKit account status.
   Future<CloudKitAccountStatus> initialize() async {
@@ -77,12 +60,11 @@ class CloudKitService {
       print('[CloudKitService] saveServerConfig called for ${config.id}');
     }
     try {
-      final recordData = _serializeMap(config.toJson());
       await _cloudKit.saveRecord(
         scope: _scope,
         recordType: serverConfigRecordType,
         recordName: config.id,
-        record: recordData,
+        record: config.toJson(), // Pass Map<String, dynamic> directly
       );
       if (kDebugMode) {
         print(
@@ -160,7 +142,7 @@ class CloudKitService {
                   return null; // Skip records that fail parsing
                 }
               })
-              .whereType<ServerConfig>() // Filter out nulls from failed parsing
+              .whereType<ServerConfig>()
               .toList();
       if (kDebugMode) {
         print(
@@ -207,12 +189,11 @@ class CloudKitService {
       print('[CloudKitService] saveMcpServerConfig called for ${config.id}');
     }
     try {
-      final recordData = _serializeMap(config.toJson());
       await _cloudKit.saveRecord(
         scope: _scope,
         recordType: mcpServerConfigRecordType,
         recordName: config.id,
-        record: recordData,
+        record: config.toJson(), // Pass Map<String, dynamic> directly
       );
       if (kDebugMode) {
         print(
@@ -316,12 +297,11 @@ class CloudKitService {
       );
     }
     try {
-      final recordData = _serializeMap(item.toJson());
       await _cloudKit.saveRecord(
         scope: _scope,
         recordType: workbenchItemRecordType,
         recordName: item.id,
-        record: recordData,
+        record: item.toJson(), // Pass Map<String, dynamic> directly
       );
       if (kDebugMode) {
         print(
@@ -436,20 +416,18 @@ class CloudKitService {
         return false;
       }
 
-      // 2. Prepare updated data (convert existing dynamic map to string map for saving)
-      // Need to deserialize first to easily update, then re-serialize
+      // 2. Prepare updated data (convert existing dynamic map to object for updating)
       final currentItem = WorkbenchItemReference.fromJson(record.values);
       final updatedItem = currentItem.copyWith(
         lastOpenedTimestamp: DateTime.now(),
       );
-      final updatedRecordData = _serializeMap(updatedItem.toJson());
 
       // 3. Save the modified record back
       await _cloudKit.saveRecord(
         scope: _scope,
         recordType: workbenchItemRecordType, // Must specify type on save
         recordName: referenceId,
-        record: updatedRecordData,
+        record: updatedItem.toJson(), // Pass Map<String, dynamic> directly
       );
       if (kDebugMode) {
         print(
@@ -561,15 +539,12 @@ class CloudKitService {
       // 2. Update the specific key
       currentSettings[keyName] = value;
 
-      // 3. Serialize the entire map to Map<String, String> for saving
-      final recordData = _serializeMap(currentSettings);
-
-      // 4. Save the record
+      // 3. Save the record
       await _cloudKit.saveRecord(
         scope: _scope,
         recordType: userSettingsRecordType,
         recordName: _userSettingsRecordName,
-        record: recordData,
+        record: currentSettings, // Pass Map<String, dynamic> directly
       );
       if (kDebugMode) {
         print('[CloudKitService] Successfully saved setting $keyName');
@@ -581,15 +556,10 @@ class CloudKitService {
           e.message != null &&
           e.message!.contains('record to insert already exists')) {
         if (kDebugMode) {
-          // More specific log message
           print(
             '[CloudKitService] saveSetting: Handled "record already exists" for "$_userSettingsRecordName" when saving key "$keyName". Treating as success (likely concurrent init).',
           );
         }
-        // If the record already exists, the goal of having *a* settings record
-        // is met, even if this specific call didn't create it.
-        // We might want to fetch and merge again here for absolute certainty,
-        // but for initialization, treating as success is often sufficient.
         return true;
       }
       // *** End specific handling ***
@@ -650,7 +620,7 @@ class CloudKitService {
               '[CloudKitService] Error deleting record ${record.recordName} of type $recordType: $e',
             );
           }
-          allSucceeded = false; // Mark failure if any deletion fails
+          allSucceeded = false;
         }
       }
       return allSucceeded;

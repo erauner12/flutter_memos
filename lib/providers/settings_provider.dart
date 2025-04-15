@@ -497,10 +497,11 @@ class PersistentSetNotifier<T> extends StateNotifier<Set<T>> {
         if (mounted) {
           state = newState;
         } else {
-          if (kDebugMode)
+          if (kDebugMode) {
             print(
               '[PersistentSetNotifier<$T>] Warning: add called on unmounted notifier for $preferenceKey',
             );
+          }
           return false; // Or handle differently?
         }
         return _saveState(newState);
@@ -516,10 +517,11 @@ class PersistentSetNotifier<T> extends StateNotifier<Set<T>> {
         if (mounted) {
           state = newState;
         } else {
-          if (kDebugMode)
+          if (kDebugMode) {
             print(
               '[PersistentSetNotifier<$T>] Warning: remove called on unmounted notifier for $preferenceKey',
             );
+          }
           return false; // Or handle differently?
         }
         return _saveState(newState);
@@ -536,10 +538,11 @@ class PersistentSetNotifier<T> extends StateNotifier<Set<T>> {
         if (mounted) {
           state = newState;
         } else {
-          if (kDebugMode)
+          if (kDebugMode) {
             print(
               '[PersistentSetNotifier<$T>] Warning: clear called on unmounted notifier for $preferenceKey',
             );
+          }
           return false; // Or handle differently?
         }
         return _saveState(newState);
@@ -551,10 +554,11 @@ class PersistentSetNotifier<T> extends StateNotifier<Set<T>> {
   // Helper to save state to SecureStorage and CloudKit
   Future<bool> _saveState(Set<T> stateToSave) async {
     if (!_initialized) {
-      if (kDebugMode)
+      if (kDebugMode) {
         print(
           '[PersistentSetNotifier<$T>] Warning: Attempting to save state before initialization for $preferenceKey.',
         );
+      }
       // Optionally wait for init or return false
       await init(); // Ensure init completes
       if (!_initialized) return false; // If init failed

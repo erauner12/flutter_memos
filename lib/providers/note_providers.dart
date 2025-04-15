@@ -261,7 +261,7 @@ class NotesNotifier extends StateNotifier<NotesState> {
         hasReachedEnd: hasReachedEnd,
         totalLoaded: newTotalLoaded,
       );
-    } catch (e, st) {
+    } catch (e) {
       if (kDebugMode) print('[NotesNotifier] Error fetching page: \$e\n\$st');
       state = state.copyWith(isLoading: false, isLoadingMore: false, error: e);
     }
@@ -395,8 +395,9 @@ class NotesNotifier extends StateNotifier<NotesState> {
   ) async {
     final noteIndex = state.notes.indexWhere((n) => n.id == noteId);
     if (noteIndex == -1) {
-      if (kDebugMode)
+      if (kDebugMode) {
         print('[NotesNotifier] Note \$noteId not found for start date update.');
+      }
       return;
     }
 
@@ -404,10 +405,11 @@ class NotesNotifier extends StateNotifier<NotesState> {
     if (newStartDate != null &&
         originalNote.endDate != null &&
         newStartDate.isAfter(originalNote.endDate!)) {
-      if (kDebugMode)
+      if (kDebugMode) {
         print(
           '[NotesNotifier] Cannot set start date (\$newStartDate) after end date (\${originalNote.endDate}) for note \$noteId.',
         );
+      }
       return;
     }
 
@@ -423,10 +425,11 @@ class NotesNotifier extends StateNotifier<NotesState> {
       return b.updateTime.compareTo(a.updateTime);
     });
     state = state.copyWith(notes: currentNotes);
-    if (kDebugMode)
+    if (kDebugMode) {
       print(
         '[NotesNotifier] Optimistically updated start date for note \$noteId to \$newStartDate.',
       );
+    }
 
     try {
       final BaseApiService apiService = _ref.read(api_p.apiServiceProvider);
@@ -448,15 +451,17 @@ class NotesNotifier extends StateNotifier<NotesState> {
           return b.updateTime.compareTo(a.updateTime);
         });
         state = state.copyWith(notes: finalNotes);
-        if (kDebugMode)
+        if (kDebugMode) {
           print(
             '[NotesNotifier] Confirmed start date update for note \$noteId from API (merged state).',
           );
+        }
       } else {
-        if (kDebugMode)
+        if (kDebugMode) {
           print(
             '[NotesNotifier] Note \$noteId disappeared after API update confirmation? Refreshing list.',
           );
+        }
         refresh();
       }
     } catch (e, stackTrace) {
@@ -475,10 +480,11 @@ class NotesNotifier extends StateNotifier<NotesState> {
           return b.updateTime.compareTo(a.updateTime);
         });
         state = state.copyWith(notes: revertedNotes);
-        if (kDebugMode)
+        if (kDebugMode) {
           print(
             '[NotesNotifier] Reverted optimistic start date update for note \$noteId.',
           );
+        }
       }
     }
   }
@@ -562,12 +568,14 @@ final toggleItemVisibilityProvider = Provider.family<void Function(), String>((
 
     if (currentHiddenIds.contains(id)) {
       manuallyHiddenIdsNotifier.remove(id);
-      if (kDebugMode)
+      if (kDebugMode) {
         print('[toggleItemVisibilityProvider] Unhid item (manual): $id');
+      }
     } else {
       manuallyHiddenIdsNotifier.add(id);
-      if (kDebugMode)
+      if (kDebugMode) {
         print('[toggleItemVisibilityProvider] Hid item (manual): $id');
+      }
     }
   };
 }, name: 'toggleItemVisibilityProvider');
@@ -715,8 +723,9 @@ final unhideNoteProvider = Provider.family<void Function(), String>((ref, id) {
 
 final unhideAllNotesProvider = Provider<Future<void> Function()>((ref) {
   return () async {
-    if (kDebugMode)
+    if (kDebugMode) {
       print('[unhideAllNotesProvider] Clearing all manually hidden notes.');
+    }
     await ref.read(settings_p.manuallyHiddenNoteIdsProvider.notifier).clear();
   };
 }, name: 'unhideAllNotesProvider');
@@ -792,8 +801,9 @@ final deleteNoteProvider = Provider.family<Future<void> Function(), String>((
 
     try {
       await apiService.deleteNote(id);
-      if (kDebugMode)
+      if (kDebugMode) {
         print('[deleteNoteProvider] Successfully deleted note: \$id');
+      }
       ref.read(settings_p.manuallyHiddenNoteIdsProvider.notifier).remove(id);
     } catch (e, stackTrace) {
       if (kDebugMode) {
@@ -818,8 +828,9 @@ final bumpNoteProvider = Provider.family<Future<void> Function(), String>((
     try {
       final NoteItem currentNote = await apiService.getNote(id);
       await apiService.updateNote(id, currentNote);
-      if (kDebugMode)
+      if (kDebugMode) {
         print('[bumpNoteProvider] Successfully bumped note: \$id');
+      }
     } catch (e, stackTrace) {
       if (kDebugMode) {
         print('[bumpNoteProvider] Error bumping note \$id: \$e');
@@ -843,10 +854,11 @@ final updateNoteProvider =
       ref
           .read(noteDetailCacheProvider.notifier)
           .update((state) => {...state, result.id: result});
-      if (kDebugMode)
+      if (kDebugMode) {
         print('[updateNoteProvider] Note \$id updated successfully.');
+      }
       return result;
-    } catch (e, stackTrace) {
+    } catch (e) {
       if (kDebugMode) {
         print('[updateNoteProvider] Error updating note: \$e\n\$stackTrace');
       }
@@ -862,8 +874,9 @@ final togglePinNoteProvider = Provider.family<
     String
 >((ref, id) {
   return () async {
-    if (kDebugMode)
+    if (kDebugMode) {
       print('[togglePinNoteProvider] Toggling pin state for note: \$id');
+    }
     final BaseApiService apiService = ref.read(api_p.apiServiceProvider);
 
     ref.read(notesNotifierProvider.notifier).togglePinOptimistically(id);
@@ -874,7 +887,7 @@ final togglePinNoteProvider = Provider.family<
           .read(noteDetailCacheProvider.notifier)
           .update((state) => {...state, result.id: result});
       return result;
-    } catch (e, stackTrace) {
+    } catch (e) {
       if (kDebugMode) {
         print(
           '[togglePinNoteProvider] Error toggling pin state for note: \$id\n\$stackTrace',
@@ -1120,10 +1133,11 @@ final toggleItemSelectionModeProvider = Provider<void Function()>((ref) {
       ref.read(selectedItemIdsProvider.notifier).state = {};
     }
     ref.read(itemSelectionModeProvider.notifier).state = !currentMode;
-    if (kDebugMode)
+    if (kDebugMode) {
       print(
         '[toggleItemSelectionModeProvider] Selection mode: \${!currentMode}',
       );
+    }
   };
 }, name: 'toggleItemSelectionModeProvider');
 
@@ -1137,8 +1151,9 @@ final prefetchNoteDetailsProvider = Provider<
 >((ref) {
   return (List<String> ids) async {
     if (ids.isEmpty) return;
-    if (kDebugMode)
+    if (kDebugMode) {
       print('[prefetchNoteDetailsProvider] Prefetching \${ids.length} notes');
+    }
     final BaseApiService apiService = ref.read(api_p.apiServiceProvider);
     final cache = ref.read(noteDetailCacheProvider);
     final uncachedIds = ids.where((id) => !cache.containsKey(id)).toList();
@@ -1160,11 +1175,13 @@ final prefetchNoteDetailsProvider = Provider<
         }
         ref.read(noteDetailCacheProvider.notifier).state = updatedCache;
       } catch (e) {
-        if (kDebugMode)
+        if (kDebugMode) {
           print('[prefetchNoteDetailsProvider] Error prefetching batch: \$e');
+        }
       }
-      if (end < uncachedIds.length)
+      if (end < uncachedIds.length) {
         await Future.delayed(const Duration(milliseconds: 100));
+      }
     }
   };
 }, name: 'prefetchNoteDetailsProvider');
@@ -1194,8 +1211,9 @@ final fixNoteGrammarProvider = FutureProvider.family<void, String>((
   ref,
   noteId,
 ) async {
-  if (kDebugMode)
+  if (kDebugMode) {
     print('[fixNoteGrammarProvider] Starting grammar fix for note: \$noteId');
+  }
 
   final BaseApiService notesApiService = ref.read(api_p.apiServiceProvider);
   final MinimalOpenAiService openaiApiService = ref.read(
@@ -1204,10 +1222,11 @@ final fixNoteGrammarProvider = FutureProvider.family<void, String>((
   final String selectedModelId = ref.read(settings_p.openAiModelIdProvider);
 
   if (!openaiApiService.isConfigured) {
-    if (kDebugMode)
+    if (kDebugMode) {
       print(
         '[fixNoteGrammarProvider] OpenAI service not configured. Aborting.',
       );
+    }
     throw Exception('OpenAI API key is not configured in settings.');
   }
 
@@ -1217,15 +1236,17 @@ final fixNoteGrammarProvider = FutureProvider.family<void, String>((
     final String originalContent = currentNote.content;
 
     if (originalContent.trim().isEmpty) {
-      if (kDebugMode)
+      if (kDebugMode) {
         print('[fixNoteGrammarProvider] Note content is empty. Skipping.');
+      }
       return;
     }
 
-    if (kDebugMode)
+    if (kDebugMode) {
       print(
         '[fixNoteGrammarProvider] Calling OpenAI API with model: \$selectedModelId...',
       );
+    }
     final String correctedContent = await openaiApiService.fixGrammar(
       originalContent,
       modelId: selectedModelId,
@@ -1233,15 +1254,17 @@ final fixNoteGrammarProvider = FutureProvider.family<void, String>((
 
     if (correctedContent == originalContent ||
         correctedContent.trim().isEmpty) {
-      if (kDebugMode)
+      if (kDebugMode) {
         print(
           '[fixNoteGrammarProvider] Content unchanged or correction empty. No update needed.',
         );
+      }
       return;
     }
 
-    if (kDebugMode)
+    if (kDebugMode) {
       print('[fixNoteGrammarProvider] Content corrected. Updating note...');
+    }
     final NoteItem updatedNoteData = currentNote.copyWith(
       content: correctedContent,
     );

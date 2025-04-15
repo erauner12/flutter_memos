@@ -81,8 +81,9 @@ final apiServiceProvider = Provider<BaseApiService>((ref) {
   switch (serverType) {
     case ServerType.memos:
       // *** ADD LOGGING INSIDE CASE ***
-      if (kDebugMode)
+      if (kDebugMode) {
         print('[apiServiceProvider] Switch case: Matched ServerType.memos');
+      }
       // *** END ADDED LOGGING ***
       final memosService =
           MemosApiService(); // Use concrete type for instantiation
@@ -94,8 +95,9 @@ final apiServiceProvider = Provider<BaseApiService>((ref) {
       break;
     case ServerType.blinko:
       // *** ADD LOGGING INSIDE CASE ***
-      if (kDebugMode)
+      if (kDebugMode) {
         print('[apiServiceProvider] Switch case: Matched ServerType.blinko');
+      }
       // *** END ADDED LOGGING ***
       final blinkoService =
           BlinkoApiService(); // Use concrete type for instantiation
@@ -185,16 +187,18 @@ Future<void> _checkApiHealth(Ref ref) async {
         ref.read(apiStatusProvider) == 'checking') {
       ref.read(apiStatusProvider.notifier).state =
           isHealthy ? 'available' : 'unavailable';
-      if (kDebugMode)
+      if (kDebugMode) {
         print(
           '[apiHealthChecker] Health check for ${activeConfig.name ?? activeConfig.id} (${activeConfig.serverType.name}): ${isHealthy ? 'Available' : 'Unavailable'}',
         );
+      }
     }
   } catch (e) {
-    if (kDebugMode)
+    if (kDebugMode) {
       print(
         '[apiHealthChecker] API health check failed for ${activeConfig.name ?? activeConfig.id}: $e',
       );
+    }
     if (ref.read(activeServerConfigProvider)?.id == activeConfig.id &&
         ref.read(apiStatusProvider) == 'checking') {
       ref.read(apiStatusProvider.notifier).state = 'unavailable'; // Or 'error'
