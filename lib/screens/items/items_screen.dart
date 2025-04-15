@@ -354,8 +354,11 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
                   padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 8.0),
                   child: _buildQuickFilterControl(),
                 ),
-              // Display hidden count conditionally
-              if (!isMultiSelectMode && hiddenCount > 0 && !showHidden)
+              // Display hidden count conditionally (for non-hidden views)
+              if (!isMultiSelectMode &&
+                  hiddenCount > 0 &&
+                  !showHidden &&
+                  selectedPresetKey != 'hidden')
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16.0, 0, 16.0, 8.0),
                   child: Align(
@@ -367,6 +370,37 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
                         color: CupertinoColors.secondaryLabel.resolveFrom(
                           context,
                         ),
+                      ),
+                    ),
+                  ),
+                ),
+              // Add Unhide All button when in hidden view
+              if (!isMultiSelectMode && selectedPresetKey == 'hidden')
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16.0, 0, 16.0, 8.0),
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: CupertinoButton(
+                      padding: EdgeInsets.zero,
+                      minSize: 0,
+                      onPressed: _showUnhideAllConfirmation, // New method
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            CupertinoIcons.eye,
+                            size: 18,
+                            color: theme.primaryColor,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Unhide All Manually Hidden (${ref.watch(note_providers.manuallyHiddenNoteCountProvider)})',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: theme.primaryColor,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -706,13 +740,74 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
     note_providers.NotesState notesState,
     List<NoteItem> filteredNotes,
   ) {
+    // Determine if we are in the hidden view
+    final selectedPresetKey = ref.watch(quickFilterPresetProvider);
+    final bool isInHiddenView = selectedPresetKey == 'hidden';
+
     return NotesListBody(
       scrollController: _scrollController,
       onMoveNoteToServer: _handleMoveNoteToServer,
       notes: filteredNotes,
       notesState: notesState,
+      isInHiddenView: isInHiddenView, // Pass the flag
     );
   }
+
+  // --- Start Unhide All Confirmation ---
+  void _showUnhideAllConfirmation() {
+    final manualHiddenCount = ref.read(
+      note_providers.manuallyHiddenNoteCountProvider,
+    );
+    if (manualHiddenCount == 0) {
+      // Optionally show a message if there's nothing to unhide
+      return;
+    }
+
+    showCupertinoDialog<bool>(
+      context: context,
+      builder:
+          (BuildContext dialogContext) => CupertinoAlertDialog(
+            title: const Text('Unhide All Manually Hidden Notes?'),
+            content: Text(
+              'Are you sure you want to unhide all $manualHiddenCount manually hidden notes? Notes hidden due to future start dates will remain hidden.',
+            ),
+            actions: <Widget>[
+              CupertinoDialogAction(
+                child: const Text('Cancel'),
+                onPressed: () => Navigator.pop(dialogContext, false),
+              ),
+              CupertinoDialogAction(
+                isDefaultAction: true,
+                child: const Text('Unhide All'),
+                onPressed: () => Navigator.pop(dialogContext, true),
+              ),
+            ],
+          ),
+    ).then((confirmed) {
+      if (confirmed == true) {
+        if (kDebugMode) {
+          print('[ItemsScreen] Confirmed Unhide All Manually Hidden.');
+        }
+        ref
+            .read(note_providers.unhideAllNotesProvider)()
+            .then((_) {
+              // Optionally switch back to a different view after unhiding
+              if (mounted && ref.read(quickFilterPresetProvider) == 'hidden') {
+                ref.read(quickFilterPresetProvider.notifier).state =
+                    'inbox'; // Or 'all'
+                ref.read(filterPreferencesProvider)('inbox'); // Save preference
+              }
+            })
+            .catchError((e, s) {
+              if (kDebugMode) {
+                print('[ItemsScreen] Error during Unhide All: $e\n$s');
+              }
+              // Show error dialog if needed
+            });
+      }
+    });
+  }
+  // --- End Unhide All Confirmation ---
 
   // --- Reset Logic ---
   void _showResetConfirmationDialog() {

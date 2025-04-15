@@ -16,11 +16,13 @@ class NoteListItem extends ConsumerStatefulWidget {
   final NoteItem note;
   final int index;
   final VoidCallback? onMoveToServer;
+  final bool isInHiddenView; // Add this parameter
 
   const NoteListItem({
     super.key,
     required this.note,
     required this.index,
+    required this.isInHiddenView, // Make it required
     this.onMoveToServer,
   });
 
@@ -61,8 +63,7 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
                   color: isFutureStart
                       ? CupertinoColors.systemOrange.resolveFrom(context)
                       : CupertinoColors.secondaryLabel.resolveFrom(context),
-                  fontWeight:
-                      isFutureStart ? FontWeight.w600 : FontWeight.normal,
+                  fontWeight: isFutureStart ? FontWeight.w600 : FontWeight.normal,
                 ),
                 overflow: TextOverflow.ellipsis,
               ),
@@ -88,12 +89,18 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
 
   // Custom context menu including date actions
   void _showCustomContextMenu(BuildContext context) {
+    // Check if the note is manually hidden (needed for context menu logic)
+    final isManuallyHidden = ref.read(settings_p.manuallyHiddenNoteIdsProvider).contains(widget.note.id);
+    final now = DateTime.now();
+    final isFutureDated = widget.note.startDate?.isAfter(now) ?? false;
+
     showCupertinoModalPopup<void>(
       context: context,
       // The builder provides the correct context for actions *inside* the popup
       builder: (BuildContext popupContext) => CupertinoActionSheet(
         // Combine all sets of actions
         actions: <Widget>[
+          // Standard Actions
           CupertinoContextMenuAction(
             child: const Text('Edit'),
             onPressed: () {
@@ -130,6 +137,24 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
               Navigator.pop(popupContext);
             },
           ),
+          // Conditional Hide/Unhide Action
+          if (isManuallyHidden) // Show Unhide only if manually hidden
+            CupertinoContextMenuAction(
+              child: const Text('Unhide'),
+              onPressed: () {
+                ref.read(note_providers.unhideNoteProvider(widget.note.id))();
+                Navigator.pop(popupContext);
+              },
+            )
+          else if (!isFutureDated) // Show Hide only if not future-dated (and not manually hidden)
+            CupertinoContextMenuAction(
+              child: const Text('Hide'),
+              onPressed: () {
+                _toggleHideItem(context, ref); // Existing hide logic
+                Navigator.pop(popupContext);
+              },
+            ),
+          // Date Actions
           CupertinoContextMenuAction(
             child: const Text('Kick Start +1 Day'),
             onPressed: () {
@@ -219,8 +244,6 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
             nextSelectedId;
       }
     }
-
-    // No need to refresh notesNotifierProvider here, filteredNotesProvider will react
   }
 
   void _navigateToItemDetail(BuildContext context, WidgetRef ref) {
@@ -452,14 +475,25 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
             label: widget.note.pinned ? 'Unpin' : 'Pin',
             autoClose: true,
           ),
-          SlidableAction(
-            onPressed: (_) => _toggleHideItem(context, ref),
-            backgroundColor: CupertinoColors.systemGrey,
-            foregroundColor: CupertinoColors.white,
-            icon: CupertinoIcons.eye_slash_fill,
-            label: 'Hide',
-            autoClose: true,
-          ),
+          // Conditionally show Hide or Unhide
+          if (widget.isInHiddenView)
+            SlidableAction(
+              onPressed: (_) => ref.read(note_providers.unhideNoteProvider(widget.note.id))(),
+              backgroundColor: CupertinoColors.systemGreen,
+              foregroundColor: CupertinoColors.white,
+              icon: CupertinoIcons.eye_fill,
+              label: 'Unhide',
+              autoClose: true,
+            )
+          else
+            SlidableAction(
+              onPressed: (_) => _toggleHideItem(context, ref),
+              backgroundColor: CupertinoColors.systemGrey,
+              foregroundColor: CupertinoColors.white,
+              icon: CupertinoIcons.eye_slash_fill,
+              label: 'Hide',
+              autoClose: true,
+            ),
         ],
       ),
       endActionPane: ActionPane(

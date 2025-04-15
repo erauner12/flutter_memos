@@ -45,6 +45,13 @@ final Map<String, QuickFilterPreset> quickFilterPresets = {
     celFilter: FilterPresets.allFilter(), // Use the new allFilter preset
     icon: CupertinoIcons.collections,
   ),
+  // Add the new 'hidden' preset
+  'hidden': const QuickFilterPreset(
+    key: 'hidden',
+    label: 'Hidden',
+    celFilter: '', // Filter logic handled client-side in filteredNotesProvider
+    icon: CupertinoIcons.eye_slash,
+  ),
   // Special key to indicate a custom filter from the advanced panel is active
   'custom': const QuickFilterPreset(
     key: 'custom',
@@ -104,11 +111,15 @@ final filterKeyProvider = StateProvider<String>(
   if (presetKey == 'today') {
     return 'all'; // Example: Maybe 'today' should show 'all' states? Adjust as needed.
   }
+  // Handle the new 'hidden' preset - likely applies to 'all' states for API, filtered client-side
+  if (presetKey == 'hidden') {
+    return 'all'; // Hidden notes are filtered client-side, fetch all non-archived
+  }
   if (presetKey == 'custom') {
     return 'all'; // Custom filter likely applies to 'all' states
   }
 
-  // Fallback if presetKey doesn't match known legacy keys
+  // Fallback if presetKey doesn't match known legacy keys (e.g., a tag)
   return presetKey;
 },
   name: 'filterKey',

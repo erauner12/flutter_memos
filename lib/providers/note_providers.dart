@@ -570,83 +570,153 @@ final toggleItemVisibilityProvider = Provider.family<void Function(), String>((
 // Keep provider name filteredNotesProvider
 final filteredNotesProvider = Provider<List<NoteItem>>((ref) {
   final notesState = ref.watch(notesNotifierProvider);
-  final filterKey = ref.watch(filterKeyProvider);
+  final filterKey = ref.watch(
+    filterKeyProvider,
+  ); // Still needed for base API fetch state
+  final selectedPresetKey = ref.watch(
+    quickFilterPresetProvider,
+  ); // Use this for primary logic
   final hidePinned = ref.watch(hidePinnedProvider);
-  final showHidden = ref.watch(
+  final showHiddenToggle = ref.watch(
     showHiddenNotesProvider,
-  ); // Read the toggle state
+  ); // Read the toggle state (used for non-'hidden' views)
   final manuallyHiddenIds = ref.watch(
     settings_p.manuallyHiddenNoteIdsProvider,
   ); // Read manual hidden IDs
   final searchQuery = ref.watch(searchQueryProvider).trim().toLowerCase();
   final now = DateTime.now();
 
-  // 1. Apply primary filter (inbox/archive/tag) and hidePinned
-  List<NoteItem> currentList =
-      notesState.notes.where((note) {
-        if (hidePinned && note.pinned) return false;
+  List<NoteItem> currentList;
 
-        bool matchesFilterKey = false;
-        switch (filterKey) {
-          case 'inbox':
-          case 'all': // Treat 'all' as non-archived for display
-            matchesFilterKey = note.state != NoteState.archived;
-            break;
-          case 'archive':
-            matchesFilterKey = note.state == NoteState.archived;
-            break;
-          default: // Assume it\'s a tag filter
-            if (!['inbox', 'all', 'archive'].contains(filterKey)) {
-              matchesFilterKey =
-                  note.tags.contains(filterKey) &&
-                  note.state != NoteState.archived;
-            } else {
-              matchesFilterKey = note.state != NoteState.archived;
-            }
-            break;
-        }
-        return matchesFilterKey;
-      }).toList();
-
-  // 2. Apply visibility filter (manual hide / future date) unless showHidden is true
-  if (!showHidden) {
+  // --- Start Hidden View Logic ---
+  if (selectedPresetKey == 'hidden') {
     currentList =
-        currentList.where((note) {
+        notesState.notes.where((note) {
+          // 1. Must not be archived
+          if (note.state == NoteState.archived) return false;
+          // 2. Apply hidePinned if active
+          if (hidePinned && note.pinned) return false;
+          // 3. Must be manually hidden OR future-dated
           final isManuallyHidden = manuallyHiddenIds.contains(note.id);
           final isFutureDated =
               note.startDate != null && note.startDate!.isAfter(now);
-          return !isManuallyHidden && !isFutureDated;
+          return isManuallyHidden || isFutureDated;
         }).toList();
-    if (kDebugMode) {
-      // print('[filteredNotesProvider] Hiding hidden notes. Count after filter: ${currentList.length}');
-    }
-  } else {
-    if (kDebugMode) {
-      // print('[filteredNotesProvider] Showing hidden notes. Count before search: ${currentList.length}');
-    }
-  }
 
-  // 3. Apply search query
-  if (searchQuery.isNotEmpty) {
-    final initialCount = currentList.length;
-    currentList =
-        currentList.where((note) {
-          return note.content.toLowerCase().contains(searchQuery);
-        }).toList();
     if (kDebugMode) {
       print(
-        '[filteredNotesProvider] Filtered by search query "$searchQuery" from $initialCount to ${currentList.length} notes.',
+        '[filteredNotesProvider] In "hidden" view. Count before search: ${currentList.length}',
       );
     }
+    // Apply search query to the hidden notes
+    if (searchQuery.isNotEmpty) {
+      final initialCount = currentList.length;
+      currentList =
+          currentList.where((note) {
+            return note.content.toLowerCase().contains(searchQuery);
+          }).toList();
+      if (kDebugMode) {
+        print(
+          '[filteredNotesProvider] Filtered hidden notes by search query "$searchQuery" from $initialCount to ${currentList.length} notes.',
+        );
+      }
+    }
+    // Sort hidden notes (e.g., by update time, or maybe start date?)
+    currentList.sort((a, b) {
+      // Example sort: Pinned first, then by update time
+      if (a.pinned != b.pinned) return a.pinned ? -1 : 1;
+      final timeA = a.displayTime;
+      final timeB = b.displayTime;
+      return timeB.compareTo(timeA);
+    });
   }
+  // --- End Hidden View Logic ---
+  else {
+    // --- Start Existing Logic for other views ---
+    // 1. Apply primary filter (inbox/archive/tag) and hidePinned
+    currentList =
+        notesState.notes.where((note) {
+          if (hidePinned && note.pinned) return false;
 
-  // 4. Sort final list (pinned first, then by update time descending)
-  currentList.sort((a, b) {
-    if (a.pinned != b.pinned) return a.pinned ? -1 : 1;
-    final timeA = a.displayTime;
-    final timeB = b.displayTime;
-    return timeB.compareTo(timeA);
-  });
+          bool matchesFilterKey = false;
+          // Use selectedPresetKey for filtering logic now, filterKey is mainly for API state
+          switch (selectedPresetKey) {
+            case 'inbox':
+            case 'all': // Treat 'all' as non-archived for display
+            case 'today': // Today also shows non-archived
+            case 'tagged': // Tagged also shows non-archived
+              matchesFilterKey = note.state != NoteState.archived;
+              break;
+            case 'archive': // This case should not be reachable if 'archive' preset is removed/handled differently
+              matchesFilterKey = note.state == NoteState.archived;
+              break;
+            case 'custom': // Custom filter applies to non-archived unless specified otherwise in CEL
+              matchesFilterKey = note.state != NoteState.archived;
+              break;
+            default: // Assume it's a tag filter (presetKey will be the tag name)
+              if (!quickFilterPresets.containsKey(selectedPresetKey)) {
+                matchesFilterKey =
+                    note.tags.contains(selectedPresetKey) &&
+                    note.state != NoteState.archived;
+              } else {
+                // Fallback for safety, should match one of the above cases
+                matchesFilterKey = note.state != NoteState.archived;
+              }
+              break;
+          }
+          // Apply tag filter specifically if the preset is 'tagged' or a specific tag name
+          if (selectedPresetKey == 'tagged' && !note.tags.isNotEmpty) {
+            matchesFilterKey = false; // If 'tagged' preset, must have tags
+          } else if (!quickFilterPresets.containsKey(selectedPresetKey) &&
+              !note.tags.contains(selectedPresetKey)) {
+            matchesFilterKey =
+                false; // If specific tag preset, must contain that tag
+          }
+
+          return matchesFilterKey;
+        }).toList();
+
+    // 2. Apply visibility filter (manual hide / future date) unless showHiddenToggle is true
+    if (!showHiddenToggle) {
+      currentList =
+          currentList.where((note) {
+            final isManuallyHidden = manuallyHiddenIds.contains(note.id);
+            final isFutureDated =
+                note.startDate != null && note.startDate!.isAfter(now);
+            return !isManuallyHidden && !isFutureDated;
+          }).toList();
+      if (kDebugMode) {
+        // print('[filteredNotesProvider] Hiding hidden notes. Count after filter: ${currentList.length}');
+      }
+    } else {
+      if (kDebugMode) {
+        // print('[filteredNotesProvider] Showing hidden notes. Count before search: ${currentList.length}');
+      }
+    }
+
+    // 3. Apply search query
+    if (searchQuery.isNotEmpty) {
+      final initialCount = currentList.length;
+      currentList =
+          currentList.where((note) {
+            return note.content.toLowerCase().contains(searchQuery);
+          }).toList();
+      if (kDebugMode) {
+        print(
+          '[filteredNotesProvider] Filtered by search query "$searchQuery" from $initialCount to ${currentList.length} notes.',
+        );
+      }
+    }
+
+    // 4. Sort final list (pinned first, then by update time descending)
+    currentList.sort((a, b) {
+      if (a.pinned != b.pinned) return a.pinned ? -1 : 1;
+      final timeA = a.displayTime;
+      final timeB = b.displayTime;
+      return timeB.compareTo(timeA);
+    });
+    // --- End Existing Logic ---
+  }
 
   if (kDebugMode) {
     // print('[filteredNotesProvider] Final sorted list count: ${currentList.length}');
@@ -662,6 +732,29 @@ final hasSearchResultsProvider = Provider<bool>((ref) {
 }, name: 'hasSearchResultsProvider');
 
 // --- Action Providers ---
+
+// Provider to unhide a single manually hidden note
+final unhideNoteProvider = Provider.family<void Function(), String>((ref, id) {
+  return () {
+    if (kDebugMode) print('[unhideNoteProvider] Unhiding note: $id');
+    // Use the persistent provider's notifier to remove the ID
+    ref.read(settings_p.manuallyHiddenNoteIdsProvider.notifier).remove(id);
+    // No need to refresh list here, filteredNotesProvider will react
+    // to the change in manuallyHiddenNoteIdsProvider.
+  };
+}, name: 'unhideNoteProvider');
+
+// Provider to unhide ALL manually hidden notes
+final unhideAllNotesProvider = Provider<Future<void> Function()>((ref) {
+  return () async {
+    if (kDebugMode)
+      print('[unhideAllNotesProvider] Clearing all manually hidden notes.');
+    // Use the persistent provider's notifier to clear the set
+    // Ensure PersistentSetNotifier.clear() handles async saving if needed
+    await ref.read(settings_p.manuallyHiddenNoteIdsProvider.notifier).clear();
+    // No need to refresh list here, filteredNotesProvider will react
+  };
+}, name: 'unhideAllNotesProvider');
 
 final archiveNoteProvider = Provider.family<Future<void> Function(), String>((
   ref,

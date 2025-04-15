@@ -17,6 +17,7 @@ class NotesListBody extends ConsumerStatefulWidget { // Renamed class
   // Add parameters to receive notes list and state directly
   final List<NoteItem> notes;
   final note_providers.NotesState notesState;
+  final bool isInHiddenView; // Add this parameter
 
 
   const NotesListBody({ // Renamed constructor
@@ -24,6 +25,7 @@ class NotesListBody extends ConsumerStatefulWidget { // Renamed class
     required this.scrollController,
     required this.notes, // Make notes required
     required this.notesState, // Make notesState required
+    required this.isInHiddenView, // Make it required
     this.onMoveNoteToServer, // Renamed parameter
   });
 
@@ -201,6 +203,7 @@ class _NotesListBodyState extends ConsumerState<NotesListBody> { // Renamed clas
                     key: ValueKey(note.id),
                     note: note, // Pass NoteItem as note prop
                     index: index,
+                    isInHiddenView: widget.isInHiddenView, // Pass the flag down
                     onMoveToServer: widget.onMoveNoteToServer != null // Use renamed callback
                         ? () => widget.onMoveNoteToServer!(note.id)
                         : null,
