@@ -80,7 +80,26 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
   Future<void> addItem(WorkbenchItemReference item) async {
     if (!mounted) return;
 
-    // Optimistic Update
+    // --- Check for Duplicates ---
+    final exists = state.items.any((existingItem) =>
+        existingItem.referencedItemId == item.referencedItemId &&
+        existingItem.serverId == item.serverId);
+
+    if (exists) {
+      if (kDebugMode) {
+        print(
+          '[WorkbenchNotifier] Item with referencedItemId ${item.referencedItemId} on server ${item.serverId} already exists. Skipping add.',
+        );
+      }
+      // Optionally: Show a message to the user via a different mechanism
+      // (e.g., return false, throw specific exception, use a separate state field)
+      // For now, just silently prevent the duplicate add.
+      return;
+    }
+    // --- End Check for Duplicates ---
+
+
+    // Optimistic Update (only if not a duplicate)
     final optimisticItems = List<WorkbenchItemReference>.from(state.items)..add(item);
     optimisticItems.sort((a, b) => b.addedTimestamp.compareTo(a.addedTimestamp));
     state = state.copyWith(items: optimisticItems);
@@ -133,6 +152,12 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
       return; // Item wasn't in the list, nothing to do
     }
 
+    // Add logging here
+    if (kDebugMode) {
+      print('[WorkbenchNotifier] Attempting to remove item with reference ID: $referenceId');
+      print('[WorkbenchNotifier] Found item to remove: ${originalItem.toString()}');
+    }
+
     // Optimistic Update
     state = state.copyWith(items: optimisticItems);
      if (kDebugMode) {
@@ -142,24 +167,37 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
     try {
       final success = await _cloudKitService.deleteWorkbenchItemReference(referenceId);
       if (!success) {
-        throw Exception('Failed to delete item from CloudKit');
+        // Even if CloudKit reports failure (e.g., already deleted), keep the optimistic removal
+        if (kDebugMode) {
+          print('[WorkbenchNotifier] CloudKit delete reported failure for $referenceId, but keeping optimistic removal.');
+        }
+        // Optionally, re-fetch from CloudKit here to be absolutely sure, but might be overkill
+      } else {
+        // If successful, state is already correct
+        if (kDebugMode) {
+          print('[WorkbenchNotifier] Successfully deleted item $referenceId from CloudKit.');
+        }
       }
-      // If successful, state is already correct
-       if (kDebugMode) {
-         print('[WorkbenchNotifier] Successfully deleted item $referenceId from CloudKit.');
-       }
     } catch (e, s) {
       if (kDebugMode) {
-        print('[WorkbenchNotifier] Error deleting item $referenceId: $e\n$s');
+        print('[WorkbenchNotifier] Error deleting item $referenceId from CloudKit: $e\n$s');
       }
-      // Revert optimistic update on failure
+      // Revert optimistic update ONLY if CloudKit deletion fails AND the item still exists locally
+      // (It might have been removed by another device in the meantime)
       if (mounted && originalItem != null) {
-        final revertedItems = List<WorkbenchItemReference>.from(state.items)..add(originalItem!);
-        revertedItems.sort((a, b) => b.addedTimestamp.compareTo(a.addedTimestamp));
-        state = state.copyWith(items: revertedItems, error: e); // Keep the error state
-         if (kDebugMode) {
-           print('[WorkbenchNotifier] Reverted optimistic remove for item: $referenceId');
-         }
+        // Check if the item is *still* gone from the current state before reverting
+        if (!state.items.any((i) => i.id == referenceId)) {
+          final revertedItems = List<WorkbenchItemReference>.from(state.items)..add(originalItem!);
+          revertedItems.sort((a, b) => b.addedTimestamp.compareTo(a.addedTimestamp));
+          state = state.copyWith(items: revertedItems, error: e); // Keep the error state
+          if (kDebugMode) {
+            print('[WorkbenchNotifier] Reverted optimistic remove for item: $referenceId due to CloudKit error.');
+          }
+        } else {
+           if (kDebugMode) {
+            print('[WorkbenchNotifier] CloudKit delete failed for $referenceId, but item already removed from local state. No revert needed.');
+          }
+        }
       }
     }
   }

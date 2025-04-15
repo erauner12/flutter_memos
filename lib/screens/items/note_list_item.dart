@@ -93,31 +93,24 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
   }
 
   // Custom context menu including date actions
-  void _showCustomContextMenu(BuildContext context) {
-    // Capture the context from the widget tree *before* the modal popup
-    // This context is guaranteed to have ScaffoldMessenger/Scaffold ancestors
-    final BuildContext scaffoldContext = context;
-
+  // Modify the signature to accept the scaffoldContext
+  void _showCustomContextMenu(BuildContext scaffoldContext) {
     // Check if the note is manually hidden (needed for context menu logic)
     final isManuallyHidden = ref.read(settings_p.manuallyHiddenNoteIdsProvider).contains(widget.note.id);
     final now = DateTime.now();
     final isFutureDated = widget.note.startDate?.isAfter(now) ?? false;
 
     showCupertinoModalPopup<void>(
-      context: context, // Use the original context to show the popup
-      // The builder provides the correct context for actions *inside* the popup
+      context: scaffoldContext, // Use the passed scaffoldContext to show the popup
       builder: (BuildContext popupContext) => CupertinoActionSheet(
-        // Combine all sets of actions
         actions: <Widget>[
-          // Standard Actions
           CupertinoContextMenuAction(
             child: const Text('Edit'),
             onPressed: () {
               Navigator.pop(popupContext);
-              onEdit(context);
+              onEdit(scaffoldContext);
             },
           ),
-          // Add Move to Server action conditionally
           if (widget.onMoveToServer != null)
             CupertinoContextMenuAction(
               child: const Text('Move to Server...'),
@@ -130,14 +123,14 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
             child: Text(widget.note.pinned ? 'Unpin' : 'Pin'),
             onPressed: () {
               Navigator.pop(popupContext);
-              onTogglePin(context);
+              onTogglePin(scaffoldContext);
             },
           ),
           CupertinoContextMenuAction(
             child: const Text('Archive'),
             onPressed: () {
               Navigator.pop(popupContext);
-              onArchive(context);
+              onArchive(scaffoldContext);
             },
           ),
           CupertinoContextMenuAction(
@@ -145,7 +138,7 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
             child: const Text('Delete'),
             onPressed: () {
               Navigator.pop(popupContext);
-              onDelete(context);
+              onDelete(scaffoldContext);
             },
           ),
           CupertinoContextMenuAction(
@@ -155,8 +148,7 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
               Navigator.pop(popupContext);
             },
           ),
-          // Conditional Hide/Unhide Action
-          if (isManuallyHidden) // Show Unhide only if manually hidden
+          if (isManuallyHidden)
             CupertinoContextMenuAction(
               child: const Text('Unhide'),
               onPressed: () {
@@ -164,29 +156,23 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
                 Navigator.pop(popupContext);
               },
             )
-          else if (!isFutureDated) // Show Hide only if not future-dated (and not manually hidden)
+          else if (!isFutureDated)
             CupertinoContextMenuAction(
               child: const Text('Hide'),
               onPressed: () {
-                _toggleHideItem(context, ref); // Existing hide logic
+                _toggleHideItem(scaffoldContext, ref);
                 Navigator.pop(popupContext);
               },
             ),
-          // --- Add this action ---
+          // --- Added action ---
           CupertinoContextMenuAction(
             child: const Text('Add to Workbench'),
             onPressed: () {
               Navigator.pop(popupContext); // Close the action sheet first
-                  // Pass the captured scaffoldContext, not popupContext or the builder's context
-                  _addNoteToWorkbenchFromList(
-                    scaffoldContext,
-                    ref,
-                    widget.note,
-                  ); // Call helper with correct context
+              _addNoteToWorkbenchFromList(scaffoldContext, ref, widget.note);
             },
           ),
           // --- End of added action ---
-          // Date Actions
           CupertinoContextMenuAction(
             child: const Text('Kick Start +1 Day'),
             onPressed: () {
@@ -230,10 +216,8 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
       ),
     );
   }
-  // --- End Moved Helper Methods ---
 
-  // --- Add this helper method within NoteListItemState ---
-  // Modify the function signature to accept the main BuildContext
+  // --- The _addNoteToWorkbenchFromList helper method remains unchanged ---
   void _addNoteToWorkbenchFromList(
     BuildContext scaffoldContext, // This context should now be correct
     WidgetRef ref,
@@ -241,46 +225,48 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
   ) {
     final activeServer = ref.read(activeServerConfigProvider);
     if (activeServer == null) {
-      // Use the passed scaffoldContext here
       ScaffoldMessenger.of(scaffoldContext).showSnackBar(
-        const SnackBar(content: Text("Cannot add to workbench: No active server."), backgroundColor: CupertinoColors.systemRed),
+        const SnackBar(
+          content: Text("Cannot add to workbench: No active server."),
+          backgroundColor: CupertinoColors.systemRed,
+        ),
       );
       return;
     }
 
-    final preview = note.content.split('\n').first; // Simple preview
+    final preview = note.content.split('\n').first;
 
     final reference = WorkbenchItemReference(
       id: const Uuid().v4(),
       referencedItemId: note.id,
-      referencedItemType: WorkbenchItemType.note, // Explicitly note
+      referencedItemType: WorkbenchItemType.note,
       serverId: activeServer.id,
       serverType: activeServer.serverType,
       serverName: activeServer.name,
       previewContent: preview.length > 100 ? '${preview.substring(0, 97)}...' : preview,
       addedTimestamp: DateTime.now(),
-      parentNoteId: null, // Explicitly set parentNoteId to null for notes
+      parentNoteId: null,
     );
 
     ref.read(workbenchProvider.notifier).addItem(reference);
 
-    // Use the passed scaffoldContext here too
     ScaffoldMessenger.of(scaffoldContext).showSnackBar(
-      const SnackBar(content: Text("Added to Workbench"), backgroundColor: CupertinoColors.systemGreen),
+      const SnackBar(
+        content: Text("Added to Workbench"),
+        backgroundColor: CupertinoColors.systemGreen,
+      ),
     );
   }
   // --- End of helper method ---
 
   void _toggleHideItem(BuildContext context, WidgetRef ref) {
-    // Use the correct provider from settings_provider
     final hiddenItemIds = ref.read(settings_p.manuallyHiddenNoteIdsProvider);
     final itemIdToToggle = widget.note.id;
 
     if (hiddenItemIds.contains(itemIdToToggle)) {
-      // Use the correct provider from settings_provider
       ref
           .read(settings_p.manuallyHiddenNoteIdsProvider.notifier)
-          .remove(itemIdToToggle); // Use remove method
+          .remove(itemIdToToggle);
     } else {
       final currentSelectedId = ref.read(ui_providers.selectedItemIdProvider);
       final notesBeforeAction = ref.read(note_providers.filteredNotesProvider);
@@ -305,21 +291,18 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
         }
       }
 
-      // Use the correct provider from settings_provider
       ref
           .read(settings_p.manuallyHiddenNoteIdsProvider.notifier)
-          .add(itemIdToToggle); // Use add method
+          .add(itemIdToToggle);
 
       if (nextSelectedId != currentSelectedId) {
-        ref.read(ui_providers.selectedItemIdProvider.notifier).state =
-            nextSelectedId;
+        ref.read(ui_providers.selectedItemIdProvider.notifier).state = nextSelectedId;
       }
     }
   }
 
   void _navigateToItemDetail(BuildContext context, WidgetRef ref) {
-    ref.read(ui_providers.selectedItemIdProvider.notifier).state =
-        widget.note.id;
+    ref.read(ui_providers.selectedItemIdProvider.notifier).state = widget.note.id;
     Navigator.of(
       context,
       rootNavigator: true,
@@ -377,25 +360,19 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
       },
     );
 
-    // Check mounted *after* the await and *before* using context again
     if (confirm == true && mounted) {
       try {
-        // Optimistically hide using the correct provider
         ref
             .read(settings_p.manuallyHiddenNoteIdsProvider.notifier)
-            .add(widget.note.id); // Use add method
+            .add(widget.note.id);
 
-        // Perform deletion
         await ref.read(note_providers.deleteNoteProvider(widget.note.id))();
-        // The deleteNoteProvider already removes the ID from manuallyHiddenNoteIdsProvider on success
       } catch (e) {
-        // Revert optimistic hide on error using the correct provider
         if (mounted) {
           ref
               .read(settings_p.manuallyHiddenNoteIdsProvider.notifier)
-              .remove(widget.note.id); // Use remove method
+              .remove(widget.note.id);
 
-          // Show error dialog
           showCupertinoDialog(
             context: context,
             builder: (ctx) => CupertinoAlertDialog(
@@ -425,15 +402,14 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
 
   @override
   Widget build(BuildContext context) {
+    // Capture the build context here
+    final BuildContext scaffoldContext = context;
+
     final selectedItemId = ref.watch(ui_providers.selectedItemIdProvider);
     final isSelected = selectedItemId == widget.note.id;
 
-    final isMultiSelectMode = ref.watch(
-      ui_providers.itemMultiSelectModeProvider,
-    );
-    final selectedIds = ref.watch(
-      ui_providers.selectedItemIdsForMultiSelectProvider,
-    );
+    final isMultiSelectMode = ref.watch(ui_providers.itemMultiSelectModeProvider);
+    final selectedIds = ref.watch(ui_providers.selectedItemIdsForMultiSelectProvider);
     final isMultiSelected = selectedIds.contains(widget.note.id);
 
     Widget noteCardWidget = NoteCard(
@@ -450,18 +426,18 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
       timestampType: 'Updated',
       onTap: isMultiSelectMode
           ? () => _toggleMultiSelection(widget.note.id)
-          : () => _navigateToItemDetail(context, ref),
-      onArchive: () => onArchive(context),
-      onDelete: () => onDelete(context),
-      onHide: () => _toggleHideItem(context, ref),
-      onTogglePin: () => onTogglePin(context),
+          : () => _navigateToItemDetail(scaffoldContext, ref),
+      onArchive: () => onArchive(scaffoldContext),
+      onDelete: () => onDelete(scaffoldContext),
+      onHide: () => _toggleHideItem(scaffoldContext, ref),
+      onTogglePin: () => onTogglePin(scaffoldContext),
       onBump: () async {
         try {
           await ref.read(note_providers.bumpNoteProvider(widget.note.id))();
         } catch (e) {
           if (mounted) {
             showCupertinoDialog(
-              context: context,
+              context: scaffoldContext,
               builder: (ctx) => CupertinoAlertDialog(
                 title: const Text('Error'),
                 content: Text(
@@ -482,7 +458,7 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
       onMoveToServer: widget.onMoveToServer,
     );
 
-    final dateInfoWidget = _buildDateInfo(context, widget.note);
+    final dateInfoWidget = _buildDateInfo(scaffoldContext, widget.note);
 
     Widget cardWithDateInfo = Column(
       mainAxisSize: MainAxisSize.min,
@@ -495,7 +471,7 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
         cardWithDateInfo = Container(
           decoration: BoxDecoration(
             border: Border.all(
-              color: CupertinoTheme.of(context).primaryColor,
+              color: CupertinoTheme.of(scaffoldContext).primaryColor,
               width: 2,
             ),
             borderRadius: BorderRadius.circular(10),
@@ -529,25 +505,24 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
         motion: const DrawerMotion(),
         children: [
           SlidableAction(
-            onPressed: (_) => onEdit(context),
+            onPressed: (_) => onEdit(scaffoldContext),
             backgroundColor: CupertinoColors.systemBlue,
             foregroundColor: CupertinoColors.white,
             icon: CupertinoIcons.pencil,
             label: 'Edit',
             autoClose: true,
           ),
-          // Add Move action conditionally
           if (widget.onMoveToServer != null)
             SlidableAction(
-              onPressed: (_) => widget.onMoveToServer!(), // Trigger callback
-              backgroundColor: CupertinoColors.systemIndigo, // Choose a color
+              onPressed: (_) => widget.onMoveToServer!(),
+              backgroundColor: CupertinoColors.systemIndigo,
               foregroundColor: CupertinoColors.white,
-              icon: CupertinoIcons.arrow_right_arrow_left_square, // Choose an icon
+              icon: CupertinoIcons.arrow_right_arrow_left_square,
               label: 'Move',
-              autoClose: true, // Close slidable after action
+              autoClose: true,
             ),
           SlidableAction(
-            onPressed: (_) => onTogglePin(context),
+            onPressed: (_) => onTogglePin(scaffoldContext),
             backgroundColor: CupertinoColors.systemOrange,
             foregroundColor: CupertinoColors.white,
             icon: widget.note.pinned
@@ -556,7 +531,6 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
             label: widget.note.pinned ? 'Unpin' : 'Pin',
             autoClose: true,
           ),
-          // Conditionally show Hide or Unhide
           if (widget.isInHiddenView)
             SlidableAction(
               onPressed: (_) => ref.read(note_providers.unhideNoteProvider(widget.note.id))(),
@@ -568,7 +542,7 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
             )
           else
             SlidableAction(
-              onPressed: (_) => _toggleHideItem(context, ref),
+              onPressed: (_) => _toggleHideItem(scaffoldContext, ref),
               backgroundColor: CupertinoColors.systemGrey,
               foregroundColor: CupertinoColors.white,
               icon: CupertinoIcons.eye_slash_fill,
@@ -581,7 +555,7 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
         motion: const DrawerMotion(),
         children: [
           SlidableAction(
-            onPressed: (_) => onDelete(context),
+            onPressed: (_) => onDelete(scaffoldContext),
             backgroundColor: CupertinoColors.destructiveRed,
             foregroundColor: CupertinoColors.white,
             icon: CupertinoIcons.delete,
@@ -589,7 +563,7 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
             autoClose: true,
           ),
           SlidableAction(
-            onPressed: (_) => onArchive(context),
+            onPressed: (_) => onArchive(scaffoldContext),
             backgroundColor: CupertinoColors.systemPurple,
             foregroundColor: CupertinoColors.white,
             icon: CupertinoIcons.archivebox_fill,
@@ -600,7 +574,8 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
       ),
       child: GestureDetector(
         onLongPress: () {
-          _showCustomContextMenu(context);
+          // Pass the captured scaffoldContext from build method
+          _showCustomContextMenu(scaffoldContext);
         },
         child: Stack(
           children: [
@@ -611,11 +586,11 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
               child: CupertinoButton(
                 padding: const EdgeInsets.all(6),
                 minSize: 0,
-                onPressed: () => onArchive(context),
+                onPressed: () => onArchive(scaffoldContext),
                 child: Icon(
                   CupertinoIcons.archivebox,
                   size: 18,
-                  color: CupertinoColors.secondaryLabel.resolveFrom(context),
+                  color: CupertinoColors.secondaryLabel.resolveFrom(scaffoldContext),
                 ),
               ),
             ),

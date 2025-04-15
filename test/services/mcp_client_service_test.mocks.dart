@@ -8,6 +8,7 @@ import 'dart:async' as _i6;
 import 'package:flutter_cloud_kit/types/cloud_kit_account_status.dart' as _i10;
 import 'package:flutter_memos/models/mcp_server_config.dart' as _i7;
 import 'package:flutter_memos/models/server_config.dart' as _i11;
+import 'package:flutter_memos/models/workbench_item_reference.dart' as _i12;
 import 'package:flutter_memos/services/cloud_kit_service.dart' as _i9;
 import 'package:flutter_memos/services/gemini_service.dart' as _i8;
 import 'package:flutter_memos/services/mcp_client_service.dart' as _i3;
@@ -335,6 +336,38 @@ class MockCloudKitService extends _i1.Mock implements _i9.CloudKitService {
         Invocation.method(
           #deleteMcpServerConfig,
           [id],
+        ),
+        returnValue: _i6.Future<bool>.value(false),
+      ) as _i6.Future<bool>);
+
+  @override
+  _i6.Future<bool> saveWorkbenchItemReference(
+          _i12.WorkbenchItemReference? item) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #saveWorkbenchItemReference,
+          [item],
+        ),
+        returnValue: _i6.Future<bool>.value(false),
+      ) as _i6.Future<bool>);
+
+  @override
+  _i6.Future<List<_i12.WorkbenchItemReference>>
+      getAllWorkbenchItemReferences() => (super.noSuchMethod(
+            Invocation.method(
+              #getAllWorkbenchItemReferences,
+              [],
+            ),
+            returnValue: _i6.Future<List<_i12.WorkbenchItemReference>>.value(
+                <_i12.WorkbenchItemReference>[]),
+          ) as _i6.Future<List<_i12.WorkbenchItemReference>>);
+
+  @override
+  _i6.Future<bool> deleteWorkbenchItemReference(String? referenceId) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #deleteWorkbenchItemReference,
+          [referenceId],
         ),
         returnValue: _i6.Future<bool>.value(false),
       ) as _i6.Future<bool>);

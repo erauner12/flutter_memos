@@ -5,10 +5,11 @@
 // ignore_for_file: no_leading_underscores_for_library_prefixes
 import 'dart:async' as _i4;
 
-import 'package:flutter/foundation.dart' as _i8;
+import 'package:flutter/foundation.dart' as _i9;
 import 'package:flutter_cloud_kit/types/cloud_kit_account_status.dart' as _i5;
 import 'package:flutter_memos/models/mcp_server_config.dart' as _i7;
 import 'package:flutter_memos/models/server_config.dart' as _i6;
+import 'package:flutter_memos/models/workbench_item_reference.dart' as _i8;
 import 'package:flutter_memos/services/cloud_kit_service.dart' as _i3;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart' as _i2;
 import 'package:mockito/mockito.dart' as _i1;
@@ -220,6 +221,38 @@ class MockCloudKitService extends _i1.Mock implements _i3.CloudKitService {
         ),
         returnValue: _i4.Future<bool>.value(false),
       ) as _i4.Future<bool>);
+
+  @override
+  _i4.Future<bool> saveWorkbenchItemReference(
+          _i8.WorkbenchItemReference? item) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #saveWorkbenchItemReference,
+          [item],
+        ),
+        returnValue: _i4.Future<bool>.value(false),
+      ) as _i4.Future<bool>);
+
+  @override
+  _i4.Future<List<_i8.WorkbenchItemReference>>
+      getAllWorkbenchItemReferences() => (super.noSuchMethod(
+            Invocation.method(
+              #getAllWorkbenchItemReferences,
+              [],
+            ),
+            returnValue: _i4.Future<List<_i8.WorkbenchItemReference>>.value(
+                <_i8.WorkbenchItemReference>[]),
+          ) as _i4.Future<List<_i8.WorkbenchItemReference>>);
+
+  @override
+  _i4.Future<bool> deleteWorkbenchItemReference(String? referenceId) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #deleteWorkbenchItemReference,
+          [referenceId],
+        ),
+        returnValue: _i4.Future<bool>.value(false),
+      ) as _i4.Future<bool>);
 }
 
 /// A class which mocks [FlutterSecureStorage].
@@ -288,7 +321,7 @@ class MockFlutterSecureStorage extends _i1.Mock
   @override
   void registerListener({
     required String? key,
-    required _i8.ValueChanged<String?>? listener,
+    required _i9.ValueChanged<String?>? listener,
   }) =>
       super.noSuchMethod(
         Invocation.method(
@@ -305,7 +338,7 @@ class MockFlutterSecureStorage extends _i1.Mock
   @override
   void unregisterListener({
     required String? key,
-    required _i8.ValueChanged<String?>? listener,
+    required _i9.ValueChanged<String?>? listener,
   }) =>
       super.noSuchMethod(
         Invocation.method(
