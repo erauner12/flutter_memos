@@ -893,33 +893,33 @@ class CloudKitService {
           '[CloudKitService] Updating lastOpenedTimestamp for WorkbenchItemReference (ID: \$referenceId)...',
         );
       }
-      // 1. Fetch the existing record to ensure it exists and potentially get other fields if needed
-      // Although we reconstruct the map, fetching confirms existence.
+      // 1. Fetch the existing record to ensure it exists.
       final CloudKitRecord ckRecord = await _cloudKit.getRecord(
         scope: CloudKitDatabaseScope.private,
         recordName: referenceId,
       );
 
-      // 2. Reconstruct the map using known fields from the fetched record
-      // This avoids sending back potentially problematic system fields.
-      // We use _mapToWorkbenchItemReference to get a clean object first.
-      final existingItem = _mapToWorkbenchItemReference(
-        ckRecord.recordName,
+      // 2. Get the existing values map and update only the timestamp field.
+      // CloudKitRecord.values is Map<String, dynamic>, but we save as Map<String, String>.
+      // Create a mutable copy to modify.
+      final Map<String, dynamic> recordValues = Map<String, dynamic>.from(
         ckRecord.values,
       );
-      final updatedItem = existingItem.copyWith(
-        lastOpenedTimestamp: DateTime.now(),
-      );
-      final Map<String, String> dataToSave = _workbenchItemReferenceToMap(
-        updatedItem,
+      final String newTimestamp = DateTime.now().toIso8601String();
+      recordValues['lastOpenedTimestamp'] = newTimestamp;
+
+      // Convert the modified map back to Map<String, String> for saving,
+      // handling potential non-string values defensively (though unlikely here).
+      final Map<String, String> dataToSave = recordValues.map(
+        (key, value) => MapEntry(key, value?.toString() ?? ''),
       );
 
-      // 3. Save the reconstructed record with the updated timestamp
+      // 3. Save the record with the modified values map.
       await _cloudKit.saveRecord(
         scope: CloudKitDatabaseScope.private,
         recordType: _workbenchItemReferenceRecordType,
         recordName: referenceId, // Use the ID as the record name
-        record: dataToSave, // Save the explicitly constructed map
+        record: dataToSave, // Save the map with just the updated timestamp
       );
 
       if (kDebugMode) {
@@ -940,5 +940,4 @@ class CloudKitService {
       return false;
     }
   }
-
-} // End of CloudKitService class
+}

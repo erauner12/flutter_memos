@@ -109,7 +109,6 @@ void main() {
           .thenAnswer((_) async => true);
 
       // Act: Try adding duplicate, then new item
-      final notifier = container.read(workbenchProvider.notifier);
       await notifier.addItem(duplicateItem);
       await notifier.addItem(newItem);
 
