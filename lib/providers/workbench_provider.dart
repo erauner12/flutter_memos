@@ -59,8 +59,24 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
     state = state.copyWith(isLoading: true, clearError: true);
     try {
       final items = await _cloudKitService.getAllWorkbenchItemReferences();
-      // Sort by added timestamp, newest first
-      items.sort((a, b) => b.addedTimestamp.compareTo(a.addedTimestamp));
+
+      // Sort by lastOpenedTimestamp (desc, nulls last), then addedTimestamp (desc)
+      items.sort((a, b) {
+        final aOpened = a.lastOpenedTimestamp;
+        final bOpened = b.lastOpenedTimestamp;
+
+        if (aOpened != null && bOpened != null) {
+          return bOpened.compareTo(aOpened); // Both opened, sort by opened desc
+        } else if (aOpened != null) {
+          return -1; // a opened, b didn't -> a comes first
+        } else if (bOpened != null) {
+          return 1; // b opened, a didn't -> b comes first
+        } else {
+          // Neither opened, sort by added desc
+          return b.addedTimestamp.compareTo(a.addedTimestamp);
+        }
+      });
+
       if (mounted) {
         state = state.copyWith(items: items, isLoading: false);
         if (kDebugMode) {
@@ -201,9 +217,108 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
       }
     }
   }
-}
 
-// Provider definition
+  /// Marks an item as opened by updating its lastOpenedTimestamp.
+  Future<void> markItemOpened(String referenceId) async {
+    if (!mounted) return;
+
+    final index = state.items.indexWhere((item) => item.id == referenceId);
+    if (index == -1) {
+      if (kDebugMode) {
+        print(
+          '[WorkbenchNotifier] markItemOpened: Item $referenceId not found in state.',
+        );
+      }
+      return; // Item not found
+    }
+
+    final originalItem = state.items[index];
+    final now = DateTime.now();
+
+    // Avoid unnecessary updates if already opened very recently (e.g., within a second)
+    if (originalItem.lastOpenedTimestamp != null &&
+        now.difference(originalItem.lastOpenedTimestamp!).inSeconds < 1) {
+      if (kDebugMode) {
+        print(
+          '[WorkbenchNotifier] markItemOpened: Item $referenceId already marked opened recently. Skipping.',
+        );
+      }
+      return;
+    }
+
+    final updatedItem = originalItem.copyWith(lastOpenedTimestamp: now);
+
+    // Optimistic UI Update (update the item in the list)
+    final optimisticItems = List<WorkbenchItemReference>.from(state.items);
+    optimisticItems[index] = updatedItem;
+    // Re-sort based on the new timestamp
+    optimisticItems.sort((a, b) {
+      final aOpened = a.lastOpenedTimestamp;
+      final bOpened = b.lastOpenedTimestamp;
+      if (aOpened != null && bOpened != null) return bOpened.compareTo(aOpened);
+      if (aOpened != null) return -1;
+      if (bOpened != null) return 1;
+      return b.addedTimestamp.compareTo(a.addedTimestamp);
+    });
+    state = state.copyWith(items: optimisticItems);
+    if (kDebugMode) {
+      print(
+        '[WorkbenchNotifier] Optimistically marked item $referenceId as opened.',
+      );
+    }
+
+    // Persist change to CloudKit (fire and forget or await with error handling)
+    try {
+      final success = await _cloudKitService.updateWorkbenchItemLastOpened(
+        referenceId,
+      );
+      if (!success) {
+        throw Exception('CloudKit update failed');
+      }
+      if (kDebugMode) {
+        print(
+          '[WorkbenchNotifier] Successfully synced lastOpenedTimestamp for $referenceId to CloudKit.',
+        );
+      }
+    } catch (e, s) {
+      if (kDebugMode) {
+        print(
+          '[WorkbenchNotifier] Error syncing lastOpenedTimestamp for $referenceId: $e\n$s',
+        );
+      }
+      // Revert optimistic update on failure
+      if (mounted) {
+        final revertedItems = List<WorkbenchItemReference>.from(state.items);
+        final revertIndex = revertedItems.indexWhere(
+          (item) => item.id == referenceId,
+        );
+        if (revertIndex != -1) {
+          revertedItems[revertIndex] =
+              originalItem; // Put the original item back
+          // Re-sort again after reverting
+          revertedItems.sort((a, b) {
+            final aOpened = a.lastOpenedTimestamp;
+            final bOpened = b.lastOpenedTimestamp;
+            if (aOpened != null && bOpened != null)
+              return bOpened.compareTo(aOpened);
+            if (aOpened != null) return -1;
+            if (bOpened != null) return 1;
+            return b.addedTimestamp.compareTo(a.addedTimestamp);
+          });
+          state = state.copyWith(items: revertedItems, error: e);
+          if (kDebugMode) {
+            print(
+              '[WorkbenchNotifier] Reverted optimistic mark opened for item: $referenceId',
+            );
+          }
+        }
+      }
+    }
+  }
+
+} // End of WorkbenchNotifier class
+
+// Provider definition remains the same
 final workbenchProvider = StateNotifierProvider<WorkbenchNotifier, WorkbenchState>((ref) {
   final notifier = WorkbenchNotifier(ref);
   // Trigger initial load when the provider is first created/read.

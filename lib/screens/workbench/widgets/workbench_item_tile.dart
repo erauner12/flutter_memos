@@ -99,9 +99,11 @@ class WorkbenchItemTile extends ConsumerWidget {
         ],
       ),
       onTap: () {
+        // --- Mark Item Opened FIRST ---
+        ref.read(workbenchProvider.notifier).markItemOpened(itemReference.id);
+        // --- End Mark Item Opened ---
+
         // --- Navigation Logic ---
-        // This is the complex part involving potential server switching.
-        // TODO: Implement robust server switching and navigation.
         final currentActiveServerId = ref.read(multiServerConfigProvider).activeServerId;
 
         if (itemReference.serverId == currentActiveServerId) {
@@ -109,12 +111,7 @@ class WorkbenchItemTile extends ConsumerWidget {
           _navigateToItem(context, ref, itemReference);
         } else {
           // Needs server switch
-          // 1. Show loading indicator (optional)
-          // 2. Call ref.read(multiServerConfigProvider.notifier).setActiveServer(itemReference.serverId);
-          // 3. Wait for the switch to complete (e.g., listen to activeServerConfigProvider or use a delay - tricky!)
-          // 4. Once switched, call _navigateToItem(context, ref, itemReference);
-          // 5. Hide loading indicator
-          _showServerSwitchRequiredDialog(context, ref, itemReference); // Placeholder dialog
+          _showServerSwitchRequiredDialog(context, ref, itemReference);
         }
       },
     );

@@ -253,6 +253,16 @@ class MockCloudKitService extends _i1.Mock implements _i3.CloudKitService {
         ),
         returnValue: _i4.Future<bool>.value(false),
       ) as _i4.Future<bool>);
+
+  @override
+  _i4.Future<bool> updateWorkbenchItemLastOpened(String? referenceId) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #updateWorkbenchItemLastOpened,
+          [referenceId],
+        ),
+        returnValue: _i4.Future<bool>.value(false),
+      ) as _i4.Future<bool>);
 }
 
 /// A class which mocks [FlutterSecureStorage].

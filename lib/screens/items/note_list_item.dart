@@ -95,13 +95,12 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
   // Custom context menu including date actions
   // Modify the signature to accept the scaffoldContext
   void _showCustomContextMenu(BuildContext scaffoldContext) {
-    // Check if the note is manually hidden (needed for context menu logic)
     final isManuallyHidden = ref.read(settings_p.manuallyHiddenNoteIdsProvider).contains(widget.note.id);
     final now = DateTime.now();
     final isFutureDated = widget.note.startDate?.isAfter(now) ?? false;
 
     showCupertinoModalPopup<void>(
-      context: scaffoldContext, // Use the passed scaffoldContext to show the popup
+      context: scaffoldContext, // Use the passed context for the popup itself
       builder: (BuildContext popupContext) => CupertinoActionSheet(
         actions: <Widget>[
           CupertinoContextMenuAction(
@@ -115,8 +114,8 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
             CupertinoContextMenuAction(
               child: const Text('Move to Server...'),
               onPressed: () {
-                Navigator.pop(popupContext); // Close the action sheet
-                widget.onMoveToServer!(); // Trigger the callback
+                    Navigator.pop(popupContext);
+                    widget.onMoveToServer!();
               },
             ),
           CupertinoContextMenuAction(
@@ -163,16 +162,14 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
                 _toggleHideItem(scaffoldContext, ref);
                 Navigator.pop(popupContext);
               },
-            ),
-          // --- Added action ---
+                ),
           CupertinoContextMenuAction(
             child: const Text('Add to Workbench'),
             onPressed: () {
-              Navigator.pop(popupContext); // Close the action sheet first
+                  Navigator.pop(popupContext);
               _addNoteToWorkbenchFromList(scaffoldContext, ref, widget.note);
             },
-          ),
-          // --- End of added action ---
+              ),
           CupertinoContextMenuAction(
             child: const Text('Kick Start +1 Day'),
             onPressed: () {
@@ -217,9 +214,10 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
     );
   }
 
-  // --- The _addNoteToWorkbenchFromList helper method remains unchanged ---
+  // Helper method to add note to workbench
+  // This method now receives the correct context from _showCustomContextMenu
   void _addNoteToWorkbenchFromList(
-    BuildContext scaffoldContext, // This context should now be correct
+    BuildContext scaffoldContext, // This context is now reliable
     WidgetRef ref,
     NoteItem note,
   ) {
@@ -246,6 +244,7 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
       previewContent: preview.length > 100 ? '${preview.substring(0, 97)}...' : preview,
       addedTimestamp: DateTime.now(),
       parentNoteId: null,
+      lastOpenedTimestamp: null, // Initialize new field as null
     );
 
     ref.read(workbenchProvider.notifier).addItem(reference);
@@ -259,7 +258,7 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
   }
   // --- End of helper method ---
 
-  void _toggleHideItem(BuildContext context, WidgetRef ref) {
+  void _toggleHideItem(BuildContext scaffoldContext, WidgetRef ref) {
     final hiddenItemIds = ref.read(settings_p.manuallyHiddenNoteIdsProvider);
     final itemIdToToggle = widget.note.id;
 
@@ -301,10 +300,10 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
     }
   }
 
-  void _navigateToItemDetail(BuildContext context, WidgetRef ref) {
+  void _navigateToItemDetail(BuildContext scaffoldContext, WidgetRef ref) {
     ref.read(ui_providers.selectedItemIdProvider.notifier).state = widget.note.id;
     Navigator.of(
-      context,
+      scaffoldContext,
       rootNavigator: true,
     ).pushNamed('/item-detail', arguments: {'itemId': widget.note.id});
   }
@@ -330,16 +329,16 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
     }
   }
 
-  void onEdit(BuildContext context) {
-    Navigator.of(context, rootNavigator: true).pushNamed(
+  void onEdit(BuildContext scaffoldContext) {
+    Navigator.of(scaffoldContext, rootNavigator: true).pushNamed(
       '/edit-entity',
       arguments: {'entityType': 'note', 'entityId': widget.note.id},
     );
   }
 
-  void onDelete(BuildContext context) async {
+  void onDelete(BuildContext scaffoldContext) async {
     final confirm = await showCupertinoDialog<bool>(
-      context: context,
+      context: scaffoldContext,
       builder: (BuildContext dialogContext) {
         return CupertinoAlertDialog(
           title: const Text('Confirm Delete'),
@@ -374,7 +373,7 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
               .remove(widget.note.id);
 
           showCupertinoDialog(
-            context: context,
+            context: scaffoldContext,
             builder: (ctx) => CupertinoAlertDialog(
               title: const Text('Error'),
               content: Text('Failed to delete note: ${e.toString()}'),
@@ -392,17 +391,17 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
     }
   }
 
-  void onArchive(BuildContext context) {
+  void onArchive(BuildContext scaffoldContext) {
     ref.read(note_providers.archiveNoteProvider(widget.note.id))();
   }
 
-  void onTogglePin(BuildContext context) {
+  void onTogglePin(BuildContext scaffoldContext) {
     ref.read(note_providers.togglePinNoteProvider(widget.note.id))();
   }
 
   @override
   Widget build(BuildContext context) {
-    // Capture the build context here
+    // Capture the build context here - THIS is the reliable context
     final BuildContext scaffoldContext = context;
 
     final selectedItemId = ref.watch(ui_providers.selectedItemIdProvider);
@@ -525,9 +524,10 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
             onPressed: (_) => onTogglePin(scaffoldContext),
             backgroundColor: CupertinoColors.systemOrange,
             foregroundColor: CupertinoColors.white,
-            icon: widget.note.pinned
-                ? CupertinoIcons.pin_slash_fill
-                : CupertinoIcons.pin_fill,
+            icon:
+                widget.note.pinned
+                    ? CupertinoIcons.pin_slash_fill
+                    : CupertinoIcons.pin_fill,
             label: widget.note.pinned ? 'Unpin' : 'Pin',
             autoClose: true,
           ),
@@ -574,9 +574,12 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
       ),
       child: GestureDetector(
         onLongPress: () {
-          // Pass the captured scaffoldContext from build method
           _showCustomContextMenu(scaffoldContext);
         },
+        onTap:
+            isMultiSelectMode
+                ? () => _toggleMultiSelection(widget.note.id)
+                : () => _navigateToItemDetail(scaffoldContext, ref),
         child: Stack(
           children: [
             cardWithDateInfo,

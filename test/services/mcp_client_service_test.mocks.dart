@@ -371,4 +371,14 @@ class MockCloudKitService extends _i1.Mock implements _i9.CloudKitService {
         ),
         returnValue: _i6.Future<bool>.value(false),
       ) as _i6.Future<bool>);
+
+  @override
+  _i6.Future<bool> updateWorkbenchItemLastOpened(String? referenceId) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #updateWorkbenchItemLastOpened,
+          [referenceId],
+        ),
+        returnValue: _i6.Future<bool>.value(false),
+      ) as _i6.Future<bool>);
 }
