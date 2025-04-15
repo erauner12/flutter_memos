@@ -100,17 +100,16 @@ void main() {
         .thenAnswer(
       (invocation) async => NoteItem(
         // Fix: Use invocation object
-        id:
-            invocation.positionalArguments[0]
-                as String, // Fix: Access argument correctly
-              content: 'Mock Note Content',
-              pinned: false,
-              state: NoteState.normal,
-              visibility: NoteVisibility.public,
-              createTime: now.subtract(const Duration(hours: 1)),
-              updateTime: now, // Default update time
-              displayTime: now.subtract(const Duration(hours: 1)),
-            ));
+        id: invocation.positionalArguments[0] as String,
+        content: 'Mock Note Content',
+        pinned: false,
+        state: NoteState.normal,
+        visibility: NoteVisibility.public,
+        createTime: now.subtract(const Duration(hours: 1)),
+        updateTime: now,
+        displayTime: now.subtract(const Duration(hours: 1)),
+      ),
+    );
     when(mockApiService.listNoteComments(any, targetServerOverride: anyNamed('targetServerOverride')))
         .thenAnswer((_) async => []); // Default to empty comments list
   });
@@ -790,19 +789,226 @@ void main() {
     );
 
     test('refreshItemDetails does nothing if no items exist', () async {
-      // Arrange: Clear all items
-      // Assuming notifier exposes a method or mechanism to clear items for testing.
-      // For this test, we simulate a scenario with no items.
-      notifier.resetOrder(); // Reset to default order first
-      // Clearing items from notifier state for test
-      notifier.clearItems();
+      // Arrange: Clear all items using the new method
+      await notifier.clearItems(); // Use the actual method
+      // Verify items are cleared before refresh attempt
+      expect(
+        container.read(workbenchProvider).items,
+        isEmpty,
+        reason: 'Pre-condition failed: Items not cleared',
+      );
 
       // Act
       await notifier.refreshItemDetails();
+      final state = container.read(workbenchProvider);
 
       // Assert
-      final state = container.read(workbenchProvider);
       expect(state.items, isEmpty);
+      expect(
+        state.isRefreshingDetails,
+        false,
+      ); // Should not enter refreshing state
+      expect(state.error, isNull);
+      // Verify API calls were NOT made
+      verifyNever(
+        mockApiService.getNote(
+          any,
+          targetServerOverride: anyNamed('targetServerOverride'),
+        ),
+      );
+      verifyNever(
+        mockApiService.listNoteComments(
+          any,
+          targetServerOverride: anyNamed('targetServerOverride'),
+        ),
+      );
     });
-  });
+  }); // End of refreshItemDetails group
+
+  group('clearItems', () {
+    setUp(() async {
+      // Arrange: Load initial items and fetch details
+      when(
+        mockCloudKitService.getAllWorkbenchItemReferences(),
+      ).thenAnswer((_) async => [item1, item3, item2]); // Unsorted by time
+      final note1UpdateTime = now.subtract(const Duration(days: 1, hours: 1));
+      final note2UpdateTime = now.subtract(const Duration(hours: 12));
+      final note3UpdateTime = now.subtract(const Duration(hours: 1));
+      final commentForItem2 = Comment(
+        id: 'comment1',
+        content: 'Latest comment',
+        createTime: now.millisecondsSinceEpoch,
+      );
+      when(
+        mockApiService.getNote(
+          item1.referencedItemId,
+          targetServerOverride: serverConfig1,
+        ),
+      ).thenAnswer(
+        (_) async => NoteItem(
+          id: item1.referencedItemId,
+          content: '',
+          pinned: false,
+          state: NoteState.normal,
+          visibility: NoteVisibility.public,
+          createTime: note1UpdateTime,
+          updateTime: note1UpdateTime,
+          displayTime: note1UpdateTime,
+        ),
+      );
+      when(
+        mockApiService.getNote(
+          item2.referencedItemId,
+          targetServerOverride: serverConfig1,
+        ),
+      ).thenAnswer(
+        (_) async => NoteItem(
+          id: item2.referencedItemId,
+          content: '',
+          pinned: false,
+          state: NoteState.normal,
+          visibility: NoteVisibility.public,
+          createTime: note2UpdateTime,
+          updateTime: note2UpdateTime,
+          displayTime: note2UpdateTime,
+        ),
+      );
+      when(
+        mockApiService.getNote(
+          item3.referencedItemId,
+          targetServerOverride: serverConfig1,
+        ),
+      ).thenAnswer(
+        (_) async => NoteItem(
+          id: item3.referencedItemId,
+          content: '',
+          pinned: false,
+          state: NoteState.normal,
+          visibility: NoteVisibility.public,
+          createTime: note3UpdateTime,
+          updateTime: note3UpdateTime,
+          displayTime: note3UpdateTime,
+        ),
+      );
+      when(
+        mockApiService.listNoteComments(
+          item1.referencedItemId,
+          targetServerOverride: serverConfig1,
+        ),
+      ).thenAnswer((_) async => []);
+      when(
+        mockApiService.listNoteComments(
+          item2.referencedItemId,
+          targetServerOverride: serverConfig1,
+        ),
+      ).thenAnswer((_) async => [commentForItem2]);
+      when(
+        mockApiService.listNoteComments(
+          item3.referencedItemId,
+          targetServerOverride: serverConfig1,
+        ),
+      ).thenAnswer((_) async => []);
+
+      await notifier.loadItems();
+      await Future.delayed(
+        const Duration(milliseconds: 100),
+      ); // Wait for details
+      // Expected initial state after load/details: [id2, id3, id1]
+      expect(
+        container.read(workbenchProvider).items.length,
+        3,
+        reason: 'Setup failed: Initial items not loaded',
+      );
+    });
+
+    test(
+      'clearItems success - removes all items locally and from CloudKit',
+      () async {
+        // Arrange: Mock successful CloudKit deletions
+        when(
+          mockCloudKitService.deleteWorkbenchItemReference(item1.id),
+        ).thenAnswer((_) async => true);
+        when(
+          mockCloudKitService.deleteWorkbenchItemReference(item2.id),
+        ).thenAnswer((_) async => true);
+        when(
+          mockCloudKitService.deleteWorkbenchItemReference(item3.id),
+        ).thenAnswer((_) async => true);
+
+        // Act
+        await notifier.clearItems();
+      final state = container.read(workbenchProvider);
+
+        // Assert
+      expect(state.items, isEmpty);
+        expect(state.error, isNull);
+        verify(
+          mockCloudKitService.deleteWorkbenchItemReference(item1.id),
+        ).called(1);
+        verify(
+          mockCloudKitService.deleteWorkbenchItemReference(item2.id),
+        ).called(1);
+        verify(
+          mockCloudKitService.deleteWorkbenchItemReference(item3.id),
+        ).called(1);
+      },
+    );
+
+    test(
+      'clearItems failure - reverts state for failed CloudKit deletions',
+      () async {
+        // Arrange: Mock failed CloudKit deletion for item2, success for others
+        final exception = Exception('CloudKit delete failed for item2');
+        when(
+          mockCloudKitService.deleteWorkbenchItemReference(item1.id),
+        ).thenAnswer((_) async => true);
+        when(
+          mockCloudKitService.deleteWorkbenchItemReference(item2.id),
+        ).thenThrow(exception); // Simulate error
+        when(
+          mockCloudKitService.deleteWorkbenchItemReference(item3.id),
+        ).thenAnswer((_) async => true);
+
+        // Act
+        await notifier.clearItems();
+        final state = container.read(workbenchProvider);
+
+        // Assert: Only item2 should remain, error should be set
+        expect(state.items.length, 1);
+        expect(state.items.first.id, 'id2'); // Only the failed item remains
+        expect(state.error, exception); // Error from the failed deletion
+        verify(
+          mockCloudKitService.deleteWorkbenchItemReference(item1.id),
+        ).called(1);
+        verify(
+          mockCloudKitService.deleteWorkbenchItemReference(item2.id),
+        ).called(1);
+        verify(
+          mockCloudKitService.deleteWorkbenchItemReference(item3.id),
+        ).called(1);
+    });
+
+    test('clearItems does nothing if list is already empty', () async {
+      // Arrange: Clear items first
+      await notifier.clearItems();
+      expect(
+        container.read(workbenchProvider).items,
+        isEmpty,
+        reason: 'Pre-condition failed: Items not cleared',
+      );
+      // Reset mock call counts
+      clearInteractions(mockCloudKitService);
+
+      // Act
+      await notifier.clearItems();
+      final state = container.read(workbenchProvider);
+
+      // Assert
+      expect(state.items, isEmpty);
+      expect(state.error, isNull);
+      verifyNever(
+        mockCloudKitService.deleteWorkbenchItemReference(any),
+      ); // No delete calls should happen
+    });
+  }); // End of clearItems group
 }

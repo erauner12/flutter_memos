@@ -427,6 +427,80 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
     // Note: Reordering is local only, not persisted to CloudKit order.
     // Default sort is applied on load/refresh.
   }
+
+  // --- clearItems ---
+  Future<void> clearItems() async {
+    if (!mounted) return;
+    if (state.items.isEmpty) {
+      if (kDebugMode) print('[WorkbenchNotifier] No items to clear.');
+      return;
+    }
+
+    final originalItems = List<WorkbenchItemReference>.from(state.items);
+    // Optimistic update: Clear local state immediately
+    state = state.copyWith(items: [], clearError: true);
+    if (kDebugMode)
+      print('[WorkbenchNotifier] Cleared local items optimistically.');
+
+    List<String> failedToDeleteIds = [];
+    Object? firstError;
+
+    // Attempt to delete all items from CloudKit
+    for (final item in originalItems) {
+      try {
+        final success = await _cloudKitService.deleteWorkbenchItemReference(
+          item.id,
+        );
+        if (!success) {
+          failedToDeleteIds.add(item.id);
+          if (kDebugMode)
+            print(
+              '[WorkbenchNotifier] Failed to delete item ${item.id} from CloudKit.',
+            );
+        }
+      } catch (e, s) {
+        failedToDeleteIds.add(item.id);
+        firstError ??= e; // Store the first error encountered
+        if (kDebugMode)
+          print(
+            '[WorkbenchNotifier] Error deleting item ${item.id} from CloudKit: $e\n$s',
+          );
+      }
+    }
+
+    // If any deletions failed, revert the state to show the items that couldn't be deleted
+    if (failedToDeleteIds.isNotEmpty && mounted) {
+      final remainingItems =
+          originalItems
+              .where((item) => failedToDeleteIds.contains(item.id))
+              .toList();
+      // Re-sort the remaining items
+      remainingItems.sort(
+        (a, b) => b.overallLastUpdateTime.compareTo(a.overallLastUpdateTime),
+      );
+      state = state.copyWith(
+        items: remainingItems,
+        error:
+            firstError ??
+            Exception('Failed to delete some items from CloudKit'),
+      );
+      if (kDebugMode)
+        print(
+          '[WorkbenchNotifier] Reverted state due to CloudKit deletion failures. ${remainingItems.length} items remain.',
+        );
+    } else if (mounted) {
+      // If all deletions succeeded or no failures occurred and still mounted
+      if (kDebugMode)
+        print(
+          '[WorkbenchNotifier] All items successfully cleared from CloudKit.',
+        );
+      // State is already cleared optimistically, ensure error is null if successful
+      if (state.error != null) {
+        state = state.copyWith(clearError: true);
+      }
+    }
+  }
+
 } // End of WorkbenchNotifier class
 
 // Provider definition - constructor signature changed
