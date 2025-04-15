@@ -1,13 +1,15 @@
 import 'package:flutter_memos/models/chat_message.dart';
 import 'package:flutter_memos/models/mcp_server_config.dart'; // Needed for McpClientState setup
-import 'package:flutter_memos/providers/chat_providers.dart';
+import 'package:flutter_memos/providers/chat_providers.dart'
+    show ChatNotifier, chatProvider; // Import ChatNotifier and provider
 // Import necessary symbols from settings_provider
 import 'package:flutter_memos/providers/settings_provider.dart'
     show
         PersistentStringNotifier,
         geminiApiKeyProvider,
         PreferenceKeys; // Import the class containing the keys
-import 'package:flutter_memos/services/gemini_service.dart';
+import 'package:flutter_memos/services/gemini_service.dart'
+    show GeminiService, geminiServiceProvider;
 // Explicitly import necessary symbols AND the provider from the service file.
 import 'package:flutter_memos/services/mcp_client_service.dart'
     show // Import only what's needed + the provider
@@ -304,9 +306,9 @@ void main() {
 
       // Assert
       // Verify calls on the *delegate* mock, capturing history
-      // Construct the full expected query string (ensure exact match with ChatNotifier)
+      // Construct the full expected query string using the static context
       final fullExpectedQuery =
-          '''${ChatNotifier.todoistContext}\n\nUser query: $userQuery''';
+          "${ChatNotifier.todoistContext}\\n\\nUser query: $userQuery";
       final verification = verify(
         mockMcpClientNotifierDelegate.processQuery(
           fullExpectedQuery,
@@ -344,7 +346,7 @@ void main() {
       expect(
         finalState.displayMessages.last.text,
         'OK. Task "buy milk" created (ID: 12345).',
-      ); // Corrected expected text
+      );
 
       // Check chat history
       expect(
@@ -352,11 +354,12 @@ void main() {
         4,
       ); // User + ModelCall + ToolResponse + FinalModel
       expect(finalState.chatHistory[0].role, 'user');
+      // The history user message includes the context
       expect(
         chatNotifierInstance.getTextFromContent(
           finalState.chatHistory[0],
         ),
-        userQuery,
+        fullExpectedQuery, // Expect the message with context
       );
       expect(
         finalState.chatHistory[1],
@@ -408,9 +411,9 @@ void main() {
 
       // Assert
       // Verify calls on the *delegate* mock
-      // Construct the full expected query string (ensure exact match with ChatNotifier)
+      // Construct the full expected query string using the static context
       final fullExpectedQuery =
-          '''${ChatNotifier.todoistContext}\n\nUser query: $userQuery''';
+          "${ChatNotifier.todoistContext}\\n\\nUser query: $userQuery";
       verify(
         mockMcpClientNotifierDelegate.processQuery(fullExpectedQuery, any),
       ).called(1);
@@ -449,9 +452,10 @@ void main() {
         4,
       ); // User + ModelCall + ToolResponse + FinalModel
       expect(finalState.chatHistory[0].role, 'user');
+      // The history user message includes the context
       expect(
         chatNotifierInstance.getTextFromContent(finalState.chatHistory[0]),
-        userQuery,
+        fullExpectedQuery, // Expect the message with context
       );
       expect(finalState.chatHistory[1], mockModelCallContent); // Role 'model'
       expect(
@@ -493,9 +497,9 @@ void main() {
       verifyNever(
         mockMcpClientNotifierDelegate.processQuery(any, any),
       );
-    // Construct the full expected query string (ensure exact match with ChatNotifier)
-    final fullExpectedQuery =
-        '''${ChatNotifier.todoistContext}\n\nUser query: $userQuery''';
+      // Construct the full expected query string using the static context
+      final fullExpectedQuery =
+          "${ChatNotifier.todoistContext}\\n\\nUser query: $userQuery";
       verify(
         mockGeminiService.sendMessageStream(fullExpectedQuery, any),
       ).called(1);
@@ -512,6 +516,11 @@ void main() {
 
       expect(finalState.chatHistory.length, 2);
       expect(finalState.chatHistory[0].role, 'user');
+      // The history user message includes the context
+      expect(
+        chatNotifierInstance.getTextFromContent(finalState.chatHistory[0]),
+        fullExpectedQuery, // Expect the message with context
+      );
       expect(finalState.chatHistory[1].role, 'model');
       expect(
         chatNotifierInstance.getTextFromContent(finalState.chatHistory[1]),

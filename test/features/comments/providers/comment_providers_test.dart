@@ -222,18 +222,26 @@ void main() {
 
       // Stub getNoteComment specifically for the archive test comment
       when(mockApiService.getNoteComment('test-comment')).thenAnswer((_) async {
-        // Find the comment in the createdComments map
-        // Ensure the note and comment exist before accessing
-        if (createdComments.containsKey('test-note-1') &&
-            createdComments['test-note-1']!.any(
-              (c) => c.id == 'test-comment',
-            )) {
-          return createdComments['test-note-1']!.firstWhere(
+        // Ensure we return the original, unarchived comment from the map
+        final noteComments = createdComments['test-note-1'];
+        if (noteComments != null) {
+          // Find the comment, ensuring it exists before returning
+          final comment = noteComments.firstWhere(
             (c) => c.id == 'test-comment',
+            orElse:
+                () =>
+                    throw Exception(
+                      'Comment test-comment not found in setup map during getNoteComment stub',
+                    ),
           );
+          // Return a copy with normal state to simulate fetching before archive
+          return comment.copyWith(state: CommentState.normal);
         }
-        throw Exception('Comment test-comment not found in setUp mock');
+        throw Exception(
+          'Note test-note-1 not found in setup map during getNoteComment stub',
+        );
       });
+
 
       // Stub setNoteRelations (replaces setMemoRelations)
       when(mockApiService.setNoteRelations(any, any)).thenAnswer((

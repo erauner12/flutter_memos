@@ -137,6 +137,7 @@ void main() {
     TestWidgetsFlutterBinding.ensureInitialized(); // Ensure binding is initialized
     SharedPreferencesStorePlatform.instance =
         InMemorySharedPreferencesStore.empty();
+    SharedPreferences.setMockInitialValues({}); // Add this line
 
     // Define initial states for mocks
     final initialMultiServerState = MultiServerConfigState(

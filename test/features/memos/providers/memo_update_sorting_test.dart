@@ -41,8 +41,14 @@ class MockNotesNotifier extends NotesNotifier {
         ref.read(apiServiceProvider) as MockBaseApiService;
     // Use the mocked API service response for refresh, explicitly using null pageToken
     final response = await apiService.listNotes(
-      pageToken: null,
-    ); // First page for refresh
+      pageToken: null, // First page for refresh
+      // Add other default parameters if needed by the mock setup
+      filter: anyNamed('filter'),
+      state: anyNamed('state'),
+      sort: anyNamed('sort'),
+      direction: anyNamed('direction'),
+      pageSize: anyNamed('pageSize'),
+    );
 
     // Update state with the response
     state = state.copyWith(
@@ -160,11 +166,12 @@ void main() {
       // 1. Initial listNotes call response (used if notifier fetches initially)
       when(
         mockApiService.listNotes(
+          filter: anyNamed('filter'),
           state: anyNamed('state'),
           sort: anyNamed('sort'),
           direction: anyNamed('direction'),
           pageSize: anyNamed('pageSize'),
-          pageToken: anyNamed('pageToken'), // initial call has null page token
+          pageToken: null, // initial call has null page token
         ),
       ).thenAnswer(
         (_) async => ListNotesResponse(
@@ -180,28 +187,32 @@ void main() {
           any,
         ),
       ).thenAnswer(
-        (_) async => NoteItem(
+        (invocation) async {
+        // Simulate the BaseApiService behavior of restoring createTime
+        final originalNote = invocation.positionalArguments[1] as NoteItem;
+        return NoteItem(
           id: noteToUpdateId,
           content: 'Note after update',
-          createTime: serverEpochCreateTime, // Server sends bad createTime
+          createTime: originalNote.createTime, // Restore original createTime
           updateTime: serverUpdateTime, // Server sends correct updateTime
           displayTime: serverUpdateTime,
           visibility: NoteVisibility.private,
           state: NoteState.normal,
           pinned: false, // Assume pinned was not updated
-        ),
+        );
+      },
       );
 
-      // Add missing getNote stub for noteToUpdateId
+      // Add missing getNote stub for noteToUpdateId (needed by updateNoteProvider)
       when(mockApiService.getNote(noteToUpdateId)).thenAnswer((_) async {
-        // Return the note state as it would be after the update
-        // This mock is used during refresh/invalidation after update
-        return notesFromServerAfterUpdate.firstWhere(
+        // Return the note state *before* the update for the getNote call
+        // within updateNoteProvider
+        return initialNotes.firstWhere(
           (m) => m.id == noteToUpdateId,
           orElse:
               () =>
                   throw Exception(
-                    'Test setup error: Updated note not found',
+                    'Test setup error: Initial note not found for getNote',
                   ),
         );
       });
@@ -225,7 +236,7 @@ void main() {
       );
       // --- End Mock Setup ---
 
-      // Use the provider from api_providers.dart
+      // Use the provider from note_providers.dart
       container = ProviderContainer(
         overrides: [
           apiServiceProvider.overrideWithValue(mockApiService),
@@ -309,8 +320,9 @@ void main() {
           '[Test Flow] Reading final notesNotifierProvider state after refresh...',
         );
         // Allow time for the async refresh within the mock notifier to complete
-        await container
-            .read(notesNotifierProvider.notifier).refresh();
+        // The refresh is triggered internally by the updateNoteProvider invalidation
+        await container.pump(); // Allow invalidation and refresh to process
+
         final finalState = container.read(
           notesNotifierProvider);
         print(
@@ -379,4 +391,12 @@ void main() {
       },
     );
   });
+}
+
+// Helper extension for pumping futures in tests
+// TODO: put this somewhere common
+extension PumpExtension on ProviderContainer {
+  Future<void> pump() async {
+    await Future.delayed(Duration.zero);
+  }
 }

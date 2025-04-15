@@ -177,11 +177,14 @@ void main() {
 
       // Act
       final notifier = container.read(testNotifierProvider.notifier);
-      await notifier.init();
-        // Increase duration to allow full migration cleanup chain
+        final initFuture = notifier.init(); // Start init
+        // Pump immediately after starting init to allow async operations within init to start
+        await container.pump();
+        // Wait for the init process AND subsequent cleanup futures to complete
+        await initFuture;
         await container.pumpFor(
           const Duration(milliseconds: 500),
-        ); // Increased duration
+        ); // Keep generous pump
 
       // Assert: State loaded from prefs
       expect(notifier.state, prefsValue);
