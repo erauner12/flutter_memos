@@ -6,9 +6,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
 
 // --- Mocks ---
-// Mock PersistentSetNotifier
+// Mock PersistentSetNotifier - ADD 'with Mock'
 class MockPersistentSetNotifier extends StateNotifier<Set<String>>
-    with Mock
+    with
+        Mock // Add this
     implements settings_p.PersistentSetNotifier<String> {
   MockPersistentSetNotifier(super.state);
 
@@ -16,25 +17,38 @@ class MockPersistentSetNotifier extends StateNotifier<Set<String>>
   @override
   Future<bool> add(String item) async {
     state = Set.from(state)..add(item);
-    return true; // Return bool
+    return super.noSuchMethod(
+      Invocation.method(#add, [item]),
+      returnValue: Future.value(true), // Provide a default return value
+      returnValueForMissingStub: Future.value(true),
+    );
   }
 
   @override
   Future<bool> remove(String item) async {
     state = Set.from(state)..remove(item);
-    return true; // Return bool
+    return super.noSuchMethod(
+      Invocation.method(#remove, [item]),
+      returnValue: Future.value(true), // Provide a default return value
+      returnValueForMissingStub: Future.value(true),
+    );
   }
 
   @override
   Future<bool> clear() async {
     state = {};
-    return true; // Return bool
+    return super.noSuchMethod(
+      Invocation.method(#clear, []),
+      returnValue: Future.value(true), // Provide a default return value
+      returnValueForMissingStub: Future.value(true),
+    );
   }
 }
 
-// Mock NotesNotifier
+// Mock NotesNotifier - ADD 'with Mock'
 class MockNotesNotifier extends StateNotifier<note_providers.NotesState>
-    with Mock
+    with
+        Mock // Add this
     implements note_providers.NotesNotifier {
   MockNotesNotifier(super.state);
   // No need to mock methods unless specifically testing interactions with them
@@ -67,11 +81,28 @@ NoteItem createDummyNote({
 void main() {
   group('Note Providers Tests', () {
     late MockPersistentSetNotifier mockHiddenIdsNotifier;
+    // Declare container here, initialize in setUp
+    late ProviderContainer container;
 
     setUp(() {
       mockHiddenIdsNotifier = MockPersistentSetNotifier(
         {},
       ); // Initialize with empty state
+      // Create container fresh for each test
+      container = ProviderContainer(
+        overrides: [
+          // Override with the *instance* of the mock notifier
+          settings_p.manuallyHiddenNoteIdsProvider.overrideWith(
+            (ref) => mockHiddenIdsNotifier,
+          ),
+          // Add overrides for other dependencies if needed by the providers under test
+        ],
+      );
+    });
+
+    tearDown(() {
+      // Dispose container after each test
+      container.dispose();
     });
 
     test('unhideNoteProvider calls remove on manuallyHiddenNoteIdsProvider', () {
@@ -79,46 +110,36 @@ void main() {
       // Set initial state directly on the mock notifier instance
       mockHiddenIdsNotifier.state = {noteIdToUnhide, 'note2'};
 
-      final container = ProviderContainer(overrides: [
-          // Use overrideWith to provide the *notifier* instance
-          settings_p.manuallyHiddenNoteIdsProvider.overrideWith(
-            (ref) => mockHiddenIdsNotifier,
-          ),
-      ]);
+      // Stub the remove method BEFORE calling the provider that uses it
+      when(
+        mockHiddenIdsNotifier.remove(noteIdToUnhide),
+      ).thenAnswer((_) async => true);
 
-      // Call the action provider
+      // Call the action provider using the container created in setUp
       container.read(note_providers.unhideNoteProvider(noteIdToUnhide))();
 
       // Verify that remove was called with the correct ID on the mock notifier
       verify(mockHiddenIdsNotifier.remove(noteIdToUnhide)).called(1);
 
-      // Optionally verify the state change on the mock
+      // Optionally verify the state change on the mock (already done by mock implementation)
       expect(mockHiddenIdsNotifier.state, equals({'note2'}));
-
-      container.dispose();
     });
 
     test('unhideAllNotesProvider calls clear on manuallyHiddenNoteIdsProvider', () {
         // Set initial state directly on the mock notifier instance
         mockHiddenIdsNotifier.state = {'note1', 'note2', 'note3'};
 
-      final container = ProviderContainer(overrides: [
-            // Use overrideWith to provide the *notifier* instance
-            settings_p.manuallyHiddenNoteIdsProvider.overrideWith(
-              (ref) => mockHiddenIdsNotifier,
-            ),
-      ]);
+        // Stub the clear method
+        when(mockHiddenIdsNotifier.clear()).thenAnswer((_) async => true);
 
-      // Call the action provider
-      container.read(note_providers.unhideAllNotesProvider)();
+        // Call the action provider using the container from setUp
+        container.read(note_providers.unhideAllNotesProvider)();
 
         // Verify that clear was called on the mock notifier
         verify(mockHiddenIdsNotifier.clear()).called(1);
 
-      // Optionally verify the state change on the mock
-      expect(mockHiddenIdsNotifier.state, isEmpty);
-
-        container.dispose();
+        // Optionally verify the state change on the mock (already done by mock implementation)
+        expect(mockHiddenIdsNotifier.state, isEmpty);
     });
 
     test('manuallyHiddenNoteCountProvider returns correct count', () {
@@ -135,7 +156,9 @@ void main() {
       );
       final mockNotesNotifier = MockNotesNotifier(mockNotesState);
 
-      final container = ProviderContainer(overrides: [
+      // Create a new container specific to this test's overrides
+      final testContainer = ProviderContainer(
+        overrides: [
           settings_p.manuallyHiddenNoteIdsProvider.overrideWith(
             (ref) => mockHiddenNotifier,
           ),
@@ -145,7 +168,10 @@ void main() {
           // Assume filterKeyProvider defaults to 'all' or 'inbox' for this test
       ]);
 
-      expect(container.read(note_providers.manuallyHiddenNoteCountProvider), equals(3));
+      expect(
+        testContainer.read(note_providers.manuallyHiddenNoteCountProvider),
+        equals(3),
+      );
 
       // Test with empty set
       final mockEmptyHiddenNotifier = MockPersistentSetNotifier({});
@@ -159,7 +185,7 @@ void main() {
       ]);
       expect(emptyContainer.read(note_providers.manuallyHiddenNoteCountProvider), equals(0));
 
-      container.dispose();
+      testContainer.dispose();
       emptyContainer.dispose();
     });
 
@@ -187,8 +213,7 @@ void main() {
         // Correctly create NotesState with a List<NoteItem>
       final mockNotesState = note_providers.NotesState(
           notes: allNotes,
-        isLoading: false,
-          // errorMessage: null, // Removed
+          isLoading: false,
         nextPageToken: null,
       );
         final mockNotesNotifier = MockNotesNotifier(mockNotesState);
@@ -196,7 +221,9 @@ void main() {
       final manuallyHiddenIds = {noteManuallyHidden.id, noteFutureManuallyHidden.id};
         final mockHiddenNotifier = MockPersistentSetNotifier(manuallyHiddenIds);
 
-      final container = ProviderContainer(overrides: [
+        // Create a new container specific to this test's overrides
+        final testContainer = ProviderContainer(
+          overrides: [
             note_providers.notesNotifierProvider.overrideWith(
               (ref) => mockNotesNotifier,
             ),
@@ -211,7 +238,10 @@ void main() {
         // Manually Hidden: noteManuallyHidden, noteFutureManuallyHidden (2)
         // Future Dated (and not manually hidden): noteFuture (1)
         // Total = 2 + 1 = 3
-      expect(container.read(note_providers.totalHiddenNoteCountProvider), equals(3));
+        expect(
+          testContainer.read(note_providers.totalHiddenNoteCountProvider),
+          equals(3),
+        );
 
       // Test case with only future notes
         final mockHiddenNotifierFutureOnly = MockPersistentSetNotifier(
@@ -284,8 +314,8 @@ void main() {
           equals(0),
         );
 
-        // Dispose containers
-        container.dispose();
+        // Dispose containers used in this specific test
+        testContainer.dispose();
         containerFutureOnly.dispose();
         containerManualOnly.dispose();
         containerNoneHidden.dispose();
