@@ -96,6 +96,10 @@ void main() {
             (ref) => mockHiddenIdsNotifier,
           ),
           // Add overrides for other dependencies if needed by the providers under test
+          // Provide a default mock for notesNotifierProvider to avoid errors in dependent providers
+          note_providers.notesNotifierProvider.overrideWith(
+            (ref) => MockNotesNotifier(const note_providers.NotesState()),
+          ),
         ],
       );
     });
@@ -156,37 +160,36 @@ void main() {
       );
       final mockNotesNotifier = MockNotesNotifier(mockNotesState);
 
-      // Create a new container specific to this test's overrides
-      final testContainer = ProviderContainer(
-        overrides: [
-          settings_p.manuallyHiddenNoteIdsProvider.overrideWith(
-            (ref) => mockHiddenNotifier,
-          ),
-          note_providers.notesNotifierProvider.overrideWith(
-            (ref) => mockNotesNotifier,
-          ),
-          // Assume filterKeyProvider defaults to 'all' or 'inbox' for this test
+      // Update overrides for the main container for this test scenario
+      container.updateOverrides([
+        settings_p.manuallyHiddenNoteIdsProvider.overrideWith(
+          (ref) => mockHiddenNotifier,
+        ),
+        note_providers.notesNotifierProvider.overrideWith(
+          (ref) => mockNotesNotifier,
+        ),
       ]);
 
       expect(
-        testContainer.read(note_providers.manuallyHiddenNoteCountProvider),
+        container.read(note_providers.manuallyHiddenNoteCountProvider),
         equals(3),
       );
 
       // Test with empty set
       final mockEmptyHiddenNotifier = MockPersistentSetNotifier({});
-      final emptyContainer = ProviderContainer(overrides: [
-          settings_p.manuallyHiddenNoteIdsProvider.overrideWith(
-            (ref) => mockEmptyHiddenNotifier,
-          ),
-          note_providers.notesNotifierProvider.overrideWith(
-            (ref) => mockNotesNotifier,
-          ), // Still need notes source
+      // Update overrides again for the empty set scenario
+      container.updateOverrides([
+        settings_p.manuallyHiddenNoteIdsProvider.overrideWith(
+          (ref) => mockEmptyHiddenNotifier,
+        ),
+        note_providers.notesNotifierProvider.overrideWith(
+          (ref) => mockNotesNotifier,
+        ), // Keep notes source
       ]);
-      expect(emptyContainer.read(note_providers.manuallyHiddenNoteCountProvider), equals(0));
-
-      testContainer.dispose();
-      emptyContainer.dispose();
+      expect(
+        container.read(note_providers.manuallyHiddenNoteCountProvider),
+        equals(0),
+      );
     });
 
     test('totalHiddenNoteCountProvider returns count of manually hidden and future notes', () {
@@ -221,16 +224,14 @@ void main() {
       final manuallyHiddenIds = {noteManuallyHidden.id, noteFutureManuallyHidden.id};
         final mockHiddenNotifier = MockPersistentSetNotifier(manuallyHiddenIds);
 
-        // Create a new container specific to this test's overrides
-        final testContainer = ProviderContainer(
-          overrides: [
-            note_providers.notesNotifierProvider.overrideWith(
-              (ref) => mockNotesNotifier,
-            ),
-            settings_p.manuallyHiddenNoteIdsProvider.overrideWith(
-              (ref) => mockHiddenNotifier,
-            ),
-            // Assume filterKeyProvider defaults to 'all' or 'inbox'
+        // Update overrides for the main container
+        container.updateOverrides([
+          note_providers.notesNotifierProvider.overrideWith(
+            (ref) => mockNotesNotifier,
+          ),
+          settings_p.manuallyHiddenNoteIdsProvider.overrideWith(
+            (ref) => mockHiddenNotifier,
+          ),
       ]);
 
         // Expected: noteManuallyHidden + noteFuture = 2 (noteFutureManuallyHidden counted in manual)
@@ -239,7 +240,7 @@ void main() {
         // Future Dated (and not manually hidden): noteFuture (1)
         // Total = 2 + 1 = 3
         expect(
-          testContainer.read(note_providers.totalHiddenNoteCountProvider),
+          container.read(note_providers.totalHiddenNoteCountProvider),
           equals(3),
         );
 
@@ -247,18 +248,17 @@ void main() {
         final mockHiddenNotifierFutureOnly = MockPersistentSetNotifier(
           {},
         ); // No manual hidden
-        final containerFutureOnly = ProviderContainer(
-          overrides: [
-            note_providers.notesNotifierProvider.overrideWith(
-              (ref) => mockNotesNotifier,
-            ),
-            settings_p.manuallyHiddenNoteIdsProvider.overrideWith(
-              (ref) => mockHiddenNotifierFutureOnly,
-            ),
+        container.updateOverrides([
+          note_providers.notesNotifierProvider.overrideWith(
+            (ref) => mockNotesNotifier,
+          ),
+          settings_p.manuallyHiddenNoteIdsProvider.overrideWith(
+            (ref) => mockHiddenNotifierFutureOnly,
+          ),
       ]);
         // Expected: noteFuture + noteFutureManuallyHidden = 2
         expect(
-          containerFutureOnly.read(note_providers.totalHiddenNoteCountProvider),
+          container.read(note_providers.totalHiddenNoteCountProvider),
           equals(2),
         );
 
@@ -274,18 +274,17 @@ void main() {
         final mockHiddenNotifierManualOnly = MockPersistentSetNotifier({
           noteManuallyHidden.id,
         });
-        final containerManualOnly = ProviderContainer(
-          overrides: [
-            note_providers.notesNotifierProvider.overrideWith(
-              (ref) => mockNotesNotifierManualOnly,
-            ),
-            settings_p.manuallyHiddenNoteIdsProvider.overrideWith(
-              (ref) => mockHiddenNotifierManualOnly,
-            ),
+        container.updateOverrides([
+          note_providers.notesNotifierProvider.overrideWith(
+            (ref) => mockNotesNotifierManualOnly,
+          ),
+          settings_p.manuallyHiddenNoteIdsProvider.overrideWith(
+            (ref) => mockHiddenNotifierManualOnly,
+          ),
       ]);
         // Expected: noteManuallyHidden = 1
         expect(
-          containerManualOnly.read(note_providers.totalHiddenNoteCountProvider),
+          container.read(note_providers.totalHiddenNoteCountProvider),
           equals(1),
         );
 
@@ -299,26 +298,19 @@ void main() {
           mockNotesStateNoneHidden,
         );
         final mockHiddenNotifierNoneHidden = MockPersistentSetNotifier({});
-        final containerNoneHidden = ProviderContainer(
-          overrides: [
-            note_providers.notesNotifierProvider.overrideWith(
-              (ref) => mockNotesNotifierNoneHidden,
-            ),
-            settings_p.manuallyHiddenNoteIdsProvider.overrideWith(
-              (ref) => mockHiddenNotifierNoneHidden,
-            ),
+        container.updateOverrides([
+          note_providers.notesNotifierProvider.overrideWith(
+            (ref) => mockNotesNotifierNoneHidden,
+          ),
+          settings_p.manuallyHiddenNoteIdsProvider.overrideWith(
+            (ref) => mockHiddenNotifierNoneHidden,
+          ),
       ]);
         // Expected: 0
         expect(
-          containerNoneHidden.read(note_providers.totalHiddenNoteCountProvider),
+          container.read(note_providers.totalHiddenNoteCountProvider),
           equals(0),
         );
-
-        // Dispose containers used in this specific test
-        testContainer.dispose();
-        containerFutureOnly.dispose();
-        containerManualOnly.dispose();
-        containerNoneHidden.dispose();
     });
 
   });
