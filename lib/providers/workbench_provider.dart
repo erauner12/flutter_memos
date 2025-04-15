@@ -255,9 +255,15 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
     optimisticItems.sort((a, b) {
       final aOpened = a.lastOpenedTimestamp;
       final bOpened = b.lastOpenedTimestamp;
-      if (aOpened != null && bOpened != null) return bOpened.compareTo(aOpened);
-      if (aOpened != null) return -1;
-      if (bOpened != null) return 1;
+      if (aOpened != null && bOpened != null) {
+        return bOpened.compareTo(aOpened);
+      }
+      if (aOpened != null) {
+        return -1;
+      }
+      if (bOpened != null) {
+        return 1;
+      }
       return b.addedTimestamp.compareTo(a.addedTimestamp);
     });
     state = state.copyWith(items: optimisticItems);
@@ -299,10 +305,15 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
           revertedItems.sort((a, b) {
             final aOpened = a.lastOpenedTimestamp;
             final bOpened = b.lastOpenedTimestamp;
-            if (aOpened != null && bOpened != null)
+            if (aOpened != null && bOpened != null) {
               return bOpened.compareTo(aOpened);
-            if (aOpened != null) return -1;
-            if (bOpened != null) return 1;
+            }
+            if (aOpened != null) {
+              return -1;
+            }
+            if (bOpened != null) {
+              return 1;
+            }
             return b.addedTimestamp.compareTo(a.addedTimestamp);
           });
           state = state.copyWith(items: revertedItems, error: e);

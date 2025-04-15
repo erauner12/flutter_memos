@@ -93,8 +93,11 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
   }
 
   // Custom context menu including date actions
-  // Modify the signature to accept the scaffoldContext
-  void _showCustomContextMenu(BuildContext scaffoldContext) {
+  // Modify the signature to accept the scaffoldContext and scaffoldMessenger
+  void _showCustomContextMenu(
+    BuildContext scaffoldContext,
+    ScaffoldMessengerState scaffoldMessenger,
+  ) {
     final isManuallyHidden = ref.read(settings_p.manuallyHiddenNoteIdsProvider).contains(widget.note.id);
     final now = DateTime.now();
     final isFutureDated = widget.note.startDate?.isAfter(now) ?? false;
@@ -167,7 +170,12 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
             child: const Text('Add to Workbench'),
             onPressed: () {
                   Navigator.pop(popupContext);
-              _addNoteToWorkbenchFromList(scaffoldContext, ref, widget.note);
+                  // Pass scaffoldMessenger instead of scaffoldContext
+                  _addNoteToWorkbenchFromList(
+                    scaffoldMessenger,
+                    ref,
+                    widget.note,
+                  );
             },
               ),
           CupertinoContextMenuAction(
@@ -215,15 +223,16 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
   }
 
   // Helper method to add note to workbench
-  // This method now receives the correct context from _showCustomContextMenu
+  // Modify signature to accept ScaffoldMessengerState instead of BuildContext
   void _addNoteToWorkbenchFromList(
-    BuildContext scaffoldContext, // This context is now reliable
+    ScaffoldMessengerState scaffoldMessenger, // Use ScaffoldMessengerState
     WidgetRef ref,
     NoteItem note,
   ) {
     final activeServer = ref.read(activeServerConfigProvider);
     if (activeServer == null) {
-      ScaffoldMessenger.of(scaffoldContext).showSnackBar(
+      // Use the passed scaffoldMessenger directly
+      scaffoldMessenger.showSnackBar(
         const SnackBar(
           content: Text("Cannot add to workbench: No active server."),
           backgroundColor: CupertinoColors.systemRed,
@@ -249,7 +258,8 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
 
     ref.read(workbenchProvider.notifier).addItem(reference);
 
-    ScaffoldMessenger.of(scaffoldContext).showSnackBar(
+    // Use the passed scaffoldMessenger directly
+    scaffoldMessenger.showSnackBar(
       const SnackBar(
         content: Text("Added to Workbench"),
         backgroundColor: CupertinoColors.systemGreen,
@@ -403,6 +413,10 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
   Widget build(BuildContext context) {
     // Capture the build context here - THIS is the reliable context
     final BuildContext scaffoldContext = context;
+    // Get the ScaffoldMessengerState using the reliable context
+    final ScaffoldMessengerState scaffoldMessenger = ScaffoldMessenger.of(
+      scaffoldContext,
+    );
 
     final selectedItemId = ref.watch(ui_providers.selectedItemIdProvider);
     final isSelected = selectedItemId == widget.note.id;
@@ -499,7 +513,7 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
     }
 
     return Slidable(
-      key: ValueKey('slidable-${widget.note.id}'),
+      key: const ValueKey('slidable-\${widget.note.id}'),
       startActionPane: ActionPane(
         motion: const DrawerMotion(),
         children: [
@@ -574,7 +588,8 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
       ),
       child: GestureDetector(
         onLongPress: () {
-          _showCustomContextMenu(scaffoldContext);
+          // Pass both scaffoldContext and scaffoldMessenger
+          _showCustomContextMenu(scaffoldContext, scaffoldMessenger);
         },
         onTap:
             isMultiSelectMode
