@@ -1,10 +1,10 @@
 import 'package:flutter/cupertino.dart'; // Use Cupertino
 import 'package:flutter_markdown/flutter_markdown.dart';
-// import 'package:flutter_memos/models/memo.dart';
+import 'package:flutter_memos/models/note_item.dart'; // Import NoteItem
 import 'package:flutter_memos/providers/api_providers.dart';
-import 'package:flutter_memos/screens/edit_memo/edit_memo_form.dart';
-import 'package:flutter_memos/screens/edit_memo/edit_memo_providers.dart'; // Add this import
-import 'package:flutter_memos/services/api_service.dart' as api_service;
+import 'package:flutter_memos/providers/edit_entity_providers.dart'; // Updated import
+import 'package:flutter_memos/screens/edit_entity/edit_entity_form.dart'; // Updated import
+import 'package:flutter_memos/services/base_api_service.dart'; // Ensure this import exists
 import 'package:flutter_memos/services/url_launcher_service.dart'; // Import url launcher service
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -42,11 +42,12 @@ void dumpRichTextContent(WidgetTester tester) {
 
 void main() {
   group('Markdown Link Styling in Preview Mode', () {
-    late MockApiService mockApiService;
+    late MockBaseApiService mockApiService; // Confirmed mock type
     late MockUrlLauncherService mockUrlLauncherService;
 
     setUp(() {
-      mockApiService = MockApiService();
+      mockApiService =
+          MockBaseApiService(); // Confirmed mock type instantiation
       mockUrlLauncherService = MockUrlLauncherService();
       when(mockApiService.apiBaseUrl).thenReturn('http://test-url.com');
       when(mockUrlLauncherService.launch(any)).thenAnswer((_) async => true);
@@ -57,11 +58,16 @@ void main() {
       markdownDebugEnabled = false;
 
       // Build a form with a link in the content - use a more distinctive link text
-      final memo = Memo(
+      final note = NoteItem(
+        // Updated type
         id: 'test-id',
         content: '# Test Heading\n\n[UNIQUE_EXAMPLE_LINK](https://example.com)',
         pinned: false,
-        state: MemoState.normal,
+        state: NoteState.normal, // Updated enum
+        createTime: DateTime.now(), // Add required field
+        updateTime: DateTime.now(), // Add required field
+        displayTime: DateTime.now(), // Add required field
+        visibility: NoteVisibility.private, // Add required field
       );
 
       await tester.pumpWidget(
@@ -72,17 +78,19 @@ void main() {
               mockUrlLauncherService,
             ),
             editEntityProvider(
-              EntityProviderParams(id: 'test-id', type: 'memo'),
-            ).overrideWith((ref) => Future.value(memo)),
+              // Use provider from edit_entity_providers.dart
+              EntityProviderParams(id: 'test-id', type: 'note'), // Updated type
+            ).overrideWith((ref) => Future.value(note)), // Use note variable
           ],
           child: CupertinoApp(
             // Use CupertinoApp
             home: CupertinoPageScaffold(
               // Use CupertinoPageScaffold
-              child: EditMemoForm(
+              child: EditEntityForm(
+                // Updated widget type
                 entityId: 'test-id',
-                entityType: 'memo',
-                entity: memo,
+                entityType: 'note', // Updated type
+                entity: note, // Use note variable
               ),
             ),
           ),
@@ -178,7 +186,8 @@ void main() {
       markdownDebugEnabled = false;
       
       // Use more distinctive content with clear markers
-      final memo = Memo(
+      final note = NoteItem(
+        // Updated type
         id: 'test-id',
         content: '''
 # MARKER_HEADING
@@ -187,7 +196,11 @@ void main() {
 [MARKER_FRAGMENT](https://example.com/page#section-2)
 ''',
         pinned: false,
-        state: MemoState.normal,
+        state: NoteState.normal, // Updated enum
+        createTime: DateTime.now(), // Add required field
+        updateTime: DateTime.now(), // Add required field
+        displayTime: DateTime.now(), // Add required field
+        visibility: NoteVisibility.private, // Add required field
       );
 
       await tester.pumpWidget(

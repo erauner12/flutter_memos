@@ -4,7 +4,7 @@ import 'package:flutter_memos/api/lib/api.dart'; // Keep for V1Resource if still
 import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/models/note_item.dart'; // Updated import
 import 'package:flutter_memos/services/base_api_service.dart'; // Keep for verboseLogging
-// import 'package:flutter_memos/services/memos_api_service.dart'; // Import concrete implementation
+import 'package:flutter_memos/services/memos_api_service.dart'; // Confirmed import exists
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/annotations.dart';
 
@@ -14,7 +14,9 @@ const bool runIntegrationTests =
 
 // Generate nice mock for MemosApiService (or BaseApiService if preferred)
 // Mocking the concrete class might be easier for integration-like tests
-@GenerateNiceMocks([MockSpec<MemosApiService>()])
+// Generate nice mock for MemosApiService (or BaseApiService if preferred)
+// Mocking the concrete class might be easier for integration-like tests
+@GenerateNiceMocks([MockSpec<MemosApiService>()]) // Confirmed MemosApiService
 void main() {
   group('ApiService Resource Integration Tests', () {
     late MemosApiService apiService; // Use concrete type

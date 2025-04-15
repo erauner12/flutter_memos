@@ -8,6 +8,7 @@ import 'package:flutter_memos/providers/ui_providers.dart' as ui_providers;
 import 'package:flutter_memos/screens/memo_detail/memo_comments.dart';
 import 'package:flutter_memos/screens/memo_detail/memo_detail_providers.dart';
 import 'package:flutter_memos/services/api_service.dart' as api_service;
+import 'package:flutter_memos/services/base_api_service.dart'; // Added import
 // Remove the direct import of ApiService if it causes ambiguity
 // import 'package:flutter_memos/services/api_service.dart';
 import 'package:flutter_memos/widgets/comment_card.dart';
@@ -58,16 +59,16 @@ void main() {
   const testMemoId = 'test-memo-1';
   // Generate dummy comments
   final initialDummyComments = createDummyComments(3);
-  // **Explicitly sort the list like the widget likely does (newest first)**
-  final sortedDummyComments = List<Comment>.from(initialDummyComments)
+  // Sort dummy comments by createTime (descending)
+  final sortedDummyComments = [...initialDummyComments]
     ..sort((a, b) => b.createTime.compareTo(a.createTime));
 
   late ProviderContainer container; // Declare container
-  late MockApiService mockApiService;
+  late MockBaseApiService mockApiService; // Updated mock type
 
   // Use setUp to create the container before each test
   setUp(() {
-    mockApiService = MockApiService();
+    mockApiService = MockBaseApiService(); // Updated mock type
 
     // Add stub for apiBaseUrl property
     when(mockApiService.apiBaseUrl).thenReturn('http://test-url.com');

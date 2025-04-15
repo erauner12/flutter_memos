@@ -25,17 +25,19 @@ import '../../../services/url_launcher_service_test.mocks.dart'; // Correct path
 import 'markdown_rendering_test.mocks.dart';
 
 // Annotation to generate nice mock for BaseApiService
-@GenerateNiceMocks([MockSpec<BaseApiService>()]) // Updated to BaseApiService
+@GenerateNiceMocks([
+  MockSpec<BaseApiService>(),
+]) // Confirm this uses BaseApiService
 
 void main() {
   // Declare mocks at the top level
-  late MockApiService mockApiService;
+  late MockBaseApiService mockApiService; // Updated mock type
   late MockUrlLauncherService mockUrlLauncherService;
 
   group('Markdown Rendering Tests', () {
     // Setup function that runs before each test
     setUp(() {
-      mockApiService = MockApiService();
+      mockApiService = MockBaseApiService(); // Updated mock type
       mockUrlLauncherService = MockUrlLauncherService(); // Initialize URL launcher mock
 
       // Add stub for apiBaseUrl property
