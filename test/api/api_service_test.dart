@@ -25,7 +25,7 @@ void main() {
           displayTime: DateTime.parse(
             '2025-03-22T21:45:00.000Z',
           ), // Use DateTime
-          creator: 'users/1',
+          creatorId: '1', // Use creatorId with just the ID part
         );
 
         // Verify all fields were set correctly
@@ -46,7 +46,7 @@ void main() {
           appNote.displayTime.toIso8601String(),
           equals('2025-03-22T21:45:00.000Z'),
         );
-        expect(appNote.creator, equals('users/1'));
+        expect(appNote.creatorId, equals('1')); // Verify creatorId
 
         // Test the copyWith method
         final updatedNote = appNote.copyWith(

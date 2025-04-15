@@ -53,7 +53,6 @@ void main() {
     when(
       mockApiService.listNotes(
         // Updated method name
-        // parent: anyNamed('parent'), // Removed parent
       filter: anyNamed('filter'),
       state: anyNamed('state'),
       sort: anyNamed('sort'),
@@ -556,7 +555,6 @@ void main() {
         verifyNever(
           mockApiService.listNotes(
             // Updated method name
-        parent: anyNamed('parent'),
         filter: anyNamed('filter'),
         state: anyNamed('state'),
         sort: anyNamed('sort'),

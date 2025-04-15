@@ -88,18 +88,9 @@ void main() {
       final updatedId = container.read(selectedItemIdProvider);
       expect(updatedId, equals(testItemId));
     });
-    
-    test('selectedMemoIdProvider can be updated', () {
-      // Use the recommended provider instead
-      final initialId = container.read(selectedMemoIdProvider);
-      expect(initialId, isNull);
 
-      // Set to some test ID
-      const testMemoId = 'test-memo-123';
-      container.read(selectedMemoIdProvider.notifier).state = testMemoId;
-      final updatedId = container.read(selectedMemoIdProvider);
-      expect(updatedId, equals(testMemoId));
-    });
+    // Test removed as selectedMemoIdProvider is deprecated and removed
+    // test('selectedMemoIdProvider can be updated', () { ... });
   });
   
   group('KeyboardNavigationMixin Tests', () {

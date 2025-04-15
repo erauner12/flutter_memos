@@ -59,7 +59,6 @@ void main() {
       print('\n[TEST] Filtering by tag using CEL: "$tagFilter"');
       final memosByTag = await apiService.listNotes(
         // Use listNotes
-        // parent: 'users/-', // Removed parent
         filter: tagFilter,
       );
       print(
@@ -71,7 +70,6 @@ void main() {
       print('\n[TEST] Filtering by visibility using CEL: "$visibilityFilter"');
       final memosByVisibility = await apiService.listNotes(
         // Use listNotes
-        // parent: 'users/-', // Removed parent
         filter: visibilityFilter,
       );
       print(
@@ -84,7 +82,6 @@ void main() {
       print('\n[TEST] Filtering by content using CEL: "$contentFilter"');
       final memosByContent = await apiService.listNotes(
         // Use listNotes
-        // parent: 'users/-', // Removed parent
         filter: contentFilter,
       );
       print(
@@ -152,7 +149,6 @@ void main() {
         );
         final memosFromToday = await apiService.listNotes(
           // Use listNotes
-          // parent: 'users/-', // Removed parent
           filter: todayFilter,
       );
         print(
@@ -166,7 +162,6 @@ void main() {
         );
         final memosFromThisWeek = await apiService.listNotes(
           // Use listNotes
-          // parent: 'users/-', // Removed parent
           filter: thisWeekFilter,
       );
       print(
@@ -182,7 +177,6 @@ void main() {
         print('\n[TEST] Filtering by created after using CEL: "$recentFilter"');
         final recentMemos = await apiService.listNotes(
           // Use listNotes
-          // parent: 'users/-', // Removed parent
           filter: recentFilter,
       );
       print(
@@ -243,7 +237,6 @@ void main() {
       print('\n[TEST] Filtering using combined CEL: "$combinedAndFilter"');
       final combinedFilterResponse = await apiService.listNotes(
         // Use listNotes
-        // parent: 'users/-', // Removed parent
         filter: combinedAndFilter,
       );
       print(
@@ -259,7 +252,6 @@ void main() {
       print('\n[TEST] Filtering using combined CEL: "$contentAndTimeFilter"');
       final contentAndTimeMemos = await apiService.listNotes(
         // Use listNotes
-        // parent: 'users/-', // Removed parent
         filter: contentAndTimeFilter,
       );
       print(
@@ -319,7 +311,6 @@ void main() {
 
       final response = await apiService.listNotes(
         // Use listNotes
-        // parent: 'users/-', // Removed parent
         filter: rawCelFilter,
       );
 
@@ -358,7 +349,6 @@ void main() {
 
       final dateFilterResponse = await apiService.listNotes(
         // Use listNotes
-        // parent: 'users/-', // Removed parent
         filter: dateFilter,
       );
 

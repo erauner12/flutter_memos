@@ -62,7 +62,6 @@ void main() {
       // First, fetch memos sorted by updateTime
       final notesByUpdateTime = await apiService.listNotes(
         // Use listNotes
-        // parent: 'users/1', // Removed parent
         sort: 'updateTime',
         direction: 'DESC',
       );
@@ -160,7 +159,6 @@ void main() {
       // Get notes with server-side sort by updateTime
       final notes = await apiService.listNotes(
         // Use listNotes
-        // parent: 'users/1', // Removed parent
         sort: 'updateTime',
         direction: 'DESC',
       );

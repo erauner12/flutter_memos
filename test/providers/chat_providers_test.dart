@@ -303,10 +303,14 @@ void main() {
       await chatNotifierInstance.sendMessage(userQuery);
 
       // Assert
-      // Verify calls on the *delegate* mock
-      verify(
-        mockMcpClientNotifierDelegate.processQuery(userQuery, any),
-      ).called(1);
+      // Verify calls on the *delegate* mock, capturing history
+      final verification = verify(
+        mockMcpClientNotifierDelegate.processQuery(userQuery, captureAny),
+      );
+      verification.called(1);
+      final capturedHistory = verification.captured.single as List<Content>?;
+      expect(capturedHistory, isA<List<Content>>()); // Verify type
+
       // Verify Gemini stream was NOT called directly
       verifyNever(mockGeminiService.sendMessageStream(any, any));
 

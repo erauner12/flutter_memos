@@ -54,6 +54,7 @@ void main() {
       NoteItem( // Updated type
         id: '1',
         content: 'Test note 1', // Updated content
+        pinned: false, // Add required field
         createTime: DateTime.parse('2025-03-22T10:00:00Z'),
         updateTime: DateTime.parse('2025-03-23T10:00:00Z'), // Newest
         displayTime: DateTime.parse('2025-03-23T10:00:00Z'), // Add required field
@@ -63,6 +64,7 @@ void main() {
       NoteItem( // Updated type
         id: '2',
         content: 'Test note 2', // Updated content
+        pinned: false, // Add required field
         createTime: DateTime.parse('2025-03-21T10:00:00Z'),
         updateTime: DateTime.parse('2025-03-22T10:00:00Z'), // Middle
         displayTime: DateTime.parse('2025-03-22T10:00:00Z'), // Add required field
@@ -72,6 +74,7 @@ void main() {
       NoteItem( // Updated type
         id: '3',
         content: 'Test note 3 #tagged', // Tagged note // Updated content
+        pinned: false, // Add required field
         createTime: DateTime.parse('2025-03-20T10:00:00Z'),
         updateTime: DateTime.parse('2025-03-21T10:00:00Z'), // Oldest
         displayTime: DateTime.parse('2025-03-21T10:00:00Z'), // Add required field
@@ -87,23 +90,24 @@ void main() {
 
       // Set up mock response for listNotes
       when(
-        mockApiService.listNotes( // Updated method name
-          // parent: anyNamed('parent'), // Removed parent
+        mockApiService.listNotes(
+          // Updated method name
           filter: anyNamed('filter'),
           state: anyNamed('state'),
           sort: anyNamed('sort'),
           direction: anyNamed('direction'),
           pageSize: anyNamed('pageSize'),
           pageToken: anyNamed('pageToken'),
-          tags: anyNamed('tags'),
-          visibility: anyNamed('visibility'),
-          contentSearch: anyNamed('contentSearch'),
-          createdAfter: anyNamed('createdAfter'),
-          createdBefore: anyNamed('createdBefore'),
-          updatedAfter: anyNamed('updatedAfter'),
-          updatedBefore: anyNamed('updatedBefore'),
-          timeExpression: anyNamed('timeExpression'),
-          useUpdateTimeForExpression: anyNamed('useUpdateTimeForExpression'),
+          // Remove unused parameters for clarity
+          // tags: anyNamed('tags'),
+          // visibility: anyNamed('visibility'),
+          // contentSearch: anyNamed('contentSearch'),
+          // createdAfter: anyNamed('createdAfter'),
+          // createdBefore: anyNamed('createdBefore'),
+          // updatedAfter: anyNamed('updatedAfter'),
+          // updatedBefore: anyNamed('updatedBefore'),
+          // timeExpression: anyNamed('timeExpression'),
+          // useUpdateTimeForExpression: anyNamed('useUpdateTimeForExpression'),
         ),
       ).thenAnswer((invocation) async {
         return ListNotesResponse( // Updated response type
@@ -213,6 +217,7 @@ void main() {
       final archivedNote = NoteItem( // Updated type
         id: '4',
         content: 'Archived',
+        pinned: false, // Add required field
         state: NoteState.archived, // Updated enum
         createTime: DateTime.now(), // Add required field
         updateTime: DateTime.now(), // Add required field

@@ -1,9 +1,9 @@
 import 'package:flutter/foundation.dart';
-import 'package:flutter_memos/api/lib/api.dart'; // Import for NoteRelation and other API models
+import 'package:flutter_memos/api/lib/api.dart'; // Import for API models
 import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/models/list_notes_response.dart'; // Updated import
 import 'package:flutter_memos/models/note_item.dart'; // Updated import
-import 'package:flutter_memos/models/note_relation.dart'; // Updated import
+import 'package:flutter_memos/models/note_relation.dart'; // Ensure this import exists
 import 'package:flutter_memos/providers/api_providers.dart';
 import 'package:flutter_memos/providers/comment_providers.dart' as comment_providers;
 import 'package:flutter_memos/providers/note_providers.dart'
@@ -43,26 +43,15 @@ void main() {
       // Stub listNotes (replaces listMemos)
       when(
         mockApiService.listNotes(
-          // No parent parameter
           filter: anyNamed('filter'),
           state: anyNamed('state'),
           sort: anyNamed('sort'),
           direction: anyNamed('direction'),
           pageSize: anyNamed('pageSize'),
           pageToken: anyNamed('pageToken'),
-          // Add other potential parameters used by providers if necessary
-          tags: anyNamed('tags'),
-          visibility: anyNamed('visibility'),
-          contentSearch: anyNamed('contentSearch'),
-          createdAfter: anyNamed('createdAfter'),
-          createdBefore: anyNamed('createdBefore'),
-          updatedAfter: anyNamed('updatedAfter'),
-          updatedBefore: anyNamed('updatedBefore'),
-          timeExpression: anyNamed('timeExpression'),
-          useUpdateTimeForExpression: anyNamed('useUpdateTimeForExpression'),
         ),
       ).thenAnswer((invocation) async {
-        // Return empty list for any listNotes call
+        // Return notes based on createdNotes map for consistency
         return ListNotesResponse(
           notes: List.from(createdNotes.values),
           nextPageToken: null,
@@ -84,7 +73,7 @@ void main() {
           displayTime: note.displayTime ?? DateTime.now(),
           visibility: note.visibility ?? NoteVisibility.private,
           state: note.state ?? NoteState.normal,
-          pinned: note.pinned ?? false,
+          pinned: note.pinned ?? false, // Ensure pinned is handled
         );
         createdNotes[createdNote.id] = createdNote;
         return createdNote;
@@ -234,6 +223,20 @@ void main() {
 
       // Stub listNoteRelations (replaces listMemoRelations)
       when(mockApiService.listNoteRelations(any)).thenAnswer((
+        invocation,
+      ) async {
+        if (shouldFailRelations) {
+          throw Exception('Simulated API error: Failed to list relations');
+        }
+        final noteId = invocation.positionalArguments[0] as String;
+        final formattedId =
+            noteId.contains('/') ? noteId.split('/').last : noteId;
+        // Return a copy to avoid modifying the original list in the map
+        return List<NoteRelation>.from(createdRelations[formattedId] ?? []);
+      });
+
+      // Stub setNoteRelations (replaces setMemoRelations)
+      when(mockApiService.setNoteRelations(any, any)).thenAnswer((
         invocation,
       ) async {
         if (shouldFailRelations) {
@@ -698,9 +701,9 @@ void main() {
         expect(passedResource['name'], equals(mockResourceName));
         expect(passedResource['filename'], equals(mockFilename));
         expect(
-          passedResource['type'],
+          passedResource['type'], // Access 'type' key
           equals(mockContentType),
-        ); // Check 'type' key
+        );
 
         // Verify the final result returned by the provider
         expect(resultComment, isNotNull);
@@ -711,9 +714,9 @@ void main() {
         expect(finalResource['name'], equals(mockResourceName));
         expect(finalResource['filename'], equals(mockFilename));
         expect(
-          finalResource['type'],
+          finalResource['type'], // Access 'type' key
           equals(mockContentType),
-        ); // Check 'type' key
+        );
       },
     );
 
@@ -769,7 +772,7 @@ void main() {
         // Check if bumpNoteProvider was called (indirect verification)
         // This requires mocking the provider itself or checking its side effects.
         // A simpler check is that createNoteComment was called.
-        expect(createCommentVerification.called(1), isTrue);
+        createCommentVerification.called(1); // Correct verification syntax
       },
     );
     // --- Tests for updateCommentProvider ---

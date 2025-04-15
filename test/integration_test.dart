@@ -63,7 +63,7 @@ void main() {
         id: 'test', // API will assign ID
         content:
             'Test note ${DateTime.now().toIso8601String()}', // Updated content
-        pinned: false,
+        // pinned: false, // Already present
         // Add required fields for NoteItem constructor
         createTime: DateTime.now(),
         updateTime: DateTime.now(),
@@ -216,7 +216,7 @@ void main() {
         id: 'test',
         content:
             'Test note for comments ${DateTime.now().toIso8601String()}', // Updated content
-        pinned: false,
+        // pinned: false, // Already present
         createTime: DateTime.now(),
         updateTime: DateTime.now(),
         displayTime: DateTime.now(),
@@ -327,6 +327,7 @@ void main() {
         id: 'test',
         content:
             'Test note for special comment states ${DateTime.now().toIso8601String()}', // Updated content
+        pinned: false, // Add required field
         createTime: DateTime.now(),
         updateTime: DateTime.now(),
         displayTime: DateTime.now(),

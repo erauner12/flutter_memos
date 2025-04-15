@@ -609,7 +609,7 @@ void main() {
         id: 'non-existent',
         serverUrl: 'url',
         authToken: 'token',
-        serverType: ServerType.memos, // Added serverType
+        serverType: ServerType.memos, // Ensure serverType is present
       );
 
       // Act

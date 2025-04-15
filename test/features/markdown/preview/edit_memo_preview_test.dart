@@ -42,7 +42,7 @@ void main() {
         // Updated type
         id: 'test-id',
         content: 'Test content',
-        pinned: false,
+        pinned: false, // Add required parameter
         state: NoteState.normal, // Updated enum
         createTime: DateTime.now(), // Add required field
         updateTime: DateTime.now(), // Add required field
@@ -117,7 +117,7 @@ void main() {
         // Updated type
         id: 'test-id',
         content: 'Initial content',
-        pinned: false,
+        pinned: false, // Add required parameter
         state: NoteState.normal, // Updated enum
         createTime: DateTime.now(), // Add required field
         updateTime: DateTime.now(), // Add required field
@@ -198,7 +198,7 @@ void main() {
         // Updated type
         id: 'test-id',
         content: '# Test Heading\n**Bold text**',
-        pinned: false,
+        pinned: false, // Add required parameter
         state: NoteState.normal, // Updated enum
         createTime: DateTime.now(), // Add required field
         updateTime: DateTime.now(), // Add required field

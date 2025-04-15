@@ -44,12 +44,13 @@ void main() {
 }
 ```
 ''',
-        pinned: false,
+        // pinned: false, // Already present
         state: NoteState.normal, // Updated enum
         createTime: DateTime.now(), // Add required field
         updateTime: DateTime.now(), // Add required field
         displayTime: DateTime.now(), // Add required field
         visibility: NoteVisibility.private, // Add required field
+        pinned: true
       );
 
       debugMarkdown('Note content: ${note.content}');

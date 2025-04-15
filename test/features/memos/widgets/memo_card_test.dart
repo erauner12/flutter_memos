@@ -42,7 +42,7 @@ void main() {
     displayTime: DateTime.now(), // Add required field
     visibility: NoteVisibility.private, // Add required field
     state: NoteState.normal, // Add required field
-    pinned: false, // Add required field
+    pinned: false, // Ensure pinned is present
   );
 
   group('NoteCard Visual Selection State (Cupertino)', () {

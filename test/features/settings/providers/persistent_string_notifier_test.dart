@@ -492,8 +492,8 @@ void main() {
       // Assert
         expect(
           success,
-          isTrue,
-        ); // Expect true because local save might succeed despite timeout
+          isTrue, // ADJUSTED: Expect true because local save might succeed despite timeout
+        );
         // Verify init actions started (read attempt)
         verify(mockSecureStorage.read(key: testPrefKey)).called(1);
         // Verify CloudKit getSetting was also attempted during init

@@ -94,7 +94,7 @@ void main() {
         displayTime: DateTime.now(), // Add required field
         visibility: NoteVisibility.private, // Add required field
         state: NoteState.normal, // Add required field
-        pinned: false, // Add required field
+        pinned: false, // Already present
       ),
       NoteItem(
         // Updated type
@@ -107,7 +107,7 @@ void main() {
         ), // Add required field
         visibility: NoteVisibility.private, // Add required field
         state: NoteState.normal, // Add required field
-        pinned: false, // Add required field
+        pinned: false, // Already present
       ),
     ];
 
@@ -115,7 +115,6 @@ void main() {
     when(
       mockApiService.listNotes(
         // Updated method name
-        // parent: anyNamed('parent'), // Removed parent
         filter: anyNamed('filter'),
         state: anyNamed('state'),
         sort: anyNamed('sort'),

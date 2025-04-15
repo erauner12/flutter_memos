@@ -80,7 +80,6 @@ void main() {
     when(
       mockApiService.listNotes(
         // Updated method name
-        // parent: anyNamed('parent'), // Removed parent
         filter: anyNamed('filter'),
         state: anyNamed('state'),
         sort: anyNamed('sort'),
@@ -114,6 +113,7 @@ void main() {
         updateTime: DateTime.now(), // Add required field
         displayTime: DateTime.now(), // Add required field
         visibility: NoteVisibility.private, // Add required field
+        // pinned: true, // Already present
       );
     });
 

@@ -103,6 +103,7 @@ void main() {
       NoteItem(
         id: noteToUpdateId,
         content: 'Note before update', // Updated content
+        pinned: false, // Add required field
         createTime: originalCreateTime,
         updateTime: originalUpdateTime, // Older update time
         displayTime: originalUpdateTime, // Add required field
@@ -112,6 +113,7 @@ void main() {
       NoteItem(
         id: otherNoteId,
         content: 'Another note', // Updated content
+        pinned: false, // Add required field
         createTime: now.subtract(const Duration(days: 1)),
         updateTime: now.subtract(
           const Duration(days: 1, minutes: 1),
@@ -133,6 +135,7 @@ void main() {
         // This represents the raw data from the server list call
         id: noteToUpdateId,
         content: 'Note after update', // Updated content
+        pinned: false, // Add required field
         createTime:
             serverEpochCreateTime, // Incorrect time from server list response
         updateTime: serverUpdateTime, // Correct new update time
@@ -143,6 +146,7 @@ void main() {
       NoteItem(
         id: otherNoteId,
         content: 'Another note', // Updated content
+        pinned: false, // Add required field
         createTime: now.subtract(const Duration(days: 1)),
         updateTime: now.subtract(const Duration(days: 1, minutes: 1)),
         displayTime: now.subtract(
@@ -161,8 +165,6 @@ void main() {
       when(
         mockApiService.listNotes(
           // Updated method name
-          parent: anyNamed('parent'),
-          filter: anyNamed('filter'),
           state: anyNamed('state'),
           sort: anyNamed('sort'),
           direction: anyNamed('direction'),
@@ -193,6 +195,7 @@ void main() {
           displayTime: serverUpdateTime, // Add required field
           visibility: NoteVisibility.private, // Add required field
           state: NoteState.normal, // Add required field
+          pinned: true, // Assume pinned was updated, add required field
         ),
       );
 
@@ -216,7 +219,7 @@ void main() {
       when(
         mockApiService.listNotes(
           // Updated method name
-          parent: anyNamed('parent'),
+          // parent: anyNamed('parent'), // TODO: do I need thi?
           filter: anyNamed('filter'),
           state: anyNamed('state'),
           sort: anyNamed('sort'),
@@ -297,6 +300,7 @@ void main() {
           displayTime: originalUpdateTime, // Add required field
           visibility: NoteVisibility.private, // Add required field
           state: NoteState.normal, // Add required field
+          pinned: false, // Add required field
         );
         // saveEntityProvider calls apiService.updateNote and then triggers refresh
         await container.read(

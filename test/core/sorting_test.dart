@@ -13,7 +13,8 @@ import 'package:flutter_test/flutter_test.dart';
 /// as a solution.
 void main() {
   group('Client-side Sorting Tests', () {
-    test('sortByUpdateTime correctly sorts notes', () {
+    test('sortByPinnedThenUpdateTime correctly sorts notes', () {
+      // Updated test name to match function
       // Create test notes with different update times
       final now = DateTime.now();
       // Explicitly type the list
@@ -21,12 +22,12 @@ void main() {
         NoteItem(
           id: '1',
           content: 'Oldest update',
+          pinned: false, // Add required field
           updateTime: now.subtract(const Duration(days: 2)),
           createTime: now.subtract(const Duration(days: 4)),
           displayTime: now.subtract(const Duration(days: 2)),
           visibility: NoteVisibility.private, // Add required fields
           state: NoteState.normal,
-          pinned: false, // Add required field
         ),
         NoteItem(
           id: '2',
@@ -40,22 +41,24 @@ void main() {
         ),
         NoteItem(
           id: '3',
+          pinned: false, // Add required field
           content: 'Newest update',
           updateTime: now,
           createTime: now.subtract(const Duration(days: 6)),
           displayTime: now,
           visibility: NoteVisibility.private,
           state: NoteState.normal,
-          pinned: false, // Add required field
         ),
-      ];
+      ]; // Close the list
 
       // Shuffle the list to ensure initial order doesn't match expected order
       final random = Random(42); // Fixed seed for reproducibility
       notes.shuffle(random);
 
       // Apply sorting using the actual implementation
-      NoteUtils.sortNotes(notes, 'updateTime'); // Use the main sort function
+      NoteUtils.sortByPinnedThenUpdateTime(
+        notes,
+      ); // Use the specific sort function
 
       // Verify the order (newest first)
       expect(
@@ -75,15 +78,17 @@ void main() {
       );
     });
 
-    test('sortNotes handles null timestamps gracefully', () {
-      // Create test notes with some null timestamps
+    test('sortNotes handles epoch timestamps gracefully', () {
+      // Updated test name
+      // Create test notes with epoch timestamps
       final now = DateTime.now();
+      final epochTime = DateTime.fromMillisecondsSinceEpoch(0);
       // Explicitly type the list
       final List<NoteItem> notes = [
         NoteItem(
           id: '1',
-          content: 'Null update time',
-          updateTime: null, // Keep null
+          content: 'Epoch update time',
+          updateTime: epochTime, // Use epoch time
           createTime: now.subtract(const Duration(days: 6)),
           displayTime: now.subtract(const Duration(days: 2)),
           visibility: NoteVisibility.private,
@@ -92,9 +97,9 @@ void main() {
         ),
         NoteItem(
           id: '2',
-          content: 'Null create time',
+          content: 'Epoch create time',
           updateTime: now.subtract(const Duration(days: 1)),
-          createTime: null, // Keep null
+          createTime: epochTime, // Use epoch time
           displayTime: now.subtract(const Duration(days: 1)),
           visibility: NoteVisibility.private,
           state: NoteState.normal,
@@ -112,13 +117,26 @@ void main() {
         ),
       ];
 
-      // Test update time sorting
-      NoteUtils.sortNotes(notes, 'updateTime'); // Use the main sort function
+      // Test update time sorting (pinned then update time)
+      NoteUtils.sortByPinnedThenUpdateTime(
+        notes,
+      ); // Use the specific sort function
       expect(
         notes[0].id,
         equals('3'),
         reason: 'Note with valid update time should come first',
       );
+      expect(
+        notes[1].id,
+        equals('2'),
+        reason: 'Note with middle update time should be second',
+      );
+      expect(
+        notes[2].id,
+        equals('1'),
+        reason: 'Note with epoch update time should be last',
+      );
+
 
       // Test create time sorting
       NoteUtils.sortByCreateTime(notes);
@@ -126,6 +144,16 @@ void main() {
         notes[0].id,
         equals('3'),
         reason: 'Note with valid create time should come first',
+      );
+      expect(
+        notes[1].id,
+        equals('1'),
+        reason: 'Note with middle create time should be second',
+      );
+      expect(
+        notes[2].id,
+        equals('2'),
+        reason: 'Note with epoch create time should be last',
       );
     });
   });

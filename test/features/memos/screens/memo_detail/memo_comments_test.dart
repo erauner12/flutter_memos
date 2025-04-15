@@ -111,7 +111,10 @@ void main() {
     // Arrange
     // Pass the container to the helper
     await tester.pumpWidget(
-      buildTestableWidget(const NoteComments(memoId: testMemoId), container), // Updated widget name
+      buildTestableWidget(
+        const NoteComments(noteId: testMemoId),
+        container,
+      ), // Updated widget name and parameter
     );
     await tester.pumpAndSettle(); // Wait for FutureProvider
 
@@ -148,7 +151,10 @@ void main() {
     (WidgetTester tester) async {
     // Arrange
     await tester.pumpWidget(
-      buildTestableWidget(const NoteComments(memoId: testMemoId), container), // Updated widget name
+        buildTestableWidget(
+          const NoteComments(noteId: testMemoId),
+          container,
+        ), // Updated widget name
     );
     await tester.pumpAndSettle();
 
@@ -187,7 +193,10 @@ testWidgets(
     (WidgetTester tester) async {
     // Arrange
     await tester.pumpWidget(
-      buildTestableWidget(const NoteComments(memoId: testMemoId), container), // Updated widget name
+        buildTestableWidget(
+          const NoteComments(noteId: testMemoId),
+          container,
+        ), // Fixed parameter name
     );
     await tester.pumpAndSettle();
 
@@ -259,7 +268,10 @@ testWidgets(
     (WidgetTester tester) async {
       // Arrange
       await tester.pumpWidget(
-        buildTestableWidget(const NoteComments(memoId: testMemoId), container), // Updated widget name
+        buildTestableWidget(
+          const NoteComments(noteId: testMemoId),
+          container,
+        ), // Fixed parameter name
       );
       await tester.pumpAndSettle();
 
@@ -333,7 +345,10 @@ testWidgets(
     (WidgetTester tester) async {
       // Arrange
       await tester.pumpWidget(
-        buildTestableWidget(const NoteComments(memoId: testMemoId), container), // Updated widget name
+        buildTestableWidget(
+          const NoteComments(noteId: testMemoId),
+          container,
+        ), // Fixed parameter name
       );
       await tester.pumpAndSettle();
 

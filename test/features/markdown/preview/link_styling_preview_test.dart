@@ -61,7 +61,7 @@ void main() {
       final note = NoteItem(
         id: 'test-id',
         content: '# Test Heading\n\n[UNIQUE_EXAMPLE_LINK](https://example.com)',
-        pinned: false,
+        // pinned: false, // Already present
         state: NoteState.normal,
         createTime: DateTime.now(),
         updateTime: DateTime.now(),
@@ -168,7 +168,7 @@ void main() {
 [MARKER_PARAMS](https://example.com/search?q=flutter&lang=dart)
 [MARKER_FRAGMENT](https://example.com/page#section-2)
 ''',
-        pinned: false,
+        // pinned: false, // Already present
         state: NoteState.normal,
         createTime: DateTime.now(),
         updateTime: DateTime.now(),
