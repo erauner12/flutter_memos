@@ -148,6 +148,25 @@ class MockCloudKitService extends _i1.Mock implements _i3.CloudKitService {
       ) as _i4.Future<bool>);
 
   @override
+  _i4.Future<bool> deleteAllRecordsOfType(String? recordType) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #deleteAllRecordsOfType,
+          [recordType],
+        ),
+        returnValue: _i4.Future<bool>.value(false),
+      ) as _i4.Future<bool>);
+
+  @override
+  _i4.Future<bool> deleteUserSettingsRecord() => (super.noSuchMethod(
+        Invocation.method(
+          #deleteUserSettingsRecord,
+          [],
+        ),
+        returnValue: _i4.Future<bool>.value(false),
+      ) as _i4.Future<bool>);
+
+  @override
   _i4.Future<String?> getSetting(String? keyName) => (super.noSuchMethod(
         Invocation.method(
           #getSetting,

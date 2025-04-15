@@ -1,9 +1,10 @@
 import 'dart:typed_data';
 
-import 'package:flutter_memos/api/lib/api.dart'; // For V1Resource
+import 'package:flutter_memos/api/lib/api.dart'; // Keep for V1Resource if still used by API
 import 'package:flutter_memos/models/comment.dart';
-import 'package:flutter_memos/models/memo.dart';
-import 'package:flutter_memos/services/api_service.dart';
+import 'package:flutter_memos/models/note_item.dart'; // Updated import
+import 'package:flutter_memos/services/base_api_service.dart'; // Keep for verboseLogging
+// import 'package:flutter_memos/services/memos_api_service.dart'; // Import concrete implementation
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/annotations.dart';
 
@@ -11,31 +12,24 @@ import 'package:mockito/annotations.dart';
 const bool runIntegrationTests =
     false; // Set to true to enable integration tests
 
-// Generate nice mock for ApiService
-@GenerateNiceMocks([MockSpec<ApiService>()])
+// Generate nice mock for MemosApiService (or BaseApiService if preferred)
+// Mocking the concrete class might be easier for integration-like tests
+@GenerateNiceMocks([MockSpec<MemosApiService>()])
 void main() {
   group('ApiService Resource Integration Tests', () {
-    late ApiService apiService;
-    String? testMemoId; // To store the ID of the memo created for testing
-    String? createdCommentId; // To store the ID of the comment created
-    String? uploadedResourceId; // To store the ID of the uploaded resource for potential cleanup
+    late MemosApiService apiService; // Use concrete type
+    String? testNoteId; // Updated variable name
+    String? createdCommentId;
+    String? uploadedResourceId;
 
     setUpAll(() async {
-      // Make setUpAll async
-      // --- IMPORTANT ---
-      // Configure ApiService with your ACTUAL test server URL and API Key
-      // Load these from environment variables or a config file
-      // Ensure Env.apiBaseUrl and Env.memosApiKey are correctly set for your test environment
-
-      // Only run setup if integration tests are enabled
       if (!runIntegrationTests) {
         print(
           '[Test Setup] Skipping ApiServiceResourceTest setup because runIntegrationTests is false.',
         );
-        return; // Exit setup early
+        return;
       }
 
-      // Example using placeholder variables:
       const baseUrl = String.fromEnvironment(
         'MEMOS_TEST_API_BASE_URL',
         defaultValue: '',
@@ -46,45 +40,51 @@ void main() {
       );
 
       if (baseUrl.isEmpty || apiKey.isEmpty) {
-        // Print a warning instead of throwing an exception
         print(
-          'WARNING: Test server URL or API Key is not configured. Set MEMOS_TEST_API_BASE_URL and MEMOS_TEST_API_KEY environment variables. Skipping ApiServiceResourceTest configuration and memo creation.',
+          'WARNING: Test server URL or API Key is not configured. Set MEMOS_TEST_API_BASE_URL and MEMOS_TEST_API_KEY environment variables. Skipping ApiServiceResourceTest configuration and note creation.', // Updated message
         );
-        // Do not proceed with configuration or memo creation if env vars are missing
         return;
       }
 
-      // Initialize and configure only if env vars are present
-      apiService = ApiService(); // Get the singleton instance
-      // Configure the service *before* creating the test memo
+      apiService = MemosApiService(); // Instantiate concrete class
       apiService.configureService(baseUrl: baseUrl, authToken: apiKey);
-      ApiService.verboseLogging = true; // Optional
+      BaseApiService.verboseLogging = true; // Optional
 
-      // Create a temporary memo for attaching comments
+      // Create a temporary note for attaching comments
       try {
         final timestamp = DateTime.now().millisecondsSinceEpoch;
-        final tempMemo = Memo(
-          id: 'temp-memo-resource-test-$timestamp',
-          content: 'Temporary Memo for Resource Test - $timestamp',
-          visibility: 'PRIVATE', // Keep test memos private
+        final tempNote = NoteItem(
+          // Updated type
+          id: 'temp-note-resource-test-$timestamp', // Updated prefix
+          content:
+              'Temporary Note for Resource Test - $timestamp', // Updated content
+          visibility: NoteVisibility.private, // Keep test notes private
+          createTime: DateTime.now(), // Add required field
+          updateTime: DateTime.now(), // Add required field
+          displayTime: DateTime.now(), // Add required field
+          state: NoteState.normal, // Add required field
         );
-        final createdMemo = await apiService.createMemo(tempMemo);
-        testMemoId = createdMemo.id;
+        final createdNote = await apiService.createNote(
+          tempNote,
+        ); // Updated method name
+        testNoteId = createdNote.id;
         print(
-          '[Test Setup] Created temporary memo for testing: ID $testMemoId',
+          '[Test Setup] Created temporary note for testing: ID $testNoteId', // Updated log
         );
       } catch (e) {
-        print('[Test Setup] Failed to create temporary memo: $e');
-        // Fail fast if setup fails
-        throw Exception('Setup failed: Could not create test memo. $e');
+        print(
+          '[Test Setup] Failed to create temporary note: $e',
+        ); // Updated log
+        throw Exception(
+          'Setup failed: Could not create test note. $e',
+        ); // Updated message
       }
     });
 
     tearDownAll(() async {
-      // Only run cleanup if integration tests were enabled and setup likely ran
-      if (!runIntegrationTests || testMemoId == null) {
+      if (!runIntegrationTests || testNoteId == null) {
         print(
-          '[Test Cleanup] Skipping ApiServiceResourceTest cleanup (runIntegrationTests is false or testMemoId is null).',
+          '[Test Cleanup] Skipping ApiServiceResourceTest cleanup (runIntegrationTests is false or testNoteId is null).', // Updated log
         );
         return;
       }
@@ -92,10 +92,12 @@ void main() {
       // Attempt to delete the created comment if it exists
       if (createdCommentId != null) {
         try {
-          // The delete API needs both memoId and commentId
-          await apiService.deleteMemoComment(testMemoId!, createdCommentId!);
+          await apiService.deleteNoteComment(
+            testNoteId!,
+            createdCommentId!,
+          ); // Updated method name
           print(
-            '[Test Cleanup] Deleted test comment: $createdCommentId from memo $testMemoId',
+            '[Test Cleanup] Deleted test comment: $createdCommentId from note $testNoteId', // Updated log
           );
         } catch (e) {
           print(
@@ -105,10 +107,9 @@ void main() {
       }
 
       // Attempt to delete the uploaded resource if its ID is known
-      // NOTE: This requires a deleteResource method in ApiService, which might not exist.
       if (uploadedResourceId != null) {
         try {
-          // Assuming a deleteResource method exists in ResourceServiceApi and is exposed via ApiService
+          // Assuming a deleteResource method exists
           // await apiService.deleteResource(uploadedResourceId!);
           print(
             '[Test Cleanup] Attempted to delete resource (if API exists): $uploadedResourceId',
@@ -117,41 +118,40 @@ void main() {
           print(
             '[Test Cleanup] Warning: Failed to delete resource $uploadedResourceId: $e',
           );
-          // Depending on the API, resource deletion might fail if it's attached to a comment.
         }
       }
 
-      // Delete the temporary memo
+      // Delete the temporary note
       try {
-        await apiService.deleteMemo(testMemoId!);
-        print('[Test Cleanup] Deleted temporary memo: $testMemoId');
+        await apiService.deleteNote(testNoteId!); // Updated method name
+        print(
+          '[Test Cleanup] Deleted temporary note: $testNoteId',
+        ); // Updated log
       } catch (e) {
         print(
-          '[Test Cleanup] Warning: Failed to delete test memo $testMemoId: $e',
+          '[Test Cleanup] Warning: Failed to delete test note $testNoteId: $e', // Updated log
         );
       }
     });
 
     test('uploads resource and creates comment with that resource', () async {
-      // Skip test if ApiService wasn't configured (due to flag or missing env vars)
       if (!runIntegrationTests || apiService.apiBaseUrl.isEmpty) {
         print(
-          'Skipping test "uploads resource and creates comment" - Integration tests disabled or ApiService not configured.',
+          'Skipping test "uploads resource and creates comment" - Integration tests disabled or MemosApiService not configured.', // Updated message
         );
         return;
       }
 
-      // Pre-condition check
       expect(
-        testMemoId,
+        testNoteId,
         isNotNull,
-        reason: 'Test memo ID should be set in setUpAll',
+        reason: 'Test note ID should be set in setUpAll', // Updated message
       );
 
       // Arrange
       final mockBytes = Uint8List.fromList(
         [1, 2, 3, 4, 5],
-      ); // Simple byte data
+      );
       final mockFilename =
           'test_upload_${DateTime.now().millisecondsSinceEpoch}.txt';
       final mockContentType = 'text/plain';
@@ -164,63 +164,63 @@ void main() {
       );
 
       // Act: Upload Resource
-      V1Resource? uploadedResource;
+      // Assuming uploadResource returns Map<String, dynamic> now
+      Map<String, dynamic>? uploadedResourceMap;
       try {
         print('[Test Action] Uploading resource: $mockFilename');
-        uploadedResource = await apiService.uploadResource(
+        uploadedResourceMap = await apiService.uploadResource(
           mockBytes,
           mockFilename,
           mockContentType,
         );
-        uploadedResourceId = uploadedResource.name; // Store for potential cleanup
+        uploadedResourceId = uploadedResourceMap['name']; // Store for cleanup
         print(
-          '[Test Action] Resource uploaded successfully: ID ${uploadedResource.name}',
+          '[Test Action] Resource uploaded successfully: ID ${uploadedResourceMap['name']}',
         );
       } catch (e) {
         fail('Failed to upload resource: $e');
       }
 
-      // Assert: Verify Uploaded Resource
+      // Assert: Verify Uploaded Resource Map
       expect(
-        uploadedResource,
+        uploadedResourceMap,
         isNotNull,
-        reason: 'uploadResource should return a resource',
+        reason: 'uploadResource should return a resource map',
       );
       expect(
-        uploadedResource.name,
+        uploadedResourceMap['name'],
         isNotNull,
-        reason: 'Uploaded resource should have a name (ID)',
+        reason: 'Uploaded resource map should have a name (ID)',
       );
       expect(
-        uploadedResource.name,
+        uploadedResourceMap['name'],
         isNotEmpty,
         reason: 'Uploaded resource name should not be empty',
       );
       expect(
-        uploadedResource.filename,
+        uploadedResourceMap['filename'],
         equals(mockFilename),
-        reason: 'Filename mismatch in uploaded resource',
+        reason: 'Filename mismatch in uploaded resource map',
       );
       expect(
-        uploadedResource.type,
+        uploadedResourceMap['type'],
         equals(mockContentType),
-        reason: 'Content type mismatch in uploaded resource',
+        reason: 'Content type mismatch in uploaded resource map',
       );
-      // Size check might be unreliable depending on server implementation (e.g., base64 overhead)
-      // expect(uploadedResource.size, equals(mockBytes.length.toString()));
 
-      // Act: Create Comment with Resource
+      // Act: Create Comment with Resource Map
       Comment? resultComment;
       try {
         print(
-          '[Test Action] Creating comment on memo $testMemoId with resource ${uploadedResource.name}',
+          '[Test Action] Creating comment on note $testNoteId with resource ${uploadedResourceMap['name']}', // Updated log
         );
-        resultComment = await apiService.createMemoComment(
-          testMemoId!,
+        resultComment = await apiService.createNoteComment(
+          // Updated method name
+          testNoteId!,
           tempComment,
-          resources: [uploadedResource], // Pass the uploaded resource
+          resources: [uploadedResourceMap], // Pass the uploaded resource map
         );
-        createdCommentId = resultComment.id; // Store for cleanup
+        createdCommentId = resultComment.id;
         print(
           '[Test Action] Comment created successfully: ID ${resultComment.id}',
         );
@@ -232,7 +232,7 @@ void main() {
       expect(
         resultComment,
         isNotNull,
-        reason: 'createMemoComment should return a comment',
+        reason: 'createNoteComment should return a comment', // Updated message
       );
       expect(
         resultComment.id,
@@ -260,19 +260,20 @@ void main() {
         reason: 'Comment should have one resource',
       );
 
+      // Access resource data as Map
       final resourceInComment = resultComment.resources!.first;
       expect(
-        resourceInComment.name,
-        equals(uploadedResource.name),
+        resourceInComment['name'],
+        equals(uploadedResourceMap['name']),
         reason: 'Resource name mismatch in comment',
       );
       expect(
-        resourceInComment.filename,
+        resourceInComment['filename'],
         equals(mockFilename),
         reason: 'Resource filename mismatch in comment',
       );
       expect(
-        resourceInComment.type,
+        resourceInComment['type'],
         equals(mockContentType),
         reason: 'Resource type mismatch in comment',
       );
@@ -282,8 +283,8 @@ void main() {
         print(
           '[Test Verify] Fetching created comment again: ID ${resultComment.id}',
         );
-        // Use the combined ID format if necessary, or just the comment's own ID
-        final fetchedComment = await apiService.getMemoComment(
+        final fetchedComment = await apiService.getNoteComment(
+          // Updated method name
           resultComment.id,
         );
         print('[Test Verify] Fetched comment successfully.');
@@ -300,17 +301,17 @@ void main() {
         );
         final fetchedResource = fetchedComment.resources!.first;
         expect(
-          fetchedResource.name,
-          equals(uploadedResource.name),
+          fetchedResource['name'],
+          equals(uploadedResourceMap['name']),
           reason: 'Resource name mismatch in fetched comment',
         );
         expect(
-          fetchedResource.filename,
+          fetchedResource['filename'],
           equals(mockFilename),
           reason: 'Resource filename mismatch in fetched comment',
         );
         expect(
-          fetchedResource.type,
+          fetchedResource['type'],
           equals(mockContentType),
           reason: 'Resource type mismatch in fetched comment',
         );

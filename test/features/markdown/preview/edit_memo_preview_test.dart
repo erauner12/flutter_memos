@@ -1,46 +1,56 @@
-import 'package:flutter/cupertino.dart'; // Use Cupertino
+import 'package:flutter/cupertino.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
-import 'package:flutter_memos/models/memo.dart';
+import 'package:flutter_memos/models/note_item.dart'; // Updated import
 import 'package:flutter_memos/providers/api_providers.dart';
-import 'package:flutter_memos/screens/edit_memo/edit_memo_form.dart';
-import 'package:flutter_memos/screens/edit_memo/edit_memo_providers.dart'; // Add this import
-import 'package:flutter_memos/services/api_service.dart' as api_service;
-import 'package:flutter_memos/services/url_launcher_service.dart'; // Import url launcher service
+// import 'package:flutter_memos/providers/edit_entity_providers.dart'; // Updated import
+import 'package:flutter_memos/screens/edit_entity/edit_entity_form.dart'; // Updated import
+import 'package:flutter_memos/services/base_api_service.dart'; // Updated import
+import 'package:flutter_memos/services/url_launcher_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/annotations.dart';
-import 'package:mockito/mockito.dart'; // Import mockito
+import 'package:mockito/mockito.dart';
 
-import '../../../helpers/test_debug.dart'; // Go up two levels to reach test/helpers/
-import '../../../services/url_launcher_service_test.mocks.dart'; // Correct path to services mocks
-// Import mocks for ApiService generated for this file or a shared location if applicable
-import 'edit_memo_preview_test.mocks.dart';
+import '../../../helpers/test_debug.dart';
+import '../../../services/url_launcher_service_test.mocks.dart';
+import 'edit_memo_preview_test.mocks.dart'; // Keep mock file name for now
 
-// Ensure ApiService is mocked if needed by EditMemoForm tests
-@GenerateNiceMocks([MockSpec<api_service.ApiService>()])
+// Ensure BaseApiService is mocked
+@GenerateNiceMocks([MockSpec<BaseApiService>()])
 void main() {
-  group('EditMemoForm Markdown Preview Tests', () {
-    late MockApiService mockApiService;
+  group('EditEntityForm Markdown Preview Tests', () {
+    // Updated group name
+    late MockBaseApiService mockApiService; // Updated mock type
     late MockUrlLauncherService mockUrlLauncherService;
 
     setUp(() {
-      mockApiService = MockApiService();
+      mockApiService = MockBaseApiService(); // Updated mock type
       mockUrlLauncherService = MockUrlLauncherService();
       when(mockApiService.apiBaseUrl).thenReturn('http://test-url.com');
       when(mockUrlLauncherService.launch(any)).thenAnswer((_) async => true);
     });
 
-    testWidgets('EditMemoForm markdown help toggle works', (WidgetTester tester) async {
-      debugMarkdown('Testing markdown help toggle in EditMemoForm');
+    testWidgets('EditEntityForm markdown help toggle works', (
+      WidgetTester tester,
+    ) async {
+      // Updated form name
+      debugMarkdown(
+        'Testing markdown help toggle in EditEntityForm',
+      ); // Updated log
 
-      final memo = Memo(
+      final note = NoteItem(
+        // Updated type
         id: 'test-id',
         content: 'Test content',
         pinned: false,
-        state: MemoState.normal,
+        state: NoteState.normal, // Updated enum
+        createTime: DateTime.now(), // Add required field
+        updateTime: DateTime.now(), // Add required field
+        displayTime: DateTime.now(), // Add required field
+        visibility: NoteVisibility.private, // Add required field
       );
 
-      // Build the EditMemoForm widget
+      // Build the EditEntityForm widget
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
@@ -49,22 +59,20 @@ void main() {
               mockUrlLauncherService,
             ),
             editEntityProvider(
-              EntityProviderParams(id: 'test-id', type: 'memo'),
-            ).overrideWith((ref) => Future.value(memo)),
+              // Use provider from edit_entity_providers.dart
+              EntityProviderParams(id: 'test-id', type: 'note'), // Updated type
+            ).overrideWith((ref) => Future.value(note)),
           ],
           child: CupertinoApp(
-            // Use CupertinoApp
             home: CupertinoPageScaffold(
-              // Use CupertinoPageScaffold
-              // Use the new constructor signature
-              // Wrap in SizedBox to provide constraints
               child: SizedBox(
                 width: 800,
                 height: 600,
-                child: EditMemoForm(
+                child: EditEntityForm(
+                  // Updated widget type
                   entityId: 'test-id',
-                  entityType: 'memo',
-                  entity: memo, // Add the required entity parameter
+                  entityType: 'note', // Updated type
+                  entity: note,
                 ),
               ),
             ),
@@ -72,7 +80,6 @@ void main() {
         ),
       );
 
-      // Wait for FutureProvider to resolve
       await tester.pumpAndSettle();
 
       // Initially help should not be shown
@@ -87,8 +94,7 @@ void main() {
       // Help should now be visible
       expect(find.text('Markdown Syntax Guide'), findsOneWidget);
       debugMarkdown('Markdown Syntax Guide is now visible');
-      
-      // Check for some help content
+
       expect(find.text('Heading 1'), findsOneWidget);
       expect(find.text('Bold text'), findsOneWidget);
       expect(find.text('Italic text'), findsOneWidget);
@@ -107,14 +113,19 @@ void main() {
     testWidgets('Live preview updates when content changes', (WidgetTester tester) async {
       debugMarkdown('Testing live preview updates with content changes');
 
-      final memo = Memo(
+      final note = NoteItem(
+        // Updated type
         id: 'test-id',
         content: 'Initial content',
         pinned: false,
-        state: MemoState.normal,
+        state: NoteState.normal, // Updated enum
+        createTime: DateTime.now(), // Add required field
+        updateTime: DateTime.now(), // Add required field
+        displayTime: DateTime.now(), // Add required field
+        visibility: NoteVisibility.private, // Add required field
       );
 
-      // Build the EditMemoForm widget
+      // Build the EditEntityForm widget
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
@@ -123,22 +134,20 @@ void main() {
               mockUrlLauncherService,
             ),
             editEntityProvider(
-              EntityProviderParams(id: 'test-id', type: 'memo'),
-            ).overrideWith((ref) => Future.value(memo)),
+              // Use provider from edit_entity_providers.dart
+              EntityProviderParams(id: 'test-id', type: 'note'), // Updated type
+            ).overrideWith((ref) => Future.value(note)),
           ],
           child: CupertinoApp(
-            // Use CupertinoApp
             home: CupertinoPageScaffold(
-              // Use CupertinoPageScaffold
-              // Use the new constructor signature
-              // Wrap in SizedBox to provide constraints
               child: SizedBox(
                 width: 800,
                 height: 600,
-                child: EditMemoForm(
+                child: EditEntityForm(
+                  // Updated widget type
                   entityId: 'test-id',
-                  entityType: 'memo',
-                  entity: memo, // Add the required entity parameter
+                  entityType: 'note', // Updated type
+                  entity: note,
                 ),
               ),
             ),
@@ -146,7 +155,6 @@ void main() {
         ),
       );
 
-      // Wait for FutureProvider to resolve
       await tester.pumpAndSettle();
 
       // First switch to preview mode
@@ -168,7 +176,7 @@ void main() {
       await tester.enterText(
         find.byType(CupertinoTextField),
         '# New Heading\n**Bold**',
-      ); // Use CupertinoTextField
+      );
       await tester.pump();
 
       // Switch to preview mode again
@@ -186,14 +194,19 @@ void main() {
     testWidgets('Toggle between edit and preview modes works correctly', (WidgetTester tester) async {
       debugMarkdown('Testing toggle between edit and preview modes');
 
-      final memo = Memo(
+      final note = NoteItem(
+        // Updated type
         id: 'test-id',
         content: '# Test Heading\n**Bold text**',
         pinned: false,
-        state: MemoState.normal,
+        state: NoteState.normal, // Updated enum
+        createTime: DateTime.now(), // Add required field
+        updateTime: DateTime.now(), // Add required field
+        displayTime: DateTime.now(), // Add required field
+        visibility: NoteVisibility.private, // Add required field
       );
 
-      // Build the EditMemoForm widget
+      // Build the EditEntityForm widget
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
@@ -202,22 +215,20 @@ void main() {
               mockUrlLauncherService,
             ),
             editEntityProvider(
-              EntityProviderParams(id: 'test-id', type: 'memo'),
-            ).overrideWith((ref) => Future.value(memo)),
+              // Use provider from edit_entity_providers.dart
+              EntityProviderParams(id: 'test-id', type: 'note'), // Updated type
+            ).overrideWith((ref) => Future.value(note)),
           ],
           child: CupertinoApp(
-            // Use CupertinoApp
             home: CupertinoPageScaffold(
-              // Use CupertinoPageScaffold
-              // Use the new constructor signature
-              // Wrap in SizedBox to provide constraints
               child: SizedBox(
                 width: 800,
                 height: 600,
-                child: EditMemoForm(
+                child: EditEntityForm(
+                  // Updated widget type
                   entityId: 'test-id',
-                  entityType: 'memo',
-                  entity: memo, // Add the required entity parameter
+                  entityType: 'note', // Updated type
+                  entity: note,
                 ),
               ),
             ),
@@ -225,14 +236,13 @@ void main() {
         ),
       );
 
-      // Wait for FutureProvider to resolve
       await tester.pumpAndSettle();
 
       // Initially in edit mode - TextField should be visible
       expect(
         find.byType(CupertinoTextField),
         findsOneWidget,
-      ); // Use CupertinoTextField
+      );
       expect(find.byType(MarkdownBody), findsNothing);
       debugMarkdown('Initially in edit mode, TextField is visible, MarkdownBody is not');
 
@@ -245,7 +255,7 @@ void main() {
       expect(
         find.byType(CupertinoTextField),
         findsNothing,
-      ); // Use CupertinoTextField
+      );
       expect(find.byType(MarkdownBody), findsOneWidget);
       debugMarkdown('Now in preview mode, MarkdownBody is visible, TextField is not');
 
@@ -263,7 +273,7 @@ void main() {
       expect(
         find.byType(CupertinoTextField),
         findsOneWidget,
-      ); // Use CupertinoTextField
+      );
       expect(find.byType(MarkdownBody), findsNothing);
       debugMarkdown('Back in edit mode, TextField is visible, MarkdownBody is not');
     });

@@ -1,8 +1,9 @@
-import 'package:flutter/cupertino.dart'; // Import Cupertino
-import 'package:flutter_memos/models/memo.dart';
+import 'package:flutter/cupertino.dart';
+import 'package:flutter_memos/models/list_notes_response.dart'; // Updated import
+import 'package:flutter_memos/models/note_item.dart'; // Updated import
 import 'package:flutter_memos/providers/api_providers.dart';
-import 'package:flutter_memos/screens/edit_memo/edit_memo_screen.dart';
-import 'package:flutter_memos/services/api_service.dart' as api_service;
+import 'package:flutter_memos/screens/edit_entity/edit_entity_screen.dart'; // Updated import
+import 'package:flutter_memos/services/base_api_service.dart'; // Updated import
 import 'package:flutter_memos/services/url_launcher_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -10,28 +11,21 @@ import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
 
 // Import the mock for UrlLauncherService
-// Corrected path to the mock file in the services directory
 import '../../../services/url_launcher_service_test.mocks.dart';
-// Generate nice mocks for ApiService - this makes undefined methods return null instead of throwing
-@GenerateNiceMocks([MockSpec<api_service.ApiService>()])
-
+// Generate nice mocks for BaseApiService
+@GenerateNiceMocks([MockSpec<BaseApiService>()])
 // This import will work after running build_runner
-import 'edit_memo_screen_test.mocks.dart';
-
-
-// We'll use the Mockito-generated MockApiService instead of a custom implementation
+import 'edit_memo_screen_test.mocks.dart'; // Keep mock file name for now
 
 void main() {
-  late MockApiService mockApiService;
-  late MockUrlLauncherService
-  mockUrlLauncherService; // Add mock for URL launcher
-  late Memo testMemo;
+  late MockBaseApiService mockApiService; // Updated mock type
+  late MockUrlLauncherService mockUrlLauncherService;
+  late NoteItem testNote; // Updated type
 
   setUp(() {
     // Initialize mock services
-    mockApiService = MockApiService();
-    mockUrlLauncherService =
-        MockUrlLauncherService(); // Initialize URL launcher mock
+    mockApiService = MockBaseApiService(); // Updated mock type
+    mockUrlLauncherService = MockUrlLauncherService();
 
     // Stub the launch method to return success by default
     when(mockUrlLauncherService.launch(any)).thenAnswer((_) async => true);
@@ -39,38 +33,53 @@ void main() {
     // Add stub for apiBaseUrl property
     when(mockApiService.apiBaseUrl).thenReturn('http://test-url.com');
 
-    // Create a test memo
-    testMemo = Memo(
-      id: 'test-edit-memo-id',
-      content: 'Test memo content for editing',
+    // Create a test note
+    testNote = NoteItem(
+      // Updated type
+      id: 'test-edit-note-id', // Updated prefix
+      content: 'Test note content for editing', // Updated content
       pinned: false,
-      createTime: DateTime.now().subtract(const Duration(days: 1)).toIso8601String(),
-      updateTime: DateTime.now().toIso8601String(),
+      createTime: DateTime.now().subtract(const Duration(days: 1)),
+      updateTime: DateTime.now(),
+      displayTime: DateTime.now(), // Add required field
+      visibility: NoteVisibility.private, // Add required field
+      state: NoteState.normal, // Add required field
     );
-    // Stub getMemo
-    when(mockApiService.getMemo(argThat(isA<String>()))).thenAnswer((invocation) async {
+    // Stub getNote
+    when(mockApiService.getNote(argThat(isA<String>()))).thenAnswer((
+      invocation,
+    ) async {
+      // Updated method name
       final id = invocation.positionalArguments[0] as String;
-      if (id == testMemo.id) {
-        return testMemo;
+      if (id == testNote.id) {
+        return testNote;
       }
-      throw Exception('Memo not found: $id');
+      throw Exception('Note not found: $id'); // Updated message
     });
 
-    // Stub updateMemo
-    when(mockApiService.updateMemo(argThat(isA<String>()), argThat(isA<Memo>()))).thenAnswer((invocation) async {
+    // Stub updateNote
+    when(
+      mockApiService.updateNote(
+        argThat(isA<String>()),
+        argThat(isA<NoteItem>()),
+      ),
+    ).thenAnswer((invocation) async {
+      // Updated method name and type
       final id = invocation.positionalArguments[0] as String;
-      final memo = invocation.positionalArguments[1] as Memo;
+      final note =
+          invocation.positionalArguments[1] as NoteItem; // Updated type
 
-      // Return updated memo
-      return memo.copyWith(
+      // Return updated note
+      return note.copyWith(
         id: id,
-        updateTime: DateTime.now().toIso8601String(),
+        updateTime: DateTime.now(),
       );
     });
 
-    // Stub listMemos - this is needed to avoid errors during refresh operations
+    // Stub listNotes - this is needed to avoid errors during refresh operations
     when(
-      mockApiService.listMemos(
+      mockApiService.listNotes(
+        // Updated method name
         parent: anyNamed('parent'),
         filter: anyNamed('filter'),
         state: anyNamed('state'),
@@ -78,33 +87,33 @@ void main() {
         direction: anyNamed('direction'),
         pageSize: anyNamed('pageSize'),
         pageToken: anyNamed('pageToken'),
-        tags: anyNamed('tags'),
-        visibility: anyNamed('visibility'),
-        contentSearch: anyNamed('contentSearch'),
-        createdAfter: anyNamed('createdAfter'),
-        createdBefore: anyNamed('createdBefore'),
-        updatedAfter: anyNamed('updatedAfter'),
-        updatedBefore: anyNamed('updatedBefore'),
-        timeExpression: anyNamed('timeExpression'),
-        useUpdateTimeForExpression: anyNamed('useUpdateTimeForExpression'),
       ),
     ).thenAnswer(
-      (_) async =>
-          api_service.PaginatedMemoResponse(
-        memos: [testMemo],
+      (_) async => ListNotesResponse(
+        // Updated response type
+        notes: [testNote], // Updated field name
         nextPageToken: null,
       ),
     );
   });
 
-  testWidgets('EditMemoScreen loads and displays memo content', (WidgetTester tester) async {
+  testWidgets('EditEntityScreen loads and displays note content', (
+    WidgetTester tester,
+  ) async {
+    // Updated screen name
     // Set up mock response
-    when(mockApiService.getMemo('test-memo-id')).thenAnswer((invocation) async {
-      return Memo(
-        id: 'test-memo-id',
-        content: 'Test Memo Content',
+    when(mockApiService.getNote('test-note-id')).thenAnswer((invocation) async {
+      // Updated method name
+      return NoteItem(
+        // Updated type
+        id: 'test-note-id', // Updated prefix
+        content: 'Test Note Content', // Updated content
         pinned: true,
-        state: MemoState.normal,
+        state: NoteState.normal, // Updated enum
+        createTime: DateTime.now(), // Add required field
+        updateTime: DateTime.now(), // Add required field
+        displayTime: DateTime.now(), // Add required field
+        visibility: NoteVisibility.private, // Add required field
       );
     });
 
@@ -115,12 +124,13 @@ void main() {
           apiServiceProvider.overrideWithValue(mockApiService),
           urlLauncherServiceProvider.overrideWithValue(
             mockUrlLauncherService,
-          ), // Add override
+          ),
         ],
         child: const CupertinoApp(
-          // Use CupertinoApp
-          home: EditMemoScreen(
-            entityId: 'test-memo-id', entityType: 'memo',
+          home: EditEntityScreen(
+            // Updated screen name
+            entityId: 'test-note-id',
+            entityType: 'note', // Updated type
           ),
         ),
       ),
@@ -130,41 +140,45 @@ void main() {
     expect(
       find.byType(CupertinoActivityIndicator),
       findsOneWidget,
-    ); // Use CupertinoActivityIndicator
+    );
 
     // Wait for the future to complete
     await tester.pumpAndSettle();
 
-    // Now we should see the form with the memo content
-    expect(find.text('Test Memo Content'), findsOneWidget);
+    // Now we should see the form with the note content
+    expect(find.text('Test Note Content'), findsOneWidget); // Updated content
     expect(
       find.byType(CupertinoTextField),
       findsOneWidget,
-    ); // Use CupertinoTextField
+    );
     expect(
       find.byType(CupertinoSwitch),
-      findsNWidgets(2),
-    ); // Use CupertinoSwitch
+      findsNWidgets(2), // Assuming still 2 switches (pinned, visibility?)
+    );
   });
 
-  testWidgets('EditMemoScreen handles save properly', (WidgetTester tester) async {
+  testWidgets('EditEntityScreen handles save properly', (
+    WidgetTester tester,
+  ) async {
+    // Updated screen name
     // Set up mock responses
-    when(mockApiService.getMemo('test-edit-memo-id')).thenAnswer((
+    when(mockApiService.getNote('test-edit-note-id')).thenAnswer((
+      // Updated method name
       invocation,
     ) async {
-      return testMemo;
+      return testNote;
     });
 
     when(
-      mockApiService.updateMemo(
-        argThat(equals('test-edit-memo-id')),
-        argThat(isA<Memo>()),
+      mockApiService.updateNote(
+        // Updated method name
+        argThat(equals('test-edit-note-id')),
+        argThat(isA<NoteItem>()), // Updated type
       ),
     ).thenAnswer((invocation) async {
-      final memo = invocation.positionalArguments[1] as Memo;
-      return memo.copyWith(
-        id: 'test-edit-memo-id',
-        updateTime: DateTime.now().toIso8601String(),
+      final note =
+          invocation.positionalArguments[1] as NoteItem; // Updated type
+      return note.copyWith(id: 'test-edit-note-id', updateTime: DateTime.now(),
       );
     });
 
@@ -175,13 +189,13 @@ void main() {
           apiServiceProvider.overrideWithValue(mockApiService),
           urlLauncherServiceProvider.overrideWithValue(
             mockUrlLauncherService,
-          ), // Add override
+          ),
         ],
         child: const CupertinoApp(
-          // Use CupertinoApp
-          home: EditMemoScreen(
-            entityId: 'test-edit-memo-id',
-            entityType: 'memo',
+          home: EditEntityScreen(
+            // Updated screen name
+            entityId: 'test-edit-note-id',
+            entityType: 'note', // Updated type
           ),
         ),
       ),
@@ -194,17 +208,20 @@ void main() {
     await tester.enterText(
       find.byType(CupertinoTextField),
       'Updated Content',
-    ); // Use CupertinoTextField
+    );
 
     // Tap the save button (assuming CupertinoButton with text)
     await tester.tap(
       find.widgetWithText(CupertinoButton, 'Save Changes'),
-    ); // Use CupertinoButton
+    );
     await tester.pumpAndSettle();
 
-    // Verify the updateMemo was called
+    // Verify the updateNote was called
     verify(
-      mockApiService.updateMemo(argThat(equals('test-edit-memo-id')), any),
+      mockApiService.updateNote(
+        argThat(equals('test-edit-note-id')),
+        any,
+      ), // Updated method name
     ).called(1);
   });
 }

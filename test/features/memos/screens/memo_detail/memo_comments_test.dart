@@ -15,13 +15,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_slidable/flutter_slidable.dart'; // Keep if Slidable is used
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/annotations.dart';
-import 'package:mockito/mockito.dart';
 
-// Generate nice mock for ApiService
-@GenerateNiceMocks([MockSpec<api_service.ApiService>()])
-// Import the generated mocks file
 import 'memo_comments_test.mocks.dart';
 
+// Generate nice mock for BaseApiService
+@GenerateNiceMocks([MockSpec<BaseApiService>()])
 // Helper to create a list of dummy comments
 List<Comment> createDummyComments(int count) {
   return List.generate(count, (i) {

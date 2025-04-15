@@ -6,13 +6,12 @@
 import 'dart:async' as _i7;
 import 'dart:typed_data' as _i9;
 
-import 'package:flutter_memos/api/lib/api.dart' as _i4;
-import 'package:flutter_memos/models/comment.dart' as _i5;
-import 'package:flutter_memos/models/memo.dart' as _i3;
-import 'package:flutter_memos/models/memo_relation.dart' as _i10;
+import 'package:flutter_memos/models/comment.dart' as _i4;
+import 'package:flutter_memos/models/list_notes_response.dart' as _i2;
+import 'package:flutter_memos/models/note_item.dart' as _i3;
 import 'package:flutter_memos/models/server_config.dart' as _i8;
-import 'package:flutter_memos/services/api_service.dart' as _i2;
-import 'package:flutter_memos/services/url_launcher_service.dart' as _i11;
+import 'package:flutter_memos/services/base_api_service.dart' as _i5;
+import 'package:flutter_memos/services/url_launcher_service.dart' as _i10;
 import 'package:mockito/mockito.dart' as _i1;
 import 'package:mockito/src/dummies.dart' as _i6;
 
@@ -30,9 +29,9 @@ import 'package:mockito/src/dummies.dart' as _i6;
 // ignore_for_file: camel_case_types
 // ignore_for_file: subtype_of_sealed_class
 
-class _FakePaginatedMemoResponse_0 extends _i1.SmartFake
-    implements _i2.PaginatedMemoResponse {
-  _FakePaginatedMemoResponse_0(
+class _FakeListNotesResponse_0 extends _i1.SmartFake
+    implements _i2.ListNotesResponse {
+  _FakeListNotesResponse_0(
     Object parent,
     Invocation parentInvocation,
   ) : super(
@@ -41,8 +40,8 @@ class _FakePaginatedMemoResponse_0 extends _i1.SmartFake
         );
 }
 
-class _FakeMemo_1 extends _i1.SmartFake implements _i3.Memo {
-  _FakeMemo_1(
+class _FakeNoteItem_1 extends _i1.SmartFake implements _i3.NoteItem {
+  _FakeNoteItem_1(
     Object parent,
     Invocation parentInvocation,
   ) : super(
@@ -51,8 +50,8 @@ class _FakeMemo_1 extends _i1.SmartFake implements _i3.Memo {
         );
 }
 
-class _FakeV1Resource_2 extends _i1.SmartFake implements _i4.V1Resource {
-  _FakeV1Resource_2(
+class _FakeComment_2 extends _i1.SmartFake implements _i4.Comment {
+  _FakeComment_2(
     Object parent,
     Invocation parentInvocation,
   ) : super(
@@ -61,20 +60,10 @@ class _FakeV1Resource_2 extends _i1.SmartFake implements _i4.V1Resource {
         );
 }
 
-class _FakeComment_3 extends _i1.SmartFake implements _i5.Comment {
-  _FakeComment_3(
-    Object parent,
-    Invocation parentInvocation,
-  ) : super(
-          parent,
-          parentInvocation,
-        );
-}
-
-/// A class which mocks [ApiService].
+/// A class which mocks [BaseApiService].
 ///
 /// See the documentation for Mockito's code generation for more information.
-class MockApiService extends _i1.Mock implements _i2.ApiService {
+class MockBaseApiService extends _i1.Mock implements _i5.BaseApiService {
   @override
   String get apiBaseUrl => (super.noSuchMethod(
         Invocation.getter(#apiBaseUrl),
@@ -89,11 +78,18 @@ class MockApiService extends _i1.Mock implements _i2.ApiService {
       ) as String);
 
   @override
-  void configureService({
+  bool get isConfigured => (super.noSuchMethod(
+        Invocation.getter(#isConfigured),
+        returnValue: false,
+        returnValueForMissingStub: false,
+      ) as bool);
+
+  @override
+  _i7.Future<void> configureService({
     required String? baseUrl,
     required String? authToken,
   }) =>
-      super.noSuchMethod(
+      (super.noSuchMethod(
         Invocation.method(
           #configureService,
           [],
@@ -102,210 +98,178 @@ class MockApiService extends _i1.Mock implements _i2.ApiService {
             #authToken: authToken,
           },
         ),
-        returnValueForMissingStub: null,
-      );
+        returnValue: _i7.Future<void>.value(),
+        returnValueForMissingStub: _i7.Future<void>.value(),
+      ) as _i7.Future<void>);
 
   @override
-  _i7.Future<_i2.PaginatedMemoResponse> listMemos({
-    String? parent = 'users/1',
-    String? filter,
-    String? state,
-    String? sort = 'updateTime',
-    String? direction = 'DESC',
+  _i7.Future<_i2.ListNotesResponse> listNotes({
     int? pageSize,
     String? pageToken,
-    List<String>? tags,
-    dynamic visibility,
-    String? contentSearch,
-    DateTime? createdAfter,
-    DateTime? createdBefore,
-    DateTime? updatedAfter,
-    DateTime? updatedBefore,
-    String? timeExpression,
-    bool? useUpdateTimeForExpression = false,
+    String? filter,
+    String? state,
+    String? sort,
+    String? direction,
+    _i8.ServerConfig? targetServerOverride,
   }) =>
       (super.noSuchMethod(
         Invocation.method(
-          #listMemos,
+          #listNotes,
           [],
           {
-            #parent: parent,
+            #pageSize: pageSize,
+            #pageToken: pageToken,
             #filter: filter,
             #state: state,
             #sort: sort,
             #direction: direction,
-            #pageSize: pageSize,
-            #pageToken: pageToken,
-            #tags: tags,
-            #visibility: visibility,
-            #contentSearch: contentSearch,
-            #createdAfter: createdAfter,
-            #createdBefore: createdBefore,
-            #updatedAfter: updatedAfter,
-            #updatedBefore: updatedBefore,
-            #timeExpression: timeExpression,
-            #useUpdateTimeForExpression: useUpdateTimeForExpression,
+            #targetServerOverride: targetServerOverride,
           },
         ),
-        returnValue: _i7.Future<_i2.PaginatedMemoResponse>.value(
-            _FakePaginatedMemoResponse_0(
+        returnValue:
+            _i7.Future<_i2.ListNotesResponse>.value(_FakeListNotesResponse_0(
           this,
           Invocation.method(
-            #listMemos,
+            #listNotes,
             [],
             {
-              #parent: parent,
+              #pageSize: pageSize,
+              #pageToken: pageToken,
               #filter: filter,
               #state: state,
               #sort: sort,
               #direction: direction,
-              #pageSize: pageSize,
-              #pageToken: pageToken,
-              #tags: tags,
-              #visibility: visibility,
-              #contentSearch: contentSearch,
-              #createdAfter: createdAfter,
-              #createdBefore: createdBefore,
-              #updatedAfter: updatedAfter,
-              #updatedBefore: updatedBefore,
-              #timeExpression: timeExpression,
-              #useUpdateTimeForExpression: useUpdateTimeForExpression,
+              #targetServerOverride: targetServerOverride,
             },
           ),
         )),
-        returnValueForMissingStub: _i7.Future<_i2.PaginatedMemoResponse>.value(
-            _FakePaginatedMemoResponse_0(
+        returnValueForMissingStub:
+            _i7.Future<_i2.ListNotesResponse>.value(_FakeListNotesResponse_0(
           this,
           Invocation.method(
-            #listMemos,
+            #listNotes,
             [],
             {
-              #parent: parent,
+              #pageSize: pageSize,
+              #pageToken: pageToken,
               #filter: filter,
               #state: state,
               #sort: sort,
               #direction: direction,
-              #pageSize: pageSize,
-              #pageToken: pageToken,
-              #tags: tags,
-              #visibility: visibility,
-              #contentSearch: contentSearch,
-              #createdAfter: createdAfter,
-              #createdBefore: createdBefore,
-              #updatedAfter: updatedAfter,
-              #updatedBefore: updatedBefore,
-              #timeExpression: timeExpression,
-              #useUpdateTimeForExpression: useUpdateTimeForExpression,
+              #targetServerOverride: targetServerOverride,
             },
           ),
         )),
-      ) as _i7.Future<_i2.PaginatedMemoResponse>);
+      ) as _i7.Future<_i2.ListNotesResponse>);
 
   @override
-  _i7.Future<_i3.Memo> getMemo(
+  _i7.Future<_i3.NoteItem> getNote(
     String? id, {
     _i8.ServerConfig? targetServerOverride,
   }) =>
       (super.noSuchMethod(
         Invocation.method(
-          #getMemo,
+          #getNote,
           [id],
           {#targetServerOverride: targetServerOverride},
         ),
-        returnValue: _i7.Future<_i3.Memo>.value(_FakeMemo_1(
+        returnValue: _i7.Future<_i3.NoteItem>.value(_FakeNoteItem_1(
           this,
           Invocation.method(
-            #getMemo,
+            #getNote,
             [id],
             {#targetServerOverride: targetServerOverride},
           ),
         )),
-        returnValueForMissingStub: _i7.Future<_i3.Memo>.value(_FakeMemo_1(
+        returnValueForMissingStub:
+            _i7.Future<_i3.NoteItem>.value(_FakeNoteItem_1(
           this,
           Invocation.method(
-            #getMemo,
+            #getNote,
             [id],
             {#targetServerOverride: targetServerOverride},
           ),
         )),
-      ) as _i7.Future<_i3.Memo>);
+      ) as _i7.Future<_i3.NoteItem>);
 
   @override
-  _i7.Future<_i3.Memo> createMemo(
-    _i3.Memo? memo, {
+  _i7.Future<_i3.NoteItem> createNote(
+    _i3.NoteItem? note, {
     _i8.ServerConfig? targetServerOverride,
   }) =>
       (super.noSuchMethod(
         Invocation.method(
-          #createMemo,
-          [memo],
+          #createNote,
+          [note],
           {#targetServerOverride: targetServerOverride},
         ),
-        returnValue: _i7.Future<_i3.Memo>.value(_FakeMemo_1(
+        returnValue: _i7.Future<_i3.NoteItem>.value(_FakeNoteItem_1(
           this,
           Invocation.method(
-            #createMemo,
-            [memo],
+            #createNote,
+            [note],
             {#targetServerOverride: targetServerOverride},
           ),
         )),
-        returnValueForMissingStub: _i7.Future<_i3.Memo>.value(_FakeMemo_1(
+        returnValueForMissingStub:
+            _i7.Future<_i3.NoteItem>.value(_FakeNoteItem_1(
           this,
           Invocation.method(
-            #createMemo,
-            [memo],
+            #createNote,
+            [note],
             {#targetServerOverride: targetServerOverride},
           ),
         )),
-      ) as _i7.Future<_i3.Memo>);
+      ) as _i7.Future<_i3.NoteItem>);
 
   @override
-  _i7.Future<_i3.Memo> updateMemo(
+  _i7.Future<_i3.NoteItem> updateNote(
     String? id,
-    _i3.Memo? memo, {
+    _i3.NoteItem? note, {
     _i8.ServerConfig? targetServerOverride,
   }) =>
       (super.noSuchMethod(
         Invocation.method(
-          #updateMemo,
+          #updateNote,
           [
             id,
-            memo,
+            note,
           ],
           {#targetServerOverride: targetServerOverride},
         ),
-        returnValue: _i7.Future<_i3.Memo>.value(_FakeMemo_1(
+        returnValue: _i7.Future<_i3.NoteItem>.value(_FakeNoteItem_1(
           this,
           Invocation.method(
-            #updateMemo,
+            #updateNote,
             [
               id,
-              memo,
+              note,
             ],
             {#targetServerOverride: targetServerOverride},
           ),
         )),
-        returnValueForMissingStub: _i7.Future<_i3.Memo>.value(_FakeMemo_1(
+        returnValueForMissingStub:
+            _i7.Future<_i3.NoteItem>.value(_FakeNoteItem_1(
           this,
           Invocation.method(
-            #updateMemo,
+            #updateNote,
             [
               id,
-              memo,
+              note,
             ],
             {#targetServerOverride: targetServerOverride},
           ),
         )),
-      ) as _i7.Future<_i3.Memo>);
+      ) as _i7.Future<_i3.NoteItem>);
 
   @override
-  _i7.Future<void> deleteMemo(
+  _i7.Future<void> deleteNote(
     String? id, {
     _i8.ServerConfig? targetServerOverride,
   }) =>
       (super.noSuchMethod(
         Invocation.method(
-          #deleteMemo,
+          #deleteNote,
           [id],
           {#targetServerOverride: targetServerOverride},
         ),
@@ -314,11 +278,243 @@ class MockApiService extends _i1.Mock implements _i2.ApiService {
       ) as _i7.Future<void>);
 
   @override
-  _i7.Future<_i4.V1Resource> uploadResource(
+  _i7.Future<_i3.NoteItem> archiveNote(
+    String? id, {
+    _i8.ServerConfig? targetServerOverride,
+  }) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #archiveNote,
+          [id],
+          {#targetServerOverride: targetServerOverride},
+        ),
+        returnValue: _i7.Future<_i3.NoteItem>.value(_FakeNoteItem_1(
+          this,
+          Invocation.method(
+            #archiveNote,
+            [id],
+            {#targetServerOverride: targetServerOverride},
+          ),
+        )),
+        returnValueForMissingStub:
+            _i7.Future<_i3.NoteItem>.value(_FakeNoteItem_1(
+          this,
+          Invocation.method(
+            #archiveNote,
+            [id],
+            {#targetServerOverride: targetServerOverride},
+          ),
+        )),
+      ) as _i7.Future<_i3.NoteItem>);
+
+  @override
+  _i7.Future<_i3.NoteItem> togglePinNote(
+    String? id, {
+    _i8.ServerConfig? targetServerOverride,
+  }) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #togglePinNote,
+          [id],
+          {#targetServerOverride: targetServerOverride},
+        ),
+        returnValue: _i7.Future<_i3.NoteItem>.value(_FakeNoteItem_1(
+          this,
+          Invocation.method(
+            #togglePinNote,
+            [id],
+            {#targetServerOverride: targetServerOverride},
+          ),
+        )),
+        returnValueForMissingStub:
+            _i7.Future<_i3.NoteItem>.value(_FakeNoteItem_1(
+          this,
+          Invocation.method(
+            #togglePinNote,
+            [id],
+            {#targetServerOverride: targetServerOverride},
+          ),
+        )),
+      ) as _i7.Future<_i3.NoteItem>);
+
+  @override
+  _i7.Future<List<_i4.Comment>> listNoteComments(
+    String? noteId, {
+    _i8.ServerConfig? targetServerOverride,
+  }) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #listNoteComments,
+          [noteId],
+          {#targetServerOverride: targetServerOverride},
+        ),
+        returnValue: _i7.Future<List<_i4.Comment>>.value(<_i4.Comment>[]),
+        returnValueForMissingStub:
+            _i7.Future<List<_i4.Comment>>.value(<_i4.Comment>[]),
+      ) as _i7.Future<List<_i4.Comment>>);
+
+  @override
+  _i7.Future<_i4.Comment> getNoteComment(
+    String? commentId, {
+    _i8.ServerConfig? targetServerOverride,
+  }) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #getNoteComment,
+          [commentId],
+          {#targetServerOverride: targetServerOverride},
+        ),
+        returnValue: _i7.Future<_i4.Comment>.value(_FakeComment_2(
+          this,
+          Invocation.method(
+            #getNoteComment,
+            [commentId],
+            {#targetServerOverride: targetServerOverride},
+          ),
+        )),
+        returnValueForMissingStub: _i7.Future<_i4.Comment>.value(_FakeComment_2(
+          this,
+          Invocation.method(
+            #getNoteComment,
+            [commentId],
+            {#targetServerOverride: targetServerOverride},
+          ),
+        )),
+      ) as _i7.Future<_i4.Comment>);
+
+  @override
+  _i7.Future<_i4.Comment> createNoteComment(
+    String? noteId,
+    _i4.Comment? comment, {
+    _i8.ServerConfig? targetServerOverride,
+    List<Map<String, dynamic>>? resources,
+  }) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #createNoteComment,
+          [
+            noteId,
+            comment,
+          ],
+          {
+            #targetServerOverride: targetServerOverride,
+            #resources: resources,
+          },
+        ),
+        returnValue: _i7.Future<_i4.Comment>.value(_FakeComment_2(
+          this,
+          Invocation.method(
+            #createNoteComment,
+            [
+              noteId,
+              comment,
+            ],
+            {
+              #targetServerOverride: targetServerOverride,
+              #resources: resources,
+            },
+          ),
+        )),
+        returnValueForMissingStub: _i7.Future<_i4.Comment>.value(_FakeComment_2(
+          this,
+          Invocation.method(
+            #createNoteComment,
+            [
+              noteId,
+              comment,
+            ],
+            {
+              #targetServerOverride: targetServerOverride,
+              #resources: resources,
+            },
+          ),
+        )),
+      ) as _i7.Future<_i4.Comment>);
+
+  @override
+  _i7.Future<_i4.Comment> updateNoteComment(
+    String? commentId,
+    _i4.Comment? comment, {
+    _i8.ServerConfig? targetServerOverride,
+  }) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #updateNoteComment,
+          [
+            commentId,
+            comment,
+          ],
+          {#targetServerOverride: targetServerOverride},
+        ),
+        returnValue: _i7.Future<_i4.Comment>.value(_FakeComment_2(
+          this,
+          Invocation.method(
+            #updateNoteComment,
+            [
+              commentId,
+              comment,
+            ],
+            {#targetServerOverride: targetServerOverride},
+          ),
+        )),
+        returnValueForMissingStub: _i7.Future<_i4.Comment>.value(_FakeComment_2(
+          this,
+          Invocation.method(
+            #updateNoteComment,
+            [
+              commentId,
+              comment,
+            ],
+            {#targetServerOverride: targetServerOverride},
+          ),
+        )),
+      ) as _i7.Future<_i4.Comment>);
+
+  @override
+  _i7.Future<void> deleteNoteComment(
+    String? noteId,
+    String? commentId, {
+    _i8.ServerConfig? targetServerOverride,
+  }) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #deleteNoteComment,
+          [
+            noteId,
+            commentId,
+          ],
+          {#targetServerOverride: targetServerOverride},
+        ),
+        returnValue: _i7.Future<void>.value(),
+        returnValueForMissingStub: _i7.Future<void>.value(),
+      ) as _i7.Future<void>);
+
+  @override
+  _i7.Future<void> setNoteRelations(
+    String? noteId,
+    List<Map<String, dynamic>>? relations, {
+    _i8.ServerConfig? targetServerOverride,
+  }) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #setNoteRelations,
+          [
+            noteId,
+            relations,
+          ],
+          {#targetServerOverride: targetServerOverride},
+        ),
+        returnValue: _i7.Future<void>.value(),
+        returnValueForMissingStub: _i7.Future<void>.value(),
+      ) as _i7.Future<void>);
+
+  @override
+  _i7.Future<Map<String, dynamic>> uploadResource(
     _i9.Uint8List? fileBytes,
     String? filename,
-    String? contentType,
-  ) =>
+    String? contentType, {
+    _i8.ServerConfig? targetServerOverride,
+  }) =>
       (super.noSuchMethod(
         Invocation.method(
           #uploadResource,
@@ -327,242 +523,30 @@ class MockApiService extends _i1.Mock implements _i2.ApiService {
             filename,
             contentType,
           ],
-        ),
-        returnValue: _i7.Future<_i4.V1Resource>.value(_FakeV1Resource_2(
-          this,
-          Invocation.method(
-            #uploadResource,
-            [
-              fileBytes,
-              filename,
-              contentType,
-            ],
-          ),
-        )),
-        returnValueForMissingStub:
-            _i7.Future<_i4.V1Resource>.value(_FakeV1Resource_2(
-          this,
-          Invocation.method(
-            #uploadResource,
-            [
-              fileBytes,
-              filename,
-              contentType,
-            ],
-          ),
-        )),
-      ) as _i7.Future<_i4.V1Resource>);
-
-  @override
-  _i7.Future<List<_i5.Comment>> listMemoComments(
-    String? memoId, {
-    _i8.ServerConfig? targetServerOverride,
-  }) =>
-      (super.noSuchMethod(
-        Invocation.method(
-          #listMemoComments,
-          [memoId],
           {#targetServerOverride: targetServerOverride},
-        ),
-        returnValue: _i7.Future<List<_i5.Comment>>.value(<_i5.Comment>[]),
-        returnValueForMissingStub:
-            _i7.Future<List<_i5.Comment>>.value(<_i5.Comment>[]),
-      ) as _i7.Future<List<_i5.Comment>>);
-
-  @override
-  _i7.Future<_i5.Comment> createMemoComment(
-    String? memoId,
-    _i5.Comment? comment, {
-    List<_i4.V1Resource>? resources,
-    _i8.ServerConfig? targetServerOverride,
-  }) =>
-      (super.noSuchMethod(
-        Invocation.method(
-          #createMemoComment,
-          [
-            memoId,
-            comment,
-          ],
-          {
-            #resources: resources,
-            #targetServerOverride: targetServerOverride,
-          },
-        ),
-        returnValue: _i7.Future<_i5.Comment>.value(_FakeComment_3(
-          this,
-          Invocation.method(
-            #createMemoComment,
-            [
-              memoId,
-              comment,
-            ],
-            {
-              #resources: resources,
-              #targetServerOverride: targetServerOverride,
-            },
-          ),
-        )),
-        returnValueForMissingStub: _i7.Future<_i5.Comment>.value(_FakeComment_3(
-          this,
-          Invocation.method(
-            #createMemoComment,
-            [
-              memoId,
-              comment,
-            ],
-            {
-              #resources: resources,
-              #targetServerOverride: targetServerOverride,
-            },
-          ),
-        )),
-      ) as _i7.Future<_i5.Comment>);
-
-  @override
-  _i7.Future<_i5.Comment> getMemoComment(
-    String? commentId, {
-    _i8.ServerConfig? targetServerOverride,
-  }) =>
-      (super.noSuchMethod(
-        Invocation.method(
-          #getMemoComment,
-          [commentId],
-          {#targetServerOverride: targetServerOverride},
-        ),
-        returnValue: _i7.Future<_i5.Comment>.value(_FakeComment_3(
-          this,
-          Invocation.method(
-            #getMemoComment,
-            [commentId],
-            {#targetServerOverride: targetServerOverride},
-          ),
-        )),
-        returnValueForMissingStub: _i7.Future<_i5.Comment>.value(_FakeComment_3(
-          this,
-          Invocation.method(
-            #getMemoComment,
-            [commentId],
-            {#targetServerOverride: targetServerOverride},
-          ),
-        )),
-      ) as _i7.Future<_i5.Comment>);
-
-  @override
-  _i7.Future<_i5.Comment> updateMemoComment(
-    String? commentId,
-    _i5.Comment? comment, {
-    _i8.ServerConfig? targetServerOverride,
-  }) =>
-      (super.noSuchMethod(
-        Invocation.method(
-          #updateMemoComment,
-          [
-            commentId,
-            comment,
-          ],
-          {#targetServerOverride: targetServerOverride},
-        ),
-        returnValue: _i7.Future<_i5.Comment>.value(_FakeComment_3(
-          this,
-          Invocation.method(
-            #updateMemoComment,
-            [
-              commentId,
-              comment,
-            ],
-            {#targetServerOverride: targetServerOverride},
-          ),
-        )),
-        returnValueForMissingStub: _i7.Future<_i5.Comment>.value(_FakeComment_3(
-          this,
-          Invocation.method(
-            #updateMemoComment,
-            [
-              commentId,
-              comment,
-            ],
-            {#targetServerOverride: targetServerOverride},
-          ),
-        )),
-      ) as _i7.Future<_i5.Comment>);
-
-  @override
-  _i7.Future<void> deleteMemoComment(
-    String? memoId,
-    String? commentId, {
-    _i8.ServerConfig? targetServerOverride,
-  }) =>
-      (super.noSuchMethod(
-        Invocation.method(
-          #deleteMemoComment,
-          [
-            memoId,
-            commentId,
-          ],
-          {#targetServerOverride: targetServerOverride},
-        ),
-        returnValue: _i7.Future<void>.value(),
-        returnValueForMissingStub: _i7.Future<void>.value(),
-      ) as _i7.Future<void>);
-
-  @override
-  _i7.Future<void> setMemoRelations(
-    String? memoId,
-    List<_i10.MemoRelation>? relations,
-  ) =>
-      (super.noSuchMethod(
-        Invocation.method(
-          #setMemoRelations,
-          [
-            memoId,
-            relations,
-          ],
-        ),
-        returnValue: _i7.Future<void>.value(),
-        returnValueForMissingStub: _i7.Future<void>.value(),
-      ) as _i7.Future<void>);
-
-  @override
-  _i7.Future<List<_i10.MemoRelation>> listMemoRelations(String? memoId) =>
-      (super.noSuchMethod(
-        Invocation.method(
-          #listMemoRelations,
-          [memoId],
         ),
         returnValue:
-            _i7.Future<List<_i10.MemoRelation>>.value(<_i10.MemoRelation>[]),
+            _i7.Future<Map<String, dynamic>>.value(<String, dynamic>{}),
         returnValueForMissingStub:
-            _i7.Future<List<_i10.MemoRelation>>.value(<_i10.MemoRelation>[]),
-      ) as _i7.Future<List<_i10.MemoRelation>>);
+            _i7.Future<Map<String, dynamic>>.value(<String, dynamic>{}),
+      ) as _i7.Future<Map<String, dynamic>>);
 
   @override
-  String parseRelationType(dynamic type) => (super.noSuchMethod(
+  _i7.Future<bool> checkHealth() => (super.noSuchMethod(
         Invocation.method(
-          #parseRelationType,
-          [type],
+          #checkHealth,
+          [],
         ),
-        returnValue: _i6.dummyValue<String>(
-          this,
-          Invocation.method(
-            #parseRelationType,
-            [type],
-          ),
-        ),
-        returnValueForMissingStub: _i6.dummyValue<String>(
-          this,
-          Invocation.method(
-            #parseRelationType,
-            [type],
-          ),
-        ),
-      ) as String);
+        returnValue: _i7.Future<bool>.value(false),
+        returnValueForMissingStub: _i7.Future<bool>.value(false),
+      ) as _i7.Future<bool>);
 }
 
 /// A class which mocks [UrlLauncherService].
 ///
 /// See the documentation for Mockito's code generation for more information.
 class MockUrlLauncherService extends _i1.Mock
-    implements _i11.UrlLauncherService {
+    implements _i10.UrlLauncherService {
   @override
   _i7.Future<bool> launch(String? urlString) => (super.noSuchMethod(
         Invocation.method(

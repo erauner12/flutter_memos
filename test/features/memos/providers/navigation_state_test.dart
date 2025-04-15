@@ -1,54 +1,58 @@
-import 'package:flutter_memos/models/memo.dart';
-import 'package:flutter_memos/providers/api_providers.dart'; // Keep this import for the provider
-import 'package:flutter_memos/providers/memo_providers.dart';
+import 'package:flutter_memos/models/list_notes_response.dart'; // Updated import
+import 'package:flutter_memos/models/note_item.dart'; // Updated import
+import 'package:flutter_memos/providers/api_providers.dart';
+import 'package:flutter_memos/providers/note_providers.dart'; // Updated import
 import 'package:flutter_memos/providers/ui_providers.dart' as ui_providers;
-import 'package:flutter_memos/services/api_service.dart' as api_service;
-// Remove the direct import of ApiService if it causes ambiguity
-// import 'package:flutter_memos/services/api_service.dart';
-import 'package:flutter_memos/utils/memo_utils.dart';
+import 'package:flutter_memos/services/base_api_service.dart'; // Updated import
+import 'package:flutter_memos/utils/note_utils.dart'; // Updated import
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
 
 // Import the generated mock file
-import 'navigation_state_test.mocks.dart'; // Updated relative import
+import 'navigation_state_test.mocks.dart';
 
-// Generate nice mocks for ApiService
-@GenerateNiceMocks([MockSpec<api_service.ApiService>()])
+// Generate nice mocks for BaseApiService
+@GenerateNiceMocks([MockSpec<BaseApiService>()])
 void main() {
-  late MockApiService mockApiService;
+  late MockBaseApiService mockApiService; // Updated mock type
   late ProviderContainer container;
-  late List<Memo> initialMemos;
+  late List<NoteItem> initialNotes; // Updated type
 
-  // Helper to create a list of memos sorted by update time
-  List<Memo> createSortedMemos(int count) {
-    final memos = List.generate(count, (i) {
+  // Helper to create a list of notes sorted by update time
+  List<NoteItem> createSortedNotes(int count) {
+    // Updated function name and type
+    final notes = List.generate(count, (i) {
       final now = DateTime.now();
       // Ensure update times are distinct and descending for predictable sorting
-      final updateTime = now.subtract(Duration(minutes: i)).toIso8601String();
-      return Memo(
-        id: 'memo_$i',
-        content: 'Memo Content $i',
+      final updateTime = now.subtract(Duration(minutes: i));
+      return NoteItem(
+        id: 'note_$i', // Updated prefix
+        content: 'Note Content $i', // Updated content
         pinned: false,
-        state: MemoState.normal,
+        state: NoteState.normal, // Updated enum
         updateTime: updateTime,
         createTime: updateTime, // Keep createTime consistent for simplicity here
+        displayTime: updateTime, // Add required field
+        visibility: NoteVisibility.private, // Add required field
       );
     });
     // Ensure sorting matches the app's logic
-    MemoUtils.sortByPinnedThenUpdateTime(memos);
-    return memos;
+    NoteUtils.sortByPinnedThenUpdateTime(notes); // Updated utility
+    return notes;
   }
 
   // Use setUpAll for mocks that don't change per test
   setUpAll(() {
-    mockApiService = MockApiService();
+    mockApiService = MockBaseApiService(); // Updated mock type
 
     // --- MOCK SETUP ---
     // Stub API calls needed by the action providers (delete, get, update)
-    // Stub listMemos only for potential refresh calls within action providers
-    when(mockApiService.listMemos(
+    // Stub listNotes only for potential refresh calls within action providers
+    when(
+      mockApiService.listNotes(
+        // Updated method name
       parent: anyNamed('parent'),
       filter: anyNamed('filter'),
       state: anyNamed('state'),
@@ -56,65 +60,71 @@ void main() {
       direction: anyNamed('direction'),
       pageSize: anyNamed('pageSize'),
         pageToken: null, // Specifically for refresh (first page)
-        // Remove deprecated filter params if they cause issues
-        // tags: anyNamed('tags'),
-        // visibility: anyNamed('visibility'),
-        // contentSearch: anyNamed('contentSearch'),
-        // createdAfter: anyNamed('createdAfter'),
-        // createdBefore: anyNamed('createdBefore'),
-        // updatedAfter: anyNamed('updatedAfter'),
-        // updatedBefore: anyNamed('updatedBefore'),
-        // timeExpression: anyNamed('timeExpression'),
-        // useUpdateTimeForExpression: anyNamed('useUpdateTimeForExpression'),
       ),
     ).thenAnswer((_) async {
       // Return empty for refresh calls to isolate optimistic update tests
-      return api_service.PaginatedMemoResponse(memos: [], nextPageToken: null);
+      return ListNotesResponse(
+        notes: [],
+        nextPageToken: null,
+      ); // Updated response type
     });
 
-    when(mockApiService.deleteMemo(any)).thenAnswer((_) async {
+    when(mockApiService.deleteNote(any)).thenAnswer((_) async {
+      // Updated method name
       return; // Return null for void
     });
-    when(mockApiService.getMemo(any)).thenAnswer((invocation) async {
+    when(mockApiService.getNote(any)).thenAnswer((invocation) async {
+      // Updated method name
       final id = invocation.positionalArguments[0] as String;
-      // Use a *local copy* of initialMemos for lookup if needed, but prefer direct return
+      // Use a *local copy* of initialNotes for lookup if needed, but prefer direct return
       // Recreate the list here to ensure it's available for lookup in the mock
-      final memos = createSortedMemos(5);
-      return memos.firstWhere(
-        (memo) => memo.id == id,
-        orElse: () => throw Exception('Memo not found for ID: $id'),
+      final notes = createSortedNotes(5); // Updated function name
+      return notes.firstWhere(
+        (note) => note.id == id, // Updated variable name
+        orElse:
+            () =>
+                throw Exception(
+                  'Note not found for ID: $id',
+                ), // Updated message
       );
     });
-    when(mockApiService.updateMemo(any, any)).thenAnswer((invocation) async {
-      final updatedMemo = invocation.positionalArguments[1] as Memo;
-      return updatedMemo; // Return the updated memo
+    when(mockApiService.updateNote(any, any)).thenAnswer((invocation) async {
+      // Updated method name
+      final updatedNote =
+          invocation.positionalArguments[1] as NoteItem; // Updated type
+      return updatedNote; // Return the updated note
     });
     // --- END MOCK SETUP ---
   });
 
   // Use setUp for container creation and state setting per test
   setUp(() {
-    initialMemos = createSortedMemos(5); // Ensure fresh list for each test
+    initialNotes = createSortedNotes(5); // Ensure fresh list for each test
 
     // Create a ProviderContainer with overrides
     container = ProviderContainer(
       overrides: [
         apiServiceProvider.overrideWithValue(mockApiService),
-        // Override the selectedMemoIdProvider to ensure it's in the same scope
-        ui_providers.selectedMemoIdProvider.overrideWith((_) => null),
+        // Override the selectedItemIdProvider to ensure it's in the same scope
+        ui_providers.selectedItemIdProvider.overrideWith((_) => null),
 
-        // Override MemosNotifier: Create it, but we will set its state manually
-        memosNotifierProvider.overrideWith(
+        // Override NotesNotifier: Create it, but we will set its state manually
+        notesNotifierProvider.overrideWith(
+          // Updated provider name
           (ref) {
             // Create the notifier with flag to skip automatic refresh/initialization
-            final notifier = MemosNotifier(ref, skipInitialFetchForTesting: true);
+            final notifier = NotesNotifier(
+              ref,
+              skipInitialFetchForTesting: true,
+            ); // Updated notifier type
             // Set the state *after* creation
             // Use copyWith on the default state to ensure all flags are set correctly
-            notifier.state = const MemosState().copyWith(
-              memos: initialMemos,
+            notifier.state = const NotesState().copyWith(
+              // Updated state type
+              notes: initialNotes, // Updated field name
               isLoading: false, // Mark as not loading
               hasReachedEnd: true, // Assume initial load is done
-              totalLoaded: initialMemos.length,
+              totalLoaded: initialNotes.length,
             );
             return notifier;
           },
@@ -123,14 +133,16 @@ void main() {
     );
 
     // Reset selection before each test
-    // container.read(ui_providers.selectedMemoIndexProvider.notifier).state = 0;
-    container.read(ui_providers.selectedMemoIdProvider.notifier).state = null;
+    container.read(ui_providers.selectedItemIdProvider.notifier).state =
+        null; // Use renamed provider
 
     // Verify initial state immediately after setup
-    final initialState = container.read(memosNotifierProvider);
+    final initialState = container.read(
+      notesNotifierProvider,
+    ); // Updated provider name
     expect(
-      initialState.memos.length,
-      initialMemos.length,
+      initialState.notes.length, // Updated field name
+      initialNotes.length,
       reason: "Notifier state not initialized correctly in setUp",
     );
     expect(
@@ -144,289 +156,406 @@ void main() {
     container.dispose();
   });
 
-  group('MemosNotifier Optimistic Updates & Selection', () {
-    test('removeMemoOptimistically removes memo from internal list', () async {
+  group('NotesNotifier Optimistic Updates & Selection', () {
+    // Updated group name
+    test('removeNoteOptimistically removes note from internal list', () async {
+      // Updated test name and method name
       // Arrange
-      final memoToRemoveId = initialMemos[2].id; // 'memo_2'
-      final initialMemoCount = container.read(memosNotifierProvider).memos.length;
+      final noteToRemoveId = initialNotes[2].id; // 'note_2'
+      final initialNoteCount =
+          container
+              .read(notesNotifierProvider)
+              .notes
+              .length; // Updated provider/field name
 
       // Act: Call the notifier method directly
-      container.read(memosNotifierProvider.notifier)
-          .removeMemoOptimistically(memoToRemoveId);
+      container
+          .read(notesNotifierProvider.notifier) // Updated provider name
+          .removeNoteOptimistically(noteToRemoveId); // Updated method name
 
-      // Assert: Memo is removed from the notifier's state
-      final updatedMemos = container.read(memosNotifierProvider).memos;
-      expect(updatedMemos.length, initialMemoCount - 1);
+      // Assert: Note is removed from the notifier's state
+      final updatedNotes =
+          container
+              .read(notesNotifierProvider)
+              .notes; // Updated provider/field name
+      expect(updatedNotes.length, initialNoteCount - 1);
       expect(
-        updatedMemos.any((m) => m.id == memoToRemoveId),
+        updatedNotes.any((m) => m.id == noteToRemoveId),
         isFalse,
-        reason: "Memo should be removed from the notifier's memo list",
+        reason:
+            "Note should be removed from the notifier's note list", // Updated message
       );
     });
 
     test('togglePinOptimistically updates pin state and re-sorts', () {
       // Arrange
-      final memoToPinId = initialMemos[3].id; // 'memo_3'
+      final noteToPinId = initialNotes[3].id; // 'note_3'
 
       // Act: Toggle pin state
-      container.read(memosNotifierProvider.notifier)
-          .togglePinOptimistically(memoToPinId);
+      container
+          .read(notesNotifierProvider.notifier) // Updated provider name
+          .togglePinOptimistically(noteToPinId); // Updated method name
 
-      // Assert: Check that the memo is pinned and moved to the top
-      final memos = container.read(memosNotifierProvider).memos;
-      expect(memos.first.id, memoToPinId);
-      expect(memos.first.pinned, isTrue);
-      expect(memos.length, initialMemos.length); // Count remains same
+      // Assert: Check that the note is pinned and moved to the top
+      final notes =
+          container
+              .read(notesNotifierProvider)
+              .notes; // Updated provider/field name
+      expect(notes.first.id, noteToPinId);
+      expect(notes.first.pinned, isTrue);
+      expect(notes.length, initialNotes.length); // Count remains same
 
-      // Act: Unpin the memo
-      container.read(memosNotifierProvider.notifier)
-          .togglePinOptimistically(memoToPinId);
+      // Act: Unpin the note
+      container
+          .read(notesNotifierProvider.notifier) // Updated provider name
+          .togglePinOptimistically(noteToPinId); // Updated method name
 
-      // Assert: Verify the memo is unpinned and the list is re-sorted by time again
-      final memosAfterUnpin = container.read(memosNotifierProvider).memos;
-      expect(memosAfterUnpin.any((m) => m.id == memoToPinId && m.pinned), isFalse);
+      // Assert: Verify the note is unpinned and the list is re-sorted by time again
+      final notesAfterUnpin =
+          container
+              .read(notesNotifierProvider)
+              .notes; // Updated provider/field name
+      expect(
+        notesAfterUnpin.any((m) => m.id == noteToPinId && m.pinned),
+        isFalse,
+      );
       // Verify original time-based order is restored (or close to it)
-      expect(memosAfterUnpin[0].id, initialMemos[0].id);
+      expect(notesAfterUnpin[0].id, initialNotes[0].id);
     });
 
-    test('bumpMemoOptimistically updates time and re-sorts', () {
+    test('bumpNoteOptimistically updates time and re-sorts', () {
+      // Updated method name
       // Arrange
-      final memoToBumpId = initialMemos[4].id; // 'memo_4', the oldest
+      final noteToBumpId = initialNotes[4].id; // 'note_4', the oldest
 
-      // Act: Bump the memo's update time optimistically
-      container.read(memosNotifierProvider.notifier)
-          .bumpMemoOptimistically(memoToBumpId);
+      // Act: Bump the note's update time optimistically
+      container
+          .read(notesNotifierProvider.notifier) // Updated provider name
+          .bumpNoteOptimistically(noteToBumpId); // Updated method name
 
-      // Assert: Verify the memo is at the top (most recent updateTime)
-      final memos = container.read(memosNotifierProvider).memos;
-      expect(memos.first.id, memoToBumpId);
-      expect(memos.length, initialMemos.length);
+      // Assert: Verify the note is at the top (most recent updateTime)
+      final notes =
+          container
+              .read(notesNotifierProvider)
+              .notes; // Updated provider/field name
+      expect(notes.first.id, noteToBumpId);
+      expect(notes.length, initialNotes.length);
     });
 
-    test('archiveMemoOptimistically updates state', () {
+    test('archiveNoteOptimistically updates state', () {
+      // Updated method name
       // Arrange
-      final memoToArchiveId = initialMemos[1].id; // 'memo_1'
+      final noteToArchiveId = initialNotes[1].id; // 'note_1'
 
-      // Act: Archive the memo optimistically
-      container.read(memosNotifierProvider.notifier)
-          .archiveMemoOptimistically(memoToArchiveId);
+      // Act: Archive the note optimistically
+      container
+          .read(notesNotifierProvider.notifier) // Updated provider name
+          .archiveNoteOptimistically(noteToArchiveId); // Updated method name
 
-      // Assert: Check that the memo state is updated to archived
-      final memos = container.read(memosNotifierProvider).memos;
-      final archivedMemo = memos.firstWhere((m) => m.id == memoToArchiveId);
-      expect(archivedMemo.state, MemoState.archived);
-      expect(memos.length, initialMemos.length);
+      // Assert: Check that the note state is updated to archived
+      final notes =
+          container
+              .read(notesNotifierProvider)
+              .notes; // Updated provider/field name
+      final archivedNote = notes.firstWhere((m) => m.id == noteToArchiveId);
+      expect(archivedNote.state, NoteState.archived); // Updated enum
+      expect(notes.length, initialNotes.length);
     });
   });
 
-  group('Memo Action Providers with Optimistic Updates', () {
-    test('deleteMemoProvider calls optimistic update then API', () async {
+  group('Note Action Providers with Optimistic Updates', () {
+    // Updated group name
+    test('deleteNoteProvider calls optimistic update then API', () async {
+      // Updated provider name
       // Arrange
-      final memoId = initialMemos[1].id; // Choose a memo to delete
+      final noteId = initialNotes[1].id; // Choose a note to delete
       // Mock API success (already done in setUpAll)
 
       // Act: Execute the delete provider, passing necessary family args
-      await container.read(deleteMemoProvider(memoId))();
+      await container.read(
+        deleteNoteProvider(noteId),
+      )(); // Updated provider name
 
-      // Assert: Memo removed from state
+      // Assert: Note removed from state
       expect(
-        container.read(memosNotifierProvider).memos.any((m) => m.id == memoId),
+        container
+            .read(notesNotifierProvider)
+            .notes
+            .any((m) => m.id == noteId), // Updated provider/field name
         isFalse,
-        reason: "Memo should be removed from the final state",
+        reason:
+            "Note should be removed from the final state", // Updated message
       );
 
       // Assert: API was called
-      verify(mockApiService.deleteMemo(memoId)).called(1);
+      verify(
+        mockApiService.deleteNote(noteId),
+      ).called(1); // Updated method name
 
       // Assert: Refresh was NOT called (delete provider doesn't refresh on success)
-      verifyNever(mockApiService.listMemos(pageToken: null));
+      verifyNever(
+        mockApiService.listNotes(pageToken: null),
+      ); // Updated method name
     });
 
-    test('deleteMemoProvider adjusts selection correctly (downward preference)', () async {
+    test('deleteNoteProvider adjusts selection correctly (downward preference)', () async {
+      // Updated provider name
       // --- Test deleting the selected item (middle) ---
-      // Arrange: Select index 2 ('memo_2')
+      // Arrange: Select index 2 ('note_2')
       final initialIndexSelected = 2;
-      final memoToDeleteSelectedId = initialMemos[initialIndexSelected].id; // memo_2
-      container.read(ui_providers.selectedMemoIdProvider.notifier).state =
-          memoToDeleteSelectedId;
+      final noteToDeleteSelectedId =
+          initialNotes[initialIndexSelected].id; // note_2
+      container
+          .read(ui_providers.selectedItemIdProvider.notifier)
+          .state = // Use renamed provider
+          noteToDeleteSelectedId;
 
-      // Act: Delete the selected memo
-      await container.read(deleteMemoProvider(memoToDeleteSelectedId))();
+      // Act: Delete the selected note
+      await container.read(
+        deleteNoteProvider(noteToDeleteSelectedId),
+      )(); // Updated provider name
 
-      // Assert: Selection should move DOWN to the next item ('memo_3')
+      // Assert: Selection should move DOWN to the next item ('note_3')
       final expectedNextIdAfterDeleteMiddle =
-          initialMemos[initialIndexSelected + 1].id; // memo_3
+          initialNotes[initialIndexSelected + 1].id; // note_3
       expect(
-        container.read(ui_providers.selectedMemoIdProvider),
+        container.read(
+          ui_providers.selectedItemIdProvider,
+        ), // Use renamed provider
         expectedNextIdAfterDeleteMiddle,
         reason:
-            "Selected memo ID should move DOWN to the next memo after deleting a middle memo",
+            "Selected item ID should move DOWN to the next note after deleting a middle note", // Updated message
       );
 
       // --- Test deleting the selected item (first) ---
-      // Arrange: Reset state, select index 0 ('memo_0')
-      container.read(memosNotifierProvider.notifier).state = const MemosState()
+      // Arrange: Reset state, select index 0 ('note_0')
+      container
+          .read(notesNotifierProvider.notifier)
+          .state = const NotesState() // Updated state type
           .copyWith(
-            memos: createSortedMemos(5),
+            notes: createSortedNotes(5), // Updated function name and field name
             isLoading: false,
             hasReachedEnd: true,
           );
       final initialIndexFirst = 0;
-      final memoToDeleteFirstId = initialMemos[initialIndexFirst].id; // memo_0
-      container.read(ui_providers.selectedMemoIdProvider.notifier).state =
-          memoToDeleteFirstId;
+      final noteToDeleteFirstId = initialNotes[initialIndexFirst].id; // note_0
+      container
+          .read(ui_providers.selectedItemIdProvider.notifier)
+          .state = // Use renamed provider
+          noteToDeleteFirstId;
 
-      // Act: Delete the first memo
-      await container.read(deleteMemoProvider(memoToDeleteFirstId))();
+      // Act: Delete the first note
+      await container.read(
+        deleteNoteProvider(noteToDeleteFirstId),
+      )(); // Updated provider name
 
-      // Assert: Selection should move DOWN to the next item ('memo_1')
+      // Assert: Selection should move DOWN to the next item ('note_1')
       final expectedNextIdAfterDeleteFirst =
-          initialMemos[initialIndexFirst + 1].id; // memo_1
+          initialNotes[initialIndexFirst + 1].id; // note_1
       expect(
-        container.read(ui_providers.selectedMemoIdProvider),
+        container.read(
+          ui_providers.selectedItemIdProvider,
+        ), // Use renamed provider
         expectedNextIdAfterDeleteFirst,
         reason:
-            "Selected memo ID should move DOWN to the next memo after deleting the first memo",
+            "Selected item ID should move DOWN to the next note after deleting the first note", // Updated message
       );
 
       // --- Test deleting the selected item (last) ---
-      // Arrange: Reset state, select index 4 ('memo_4')
-      container.read(memosNotifierProvider.notifier).state = const MemosState()
+      // Arrange: Reset state, select index 4 ('note_4')
+      container
+          .read(notesNotifierProvider.notifier)
+          .state = const NotesState() // Updated state type
           .copyWith(
-            memos: createSortedMemos(5),
+            notes: createSortedNotes(5), // Updated function name and field name
             isLoading: false,
             hasReachedEnd: true,
           );
       final initialIndexLast = 4;
-      final memoToDeleteLastId = initialMemos[initialIndexLast].id; // memo_4
-      container.read(ui_providers.selectedMemoIdProvider.notifier).state =
-          memoToDeleteLastId;
+      final noteToDeleteLastId = initialNotes[initialIndexLast].id; // note_4
+      container
+          .read(ui_providers.selectedItemIdProvider.notifier)
+          .state = // Use renamed provider
+          noteToDeleteLastId;
 
-      // Act: Delete the last memo
-      await container.read(deleteMemoProvider(memoToDeleteLastId))();
+      // Act: Delete the last note
+      await container.read(
+        deleteNoteProvider(noteToDeleteLastId),
+      )(); // Updated provider name
 
-      // Assert: Selection should move UP to the PREVIOUS item ('memo_3') as it's the new last item
+      // Assert: Selection should move UP to the PREVIOUS item ('note_3') as it's the new last item
       final expectedNextIdAfterDeleteLast =
-          initialMemos[initialIndexLast - 1].id; // memo_3
+          initialNotes[initialIndexLast - 1].id; // note_3
       expect(
-        container.read(ui_providers.selectedMemoIdProvider),
+        container.read(
+          ui_providers.selectedItemIdProvider,
+        ), // Use renamed provider
         expectedNextIdAfterDeleteLast,
         reason:
-            "Selected memo ID should move UP to the previous memo after deleting the last memo",
+            "Selected item ID should move UP to the previous note after deleting the last note", // Updated message
       );
 
 
       // --- Test deleting item *before* selection (selection should not change) ---
-      // Arrange: Reset state, select index 2 ('memo_2'), delete index 0 ('memo_0')
-      container.read(memosNotifierProvider.notifier).state = const MemosState()
+      // Arrange: Reset state, select index 2 ('note_2'), delete index 0 ('note_0')
+      container
+          .read(notesNotifierProvider.notifier)
+          .state = const NotesState() // Updated state type
           .copyWith(
-            memos: createSortedMemos(5),
+            notes: createSortedNotes(5), // Updated function name and field name
             isLoading: false,
             hasReachedEnd: true,
           );
-      final selectedIdBefore = initialMemos[2].id; // memo_2
-      final memoToDeleteBeforeId = initialMemos[0].id; // memo_0
-      container.read(ui_providers.selectedMemoIdProvider.notifier).state =
+      final selectedIdBefore = initialNotes[2].id; // note_2
+      final noteToDeleteBeforeId = initialNotes[0].id; // note_0
+      container
+          .read(ui_providers.selectedItemIdProvider.notifier)
+          .state = // Use renamed provider
           selectedIdBefore;
 
-      // Act: Delete memo before selection
-      await container.read(deleteMemoProvider(memoToDeleteBeforeId))();
+      // Act: Delete note before selection
+      await container.read(
+        deleteNoteProvider(noteToDeleteBeforeId),
+      )(); // Updated provider name
 
       // Assert: Selection ID remains unchanged
       expect(
-        container.read(ui_providers.selectedMemoIdProvider),
+        container.read(
+          ui_providers.selectedItemIdProvider,
+        ), // Use renamed provider
         selectedIdBefore,
-        reason: "Selected memo ID should remain unchanged when deleting a different memo before it",
+        reason:
+            "Selected item ID should remain unchanged when deleting a different note before it", // Updated message
       );
 
       // --- Test deleting item *after* selection (selection should not change) ---
-      // Arrange: Reset state, select index 0 ('memo_0'), delete index 3 ('memo_3')
-      container.read(memosNotifierProvider.notifier).state = const MemosState()
+      // Arrange: Reset state, select index 0 ('note_0'), delete index 3 ('note_3')
+      container
+          .read(notesNotifierProvider.notifier)
+          .state = const NotesState() // Updated state type
           .copyWith(
-            memos: createSortedMemos(5),
+            notes: createSortedNotes(5), // Updated function name and field name
             isLoading: false,
             hasReachedEnd: true,
           );
-      final selectedIdAfter = initialMemos[0].id; // memo_0
-      final memoToDeleteAfterId = initialMemos[3].id; // memo_3
-      container.read(ui_providers.selectedMemoIdProvider.notifier).state =
+      final selectedIdAfter = initialNotes[0].id; // note_0
+      final noteToDeleteAfterId = initialNotes[3].id; // note_3
+      container
+          .read(ui_providers.selectedItemIdProvider.notifier)
+          .state = // Use renamed provider
           selectedIdAfter;
 
-      // Act: Delete memo after selection
-      await container.read(deleteMemoProvider(memoToDeleteAfterId))();
+      // Act: Delete note after selection
+      await container.read(
+        deleteNoteProvider(noteToDeleteAfterId),
+      )(); // Updated provider name
 
       // Assert: Selection ID remains unchanged
       expect(
-        container.read(ui_providers.selectedMemoIdProvider),
+        container.read(
+          ui_providers.selectedItemIdProvider,
+        ), // Use renamed provider
         selectedIdAfter,
         reason:
-            "Selected memo ID should remain unchanged when deleting a memo after it",
+            "Selected item ID should remain unchanged when deleting a note after it", // Updated message
       );
 
       // --- Test deleting the only item ---
-      // Arrange: Set up with only one memo and select it
-      final singleMemo = createSortedMemos(1);
-      container.read(memosNotifierProvider.notifier).state = const MemosState()
-          .copyWith(memos: singleMemo, isLoading: false, hasReachedEnd: true);
-      final singleMemoId = singleMemo[0].id;
-      container.read(ui_providers.selectedMemoIdProvider.notifier).state =
-          singleMemoId;
+      // Arrange: Set up with only one note and select it
+      final singleNote = createSortedNotes(1); // Updated function name
+      container
+          .read(notesNotifierProvider.notifier)
+          .state = const NotesState() // Updated state type
+          .copyWith(
+            notes: singleNote,
+            isLoading: false,
+            hasReachedEnd: true,
+          ); // Updated field name
+      final singleNoteId = singleNote[0].id;
+      container
+          .read(ui_providers.selectedItemIdProvider.notifier)
+          .state = // Use renamed provider
+          singleNoteId;
 
-      // Act: Delete the only memo
-      await container.read(deleteMemoProvider(singleMemoId))();
+      // Act: Delete the only note
+      await container.read(
+        deleteNoteProvider(singleNoteId),
+      )(); // Updated provider name
 
       // Assert: Selection should become null
       expect(
-        container.read(ui_providers.selectedMemoIdProvider),
+        container.read(
+          ui_providers.selectedItemIdProvider,
+        ), // Use renamed provider
         isNull,
         reason:
-            "Selection should be null after deleting the only memo in the list",
+            "Selection should be null after deleting the only note in the list", // Updated message
       );
     });
 
-    test('togglePinMemoProvider calls optimistic update then API', () async {
+    test('togglePinNoteProvider calls optimistic update then API', () async {
+      // Updated provider name
       // Arrange
-      final memoId = initialMemos[2].id;
-      final originalMemo = initialMemos.firstWhere((m) => m.id == memoId);
+      final noteId = initialNotes[2].id;
+      final originalNote = initialNotes.firstWhere((m) => m.id == noteId);
       // Mock API calls (already done in setUpAll)
 
-      // Act: Toggle memo pin state via the provider
-      await container.read(togglePinMemoProvider(memoId))();
+      // Act: Toggle note pin state via the provider
+      await container.read(
+        togglePinNoteProvider(noteId),
+      )(); // Updated provider name
 
-      // Assert: Verify memo pin state toggled optimistically
-      final memos = container.read(memosNotifierProvider).memos;
-      final toggledMemo = memos.firstWhere((m) => m.id == memoId);
-      expect(toggledMemo.pinned, !originalMemo.pinned);
+      // Assert: Verify note pin state toggled optimistically
+      final notes =
+          container
+              .read(notesNotifierProvider)
+              .notes; // Updated provider/field name
+      final toggledNote = notes.firstWhere((m) => m.id == noteId);
+      expect(toggledNote.pinned, !originalNote.pinned);
 
       // Assert: API calls were made
-      verify(mockApiService.getMemo(memoId)).called(1);
-      verify(mockApiService.updateMemo(memoId, any)).called(1);
+      verify(mockApiService.getNote(noteId)).called(1); // Updated method name
+      verify(
+        mockApiService.updateNote(noteId, any),
+      ).called(1); // Updated method name
 
       // Assert: Refresh was NOT called (togglePin provider doesn't refresh on success)
-      verifyNever(mockApiService.listMemos(pageToken: null));
+      verifyNever(
+        mockApiService.listNotes(pageToken: null),
+      ); // Updated method name
     });
 
-    test('archiveMemoProvider calls optimistic update then API, then refreshes and updates selection', () async {
+    test(
+      'archiveNoteProvider calls optimistic update then API, then refreshes and updates selection',
+      () async {
+        // Updated provider name
       // Arrange
       final initialIndexSelected = 1;
-      final memoId = initialMemos[initialIndexSelected].id; // memo_1
-      container.read(ui_providers.selectedMemoIdProvider.notifier).state = memoId; // Select this memo
-      // Mocks for get/update/listMemos(refresh) already in setUpAll
+        final noteId = initialNotes[initialIndexSelected].id; // note_1
+        container.read(ui_providers.selectedItemIdProvider.notifier).state =
+            noteId; // Select this note // Use renamed provider
+        // Mocks for get/update/listNotes(refresh) already in setUpAll
 
       // Act: Execute archive provider
-      await container.read(archiveMemoProvider(memoId))();
+        await container.read(
+          archiveNoteProvider(noteId),
+        )(); // Updated provider name
 
-      // Assert: Verify memo state update via API calls
-      verify(mockApiService.getMemo(memoId)).called(1);
-      final verificationResult = verify(mockApiService.updateMemo(memoId, captureAny));
+        // Assert: Verify note state update via API calls
+        verify(mockApiService.getNote(noteId)).called(1); // Updated method name
+        final verificationResult = verify(
+          mockApiService.updateNote(noteId, captureAny),
+        ); // Updated method name
       verificationResult.called(1);
-      final capturedMemo = verificationResult.captured.single as Memo;
-      expect(capturedMemo.state, MemoState.archived);
-      expect(capturedMemo.pinned, isFalse);
+        final capturedNote =
+            verificationResult.captured.single as NoteItem; // Updated type
+        expect(capturedNote.state, NoteState.archived); // Updated enum
+        expect(capturedNote.pinned, isFalse);
 
         // Assert: Refresh was NOT triggered on success
         verifyNever(
-          mockApiService.listMemos(
+          mockApiService.listNotes(
+            // Updated method name
         parent: anyNamed('parent'),
         filter: anyNamed('filter'),
         state: anyNamed('state'),
@@ -437,34 +566,46 @@ void main() {
           ),
         ); // No longer called on success
 
-        // Assert: Selection was updated DOWNWARD to the next memo (memo_2)
+        // Assert: Selection was updated DOWNWARD to the next note (note_2)
         final expectedNextIdAfterArchive =
-            initialMemos[initialIndexSelected + 1].id; // memo_2
+            initialNotes[initialIndexSelected + 1].id; // note_2
       expect(
-        container.read(ui_providers.selectedMemoIdProvider),
+          container.read(
+            ui_providers.selectedItemIdProvider,
+          ), // Use renamed provider
         expectedNextIdAfterArchive,
           reason:
-              "Selection should move DOWN to the next memo after archiving the selected one",
+              "Selection should move DOWN to the next note after archiving the selected one", // Updated message
       );
     });
   });
 
-  test('selectedMemoIdProvider starts as null', () {
-    final selectedId = container.read(ui_providers.selectedMemoIdProvider);
+  test('selectedItemIdProvider starts as null', () {
+    // Updated provider name
+    final selectedId = container.read(
+      ui_providers.selectedItemIdProvider,
+    ); // Use renamed provider
     expect(selectedId, isNull);
   });
 
-  test('selectedMemoIdProvider can be updated', () {
+  test('selectedItemIdProvider can be updated', () {
+    // Updated provider name
     // Start at null
-    final initialId = container.read(ui_providers.selectedMemoIdProvider);
+    final initialId = container.read(
+      ui_providers.selectedItemIdProvider,
+    ); // Use renamed provider
     expect(initialId, isNull);
 
-    // Set to a memo ID
-    const testMemoId = 'test-memo-123';
-    container.read(ui_providers.selectedMemoIdProvider.notifier).state =
-        testMemoId;
-    final updatedId = container.read(ui_providers.selectedMemoIdProvider);
-    expect(updatedId, equals(testMemoId));
+    // Set to a note ID
+    const testNoteId = 'test-note-123'; // Updated prefix
+    container
+        .read(ui_providers.selectedItemIdProvider.notifier)
+        .state = // Use renamed provider
+        testNoteId;
+    final updatedId = container.read(
+      ui_providers.selectedItemIdProvider,
+    ); // Use renamed provider
+    expect(updatedId, equals(testNoteId));
   });
 
   test('selectedCommentIndexProvider starts at -1', () {

@@ -24,8 +24,8 @@ import '../../../services/url_launcher_service_test.mocks.dart'; // Correct path
 // Import the mock for UrlLauncherService
 import 'markdown_rendering_test.mocks.dart';
 
-// Annotation to generate nice mock for ApiService only
-@GenerateNiceMocks([MockSpec<api_service.ApiService>()])
+// Annotation to generate nice mock for BaseApiService
+@GenerateNiceMocks([MockSpec<BaseApiService>()]) // Updated to BaseApiService
 
 void main() {
   // Declare mocks at the top level

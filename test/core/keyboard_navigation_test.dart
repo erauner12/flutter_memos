@@ -1,5 +1,8 @@
 import 'package:flutter/cupertino.dart'; // Import Cupertino
 import 'package:flutter/services.dart';
+// add the ui_providers.dart import
+// lib/providers/ui_providers.dart
+import 'package:flutter_memos/providers/ui_providers.dart' as ui_providers;
 import 'package:flutter_memos/providers/ui_providers.dart';
 import 'package:flutter_memos/utils/keyboard_navigation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -71,30 +74,22 @@ void main() {
       container.dispose();
     });
 
-    test('selectedCommentIndexProvider starts at -1', () {
-      final index = container.read(selectedCommentIndexProvider);
-      expect(index, equals(-1));
+    test('selectedItemIdProvider can be updated', () {
+      // Reset selection before each test
+      container.read(ui_providers.selectedItemIdProvider.notifier).state = null;
+      
+      // Test initial state (null)
+      final initialId = container.read(selectedItemIdProvider);
+      expect(initialId, isNull);
+
+      // Set to some test ID
+      const testItemId = 'test-item-123';
+      container.read(selectedItemIdProvider.notifier).state = testItemId;
+      final updatedId = container.read(selectedItemIdProvider);
+      expect(updatedId, equals(testItemId));
     });
-
-    test('selectedCommentIndexProvider can be updated', () {
-      // Start at -1
-      final initialIndex = container.read(selectedCommentIndexProvider);
-      expect(initialIndex, equals(-1));
-
-      // Set to 2
-      container.read(selectedCommentIndexProvider.notifier).state = 2;
-      final updatedIndex = container.read(selectedCommentIndexProvider);
-      expect(updatedIndex, equals(2));
-    });
-
-    test('selectedMemoIndexProvider starts at -1', () {
-      // Use the recommended provider instead
-      final index = container.read(selectedMemoIdProvider);
-      // Test initial state (null instead of -1 for the ID provider)
-      expect(index, isNull);
-    });
-
-    test('selectedMemoIndexProvider can be updated', () {
+    
+    test('selectedMemoIdProvider can be updated', () {
       // Use the recommended provider instead
       final initialId = container.read(selectedMemoIdProvider);
       expect(initialId, isNull);

@@ -1,47 +1,48 @@
 import 'package:flutter/foundation.dart';
-import 'package:flutter_memos/api/lib/api.dart'; // For V1Resource
+import 'package:flutter_memos/api/lib/api.dart'; // For V1Resource (assuming this is still correct)
 import 'package:flutter_memos/models/comment.dart';
-import 'package:flutter_memos/models/memo.dart';
-import 'package:flutter_memos/models/memo_relation.dart';
+import 'package:flutter_memos/models/list_notes_response.dart'; // Updated import
+import 'package:flutter_memos/models/note_item.dart'; // Updated import
+// import 'package:flutter_memos/models/note_relation.dart'; // Updated import
 import 'package:flutter_memos/providers/api_providers.dart';
 import 'package:flutter_memos/providers/comment_providers.dart' as comment_providers;
-import 'package:flutter_memos/screens/memo_detail/memo_detail_providers.dart'; // <-- Add this import
-import 'package:flutter_memos/services/api_service.dart' as api_service;
+import 'package:flutter_memos/providers/note_providers.dart'
+    as note_providers; // Updated import
+import 'package:flutter_memos/services/base_api_service.dart'; // Updated import
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mockito/annotations.dart'; // Add Mockito annotation import
-import 'package:mockito/mockito.dart'; // Add Mockito import
+import 'package:mockito/annotations.dart';
+import 'package:mockito/mockito.dart';
 
-// Import the generated mocks file (will be created by build_runner)
+// Import the generated mocks file
 import 'comment_providers_test.mocks.dart';
 
-
-
-// Annotation to generate nice mock for ApiService
-@GenerateNiceMocks([MockSpec<api_service.ApiService>()])
+// Annotation to generate nice mock for BaseApiService
+@GenerateNiceMocks([MockSpec<BaseApiService>()])
 void main() {
-  late MockApiService mockApiService; // Use the generated MockApiService
+  late MockBaseApiService
+  mockApiService; // Use the generated MockBaseApiService
   late ProviderContainer container;
   // Store created entities for easier stubbing/verification
-  final Map<String, Memo> createdMemos = {};
+  final Map<String, NoteItem> createdNotes = {}; // Updated type
   final Map<String, List<Comment>> createdComments = {};
-  final Map<String, List<MemoRelation>> createdRelations = {};
+  final Map<String, List<NoteRelation>> createdRelations = {}; // Updated type
   bool shouldFailRelations = false; // Flag to simulate relation errors
 
   group('Comment Providers Tests', () {
     setUp(() {
       // Reset state for each test
-      createdMemos.clear();
+      createdNotes.clear();
       createdComments.clear();
       createdRelations.clear();
       shouldFailRelations = false;
-      mockApiService = MockApiService(); // Instantiate the generated mock
+      mockApiService = MockBaseApiService(); // Instantiate the generated mock
 
       // --- Mockito Stubbing ---
 
-      // Stub listMemos
+      // Stub listNotes (replaces listMemos)
       when(
-        mockApiService.listMemos(
+        mockApiService.listNotes(
           parent: anyNamed('parent'),
           filter: anyNamed('filter'),
           state: anyNamed('state'),
@@ -49,53 +50,46 @@ void main() {
           direction: anyNamed('direction'),
           pageSize: anyNamed('pageSize'),
           pageToken: anyNamed('pageToken'),
-          // Remove deprecated filter params if they cause issues
-          // tags: anyNamed('tags'),
-          // visibility: anyNamed('visibility'),
-          // contentSearch: anyNamed('contentSearch'),
-          // createdAfter: anyNamed('createdAfter'),
-          // createdBefore: anyNamed('createdBefore'),
-          // updatedAfter: anyNamed('updatedAfter'),
-          // updatedBefore: anyNamed('updatedBefore'),
-          // timeExpression: anyNamed('timeExpression'),
-          // useUpdateTimeForExpression: anyNamed('useUpdateTimeForExpression'),
         ),
       ).thenAnswer((invocation) async {
-        // Return empty list for any listMemos call
-        return api_service.PaginatedMemoResponse(
-          memos: List.from(createdMemos.values),
+        // Return empty list for any listNotes call
+        return ListNotesResponse(
+          notes: List.from(createdNotes.values),
           nextPageToken: null,
         );
       });
 
-      // Stub createMemo
-      when(mockApiService.createMemo(any)).thenAnswer((invocation) async {
-        final memo = invocation.positionalArguments[0] as Memo;
+      // Stub createNote (replaces createMemo)
+      when(mockApiService.createNote(any)).thenAnswer((invocation) async {
+        final note = invocation.positionalArguments[0] as NoteItem;
         final newId =
-            memo.id.startsWith('temp-')
-                ? 'memo-${DateTime.now().millisecondsSinceEpoch}'
-                : memo.id;
-        final createdMemo = memo.copyWith(
+            note.id.startsWith('temp-')
+                ? 'note-${DateTime.now().millisecondsSinceEpoch}'
+                : note.id;
+        final createdNote = note.copyWith(
           id: newId,
-          createTime: DateTime.now().toIso8601String(),
-          updateTime: DateTime.now().toIso8601String(),
+          createTime: DateTime.now(),
+          updateTime: DateTime.now(),
         );
-        createdMemos[createdMemo.id] = createdMemo;
-        return createdMemo;
+        createdNotes[createdNote.id] = createdNote;
+        return createdNote;
       });
 
-      // Stub createMemoComment
+      // Stub createNoteComment (replaces createMemoComment)
+      // Note: resources parameter type is List<Map<String, dynamic>>?
       when(
-        mockApiService.createMemoComment(
+        mockApiService.createNoteComment(
           any,
           any,
           resources: anyNamed('resources'),
         ),
       ).thenAnswer((invocation) async {
-        final memoId = invocation.positionalArguments[0] as String;
+        final noteId = invocation.positionalArguments[0] as String;
         final comment = invocation.positionalArguments[1] as Comment;
+        // Capture resources as the correct type
         final resources =
-            invocation.namedArguments[#resources] as List<V1Resource>?;
+            invocation.namedArguments[#resources]
+                as List<Map<String, dynamic>>?;
         final now = DateTime.now().millisecondsSinceEpoch;
         final newId =
             comment.id.startsWith('temp-')
@@ -109,84 +103,84 @@ void main() {
           updateTime: now,
           state: comment.state,
           pinned: comment.pinned,
-          resources: resources,
+          resources: resources, // Store the map list
         );
-        createdComments.putIfAbsent(memoId, () => []).add(createdComment);
+        createdComments.putIfAbsent(noteId, () => []).add(createdComment);
         return createdComment;
       });
 
-      // Stub getMemoComment
-      when(mockApiService.getMemoComment(any)).thenAnswer((invocation) async {
+      // Stub getNoteComment (replaces getMemoComment)
+      when(mockApiService.getNoteComment(any)).thenAnswer((invocation) async {
         final fullId = invocation.positionalArguments[0] as String;
-        String memoId = '';
+        String noteId = '';
         String commentId = fullId;
 
         if (fullId.contains('/')) {
           final parts = fullId.split('/');
-          memoId = parts[0];
+          noteId = parts[0];
           commentId = parts[1];
         } else {
-          // Find the memoId by searching through comments
+          // Find the noteId by searching through comments
           for (final entry in createdComments.entries) {
             if (entry.value.any((c) => c.id == commentId)) {
-              memoId = entry.key;
+              noteId = entry.key;
               break;
             }
           }
         }
 
-        if (memoId.isEmpty || !createdComments.containsKey(memoId)) {
+        if (noteId.isEmpty || !createdComments.containsKey(noteId)) {
           throw Exception(
-            'Comment not found: $fullId (Memo context not found)',
+            'Comment not found: $fullId (Note context not found)',
           );
         }
-        final comment = createdComments[memoId]!.firstWhere(
+        final comment = createdComments[noteId]!.firstWhere(
           (c) => c.id == commentId,
           orElse:
               () =>
                   throw Exception(
-                    'Comment not found: $commentId in memo $memoId',
+                    'Comment not found: $commentId in note $noteId',
                   ),
         );
         return comment;
       });
 
-      // Stub listMemoComments
-      when(mockApiService.listMemoComments(any)).thenAnswer((invocation) async {
-        final memoId = invocation.positionalArguments[0] as String;
-        return createdComments[memoId] ?? [];
+      // Stub listNoteComments (replaces listMemoComments)
+      when(mockApiService.listNoteComments(any)).thenAnswer((invocation) async {
+        final noteId = invocation.positionalArguments[0] as String;
+        return createdComments[noteId] ?? [];
       });
 
-      // Stub updateMemoComment
-      when(mockApiService.updateMemoComment(any, any)).thenAnswer((
+      // Stub updateNoteComment (replaces updateMemoComment)
+      when(mockApiService.updateNoteComment(any, any)).thenAnswer((
         invocation,
       ) async {
         final fullId = invocation.positionalArguments[0] as String;
         final updatedCommentData = invocation.positionalArguments[1] as Comment;
-        String memoId = '';
+        String noteId = '';
         String commentId = fullId;
 
         if (fullId.contains('/')) {
           final parts = fullId.split('/');
-          memoId = parts[0];
+          noteId = parts[0];
           commentId = parts[1];
         } else {
           for (final entry in createdComments.entries) {
             if (entry.value.any((c) => c.id == commentId)) {
-              memoId = entry.key;
+              noteId = entry.key;
               break;
             }
           }
         }
 
-        if (memoId.isEmpty || !createdComments.containsKey(memoId)) {
+        if (noteId.isEmpty || !createdComments.containsKey(noteId)) {
           throw Exception('Comment not found for update: $fullId');
         }
-        final commentsList = createdComments[memoId]!;
+        final commentsList = createdComments[noteId]!;
         final index = commentsList.indexWhere((c) => c.id == commentId);
         if (index == -1) {
           throw Exception(
-            'Comment not found for update: $commentId in memo $memoId',
+            'Comment not found for update: $commentId in note $noteId',
           );
         }
         final originalComment = commentsList[index];
@@ -204,56 +198,57 @@ void main() {
         return updated;
       });
 
-      // Stub deleteMemoComment
-      when(mockApiService.deleteMemoComment(any, any)).thenAnswer((
+      // Stub deleteNoteComment (replaces deleteMemoComment)
+      when(mockApiService.deleteNoteComment(any, any)).thenAnswer((
         invocation,
       ) async {
-        final memoId = invocation.positionalArguments[0] as String;
+        final noteId = invocation.positionalArguments[0] as String;
         final commentId = invocation.positionalArguments[1] as String;
-        if (!createdComments.containsKey(memoId)) {
-          throw Exception('No comments for memo: $memoId');
+        if (!createdComments.containsKey(noteId)) {
+          throw Exception('No comments for note: $noteId');
         }
-        final commentsList = createdComments[memoId]!;
+        final commentsList = createdComments[noteId]!;
         final initialLength = commentsList.length;
         commentsList.removeWhere((c) => c.id == commentId);
         if (commentsList.length == initialLength) {
           throw Exception(
-            'Comment not found for delete: $commentId in memo $memoId',
+            'Comment not found for delete: $commentId in note $noteId',
           );
         }
         return;
       });
 
-      // Stub listMemoRelations
-      when(mockApiService.listMemoRelations(any)).thenAnswer((
+      // Stub listNoteRelations (replaces listMemoRelations)
+      when(mockApiService.listNoteRelations(any)).thenAnswer((
         invocation,
       ) async {
         if (shouldFailRelations) {
           throw Exception('Simulated API error: Failed to list relations');
         }
-        final memoId = invocation.positionalArguments[0] as String;
+        final noteId = invocation.positionalArguments[0] as String;
         final formattedId =
-            memoId.contains('/') ? memoId.split('/').last : memoId;
+            noteId.contains('/') ? noteId.split('/').last : noteId;
         return createdRelations[formattedId] ?? [];
       });
 
-      // Stub setMemoRelations
-      when(mockApiService.setMemoRelations(any, any)).thenAnswer((
+      // Stub setNoteRelations (replaces setMemoRelations)
+      when(mockApiService.setNoteRelations(any, any)).thenAnswer((
         invocation,
       ) async {
         if (shouldFailRelations) {
           throw Exception('Simulated API error: Could not set relations');
         }
-        final memoId = invocation.positionalArguments[0] as String;
+        final noteId = invocation.positionalArguments[0] as String;
         final relations =
-            invocation.positionalArguments[1] as List<MemoRelation>;
+            invocation.positionalArguments[1]
+                as List<NoteRelation>; // Updated type
         final formattedId =
-            memoId.contains('/') ? memoId.split('/').last : memoId;
+            noteId.contains('/') ? noteId.split('/').last : noteId;
         createdRelations[formattedId] = List.from(relations);
         return;
       });
 
-      // Stub uploadResource
+      // Stub uploadResource (assuming V1Resource is still used for return type)
       when(mockApiService.uploadResource(any, any, any)).thenAnswer((
         invocation,
       ) async {
@@ -262,13 +257,14 @@ void main() {
         final contentType = invocation.positionalArguments[2] as String;
         final resourceName =
             'resources/mock-resource-${DateTime.now().millisecondsSinceEpoch}';
-        return V1Resource(
-          name: resourceName,
-          filename: filename,
-          type: contentType,
-          size: bytes.length.toString(),
-          createTime: DateTime.now(),
-        );
+        // Return a Map matching the expected type for Comment.resources
+        return {
+          'name': resourceName,
+          'filename': filename,
+          'type': contentType,
+          'size': bytes.length.toString(),
+          'createTime': DateTime.now().toIso8601String(), // Use ISO string
+        };
       });
 
       // Override the apiServiceProvider to use our mock
@@ -282,43 +278,59 @@ void main() {
     });
 
     test('archiveCommentProvider archives a comment correctly', () async {
-      // Set up test memo and comment using the stubbed methods
-      final memo = await mockApiService.createMemo(
-        Memo(id: 'test-memo-1', content: 'Test memo'),
+      // Set up test note and comment using the stubbed methods
+      final note = await mockApiService.createNote(
+        NoteItem(
+          id: 'test-note-1',
+          content: 'Test note',
+          createTime: DateTime.now(),
+          updateTime: DateTime.now(),
+          displayTime: DateTime.now(),
+          visibility: NoteVisibility.private,
+          state: NoteState.normal,
+        ),
       );
-      final comment = await mockApiService.createMemoComment(
-        memo.id,
+      final comment = await mockApiService.createNoteComment(
+        note.id,
         Comment(
           id: 'test-comment',
           content: 'Test comment',
           createTime: DateTime.now().millisecondsSinceEpoch,
         ),
       );
-      final fullId = '${memo.id}/${comment.id}';
+      final fullId = '${note.id}/${comment.id}';
 
       // Call the archive provider
       await container.read(comment_providers.archiveCommentProvider(fullId))();
 
-      // Verify the updateMemoComment call using Mockito
+      // Verify the updateNoteComment call using Mockito
       final verificationResult = verify(
-        mockApiService.updateMemoComment(argThat(equals(fullId)), captureAny),
+        mockApiService.updateNoteComment(argThat(equals(fullId)), captureAny),
       );
       verificationResult.called(1);
       final capturedComment = verificationResult.captured.single as Comment;
       expect(capturedComment.state, equals(CommentState.archived));
 
       // Optional: Verify the final state by getting the comment again
-      final updatedComment = await mockApiService.getMemoComment(fullId);
+      final updatedComment = await mockApiService.getNoteComment(fullId);
       expect(updatedComment.state, equals(CommentState.archived));
     });
 
     test('deleteCommentProvider deletes a comment correctly', () async {
-      // Set up test memo and comment
-      final memo = await mockApiService.createMemo(
-        Memo(id: 'test-memo-2', content: 'Test memo'),
+      // Set up test note and comment
+      final note = await mockApiService.createNote(
+        NoteItem(
+          id: 'test-note-2',
+          content: 'Test note',
+          createTime: DateTime.now(),
+          updateTime: DateTime.now(),
+          displayTime: DateTime.now(),
+          visibility: NoteVisibility.private,
+          state: NoteState.normal,
+        ),
       );
-      final comment = await mockApiService.createMemoComment(
-        memo.id,
+      final comment = await mockApiService.createNoteComment(
+        note.id,
         Comment(
           id: 'test-comment-delete',
           content: 'Comment to delete',
@@ -327,30 +339,38 @@ void main() {
       );
 
       // Verify comment exists (using stubbed list)
-      final comments = await mockApiService.listMemoComments(memo.id);
+      final comments = await mockApiService.listNoteComments(note.id);
       expect(comments.any((c) => c.id == comment.id), isTrue);
 
       // Get combined ID
-      final fullId = '${memo.id}/${comment.id}';
+      final fullId = '${note.id}/${comment.id}';
 
       // Call the delete provider
       await container.read(comment_providers.deleteCommentProvider(fullId))();
 
-      // Verify deleteMemoComment was called
-      verify(mockApiService.deleteMemoComment(memo.id, comment.id)).called(1);
+      // Verify deleteNoteComment was called
+      verify(mockApiService.deleteNoteComment(note.id, comment.id)).called(1);
 
       // Verify comment was deleted (using stubbed list)
-      final commentsAfter = await mockApiService.listMemoComments(memo.id);
+      final commentsAfter = await mockApiService.listNoteComments(note.id);
       expect(commentsAfter.any((c) => c.id == comment.id), isFalse);
     });
 
     test('togglePinCommentProvider toggles comment pin state', () async {
-      // Set up test memo and comment
-      final memo = await mockApiService.createMemo(
-        Memo(id: 'test-memo-3', content: 'Test memo'),
+      // Set up test note and comment
+      final note = await mockApiService.createNote(
+        NoteItem(
+          id: 'test-note-3',
+          content: 'Test note',
+          createTime: DateTime.now(),
+          updateTime: DateTime.now(),
+          displayTime: DateTime.now(),
+          visibility: NoteVisibility.private,
+          state: NoteState.normal,
+        ),
       );
-      final comment = await mockApiService.createMemoComment(
-        memo.id,
+      final comment = await mockApiService.createNoteComment(
+        note.id,
         Comment(
           id: 'test-comment-pin',
           content: 'Comment to pin/unpin',
@@ -358,13 +378,13 @@ void main() {
           pinned: false, // Start unpinned
         ),
       );
-      final fullId = '${memo.id}/${comment.id}';
+      final fullId = '${note.id}/${comment.id}';
 
-      // Store comments passed to updateMemoComment for later verification
+      // Store comments passed to updateNoteComment for later verification
       List<Comment> updatedComments = [];
 
       // Create a stub that also records the comments
-      when(mockApiService.updateMemoComment(any, any)).thenAnswer((
+      when(mockApiService.updateNoteComment(any, any)).thenAnswer((
         invocation,
       ) async {
         final fullId = invocation.positionalArguments[0] as String;
@@ -374,30 +394,30 @@ void main() {
         updatedComments.add(updatedCommentData);
 
         // Original implementation from setUp
-        String memoId = '';
+        String noteId = '';
         String commentId = fullId;
 
         if (fullId.contains('/')) {
           final parts = fullId.split('/');
-          memoId = parts[0];
+          noteId = parts[0];
           commentId = parts[1];
         } else {
           for (final entry in createdComments.entries) {
             if (entry.value.any((c) => c.id == commentId)) {
-              memoId = entry.key;
+              noteId = entry.key;
               break;
             }
           }
         }
 
-        if (memoId.isEmpty || !createdComments.containsKey(memoId)) {
+        if (noteId.isEmpty || !createdComments.containsKey(noteId)) {
           throw Exception('Comment not found for update: $fullId');
         }
-        final commentsList = createdComments[memoId]!;
+        final commentsList = createdComments[noteId]!;
         final index = commentsList.indexWhere((c) => c.id == commentId);
         if (index == -1) {
           throw Exception(
-            'Comment not found for update: $commentId in memo $memoId',
+            'Comment not found for update: $commentId in note $noteId',
           );
         }
         final originalComment = commentsList[index];
@@ -441,117 +461,144 @@ void main() {
         isFalse,
         reason: "Second update should set pinned to false",
       );
-      
+
       // Also verify the final state through the API
-      final finalComment = await mockApiService.getMemoComment(fullId);
+      final finalComment = await mockApiService.getNoteComment(fullId);
       expect(finalComment.pinned, isFalse);
     });
 
     test(
-      'convertCommentToMemoProvider converts a comment to a memo with relation',
+      'convertCommentToNoteProvider converts a comment to a note with relation',
       () async {
-        // Set up test memo and comment
-        final memo = await mockApiService.createMemo(
-          Memo(id: 'test-memo-convert', content: 'Test memo for conversion'),
+        // Set up test note and comment
+        final note = await mockApiService.createNote(
+          NoteItem(
+            id: 'test-note-convert',
+            content: 'Test note for conversion',
+            createTime: DateTime.now(),
+            updateTime: DateTime.now(),
+            displayTime: DateTime.now(),
+            visibility: NoteVisibility.private,
+            state: NoteState.normal,
+          ),
         );
-        final comment = await mockApiService.createMemoComment(
-          memo.id,
+        final comment = await mockApiService.createNoteComment(
+          note.id,
           Comment(
             id: 'test-comment-convert',
-            content: 'Comment to convert to memo',
+            content: 'Comment to convert to note',
             createTime: DateTime.now().millisecondsSinceEpoch,
           ),
         );
-        final fullId = '${memo.id}/${comment.id}';
+        final fullId = '${note.id}/${comment.id}';
 
         // Get the function from the provider and call it
         final convertFunction = container.read(
-          comment_providers.convertCommentToMemoProvider(fullId),
+          comment_providers.convertCommentToNoteProvider(
+            fullId,
+          ), // Updated provider name
         );
-        final createdMemo = await convertFunction();
+        final createdNote = await convertFunction();
 
-        // Verify memo was created
-        expect(createdMemo, isNotNull);
-        expect(createdMemo.content, equals(comment.content));
-        // We verify that createMemo was called at least once - the exact number doesn't matter
-        // since the memo refresh operation might trigger additional calls
-        verify(mockApiService.createMemo(any)).called(greaterThanOrEqualTo(1));
+        // Verify note was created
+        expect(createdNote, isNotNull);
+        expect(createdNote.content, equals(comment.content));
+        // We verify that createNote was called at least once
+        verify(mockApiService.createNote(any)).called(greaterThanOrEqualTo(1));
 
         // Verify relation was set
         final relationVerification = verify(
-          mockApiService.setMemoRelations(
-            argThat(equals(createdMemo.id)),
+          mockApiService.setNoteRelations(
+            argThat(equals(createdNote.id)),
             captureAny,
           ),
         );
         relationVerification.called(1);
         final capturedRelations =
-            relationVerification.captured.single as List<MemoRelation>;
+            relationVerification.captured.single
+                as List<NoteRelation>; // Updated type
         expect(capturedRelations, hasLength(1));
-        expect(capturedRelations.first.relatedMemoId, equals(memo.id));
-        expect(capturedRelations.first.type, equals(MemoRelation.typeComment));
+        expect(
+          capturedRelations.first.relatedNoteId,
+          equals(note.id),
+        ); // Updated field name
+        expect(
+          capturedRelations.first.type,
+          equals(NoteRelationType.comment),
+        ); // Updated enum
 
-        // Optional: Verify relation list via stubbed listMemoRelations
-        final relations = await mockApiService.listMemoRelations(
-          createdMemo.id,
+        // Optional: Verify relation list via stubbed listNoteRelations
+        final relations = await mockApiService.listNoteRelations(
+          createdNote.id,
         );
         expect(relations, hasLength(1));
-        expect(relations.first.relatedMemoId, equals(memo.id));
+        expect(
+          relations.first.relatedNoteId,
+          equals(note.id),
+        ); // Updated field name
       },
     );
 
     test(
-      'convertCommentToMemoProvider succeeds even if relation creation fails',
+      'convertCommentToNoteProvider succeeds even if relation creation fails',
       () async {
-        // Set up test memo and comment
-        final memo = await mockApiService.createMemo(
-          Memo(
-            id: 'test-memo-no-relation',
-            content: 'Test memo for conversion without relation',
+        // Set up test note and comment
+        final note = await mockApiService.createNote(
+          NoteItem(
+            id: 'test-note-no-relation',
+            content: 'Test note for conversion without relation',
+            createTime: DateTime.now(),
+            updateTime: DateTime.now(),
+            displayTime: DateTime.now(),
+            visibility: NoteVisibility.private,
+            state: NoteState.normal,
           ),
         );
-        final comment = await mockApiService.createMemoComment(
-          memo.id,
+        final comment = await mockApiService.createNoteComment(
+          note.id,
           Comment(
             id: 'test-comment-no-relation',
-            content: 'Comment to convert to memo without relation',
+            content: 'Comment to convert to note without relation',
             createTime: DateTime.now().millisecondsSinceEpoch,
           ),
         );
-        final fullId = '${memo.id}/${comment.id}';
+        final fullId = '${note.id}/${comment.id}';
 
         // Configure mock to fail when setting relations
         shouldFailRelations = true; // Use the flag defined in setUp
-        // Re-stub setMemoRelations to throw based on the flag
-        when(mockApiService.setMemoRelations(any, any)).thenAnswer((
+        // Re-stub setNoteRelations to throw based on the flag
+        when(mockApiService.setNoteRelations(any, any)).thenAnswer((
           invocation,
         ) async {
           if (shouldFailRelations) {
             throw Exception('Simulated API error: Could not set relations');
           }
-          final memoId = invocation.positionalArguments[0] as String;
+          final noteId = invocation.positionalArguments[0] as String;
           final relations =
-              invocation.positionalArguments[1] as List<MemoRelation>;
+              invocation.positionalArguments[1]
+                  as List<NoteRelation>; // Updated type
           final formattedId =
-              memoId.contains('/') ? memoId.split('/').last : memoId;
+              noteId.contains('/') ? noteId.split('/').last : noteId;
           createdRelations[formattedId] = List.from(relations);
           return;
         });
 
         // Get the function from the provider and call it
         final convertFunction = container.read(
-          comment_providers.convertCommentToMemoProvider(fullId),
+          comment_providers.convertCommentToNoteProvider(
+            fullId,
+          ), // Updated provider name
         );
-        final createdMemo = await convertFunction();
+        final createdNote = await convertFunction();
 
-        // Verify memo was created successfully
-        expect(createdMemo, isNotNull);
-        expect(createdMemo.content, equals(comment.content));
-        verify(mockApiService.createMemo(any)).called(greaterThanOrEqualTo(1));
+        // Verify note was created successfully
+        expect(createdNote, isNotNull);
+        expect(createdNote.content, equals(comment.content));
+        verify(mockApiService.createNote(any)).called(greaterThanOrEqualTo(1));
 
-        // Verify setMemoRelations was called but threw (implicitly handled by try/catch in provider)
+        // Verify setNoteRelations was called but threw (implicitly handled by try/catch in provider)
         verify(
-          mockApiService.setMemoRelations(argThat(equals(createdMemo.id)), any),
+          mockApiService.setNoteRelations(argThat(equals(createdNote.id)), any),
         ).called(1);
 
         // Reset flag
@@ -563,7 +610,7 @@ void main() {
       'createCommentProvider uploads resource and creates comment with resource link',
       () async {
         // Arrange
-        final memoId = 'memo-for-upload-test';
+        final noteId = 'note-for-upload-test';
         final commentContent = 'Test comment with upload';
         final mockComment = Comment(
           id: 'temp-upload-comment',
@@ -574,22 +621,23 @@ void main() {
         final mockFilename = 'upload.jpg';
         final mockContentType = 'image/jpeg';
         final mockResourceName = 'resources/mock-upload-resource-123';
-        final mockExpectedResource = V1Resource(
-          name: mockResourceName,
-          filename: mockFilename,
-          type: mockContentType,
-          createTime: DateTime.now(),
-          size: '3',
-        );
+        // Mock uploadResource to return a Map
+        final mockExpectedResourceMap = {
+          'name': mockResourceName,
+          'filename': mockFilename,
+          'type': mockContentType,
+          'size': '3',
+          'createTime': DateTime.now().toIso8601String(),
+        };
 
         // Configure the mock ApiService responses using Mockito
         when(
           mockApiService.uploadResource(any, any, any),
-        ).thenAnswer((_) async => mockExpectedResource);
+        ).thenAnswer((_) async => mockExpectedResourceMap);
 
         // Act
         final createFunction = container.read(
-          comment_providers.createCommentProvider(memoId),
+          comment_providers.createCommentProvider(noteId),
         );
         final resultComment = await createFunction(
           mockComment,
@@ -608,10 +656,10 @@ void main() {
         expect(uploadVerification.captured[1], equals(mockFilename));
         expect(uploadVerification.captured[2], equals(mockContentType));
 
-        // Verify createMemoComment call
+        // Verify createNoteComment call
         final createCommentVerification = verify(
-          mockApiService.createMemoComment(
-            argThat(equals(memoId)),
+          mockApiService.createNoteComment(
+            argThat(equals(noteId)),
             captureAny,
             resources: captureAnyNamed('resources'),
           ),
@@ -619,16 +667,18 @@ void main() {
         createCommentVerification.called(1);
         final capturedCommentArg =
             createCommentVerification.captured[0] as Comment;
+        // Capture resources as the correct type
         final capturedResourcesArg =
-            createCommentVerification.captured[1] as List<V1Resource>?;
+            createCommentVerification.captured[1]
+                as List<Map<String, dynamic>>?;
 
         expect(capturedCommentArg.content, equals(commentContent));
         expect(capturedResourcesArg, isNotNull);
         expect(capturedResourcesArg, hasLength(1));
         final passedResource = capturedResourcesArg!.first;
-        expect(passedResource.name, equals(mockResourceName));
-        expect(passedResource.filename, equals(mockFilename));
-        expect(passedResource.type, equals(mockContentType));
+        expect(passedResource['name'], equals(mockResourceName));
+        expect(passedResource['filename'], equals(mockFilename));
+        expect(passedResource['type'], equals(mockContentType));
 
         // Verify the final result returned by the provider
         expect(resultComment, isNotNull);
@@ -636,27 +686,35 @@ void main() {
         expect(resultComment.resources, isNotNull);
         expect(resultComment.resources, hasLength(1));
         final finalResource = resultComment.resources!.first;
-        expect(finalResource.name, equals(mockResourceName));
-        expect(finalResource.filename, equals(mockFilename));
-        expect(finalResource.type, equals(mockContentType));
+        expect(finalResource['name'], equals(mockResourceName));
+        expect(finalResource['filename'], equals(mockFilename));
+        expect(finalResource['type'], equals(mockContentType));
       },
     );
 
     test(
-      'createCommentProvider creates comment and bumps parent memo (no upload)',
+      'createCommentProvider creates comment and bumps parent note (no upload)',
       () async {
         // Arrange
-        final memo = await mockApiService.createMemo(
-          Memo(id: 'test-memo-bump', content: 'Test memo for bump'),
+        final note = await mockApiService.createNote(
+          NoteItem(
+            id: 'test-note-bump',
+            content: 'Test note for bump',
+            createTime: DateTime.now(),
+            updateTime: DateTime.now(),
+            displayTime: DateTime.now(),
+            visibility: NoteVisibility.private,
+            state: NoteState.normal,
+          ),
         );
         final newComment = Comment(
           id: 'test-comment-bump',
-          content: 'Comment that should trigger memo bump',
+          content: 'Comment that should trigger note bump',
           createTime: DateTime.now().millisecondsSinceEpoch,
         );
 
         // Act: Call createCommentProvider without file data
-        await container.read(comment_providers.createCommentProvider(memo.id))(
+        await container.read(comment_providers.createCommentProvider(note.id))(
           newComment,
         );
 
@@ -664,8 +722,8 @@ void main() {
         verifyNever(mockApiService.uploadResource(any, any, any));
 
         final createCommentVerification = verify(
-          mockApiService.createMemoComment(
-            argThat(equals(memo.id)),
+          mockApiService.createNoteComment(
+            argThat(equals(note.id)),
             any,
             resources: captureAnyNamed('resources'),
           ),
@@ -673,31 +731,53 @@ void main() {
         createCommentVerification.called(1);
         expect(createCommentVerification.captured.last, isNull);
 
-        // Verify parent memo was bumped (getMemo followed by updateMemo)
-        // NOTE: The bump logic was commented out in the original provider code.
-        // If re-enabled, these assertions would be valid.
-        // verify(mockApiService.getMemo(memo.id)).called(1);
-        // verify(mockApiService.updateMemo(memo.id, any)).called(1);
+        // Verify parent note was bumped (getNote followed by updateNote)
+        // Use the correct provider name: bumpNoteProvider
+        // The bump logic might be internal to the provider or notifier,
+        // so direct verification of get/update might not be the primary check.
+        // Instead, check if the bumpNoteProvider was interacted with if possible,
+        // or verify the side effect (e.g., note list re-sorting if bump changes updateTime).
+        // For now, we'll assume the provider handles the bump internally.
+        // verify(mockApiService.getNote(note.id)).called(1); // Might not be called directly
+        // verify(mockApiService.updateNote(note.id, any)).called(1); // Might not be called directly
       },
     );
     // --- Tests for updateCommentProvider ---
     group('updateCommentProvider Tests', () {
       test('Successfully updates comment content', () async {
         // Arrange
-        final memo = await mockApiService.createMemo(Memo(id: 'memo-update', content: 'Memo for update test'));
-        final originalComment = await mockApiService.createMemoComment(
-          memo.id,
-          Comment(id: 'comment-to-update', content: 'Original Content', createTime: DateTime.now().millisecondsSinceEpoch),
+        final note = await mockApiService.createNote(
+          NoteItem(
+            id: 'note-update',
+            content: 'Note for update test',
+            createTime: DateTime.now(),
+            updateTime: DateTime.now(),
+            displayTime: DateTime.now(),
+            visibility: NoteVisibility.private,
+            state: NoteState.normal,
+          ),
+        );
+        final originalComment = await mockApiService.createNoteComment(
+          note.id,
+          Comment(
+            id: 'comment-to-update',
+            content: 'Original Content',
+            createTime: DateTime.now().millisecondsSinceEpoch,
+          ),
         );
         final newContent = 'Updated Content';
-        // Use the simple comment ID for getMemoComment stubbing as well, assuming API service handles it
+        // Use the simple comment ID for getNoteComment stubbing
         final commentIdToGet = originalComment.id;
 
-        // Stub getMemoComment to return the original comment using simple ID
-        when(mockApiService.getMemoComment(commentIdToGet)).thenAnswer((_) async => originalComment);
+        // Stub getNoteComment to return the original comment using simple ID
+        when(
+          mockApiService.getNoteComment(commentIdToGet),
+        ).thenAnswer((_) async => originalComment);
 
-        // Stub updateMemoComment to return the updated comment
-        when(mockApiService.updateMemoComment(originalComment.id, any)).thenAnswer((invocation) async {
+        // Stub updateNoteComment to return the updated comment
+        when(
+          mockApiService.updateNoteComment(originalComment.id, any),
+        ).thenAnswer((invocation) async {
           final updatedData = invocation.positionalArguments[1] as Comment;
           return originalComment.copyWith(
             content: updatedData.content, // Use content from payload
@@ -706,22 +786,35 @@ void main() {
         });
 
         // Act
-        final updateFunction = container.read(comment_providers.updateCommentProvider);
-        final result = await updateFunction(memo.id, originalComment.id, newContent);
+        final updateFunction = container.read(
+          comment_providers.updateCommentProvider,
+        );
+        final result = await updateFunction(
+          note.id,
+          originalComment.id,
+          newContent,
+        );
 
         // Assert
-        // Verify getMemoComment was called to fetch original data with simple ID
-        verify(mockApiService.getMemoComment(commentIdToGet)).called(1);
+        // Verify getNoteComment was called to fetch original data with simple ID
+        verify(mockApiService.getNoteComment(commentIdToGet)).called(1);
 
-        // Verify updateMemoComment was called with correct ID and payload
-        final verification = verify(mockApiService.updateMemoComment(
+        // Verify updateNoteComment was called with correct ID and payload
+        final verification = verify(
+          mockApiService.updateNoteComment(
           argThat(equals(originalComment.id)), // Verify simple ID passed
           captureAny,
         ));
         verification.called(1);
         final capturedPayload = verification.captured.single as Comment;
-        expect(capturedPayload.content, equals(newContent)); // Check content in payload
-        expect(capturedPayload.id, equals(originalComment.id)); // Ensure ID is preserved in payload
+        expect(
+          capturedPayload.content,
+          equals(newContent),
+        ); // Check content in payload
+        expect(
+          capturedPayload.id,
+          equals(originalComment.id),
+        ); // Ensure ID is preserved in payload
 
         // Verify the result returned by the provider
         expect(result.id, equals(originalComment.id));
@@ -732,29 +825,35 @@ void main() {
 
       test('Throws exception on API error during update', () async {
         // Arrange
-        final memoId = 'memo-update-fail';
+        final noteId = 'note-update-fail';
         final commentId = 'comment-update-fail';
         final newContent = 'This will fail';
         // Use simple comment ID for stubbing
         final commentIdToGet = commentId;
         final apiError = Exception('API Update Failed');
 
-        // Stub getMemoComment (needed before update attempt)
-        when(mockApiService.getMemoComment(commentIdToGet)).thenAnswer((_) async => Comment(id: commentId, content: 'fail', createTime: 0));
-        // Stub updateMemoComment to throw
-        when(mockApiService.updateMemoComment(commentId, any)).thenThrow(apiError);
+        // Stub getNoteComment (needed before update attempt)
+        when(mockApiService.getNoteComment(commentIdToGet)).thenAnswer(
+          (_) async => Comment(id: commentId, content: 'fail', createTime: 0),
+        );
+        // Stub updateNoteComment to throw
+        when(
+          mockApiService.updateNoteComment(commentId, any),
+        ).thenThrow(apiError);
 
         // Act & Assert
-        final updateFunction = container.read(comment_providers.updateCommentProvider);
+        final updateFunction = container.read(
+          comment_providers.updateCommentProvider,
+        );
         // Use await expectLater for async throws
         await expectLater(
-          updateFunction(memoId, commentId, newContent),
+          updateFunction(noteId, commentId, newContent),
           throwsA(predicate((e) => e == apiError)), // Check for the specific error
         );
 
         // Verify API calls
-        verify(mockApiService.getMemoComment(commentIdToGet)).called(1);
-        verify(mockApiService.updateMemoComment(commentId, any)).called(1);
+        verify(mockApiService.getNoteComment(commentIdToGet)).called(1);
+        verify(mockApiService.updateNoteComment(commentId, any)).called(1);
       });
     });
     // --- End tests for updateCommentProvider ---
@@ -763,12 +862,20 @@ void main() {
       'updateCommentProvider updates content and triggers resort by updateTime',
       () async {
         // Arrange
-        final memo = await mockApiService.createMemo(
-          Memo(id: 'memo-sort-test', content: 'Memo for sort test'),
+        final note = await mockApiService.createNote(
+          NoteItem(
+            id: 'note-sort-test',
+            content: 'Note for sort test',
+            createTime: DateTime.now(),
+            updateTime: DateTime.now(),
+            displayTime: DateTime.now(),
+            visibility: NoteVisibility.private,
+            state: NoteState.normal,
+          ),
         );
         final nowMillis = DateTime.now().millisecondsSinceEpoch;
-        final comment1 = await mockApiService.createMemoComment(
-          memo.id,
+        final comment1 = await mockApiService.createNoteComment(
+          note.id,
           Comment(
             id: 'comment-sort-1',
             content: 'Older Comment',
@@ -776,8 +883,8 @@ void main() {
             updateTime: nowMillis - 2000,
           ),
         );
-        final comment2 = await mockApiService.createMemoComment(
-          memo.id,
+        final comment2 = await mockApiService.createNoteComment(
+          note.id,
           Comment(
             id: 'comment-sort-2',
             content: 'Newer Comment',
@@ -786,17 +893,18 @@ void main() {
           ),
         );
 
-        // Initial list fetch (simulate memoCommentsProvider)
+        // Initial list fetch (simulate noteCommentsProvider)
         // Return the list pre-sorted as the provider would sort it
         when(
-          mockApiService.listMemoComments(memo.id),
+          mockApiService.listNoteComments(note.id),
         ).thenAnswer(
           (_) async => [comment2, comment1],
         ); // <-- Return sorted list [newer, older]
-        var initialComments = await container.read(
-          memoCommentsProvider(memo.id).future,
+        // Cast the future result to the expected type
+        final initialComments = await container.read(
+          note_providers.noteCommentsProvider(note.id).future,
         );
-        // REMOVED Manual sort: The provider should have already sorted it.
+
         expect(
           initialComments.first.id,
           equals(comment2.id),
@@ -804,17 +912,17 @@ void main() {
               "Initially, comment2 should be first because the provider sorts by update time",
         );
 
-        // Stub getMemoComment for the update operation
+        // Stub getNoteComment for the update operation
         when(
-          mockApiService.getMemoComment(comment1.id),
+          mockApiService.getNoteComment(comment1.id),
         ).thenAnswer((_) async => comment1);
 
-        // Stub updateMemoComment to return the updated comment with a new timestamp
+        // Stub updateNoteComment to return the updated comment with a new timestamp
         final updatedContent = "Older Comment - Updated";
         final updatedTimestamp =
             DateTime.now()
                 .millisecondsSinceEpoch; // Newer than comment2's updateTime
-        when(mockApiService.updateMemoComment(comment1.id, any)).thenAnswer((
+        when(mockApiService.updateNoteComment(comment1.id, any)).thenAnswer((
           invocation,
         ) async {
           return comment1.copyWith(
@@ -823,29 +931,30 @@ void main() {
           );
         });
 
-        // Stub listMemoComments *again* for the refresh triggered by updateCommentProvider
+        // Stub listNoteComments *again* for the refresh triggered by updateCommentProvider
         // This time, the list should contain the *updated* comment1
         final updatedComment1 = comment1.copyWith(
           content: updatedContent,
           updateTime: updatedTimestamp,
         );
         when(
-          mockApiService.listMemoComments(memo.id),
+          mockApiService.listNoteComments(note.id),
         ).thenAnswer((_) async => [updatedComment1, comment2]);
 
         // Act: Update the older comment (comment1)
         final updateFunction = container.read(
           comment_providers.updateCommentProvider,
         );
-        await updateFunction(memo.id, comment1.id, updatedContent);
+        await updateFunction(note.id, comment1.id, updatedContent);
 
         // Assert: Fetch the comments again via the provider (which should have been invalidated and refetched)
         // Need to explicitly invalidate and wait for the provider if the test setup doesn't handle it automatically
-        container.invalidate(memoCommentsProvider(memo.id));
+        container.invalidate(note_providers.noteCommentsProvider(note.id));
         await container.pump(); // Allow time for the provider to rebuild
 
+        // Cast the future result to the expected type
         final finalComments = await container.read(
-          memoCommentsProvider(memo.id).future,
+          note_providers.noteCommentsProvider(note.id).future,
         );
 
         // Verify the sorting: The updated comment (originally comment1) should now be first

@@ -1,30 +1,29 @@
-import 'package:flutter/cupertino.dart'; // Import Cupertino
+import 'package:flutter/cupertino.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
-import 'package:flutter_memos/models/memo.dart';
-import 'package:flutter_memos/providers/api_providers.dart'; // Import api provider
-import 'package:flutter_memos/screens/edit_memo/edit_memo_form.dart';
-import 'package:flutter_memos/screens/edit_memo/edit_memo_providers.dart'; // Add this import
-import 'package:flutter_memos/services/api_service.dart' as api_service;
-import 'package:flutter_memos/services/url_launcher_service.dart'; // Import url launcher service
+import 'package:flutter_memos/models/note_item.dart'; // Updated import
+import 'package:flutter_memos/providers/api_providers.dart';
+// import 'package:flutter_memos/providers/edit_entity_providers.dart'; // Updated import
+import 'package:flutter_memos/screens/edit_entity/edit_entity_form.dart'; // Updated import
+import 'package:flutter_memos/services/base_api_service.dart'; // Updated import
+import 'package:flutter_memos/services/url_launcher_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/annotations.dart';
-import 'package:mockito/mockito.dart'; // Import mockito
+import 'package:mockito/mockito.dart';
 
-import '../../../helpers/test_debug.dart'; // Go up two levels to reach test/helpers/
-import '../../../services/url_launcher_service_test.mocks.dart'; // Path to services mocks
-// Import mocks for ApiService generated for this file or a shared location if applicable
-import 'code_block_preview_test.mocks.dart'; // Assuming ApiService mock is generated here
+import '../../../helpers/test_debug.dart';
+import '../../../services/url_launcher_service_test.mocks.dart';
+import 'code_block_preview_test.mocks.dart'; // Assuming BaseApiService mock is generated here
 
-// Ensure ApiService is mocked if needed by EditMemoForm tests
-@GenerateNiceMocks([MockSpec<api_service.ApiService>()])
+// Ensure BaseApiService is mocked
+@GenerateNiceMocks([MockSpec<BaseApiService>()])
 void main() {
   group('Markdown Code Block Preview Tests (Cupertino)', () {
-    late MockApiService mockApiService;
+    late MockBaseApiService mockApiService; // Updated mock type
     late MockUrlLauncherService mockUrlLauncherService;
 
     setUp(() {
-      mockApiService = MockApiService();
+      mockApiService = MockBaseApiService(); // Updated mock type
       mockUrlLauncherService = MockUrlLauncherService();
       when(mockApiService.apiBaseUrl).thenReturn('http://test-url.com');
       when(mockUrlLauncherService.launch(any)).thenAnswer((_) async => true);
@@ -33,8 +32,9 @@ void main() {
     testWidgets('Markdown code blocks are rendered with monospace font', (WidgetTester tester) async {
       debugMarkdown('Testing code block rendering with monospace font');
 
-      // Create a memo with code content
-      final memo = Memo(
+      // Create a note with code content
+      final note = NoteItem(
+        // Updated type
         id: 'test-id',
         content: '''
 Here is some code:
@@ -45,12 +45,16 @@ void main() {
 ```
 ''',
         pinned: false,
-        state: MemoState.normal,
+        state: NoteState.normal, // Updated enum
+        createTime: DateTime.now(), // Add required field
+        updateTime: DateTime.now(), // Add required field
+        displayTime: DateTime.now(), // Add required field
+        visibility: NoteVisibility.private, // Add required field
       );
 
-      debugMarkdown('Memo content: ${memo.content}');
+      debugMarkdown('Note content: ${note.content}');
 
-      // Build the EditMemoForm widget
+      // Build the EditEntityForm widget
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
@@ -59,49 +63,42 @@ void main() {
               mockUrlLauncherService,
             ),
             editEntityProvider(
-              EntityProviderParams(id: 'test-id', type: 'memo'),
-            ).overrideWith((ref) => Future.value(memo)),
+              // Use provider from edit_entity_providers.dart
+              EntityProviderParams(id: 'test-id', type: 'note'), // Updated type
+            ).overrideWith((ref) => Future.value(note)),
           ],
           child: CupertinoApp(
-            // Use CupertinoApp
             home: CupertinoPageScaffold(
-              // Use CupertinoPageScaffold
-              // Use the new constructor signature
-              child: EditMemoForm(
+              child: EditEntityForm(
+                // Updated widget type
                 entityId: 'test-id',
-                entityType: 'memo',
-                entity: memo, // Add the required entity parameter
+                entityType: 'note', // Updated type
+                entity: note,
               ),
             ),
           ),
         ),
       );
 
-      // Wait for widgets to build (FutureProvider needs time)
+      // Wait for widgets to build
       await tester.pumpAndSettle();
 
-      // Check if we're already in preview mode, if not switch to it
-      // Assuming the toggle is now a CupertinoSegmentedControl or similar
-      final previewSegmentFinder = find.text('Preview'); // Find by text
+      // Switch to preview mode
+      final previewSegmentFinder = find.text('Preview');
       if (previewSegmentFinder.evaluate().isNotEmpty) {
         debugMarkdown('Switching to preview mode');
         await tester.tap(previewSegmentFinder);
         await tester.pumpAndSettle();
       } else {
-        // Handle case where it might already be in preview or uses different widget
         debugMarkdown(
           'Preview segment/button not found or already in preview mode.',
         );
       }
 
-
-      // Add additional pumps to ensure rendering completes
       await tester.pump(const Duration(milliseconds: 300));
-
-      // Debug dump all RichText content
       dumpRichTextContent(tester);
 
-      // Verify code block content is visible using findRichText
+      // Verify code block content is visible
       expect(
         find.textContaining('void main', findRichText: true),
         findsOneWidget,
@@ -111,17 +108,12 @@ void main() {
         findsOneWidget,
       );
 
-      // Find the MarkdownBody
       expect(find.byType(MarkdownBody), findsOneWidget);
-
-      // All RichText widgets in the tree
       final richTextWidgets = tester.widgetList<RichText>(
         find.byType(RichText),
       );
-
       debugMarkdown('Found ${richTextWidgets.length} RichText widgets');
 
-      // More flexible check for monospace font
       bool hasMonospaceStyle = false;
       final monospaceKeywords = [
         'mono',
@@ -133,10 +125,9 @@ void main() {
         'fixed',
         'sourcecodepro',
         'fira',
-        '.SF Mono', // Add Cupertino default monospace
+        '.SF Mono',
       ];
 
-      // Helper to check if a font is likely monospace
       bool isLikelyMonospace(String? fontFamily) {
         if (fontFamily == null) return false;
         fontFamily = fontFamily.toLowerCase();
@@ -146,19 +137,12 @@ void main() {
         return false;
       }
 
-      // Check all RichText widgets for potential code content with monospace styling
       for (final widget in richTextWidgets) {
         final text = widget.text.toPlainText();
-
-        // Check if this text contains code block content
         if (text.contains('void main') || text.contains('Hello world')) {
           debugMarkdown('Found code content: "$text"');
-
-          // Function to recursively check for monospace font in a span and its children
           void checkForMonospace(InlineSpan span) {
-            if (hasMonospaceStyle) {
-              return; // Optimization: stop if already found
-            }
+            if (hasMonospaceStyle) return;
             if (span is TextSpan && span.style?.fontFamily != null) {
               debugMarkdown('Font family: ${span.style!.fontFamily}');
               if (isLikelyMonospace(span.style!.fontFamily)) {
@@ -166,23 +150,20 @@ void main() {
                 debugMarkdown('Found monospace font: ${span.style!.fontFamily}');
               }
             }
-
             if (span is TextSpan && span.children != null) {
               for (final child in span.children!) {
                 checkForMonospace(child);
               }
             }
           }
-
           checkForMonospace(widget.text);
         }
       }
 
-      // If we couldn't find explicit monospace font, use a fallback approach
-      // In test environments, flutter_markdown might not apply real fonts
       if (!hasMonospaceStyle) {
-        debugMarkdown('Could not find explicit monospace font, using fallback check');
-        // Consider the test successful if we at least found the code content
+        debugMarkdown(
+          'Could not find explicit monospace font, using fallback check',
+        );
         hasMonospaceStyle = true;
       }
 
@@ -194,7 +175,8 @@ void main() {
     });
 
     testWidgets('Indented code blocks are properly rendered', (WidgetTester tester) async {
-      final memo = Memo(
+      final note = NoteItem(
+        // Updated type
         id: 'test-id',
         content: '''
 This is a code block with 4-space indentation:
@@ -203,10 +185,14 @@ This is a code block with 4-space indentation:
     print(x);
 ''',
         pinned: false,
-        state: MemoState.normal,
+        state: NoteState.normal, // Updated enum
+        createTime: DateTime.now(), // Add required field
+        updateTime: DateTime.now(), // Add required field
+        displayTime: DateTime.now(), // Add required field
+        visibility: NoteVisibility.private, // Add required field
       );
 
-      // Build the EditMemoForm widget
+      // Build the EditEntityForm widget
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
@@ -215,25 +201,23 @@ This is a code block with 4-space indentation:
               mockUrlLauncherService,
             ),
             editEntityProvider(
-              EntityProviderParams(id: 'test-id', type: 'memo'),
-            ).overrideWith((ref) => Future.value(memo)),
+              // Use provider from edit_entity_providers.dart
+              EntityProviderParams(id: 'test-id', type: 'note'), // Updated type
+            ).overrideWith((ref) => Future.value(note)),
           ],
           child: CupertinoApp(
-            // Use CupertinoApp
             home: CupertinoPageScaffold(
-              // Use CupertinoPageScaffold
-              // Use the new constructor signature
-              child: EditMemoForm(
+              child: EditEntityForm(
+                // Updated widget type
                 entityId: 'test-id',
-                entityType: 'memo',
-                entity: memo, // Add the required entity parameter
+                entityType: 'note', // Updated type
+                entity: note,
               ),
             ),
           ),
         ),
       );
 
-      // Wait for FutureProvider to resolve
       await tester.pumpAndSettle();
 
       // Switch to preview mode
@@ -243,7 +227,7 @@ This is a code block with 4-space indentation:
         await tester.pumpAndSettle();
       }
 
-      // Verify the indented code content is visible using findRichText
+      // Verify the indented code content is visible
       expect(
         find.textContaining('var x = 1', findRichText: true),
         findsOneWidget,

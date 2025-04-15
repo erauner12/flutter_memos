@@ -1,55 +1,59 @@
-import 'package:flutter/cupertino.dart'; // Import Cupertino
+import 'package:flutter/cupertino.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_memos/models/comment.dart';
-import 'package:flutter_memos/models/memo.dart';
-import 'package:flutter_memos/providers/api_providers.dart'; // Import api provider
-import 'package:flutter_memos/screens/memo_detail/memo_content.dart';
-import 'package:flutter_memos/screens/memo_detail/memo_detail_providers.dart';
-import 'package:flutter_memos/services/api_service.dart'
-    as api_service; // Import for ApiService with prefix
+import 'package:flutter_memos/models/note_item.dart'; // Updated import
+import 'package:flutter_memos/providers/api_providers.dart';
+import 'package:flutter_memos/providers/note_providers.dart'
+    as note_providers; // Updated import
+import 'package:flutter_memos/screens/item_detail/note_content.dart'; // Updated import
+import 'package:flutter_memos/services/base_api_service.dart'; // Updated import
 import 'package:flutter_memos/services/url_launcher_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mockito/annotations.dart'; // Add this import for @GenerateNiceMocks
+import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
 
-// Import debug utils
-import '../../../helpers/test_debug.dart'; // Go up two levels to reach test/helpers/
-// Import the generated mocks for THIS file
-import 'memo_content_links_test.mocks.dart';
+import '../../../helpers/test_debug.dart';
+import 'memo_content_links_test.mocks.dart'; // Keep mock file name for now
 
 // Generate mocks for services used in this test file
 @GenerateNiceMocks([
-  MockSpec<api_service.ApiService>(),
+  MockSpec<BaseApiService>(), // Updated mock type
   MockSpec<UrlLauncherService>(),
 ])
-
 void main() {
-  group('MemoContent Link Handling Tests (Cupertino)', () {
-    late MockApiService mockApiService;
+  group('NoteContent Link Handling Tests (Cupertino)', () {
+    // Updated group name
+    late MockBaseApiService mockApiService; // Updated mock type
     late MockUrlLauncherService mockUrlLauncherService;
 
     setUp(() {
-      mockApiService = MockApiService();
-      mockUrlLauncherService =
-          MockUrlLauncherService(); // Instantiate the imported mock
+      mockApiService = MockBaseApiService(); // Updated mock type
+      mockUrlLauncherService = MockUrlLauncherService();
       when(mockApiService.apiBaseUrl).thenReturn('http://test-url.com');
       when(mockUrlLauncherService.launch(any)).thenAnswer((_) async => true);
     });
 
-    testWidgets('MemoContent handles link taps correctly', (WidgetTester tester) async {
-      // Debug logs now enabled by default from test_debug.dart
-      debugMarkdown('Starting MemoContent link tap test');
+    testWidgets('NoteContent handles link taps correctly', (
+      WidgetTester tester,
+    ) async {
+      // Updated widget name
+      debugMarkdown('Starting NoteContent link tap test'); // Updated log
 
-      // Create a memo with a link
-      final memo = Memo(
+      // Create a note with a link
+      final note = NoteItem(
+        // Updated type
         id: 'test-id',
         content: '[Example Link](https://example.com)',
         pinned: false,
-        state: MemoState.normal,
+        state: NoteState.normal, // Updated enum
+        createTime: DateTime.now(), // Add required field
+        updateTime: DateTime.now(), // Add required field
+        displayTime: DateTime.now(), // Add required field
+        visibility: NoteVisibility.private, // Add required field
       );
 
-      // Create a mock list of comments to avoid API calls
+      // Create a mock list of comments
       final mockComments = [
         Comment(
           id: 'comment-1',
@@ -58,62 +62,60 @@ void main() {
         )
       ];
 
-      debugMarkdown('Building MemoContent with memo: ${memo.content}');
+      debugMarkdown(
+        'Building NoteContent with note: ${note.content}',
+      ); // Updated log
 
-      // Build MemoContent with the memo using a ProviderScope with overrides
+      // Build NoteContent with the note using a ProviderScope with overrides
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
-            // Override the memoCommentsProvider to return our mock comments
-            memoCommentsProvider.overrideWith(
-              (ref, id) => Future.value(mockComments),
-            ),
-            // Override the urlLauncherServiceProvider
+            // Override the noteCommentsProvider to return our mock comments
+            note_providers
+                .noteCommentsProvider('test-id')
+                .overrideWith(
+                  // Updated provider name
+                  (ref) => Future.value(mockComments),
+                ),
             urlLauncherServiceProvider.overrideWithValue(
               mockUrlLauncherService,
             ),
-            // Override the apiServiceProvider
             apiServiceProvider.overrideWithValue(mockApiService),
           ],
-          child: CupertinoApp( // Use CupertinoApp
-            home: CupertinoPageScaffold( // Use CupertinoPageScaffold
-              child: MemoContent(memo: memo, memoId: 'test-id'),
+          child: CupertinoApp(
+            home: CupertinoPageScaffold(
+              child: NoteContent(
+                note: note,
+                noteId: 'test-id',
+              ), // Updated widget type and params
             ),
           ),
         ),
       );
 
-      // Wait for the async operations to complete
       await tester.pumpAndSettle();
-
-      // Print out the widget tree for debugging
       debugDumpAppIfEnabled();
 
-      // Find the MarkdownBody widget first to narrow down the search area
       expect(find.byType(MarkdownBody), findsAtLeastNWidgets(1));
 
-      // Find all RichText widgets to check for our link text
       final richTextWidgets = tester.widgetList<RichText>(
         find.byType(RichText),
       );
 
-      // Debug log all RichText content
       debugMarkdown('\nAll RichText widgets content:');
       for (final widget in richTextWidgets) {
         debugMarkdown('- "${widget.text.toPlainText()}"');
       }
 
-      // More flexible approach to find our link text
       bool foundLinkText = false;
-
-      // First try direct text search
       try {
         expect(find.textContaining('Example Link'), findsAtLeastNWidgets(1));
         foundLinkText = true;
         debugMarkdown('Found "Example Link" with direct text search');
       } catch (_) {
-        debugMarkdown('Direct text search failed, searching in RichText widgets');
-        // Not found with direct search, try searching in RichText widgets
+        debugMarkdown(
+          'Direct text search failed, searching in RichText widgets',
+        );
         for (final widget in richTextWidgets) {
           final text = widget.text.toPlainText();
           if (text.contains('Example Link')) {
@@ -130,7 +132,6 @@ void main() {
         reason: 'Could not find the link text "Example Link" in any widget',
       );
 
-      // Verify the MarkdownBody is set up for handling link taps
       final markdownBody = tester.widget<MarkdownBody>(
         find.byType(MarkdownBody).first,
       );
@@ -138,25 +139,27 @@ void main() {
       debugMarkdown('MarkdownBody onTapLink is properly configured');
     });
 
-    testWidgets('MemoContent handles different link types (HTTP, HTTPS, memo://, etc)',
+    testWidgets(
+      'NoteContent handles different link types (HTTP, HTTPS, note://, etc)', // Updated widget name and link type
         (WidgetTester tester) async {
-        // Mocks are initialized in setUp
-
-      // Create a memo with different link types
-      final memo = Memo(
+        final note = NoteItem(
+          // Updated type
         id: 'test-id',
         content: '''
 [HTTP Link](http://example.com)
 [HTTPS Link](https://secure.example.com)
-[Memo Link](memo://12345)
+[Note Link](note://12345)
 [Email Link](mailto:test@example.com)
 [Phone Link](tel:+1234567890)
 ''',
         pinned: false,
-        state: MemoState.normal,
+          state: NoteState.normal, // Updated enum
+          createTime: DateTime.now(), // Add required field
+          updateTime: DateTime.now(), // Add required field
+          displayTime: DateTime.now(), // Add required field
+          visibility: NoteVisibility.private, // Add required field
       );
 
-      // Mock comments
       final mockComments = [
         Comment(
           id: 'comment-1',
@@ -168,19 +171,25 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
-            memoCommentsProvider.overrideWith(
-              (ref, id) => Future.value(mockComments),
-            ),
-              // Override the urlLauncherServiceProvider
+              note_providers
+                  .noteCommentsProvider('test-id')
+                  .overrideWith(
+                    // Updated provider name
+                    (ref) => Future.value(
+                      mockComments,
+                    ), // Removed id parameter from callback
+                  ),
               urlLauncherServiceProvider.overrideWithValue(
                 mockUrlLauncherService,
               ),
-              // Override the apiServiceProvider
               apiServiceProvider.overrideWithValue(mockApiService),
           ],
-          child: CupertinoApp( // Use CupertinoApp
-            home: CupertinoPageScaffold( // Use CupertinoPageScaffold
-              child: MemoContent(memo: memo, memoId: 'test-id'),
+            child: CupertinoApp(
+              home: CupertinoPageScaffold(
+                child: NoteContent(
+                  note: note,
+                  noteId: 'test-id',
+                ), // Updated widget type and params
             ),
           ),
         ),
@@ -188,20 +197,16 @@ void main() {
 
       await tester.pumpAndSettle();
 
-      // Check that all link texts are rendered
       final linkTexts = [
         'HTTP Link',
         'HTTPS Link',
-        'Memo Link',
+          'Note Link', // Updated link text
         'Email Link',
         'Phone Link',
       ];
 
-      for (final linkText in linkTexts) {
-        // Try different approaches to find the link text
-        bool foundText = false;
-
-        // Try textContaining finder
+        for (final linkText in linkTexts) {
+          bool foundText = false;
         try {
           await tester.runAsync(() async {
             final finder = find.textContaining(linkText);
@@ -210,15 +215,13 @@ void main() {
             }
           });
         } catch (_) {
-          // Ignore error and try alternative method
+            // Ignore
         }
 
-        // If not found, try searching in RichText widgets
         if (!foundText) {
           final richTextWidgets = tester.widgetList<RichText>(
             find.byType(RichText),
-          );
-
+            );
           for (final widget in richTextWidgets) {
             if (widget.text.toPlainText().contains(linkText)) {
               foundText = true;
@@ -230,7 +233,8 @@ void main() {
         expect(
           foundText,
           isTrue,
-          reason: 'Could not find the link text "$linkText" in the MemoContent',
+            reason:
+                'Could not find the link text "$linkText" in the NoteContent', // Updated message
         );
       }
     });

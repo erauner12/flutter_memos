@@ -41,24 +41,28 @@ void main() {
     name: 'Server One',
     serverUrl: 'https://server1.example.com',
     authToken: 'token1',
+    serverType: ServerType.memos, // Added serverType
   );
   final server2 = ServerConfig(
     id: const Uuid().v4(),
     name: 'Server Two',
     serverUrl: 'https://server2.example.com',
     authToken: 'token2',
+    serverType: ServerType.memos, // Added serverType
   );
   final server3CloudOnly = ServerConfig(
     id: const Uuid().v4(),
     name: 'Server Three (Cloud)',
     serverUrl: 'https://server3.example.com',
     authToken: 'token3',
+    serverType: ServerType.memos, // Added serverType
   );
   final legacyServer = ServerConfig(
     id: 'fixed-legacy-id', // Use a predictable ID for testing migration
     name: 'Migrated Server',
     serverUrl: 'https://legacy.example.com',
     authToken: 'legacy_token',
+    serverType: ServerType.memos, // Added serverType
   );
 
   // Helper to create initial state JSON
@@ -605,6 +609,7 @@ void main() {
         id: 'non-existent',
         serverUrl: 'url',
         authToken: 'token',
+        serverType: ServerType.memos, // Added serverType
       );
 
       // Act

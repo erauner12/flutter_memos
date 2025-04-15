@@ -1,179 +1,172 @@
-import 'package:flutter/cupertino.dart'; // Import Cupertino
-// Remove unused Icons import
-import 'package:flutter_memos/models/memo.dart';
-import 'package:flutter_memos/models/multi_server_config_state.dart'; // Import MultiServerConfigState
-import 'package:flutter_memos/models/server_config.dart'; // Import ServerConfig
+import 'package:flutter/cupertino.dart';
+import 'package:flutter_memos/models/list_notes_response.dart'; // Updated import
+import 'package:flutter_memos/models/note_item.dart'; // Updated import
+import 'package:flutter_memos/models/multi_server_config_state.dart';
+import 'package:flutter_memos/models/server_config.dart';
 import 'package:flutter_memos/providers/filter_providers.dart';
-import 'package:flutter_memos/providers/memo_providers.dart';
-import 'package:flutter_memos/providers/server_config_provider.dart'; // Import server config provider
+import 'package:flutter_memos/providers/note_providers.dart'; // Updated import
+import 'package:flutter_memos/providers/server_config_provider.dart';
 import 'package:flutter_memos/providers/ui_providers.dart' as ui_providers;
-import 'package:flutter_memos/screens/memos/memo_list_item.dart';
-import 'package:flutter_memos/screens/memos/memos_body.dart'; // Import MemosBody
-import 'package:flutter_memos/screens/memos/memos_screen.dart';
-import 'package:flutter_memos/services/api_service.dart' as api_service;
-import 'package:flutter_memos/services/api_service.dart'; // Import for PaginatedMemoResponse
-import 'package:flutter_memos/widgets/advanced_filter_panel.dart'; // Import AdvancedFilterPanel
+import 'package:flutter_memos/screens/items/note_list_item.dart'; // Updated import
+import 'package:flutter_memos/screens/items/notes_list_body.dart'; // Updated import
+import 'package:flutter_memos/screens/items/items_screen.dart'; // Updated import
+import 'package:flutter_memos/services/base_api_service.dart'; // Updated import
+import 'package:flutter_memos/services/api_service.dart'; // Keep for PaginatedMemoResponse if needed elsewhere, or remove if ListNotesResponse is sufficient
+import 'package:flutter_memos/widgets/advanced_filter_panel.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_slidable/flutter_slidable.dart'; // Keep if Slidable is used
+import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
-import 'package:shared_preferences/shared_preferences.dart'; // Import SharedPreferences
-import 'package:uuid/uuid.dart'; // Import Uuid
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:uuid/uuid.dart';
 
-import 'memos_screen_test.mocks.dart';
+import 'memos_screen_test.mocks.dart'; // Keep mock file name for now
 
-// Generate nice mock for ApiService
-@GenerateNiceMocks([MockSpec<api_service.ApiService>()])
-// Helper to create a list of dummy memos
-List<Memo> createDummyMemos(int count) {
+// Generate nice mock for BaseApiService
+@GenerateNiceMocks([MockSpec<BaseApiService>()])
+// Helper to create a list of dummy notes
+List<NoteItem> createDummyNotes(int count) { // Updated function name and type
   return List.generate(count, (i) {
     final now = DateTime.now();
-    final updateTime = now.subtract(Duration(minutes: i)).toIso8601String();
-    return Memo(
-      id: 'memo_$i',
-      content: 'Dummy Memo Content $i',
+    final updateTime = now.subtract(Duration(minutes: i));
+    return NoteItem( // Updated type
+      id: 'note_$i', // Updated prefix
+      content: 'Dummy Note Content $i', // Updated content
       pinned: false,
-      state: MemoState.normal,
+      state: NoteState.normal, // Updated enum
       updateTime: updateTime,
       createTime: updateTime,
+      displayTime: updateTime, // Add required field
+      visibility: NoteVisibility.private, // Add required field
     );
   });
 }
 
 // Mock Notifier extending the actual Notifier
-class MockMemosNotifier extends MemosNotifier {
+class MockNotesNotifier extends NotesNotifier { // Updated class name
   // Constructor needs to call super, passing the ref and setting the skip flag
-  MockMemosNotifier(super.ref, MemosState initialState)
+  MockNotesNotifier(super.ref, NotesState initialState) // Updated state type
     : super(skipInitialFetchForTesting: true) {
     // Manually set the state after initialization
     state = initialState;
   }
 
-  // Override methods that might be called during the test if needed,
-  // otherwise, they inherit the base implementation (which might try to fetch)
+  // Override methods that might be called during the test if needed
   @override
   Future<void> refresh() async {
     // No-op for mock
   }
 
   @override
-  Future<void> fetchMoreMemos() async {
+  Future<void> fetchMoreNotes() async { // Updated method name
     // No-op for mock
   }
 }
 
 // Modify buildTestableWidget to accept the container and use CupertinoApp
 Widget buildTestableWidget(Widget child, ProviderContainer container) {
-  // Keep ProviderScope so the widget can lookup providers
-  // Link it to the container created in the test setup
   return UncontrolledProviderScope(
     container: container,
     child: CupertinoApp(
-      // Use CupertinoApp
       home: child,
-      // Define routes needed for navigation actions within MemoListItem (like edit)
+      // Define routes needed for navigation actions within NoteListItem
       routes: {
         '/edit-entity':
             (context) => const CupertinoPageScaffold(
               child: Center(child: Text('Edit Screen')),
             ),
-        '/memo-detail':
+        '/item-detail': // Updated route name
             (context) => const CupertinoPageScaffold(
               child: Center(child: Text('Detail Screen')),
             ),
-        '/new-memo':
+        '/new-note': // Updated route name
             (context) => const CupertinoPageScaffold(
-              child: Center(child: Text('New Memo Screen')),
+              child: Center(child: Text('New Note Screen')),
             ),
-        // Add route for settings if needed by server switcher
         '/settings':
             (context) => const CupertinoPageScaffold(
               child: Center(child: Text('Settings Screen')),
             ),
       },
-      // Add onGenerateRoute for modal popups like AdvancedFilterPanel if needed
-      // or ensure the test setup handles them.
     ),
   );
 } // End of buildTestableWidget
 
 // Mock Notifier for MultiServerConfigState that extends the real one
 class MockMultiServerConfigNotifier extends MultiServerConfigNotifier {
-  // Add Ref parameter and pass it to super
   MockMultiServerConfigNotifier(
     super.ref,
     MultiServerConfigState initialState,
   ) {
-    // Manually set the initial state after calling the super constructor
     state = initialState;
   }
 
-  // Override methods only if their behavior needs to be mocked for the test
   @override
   Future<void> loadConfiguration() async {
-    // Match the new method name
-    // No-op for mock during load, state is set in constructor
+    // No-op
   }
 
   @override
   Future<bool> addServer(ServerConfig config) async {
-    // Simple state update for testing purposes if needed
     state = state.copyWith(servers: [...state.servers, config]);
     return true;
   }
 
   @override
   void setActiveServer(String? serverId) {
-    // Simple state update for testing purposes if needed
     state = state.copyWith(activeServerId: serverId);
   }
 
   @override
   Future<bool> setDefaultServer(String? serverId) async {
-    // Simple state update for testing purposes if needed
     state = state.copyWith(defaultServerId: () => serverId);
     return true;
   }
 
-  // Add other overrides if necessary for specific test interactions
+  // Add missing resetStateAndCache method
+  @override
+  Future<void> resetStateAndCache() async {
+    state = const MultiServerConfigState(); // Reset to default state
+    // Simulate clearing cache if needed for test verification
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('server_config_cache');
+    await prefs.remove('defaultServerId');
+  }
 }
 
 void main() {
-  final dummyMemos = createDummyMemos(3); // Create 3 dummy memos for testing
-  late ProviderContainer container; // Declare container
-  late MockApiService mockApiService; // Declare the mock API service
+  final dummyNotes = createDummyNotes(3); // Updated variable name and function call
+  late ProviderContainer container;
+  late MockBaseApiService mockApiService; // Updated mock type
   late ServerConfig mockServer1;
   late ServerConfig mockServer2;
 
-  // Use setUp to create the container before each test
   setUp(() async {
-    // Make setUp async for SharedPreferences
-    // Initialize mock SharedPreferences
     SharedPreferences.setMockInitialValues({});
-    // Initialize the mock API service
-    mockApiService = MockApiService();
+    mockApiService = MockBaseApiService(); // Updated mock type
 
-    // Create mock server configs
+    // Create mock server configs with serverType
     mockServer1 = ServerConfig(
       id: const Uuid().v4(),
       name: 'Mock Server 1',
       serverUrl: 'https://mock1.test',
       authToken: 'token1',
+      serverType: ServerType.memos, // Added serverType
     );
     mockServer2 = ServerConfig(
       id: const Uuid().v4(),
       name: 'Mock Server 2',
       serverUrl: 'https://mock2.test',
       authToken: 'token2',
+      serverType: ServerType.memos, // Added serverType
     );
 
-    // Add stub for apiBaseUrl property (using mockServer1's URL)
     when(mockApiService.apiBaseUrl).thenReturn(mockServer1.serverUrl);
 
-    // Configure the mock API service to return the dummy memos
+    // Configure the mock API service to return the dummy notes
     when(
-      mockApiService.listMemos(
+      mockApiService.listNotes( // Updated method name
         parent: anyNamed('parent'),
         filter: anyNamed('filter'),
         state: anyNamed('state'),
@@ -183,20 +176,19 @@ void main() {
         pageToken: anyNamed('pageToken'),
       ),
     ).thenAnswer(
-      (_) async => PaginatedMemoResponse(
-        memos: dummyMemos,
-        nextPageToken: null, // No more pages available
+      (_) async => ListNotesResponse( // Updated response type
+        notes: dummyNotes, // Updated field name
+        nextPageToken: null,
       ),
     );
 
-    final initialMemoState = const MemosState().copyWith(
-      memos: dummyMemos,
+    final initialNoteState = const NotesState().copyWith( // Updated state type
+      notes: dummyNotes, // Updated field name
       isLoading: false,
       hasReachedEnd: true,
-      totalLoaded: dummyMemos.length,
+      totalLoaded: dummyNotes.length,
     );
 
-    // Initial multi-server state (server1 is active and default)
     final initialMultiServerState = MultiServerConfigState(
       servers: [mockServer1, mockServer2],
       activeServerId: mockServer1.id,
@@ -205,64 +197,49 @@ void main() {
 
     container = ProviderContainer(
       overrides: [
-        // Override the API service with our mock
-        api_service.apiServiceProvider.overrideWithValue(mockApiService),
-        // Override the actual notifier with our mock builder
-        memosNotifierProvider.overrideWith(
-          (ref) => MockMemosNotifier(ref, initialMemoState),
+        apiServiceProvider.overrideWithValue(mockApiService),
+        notesNotifierProvider.overrideWith( // Updated provider name
+          (ref) => MockNotesNotifier(ref, initialNoteState), // Updated mock type
         ),
-        // Override multi-server config provider with an instance of the mock notifier
-        // Pass the ref to the mock constructor
         multiServerConfigProvider.overrideWith(
           (ref) => MockMultiServerConfigNotifier(ref, initialMultiServerState),
         ),
-        // Override active server config (derived from multiServerConfigProvider)
-        // No need to override activeServerConfigProvider directly if multiServerConfigProvider is mocked correctly
-
-        // Ensure UI providers start in a known state
-        ui_providers.memoMultiSelectModeProvider.overrideWith((ref) => false),
-        ui_providers.selectedMemoIdsForMultiSelectProvider.overrideWith(
+        ui_providers.itemMultiSelectModeProvider.overrideWith((ref) => false), // Use renamed provider
+        ui_providers.selectedItemIdsForMultiSelectProvider.overrideWith( // Use renamed provider
           (ref) => {},
         ),
-        ui_providers.selectedMemoIdProvider.overrideWith((ref) => null),
-        // Explicitly set the filter preset for consistent AppBar title
+        ui_providers.selectedItemIdProvider.overrideWith((ref) => null), // Use renamed provider
         quickFilterPresetProvider.overrideWith(
           (ref) => 'inbox',
-        ), // Start with 'inbox'
+        ),
       ],
     );
 
-    // Ensure preferences are loaded (needed for filter preset)
     await container.read(loadFilterPreferencesProvider.future);
   });
 
-  // Use tearDown to dispose the container after each test
   tearDown(() {
     container.dispose();
   });
 
-  // Test 1: Standard UI
-  testWidgets('MemosScreen displays standard UI elements initially', (
+  testWidgets('ItemsScreen displays standard UI elements initially', ( // Updated screen name
     WidgetTester tester,
   ) async {
     // Arrange
     await tester.pumpWidget(
-      buildTestableWidget(const MemosScreen(), container),
+      buildTestableWidget(const ItemsScreen(), container), // Updated screen name
     );
-    await tester.pumpAndSettle(); // Wait for initial build and preference load
+    await tester.pumpAndSettle();
 
     // Act & Assert
-    // Verify NavigationBar
     expect(find.byType(CupertinoNavigationBar), findsOneWidget);
-    // Verify Title (based on initial 'inbox' preset)
     expect(
       find.descendant(
         of: find.byType(CupertinoNavigationBar),
-        matching: find.text('Inbox'), // Check for 'Inbox' title
+        matching: find.text('Inbox'),
       ),
       findsOneWidget,
     );
-    // Verify Server Switcher button
     final navBarFinder = find.byType(CupertinoNavigationBar);
     final serverSwitcherButtonFinder = find.descendant(
       of: navBarFinder,
@@ -274,7 +251,6 @@ void main() {
     expect(serverSwitcherButtonFinder, findsOneWidget);
     expect(find.textContaining('Mock Server 1'), findsOneWidget);
 
-    // Verify Trailing Buttons
     final multiSelectButtonFinder = find.descendant(
       of: navBarFinder,
       matching: find.widgetWithIcon(
@@ -294,31 +270,25 @@ void main() {
     );
     expect(addButtonFinder, findsOneWidget);
 
-    // Verify Search Bar
     expect(find.byType(CupertinoSearchTextField), findsOneWidget);
-
-    // Verify Quick Filter Control
     expect(
       find.byType(CupertinoSlidingSegmentedControl<String>),
       findsOneWidget,
     );
-    expect(find.text('Inbox'), findsWidgets); // Segment label
-    expect(find.text('Today'), findsWidgets); // Segment label
-    expect(find.text('Tagged'), findsWidgets); // Segment label
-    expect(find.text('All'), findsWidgets); // Segment label
+    expect(find.text('Inbox'), findsWidgets);
+    expect(find.text('Today'), findsWidgets);
+    expect(find.text('Tagged'), findsWidgets);
+    expect(find.text('All'), findsWidgets);
 
-    // Verify Memo List Items (now within MemosBody)
-    // Check if MemosBody exists, which contains the list
-    expect(find.byType(MemosBody), findsOneWidget);
+    // Verify Note List Items (now within NotesListBody)
+    expect(find.byType(NotesListBody), findsOneWidget); // Updated body widget
 
-    // Verify multi-select actions are NOT present
     expect(
       find.widgetWithIcon(CupertinoButton, CupertinoIcons.clear),
-      findsNothing, // Cancel button should not be present
+      findsNothing,
     );
-    expect(find.textContaining('Selected'), findsNothing); // Multi-select title
+    expect(find.textContaining('Selected'), findsNothing);
 
-    // Verify standard trailing buttons ARE present within the NavBar (using the existing navBarFinder)
     expect(
       find.descendant(
         of: navBarFinder,
@@ -347,45 +317,42 @@ void main() {
         matching: find.widgetWithIcon(CupertinoButton, CupertinoIcons.add),
       ),
       findsOneWidget,
-      reason: 'Add memo button should be present',
+      reason: 'Add note button should be present', // Updated message
     );
-    // Verify no Checkboxes/Switches are present within list items
     expect(
       find.descendant(
-        of: find.byType(MemoListItem),
+        of: find.byType(NoteListItem), // Updated item widget
         matching: find.byType(CupertinoSwitch),
       ),
       findsNothing,
     );
     expect(
       find.descendant(
-        of: find.byType(MemoListItem),
+        of: find.byType(NoteListItem), // Updated item widget
         matching: find.byType(CupertinoCheckbox),
       ),
       findsNothing,
     );
 
-    // Verify Slidable IS present in normal mode
     expect(
       find.descendant(
-        of: find.byType(MemoListItem),
+        of: find.byType(NoteListItem), // Updated item widget
         matching: find.byType(Slidable),
       ),
-      findsNWidgets(dummyMemos.length), // Expect Slidable for each item
+      findsNWidgets(dummyNotes.length),
     );
   });
 
-  // Test 2: Enter Multi-Select Mode
-  testWidgets('MemosScreen enters multi-select mode on button tap', (
+  testWidgets('ItemsScreen enters multi-select mode on button tap', ( // Updated screen name
     WidgetTester tester,
   ) async {
     // Arrange
     await tester.pumpWidget(
-      buildTestableWidget(const MemosScreen(), container),
+      buildTestableWidget(const ItemsScreen(), container), // Updated screen name
     );
     await tester.pumpAndSettle();
 
-    // Act: Find and tap the "Select" button (checkmark_seal)
+    // Act: Find and tap the "Select" button
     final navBarFinder = find.byType(CupertinoNavigationBar);
     final selectButtonFinder = find.descendant(
       of: navBarFinder,
@@ -399,9 +366,8 @@ void main() {
     await tester.pumpAndSettle();
 
     // Assert
-    expect(container.read(ui_providers.memoMultiSelectModeProvider), isTrue);
+    expect(container.read(ui_providers.itemMultiSelectModeProvider), isTrue); // Use renamed provider
 
-    // Verify NavigationBar changes
     expect(
       find.widgetWithIcon(
         CupertinoButton,
@@ -424,7 +390,6 @@ void main() {
       ),
       findsOneWidget,
     );
-    // Verify standard title and trailing buttons are gone
     expect(find.text('Inbox'), findsNothing);
     expect(
       find.widgetWithIcon(
@@ -444,25 +409,22 @@ void main() {
       find.widgetWithIcon(CupertinoButton, CupertinoIcons.add),
       findsNothing,
     );
-    // Verify Search Bar and Filter Control are hidden
     expect(find.byType(CupertinoSearchTextField), findsNothing);
     expect(find.byType(CupertinoSlidingSegmentedControl<String>), findsNothing);
 
-    // Verify Checkboxes appear in list items
     final checkboxFinder = find.descendant(
-      of: find.byType(MemoListItem),
+      of: find.byType(NoteListItem), // Updated item widget
       matching: find.byType(CupertinoCheckbox),
     );
-    expect(checkboxFinder, findsNWidgets(dummyMemos.length));
+    expect(checkboxFinder, findsNWidgets(dummyNotes.length));
   });
 
-  // Test 3: Select/Deselect Item
-  testWidgets('MemosScreen selects/deselects memo via Checkbox tap', (
+  testWidgets('ItemsScreen selects/deselects note via Checkbox tap', ( // Updated screen name and type
     WidgetTester tester,
   ) async {
     // Arrange: Enter multi-select mode
     await tester.pumpWidget(
-      buildTestableWidget(const MemosScreen(), container),
+      buildTestableWidget(const ItemsScreen(), container), // Updated screen name
     );
     await tester.pumpAndSettle();
     final navBarFinder = find.byType(CupertinoNavigationBar);
@@ -477,7 +439,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // Act: Tap the first checkbox
-    final firstItemFinder = find.byType(MemoListItem).first;
+    final firstItemFinder = find.byType(NoteListItem).first; // Updated item widget
     final firstCheckboxFinder = find.descendant(
       of: firstItemFinder,
       matching: find.byType(CupertinoCheckbox),
@@ -488,11 +450,11 @@ void main() {
 
     // Assert: Item selected
     expect(
-      container.read(ui_providers.selectedMemoIdsForMultiSelectProvider),
-      contains(dummyMemos[0].id),
+      container.read(ui_providers.selectedItemIdsForMultiSelectProvider), // Use renamed provider
+      contains(dummyNotes[0].id),
     );
     expect(
-      container.read(ui_providers.selectedMemoIdsForMultiSelectProvider).length,
+      container.read(ui_providers.selectedItemIdsForMultiSelectProvider).length, // Use renamed provider
       1,
     );
     expect(find.text('1 Selected'), findsOneWidget);
@@ -503,37 +465,36 @@ void main() {
 
     // Assert: Item deselected
     expect(
-      container.read(ui_providers.selectedMemoIdsForMultiSelectProvider),
+      container.read(ui_providers.selectedItemIdsForMultiSelectProvider), // Use renamed provider
       isEmpty,
     );
     expect(find.text('0 Selected'), findsOneWidget);
   });
 
-  // Test 4: Exit Multi-Select Mode
-  testWidgets('MemosScreen exits multi-select mode via Cancel button', (
+  testWidgets('ItemsScreen exits multi-select mode via Cancel button', ( // Updated screen name
     WidgetTester tester,
   ) async {
     // Arrange: Enter multi-select mode and select an item
     await tester.pumpWidget(
-      buildTestableWidget(const MemosScreen(), container),
+      buildTestableWidget(const ItemsScreen(), container), // Updated screen name
     );
     await tester.pumpAndSettle();
-    container.read(ui_providers.toggleMemoMultiSelectModeProvider)();
+    container.read(ui_providers.toggleItemMultiSelectModeProvider)(); // Use renamed provider
     await tester.pumpAndSettle();
-    final firstItemFinder = find.byType(MemoListItem).first;
+    final firstItemFinder = find.byType(NoteListItem).first; // Updated item widget
     final firstCheckboxFinder = find.descendant(
       of: firstItemFinder,
       matching: find.byType(CupertinoCheckbox),
     );
     await tester.tap(firstCheckboxFinder);
     await tester.pumpAndSettle();
-    expect(container.read(ui_providers.memoMultiSelectModeProvider), isTrue);
+    expect(container.read(ui_providers.itemMultiSelectModeProvider), isTrue); // Use renamed provider
     expect(
-      container.read(ui_providers.selectedMemoIdsForMultiSelectProvider),
+      container.read(ui_providers.selectedItemIdsForMultiSelectProvider), // Use renamed provider
       isNotEmpty,
     );
 
-    // Act: Tap the Cancel button (clear icon)
+    // Act: Tap the Cancel button
     final navBarFinder = find.byType(CupertinoNavigationBar);
     final cancelButtonFinder = find.descendant(
       of: navBarFinder,
@@ -544,13 +505,13 @@ void main() {
     await tester.pumpAndSettle();
 
     // Assert: Exited multi-select mode
-    expect(container.read(ui_providers.memoMultiSelectModeProvider), isFalse);
+    expect(container.read(ui_providers.itemMultiSelectModeProvider), isFalse); // Use renamed provider
     expect(
-      container.read(ui_providers.selectedMemoIdsForMultiSelectProvider),
+      container.read(ui_providers.selectedItemIdsForMultiSelectProvider), // Use renamed provider
       isEmpty,
     );
 
-    // Verify NavigationBar reverts - Use the existing navBarFinder
+    // Verify NavigationBar reverts
     expect(
       find.descendant(
         of: navBarFinder,
@@ -584,30 +545,27 @@ void main() {
       findsNothing,
     );
 
-    // Verify Search Bar and Filter Control are visible again
     expect(find.byType(CupertinoSearchTextField), findsOneWidget);
     expect(
       find.byType(CupertinoSlidingSegmentedControl<String>),
       findsOneWidget,
     );
 
-    // Verify Checkboxes are gone
     expect(
       find.descendant(
-        of: find.byType(MemoListItem),
+        of: find.byType(NoteListItem), // Updated item widget
         matching: find.byType(CupertinoCheckbox),
       ),
       findsNothing,
     );
   });
 
-  // Test 5: Server Switcher
-  testWidgets('MemosScreen displays server switcher and opens action sheet', (
+  testWidgets('ItemsScreen displays server switcher and opens action sheet', ( // Updated screen name
     WidgetTester tester,
   ) async {
     // Arrange
     await tester.pumpWidget(
-      buildTestableWidget(const MemosScreen(), container),
+      buildTestableWidget(const ItemsScreen(), container), // Updated screen name
     );
     await tester.pumpAndSettle();
 
@@ -637,18 +595,16 @@ void main() {
     expect(find.text('Cancel'), findsOneWidget);
   });
 
-  // Test 6: Quick Filter Control Interaction
-  testWidgets('MemosScreen updates filter preset via segmented control', (
+  testWidgets('ItemsScreen updates filter preset via segmented control', ( // Updated screen name
     WidgetTester tester,
   ) async {
     // Arrange
     await tester.pumpWidget(
-      buildTestableWidget(const MemosScreen(), container),
+      buildTestableWidget(const ItemsScreen(), container), // Updated screen name
     );
     await tester.pumpAndSettle();
     expect(container.read(quickFilterPresetProvider), 'inbox');
 
-    // Verify Initial Title specifically within NavBar
     final navBarFinder = find.byType(CupertinoNavigationBar);
     expect(
       find.descendant(
@@ -659,7 +615,7 @@ void main() {
       reason: 'Initial title should be Inbox',
     );
 
-    // Act: Tap the \'Today\' segment
+    // Act: Tap the 'Today' segment
     final todaySegmentFinder = find.descendant(
       of: find.byType(CupertinoSlidingSegmentedControl<String>),
       matching: find.text('Today'),
@@ -678,7 +634,7 @@ void main() {
       reason: 'Title should update to Today',
     );
 
-    // Act: Tap the \'All\' segment
+    // Act: Tap the 'All' segment
     final allSegmentFinder = find.descendant(
       of: find.byType(CupertinoSlidingSegmentedControl<String>),
       matching: find.text('All'),
@@ -698,17 +654,16 @@ void main() {
     );
   });
 
-  // Test 7: Open Advanced Filter Panel
-  testWidgets('MemosScreen opens AdvancedFilterPanel on tuning fork tap', (
+  testWidgets('ItemsScreen opens AdvancedFilterPanel on tuning fork tap', ( // Updated screen name
     WidgetTester tester,
   ) async {
     // Arrange
     await tester.pumpWidget(
-      buildTestableWidget(const MemosScreen(), container),
+      buildTestableWidget(const ItemsScreen(), container), // Updated screen name
     );
     await tester.pumpAndSettle();
 
-    // Act: Tap the advanced filter button (tuningfork)
+    // Act: Tap the advanced filter button
     final navBarFinder = find.byType(CupertinoNavigationBar);
     final advancedFilterButtonFinder = find.descendant(
       of: navBarFinder,
