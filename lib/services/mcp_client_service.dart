@@ -116,6 +116,26 @@ class McpProcessResult {
     this.toolResult,
     this.sourceServerId,
   });
+
+  McpProcessResult copyWith({
+    Content? modelCallContent,
+    Content? toolResponseContent,
+    Content? finalModelContent,
+    String? toolName,
+    Map<String, dynamic>? toolArgs,
+    String? toolResult,
+    String? sourceServerId,
+  }) {
+    return McpProcessResult(
+      modelCallContent: modelCallContent ?? this.modelCallContent,
+      toolResponseContent: toolResponseContent ?? this.toolResponseContent,
+      finalModelContent: finalModelContent ?? this.finalModelContent,
+      toolName: toolName ?? this.toolName,
+      toolArgs: toolArgs ?? this.toolArgs,
+      toolResult: toolResult ?? this.toolResult,
+      sourceServerId: sourceServerId ?? this.sourceServerId,
+    );
+  }
 }
 
 // --- Connection Status Enum ---
