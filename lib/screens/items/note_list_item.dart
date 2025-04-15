@@ -173,6 +173,7 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
             child: const Text('Add to Workbench'),
             onPressed: () {
               Navigator.pop(popupContext); // Close the action sheet first
+                  // Pass the main widget's context, not popupContext
               _addNoteToWorkbenchFromList(context, ref, widget.note); // Call helper
             },
           ),
@@ -224,11 +225,16 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
   // --- End Moved Helper Methods ---
 
   // --- Add this helper method within NoteListItemState ---
-  void _addNoteToWorkbenchFromList(BuildContext context, WidgetRef ref, NoteItem note) {
+  // Modify the function signature to accept the main BuildContext
+  void _addNoteToWorkbenchFromList(
+    BuildContext scaffoldContext,
+    WidgetRef ref,
+    NoteItem note,
+  ) {
     final activeServer = ref.read(activeServerConfigProvider);
     if (activeServer == null) {
-      // Optionally show an error message if needed
-      ScaffoldMessenger.of(context).showSnackBar(
+      // Use the passed scaffoldContext here
+      ScaffoldMessenger.of(scaffoldContext).showSnackBar(
         const SnackBar(content: Text("Cannot add to workbench: No active server."), backgroundColor: CupertinoColors.systemRed),
       );
       return;
@@ -250,8 +256,8 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
 
     ref.read(workbenchProvider.notifier).addItem(reference);
 
-    // Show confirmation
-    ScaffoldMessenger.of(context).showSnackBar(
+    // Use the passed scaffoldContext here too
+    ScaffoldMessenger.of(scaffoldContext).showSnackBar(
       const SnackBar(content: Text("Added to Workbench"), backgroundColor: CupertinoColors.systemGreen),
     );
   }
