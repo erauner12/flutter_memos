@@ -970,59 +970,45 @@ class BlinkoApiService implements BaseApiService {
       state = NoteState.archived;
     }
 
-    NoteVisibility visibility =
-        NoteVisibility
-            .private; // Blinko doesn't seem to have public/protected distinction easily available here
+    NoteVisibility visibility = NoteVisibility.private;
 
-    // Remove unnecessary null-aware operators
     final String idStr = blinkoDetail.id.toString();
     final String contentStr = blinkoDetail.content;
     final bool isPinned = blinkoDetail.isTop;
     final DateTime createdAt = parseBlinkoDate(blinkoDetail.createdAt);
     final DateTime updatedAt = parseBlinkoDate(blinkoDetail.updatedAt);
-    // Keep ?? for accountId as it's nullable num?
     final String creatorIdStr =
         blinkoDetail.accountId?.toString() ?? 'unknown_creator';
 
     // --- Parse Start/End Dates ---
-    // REMOVED: Access to potentially non-existent startDate/endDate fields
-    // final DateTime? startDate = tryParseDateTime(blinkoDetail.startDate);
-    // final DateTime? endDate = tryParseDateTime(blinkoDetail.endDate);
     final DateTime? startDate = null; // Assume null for now
     final DateTime? endDate = null; // Assume null for now
     // ---------------------------
 
-    // Keep ?? for tags as it's nullable list?
     final List<String> tags =
         (blinkoDetail.tags ?? [])
-            .map((t) => t.tag.name) // Safely access nested name
+            .map((t) => t.tag.name)
             .whereType<String>()
             .toList();
 
-    // Keep ?? for attachments as it's nullable list?
     final List<Map<String, dynamic>> resources =
         (blinkoDetail.attachments ?? []).map((a) {
           return {
-            'id':
-                a.path, // Use path as a unique identifier if no specific ID is available
-            'name': a.path, // Use path or filename as name
+            'id': a.path,
+            'name': a.path,
             'filename': a.name,
-            'externalLink': a.path, // Assuming path is the link
+            'externalLink': a.path,
             'contentType': a.type,
-            'size':
-                a.size?.toString(), // Keep ?? for size as it's nullable num?
-            'createTime':
-                a.createdAt, // Assuming this is a parsable date string
+            'size': a.size?.toString(),
+            'createTime': a.createdAt,
           };
         }).toList();
 
-    // Keep ?? for references as it's nullable list?
     final List<Map<String, dynamic>> relations =
         (blinkoDetail.references ?? [])
             .map((r) {
-              final relatedNoteId = r.toNoteId.toString(); // Use toNoteId
-              final type =
-                  'REFERENCE'; // Blinko references are likely this type
+              final relatedNoteId = r.toNoteId.toString();
+              final type = 'REFERENCE';
               return {'relatedMemoId': relatedNoteId, 'type': type};
             })
             .whereType<Map<String, dynamic>>()
@@ -1036,13 +1022,13 @@ class BlinkoApiService implements BaseApiService {
       visibility: visibility,
       createTime: createdAt,
       updateTime: updatedAt,
-      displayTime: createdAt, // Or maybe updatedAt? Decide display logic.
+      displayTime: createdAt,
       tags: tags,
       resources: resources,
       relations: relations,
       creatorId: creatorIdStr,
-      startDate: startDate, // Assign parsed start date (now null)
-      endDate: endDate, // Assign parsed end date (now null)
+      startDate: startDate,
+      endDate: endDate,
     );
   }
 
@@ -1054,7 +1040,6 @@ class BlinkoApiService implements BaseApiService {
       if (dateString == null || dateString.isEmpty) {
         return null;
       }
-      // Handle potential '0001-01-01T00:00:00Z' or similar zero dates from API
       if (dateString.startsWith('0001-')) {
         return null;
       }
@@ -1072,59 +1057,43 @@ class BlinkoApiService implements BaseApiService {
       state = NoteState.archived;
     }
 
-    NoteVisibility visibility =
-        NoteVisibility
-            .private; // Blinko doesn't seem to have public/protected distinction easily available here
+    NoteVisibility visibility = NoteVisibility.private;
 
-    // Remove unnecessary null-aware operators
     final String idStr = blinkoNote.id.toString();
     final String contentStr = blinkoNote.content;
     final bool isPinned = blinkoNote.isTop;
     final DateTime createdAt = parseBlinkoDate(blinkoNote.createdAt);
     final DateTime updatedAt = parseBlinkoDate(blinkoNote.updatedAt);
-    // Keep ?? for accountId as it's nullable num?
     final String creatorIdStr =
         blinkoNote.accountId?.toString() ?? 'unknown_creator';
 
-    // --- Parse Start/End Dates ---
-    // REMOVED: Access to potentially non-existent startDate/endDate fields
-    // final DateTime? startDate = tryParseDateTime(blinkoNote.startDate);
-    // final DateTime? endDate = tryParseDateTime(blinkoNote.endDate);
     final DateTime? startDate = null; // Assume null for now
     final DateTime? endDate = null; // Assume null for now
-    // ---------------------------
 
-    // Keep ?? for tags as it's nullable list?
     final List<String> tags =
         (blinkoNote.tags ?? [])
             .map((t) => t.tag.name)
             .whereType<String>()
             .toList();
 
-    // Keep ?? for attachments as it's nullable list?
     final List<Map<String, dynamic>> resources =
         (blinkoNote.attachments ?? []).map((a) {
           return {
-            'id':
-                a.path, // Use path as a unique identifier if no specific ID is available
-            'name': a.path, // Use path or filename as name
+            'id': a.path,
+            'name': a.path,
             'filename': a.name,
-            'externalLink': a.path, // Assuming path is the link
+            'externalLink': a.path,
             'contentType': a.type,
-            'size':
-                a.size?.toString(), // Keep ?? for size as it's nullable num?
-            'createTime':
-                a.createdAt, // Assuming this is a parsable date string
+            'size': a.size?.toString(),
+            'createTime': a.createdAt,
           };
         }).toList();
 
-    // Keep ?? for references as it's nullable list?
     final List<Map<String, dynamic>> relations =
         (blinkoNote.references ?? [])
             .map((r) {
-              final relatedNoteId = r.toNoteId.toString(); // Use toNoteId
-              final type =
-                  'REFERENCE'; // Blinko references are likely this type
+              final relatedNoteId = r.toNoteId.toString();
+              final type = 'REFERENCE';
               return {'relatedMemoId': relatedNoteId, 'type': type};
             })
             .whereType<Map<String, dynamic>>()
@@ -1138,13 +1107,13 @@ class BlinkoApiService implements BaseApiService {
       visibility: visibility,
       createTime: createdAt,
       updateTime: updatedAt,
-      displayTime: createdAt, // Or maybe updatedAt? Decide display logic.
+      displayTime: createdAt,
       tags: tags,
       resources: resources,
       relations: relations,
       creatorId: creatorIdStr,
-      startDate: startDate, // Assign parsed start date (now null)
-      endDate: endDate, // Assign parsed end date (now null)
+      startDate: startDate,
+      endDate: endDate,
     );
   }
 
@@ -1157,7 +1126,6 @@ class BlinkoApiService implements BaseApiService {
         return DateTime(1970);
       }
       try {
-        // Handle potential '0001-01-01T00:00:00Z' or similar zero dates from API
         if (dateString.startsWith('0001-')) {
           return DateTime(1970);
         }
@@ -1168,12 +1136,10 @@ class BlinkoApiService implements BaseApiService {
     }
     CommentState state = CommentState.normal;
     bool pinned = false;
-    // Remove unnecessary null-aware operators
     final String idStr = blinkoComment.id.toString();
     final String contentStr = blinkoComment.content;
     final DateTime createdAt = parseBlinkoDate(blinkoComment.createdAt);
     final DateTime updatedAt = parseBlinkoDate(blinkoComment.updatedAt);
-    // Keep ?? for accountId as it's nullable num?
     final String creatorIdStr =
         blinkoComment.accountId?.toString() ?? 'unknown_creator';
     return Comment(
@@ -1184,7 +1150,82 @@ class BlinkoApiService implements BaseApiService {
       creatorId: creatorIdStr,
       pinned: pinned,
       state: state,
-      resources: [],
+      resources:
+          [], // Blinko comments don't seem to have resources in the model
     );
+  }
+
+  // --- RESOURCE DATA FETCHING ---
+
+  @override
+  Future<Uint8List> getResourceData(
+    String resourceIdentifier, {
+    ServerConfig? targetServerOverride,
+  }) async {
+    // In Blinko, the identifier is likely the 'path' returned by the upload endpoint, e.g., "/file/get/some_hash.jpg"
+    final apiClient = _getApiClientForServer(targetServerOverride);
+    final serverIdForLog =
+        targetServerOverride?.name ?? targetServerOverride?.id ?? 'active';
+    // Ensure the identifier starts with '/' if it's a path, otherwise assume it's just the filename/hash part
+    final String effectivePath =
+        resourceIdentifier.startsWith('/')
+            ? resourceIdentifier
+            : '/file/get/$resourceIdentifier';
+    final resourceUrl = '${apiClient.basePath}$effectivePath';
+
+    if (kDebugMode) {
+      print(
+        '[BlinkoApiService.getResourceData] Attempting to fetch resource $resourceIdentifier from URL: $resourceUrl on server $serverIdForLog',
+      );
+    }
+
+    try {
+      final response = await http.get(
+        Uri.parse(resourceUrl),
+        headers: {
+          'Authorization':
+              'Bearer ${apiClient.authentication is blinko_api.HttpBearerAuth ? (apiClient.authentication as blinko_api.HttpBearerAuth).accessToken : ''}',
+          'Accept': '*/*',
+        },
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        if (kDebugMode) {
+          print(
+            '[BlinkoApiService.getResourceData] Successfully fetched ${response.bodyBytes.length} bytes for resource $resourceIdentifier',
+          );
+        }
+        return response.bodyBytes;
+      } else {
+        String errorBody = response.body;
+        try {
+          errorBody = utf8.decode(response.bodyBytes);
+        } catch (_) {}
+        if (kDebugMode) {
+          print(
+            '[BlinkoApiService.getResourceData] Failed to fetch resource $resourceIdentifier. Status: ${response.statusCode}, Body: $errorBody',
+          );
+        }
+        throw blinko_api.ApiException(
+          response.statusCode,
+          'Failed to fetch resource data from $resourceUrl: $errorBody',
+        );
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print(
+          '[BlinkoApiService.getResourceData] Error fetching resource $resourceIdentifier: $e',
+        );
+      }
+      if (e is blinko_api.ApiException) rethrow;
+      if (e is http.ClientException) {
+        throw Exception(
+          'Network error fetching resource data for $resourceIdentifier from $serverIdForLog: ${e.message}',
+        );
+      }
+      throw Exception(
+        'Failed to fetch resource data for $resourceIdentifier from $serverIdForLog: $e',
+      );
+    }
   }
 }

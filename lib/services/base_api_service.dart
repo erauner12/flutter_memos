@@ -90,6 +90,10 @@ abstract class BaseApiService {
   // Health Check
   Future<bool> checkHealth();
 
+  /// Fetches the raw byte data for a given resource identifier (ID, name, or path).
+  /// The exact identifier depends on the API implementation.
+  Future<Uint8List> getResourceData(String resourceIdentifier, {ServerConfig? targetServerOverride});
+
   // Add other common methods as needed (e.g., tags)
 }
 
@@ -238,4 +242,9 @@ class DummyApiService implements BaseApiService {
 
   @override
   Future<bool> checkHealth() async => false;
+
+  @override
+  Future<Uint8List> getResourceData(String resourceIdentifier, {ServerConfig? targetServerOverride}) async {
+    throw UnimplementedError("Service not configured");
+  }
 }

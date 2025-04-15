@@ -108,6 +108,15 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
               onEdit(context);
             },
           ),
+              // Add Move to Server action conditionally
+              if (widget.onMoveToServer != null)
+                CupertinoContextMenuAction(
+                  child: const Text('Move to Server...'),
+                  onPressed: () {
+                    Navigator.pop(popupContext); // Close the action sheet
+                    widget.onMoveToServer!(); // Trigger the callback
+                  },
+                ),
           CupertinoContextMenuAction(
             child: Text(widget.note.pinned ? 'Unpin' : 'Pin'),
             onPressed: () {
@@ -465,6 +474,18 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
             label: 'Edit',
             autoClose: true,
           ),
+          // Add Move action conditionally
+          if (widget.onMoveToServer != null)
+            SlidableAction(
+              onPressed: (_) => widget.onMoveToServer!(), // Trigger callback
+              backgroundColor: CupertinoColors.systemIndigo, // Choose a color
+              foregroundColor: CupertinoColors.white,
+              icon:
+                  CupertinoIcons
+                      .arrow_right_arrow_left_square, // Choose an icon
+              label: 'Move',
+              autoClose: true, // Close slidable after action
+            ),
           SlidableAction(
             onPressed: (_) => onTogglePin(context),
             backgroundColor: CupertinoColors.systemOrange,
