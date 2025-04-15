@@ -85,50 +85,6 @@ class MockCloudKitService extends _i1.Mock implements _i2.CloudKitService {
       ) as _i3.Future<bool>);
 
   @override
-  _i3.Future<bool> deleteAllRecordsOfType(String? recordType) =>
-      (super.noSuchMethod(
-        Invocation.method(
-          #deleteAllRecordsOfType,
-          [recordType],
-        ),
-        returnValue: _i3.Future<bool>.value(false),
-      ) as _i3.Future<bool>);
-
-  @override
-  _i3.Future<bool> deleteUserSettingsRecord() => (super.noSuchMethod(
-        Invocation.method(
-          #deleteUserSettingsRecord,
-          [],
-        ),
-        returnValue: _i3.Future<bool>.value(false),
-      ) as _i3.Future<bool>);
-
-  @override
-  _i3.Future<String?> getSetting(String? keyName) => (super.noSuchMethod(
-        Invocation.method(
-          #getSetting,
-          [keyName],
-        ),
-        returnValue: _i3.Future<String?>.value(),
-      ) as _i3.Future<String?>);
-
-  @override
-  _i3.Future<bool> saveSetting(
-    String? keyName,
-    String? value,
-  ) =>
-      (super.noSuchMethod(
-        Invocation.method(
-          #saveSetting,
-          [
-            keyName,
-            value,
-          ],
-        ),
-        returnValue: _i3.Future<bool>.value(false),
-      ) as _i3.Future<bool>);
-
-  @override
   _i3.Future<bool> saveMcpServerConfig(_i6.McpServerConfig? config) =>
       (super.noSuchMethod(
         Invocation.method(
@@ -191,11 +147,45 @@ class MockCloudKitService extends _i1.Mock implements _i2.CloudKitService {
       ) as _i3.Future<bool>);
 
   @override
-  _i3.Future<bool> updateWorkbenchItemLastOpened(String? referenceId) =>
+  _i3.Future<String?> getSetting(String? keyName) => (super.noSuchMethod(
+        Invocation.method(
+          #getSetting,
+          [keyName],
+        ),
+        returnValue: _i3.Future<String?>.value(),
+      ) as _i3.Future<String?>);
+
+  @override
+  _i3.Future<bool> saveSetting(
+    String? keyName,
+    String? value,
+  ) =>
       (super.noSuchMethod(
         Invocation.method(
-          #updateWorkbenchItemLastOpened,
-          [referenceId],
+          #saveSetting,
+          [
+            keyName,
+            value,
+          ],
+        ),
+        returnValue: _i3.Future<bool>.value(false),
+      ) as _i3.Future<bool>);
+
+  @override
+  _i3.Future<bool> deleteAllRecordsOfType(String? recordType) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #deleteAllRecordsOfType,
+          [recordType],
+        ),
+        returnValue: _i3.Future<bool>.value(false),
+      ) as _i3.Future<bool>);
+
+  @override
+  _i3.Future<bool> deleteUserSettingsRecord() => (super.noSuchMethod(
+        Invocation.method(
+          #deleteUserSettingsRecord,
+          [],
         ),
         returnValue: _i3.Future<bool>.value(false),
       ) as _i3.Future<bool>);

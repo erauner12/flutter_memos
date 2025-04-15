@@ -78,13 +78,23 @@ class WorkbenchScreen extends ConsumerWidget {
               padding: const EdgeInsets.symmetric(
                 vertical: 8.0,
               ), // Add some padding
+              buildDefaultDragHandles: false, // Disable the default handle
               itemCount: items.length,
               itemBuilder: (context, index) {
                 final item = items[index];
                 // IMPORTANT: Key MUST be present and unique for ReorderableListView
-                return WorkbenchItemTile(
-                  key: ValueKey(item.id), // Use reference ID as key
-                  itemReference: item,
+                // Wrap the tile in a listener to make it draggable
+                return ReorderableDragStartListener(
+                  index: index,
+                  key: ValueKey(
+                    'drag-${item.id}',
+                  ), // Add a key to the listener too
+                  child: WorkbenchItemTile(
+                    key: ValueKey(
+                      item.id,
+                    ), // Keep key on the tile itself as well
+                    itemReference: item,
+                  ),
                 );
               },
               onReorder: (oldIndex, newIndex) {
