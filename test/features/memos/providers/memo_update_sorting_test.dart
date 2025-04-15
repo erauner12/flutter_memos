@@ -22,7 +22,10 @@ class MockNotesNotifier extends NotesNotifier {
   // Update to use the non-deprecated Ref type
   final Ref ref;
 
-  MockNotesNotifier(this.ref, NotesState initialState) // Updated state type
+  MockNotesNotifier(
+    this.ref,
+    note_providers.NotesState initialState,
+  ) // Updated state type
     : super(ref, skipInitialFetchForTesting: true) {
     // Explicitly set the initial state in the constructor
     state = initialState;
