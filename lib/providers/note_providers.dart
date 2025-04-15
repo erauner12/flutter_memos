@@ -5,6 +5,7 @@ import 'package:flutter_memos/models/note_item.dart';
 import 'package:flutter_memos/models/server_config.dart';
 import 'package:flutter_memos/providers/api_providers.dart' as api_p;
 import 'package:flutter_memos/providers/filter_providers.dart';
+
 import 'package:flutter_memos/providers/server_config_provider.dart';
 import 'package:flutter_memos/providers/ui_providers.dart' as ui_providers;
 import 'package:flutter_memos/services/base_api_service.dart';
@@ -16,6 +17,7 @@ import 'package:flutter_memos/providers/settings_provider.dart' as settings_p;
 
 // New imports for moveNoteProvider refactor
 import 'package:flutter_memos/services/blinko_api_service.dart';
+// Update this import path
 import 'package:flutter_memos/services/memos_api_service.dart';
 import 'package:flutter_memos/utils/migration_utils.dart';
 import 'dart:typed_data';

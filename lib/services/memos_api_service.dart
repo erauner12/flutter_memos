@@ -1,6 +1,6 @@
 import 'dart:convert'; // For base64Encode, utf8
 
-import 'package:flutter/foundation.dart'; // For kDebugMode
+import 'package:flutter/foundation.dart'; // For kDebugMode, Uint8List
 import 'package:flutter_memos/api/lib/api.dart' as memos_api; // Alias Memos API
 import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/models/list_notes_response.dart';
@@ -541,6 +541,98 @@ class MemosApiService implements BaseApiService {
     }
   }
 
+  // --- RESOURCE DATA FETCHING ---
+
+  @override
+  Future<Uint8List> getResourceData(
+    String resourceIdentifier, { // Identifier is likely the 'name' (e.g., "resources/123")
+    ServerConfig? targetServerOverride,
+  }) async {
+    final apiClient = _getApiClientForServer(targetServerOverride);
+    final serverIdForLog =
+        targetServerOverride?.name ?? targetServerOverride?.id ?? 'active';
+
+    // Memos resource URL structure: {baseUrl}/o/r/{resourceId}/{filename}
+    // The 'resourceIdentifier' is the 'name' field, like "resources/123"
+    // We need to extract the ID and potentially get the filename from the API if not provided.
+    // For simplicity, let's assume the identifier *is* the name and construct the URL.
+    // A more robust way might involve fetching the resource metadata first if needed.
+
+    final String resourceId = _extractIdFromName(resourceIdentifier);
+    // Construct the URL. We might not know the filename here, but Memos often redirects
+    // or serves the content even without the correct filename in the URL path.
+    // Using a placeholder filename or just the ID might work. Let's try with just the ID first.
+    // The actual path is /o/r/{resourceId}/{optional_filename}
+    // Let's try the direct resource link format if available or construct one.
+    // The ResourceServiceApi doesn't have a dedicated download method.
+    // We need to use a direct HTTP GET request.
+
+    // Construct the URL based on the API base path and Memos resource path structure
+    final resourceUrl = '${apiClient.basePath}/o/r/$resourceId';
+
+    if (kDebugMode) {
+      print(
+        '[MemosApiService.getResourceData] Attempting to fetch resource $resourceIdentifier (ID: $resourceId) from URL: $resourceUrl on server $serverIdForLog',
+      );
+    }
+
+    try {
+      final response = await http.get(
+        Uri.parse(resourceUrl),
+        headers: {
+          'Authorization':
+              'Bearer ${apiClient.authentication is memos_api.HttpBearerAuth ? (apiClient.authentication as memos_api.HttpBearerAuth).accessToken : ''}',
+          'Accept': '*/*', // Accept any content type
+        },
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        if (kDebugMode) {
+          print(
+            '[MemosApiService.getResourceData] Successfully fetched ${response.bodyBytes.length} bytes for resource $resourceIdentifier',
+          );
+        }
+        return response.bodyBytes;
+      } else {
+        String errorBody = response.body;
+        try {
+          // Try decoding as UTF-8 for potential error messages
+          errorBody = utf8.decode(response.bodyBytes);
+        } catch (_) {
+          // Ignore decoding errors, keep original body string
+        }
+        if (kDebugMode) {
+          print(
+            '[MemosApiService.getResourceData] Failed to fetch resource $resourceIdentifier. Status: ${response.statusCode}, Body: $errorBody',
+          );
+        }
+        // Throw an exception that mimics ApiException structure if possible
+        throw memos_api.ApiException(
+          response.statusCode,
+          'Failed to fetch resource data from $resourceUrl: $errorBody',
+        );
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print(
+          '[MemosApiService.getResourceData] Error fetching resource $resourceIdentifier: $e',
+        );
+      }
+      if (e is memos_api.ApiException) rethrow; // Re-throw API exceptions directly
+      if (e is http.ClientException) {
+        // Wrap HTTP client errors
+        throw Exception(
+          'Network error fetching resource data for $resourceIdentifier from $serverIdForLog: ${e.message}',
+        );
+      }
+      // Wrap other potential errors
+      throw Exception(
+        'Failed to fetch resource data for $resourceIdentifier from $serverIdForLog: $e',
+      );
+    }
+  }
+
+
   // --- HELPER METHODS ---
 
   memos_api.MemoServiceApi _getMemoApiForServer(ServerConfig? serverConfig) {
@@ -561,7 +653,22 @@ class MemosApiService implements BaseApiService {
     return memos_api.ResourceServiceApi(_getApiClientForServer(serverConfig));
   }
 
-  memos_api.ApiClient _getApiClientForServer(ServerConfig serverConfig) {
+  memos_api.ApiClient _getApiClientForServer(ServerConfig? serverConfig) {
+     // Added null check for serverConfig
+    if (serverConfig == null ||
+        (serverConfig.serverUrl == _baseUrl &&
+         serverConfig.authToken == _authToken)) {
+      // Ensure the default client is properly initialized if used
+       if (!_apiClient.basePath.startsWith('http')) {
+         if (kDebugMode) print("[MemosApiService._getApiClientForServer] Warning: Default ApiClient seems uninitialized. Attempting re-init.");
+         if (_baseUrl.isNotEmpty && _authToken.isNotEmpty) {
+           _initializeClient(_baseUrl, _authToken);
+         } else {
+           throw Exception("Default MemosApiService ApiClient is not configured.");
+         }
+       }
+      return _apiClient;
+    }
     try {
       String targetBaseUrl = serverConfig.serverUrl;
       if (targetBaseUrl.toLowerCase().contains('/api/v1')) {
@@ -616,6 +723,9 @@ class MemosApiService implements BaseApiService {
       relations: apiMemo.relations.map(_convertApiRelationToMap).toList(),
       creatorId: apiMemo.creator != null ? _extractIdFromName(apiMemo.creator!) : null,
       parentId: apiMemo.parent != null ? _extractIdFromName(apiMemo.parent!) : null,
+      // Add startDate and endDate mapping if Memos API supports them
+      startDate: null, // Placeholder
+      endDate: null,   // Placeholder
     );
   }
 
@@ -623,12 +733,13 @@ class MemosApiService implements BaseApiService {
   Map<String, dynamic> _convertApiResourceToMap(memos_api.V1Resource apiResource) {
     return {
       'id': apiResource.name != null ? _extractIdFromName(apiResource.name!) : null,
-      'name': apiResource.name,
+      'name': apiResource.name, // Keep the full name (e.g., resources/123)
       'filename': apiResource.filename,
       'contentType': apiResource.type,
       'size': apiResource.size != null ? int.tryParse(apiResource.size!) : null,
       'createTime': apiResource.createTime?.toIso8601String(),
       'externalLink': apiResource.externalLink,
+      // Add other fields if needed, e.g., publicId, uid
     };
   }
 
