@@ -39,8 +39,6 @@ class CloudKitService {
 
   /// Check the iCloud account status.
   Future<CloudKitAccountStatus> initialize() async {
-    // Use CloudKitAccountStatus
-    // Use correct type CloudKitAccountStatus
     try {
       final status = await _cloudKit.getAccountStatus();
       if (kDebugMode) {
@@ -51,7 +49,7 @@ class CloudKitService {
       if (kDebugMode) {
         print('[CloudKitService] Error getting account status: \$e');
       }
-      return CloudKitAccountStatus.couldNotDetermine; // Use CloudKitAccountStatus enum value
+      return CloudKitAccountStatus.couldNotDetermine;
     }
   }
 
@@ -59,35 +57,31 @@ class CloudKitService {
 
   /// Convert ServerConfig to a map suitable for CloudKit storage (`Map<String, String>`).
   Map<String, String> _serverConfigToMap(ServerConfig config) {
-    // CloudKit fields must match keys here. All values MUST be strings.
     return {
-      'name': config.name ?? '', // Ensure null becomes empty string
-      'serverUrl': config.serverUrl, // Already a string
-      'authToken': config.authToken, // Already a string
-      'serverType': config.serverType.name, // <-- ADD serverType field
-      // 'id' is the recordName, not stored as a field within the record data
+      'name': config.name ?? '',
+      'serverUrl': config.serverUrl,
+      'authToken': config.authToken,
+      'serverType': config.serverType.name,
     };
   }
 
   /// Convert CloudKit record data (`Map<String, dynamic>`) back to a ServerConfig object.
   ServerConfig _mapToServerConfig(
     String recordName,
-    Map<String, dynamic> recordData, // Changed type to match CloudKitRecord.values
+    Map<String, dynamic> recordData,
   ) {
     if (kDebugMode) {
       print(
         '[CloudKitService][_mapToServerConfig] Mapping recordName: \$recordName, data: \$recordData',
       );
     }
-    // Access values assuming they are strings, as saved by _serverConfigToMap
     final config = ServerConfig(
-      id: recordName, // Use CloudKit's recordName as the unique ID
-      name: recordData['name'] as String?, // Cast to String? (or handle null)
-      serverUrl: recordData['serverUrl'] as String? ?? '', // Cast and handle null
-      authToken: recordData['authToken'] as String? ?? '', // Cast and handle null
-      // --- START serverType Parsing ---
+      id: recordName,
+      name: recordData['name'] as String?,
+      serverUrl: recordData['serverUrl'] as String? ?? '',
+      authToken: recordData['authToken'] as String? ?? '',
       serverType: () {
-        ServerType type = ServerType.memos; // Default
+        ServerType type = ServerType.memos;
         final rawServerType = recordData['serverType'];
         if (kDebugMode) {
           print(
@@ -114,13 +108,12 @@ class CloudKitService {
           }
         }
         return type;
-      }(), // Immediately invoke the function to get the type
-      // --- END serverType Parsing ---
+      }(),
     );
     if (kDebugMode) {
       print(
         '[CloudKitService][_mapToServerConfig] Mapped result: \${config.toJson()}',
-      ); // Log the resulting object
+      );
     }
     return config;
   }
@@ -129,19 +122,15 @@ class CloudKitService {
   Future<bool> saveServerConfig(ServerConfig config) async {
     try {
       final mapData = _serverConfigToMap(config);
-      // --- Add Logging Here ---
       if (kDebugMode) {
-        // Log the serverType being saved (it's part of the config object, but _serverConfigToMap might exclude it)
-        // Let's log the type from the original config object for clarity.
         print(
           '[CloudKitService] Preparing to save ServerConfig (ID: \${config.id}, Type: \${config.serverType.name}) to CloudKit with data: \$mapData',
         );
       }
-      // --- End Logging ---
       await _cloudKit.saveRecord(
-        scope: CloudKitDatabaseScope.private, // Use CloudKitDatabaseScope
+        scope: CloudKitDatabaseScope.private,
         recordType: _serverConfigRecordType,
-        recordName: config.id, // Use ServerConfig's ID as the CloudKit recordName
+        recordName: config.id,
         record: mapData,
       );
       if (kDebugMode) {
@@ -168,19 +157,13 @@ class CloudKitService {
           '[CloudKitService] Getting ServerConfig (ID: \$id) from CloudKit...',
         );
       }
-      // getRecord returns CloudKitRecord (due to dependency typo in filename, but correct class name)
       final CloudKitRecord ckRecord = await _cloudKit.getRecord(
-        // Use correct class name CloudKitRecord
-        scope: CloudKitDatabaseScope.private, // Use CloudKitDatabaseScope enum
+        scope: CloudKitDatabaseScope.private,
         recordName: id,
       );
-
-      // The package might throw an exception if not found.
-      // Assuming it throws if not found, and the object is non-null on success.
       if (kDebugMode) {
         print('[CloudKitService] Found ServerConfig (ID: \$id).');
       }
-      // Access fields using the '.values' property
       return _mapToServerConfig(ckRecord.recordName, ckRecord.values);
     } catch (e) {
       if (kDebugMode) {
@@ -197,7 +180,7 @@ class CloudKitService {
         print('[CloudKitService] Getting all ServerConfigs from CloudKit...');
       }
       final List<CloudKitRecord> ckRecords = await _cloudKit.getRecordsByType(
-        scope: CloudKitDatabaseScope.private, // Use CloudKitDatabaseScope enum
+        scope: CloudKitDatabaseScope.private,
         recordType: _serverConfigRecordType,
       );
       if (kDebugMode) {
@@ -205,12 +188,10 @@ class CloudKitService {
           '[CloudKitService] Found \${ckRecords.length} ServerConfig records raw from CloudKit.',
         );
       }
-      // Log raw data including inferred type before mapping
       if (kDebugMode) {
         for (final ckRecord in ckRecords) {
-          final rawType = ckRecord.values['serverType'];
           print(
-            '[CloudKitService] Raw Fetched ServerConfig Record: Name=\${ckRecord.recordName}, Values=\${ckRecord.values}, Raw Type Field="\$rawType"',
+            '[CloudKitService] Raw Fetched ServerConfig Record: Name=\${ckRecord.recordName}, Values=\${ckRecord.values}',
           );
         }
       }
@@ -237,7 +218,7 @@ class CloudKitService {
         );
       }
       await _cloudKit.deleteRecord(
-        scope: CloudKitDatabaseScope.private, // Use CloudKitDatabaseScope enum
+        scope: CloudKitDatabaseScope.private,
         recordName: id,
       );
       if (kDebugMode) {
@@ -262,7 +243,6 @@ class CloudKitService {
       );
     }
     try {
-      // 1. Fetch all records of the given type
       final List<CloudKitRecord> ckRecords = await _cloudKit.getRecordsByType(
         scope: CloudKitDatabaseScope.private,
         recordType: recordType,
@@ -275,13 +255,11 @@ class CloudKitService {
       }
 
       if (ckRecords.isEmpty) {
-        return true; // Nothing to delete
+        return true;
       }
 
-      // 2. Extract record names
       final recordNames = ckRecords.map((r) => r.recordName).toList();
 
-      // 3. Delete each record
       for (final recordName in recordNames) {
         try {
           if (kDebugMode) {
@@ -307,7 +285,6 @@ class CloudKitService {
           '[CloudKitService] Finished deleting records of type \$recordType.',
         );
       }
-      // Return true if the process completed, even if individual deletions failed.
       return true;
     } catch (fetchError) {
       if (kDebugMode) {
@@ -326,7 +303,6 @@ class CloudKitService {
         '[CloudKitService] Attempting to delete UserSettings record (\$_userSettingsRecordName)...',
       );
     }
-    // Use the lock to prevent conflicts with saveSetting potentially running concurrently
     return _settingsLock.synchronized(() async {
       try {
         await _cloudKit.deleteRecord(
@@ -360,7 +336,6 @@ class CloudKitService {
   }
 
   // --- UserSettings Methods ---
-  // (Existing methods for fetching and saving user settings)
 
   /// Fetches the user settings record from CloudKit.
   Future<CloudKitRecord?> _fetchUserSettingsRecord() async {
@@ -481,21 +456,20 @@ class CloudKitService {
   }
 
   // --- MCP ServerConfig Methods ---
-  // (Existing methods for MCP ServerConfig)
 
   /// Convert McpServerConfig to a map suitable for CloudKit storage (`Map<String, String>`).
   Map<String, String> _mcpServerConfigToMap(McpServerConfig config) {
     return {
       'name': config.name,
-      'connectionType': config.connectionType.name, // Store enum name
+      'connectionType': config.connectionType.name,
       'command': config.command,
       'args': config.args,
-      'host': config.host ?? '', // Store nullable string, default to empty
+      'host': config.host ?? '',
       'port': config.port.toString(),
-      'isActive': config.isActive.toString(), // Store bool as string 'true'/'false'
+      'isActive': config.isActive.toString(),
       'customEnvironment': jsonEncode(
         config.customEnvironment,
-      ), // Store the environment map as a JSON string
+      ),
     };
   }
 
@@ -510,7 +484,6 @@ class CloudKitService {
       );
     }
 
-    // Safely parse the custom environment JSON string
     Map<String, String> environment = {};
     final envString = recordData['customEnvironment'] as String?;
     if (envString != null && envString.isNotEmpty) {
@@ -528,7 +501,6 @@ class CloudKitService {
       }
     }
 
-    // Parse connectionType safely, defaulting to stdio if missing/invalid
     McpConnectionType parsedConnectionType = McpConnectionType.stdio;
     final typeString = recordData['connectionType'] as String?;
     if (typeString != null) {
@@ -687,31 +659,25 @@ class CloudKitService {
 
   // --- WorkbenchItemReference Methods ---
 
-  /// Convert WorkbenchItemReference to a map suitable for CloudKit storage (`Map<String, dynamic>`).
-  Map<String, dynamic> _workbenchItemReferenceToMap(
+  /// Convert WorkbenchItemReference to a map suitable for CloudKit storage (`Map<String, String>`).
+  Map<String, String> _workbenchItemReferenceToMap(
     WorkbenchItemReference item,
   ) {
     return {
-      // 'id' is the recordName, not stored as a field
       'referencedItemId': item.referencedItemId,
-      'referencedItemType':
-          item.referencedItemType.name, // Store enum name as String
+      'referencedItemType': item.referencedItemType.name,
       'serverId': item.serverId,
-      'serverType': item.serverType.name, // Store enum name as String
-      'serverName': item.serverName, // Store String? (CloudKit handles null)
-      'previewContent':
-          item.previewContent, // Store String? (CloudKit handles null)
-      'addedTimestamp': item.addedTimestamp, // Store native DateTime
-      // Store native DateTime? (CloudKit handles null)
-      'lastOpenedTimestamp': item.lastOpenedTimestamp,
-      // Add parentNoteId if needed in the future
-      // 'parentNoteId': item.parentNoteId,
+      'serverType': item.serverType.name,
+      'serverName': item.serverName ?? '',
+      'previewContent': item.previewContent ?? '',
+      'addedTimestamp': item.addedTimestamp.toIso8601String(),
+      'lastOpenedTimestamp': item.lastOpenedTimestamp?.toIso8601String() ?? '',
     };
   }
 
   /// Convert CloudKit record data (`Map<String, dynamic>`) back to a WorkbenchItemReference object.
   WorkbenchItemReference _mapToWorkbenchItemReference(
-    String recordName, // This is the WorkbenchItemReference.id
+    String recordName,
     Map<String, dynamic> recordData,
   ) {
     if (kDebugMode) {
@@ -720,7 +686,6 @@ class CloudKitService {
       );
     }
 
-    // Helper to parse enums safely
     T parseEnum<T extends Enum>(
       List<T> enumValues,
       String? name,
@@ -749,12 +714,10 @@ class CloudKitService {
       }
     }
 
-    // Helper to parse DateTime robustly (handles String or DateTime)
     DateTime? parseDateTimeRobustly(dynamic value) {
       if (value == null) return null;
       if (value is DateTime) return value;
       if (value is String) return DateTime.tryParse(value);
-      // Add handling for Timestamp if CloudKit returns that type
       if (kDebugMode) {
         print(
           '[CloudKitService][_mapToWorkbenchItemReference] Warning: Unexpected type for DateTime field: \${value.runtimeType}. Value: \$value',
@@ -764,7 +727,7 @@ class CloudKitService {
     }
 
     final item = WorkbenchItemReference(
-      id: recordName, // Use CloudKit recordName as the reference's unique ID
+      id: recordName,
       referencedItemId: recordData['referencedItemId'] as String? ?? '',
       referencedItemType: parseEnum<WorkbenchItemType>(
         WorkbenchItemType.values,
@@ -779,14 +742,11 @@ class CloudKitService {
       ),
       serverName: recordData['serverName'] as String?,
       previewContent: recordData['previewContent'] as String?,
-      // Use robust DateTime parsing, default to now if addedTimestamp is invalid/missing
       addedTimestamp:
           parseDateTimeRobustly(recordData['addedTimestamp']) ?? DateTime.now(),
-      // Use robust DateTime parsing for optional lastOpenedTimestamp
       lastOpenedTimestamp: parseDateTimeRobustly(
         recordData['lastOpenedTimestamp'],
       ),
-      // parentNoteId: recordData['parentNoteId'] as String?, // If added later
     );
 
     if (kDebugMode) {
@@ -800,8 +760,7 @@ class CloudKitService {
   /// Save or update a WorkbenchItemReference in CloudKit.
   Future<bool> saveWorkbenchItemReference(WorkbenchItemReference item) async {
     try {
-      // Use the updated map function which returns Map<String, dynamic>
-      final Map<String, dynamic> mapData = _workbenchItemReferenceToMap(item);
+      final Map<String, String> mapData = _workbenchItemReferenceToMap(item);
       if (kDebugMode) {
         print(
           '[CloudKitService] Saving WorkbenchItemReference (ID: \${item.id}) to CloudKit with data: \$mapData',
@@ -810,8 +769,8 @@ class CloudKitService {
       await _cloudKit.saveRecord(
         scope: CloudKitDatabaseScope.private,
         recordType: _workbenchItemReferenceRecordType,
-        recordName: item.id, // Use WorkbenchItemReference's ID as the CloudKit recordName
-        record: mapData, // Pass the Map<String, dynamic> directly
+        recordName: item.id,
+        record: mapData,
       );
       if (kDebugMode) {
         print(
@@ -819,11 +778,10 @@ class CloudKitService {
         );
       }
       return true;
-    } catch (e, s) {
-      // Add stack trace
+    } catch (e) {
       if (kDebugMode) {
         print(
-          '[CloudKitService] Error saving WorkbenchItemReference (ID: \${item.id}): \$e\n\$s', // Log stack trace
+          '[CloudKitService] Error saving WorkbenchItemReference (ID: \${item.id}): \$e',
         );
       }
       return false;
@@ -838,7 +796,6 @@ class CloudKitService {
           '[CloudKitService] Getting all WorkbenchItemReferences from CloudKit...',
         );
       }
-      // Import WorkbenchItemReference model at the top
       final List<CloudKitRecord> ckRecords = await _cloudKit.getRecordsByType(
         scope: CloudKitDatabaseScope.private,
         recordType: _workbenchItemReferenceRecordType,
@@ -862,7 +819,7 @@ class CloudKitService {
           '[CloudKitService] Error getting all WorkbenchItemReferences: \$e',
         );
       }
-      return []; // Return empty list on error
+      return [];
     }
   }
 
@@ -876,7 +833,7 @@ class CloudKitService {
       }
       await _cloudKit.deleteRecord(
         scope: CloudKitDatabaseScope.private,
-        recordName: referenceId, // The ID of the reference is the record name
+        recordName: referenceId,
       );
       if (kDebugMode) {
         print(
@@ -892,7 +849,7 @@ class CloudKitService {
             '[CloudKitService] WorkbenchItemReference (ID: \$referenceId) not found for deletion (already deleted?).',
           );
         }
-        return true; // Consider deletion successful if it doesn't exist
+        return true;
       }
       if (kDebugMode) {
         print(
@@ -911,38 +868,30 @@ class CloudKitService {
           '[CloudKitService] Updating lastOpenedTimestamp for WorkbenchItemReference (ID: \$referenceId)...',
         );
       }
-      // 1. Fetch the existing record.
       final CloudKitRecord ckRecord = await _cloudKit.getRecord(
         scope: CloudKitDatabaseScope.private,
         recordName: referenceId,
       );
-
-      // 2. Get the existing values map (which is Map<String, dynamic>)
-      //    and update only the timestamp field with a native DateTime object.
-      final Map<String, dynamic> dataToSave = Map<String, dynamic>.from(
-        ckRecord.values,
+      final Map<String, String> dataToSave = ckRecord.values.map(
+        (key, value) => MapEntry(key, value?.toString() ?? ''),
       );
-      dataToSave['lastOpenedTimestamp'] = DateTime.now(); // Use native DateTime
-
-      // 3. Save the record with the modified Map<String, dynamic>.
+      dataToSave['lastOpenedTimestamp'] = DateTime.now().toIso8601String();
       await _cloudKit.saveRecord(
         scope: CloudKitDatabaseScope.private,
         recordType: _workbenchItemReferenceRecordType,
-        recordName: referenceId, // Use the ID as the record name
-        record: dataToSave, // Save the map with the updated DateTime
+        recordName: referenceId,
+        record: dataToSave,
       );
-
       if (kDebugMode) {
         print(
           '[CloudKitService] Updated lastOpenedTimestamp for WorkbenchItemReference (ID: \$referenceId) successfully.',
         );
       }
       return true;
-    } catch (e, s) {
-      // Add stack trace
+    } catch (e) {
       if (kDebugMode) {
         print(
-          '[CloudKitService] Error updating lastOpenedTimestamp for WorkbenchItemReference (ID: \$referenceId): \$e\n\$s', // Log stack trace
+          '[CloudKitService] Error updating lastOpenedTimestamp for WorkbenchItemReference (ID: \$referenceId): \$e',
         );
       }
       return false;
