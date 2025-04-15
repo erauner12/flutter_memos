@@ -71,13 +71,18 @@ void main() {
 
   group('initial state and loadItems', () {
     test('initial state is loading', () {
-      // Arrange: Provider is just created in setUp
+      // Arrange: Provider is created in setUp, constructor doesn't load
+      
       // Act: Read initial state immediately
       final state = container.read(workbenchProvider);
-      // Assert
-      expect(state.isLoading, true);
+      
+      // Assert: Should not be loading, should be empty, no error
+      expect(state.isLoading, false); // Changed from true to false
       expect(state.items, isEmpty);
       expect(state.error, isNull);
+      
+      // Verify loadItems was NOT called yet by the constructor
+      verifyNever(mockCloudKitService.getAllWorkbenchItemReferences());
     });
 
     test('loadItems success - sorts items by addedTimestamp descending', () async {
