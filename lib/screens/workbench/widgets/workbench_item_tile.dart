@@ -1,11 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_memos/models/comment.dart'; // Import Comment
 import 'package:flutter_memos/models/server_config.dart';
 import 'package:flutter_memos/models/workbench_item_reference.dart';
-import 'package:flutter_memos/providers/server_config_provider.dart';
 import 'package:flutter_memos/providers/workbench_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart'; // For date formatting
@@ -35,16 +33,38 @@ class WorkbenchItemTile extends ConsumerWidget {
     }
   }
 
+  // Add this helper to the class, below the icon helpers:
+  String _formatRelativeTime(DateTime dateTime) {
+    final now = DateTime.now();
+    final difference = now.difference(dateTime);
+
+    if (difference.inSeconds < 60) {
+      return 'just now';
+    } else if (difference.inMinutes < 60) {
+      return '${difference.inMinutes} min${difference.inMinutes == 1 ? '' : 's'} ago';
+    } else if (difference.inHours < 24) {
+      return '${difference.inHours} hour${difference.inHours == 1 ? '' : 's'} ago';
+    } else if (difference.inDays == 1) {
+      return 'yesterday';
+    } else if (difference.inDays < 7) {
+      return '${difference.inDays} days ago';
+    } else {
+      // Fallback to date string if older than a week
+      return DateFormat.yMd().format(dateTime);
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = CupertinoTheme.of(context);
     final preview = itemReference.previewContent ?? 'No preview available';
     final serverDisplayName =
         itemReference.serverName ?? itemReference.serverId;
-    final addedDate = DateFormat.yMd().add_jm().format(
+    // Use relative time formatting
+    final addedRelative = _formatRelativeTime(
       itemReference.addedTimestamp.toLocal(),
     );
-    final lastActivityDate = DateFormat.yMd().add_jm().format(
+    final lastActivityRelative = _formatRelativeTime(
       itemReference.overallLastUpdateTime.toLocal(),
     );
 
@@ -95,7 +115,7 @@ class WorkbenchItemTile extends ConsumerWidget {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      'Server: $serverDisplayName • Added: $addedDate',
+                      'Server: $serverDisplayName • Added: $addedRelative',
                       style: TextStyle(
                         fontSize: 12.5,
                         color: CupertinoColors.secondaryLabel.resolveFrom(
@@ -107,7 +127,7 @@ class WorkbenchItemTile extends ConsumerWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      'Last activity: $lastActivityDate',
+                      'Last activity: $lastActivityRelative',
                       style: TextStyle(
                         fontSize: 12.5,
                         color: CupertinoColors.secondaryLabel.resolveFrom(
@@ -285,80 +305,5 @@ class WorkbenchItemTile extends ConsumerWidget {
         }
         break;
     }
-  }
-
-  // Placeholder dialog for server switch requirement
-  void _showServerSwitchRequiredDialog(
-    BuildContext context,
-    WidgetRef ref,
-    WorkbenchItemReference itemRef,
-  ) {
-    showCupertinoDialog(
-      context: context,
-      builder:
-          (dialogContext) => CupertinoAlertDialog(
-            title: const Text('Server Switch Required'),
-            content: Text(
-              'This item is on server "${itemRef.serverName ?? itemRef.serverId}". Switch to this server to view the item?',
-            ),
-            actions: [
-              CupertinoDialogAction(
-                child: const Text('Cancel'),
-                onPressed: () => Navigator.pop(dialogContext),
-              ),
-              CupertinoDialogAction(
-                isDefaultAction: true,
-                child: const Text('Switch & View'),
-                onPressed: () async {
-                  Navigator.pop(dialogContext);
-                  // --- Actual Switch Logic ---
-                  ref
-                      .read(multiServerConfigProvider.notifier)
-                      .setActiveServer(itemRef.serverId);
-                  // Wait for the activeServerConfigProvider to reflect the change
-                  // This uses ref.listen for a more robust state propagation check
-                  final completer = Completer<void>();
-                  // Variable to hold the subscription, captured by the listener
-                  ProviderSubscription<ServerConfig?>? sub;
-                  // Call ref.listen without assigning its void result
-                  // Capture the subscription object passed to the listener
-                  ref.listen<ServerConfig?>(
-                    activeServerConfigProvider,
-                    (prev, next, subscription) {
-                          // Accept the subscription object here
-                          // Store the subscription so it can be closed later
-                          sub = subscription;
-                          if (next?.id == itemRef.serverId &&
-                              !completer.isCompleted) {
-                            completer.complete();
-                          }
-                        }
-                        as void Function(
-                          ServerConfig? previous,
-                          ServerConfig? next,
-                        ),
-                  );
-                  // Add a timeout to prevent waiting indefinitely
-                  try {
-                    await completer.future.timeout(const Duration(seconds: 3));
-                    if (context.mounted) {
-                      // Check if context is still valid after delay/state change
-                      _navigateToItem(context, ref, itemRef);
-                    }
-                  } catch (e) {
-                    if (kDebugMode) {
-                      print("Timeout or error waiting for server switch: $e");
-                    }
-                    // Optionally show an error message to the user
-                  } finally {
-                    // Close the subscription using the captured variable
-                    sub?.close(); // Clean up the listener
-                  }
-                  // --- End Switch Logic ---
-                },
-              ),
-            ],
-          ),
-    );
   }
 }
