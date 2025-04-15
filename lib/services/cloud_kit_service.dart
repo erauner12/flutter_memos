@@ -893,30 +893,33 @@ class CloudKitService {
           '[CloudKitService] Updating lastOpenedTimestamp for WorkbenchItemReference (ID: \$referenceId)...',
         );
       }
-      // 1. Fetch the existing record
+      // 1. Fetch the existing record to ensure it exists and potentially get other fields if needed
+      // Although we reconstruct the map, fetching confirms existence.
       final CloudKitRecord ckRecord = await _cloudKit.getRecord(
         scope: CloudKitDatabaseScope.private,
         recordName: referenceId,
       );
 
-      // 2. Prepare the update map - only include the timestamp
-      final Map<String, String> updateData = {
-        'lastOpenedTimestamp': DateTime.now().toIso8601String(),
-      };
+      // 2. Reconstruct the map using known fields from the fetched record
+      // This avoids sending back potentially problematic system fields.
+      // We use _mapToWorkbenchItemReference to get a clean object first.
+      final existingItem = _mapToWorkbenchItemReference(
+        ckRecord.recordName,
+        ckRecord.values,
+      );
+      final updatedItem = existingItem.copyWith(
+        lastOpenedTimestamp: DateTime.now(),
+      );
+      final Map<String, String> dataToSave = _workbenchItemReferenceToMap(
+        updatedItem,
+      );
 
-      // 3. Save the record with only the updated field
-      // Note: flutter_cloud_kit's saveRecord might overwrite fields not present
-      // in the `record` map if the underlying native implementation does.
-      // A safer approach if partial updates aren't supported is to merge:
-      final Map<String, String> mergedData = Map<String, String>.from(
-        ckRecord.values.map((key, value) => MapEntry(key, value.toString())),
-      )..addAll(updateData);
-
+      // 3. Save the reconstructed record with the updated timestamp
       await _cloudKit.saveRecord(
         scope: CloudKitDatabaseScope.private,
         recordType: _workbenchItemReferenceRecordType,
-        recordName: referenceId,
-        record: mergedData, // Save the merged data
+        recordName: referenceId, // Use the ID as the record name
+        record: dataToSave, // Save the explicitly constructed map
       );
 
       if (kDebugMode) {
@@ -926,11 +929,14 @@ class CloudKitService {
       }
       return true;
     } catch (e) {
+      // Log specific CloudKit errors if possible
       if (kDebugMode) {
         print(
           '[CloudKitService] Error updating lastOpenedTimestamp for WorkbenchItemReference (ID: \$referenceId): \$e',
         );
       }
+      // Rethrow or handle specific CloudKit exceptions if needed
+      // For now, return false to indicate failure
       return false;
     }
   }

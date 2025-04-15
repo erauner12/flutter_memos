@@ -24,6 +24,7 @@ void main() {
     WorkbenchItemReference createItem({
       String? id,
       String refId = 'note1',
+      String serverId = 'server1', // Add serverId parameter with default
       DateTime? added,
       DateTime? opened,
     }) {
@@ -32,7 +33,7 @@ void main() {
         id: id ?? const Uuid().v4(),
         referencedItemId: refId,
         referencedItemType: WorkbenchItemType.note,
-        serverId: 'server1',
+        serverId: serverId, // Use the parameter
         serverType: ServerType.memos,
         addedTimestamp: added ?? now,
         lastOpenedTimestamp: opened,
@@ -69,9 +70,10 @@ void main() {
           .thenAnswer((_) async => List.from(cloudKitItems)); // Return a copy
 
       // Act
-      // Provider initialization triggers loadItems via unawaited
-      // Wait for the loading future to complete
-      await container.read(workbenchProvider.future);
+        // Get the notifier instance
+        final notifier = container.read(workbenchProvider.notifier);
+        // Explicitly await the loadItems method
+        await notifier.loadItems();
 
       // Assert
       final state = container.read(workbenchProvider);
@@ -89,18 +91,27 @@ void main() {
       final existingItem = createItem(id: 'id1', refId: 'note1', serverId: 'server1');
       when(mockCloudKitService.getAllWorkbenchItemReferences())
           .thenAnswer((_) async => [existingItem]);
-      await container.read(workbenchProvider.future); // Initial load
+      // Get notifier and load initial state
+      final notifier = container.read(workbenchProvider.notifier);
+      await notifier.loadItems();
 
-      final duplicateItem = createItem(refId: 'note1', serverId: 'server1'); // Same refId and serverId
-      final newItem = createItem(id: 'id2', refId: 'note2', serverId: 'server1');
+      final duplicateItem = createItem(
+        refId: 'note1',
+        serverId: 'server1',
+      ); // Uses helper default serverId
+      final newItem = createItem(
+        id: 'id2',
+        refId: 'note2',
+        serverId: 'server1',
+      ); // Uses helper default serverId
 
       when(mockCloudKitService.saveWorkbenchItemReference(any))
-          .thenAnswer((_) async => true); // Mock successful save
+          .thenAnswer((_) async => true);
 
       // Act: Try adding duplicate, then new item
       final notifier = container.read(workbenchProvider.notifier);
-      await notifier.addItem(duplicateItem); // Should be skipped
-      await notifier.addItem(newItem);       // Should be added
+      await notifier.addItem(duplicateItem);
+      await notifier.addItem(newItem);
 
       // Assert
       final state = container.read(workbenchProvider);
@@ -118,13 +129,14 @@ void main() {
       final itemToKeep = createItem(id: 'id2');
       when(mockCloudKitService.getAllWorkbenchItemReferences())
           .thenAnswer((_) async => [itemToRemove, itemToKeep]);
-      await container.read(workbenchProvider.future); // Initial load
+      // Get notifier and load initial state
+      final notifier = container.read(workbenchProvider.notifier);
+      await notifier.loadItems();
 
       when(mockCloudKitService.deleteWorkbenchItemReference('id1'))
-          .thenAnswer((_) async => true); // Mock successful delete
+          .thenAnswer((_) async => true);
 
       // Act
-      final notifier = container.read(workbenchProvider.notifier);
       await notifier.removeItem('id1');
 
       // Assert
@@ -136,28 +148,36 @@ void main() {
 
      test('markItemOpened updates timestamp, re-sorts, and calls CloudKit', () async {
       // Arrange
-      final item1 = createItem(id: 'id1', added: DateTime.now().subtract(const Duration(days: 1)), opened: null); // Never opened
-      final item2 = createItem(id: 'id2', added: DateTime.now(), opened: null); // Never opened, added later
+        final item1 = createItem(
+          id: 'id1',
+          added: DateTime.now().subtract(const Duration(days: 1)),
+          opened: null,
+        );
+        final item2 = createItem(
+          id: 'id2',
+          added: DateTime.now(),
+          opened: null,
+        );
 
       when(mockCloudKitService.getAllWorkbenchItemReferences())
-          .thenAnswer((_) async => [item1, item2]); // Initial order by added desc
-      await container.read(workbenchProvider.future); // Initial load
+          .thenAnswer((_) async => [item1, item2]);
+        // Get notifier and load initial state
+        final notifier = container.read(workbenchProvider.notifier);
+        await notifier.loadItems();
 
-      // Verify initial sort order (item2 then item1)
+        // Verify initial sort order (item2 then item1 by addedTimestamp)
       expect(container.read(workbenchProvider).items[0].id, 'id2');
       expect(container.read(workbenchProvider).items[1].id, 'id1');
 
       when(mockCloudKitService.updateWorkbenchItemLastOpened('id1'))
-          .thenAnswer((_) async => true); // Mock successful update
+          .thenAnswer((_) async => true);
 
-      // Act: Mark the older item (item1) as opened
-      final notifier = container.read(workbenchProvider.notifier);
+        // Act: Mark the older item (item1) as opened
       await notifier.markItemOpened('id1');
 
       // Assert
       final state = container.read(workbenchProvider);
-      expect(state.items.length, 2);
-      // Verify new sort order (item1 now first because it was opened)
+        expect(state.items.length, 2);
       expect(state.items[0].id, 'id1');
       expect(state.items[1].id, 'id2');
       expect(state.items[0].lastOpenedTimestamp, isNotNull);
@@ -170,22 +190,23 @@ void main() {
       final item1 = createItem(id: 'id1', opened: null);
       when(mockCloudKitService.getAllWorkbenchItemReferences())
           .thenAnswer((_) async => [item1]);
-      await container.read(workbenchProvider.future); // Initial load
+        // Get notifier and load initial state
+        final notifier = container.read(workbenchProvider.notifier);
+        await notifier.loadItems();
 
       // Mock CloudKit failure
       when(mockCloudKitService.updateWorkbenchItemLastOpened('id1'))
-          .thenAnswer((_) async => false);
+          .thenAnswer((_) async => false); // Simulate failure
 
-      // Act
-      final notifier = container.read(workbenchProvider.notifier);
+        // Act
       await notifier.markItemOpened('id1');
 
       // Assert
       final state = container.read(workbenchProvider);
       expect(state.items.length, 1);
       expect(state.items[0].id, 'id1');
-      expect(state.items[0].lastOpenedTimestamp, isNull); // Should have reverted
-      expect(state.error, isNotNull); // Error should be set
+        expect(state.items[0].lastOpenedTimestamp, isNull);
+        expect(state.error, isNotNull);
       verify(mockCloudKitService.updateWorkbenchItemLastOpened('id1')).called(1);
     });
 
