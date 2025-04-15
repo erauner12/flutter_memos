@@ -1,54 +1,45 @@
-import 'package:flutter/cupertino.dart'; // Use Cupertino
+import 'package:flutter/cupertino.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_memos/models/comment.dart';
-import 'package:flutter_memos/models/memo.dart';
+import 'package:flutter_memos/models/note_item.dart'; // Use NoteItem
 import 'package:flutter_memos/providers/api_providers.dart';
-import 'package:flutter_memos/screens/edit_memo/edit_memo_form.dart';
-import 'package:flutter_memos/screens/edit_memo/edit_memo_providers.dart';
-import 'package:flutter_memos/screens/memo_detail/memo_content.dart';
-import 'package:flutter_memos/screens/memo_detail/memo_detail_providers.dart';
-import 'package:flutter_memos/services/api_service.dart'
-    as api_service; // Import with alias
+import 'package:flutter_memos/providers/edit_entity_providers.dart'; // Use edit_entity_providers
+import 'package:flutter_memos/providers/note_providers.dart'
+    as note_providers; // Use note_providers
+import 'package:flutter_memos/screens/edit_entity/edit_entity_form.dart'; // Use EditEntityForm
+import 'package:flutter_memos/screens/item_detail/note_content.dart'; // Use NoteContent
+import 'package:flutter_memos/services/base_api_service.dart'; // Use BaseApiService
 import 'package:flutter_memos/services/url_launcher_service.dart';
 import 'package:flutter_memos/widgets/comment_card.dart';
-import 'package:flutter_memos/widgets/memo_card.dart';
+import 'package:flutter_memos/widgets/note_card.dart'; // Use NoteCard
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mockito/annotations.dart'; // Add Mockito annotation import
-import 'package:mockito/mockito.dart'; // Add Mockito import
+import 'package:mockito/annotations.dart';
+import 'package:mockito/mockito.dart';
 
-// Import test utility
-import '../../../helpers/test_debug.dart'; // Go up two levels to reach test/helpers/
-// Import the mock for UrlLauncherService
-import '../../../services/url_launcher_service_test.mocks.dart'; // Correct path to UrlLauncherService mock
-// Import the mock for UrlLauncherService
+import '../../../helpers/test_debug.dart';
+import '../../../services/url_launcher_service_test.mocks.dart';
+// Import the generated mocks for this file
 import 'markdown_rendering_test.mocks.dart';
 
 // Annotation to generate nice mock for BaseApiService
-@GenerateNiceMocks([
-  MockSpec<BaseApiService>(),
-]) // Confirm this uses BaseApiService
-
+@GenerateNiceMocks([MockSpec<BaseApiService>()])
 void main() {
-  // Declare mocks at the top level
-  late MockBaseApiService mockApiService; // Updated mock type
+  late MockBaseApiService mockApiService; // Use MockBaseApiService
   late MockUrlLauncherService mockUrlLauncherService;
 
   group('Markdown Rendering Tests', () {
-    // Setup function that runs before each test
     setUp(() {
-      mockApiService = MockBaseApiService(); // Updated mock type
-      mockUrlLauncherService = MockUrlLauncherService(); // Initialize URL launcher mock
+      mockApiService = MockBaseApiService(); // Use MockBaseApiService
+      mockUrlLauncherService = MockUrlLauncherService();
 
-      // Add stub for apiBaseUrl property
       when(mockApiService.apiBaseUrl).thenReturn('http://test-url.com');
-      // Stub the launch method to return success by default
       when(mockUrlLauncherService.launch(any)).thenAnswer((_) async => true);
     });
 
     testWidgets('Basic markdown elements render correctly in MarkdownBody', (WidgetTester tester) async {
       debugMarkdown('Testing basic markdown elements rendering');
-      
+
       const markdownText = '''
 # Heading 1
 ## Heading 2
@@ -64,7 +55,6 @@ void main() {
 ''';
       debugMarkdown('Test markdown content: $markdownText');
 
-      // Build a basic MarkdownBody widget within Cupertino context
       await tester.pumpWidget(
         const CupertinoApp(
           home: CupertinoPageScaffold(
@@ -76,11 +66,8 @@ void main() {
       );
 
       await tester.pumpAndSettle();
-      
-      // Debug output all rendered content
       dumpRichTextContent(tester);
 
-      // Verify markdown elements are rendered, using textContaining for more reliable results
       expect(find.textContaining('Heading 1'), findsOneWidget);
       expect(find.textContaining('Heading 2'), findsOneWidget);
       expect(find.textContaining('Bold text'), findsOneWidget);
@@ -94,17 +81,13 @@ void main() {
       expect(find.textContaining('Code'), findsOneWidget);
       debugMarkdown('Found all expected markdown elements in rendered output');
 
-      // Verify RichText widgets exist (this is how markdown ultimately renders)
       expect(find.byType(RichText), findsWidgets);
     });
 
     testWidgets('Markdown renders with custom styling', (WidgetTester tester) async {
       const markdownText = '**Bold text with custom color**';
-      final customColor =
-          CupertinoColors
-              .systemRed; // Using standard Color instead of MaterialColor
+      final customColor = CupertinoColors.systemRed;
 
-      // Build a MarkdownBody with custom styling within Cupertino context
       await tester.pumpWidget(
         CupertinoApp(
           home: CupertinoPageScaffold(
@@ -120,46 +103,31 @@ void main() {
 
       await tester.pumpAndSettle();
 
-      // Verify bold text exists
       expect(
         find.textContaining('Bold text with custom color'),
         findsOneWidget,
       );
-      
-      // Find RichText widgets that contain our text
+
       final richTextWidgets = tester.widgetList<RichText>(
         find.byType(RichText),
       );
-      
-      // Debug: Print all RichText widgets and their colors
+
       debugMarkdown(
         '\nChecking ${richTextWidgets.length} RichText widgets for styled text:',
       );
 
-      // Look for any TextSpan with red styling
       bool foundStyledText = false;
-      
-      // Helper function to recursively check TextSpan and its children for red styling
       void checkForRedStyling(InlineSpan span) {
         if (span is TextSpan) {
           final style = span.style;
           final text = span.text ?? '';
-
-          // Debug info
           if (style?.color != null) {
             debugMarkdown('Text: "$text", Color: ${style?.color}');
           }
-
-          // Check if this span has red color
-          if (style?.color != null &&
-              style!.color!.r > 0.5 &&
-              style.color!.g < 0.5 &&
-              style.color!.b < 0.5) {
+          if (style?.color == customColor) {
             debugMarkdown('Found red text: "$text"');
             foundStyledText = true;
           }
-
-          // Check children if they exist
           if (span.children != null) {
             for (final child in span.children!) {
               checkForRedStyling(child);
@@ -168,33 +136,28 @@ void main() {
         }
       }
 
-      // Check all RichText widgets
       for (final widget in richTextWidgets) {
         checkForRedStyling(widget.text);
         if (foundStyledText) break;
       }
 
-      // If we didn't find red text, try a different approach - check for any red styling
       if (!foundStyledText) {
         for (final widget in richTextWidgets) {
           final plainText = widget.text.toPlainText();
           if (plainText.contains('Bold text with custom color')) {
             debugMarkdown('Found matching text: $plainText');
-            // Use a more lenient check for any reddish color
             void checkTextSpanColor(InlineSpan span) {
               if (span is TextSpan) {
                 final color = span.style?.color;
                 if (color != null) {
                   debugMarkdown(
-                    'Color components: R=${color.r}, G=${color.g}, B=${color.b}',
+                    'Color components: R=${color.red}, G=${color.green}, B=${color.blue}',
                   );
-                  // More lenient check: any shade where red is the dominant component
-                  if (color.r > color.g && color.r > color.b) {
+                  if (color.red > color.green && color.red > color.blue) {
                     foundStyledText = true;
                     debugMarkdown('Found reddish color: $color');
                   }
                 }
-
                 if (span.children != null) {
                   for (final child in span.children!) {
                     checkTextSpanColor(child);
@@ -202,7 +165,6 @@ void main() {
                 }
               }
             }
-
             checkTextSpanColor(widget.text);
           }
         }
@@ -216,20 +178,18 @@ void main() {
     });
 
     testWidgets('NoteContent renders markdown correctly', (
-      // Updated widget name
       WidgetTester tester,
     ) async {
       // Set up note and comments data
       final note = NoteItem(
-        // Updated type
         id: 'test-id',
         content: '# Test Heading\n**Bold text**\n*Italic text*',
         pinned: false,
-        state: NoteState.normal, // Updated enum
-        createTime: DateTime.now(), // Add required field
-        updateTime: DateTime.now(), // Add required field
-        displayTime: DateTime.now(), // Add required field
-        visibility: NoteVisibility.private, // Add required field
+        state: NoteState.normal,
+        createTime: DateTime.now(),
+        updateTime: DateTime.now(),
+        displayTime: DateTime.now(),
+        visibility: NoteVisibility.private,
       );
 
       final comments = [
@@ -241,11 +201,9 @@ void main() {
       ];
 
       // Configure the mock with Mockito
+      when(mockApiService.getNote('test-id')).thenAnswer((_) async => note);
       when(
-        mockApiService.getNote('test-id'),
-      ).thenAnswer((_) async => note); // Updated method name
-      when(
-        mockApiService.listNoteComments('test-id'), // Updated method name
+        mockApiService.listNoteComments('test-id'),
       ).thenAnswer((_) async => comments);
 
       // Build the NoteContent widget with the provider overrides
@@ -253,34 +211,28 @@ void main() {
         ProviderScope(
           overrides: [
             apiServiceProvider.overrideWithValue(mockApiService),
-            urlLauncherServiceProvider.overrideWithValue(mockUrlLauncherService), // Add override
+            urlLauncherServiceProvider.overrideWithValue(
+              mockUrlLauncherService,
+            ),
             note_providers
                 .noteCommentsProvider('test-id')
-                .overrideWith(
-                  // Updated provider name
-                  (ref) => Future.value(comments),
+                .overrideWith((ref) => Future.value(comments),
             ),
           ],
           child: CupertinoApp(
             home: CupertinoPageScaffold(
-              child: NoteContent(
-                note: note,
-                noteId: 'test-id',
-              ), // Updated widget type and params
+              child: NoteContent(note: note, noteId: 'test-id'),
             ),
           ),
         ),
       );
 
-      // Allow async operations to complete
       await tester.pumpAndSettle();
 
-      // Use textContaining for more reliable text finding
       expect(find.textContaining('Test Heading'), findsOneWidget);
       expect(find.textContaining('Bold text'), findsOneWidget);
       expect(find.textContaining('Italic text'), findsOneWidget);
 
-      // Verify a MarkdownBody widget is present
       expect(find.byType(MarkdownBody), findsOneWidget);
     });
 
@@ -291,32 +243,27 @@ void main() {
         createTime: DateTime.now().millisecondsSinceEpoch,
       );
 
-      // Build the CommentCard widget
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
-            urlLauncherServiceProvider.overrideWithValue(mockUrlLauncherService), // Add override
+            urlLauncherServiceProvider.overrideWithValue(
+              mockUrlLauncherService,
+            ),
           ],
           child: CupertinoApp(
-            // Use CupertinoApp
             home: CupertinoPageScaffold(
-              // Use CupertinoPageScaffold
               child: CommentCard(
                 comment: comment,
-                noteId: 'test-note-id', // Updated parameter name
+                noteId: 'test-note-id', // Use noteId
               ),
             ),
           ),
         ),
       );
 
-      // Allow async operations to complete
       await tester.pumpAndSettle();
 
-      // Look for MarkdownBody which renders our content
       expect(find.byType(MarkdownBody), findsOneWidget);
-
-      // Verify markdown text is rendered somewhere in the widget tree
       expect(find.textContaining('Bold comment'), findsOneWidget);
       expect(find.textContaining('Italic text'), findsOneWidget);
       expect(find.textContaining('Link'), findsOneWidget);
@@ -325,37 +272,30 @@ void main() {
     testWidgets('NoteCard renders markdown correctly', (
       WidgetTester tester,
     ) async {
-      // Updated widget name
-      // Build the NoteCard widget
       await tester.pumpWidget(
-        ProviderScope( // Add ProviderScope for override
+        ProviderScope(
           overrides: [
-            urlLauncherServiceProvider.overrideWithValue(mockUrlLauncherService), // Add override
+            urlLauncherServiceProvider.overrideWithValue(
+              mockUrlLauncherService,
+            ),
           ],
           child: CupertinoApp(
-            // Use CupertinoApp
             home: CupertinoPageScaffold(
-              // Use CupertinoPageScaffold
               child: NoteCard(
-                // Updated widget type
+                // Use NoteCard
                 id: 'test-id',
                 content: '# Card Heading\n**Bold text**\n- List item',
                 pinned: false,
-                updatedAt:
-                    DateTime.now().toIso8601String(), // Pass required param
+                updatedAt: DateTime.now().toIso8601String(),
               ),
             ),
           ),
         ),
       );
 
-      // Allow async operations to complete
       await tester.pumpAndSettle();
 
-      // Find the MarkdownBody widget
       expect(find.byType(MarkdownBody), findsOneWidget);
-
-      // Verify markdown elements are rendered
       expect(find.textContaining('Card Heading'), findsOneWidget);
       expect(find.textContaining('Bold text'), findsOneWidget);
       expect(find.textContaining('List item'), findsOneWidget);
@@ -364,42 +304,36 @@ void main() {
     testWidgets('EditEntityForm toggles between edit and preview modes', (
       WidgetTester tester,
     ) async {
-      // Updated widget name
       final note = NoteItem(
-        // Updated type
         id: 'test-id',
         content: '# Test Heading\n**Bold text**',
         pinned: false,
-        state: NoteState.normal, // Updated enum
-        createTime: DateTime.now(), // Add required field
-        updateTime: DateTime.now(), // Add required field
-        displayTime: DateTime.now(), // Add required field
-        visibility: NoteVisibility.private, // Add required field
+        state: NoteState.normal,
+        createTime: DateTime.now(),
+        updateTime: DateTime.now(),
+        displayTime: DateTime.now(),
+        visibility: NoteVisibility.private,
       );
 
-      // Use Mockito stubbing
-      when(
-        mockApiService.getNote('test-id'),
-      ).thenAnswer((_) async => note); // Updated method name
+      when(mockApiService.getNote('test-id')).thenAnswer((_) async => note);
 
-      // Build the EditEntityForm widget
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
             apiServiceProvider.overrideWithValue(mockApiService),
-            urlLauncherServiceProvider.overrideWithValue(mockUrlLauncherService), // Add override
-            // Mock the provider that EditEntityForm uses to fetch the entity
+            urlLauncherServiceProvider.overrideWithValue(
+              mockUrlLauncherService,
+            ),
             editEntityProvider(
-              // Use provider from edit_entity_providers.dart
-              EntityProviderParams(id: 'test-id', type: 'note'), // Updated type
+              EntityProviderParams(id: 'test-id', type: 'note'),
             ).overrideWith((ref) => Future.value(note)),
           ],
           child: CupertinoApp(
             home: CupertinoPageScaffold(
               child: EditEntityForm(
-                // Updated widget type
+                // Use EditEntityForm
                 entityId: 'test-id',
-                entityType: 'note', // Updated type
+                entityType: 'note',
                 entity: note,
               ),
             ),
@@ -407,30 +341,22 @@ void main() {
         ),
       );
 
-      // Wait for the FutureProvider to resolve and the form to build
       await tester.pumpAndSettle();
 
-      // Initially in edit mode - CupertinoTextField should be visible
       expect(find.byType(CupertinoTextField), findsOneWidget);
       expect(find.byType(MarkdownBody), findsNothing);
 
-      // Find and tap the Preview button
       await tester.tap(find.text('Preview'));
       await tester.pumpAndSettle();
 
-      // Now should be in preview mode - MarkdownBody should be visible, CupertinoTextField hidden
       expect(find.byType(CupertinoTextField), findsNothing);
       expect(find.byType(MarkdownBody), findsOneWidget);
-
-      // Verify markdown content is rendered
       expect(find.textContaining('Test Heading'), findsOneWidget);
       expect(find.textContaining('Bold text'), findsOneWidget);
 
-      // Go back to edit mode
       await tester.tap(find.text('Edit'));
       await tester.pumpAndSettle();
 
-      // Should be back in edit mode
       expect(find.byType(CupertinoTextField), findsOneWidget);
       expect(find.byType(MarkdownBody), findsNothing);
     });
@@ -448,7 +374,6 @@ void main() {
 2. Second item with >quote
 ''';
 
-      // Build a MarkdownBody with complex content within Cupertino context
       await tester.pumpWidget(
         const CupertinoApp(
           home: CupertinoPageScaffold(
@@ -461,7 +386,6 @@ void main() {
 
       await tester.pumpAndSettle();
 
-      // Verify main elements are rendered
       expect(find.textContaining('Main heading'), findsOneWidget);
       expect(find.textContaining('Sub heading'), findsOneWidget);
       expect(find.textContaining('bold text'), findsOneWidget);
@@ -469,6 +393,7 @@ void main() {
       expect(find.textContaining('link'), findsOneWidget);
       expect(find.textContaining('Nested list item'), findsOneWidget);
       expect(find.textContaining('code'), findsOneWidget);
+      expect(find.textContaining('quote'), findsOneWidget);
     });
 
     testWidgets('Special characters in markdown are handled correctly', (WidgetTester tester) async {
@@ -480,7 +405,6 @@ Code with special <html> &tags
 ```
 ''';
 
-      // Build a MarkdownBody with special characters within Cupertino context
       await tester.pumpWidget(
         const CupertinoApp(
           home: CupertinoPageScaffold(
@@ -491,7 +415,6 @@ Code with special <html> &tags
 
       await tester.pumpAndSettle();
 
-      // Verify elements with special characters are rendered
       expect(find.textContaining('Heading with'), findsOneWidget);
       expect(find.textContaining('emoji'), findsOneWidget);
       expect(find.textContaining('Code with special'), findsOneWidget);

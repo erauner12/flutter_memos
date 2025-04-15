@@ -50,7 +50,7 @@ void main() {
 
       apiService = MemosApiService(); // Instantiate concrete class
       apiService.configureService(baseUrl: baseUrl, authToken: apiKey);
-      BaseApiService.verboseLogging = true; // Optional
+      MemosApiService.verboseLogging = true; // Correct static access
 
       // Create a temporary note for attaching comments
       try {
@@ -60,6 +60,7 @@ void main() {
           id: 'temp-note-resource-test-$timestamp', // Updated prefix
           content:
               'Temporary Note for Resource Test - $timestamp', // Updated content
+          pinned: false, // Added missing required argument
           visibility: NoteVisibility.private, // Keep test notes private
           createTime: DateTime.now(), // Add required field
           updateTime: DateTime.now(), // Add required field
