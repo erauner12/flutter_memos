@@ -48,15 +48,38 @@ class WorkbenchState {
 class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
   final Ref _ref;
   late final CloudKitService _cloudKitService;
+  // Keep track if initial load was triggered by constructor
+  bool _initialLoadTriggered = false;
 
-  WorkbenchNotifier(this._ref) : super(const WorkbenchState(isLoading: true)) {
+  WorkbenchNotifier(this._ref, {bool loadOnInit = true})
+    : super(const WorkbenchState(isLoading: false)) {
+    // Default isLoading to false
     _cloudKitService = _ref.read(cloudKitServiceProvider);
-    // Initial load is triggered by the provider definition
+    if (loadOnInit) {
+      _initialLoadTriggered = true;
+      // Use unawaited only if loading on init
+      unawaited(loadItems());
+    }
   }
 
   Future<void> loadItems() async {
+    // Prevent concurrent loads, especially during init vs manual refresh
+    if (state.isLoading) return;
+
     if (!mounted) return;
-    state = state.copyWith(isLoading: true, clearError: true);
+    // Set loading true only if not the initial auto-load or if already loaded once
+    final bool setLoading =
+        !_initialLoadTriggered || state.items.isNotEmpty || state.error != null;
+    if (setLoading) {
+      state = state.copyWith(isLoading: true, clearError: true);
+    } else {
+      // For the very first auto-load, clear error but don't show loading indicator yet
+      state = state.copyWith(clearError: true);
+    }
+
+    // Mark that a load attempt has happened
+    _initialLoadTriggered = true;
+
     try {
       final items = await _cloudKitService.getAllWorkbenchItemReferences();
 
@@ -211,8 +234,9 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
   void reorderItems(int oldIndex, int newIndex) {
     if (!mounted) return;
     if (oldIndex < 0 || oldIndex >= state.items.length) return;
-    if (newIndex < 0 || newIndex > state.items.length)
+    if (newIndex < 0 || newIndex > state.items.length) {
       return; // Allow inserting at the end
+    }
 
     final List<WorkbenchItemReference> currentItems = List.from(state.items);
 
@@ -251,9 +275,8 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
 
 // Provider definition remains the same
 final workbenchProvider = StateNotifierProvider<WorkbenchNotifier, WorkbenchState>((ref) {
-  final notifier = WorkbenchNotifier(ref);
-  // Trigger initial load when the provider is first created/read.
-  // Use unawaited to not block provider creation, errors handled internally.
-  unawaited(notifier.loadItems());
+  // Pass loadOnInit: true for normal operation
+  final notifier = WorkbenchNotifier(ref, loadOnInit: true);
+  // Initial load is now handled within the constructor if loadOnInit is true
   return notifier;
 });
