@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_memos/models/comment.dart'; // Import Comment
 import 'package:flutter_memos/models/server_config.dart';
 import 'package:flutter_memos/models/workbench_item_reference.dart';
@@ -127,6 +130,7 @@ class WorkbenchItemTile extends ConsumerWidget {
                       child: const Text('Remove'),
                       onPressed: () {
                         Navigator.pop(dialogContext);
+                            // Fix: Call removeItem on the notifier
                         ref.read(workbenchProvider.notifier).removeItem(itemReference.id);
                       },
                     ),
@@ -154,7 +158,8 @@ class WorkbenchItemTile extends ConsumerWidget {
 
   // Add helper widget for comment preview
   Widget _buildCommentPreview(BuildContext context, Comment? comment) {
-    final theme = CupertinoTheme.of(context);
+    // Fix: Remove unused theme variable
+    // final theme = CupertinoTheme.of(context);
     final textStyle = TextStyle(
       fontSize: 13,
       color: CupertinoColors.secondaryLabel.resolveFrom(context),
@@ -203,27 +208,39 @@ class WorkbenchItemTile extends ConsumerWidget {
         );
         break;
       case WorkbenchItemType.comment:
-        // TODO: Need parent note ID to navigate correctly.
-        // For now, maybe just navigate to the note detail screen without highlighting.
-        // Or show a message "Comment navigation not fully supported yet".
-         // Attempt navigation assuming referencedItemId might be the note ID for now
-         // This needs refinement based on how comment references are stored/handled.
-         // A better approach might be to store parentNoteId in the reference.
-         /*
-         Navigator.of(context, rootNavigator: true).pushNamed(
-           '/item-detail',
-           arguments: {
-             'itemId': parentNoteId, // Need parentNoteId here
-             'commentIdToHighlight': itemRef.referencedItemId
-           },
-         );
-         */
-         // Placeholder: Show alert
-         showCupertinoDialog(context: context, builder: (ctx) => CupertinoAlertDialog(
-           title: const Text('Navigation Incomplete'),
-           content: const Text('Navigation to specific comments from the Workbench is not yet fully implemented.'),
-           actions: [CupertinoDialogAction(isDefaultAction: true, child: const Text('OK'), onPressed: () => Navigator.pop(ctx))],
-         ));
+        // Navigate to the parent note, potentially highlighting the comment
+        final parentId =
+            itemRef.parentNoteId ??
+            itemRef.referencedItemId; // Fallback if parentId is missing
+        if (parentId.isNotEmpty) {
+          Navigator.of(context, rootNavigator: true).pushNamed(
+            '/item-detail',
+            arguments: {
+              'itemId': parentId,
+              'commentIdToHighlight':
+                  itemRef.referencedItemId, // Pass comment ID for highlighting
+            },
+          );
+        } else {
+          // Show alert if navigation is not possible
+          showCupertinoDialog(
+            context: context,
+            builder:
+                (ctx) => CupertinoAlertDialog(
+                  title: const Text('Navigation Error'),
+                  content: const Text(
+                    'Cannot navigate to comment: Parent note ID is missing.',
+                  ),
+                  actions: [
+                    CupertinoDialogAction(
+                      isDefaultAction: true,
+                      child: const Text('OK'),
+                      onPressed: () => Navigator.pop(ctx),
+                    ),
+                  ],
+                ),
+          );
+        }
         break;
     }
   }
@@ -245,14 +262,34 @@ class WorkbenchItemTile extends ConsumerWidget {
              child: const Text('Switch & View'),
              onPressed: () async {
                Navigator.pop(dialogContext);
-                  // --- Actual Switch Logic (Needs Refinement) ---
+                  // --- Actual Switch Logic ---
                ref.read(multiServerConfigProvider.notifier).setActiveServer(itemRef.serverId);
-               // FIXME: This delay is NOT robust. Need a better way to wait for state propagation.
-               // Consider listening to activeServerConfigProvider or using a FutureProvider
-               // that resolves when the API service is ready for the target server.
-                  await Future.delayed(const Duration(milliseconds: 500));
-               if (context.mounted) { // Check if context is still valid after delay
-                 _navigateToItem(context, ref, itemRef);
+                  // Wait for the activeServerConfigProvider to reflect the change
+                  // This uses ref.listen for a more robust state propagation check
+                  final completer = Completer<void>();
+                  final sub = ref.listen<ServerConfig?>(
+                    activeServerConfigProvider,
+                    (prev, next) {
+                      if (next?.id == itemRef.serverId &&
+                          !completer.isCompleted) {
+                        completer.complete();
+                      }
+                    },
+                  );
+                  // Add a timeout to prevent waiting indefinitely
+                  try {
+                    await completer.future.timeout(const Duration(seconds: 3));
+                    if (context.mounted) {
+                      // Check if context is still valid after delay/state change
+                      _navigateToItem(context, ref, itemRef);
+                    }
+                  } catch (e) {
+                    if (kDebugMode) {
+                      print("Timeout or error waiting for server switch: $e");
+                    }
+                    // Optionally show an error message to the user
+                  } finally {
+                    sub.close(); // Clean up the listener
                }
                // --- End Switch Logic ---
              },

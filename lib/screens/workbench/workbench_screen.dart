@@ -4,12 +4,30 @@ import 'package:flutter_memos/providers/workbench_provider.dart';
 import 'package:flutter_memos/screens/workbench/widgets/workbench_item_tile.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-
-class WorkbenchScreen extends ConsumerWidget {
+// Convert to ConsumerStatefulWidget to call loadItems in initState
+class WorkbenchScreen extends ConsumerStatefulWidget {
   const WorkbenchScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<WorkbenchScreen> createState() => _WorkbenchScreenState();
+}
+
+class _WorkbenchScreenState extends ConsumerState<WorkbenchScreen> {
+
+  @override
+  void initState() {
+    super.initState();
+    // Trigger initial load when the screen is initialized
+    // Use addPostFrameCallback to ensure provider is ready
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) { // Check if mounted before accessing ref
+        ref.read(workbenchProvider.notifier).loadItems();
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final workbenchState = ref.watch(workbenchProvider);
     final items = workbenchState.items;
     // Determine if refresh can be triggered
@@ -111,6 +129,7 @@ class WorkbenchScreen extends ConsumerWidget {
                 );
               },
               onReorder: (oldIndex, newIndex) {
+                // Fix: Call reorderItems on the notifier
                 ref
                     .read(workbenchProvider.notifier)
                     .reorderItems(oldIndex, newIndex);

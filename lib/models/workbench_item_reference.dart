@@ -90,6 +90,7 @@ class WorkbenchItemReference {
         }
       }
       // If the original overall time was later than any component, keep it (e.g., if manually set)
+      // Check against this.overallLastUpdateTime only if overallLastUpdateTime parameter was null
       if (this.overallLastUpdateTime.isAfter(calculatedUpdateTime)) {
         calculatedUpdateTime = this.overallLastUpdateTime;
       }

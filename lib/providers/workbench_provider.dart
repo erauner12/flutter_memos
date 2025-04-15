@@ -2,6 +2,7 @@ import 'dart:async'; // For unawaited
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_memos/models/comment.dart'; // Import Comment
+import 'package:flutter_memos/models/server_config.dart'; // Import ServerConfig class
 import 'package:flutter_memos/models/workbench_item_reference.dart';
 import 'package:flutter_memos/providers/api_providers.dart'; // Import API providers
 import 'package:flutter_memos/providers/server_config_provider.dart'; // Import server config provider
@@ -63,8 +64,6 @@ class WorkbenchState {
 class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
   final Ref _ref; // Keep ref
   late final CloudKitService _cloudKitService;
-  // Remove _initialLoadTriggered flag
-  // bool _initialLoadTriggered = false;
 
   // Constructor takes Ref, initial state is not loading
   WorkbenchNotifier(this._ref) : super(const WorkbenchState()) {
@@ -104,7 +103,7 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
     }
   }
 
-// Add this new private method inside WorkbenchNotifier class
+  // Add this new private method inside WorkbenchNotifier class
   Future<void> _fetchAndPopulateDetails(
     List<WorkbenchItemReference> itemsToProcess,
   ) async {
@@ -131,13 +130,14 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
 
       // Get the API service for this specific server
       // Assumption: Workbench only shows items for servers configured in multiServerConfigProvider
+      // Find the server config, allowing it to be null
       final serverConfig = _ref
           .read(multiServerConfigProvider)
           .servers
+          .cast<ServerConfig?>() // Cast to nullable type
           .firstWhere(
-            (s) => s.id == serverId,
-            orElse:
-                () => null, // Handle case where server might have been deleted
+            (s) => s?.id == serverId,
+            orElse: () => null, // Ensure orElse returns null
           );
 
       // Get the correct API service instance (assuming apiServiceProvider is NOT a family)
@@ -222,9 +222,8 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
             return itemRef; // Return original item on error for this specific item
           }
         }()); // Immediately invoke the async closure
+      }
     }
-  }
-
 
     // Wait for all detail fetching futures to complete
     final List<WorkbenchItemReference> results = await Future.wait(
@@ -299,13 +298,140 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
     }
   }
 
+  // --- addItem ---
+  Future<void> addItem(WorkbenchItemReference item) async {
+    if (!mounted) return;
+
+    // Check for duplicates based on referencedItemId and serverId
+    final isDuplicate = state.items.any(
+      (existingItem) =>
+          existingItem.referencedItemId == item.referencedItemId &&
+          existingItem.serverId == item.serverId,
+    );
+
+    if (isDuplicate) {
+      if (kDebugMode) {
+        print(
+          '[WorkbenchNotifier] Item with refId ${item.referencedItemId} on server ${item.serverId} already exists. Skipping add.',
+        );
+      }
+      // Optionally show a message to the user
+      return;
+    }
+
+    // Optimistic update
+    final originalItems = List<WorkbenchItemReference>.from(state.items);
+    final newItems = [...originalItems, item];
+    // Sort immediately after adding based on current logic (overallLastUpdateTime)
+    newItems.sort(
+      (a, b) => b.overallLastUpdateTime.compareTo(a.overallLastUpdateTime),
+    );
+    state = state.copyWith(items: newItems, clearError: true);
+
+    try {
+      final success = await _cloudKitService.saveWorkbenchItemReference(item);
+      if (!success) {
+        throw Exception('CloudKit save failed');
+      }
+      if (kDebugMode) {
+        print('[WorkbenchNotifier] Added item ${item.id} successfully.');
+      }
+      // Fetch details for the newly added item asynchronously
+      unawaited(_fetchAndPopulateDetails([item]));
+    } catch (e, s) {
+      if (kDebugMode) {
+        print('[WorkbenchNotifier] Error adding item ${item.id}: $e\n$s');
+      }
+      // Revert optimistic update on failure
+      if (mounted) {
+        // Re-sort the original list to maintain consistency
+        originalItems.sort(
+          (a, b) => b.overallLastUpdateTime.compareTo(a.overallLastUpdateTime),
+        );
+        state = state.copyWith(items: originalItems, error: e);
+      }
+    }
+  }
+
+  // --- removeItem ---
+  Future<void> removeItem(String itemId) async {
+    if (!mounted) return;
+
+    final itemToRemove = state.items.firstWhere(
+      (item) => item.id == itemId,
+      orElse: () => null, // Use orElse to return null if not found
+    );
+
+    // Optimistic update
+    final originalItems = List<WorkbenchItemReference>.from(state.items);
+    final newItems = originalItems.where((item) => item.id != itemId).toList();
+    // No need to re-sort here as relative order is maintained
+    state = state.copyWith(items: newItems, clearError: true);
+
+    try {
+      final success = await _cloudKitService.deleteWorkbenchItemReference(
+        itemId,
+      );
+      if (!success) {
+        throw Exception('CloudKit delete failed');
+      }
+      if (kDebugMode) {
+        print('[WorkbenchNotifier] Removed item $itemId successfully.');
+      }
+    } catch (e, s) {
+      if (kDebugMode) {
+        print('[WorkbenchNotifier] Error removing item $itemId: $e\n$s');
+      }
+      // Revert optimistic update on failure
+      if (mounted) {
+        // Re-sort the original list to ensure correct order before setting state
+        originalItems.sort(
+          (a, b) => b.overallLastUpdateTime.compareTo(a.overallLastUpdateTime),
+        );
+        state = state.copyWith(items: originalItems, error: e);
+      }
+    }
+  }
+
+  // --- reorderItems ---
+  void reorderItems(int oldIndex, int newIndex) {
+    if (!mounted) return;
+    if (oldIndex < 0 || oldIndex >= state.items.length) return;
+    if (newIndex < 0 || newIndex > state.items.length)
+      return; // Allow newIndex == length
+
+    final currentItems = List<WorkbenchItemReference>.from(state.items);
+    final item = currentItems.removeAt(oldIndex);
+
+    // Adjust newIndex if item was moved downwards
+    final effectiveNewIndex = (newIndex > oldIndex) ? newIndex - 1 : newIndex;
+
+    // Ensure effectiveNewIndex is within bounds after removal
+    if (effectiveNewIndex < 0 || effectiveNewIndex > currentItems.length)
+      return;
+
+    currentItems.insert(effectiveNewIndex, item);
+    state = state.copyWith(items: currentItems);
+    if (kDebugMode) {
+      print(
+        '[WorkbenchNotifier] Reordered items: $oldIndex -> $effectiveNewIndex',
+      );
+    }
+    // Note: Reordering is local only, not persisted to CloudKit order.
+    // Default sort is applied on load/refresh.
+  }
 } // End of WorkbenchNotifier class
 
 // Provider definition - constructor signature changed
-final workbenchProvider = StateNotifierProvider<WorkbenchNotifier, WorkbenchState>((ref) {
-      // Constructor no longer takes loadOnInit
-      final notifier = WorkbenchNotifier(ref);
-      // IMPORTANT: The application UI (e.g., WorkbenchScreen) will now need
-      // to trigger the initial loadItems call if it wasn't already.
+final workbenchProvider = StateNotifierProvider<
+  WorkbenchNotifier,
+  WorkbenchState
+>((ref) {
+  // Constructor no longer takes loadOnInit
+  final notifier = WorkbenchNotifier(ref);
+  // IMPORTANT: The application UI (e.g., WorkbenchScreen) will now need
+  // to trigger the initial loadItems call if it wasn't already.
+  // Consider calling loadItems here if it should always load on provider init.
+  // notifier.loadItems(); // Uncomment if initial load is desired here
   return notifier;
 });
