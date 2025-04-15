@@ -1,18 +1,51 @@
 import 'package:flutter/foundation.dart';
-// TODO: Add necessary CloudKit package imports (e.g., package:flutter_cloud_kit/flutter_cloud_kit.dart)
-import 'package:flutter_cloud_kit/types/cloud_kit_account_status.dart'; // Needed for initialize return type
+// Add CloudKit package imports
+import 'package:flutter_cloud_kit/flutter_cloud_kit.dart';
+import 'package:flutter_cloud_kit/types/cloud_kit_account_status.dart';
+import 'package:flutter_cloud_kit/types/database_scope.dart';
+// Existing model imports
 import 'package:flutter_memos/models/mcp_server_config.dart';
 import 'package:flutter_memos/models/server_config.dart';
 import 'package:flutter_memos/models/workbench_item_reference.dart';
-// TODO: Add any other necessary model or utility imports
+// Add any other necessary model or utility imports
 
 /// Service class for interacting with Apple CloudKit.
 ///
 /// This class handles saving, fetching, and deleting records related to
 /// server configurations, workbench items, and user settings stored in CloudKit.
 class CloudKitService {
-  // TODO: Initialize CloudKit instance (e.g., FlutterCloudKit)
-  // final FlutterCloudKit _cloudKit = FlutterCloudKit('your.container.id');
+  // TODO: Replace 'YOUR_CONTAINER_ID' with the actual ID from config/constants
+  // Example: 'iCloud.com.yourcompany.yourapp'
+  final FlutterCloudKit _cloudKit = FlutterCloudKit(
+    containerId: 'YOUR_CONTAINER_ID',
+  );
+  final String _userSettingsRecordName =
+      'currentUserSettings'; // Fixed name for settings record
+  final CloudKitDatabaseScope _scope =
+      CloudKitDatabaseScope.private; // Default scope
+
+  // Define record type constants
+  static const String serverConfigRecordType = 'ServerConfig';
+  static const String mcpServerConfigRecordType = 'McpServerConfig';
+  static const String workbenchItemRecordType = 'WorkbenchItemReference';
+  static const String userSettingsRecordType = 'UserSettings';
+
+  // Helper to convert Map<String, dynamic> to Map<String, String> for saving
+  Map<String, String> _serializeMap(Map<String, dynamic> data) {
+    return data.map((key, value) {
+      if (value == null) {
+        // CloudKit might not support null, represent as empty string or handle differently
+        return MapEntry(key, '');
+      } else if (value is DateTime) {
+        return MapEntry(key, value.toIso8601String());
+      } else if (value is Enum) {
+        return MapEntry(key, value.name);
+      } else {
+        // Convert numbers, booleans, etc., to string
+        return MapEntry(key, value.toString());
+      }
+    });
+  }
 
   /// Initializes the CloudKit service, potentially checking account status.
   /// Returns the current CloudKit account status.
@@ -20,14 +53,18 @@ class CloudKitService {
     if (kDebugMode) {
       print('[CloudKitService] Initializing...');
     }
-    // TODO: Implement CloudKit initialization and account status check
-    // Example: return await _cloudKit.getAccountStatus();
-    await Future.delayed(
-      const Duration(milliseconds: 50),
-    ); // Simulate async work
-    print('[CloudKitService] Placeholder initialization complete.');
-    return CloudKitAccountStatus.couldNotDetermine; // Placeholder return
-    // throw UnimplementedError('CloudKitService.initialize not implemented');
+    try {
+      final status = await _cloudKit.getAccountStatus();
+      if (kDebugMode) {
+        print('[CloudKitService] CloudKit Account Status: ${status.name}');
+      }
+      return status;
+    } catch (e, s) {
+      if (kDebugMode) {
+        print('[CloudKitService] Error getting account status: $e\n$s');
+      }
+      return CloudKitAccountStatus.couldNotDetermine;
+    }
   }
 
   // --- ServerConfig Methods ---
@@ -35,41 +72,124 @@ class CloudKitService {
   /// Saves a Memos server configuration to CloudKit.
   /// Returns true if successful, false otherwise.
   Future<bool> saveServerConfig(ServerConfig config) async {
-    if (kDebugMode)
-      print('[CloudKitService] saveServerConfig called for \${config.id}');
-    // TODO: Implement CloudKit record saving logic for ServerConfig
-    throw UnimplementedError(
-      'CloudKitService.saveServerConfig not implemented',
-    );
+    if (kDebugMode) {
+      print('[CloudKitService] saveServerConfig called for ${config.id}');
+    }
+    try {
+      final recordData = _serializeMap(config.toJson());
+      await _cloudKit.saveRecord(
+        scope: _scope,
+        recordType: serverConfigRecordType,
+        recordName: config.id,
+        record: recordData,
+      );
+      if (kDebugMode) {
+        print('[CloudKitService] Successfully saved ServerConfig ${config.id}');
+      }
+      return true;
+    } catch (e, s) {
+      if (kDebugMode) {
+        print(
+          '[CloudKitService] Error saving ServerConfig ${config.id}: $e\n$s',
+        );
+      }
+      return false;
+    }
   }
 
   /// Retrieves a specific Memos server configuration from CloudKit by its ID.
   /// Returns the ServerConfig if found, null otherwise.
   Future<ServerConfig?> getServerConfig(String id) async {
-    if (kDebugMode) print('[CloudKitService] getServerConfig called for \$id');
-    // TODO: Implement CloudKit record fetching logic for a single ServerConfig
-    throw UnimplementedError('CloudKitService.getServerConfig not implemented');
+    if (kDebugMode) print('[CloudKitService] getServerConfig called for $id');
+    try {
+      final record = await _cloudKit.getRecord(
+        scope: _scope,
+        recordName: id, // Assuming recordName is the ID for this type
+      );
+      // Note: getRecord doesn't take recordType, relies on unique recordName across types or plugin handles it.
+      // We need to check the returned recordType if the plugin doesn't filter.
+      if (record.recordType == serverConfigRecordType) {
+        final config = ServerConfig.fromJson(record.values);
+        if (kDebugMode) {
+          print('[CloudKitService] Successfully fetched ServerConfig $id');
+        }
+        return config;
+      } else {
+        if (kDebugMode) {
+          print(
+            '[CloudKitService] Fetched record $id but type was ${record.recordType}, expected $serverConfigRecordType',
+          );
+        }
+        return null; // Wrong type fetched
+      }
+    } catch (e, s) {
+      // Handle specific "record not found" errors if the plugin provides them, otherwise treat all errors as failure.
+      if (kDebugMode) {
+        print('[CloudKitService] Error fetching ServerConfig $id: $e\n$s');
+      }
+      return null;
+    }
   }
 
   /// Retrieves all Memos server configurations from CloudKit.
   /// Returns a list of ServerConfig objects.
   Future<List<ServerConfig>> getAllServerConfigs() async {
     if (kDebugMode) print('[CloudKitService] getAllServerConfigs called');
-    // TODO: Implement CloudKit query logic to fetch all ServerConfig records
-    throw UnimplementedError(
-      'CloudKitService.getAllServerConfigs not implemented',
-    );
+    try {
+      final records = await _cloudKit.getRecordsByType(
+        scope: _scope,
+        recordType: serverConfigRecordType,
+      );
+      final configs =
+          records
+              .map((record) {
+                try {
+                  return ServerConfig.fromJson(record.values);
+                } catch (e) {
+                  if (kDebugMode) {
+                    print(
+                      '[CloudKitService] Error parsing ServerConfig record ${record.recordName}: $e',
+                    );
+                  }
+                  return null; // Skip records that fail parsing
+                }
+              })
+              .whereType<ServerConfig>() // Filter out nulls from failed parsing
+              .toList();
+      if (kDebugMode) {
+        print(
+          '[CloudKitService] Successfully fetched ${configs.length} ServerConfigs',
+        );
+      }
+      return configs;
+    } catch (e, s) {
+      if (kDebugMode) {
+        print('[CloudKitService] Error fetching all ServerConfigs: $e\n$s');
+      }
+      return []; // Return empty list on error
+    }
   }
 
   /// Deletes a Memos server configuration from CloudKit by its ID.
   /// Returns true if successful, false otherwise.
   Future<bool> deleteServerConfig(String id) async {
-    if (kDebugMode)
-      print('[CloudKitService] deleteServerConfig called for \$id');
-    // TODO: Implement CloudKit record deletion logic for ServerConfig
-    throw UnimplementedError(
-      'CloudKitService.deleteServerConfig not implemented',
-    );
+    if (kDebugMode) {
+      print('[CloudKitService] deleteServerConfig called for $id');
+    }
+    try {
+      // Assuming deleteRecord uses recordName. The plugin interface doesn't specify recordType for delete.
+      await _cloudKit.deleteRecord(scope: _scope, recordName: id);
+      if (kDebugMode) {
+        print('[CloudKitService] Successfully deleted ServerConfig $id');
+      }
+      return true;
+    } catch (e, s) {
+      // Handle specific "record not found" errors if needed, otherwise treat all errors as failure.
+      if (kDebugMode) {
+        print('[CloudKitService] Error deleting ServerConfig $id: $e\n$s');
+      }
+      return false;
+    }
   }
 
   // --- McpServerConfig Methods ---
@@ -77,33 +197,90 @@ class CloudKitService {
   /// Saves an MCP server configuration to CloudKit.
   /// Returns true if successful, false otherwise.
   Future<bool> saveMcpServerConfig(McpServerConfig config) async {
-    if (kDebugMode)
-      print('[CloudKitService] saveMcpServerConfig called for \${config.id}');
-    // TODO: Implement CloudKit record saving logic for McpServerConfig
-    throw UnimplementedError(
-      'CloudKitService.saveMcpServerConfig not implemented',
-    );
+    if (kDebugMode) {
+      print('[CloudKitService] saveMcpServerConfig called for ${config.id}');
+    }
+    try {
+      final recordData = _serializeMap(config.toJson());
+      await _cloudKit.saveRecord(
+        scope: _scope,
+        recordType: mcpServerConfigRecordType,
+        recordName: config.id,
+        record: recordData,
+      );
+      if (kDebugMode) {
+        print(
+          '[CloudKitService] Successfully saved McpServerConfig ${config.id}',
+        );
+      }
+      return true;
+    } catch (e, s) {
+      if (kDebugMode) {
+        print(
+          '[CloudKitService] Error saving McpServerConfig ${config.id}: $e\n$s',
+        );
+      }
+      return false;
+    }
   }
 
   /// Retrieves all MCP server configurations from CloudKit.
   /// Returns a list of McpServerConfig objects.
   Future<List<McpServerConfig>> getAllMcpServerConfigs() async {
     if (kDebugMode) print('[CloudKitService] getAllMcpServerConfigs called');
-    // TODO: Implement CloudKit query logic to fetch all McpServerConfig records
-    throw UnimplementedError(
-      'CloudKitService.getAllMcpServerConfigs not implemented',
-    );
+    try {
+      final records = await _cloudKit.getRecordsByType(
+        scope: _scope,
+        recordType: mcpServerConfigRecordType,
+      );
+      final configs =
+          records
+              .map((record) {
+                try {
+                  return McpServerConfig.fromJson(record.values);
+                } catch (e) {
+                  if (kDebugMode) {
+                    print(
+                      '[CloudKitService] Error parsing McpServerConfig record ${record.recordName}: $e',
+                    );
+                  }
+                  return null;
+                }
+              })
+              .whereType<McpServerConfig>()
+              .toList();
+      if (kDebugMode) {
+        print(
+          '[CloudKitService] Successfully fetched ${configs.length} McpServerConfigs',
+        );
+      }
+      return configs;
+    } catch (e, s) {
+      if (kDebugMode) {
+        print('[CloudKitService] Error fetching all McpServerConfigs: $e\n$s');
+      }
+      return [];
+    }
   }
 
   /// Deletes an MCP server configuration from CloudKit by its ID.
   /// Returns true if successful, false otherwise.
   Future<bool> deleteMcpServerConfig(String id) async {
-    if (kDebugMode)
-      print('[CloudKitService] deleteMcpServerConfig called for \$id');
-    // TODO: Implement CloudKit record deletion logic for McpServerConfig
-    throw UnimplementedError(
-      'CloudKitService.deleteMcpServerConfig not implemented',
-    );
+    if (kDebugMode) {
+      print('[CloudKitService] deleteMcpServerConfig called for $id');
+    }
+    try {
+      await _cloudKit.deleteRecord(scope: _scope, recordName: id);
+      if (kDebugMode) {
+        print('[CloudKitService] Successfully deleted McpServerConfig $id');
+      }
+      return true;
+    } catch (e, s) {
+      if (kDebugMode) {
+        print('[CloudKitService] Error deleting McpServerConfig $id: $e\n$s');
+      }
+      return false;
+    }
   }
 
   // --- WorkbenchItemReference Methods ---
@@ -111,51 +288,158 @@ class CloudKitService {
   /// Saves a workbench item reference to CloudKit.
   /// Returns true if successful, false otherwise.
   Future<bool> saveWorkbenchItemReference(WorkbenchItemReference item) async {
-    if (kDebugMode)
+    if (kDebugMode) {
       print(
-        '[CloudKitService] saveWorkbenchItemReference called for \${item.id}',
+        '[CloudKitService] saveWorkbenchItemReference called for ${item.id}',
       );
-    // TODO: Implement CloudKit record saving logic for WorkbenchItemReference
-    throw UnimplementedError(
-      'CloudKitService.saveWorkbenchItemReference not implemented',
-    );
+    }
+    try {
+      final recordData = _serializeMap(item.toJson());
+      await _cloudKit.saveRecord(
+        scope: _scope,
+        recordType: workbenchItemRecordType,
+        recordName: item.id,
+        record: recordData,
+      );
+      if (kDebugMode) {
+        print(
+          '[CloudKitService] Successfully saved WorkbenchItemReference ${item.id}',
+        );
+      }
+      return true;
+    } catch (e, s) {
+      if (kDebugMode) {
+        print(
+          '[CloudKitService] Error saving WorkbenchItemReference ${item.id}: $e\n$s',
+        );
+      }
+      return false;
+    }
   }
 
   /// Retrieves all workbench item references from CloudKit.
   /// Returns a list of WorkbenchItemReference objects.
   Future<List<WorkbenchItemReference>> getAllWorkbenchItemReferences() async {
-    if (kDebugMode)
+    if (kDebugMode) {
       print('[CloudKitService] getAllWorkbenchItemReferences called');
-    // TODO: Implement CloudKit query logic to fetch all WorkbenchItemReference records
-    throw UnimplementedError(
-      'CloudKitService.getAllWorkbenchItemReferences not implemented',
-    );
+    }
+    try {
+      final records = await _cloudKit.getRecordsByType(
+        scope: _scope,
+        recordType: workbenchItemRecordType,
+      );
+      final items =
+          records
+              .map((record) {
+                try {
+                  return WorkbenchItemReference.fromJson(record.values);
+                } catch (e) {
+                  if (kDebugMode) {
+                    print(
+                      '[CloudKitService] Error parsing WorkbenchItemReference record ${record.recordName}: $e',
+                    );
+                  }
+                  return null;
+                }
+              })
+              .whereType<WorkbenchItemReference>()
+              .toList();
+      if (kDebugMode) {
+        print(
+          '[CloudKitService] Successfully fetched ${items.length} WorkbenchItemReferences',
+        );
+      }
+      return items;
+    } catch (e, s) {
+      if (kDebugMode) {
+        print(
+          '[CloudKitService] Error fetching all WorkbenchItemReferences: $e\n$s',
+        );
+      }
+      return [];
+    }
   }
 
   /// Deletes a workbench item reference from CloudKit by its ID.
   /// Returns true if successful, false otherwise.
   Future<bool> deleteWorkbenchItemReference(String referenceId) async {
-    if (kDebugMode)
+    if (kDebugMode) {
       print(
-        '[CloudKitService] deleteWorkbenchItemReference called for \$referenceId',
+        '[CloudKitService] deleteWorkbenchItemReference called for $referenceId',
       );
-    // TODO: Implement CloudKit record deletion logic for WorkbenchItemReference
-    throw UnimplementedError(
-      'CloudKitService.deleteWorkbenchItemReference not implemented',
-    );
+    }
+    try {
+      await _cloudKit.deleteRecord(scope: _scope, recordName: referenceId);
+      if (kDebugMode) {
+        print(
+          '[CloudKitService] Successfully deleted WorkbenchItemReference $referenceId',
+        );
+      }
+      return true;
+    } catch (e, s) {
+      if (kDebugMode) {
+        print(
+          '[CloudKitService] Error deleting WorkbenchItemReference $referenceId: $e\n$s',
+        );
+      }
+      return false;
+    }
   }
 
   /// Updates the last opened timestamp for a specific workbench item in CloudKit.
   /// Returns true if successful, false otherwise.
   Future<bool> updateWorkbenchItemLastOpened(String referenceId) async {
-    if (kDebugMode)
+    if (kDebugMode) {
       print(
-        '[CloudKitService] updateWorkbenchItemLastOpened called for \$referenceId',
+        '[CloudKitService] updateWorkbenchItemLastOpened called for $referenceId',
       );
-    // TODO: Implement CloudKit record update logic for WorkbenchItemReference lastOpenedTimestamp
-    throw UnimplementedError(
-      'CloudKitService.updateWorkbenchItemLastOpened not implemented',
-    );
+    }
+    try {
+      // 1. Fetch the existing record
+      final record = await _cloudKit.getRecord(
+        scope: _scope,
+        recordName: referenceId,
+      );
+
+      // Check if the fetched record is of the correct type
+      if (record.recordType != workbenchItemRecordType) {
+        if (kDebugMode) {
+          print(
+            '[CloudKitService] Fetched record $referenceId but type was ${record.recordType}, expected $workbenchItemRecordType. Cannot update timestamp.',
+          );
+        }
+        return false;
+      }
+
+      // 2. Prepare updated data (convert existing dynamic map to string map for saving)
+      // Need to deserialize first to easily update, then re-serialize
+      final currentItem = WorkbenchItemReference.fromJson(record.values);
+      final updatedItem = currentItem.copyWith(
+        lastOpenedTimestamp: DateTime.now(),
+      );
+      final updatedRecordData = _serializeMap(updatedItem.toJson());
+
+      // 3. Save the modified record back
+      await _cloudKit.saveRecord(
+        scope: _scope,
+        recordType: workbenchItemRecordType, // Must specify type on save
+        recordName: referenceId,
+        record: updatedRecordData,
+      );
+      if (kDebugMode) {
+        print(
+          '[CloudKitService] Successfully updated lastOpenedTimestamp for $referenceId',
+        );
+      }
+      return true;
+    } catch (e, s) {
+      if (kDebugMode) {
+        print(
+          '[CloudKitService] Error updating lastOpenedTimestamp for $referenceId: $e\n$s',
+        );
+      }
+      return false;
+    }
   }
 
   // --- Settings Methods ---
@@ -163,17 +447,103 @@ class CloudKitService {
   /// Retrieves a specific setting value from the UserSettings record in CloudKit.
   /// Returns the setting value as a String if found, null otherwise.
   Future<String?> getSetting(String keyName) async {
-    if (kDebugMode) print('[CloudKitService] getSetting called for \$keyName');
-    // TODO: Implement CloudKit logic to fetch a specific field from the UserSettings record
-    throw UnimplementedError('CloudKitService.getSetting not implemented');
+    if (kDebugMode) print('[CloudKitService] getSetting called for $keyName');
+    try {
+      final record = await _cloudKit.getRecord(
+        scope: _scope,
+        recordName: _userSettingsRecordName,
+      );
+
+      // Check type just in case
+      if (record.recordType != userSettingsRecordType) {
+        if (kDebugMode) {
+          print(
+            '[CloudKitService] Fetched settings record but type was ${record.recordType}.',
+          );
+        }
+        return null;
+      }
+
+      // Access the specific key from the values map
+      final value = record.values[keyName];
+      if (value != null) {
+        if (kDebugMode) {
+          print('[CloudKitService] Successfully fetched setting $keyName');
+        }
+        // Ensure it's returned as a String
+        return value.toString();
+      } else {
+        if (kDebugMode) {
+          print(
+            '[CloudKitService] Setting $keyName not found in UserSettings record.',
+          );
+        }
+        return null;
+      }
+    } catch (e, s) {
+      // Handle "record not found" specifically if possible, otherwise treat as error
+      if (kDebugMode) {
+        print('[CloudKitService] Error fetching setting $keyName: $e\n$s');
+      }
+      return null;
+    }
   }
 
   /// Saves a specific setting key-value pair to the UserSettings record in CloudKit.
   /// Returns true if successful, false otherwise.
   Future<bool> saveSetting(String keyName, String value) async {
-    if (kDebugMode) print('[CloudKitService] saveSetting called for \$keyName');
-    // TODO: Implement CloudKit logic to update a specific field in the UserSettings record
-    throw UnimplementedError('CloudKitService.saveSetting not implemented');
+    if (kDebugMode) print('[CloudKitService] saveSetting called for $keyName');
+    try {
+      Map<String, dynamic> currentSettings = {};
+      // 1. Try to fetch the existing record
+      try {
+        final existingRecord = await _cloudKit.getRecord(
+          scope: _scope,
+          recordName: _userSettingsRecordName,
+        );
+        // Check type
+        if (existingRecord.recordType == userSettingsRecordType) {
+          currentSettings = Map<String, dynamic>.from(existingRecord.values);
+        } else {
+          if (kDebugMode) {
+            print(
+              '[CloudKitService] Found record $_userSettingsRecordName but it was wrong type: ${existingRecord.recordType}',
+            );
+          }
+          // Decide how to handle: overwrite or fail? Overwriting seems reasonable for settings.
+        }
+      } catch (e) {
+        // Assume record not found error, proceed with empty map
+        if (kDebugMode) {
+          print(
+            '[CloudKitService] UserSettings record not found, creating new one. Error: $e',
+          );
+        }
+      }
+
+      // 2. Update the specific key
+      currentSettings[keyName] = value;
+
+      // 3. Serialize the entire map to Map<String, String> for saving
+      final recordData = _serializeMap(currentSettings);
+
+      // 4. Save the record
+      await _cloudKit.saveRecord(
+        scope: _scope,
+        recordType: userSettingsRecordType,
+        recordName: _userSettingsRecordName,
+        record: recordData,
+      );
+      if (kDebugMode) {
+        print('[CloudKitService] Successfully saved setting $keyName');
+      }
+      return true;
+    } catch (e, s) {
+      if (kDebugMode) {
+        print('[CloudKitService] Error saving setting $keyName: $e\n$s');
+      }
+      return false;
+    }
   }
 
   // --- Utility Methods ---
@@ -181,21 +551,83 @@ class CloudKitService {
   /// Deletes all CloudKit records of a specific type. Use with caution!
   /// Returns true if successful, false otherwise.
   Future<bool> deleteAllRecordsOfType(String recordType) async {
-    if (kDebugMode)
-      print('[CloudKitService] deleteAllRecordsOfType called for \$recordType');
-    // TODO: Implement CloudKit batch deletion logic for a given record type
-    throw UnimplementedError(
-      'CloudKitService.deleteAllRecordsOfType not implemented',
-    );
+    if (kDebugMode) {
+      print('[CloudKitService] deleteAllRecordsOfType called for $recordType');
+    }
+    try {
+      // 1. Fetch all records of the given type
+      final records = await _cloudKit.getRecordsByType(
+        scope: _scope,
+        recordType: recordType,
+      );
+
+      if (records.isEmpty) {
+        if (kDebugMode) {
+          print(
+            '[CloudKitService] No records found for type $recordType to delete.',
+          );
+        }
+        return true; // Nothing to delete, considered success
+      }
+
+      if (kDebugMode) {
+        print(
+          '[CloudKitService] Found ${records.length} records of type $recordType to delete.',
+        );
+      }
+
+      // 2. Delete each record individually (plugin lacks batch delete)
+      bool allSucceeded = true;
+      for (final record in records) {
+        try {
+          await _cloudKit.deleteRecord(
+            scope: _scope,
+            recordName: record.recordName,
+          );
+          if (kDebugMode) {
+            print(
+              '[CloudKitService] Deleted record ${record.recordName} of type $recordType',
+            );
+          }
+        } catch (e) {
+          if (kDebugMode) {
+            print(
+              '[CloudKitService] Error deleting record ${record.recordName} of type $recordType: $e',
+            );
+          }
+          allSucceeded = false; // Mark failure if any deletion fails
+          // Continue trying to delete others
+        }
+      }
+      return allSucceeded;
+    } catch (e, s) {
+      if (kDebugMode) {
+        print(
+          '[CloudKitService] Error fetching records for deletion (type $recordType): $e\n$s',
+        );
+      }
+      return false;
+    }
   }
 
   /// Deletes the UserSettings record from CloudKit. Use with caution!
   /// Returns true if successful, false otherwise.
   Future<bool> deleteUserSettingsRecord() async {
     if (kDebugMode) print('[CloudKitService] deleteUserSettingsRecord called');
-    // TODO: Implement CloudKit deletion logic for the UserSettings record
-    throw UnimplementedError(
-      'CloudKitService.deleteUserSettingsRecord not implemented',
-    );
+    try {
+      await _cloudKit.deleteRecord(
+        scope: _scope,
+        recordName: _userSettingsRecordName,
+      );
+      if (kDebugMode) {
+        print('[CloudKitService] Successfully deleted UserSettings record.');
+      }
+      return true;
+    } catch (e, s) {
+      if (kDebugMode) {
+        print('[CloudKitService] Error deleting UserSettings record: $e\n$s');
+      }
+      return false;
+    }
   }
 }
