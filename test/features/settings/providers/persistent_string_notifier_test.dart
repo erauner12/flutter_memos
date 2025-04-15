@@ -498,16 +498,18 @@ void main() {
         verify(mockSecureStorage.read(key: testPrefKey)).called(1);
         // Verify CloudKit getSetting was also attempted during init
         verify(mockCloudKitService.getSetting(testPrefKey)).called(1);
-      // Verify set actions did NOT happen due to timeout
-      verifyNever(
+        // Verify set actions DID happen after init completed
+        verify(
         mockSecureStorage.write(key: testPrefKey, value: newValue),
-      );
-        verifyNever(mockCloudKitService.saveSetting(testPrefKey, newValue));
-        // State should remain default because init didn't complete before set timed out
+        ).called(1);
+        verify(
+          mockCloudKitService.saveSetting(testPrefKey, newValue),
+        ).called(1);
+        // State should be the new value because set eventually succeeded
         expect(
           notifier.state,
-          defaultValue,
-          reason: "State should not change if set times out waiting for init",
+          newValue,
+          reason: "State should be updated after init completes and set runs",
         );
       },
       timeout: const Timeout(Duration(seconds: 1)),

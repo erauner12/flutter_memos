@@ -44,6 +44,7 @@ void main() {
       // Updated type
       id: 'note1', // Updated prefix
       content: 'Note to move', // Updated content
+      pinned: false, // Add required parameter
       createTime: DateTime.now(),
       updateTime: DateTime.now(),
       displayTime: DateTime.now(), // Add required field
@@ -92,7 +93,7 @@ void main() {
       ).thenAnswer((_) {});
       when(
         mockNotesNotifierInstance.refresh()).thenAnswer((_) async {
-        return null;
+        return;
       });
 
       // Configure ApiService mocks

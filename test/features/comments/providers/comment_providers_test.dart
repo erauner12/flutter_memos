@@ -1,9 +1,8 @@
 import 'package:flutter/foundation.dart';
-import 'package:flutter_memos/api/lib/api.dart'; // Import for API models
 import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/models/list_notes_response.dart'; // Updated import
 import 'package:flutter_memos/models/note_item.dart'; // Updated import
-import 'package:flutter_memos/models/note_relation.dart'; // Ensure this import exists
+// Removed import for note_relation.dart
 import 'package:flutter_memos/providers/api_providers.dart';
 import 'package:flutter_memos/providers/comment_providers.dart' as comment_providers;
 import 'package:flutter_memos/providers/note_providers.dart'
@@ -26,7 +25,7 @@ void main() {
   // Store created entities for easier stubbing/verification
   final Map<String, NoteItem> createdNotes = {}; // Updated type
   final Map<String, List<Comment>> createdComments = {};
-  final Map<String, List<NoteRelation>> createdRelations = {}; // Updated type
+  final Map<String, List<Map<String, dynamic>>> createdRelations = {}; // Updated type
   bool shouldFailRelations = false; // Flag to simulate relation errors
 
   group('Comment Providers Tests', () {
@@ -221,20 +220,6 @@ void main() {
         return;
       });
 
-      // Stub listNoteRelations (replaces listMemoRelations)
-      when(mockApiService.listNoteRelations(any)).thenAnswer((
-        invocation,
-      ) async {
-        if (shouldFailRelations) {
-          throw Exception('Simulated API error: Failed to list relations');
-        }
-        final noteId = invocation.positionalArguments[0] as String;
-        final formattedId =
-            noteId.contains('/') ? noteId.split('/').last : noteId;
-        // Return a copy to avoid modifying the original list in the map
-        return List<NoteRelation>.from(createdRelations[formattedId] ?? []);
-      });
-
       // Stub setNoteRelations (replaces setMemoRelations)
       when(mockApiService.setNoteRelations(any, any)).thenAnswer((
         invocation,
@@ -245,7 +230,8 @@ void main() {
         final noteId = invocation.positionalArguments[0] as String;
         final formattedId =
             noteId.contains('/') ? noteId.split('/').last : noteId;
-        return createdRelations[formattedId] ?? [];
+        // Return type is void, so return null or nothing
+        return;
       });
 
       // Stub setNoteRelations (replaces setMemoRelations)
@@ -258,7 +244,7 @@ void main() {
         final noteId = invocation.positionalArguments[0] as String;
         final relations =
             invocation.positionalArguments[1]
-                as List<NoteRelation>; // Updated type
+                as List<Map<String, dynamic>>; // Updated type
         final formattedId =
             noteId.contains('/') ? noteId.split('/').last : noteId;
         createdRelations[formattedId] = List.from(relations);
@@ -536,26 +522,22 @@ void main() {
         relationVerification.called(1);
         final capturedRelations =
             relationVerification.captured.single
-                as List<NoteRelation>; // Updated type
+                as List<Map<String, dynamic>>; // Updated type
         expect(capturedRelations, hasLength(1));
         expect(
-          capturedRelations.first.relatedNoteId,
+          capturedRelations.first['relatedMemoId'], // Access map key
           equals(note.id),
         ); // Updated field name
         expect(
-          capturedRelations.first.type,
-          equals(NoteRelationType.comment),
+          capturedRelations.first['type'], // Access map key
+          equals('COMMENT'), // Use string representation
         ); // Updated enum
 
-        // Optional: Verify relation list via stubbed listNoteRelations
-        final relations = await mockApiService.listNoteRelations(
-          createdNote.id,
-        );
-        expect(relations, hasLength(1));
-        expect(
-          relations.first.relatedNoteId,
-          equals(note.id),
-        ); // Updated field name
+        // Optional: Verify relation list via createdRelations map
+        expect(createdRelations[createdNote.id], isNotNull);
+        expect(createdRelations[createdNote.id], hasLength(1));
+        expect(createdRelations[createdNote.id]!.first['relatedMemoId'], equals(note.id));
+        expect(createdRelations[createdNote.id]!.first['type'], equals('COMMENT'));
       },
     );
 
@@ -597,7 +579,7 @@ void main() {
           final noteId = invocation.positionalArguments[0] as String;
           final relations =
               invocation.positionalArguments[1]
-                  as List<NoteRelation>; // Updated type
+                  as List<Map<String, dynamic>>; // Updated type
           final formattedId =
               noteId.contains('/') ? noteId.split('/').last : noteId;
           createdRelations[formattedId] = List.from(relations);

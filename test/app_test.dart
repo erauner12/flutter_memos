@@ -67,6 +67,7 @@ class MockMultiServerConfigNotifier
 }
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized(); // Add this line
   late MockBaseApiService mockApiService; // Updated mock type
   late List<NoteItem> testNotes; // Updated type
 

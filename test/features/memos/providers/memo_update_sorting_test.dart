@@ -2,8 +2,9 @@ import 'package:flutter/foundation.dart'; // Import for kDebugMode
 import 'package:flutter_memos/models/list_notes_response.dart'; // Updated import
 import 'package:flutter_memos/models/note_item.dart'; // Updated import
 import 'package:flutter_memos/providers/api_providers.dart';
-import 'package:flutter_memos/providers/edit_entity_providers.dart'; // Updated import
-import 'package:flutter_memos/providers/note_providers.dart'; // Updated import
+// Removed import for edit_entity_providers.dart
+import 'package:flutter_memos/providers/note_providers.dart'
+    as note_providers; // Updated import
 import 'package:flutter_memos/services/base_api_service.dart'; // Updated import
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -241,9 +242,9 @@ void main() {
         overrides: [
           apiServiceProvider.overrideWithValue(mockApiService),
           // Override the notifier to set initial state manually
-          notesNotifierProvider.overrideWith((ref) {
+          note_providers.notesNotifierProvider.overrideWith((ref) {
             // Updated provider name
-            final initialState = const NotesState().copyWith(
+            final initialState = const note_providers.NotesState().copyWith(
               // Updated state type
               notes: initialNotes, // Updated field name
               isLoading: false,
@@ -269,7 +270,7 @@ void main() {
           '[Test Flow] Verifying initial notesNotifierProvider state...',
         ); // Updated log
         final initialState = container.read(
-          notesNotifierProvider,
+          note_providers.notesNotifierProvider,
         ); // Updated provider name
         print(
           '[Test Flow] Initial state count: ${initialState.notes.length}',
@@ -302,17 +303,11 @@ void main() {
           state: NoteState.normal, // Add required field
           pinned: false, // Add required field
         );
-        // saveEntityProvider calls apiService.updateNote and then triggers refresh
+        // updateNoteProvider calls apiService.updateNote and updates notifier state
         await container.read(
-          saveEntityProvider(
-            // Use provider from edit_entity_providers.dart
-            EntityProviderParams(
-              id: noteToUpdateId,
-              type: 'note',
-            ), // Updated type
-          ),
+          note_providers.updateNoteProvider(noteToUpdateId),
         )(noteDataForUpdate);
-        print('[Test Flow] saveEntityProvider call complete.');
+        print('[Test Flow] updateNoteProvider call complete.');
 
         // Verify updateNote was called with expected arguments
         verify(
@@ -331,10 +326,10 @@ void main() {
         );
         // Allow time for the async refresh within the mock notifier to complete
         await container
-            .read(notesNotifierProvider.notifier)
+            .read(note_providers.notesNotifierProvider.notifier)
             .refresh(); // Updated provider name
         final finalState = container.read(
-          notesNotifierProvider,
+          note_providers.notesNotifierProvider,
         ); // Updated provider name
         print(
           '[Test Flow] Final state count: ${finalState.notes.length}',

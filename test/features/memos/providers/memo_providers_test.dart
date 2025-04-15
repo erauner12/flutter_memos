@@ -135,6 +135,28 @@ void main() {
       // Stub deleteNote
       when(mockApiService.deleteNote(any)).thenAnswer((_) async => {}); // Updated method name
 
+      // Add stubs for togglePinNote and archiveNote
+      when(mockApiService.togglePinNote(any)).thenAnswer((invocation) async {
+        final id = invocation.positionalArguments[0] as String;
+        // Find the note in the *current* state of the mock notifier if possible,
+        // otherwise use the initial 'notes' list as a fallback.
+        final currentNotesList = container.read(notesNotifierProvider).notes;
+        final currentNote = currentNotesList.firstWhere(
+          (n) => n.id == id,
+          orElse: () => notes.firstWhere((n) => n.id == id),
+        );
+        return currentNote.copyWith(pinned: !currentNote.pinned);
+      });
+      when(mockApiService.archiveNote(any)).thenAnswer((invocation) async {
+        final id = invocation.positionalArguments[0] as String;
+        final currentNotesList = container.read(notesNotifierProvider).notes;
+        final currentNote = currentNotesList.firstWhere(
+          (n) => n.id == id,
+          orElse: () => notes.firstWhere((n) => n.id == id),
+        );
+        return currentNote.copyWith(state: NoteState.archived, pinned: false);
+      });
+
       container = ProviderContainer(
         overrides: [
           apiServiceProvider.overrideWithValue(mockApiService),

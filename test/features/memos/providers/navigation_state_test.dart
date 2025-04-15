@@ -88,10 +88,25 @@ void main() {
       );
     });
     when(mockApiService.updateNote(any, any)).thenAnswer((invocation) async {
-      // Updated method name
       final updatedNote =
           invocation.positionalArguments[1] as NoteItem; // Updated type
       return updatedNote; // Return the updated note
+    });
+
+    // Add stubs for togglePinNote and archiveNote
+    when(mockApiService.togglePinNote(any)).thenAnswer((invocation) async {
+      final id = invocation.positionalArguments[0] as String;
+      // Recreate the list here to ensure it's available for lookup in the mock
+      final notes = createSortedNotes(5); // Updated function name
+      final currentNote = notes.firstWhere((n) => n.id == id);
+      return currentNote.copyWith(pinned: !currentNote.pinned);
+    });
+    when(mockApiService.archiveNote(any)).thenAnswer((invocation) async {
+      final id = invocation.positionalArguments[0] as String;
+      // Recreate the list here to ensure it's available for lookup in the mock
+      final notes = createSortedNotes(5); // Updated function name
+      final currentNote = notes.firstWhere((n) => n.id == id);
+      return currentNote.copyWith(state: NoteState.archived, pinned: false);
     });
     // --- END MOCK SETUP ---
   });

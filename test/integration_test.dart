@@ -1,6 +1,6 @@
 import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/models/note_item.dart';
-import 'package:flutter_memos/services/api_service.dart'; // Add import for ApiService
+import 'package:flutter_memos/services/api_service.dart'; // Keep for MemosApiService
 import 'package:flutter_memos/services/base_api_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -29,10 +29,11 @@ void main() {
           );
           apiService = DummyApiService(); // Changed to DummyApiService
         } else {
-          apiService = ApiService(); // Using ApiService
-          print('Configuring ApiService for integration tests: $baseUrl');
+          apiService = MemosApiService(); // Using MemosApiService
+          print('Configuring MemosApiService for integration tests: $baseUrl');
           apiService.configureService(baseUrl: baseUrl, authToken: apiKey);
-          ApiService.verboseLogging = true; // Fixed: Access via ApiService
+          MemosApiService.verboseLogging =
+              true; // Fixed: Access via MemosApiService
         }
       } else {
         apiService = DummyApiService(); // Changed to DummyApiService

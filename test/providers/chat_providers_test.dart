@@ -304,8 +304,30 @@ void main() {
 
       // Assert
       // Verify calls on the *delegate* mock, capturing history
+      // Construct the full expected query string
+      final fullExpectedQuery = '''  Todoist Filter Reference (Examples):
+        - `today`: Tasks due today.
+        - `overdue`: Tasks past their due date.
+        - `p1`, `p2`, `p3`, `p4`: Filter by priority.
+        - `#ProjectName`: Tasks in a specific project.
+        - `##ParentProject`: Tasks in a project and its sub-projects.
+        - `@labelName`: Tasks with a specific label.
+        - `7 days`: Tasks due in the next 7 days.
+        - `no date`: Tasks without a due date.
+        - `search: keyword`: Tasks containing a keyword.
+        - Combine with `&` (AND), `|` (OR), `!` (NOT), `()` (grouping). Example: `(today | overdue) & #Work`
+
+        Todoist Date Reference (Examples):
+        - `today`, `tomorrow`, `next monday`, `Jan 27`, `in 3 weeks`
+        - `every day`, `every other week`, `every 3rd friday`, `every! day` (repeats from completion date)
+        - `starting tomorrow`, `until Dec 31`, `for 3 weeks`
+        - `at 5pm`, `for 2h` (duration)
+      \n\nUser query: $userQuery''';
       final verification = verify(
-        mockMcpClientNotifierDelegate.processQuery(userQuery, captureAny),
+        mockMcpClientNotifierDelegate.processQuery(
+          fullExpectedQuery,
+          captureAny,
+        ),
       );
       verification.called(1);
       final capturedHistory = verification.captured.single as List<Content>?;
@@ -402,8 +424,27 @@ void main() {
 
       // Assert
       // Verify calls on the *delegate* mock
+      // Construct the full expected query string
+      final fullExpectedQuery = '''  Todoist Filter Reference (Examples):
+        - `today`: Tasks due today.
+        - `overdue`: Tasks past their due date.
+        - `p1`, `p2`, `p3`, `p4`: Filter by priority.
+        - `#ProjectName`: Tasks in a specific project.
+        - `##ParentProject`: Tasks in a project and its sub-projects.
+        - `@labelName`: Tasks with a specific label.
+        - `7 days`: Tasks due in the next 7 days.
+        - `no date`: Tasks without a due date.
+        - `search: keyword`: Tasks containing a keyword.
+        - Combine with `&` (AND), `|` (OR), `!` (NOT), `()` (grouping). Example: `(today | overdue) & #Work`
+
+        Todoist Date Reference (Examples):
+        - `today`, `tomorrow`, `next monday`, `Jan 27`, `in 3 weeks`
+        - `every day`, `every other week`, `every 3rd friday`, `every! day` (repeats from completion date)
+        - `starting tomorrow`, `until Dec 31`, `for 3 weeks`
+        - `at 5pm`, `for 2h` (duration)
+      \n\nUser query: $userQuery''';
       verify(
-        mockMcpClientNotifierDelegate.processQuery(userQuery, any),
+        mockMcpClientNotifierDelegate.processQuery(fullExpectedQuery, any),
       ).called(1);
       // Verify Gemini stream was NOT called directly
       verifyNever(mockGeminiService.sendMessageStream(any, any));
@@ -484,8 +525,27 @@ void main() {
       verifyNever(
         mockMcpClientNotifierDelegate.processQuery(any, any),
       );
+      // Construct the full expected query string
+      final fullExpectedQuery = '''  Todoist Filter Reference (Examples):
+        - `today`: Tasks due today.
+        - `overdue`: Tasks past their due date.
+        - `p1`, `p2`, `p3`, `p4`: Filter by priority.
+        - `#ProjectName`: Tasks in a specific project.
+        - `##ParentProject`: Tasks in a project and its sub-projects.
+        - `@labelName`: Tasks with a specific label.
+        - `7 days`: Tasks due in the next 7 days.
+        - `no date`: Tasks without a due date.
+        - `search: keyword`: Tasks containing a keyword.
+        - Combine with `&` (AND), `|` (OR), `!` (NOT), `()` (grouping). Example: `(today | overdue) & #Work`
+
+        Todoist Date Reference (Examples):
+        - `today`, `tomorrow`, `next monday`, `Jan 27`, `in 3 weeks`
+        - `every day`, `every other week`, `every 3rd friday`, `every! day` (repeats from completion date)
+        - `starting tomorrow`, `until Dec 31`, `for 3 weeks`
+        - `at 5pm`, `for 2h` (duration)
+      \n\nUser query: $userQuery''';
       verify(
-        mockGeminiService.sendMessageStream(userQuery, any),
+        mockGeminiService.sendMessageStream(fullExpectedQuery, any),
       ).called(1);
 
       final finalState = container.read(chatProvider);

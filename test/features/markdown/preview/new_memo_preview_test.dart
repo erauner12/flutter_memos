@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart'; // Use Cupertino
 import 'package:flutter_markdown/flutter_markdown.dart';
-import 'package:flutter_memos/screens/new_memo/new_memo_form.dart';
+import 'package:flutter_memos/models/note_item.dart'; // Import NoteItem
+import 'package:flutter_memos/screens/edit_entity/edit_entity_form.dart'; // Import EditEntityForm
 import 'package:flutter_memos/services/url_launcher_service.dart'; // Import url launcher service
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -36,8 +37,24 @@ void main() {
               mockUrlLauncherService,
             ), // Add override
           ],
-          child: const CupertinoApp(
-            home: CupertinoPageScaffold(child: NewMemoForm()),
+          child: CupertinoApp(
+            home: CupertinoPageScaffold(
+              child: EditEntityForm(
+                entityId: '', // Indicate creation with empty string or null
+                entityType: 'note',
+                entity: NoteItem(
+                  // Provide a default empty NoteItem
+                  id: '',
+                  content: '',
+                  pinned: false,
+                  state: NoteState.normal,
+                  visibility: NoteVisibility.private,
+                  createTime: DateTime.now(),
+                  updateTime: DateTime.now(),
+                  displayTime: DateTime.now(),
+                ),
+              ),
+            ),
           ), // Use Cupertino
         ),
       );
@@ -93,14 +110,29 @@ void main() {
               mockUrlLauncherService,
             ), // Add override
           ],
-          child: const CupertinoApp(
+          child: CupertinoApp(
             // Use CupertinoApp
             home: CupertinoPageScaffold(
               // Use CupertinoPageScaffold
               child: SizedBox(
                 width: 800,
                 height: 600,
-                child: NewMemoForm(), // Directly use NewMemoForm
+                child: EditEntityForm(
+                  // Use EditEntityForm
+                  entityId: '', // Indicate creation
+                  entityType: 'note',
+                  entity: NoteItem(
+                    // Provide a default empty NoteItem
+                    id: '',
+                    content: '',
+                    pinned: false,
+                    state: NoteState.normal,
+                    visibility: NoteVisibility.private,
+                    createTime: DateTime.now(),
+                    updateTime: DateTime.now(),
+                    displayTime: DateTime.now(),
+                  ),
+                ),
               ),
             ),
           ),
