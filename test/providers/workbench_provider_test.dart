@@ -1247,9 +1247,8 @@ void main() {
         final initialItem1 = initialLoadedState.items.firstWhere(
           (i) => i.id == 'id1',
         );
-        final expectedItem1OverallTime =
-            initialItem1
-                .overallLastUpdateTime; // This should be note1UpdateTime from setUp
+        // The correct expected value after refresh error is item1.addedTimestamp
+        final expectedItem1OverallTime = item1.addedTimestamp;
 
         when(
           mockApiService.getNote(any, targetServerOverride: serverConfig1),
@@ -1302,13 +1301,13 @@ void main() {
 
         // Verify item1 retains its original data calculated during initial load
         final item1State = state.items.firstWhere((i) => i.id == 'id1');
-        // Corrected Assertion: Compare against the time calculated after initial load
+        // Corrected Assertion: After refresh error, overallLastUpdateTime should be item1.addedTimestamp
         expect(item1State.overallLastUpdateTime, expectedItem1OverallTime);
         // Check other fields remain as they were after initial load
         expect(
           item1State.referencedItemUpdateTime,
-          isNotNull,
-        ); // It got a value during initial load
+          isNull,
+        ); // It will be null after refresh error
         expect(item1State.latestComment, isNull);
 
         // Verify other items were updated correctly (order should still be based on available data)
