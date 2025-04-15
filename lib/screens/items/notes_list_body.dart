@@ -207,6 +207,11 @@ class _NotesListBodyState extends ConsumerState<NotesListBody> { // Renamed clas
                     onMoveToServer: widget.onMoveNoteToServer != null // Use renamed callback
                         ? () => widget.onMoveNoteToServer!(note.id)
                         : null,
+                    // TODO: Add 'Add to Workbench' action here (e.g., in a context menu on long-press)
+                    // Action should:
+                    // 1. Get note details (id, preview, server config).
+                    // 2. Create WorkbenchItemReference(type: note).
+                    // 3. Call ref.read(workbenchProvider.notifier).addItem(...).
                   );
                 }, childCount: visibleNotes.length),
               ),

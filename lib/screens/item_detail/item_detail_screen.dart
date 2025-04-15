@@ -2,18 +2,23 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart'; // Keep for ScaffoldMessenger
 import 'package:flutter/services.dart';
+import 'package:flutter_memos/models/note_item.dart'; // Import NoteItem
+import 'package:flutter_memos/models/workbench_item_reference.dart'; // Import workbench model
 // Import note_providers instead of memo_providers
 import 'package:flutter_memos/providers/note_providers.dart' as note_providers;
+import 'package:flutter_memos/providers/server_config_provider.dart'; // Import server config provider
 // Import settings_provider for manuallyHiddenNoteIdsProvider
 import 'package:flutter_memos/providers/settings_provider.dart' as settings_p;
 import 'package:flutter_memos/providers/ui_providers.dart';
+// Removed import for memo_detail_providers
+import 'package:flutter_memos/providers/workbench_provider.dart'; // Import workbench provider
 import 'package:flutter_memos/utils/keyboard_navigation.dart';
 import 'package:flutter_memos/widgets/capture_utility.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:uuid/uuid.dart'; // Import Uuid
 
 import 'note_comments.dart'; // Updated import
 import 'note_content.dart'; // Updated import
-// Removed import for memo_detail_providers
 
 class ItemDetailScreen extends ConsumerStatefulWidget { // Renamed class
   final String itemId; // Renamed from memoId to itemId
@@ -91,11 +96,46 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> // Renamed 
     );
   }
 
+  // --- Add to Workbench Action ---
+  void _addNoteToWorkbench(NoteItem note) {
+    final activeServer = ref.read(activeServerConfigProvider);
+    if (activeServer == null) {
+      _showErrorSnackbar("Cannot add to workbench: No active server.");
+      return;
+    }
+
+    final preview =
+        note.content.split('\n').first; // Simple preview (first line)
+
+    final reference = WorkbenchItemReference(
+      id: const Uuid().v4(), // Generate unique ID for the reference
+      referencedItemId: note.id,
+      referencedItemType: WorkbenchItemType.note,
+      serverId: activeServer.id,
+      serverType: activeServer.serverType,
+      serverName: activeServer.name,
+      previewContent:
+          preview.length > 100
+              ? '${preview.substring(0, 97)}...'
+              : preview, // Limit preview length
+      addedTimestamp: DateTime.now(),
+    );
+
+    ref.read(workbenchProvider.notifier).addItem(reference);
+    _showSuccessSnackbar('Added note to Workbench');
+  }
+  // --- End Add to Workbench Action ---
+
+
   // --- Action Sheet Logic ---
   void _showActions() {
     if (!mounted) return;
     // Use public provider from note_providers
     final isFixingGrammar = ref.read(note_providers.isFixingGrammarProvider);
+    // Get the current note data to pass to the add action
+    final noteAsync = ref.read(
+      note_providers.noteDetailProvider(widget.itemId),
+    );
 
     showCupertinoModalPopup<void>(
       context: context,
@@ -131,6 +171,18 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> // Renamed 
                       });
                 },
               ),
+              // --- Add Note to Workbench Action ---
+              // Only show if note data is available
+              if (noteAsync is AsyncData<NoteItem>)
+                CupertinoActionSheetAction(
+                  child: const Text('Add to Workbench'),
+                  onPressed: () {
+                    Navigator.pop(popupContext); // Close the sheet
+                    _addNoteToWorkbench(
+                      noteAsync.value,
+                    ); // Call the add function
+                  },
+                ),
               CupertinoActionSheetAction(
                 isDefaultAction: !isFixingGrammar,
                 onPressed: isFixingGrammar ? () {} : () {
