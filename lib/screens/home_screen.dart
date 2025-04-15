@@ -46,23 +46,22 @@ class HomeScreen extends ConsumerWidget {
           case 1: // New index for Chat tab
             return CupertinoTabView(
               builder: (context) {
-                // Directly return ChatScreen within its own tab view context
-                return const ChatScreen();
+                // Wrap ChatScreen in CupertinoPageScaffold to ensure Navigator has a route
+                return const CupertinoPageScaffold(child: ChatScreen());
               },
             );
           case 2: // Updated index for Settings tab
             // Simplify the Settings tab - remove nested Scaffold/NavBar
             return CupertinoTabView(
               builder: (context) {
-                // Directly return SettingsScreen. The CupertinoTabScaffold
-                // will provide the main navigation context if needed,
-                // or SettingsScreen can be designed to fit within the tab
-                // without its own specific NavBar.
-                return const SettingsScreen(isInitialSetup: false);
+                // Wrap SettingsScreen in CupertinoPageScaffold to ensure Navigator has a route
+                return const CupertinoPageScaffold(
+                  child: SettingsScreen(isInitialSetup: false),
+                );
               },
             );
           default:
-            // Should not happen with 2 tabs, but good practice
+            // Should not happen with 3 tabs, but good practice
             return const SizedBox.shrink();
         }
       },

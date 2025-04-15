@@ -87,6 +87,38 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
 
   // Custom context menu including date actions
   void _showCustomContextMenu(BuildContext context) {
+    final noteActions = <Widget>[
+      CupertinoContextMenuAction(
+        child: const Text('Edit'),
+        onPressed: () {
+          Navigator.pop(context);
+          _onEdit(context);
+        },
+      ),
+      CupertinoContextMenuAction(
+        child: Text(widget.note.pinned ? 'Unpin' : 'Pin'),
+        onPressed: () {
+          Navigator.pop(context);
+          _onTogglePin(context);
+        },
+      ),
+      CupertinoContextMenuAction(
+        child: const Text('Archive'),
+        onPressed: () {
+          Navigator.pop(context);
+          _onArchive(context);
+        },
+      ),
+      CupertinoContextMenuAction(
+        isDestructiveAction: true,
+        child: const Text('Delete'),
+        onPressed: () {
+          Navigator.pop(context);
+          _onDelete(context);
+        },
+      ),
+    ];
+
     final standardActions = <Widget>[
       CupertinoContextMenuAction(
         child: const Text('Copy Content'),
@@ -142,8 +174,12 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
       // The builder provides the correct context for actions *inside* the popup
       builder:
           (BuildContext builderContext) => CupertinoActionSheet(
-            // Combine both sets of actions
-            actions: <Widget>[...standardActions, ...dateActions],
+            // Combine all sets of actions
+            actions: <Widget>[
+              ...noteActions,
+              ...standardActions,
+              ...dateActions,
+            ],
             cancelButton: CupertinoActionSheetAction(
               child: const Text('Cancel'),
               onPressed: () {
