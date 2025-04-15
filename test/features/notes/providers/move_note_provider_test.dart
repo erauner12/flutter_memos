@@ -22,7 +22,6 @@ import 'move_note_provider_test.mocks.dart';
 @GenerateNiceMocks([
   MockSpec<MemosApiService>(),
   MockSpec<BlinkoApiService>(),
-  MockSpec<NotesNotifier>(), // Keep existing mock for NotesNotifier
 ])
 
 // Re-use MockNotesNotifier from memo_providers_test.dart for consistency
@@ -36,7 +35,6 @@ void main() {
     // Use specific mock types
     late MockMemosApiService mockSourceApiService; // For Memos
     late MockBlinkoApiService mockTargetApiService; // For Blinko
-    late MockNotesNotifier mockNotesNotifier;
 
     // --- Sample Data ---
     final sourceMemosServer = ServerConfig(
@@ -116,38 +114,32 @@ void main() {
       // Instantiate specific mocks
       mockSourceApiService = MockMemosApiService();
       mockTargetApiService = MockBlinkoApiService();
-      // Use the generated mock's default constructor
-      mockNotesNotifier = MockNotesNotifier();
-
-      // Stub the initial state for the generated mock
-      when(
-        mockNotesNotifier.state,
-      ).thenReturn(
-        NotesState(notes: [sourceNote], isLoading: false),
-      );
-
-      // IMPORTANT: This setup relies on the provider correctly choosing
-      // the service based on the ServerConfig. We stub the methods on
-      // the *specific* mock instances we expect to be used.
-      // We don't override the apiServiceProvider directly.
 
       container = ProviderContainer(
         overrides: [
           activeServerConfigProvider.overrideWithValue(sourceMemosServer),
-          notesNotifierProvider.overrideWith((ref) => mockNotesNotifier),
-          // We are NOT overriding apiServiceProvider globally.
-          // Instead, we will stub the methods on mockSourceApiService and mockTargetApiService.
-          // The test implicitly assumes the provider logic correctly selects
-          // the right service instance based on the ServerConfig.
-
-          // +++ Override the new service providers to return our specific mocks +++
+          // Use the override pattern from memo_providers_test.dart
+          notesNotifierProvider.overrideWith((ref) {
+            // Define the initial state needed for the test
+            final initialState = NotesState(
+              notes: [sourceNote],
+              isLoading: false,
+            );
+            // Create the REAL notifier instance, skipping its async init
+            final notifier = NotesNotifier(
+              ref,
+              skipInitialFetchForTesting: true,
+            );
+            // Manually set the state
+            notifier.state = initialState;
+            return notifier;
+          }),
           memosApiServiceProvider.overrideWithValue(
             mockSourceApiService,
-          ), // Now type matches
+          ),
           blinkoApiServiceProvider.overrideWithValue(
             mockTargetApiService,
-          ), // Now type matches
-          // +++ End overrides +++
+          ),
         ],
       );
 
@@ -214,15 +206,26 @@ void main() {
       // This doesn't run the provider logic, just sets up expectations.
       // The actual execution happens via container.read below.
 
+      // Assert initial state contains the note
+      final initialState = container.read(notesNotifierProvider);
+      expect(initialState.notes.length, 1);
+      expect(initialState.notes.first.id, sourceNoteId);
+
       // Act: Execute the provider function
       final moveFunction = container.read(moveNoteProvider(params));
       await moveFunction();
 
       // Assert
-      // 1. Optimistic UI update
-      verify(mockNotesNotifier.removeNoteOptimistically(sourceNoteId)).called(1);
+      // 1. Optimistic UI update (verify by checking state)
+      final finalState = container.read(notesNotifierProvider);
+      expect(
+        finalState.notes.any((n) => n.id == sourceNoteId),
+        isFalse,
+        reason: "Note should have been optimistically removed",
+      );
 
-      // 2. Source API calls
+
+      // 2. Source API calls (Keep these)
       verify(mockSourceApiService.getNote(sourceNoteId)).called(1);
       verify(mockSourceApiService.listNoteComments(sourceNoteId)).called(1);
       verify(mockSourceApiService.getResourceData('resources/res1')).called(1);
