@@ -687,21 +687,25 @@ class CloudKitService {
 
   // --- WorkbenchItemReference Methods ---
 
-  /// Convert WorkbenchItemReference to a map suitable for CloudKit storage (`Map<String, String>`).
-  Map<String, String> _workbenchItemReferenceToMap(
+  /// Convert WorkbenchItemReference to a map suitable for CloudKit storage (`Map<String, dynamic>`).
+  Map<String, dynamic> _workbenchItemReferenceToMap(
     WorkbenchItemReference item,
   ) {
     return {
       // 'id' is the recordName, not stored as a field
       'referencedItemId': item.referencedItemId,
-      'referencedItemType': item.referencedItemType.name, // Store enum name
+      'referencedItemType':
+          item.referencedItemType.name, // Store enum name as String
       'serverId': item.serverId,
-      'serverType': item.serverType.name, // Store enum name
-      'serverName': item.serverName ?? '', // Handle null
-      'previewContent': item.previewContent ?? '', // Handle null
-      'addedTimestamp': item.addedTimestamp.toIso8601String(), // Store as ISO string
-      // Add the new lastOpenedTimestamp field, store as ISO string or empty if null
-      'lastOpenedTimestamp': item.lastOpenedTimestamp?.toIso8601String() ?? '',
+      'serverType': item.serverType.name, // Store enum name as String
+      'serverName': item.serverName, // Store String? (CloudKit handles null)
+      'previewContent':
+          item.previewContent, // Store String? (CloudKit handles null)
+      'addedTimestamp': item.addedTimestamp, // Store native DateTime
+      // Store native DateTime? (CloudKit handles null)
+      'lastOpenedTimestamp': item.lastOpenedTimestamp,
+      // Add parentNoteId if needed in the future
+      // 'parentNoteId': item.parentNoteId,
     };
   }
 
@@ -724,7 +728,6 @@ class CloudKitService {
     ) {
       if (name == null) return defaultValue;
       try {
-        // Find enum value by comparing its .name property to the stored string
         return enumValues.firstWhere(
           (e) => e.name == name,
           orElse: () {
@@ -737,7 +740,6 @@ class CloudKitService {
           },
         );
       } catch (e) {
-        // Catch potential errors during lookup
         if (kDebugMode) {
           print(
             '[CloudKitService][_mapToWorkbenchItemReference] Error parsing enum value "\$name" for type \$T: \$e. Using default \$defaultValue.',
@@ -747,30 +749,44 @@ class CloudKitService {
       }
     }
 
+    // Helper to parse DateTime robustly (handles String or DateTime)
+    DateTime? parseDateTimeRobustly(dynamic value) {
+      if (value == null) return null;
+      if (value is DateTime) return value;
+      if (value is String) return DateTime.tryParse(value);
+      // Add handling for Timestamp if CloudKit returns that type
+      if (kDebugMode) {
+        print(
+          '[CloudKitService][_mapToWorkbenchItemReference] Warning: Unexpected type for DateTime field: \${value.runtimeType}. Value: \$value',
+        );
+      }
+      return null;
+    }
+
     final item = WorkbenchItemReference(
       id: recordName, // Use CloudKit recordName as the reference's unique ID
       referencedItemId: recordData['referencedItemId'] as String? ?? '',
       referencedItemType: parseEnum<WorkbenchItemType>(
-        // Explicitly type the generic
         WorkbenchItemType.values,
         recordData['referencedItemType'] as String?,
-        WorkbenchItemType.note, // Default if parsing fails
+        WorkbenchItemType.note,
       ),
       serverId: recordData['serverId'] as String? ?? '',
       serverType: parseEnum<ServerType>(
-        // Explicitly type the generic
         ServerType.values,
         recordData['serverType'] as String?,
-        ServerType.memos, // Default if parsing fails
+        ServerType.memos,
       ),
       serverName: recordData['serverName'] as String?,
       previewContent: recordData['previewContent'] as String?,
-      addedTimestamp: DateTime.tryParse(recordData['addedTimestamp'] as String? ?? '') ??
-          DateTime.now(), // Default to now if parsing fails
-      // Parse the new lastOpenedTimestamp field
-      lastOpenedTimestamp: DateTime.tryParse(
-        recordData['lastOpenedTimestamp'] as String? ?? '',
+      // Use robust DateTime parsing, default to now if addedTimestamp is invalid/missing
+      addedTimestamp:
+          parseDateTimeRobustly(recordData['addedTimestamp']) ?? DateTime.now(),
+      // Use robust DateTime parsing for optional lastOpenedTimestamp
+      lastOpenedTimestamp: parseDateTimeRobustly(
+        recordData['lastOpenedTimestamp'],
       ),
+      // parentNoteId: recordData['parentNoteId'] as String?, // If added later
     );
 
     if (kDebugMode) {
@@ -784,7 +800,8 @@ class CloudKitService {
   /// Save or update a WorkbenchItemReference in CloudKit.
   Future<bool> saveWorkbenchItemReference(WorkbenchItemReference item) async {
     try {
-      final mapData = _workbenchItemReferenceToMap(item);
+      // Use the updated map function which returns Map<String, dynamic>
+      final Map<String, dynamic> mapData = _workbenchItemReferenceToMap(item);
       if (kDebugMode) {
         print(
           '[CloudKitService] Saving WorkbenchItemReference (ID: \${item.id}) to CloudKit with data: \$mapData',
@@ -794,7 +811,7 @@ class CloudKitService {
         scope: CloudKitDatabaseScope.private,
         recordType: _workbenchItemReferenceRecordType,
         recordName: item.id, // Use WorkbenchItemReference's ID as the CloudKit recordName
-        record: mapData,
+        record: mapData, // Pass the Map<String, dynamic> directly
       );
       if (kDebugMode) {
         print(
@@ -802,10 +819,11 @@ class CloudKitService {
         );
       }
       return true;
-    } catch (e) {
+    } catch (e, s) {
+      // Add stack trace
       if (kDebugMode) {
         print(
-          '[CloudKitService] Error saving WorkbenchItemReference (ID: \${item.id}): \$e',
+          '[CloudKitService] Error saving WorkbenchItemReference (ID: \${item.id}): \$e\n\$s', // Log stack trace
         );
       }
       return false;
@@ -893,33 +911,25 @@ class CloudKitService {
           '[CloudKitService] Updating lastOpenedTimestamp for WorkbenchItemReference (ID: \$referenceId)...',
         );
       }
-      // 1. Fetch the existing record to ensure it exists.
+      // 1. Fetch the existing record.
       final CloudKitRecord ckRecord = await _cloudKit.getRecord(
         scope: CloudKitDatabaseScope.private,
         recordName: referenceId,
       );
 
-      // 2. Get the existing values map and update only the timestamp field.
-      // CloudKitRecord.values is Map<String, dynamic>, but we save as Map<String, String>.
-      // Create a mutable copy to modify.
-      final Map<String, dynamic> recordValues = Map<String, dynamic>.from(
+      // 2. Get the existing values map (which is Map<String, dynamic>)
+      //    and update only the timestamp field with a native DateTime object.
+      final Map<String, dynamic> dataToSave = Map<String, dynamic>.from(
         ckRecord.values,
       );
-      final String newTimestamp = DateTime.now().toIso8601String();
-      recordValues['lastOpenedTimestamp'] = newTimestamp;
+      dataToSave['lastOpenedTimestamp'] = DateTime.now(); // Use native DateTime
 
-      // Convert the modified map back to Map<String, String> for saving,
-      // handling potential non-string values defensively (though unlikely here).
-      final Map<String, String> dataToSave = recordValues.map(
-        (key, value) => MapEntry(key, value?.toString() ?? ''),
-      );
-
-      // 3. Save the record with the modified values map.
+      // 3. Save the record with the modified Map<String, dynamic>.
       await _cloudKit.saveRecord(
         scope: CloudKitDatabaseScope.private,
         recordType: _workbenchItemReferenceRecordType,
         recordName: referenceId, // Use the ID as the record name
-        record: dataToSave, // Save the map with just the updated timestamp
+        record: dataToSave, // Save the map with the updated DateTime
       );
 
       if (kDebugMode) {
@@ -928,15 +938,13 @@ class CloudKitService {
         );
       }
       return true;
-    } catch (e) {
-      // Log specific CloudKit errors if possible
+    } catch (e, s) {
+      // Add stack trace
       if (kDebugMode) {
         print(
-          '[CloudKitService] Error updating lastOpenedTimestamp for WorkbenchItemReference (ID: \$referenceId): \$e',
+          '[CloudKitService] Error updating lastOpenedTimestamp for WorkbenchItemReference (ID: \$referenceId): \$e\n\$s', // Log stack trace
         );
       }
-      // Rethrow or handle specific CloudKit exceptions if needed
-      // For now, return false to indicate failure
       return false;
     }
   }
