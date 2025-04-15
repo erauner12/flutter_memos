@@ -179,7 +179,9 @@ void main() {
       final notifier = container.read(testNotifierProvider.notifier);
       await notifier.init();
         // Increase duration to allow full migration cleanup chain
-        await container.pumpFor(const Duration(milliseconds: 200));
+        await container.pumpFor(
+          const Duration(milliseconds: 500),
+        ); // Increased duration
 
       // Assert: State loaded from prefs
       expect(notifier.state, prefsValue);

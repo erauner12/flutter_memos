@@ -365,19 +365,8 @@ void main() {
         expect(notesAfterPin.first.pinned, isTrue);
 
         // Verify first API calls using Mockito verification
-        verify(mockApiService.getNote(noteIdToToggle)).called(1); // Updated method name
-
-        // Verify the first updateNote call (pin operation)
-        final pinVerification = verify(
-          mockApiService.updateNote( // Updated method name
-            argThat(equals(noteIdToToggle)),
-            captureAny,
-          ),
-        );
-        pinVerification.called(1);
-
-        final capturedPinNote = pinVerification.captured.single as NoteItem; // Updated type
-        expect(capturedPinNote.pinned, isTrue);
+        // Verify togglePinNote API call (for pinning)
+        verify(mockApiService.togglePinNote(noteIdToToggle)).called(1);
 
         // Reset mock verification for clean tracking of the second call
         reset(mockApiService);
@@ -410,21 +399,8 @@ void main() {
         expect(notesAfterUnpin.first.id, equals('1'));
 
         // Verify second API calls
-        verify(mockApiService.getNote(noteIdToToggle)).called(1); // Updated method name
-
-        final unpinVerification = verify(
-          mockApiService.updateNote( // Updated method name
-            argThat(equals(noteIdToToggle)),
-            captureAny,
-          ),
-        );
-        unpinVerification.called(
-          1,
-        );
-
-        // Check the second call's captured argument
-        final capturedUnpinNote = unpinVerification.captured.single as NoteItem; // Updated type
-        expect(capturedUnpinNote.pinned, isFalse);
+        // Verify togglePinNote API call (for unpinning)
+        verify(mockApiService.togglePinNote(noteIdToToggle)).called(1);
       },
     );
 

@@ -17,12 +17,13 @@ import 'memo_update_sorting_test.mocks.dart';
 // Mock Notifier extending the actual Notifier
 class MockNotesNotifier extends NotesNotifier {
   // Update to use the non-deprecated Ref type
-  final Ref ref;
+  final Ref ref; // Keep ref if needed by super or methods
 
   MockNotesNotifier(
-    this.ref,
+    this.ref, // Pass ref
     NotesState initialState)
     : super(ref, skipInitialFetchForTesting: true) {
+    // Pass ref to super
     // Explicitly set the initial state in the constructor
     state = initialState;
   }

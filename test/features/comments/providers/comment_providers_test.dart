@@ -220,6 +220,21 @@ void main() {
         return;
       });
 
+      // Stub getNoteComment specifically for the archive test comment
+      when(mockApiService.getNoteComment('test-comment')).thenAnswer((_) async {
+        // Find the comment in the createdComments map
+        // Ensure the note and comment exist before accessing
+        if (createdComments.containsKey('test-note-1') &&
+            createdComments['test-note-1']!.any(
+              (c) => c.id == 'test-comment',
+            )) {
+          return createdComments['test-note-1']!.firstWhere(
+            (c) => c.id == 'test-comment',
+          );
+        }
+        throw Exception('Comment test-comment not found in setUp mock');
+      });
+
       // Stub setNoteRelations (replaces setMemoRelations)
       when(mockApiService.setNoteRelations(any, any)).thenAnswer((
         invocation,
@@ -318,11 +333,13 @@ void main() {
       verificationResult.called(1);
       final capturedId = verificationResult.captured[0] as String;
       final capturedComment = verificationResult.captured[1] as Comment;
-      expect(capturedId, equals(comment.id)); // Verify the simple ID was passed
+      expect(capturedId, equals('test-comment')); // Use the known ID
       expect(capturedComment.state, equals(CommentState.archived));
 
       // Optional: Verify the final state by getting the comment again
-      final updatedComment = await mockApiService.getNoteComment(fullId);
+      final updatedComment = await mockApiService.getNoteComment(
+        'test-comment',
+      ); // Use simple ID
       expect(updatedComment.state, equals(CommentState.archived));
     });
 

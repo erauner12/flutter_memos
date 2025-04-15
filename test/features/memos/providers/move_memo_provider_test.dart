@@ -105,12 +105,9 @@ void main() {
         ),
       ).thenAnswer((_) async => noteToMove);
 
-      // Add specific stub for the note being moved
+      // Add specific stub for the note being moved (without override)
       when(
-        mockApiService.getNote(
-          noteToMove.id,
-          // No targetServerOverride needed here as it defaults to active
-        ),
+        mockApiService.getNote(noteToMove.id),
       ).thenAnswer((_) async => noteToMove);
 
       when(
@@ -219,7 +216,7 @@ void main() {
           targetServerOverride: destinationServer,
           resources: anyNamed('resources'),
         ),
-      ).called(1);
+      ).called(1); // Should be called twice if 2 comments exist
       verify(
         mockApiService.deleteNote(
           // Updated method name
@@ -445,7 +442,7 @@ void main() {
           targetServerOverride: destinationServer,
           resources: anyNamed('resources'),
         ),
-      ).called(2);
+      ).called(2); // Expect 2 calls if 2 comments exist
 
       verify(
         mockApiService.deleteNote(

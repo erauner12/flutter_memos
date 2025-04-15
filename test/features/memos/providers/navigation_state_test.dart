@@ -528,14 +528,8 @@ void main() {
       expect(toggledNote.pinned, isTrue); // Check the pin state was toggled
 
       // Assert: API calls were made
-      // Verify getNote was called (likely within togglePinNote)
-      verify(
-        mockApiService.getNote(noteId),
-      ).called(1); // Simply use called(1) instead of atLeastOnce
-
-      verify(
-        mockApiService.updateNote(noteId, any),
-      ).called(1); // Updated method name
+      // Verify togglePinNote API call
+      verify(mockApiService.togglePinNote(noteId)).called(1);
 
       // Assert: Refresh was NOT called (togglePin provider doesn't refresh on success)
       verifyNever(

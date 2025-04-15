@@ -14,6 +14,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shared_preferences_platform_interface/shared_preferences_platform_interface.dart'; // Import for platform interface
 
 // Generate nice mock for BaseApiService
 @GenerateNiceMocks([MockSpec<BaseApiService>()])
@@ -132,6 +133,11 @@ void main() {
   });
 
   testWidgets('App loads and displays title', (WidgetTester tester) async {
+    // Mock SharedPreferences platform channel
+    TestWidgetsFlutterBinding.ensureInitialized(); // Ensure binding is initialized
+    SharedPreferencesStorePlatform.instance =
+        InMemorySharedPreferencesStore.empty();
+
     // Define initial states for mocks
     final initialMultiServerState = MultiServerConfigState(
       servers: [
