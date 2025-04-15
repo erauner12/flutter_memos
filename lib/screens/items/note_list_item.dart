@@ -1,3 +1,5 @@
+import 'dart:math'; // For min
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart'; // Needed for ScaffoldMessenger/SnackBar
@@ -259,9 +261,15 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
     ref.read(workbenchProvider.notifier).addItem(reference);
 
     // Use the passed scaffoldMessenger directly
+    // Handle potential null previewContent
+    final previewText = reference.previewContent ?? 'Item';
+    final snackBarContent =
+        'Added "${previewText.substring(0, min(30, previewText.length))}${previewText.length > 30 ? '...' : ''}" to Workbench';
+
     scaffoldMessenger.showSnackBar(
-      const SnackBar(
-        content: Text("Added to Workbench"),
+      SnackBar(
+        content: Text(snackBarContent),
+        duration: const Duration(seconds: 2),
         backgroundColor: CupertinoColors.systemGreen,
       ),
     );

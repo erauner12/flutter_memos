@@ -4,7 +4,7 @@ import 'package:collection/collection.dart'; // For DeepCollectionEquality
 import 'package:flutter/foundation.dart';
 import 'package:flutter_memos/models/mcp_server_config.dart';
 import 'package:flutter_memos/providers/service_providers.dart';
-import 'package:flutter_memos/services/cloud_kit_service.dart';
+import 'package:flutter_memos/services/cloud_kit_service.dart'; // <<< Add this import
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 

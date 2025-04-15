@@ -5,7 +5,7 @@ import 'package:flutter_memos/models/server_config.dart';
 import 'package:flutter_memos/providers/mcp_server_config_provider.dart';
 import 'package:flutter_memos/providers/service_providers.dart'; // Import service provider
 import 'package:flutter_memos/providers/settings_provider.dart';
-import 'package:flutter_memos/services/cloud_kit_service.dart'; // Import CloudKit service
+import 'package:flutter_memos/services/cloud_kit_service.dart'; // <<< Add this import
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart'; // Import Uuid
