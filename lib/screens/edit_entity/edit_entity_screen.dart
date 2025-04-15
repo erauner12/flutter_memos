@@ -48,15 +48,10 @@ class EditEntityScreen extends ConsumerWidget { // Renamed class
             if (ref.exists(note_providers.noteDetailCacheProvider)) { // Use provider from note_providers
               ref.invalidate(note_providers.noteDetailProvider(entityId)); // Use provider from note_providers
             }
-            // Ensure the item is not hidden (using correct provider)
+            // Ensure the item is not hidden (using correct provider and remove method)
             ref
                 .read(settings_p.manuallyHiddenNoteIdsProvider.notifier)
-                .update(
-                  (state) =>
-                      state.contains(entityId)
-                          ? (state..remove(entityId))
-                          : state,
-                );
+                .remove(entityId); // Directly remove the ID if it exists
           }
         }
       },

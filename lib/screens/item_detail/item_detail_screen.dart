@@ -120,17 +120,14 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> // Renamed 
                         // Use providers from note_providers
                         ref.invalidate(note_providers.noteDetailProvider(widget.itemId));
                         ref.invalidate(note_providers.noteCommentsProvider(widget.itemId));
-                        // Ensure item is not hidden after edit (using correct provider)
+                        // Ensure item is not hidden after edit (using correct provider and remove method)
                         ref
                             .read(
                               settings_p.manuallyHiddenNoteIdsProvider.notifier,
                             )
-                            .update(
-                              (state) =>
-                                  state.contains(widget.itemId)
-                                      ? (state..remove(widget.itemId))
-                                      : state,
-                            );
+                            .remove(
+                              widget.itemId,
+                            ); // Directly remove the ID if it exists
                       });
                 },
               ),

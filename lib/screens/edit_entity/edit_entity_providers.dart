@@ -150,12 +150,12 @@ final saveEntityProvider = Provider.family<
       ); // Refresh note detail
 
       // Clear any hidden item IDs for this note to ensure it's visible
-      // Use the correct provider from settings_provider
+      // Use the correct provider from settings_provider and its remove method
       ref
           .read(
             settings_p.manuallyHiddenNoteIdsProvider.notifier,
           )
-          .update((state) => state.contains(id) ? (state..remove(id)) : state);
+          .remove(id); // Directly remove the ID if it exists
     }
   };
 }, name: 'saveEntityProvider'); // Optional: Add name for debugging
