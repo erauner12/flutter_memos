@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 // Add Ref and CloudKitService imports
 import 'package:flutter_memos/providers/service_providers.dart';
@@ -5,6 +7,7 @@ import 'package:flutter_memos/services/cloud_kit_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart'; // Import secure storage
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:synchronized/synchronized.dart';
 
 /// Keys for SharedPreferences storage (now primarily for migration check)
 /// and SecureStorage / CloudKit keys.
@@ -17,6 +20,9 @@ class PreferenceKeys {
   // New keys for Gemini and MCP
   static const String geminiApiKey = 'gemini_api_key';
   // Removed mcpServerListKey - Managed by McpServerConfigNotifier
+
+  // Key for manually hidden note IDs (stored as JSON Set<String>)
+  static const String manuallyHiddenNoteIds = 'manually_hidden_note_ids';
 }
 
 /// Provider for the Todoist API key with persistence using SharedPreferences
@@ -64,6 +70,18 @@ final geminiApiKeyProvider =
       name: 'geminiApiKeyProvider', // Provider name
     );
 // --- End Gemini ---
+
+/// Provider for the set of manually hidden note IDs
+final manuallyHiddenNoteIdsProvider =
+    StateNotifierProvider<PersistentSetNotifier<String>, Set<String>>(
+      (ref) => PersistentSetNotifier<String>(
+        ref,
+        {}, // Initial empty set
+        PreferenceKeys.manuallyHiddenNoteIds,
+      ),
+      name: 'manuallyHiddenNoteIdsProvider',
+    );
+
 
 /// A StateNotifier that persists string values to SharedPreferences
 class PersistentStringNotifier extends StateNotifier<String> {
@@ -349,26 +367,282 @@ class PersistentStringNotifier extends StateNotifier<String> {
   }
 }
 
-// --- Settings Service ---
+// --- Start PersistentSetNotifier ---
 
-/// Service class to interact with settings persistence (SharedPreferences, SecureStorage, CloudKit).
-/// Handles saving and loading various settings, including API keys.
-class SettingsService {
+/// A StateNotifier that persists a Set<T> (specifically Set<String> for now)
+/// to SecureStorage and syncs with CloudKit's UserSettings record.
+/// Assumes T is serializable with jsonEncode/Decode (currently expects String).
+class PersistentSetNotifier<T> extends StateNotifier<Set<T>> {
   final Ref _ref;
-  SettingsService(this._ref);
+  final String preferenceKey; // Used for SecureStorage key AND CloudKit key
+  late final CloudKitService _cloudKitService;
+  FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
+  bool _initialized = false;
+  bool _cloudKitChecked = false; // Flag to prevent redundant CloudKit checks
+  final _lock = Lock(); // Use a dedicated lock for this notifier instance
 
-  // --- Other Settings Methods (Example: Show Code Blocks - if needed) ---
-  // Future<void> saveShowCodeBlocks(bool showCodeBlocks) async {
-  //   try {
-  //     await _prefs.setBool('showCodeBlocksKey', showCodeBlocks);
-  //     if (kDebugMode) print("[SettingsService] Show Code Blocks setting saved: \$showCodeBlocks");
-  //   } catch (e) {
-  //     if (kDebugMode) print("[SettingsService] Error saving Show Code Blocks setting: \$e");
-  //   }
-  // }
+  @visibleForTesting
+  set debugSecureStorage(FlutterSecureStorage storage) {
+    _secureStorage = storage;
+  }
+
+  PersistentSetNotifier(this._ref, super.initialState, this.preferenceKey) {
+    _cloudKitService = _ref.read(cloudKitServiceProvider);
+    // Initialization (`init()`) must be called externally after provider creation.
+  }
+
+  Future<void> init() async {
+    if (_initialized) return;
+
+    await _lock.synchronized(() async {
+      if (_initialized) return; // Double check inside lock
+
+      Set<T> loadedState = {};
+      String? secureValue;
+      String? cloudValueJson;
+
+      // 1. Load from Secure Storage
+      try {
+        secureValue = await _secureStorage.read(key: preferenceKey);
+        if (secureValue != null) {
+          loadedState = _decodeSet(secureValue);
+          if (kDebugMode) {
+            print(
+              '[PersistentSetNotifier<$T>] Loaded ${loadedState.length} items for $preferenceKey from Secure Storage.',
+            );
+          }
+        }
+      } catch (e) {
+        if (kDebugMode) {
+          print(
+            '[PersistentSetNotifier<$T>] Error reading $preferenceKey from Secure Storage: $e',
+          );
+        }
+      }
+
+      // 2. Set initial state from Secure Storage if found
+      if (mounted && loadedState.isNotEmpty) {
+        state = loadedState;
+      }
+      _initialized = true; // Mark initialized after cache load attempt
+
+      // 3. Asynchronously check CloudKit (only once)
+      if (!_cloudKitChecked) {
+        _cloudKitChecked = true;
+        try {
+          if (kDebugMode) {
+            print(
+              '[PersistentSetNotifier<$T>] Checking CloudKit for $preferenceKey...',
+            );
+          }
+          cloudValueJson = await _cloudKitService.getSetting(preferenceKey);
+          if (kDebugMode) {
+            print(
+              '[PersistentSetNotifier<$T>] CloudKit check for $preferenceKey complete. Value: ${cloudValueJson != null ? (cloudValueJson.isNotEmpty ? "present" : "empty") : "null"}',
+            );
+          }
+
+          if (cloudValueJson != null) {
+            final cloudState = _decodeSet(cloudValueJson);
+            // CloudKit wins if different from current state (which came from secure storage)
+            if (!setEquals(cloudState, state)) {
+              if (kDebugMode) {
+                print(
+                  '[PersistentSetNotifier<$T>] CloudKit value for $preferenceKey differs. Updating state (${cloudState.length} items) and Secure Storage.',
+                );
+              }
+              if (mounted) {
+                state = cloudState; // Update state
+              }
+              await _secureStorage.write(
+                key: preferenceKey,
+                value: cloudValueJson,
+              ); // Update cache
+            }
+          } else if (state.isNotEmpty) {
+            // Value exists locally but not in CloudKit -> Upload
+            if (kDebugMode) {
+              print(
+                '[PersistentSetNotifier<$T>] Value for $preferenceKey exists locally (${state.length} items) but not in CloudKit. Uploading...',
+              );
+            }
+            await _cloudKitService.saveSetting(
+              preferenceKey,
+              _encodeSet(state),
+            );
+          }
+        } catch (e) {
+          if (kDebugMode) {
+            print(
+              '[PersistentSetNotifier<$T>] Error during async CloudKit check for $preferenceKey: $e',
+            );
+          }
+        }
+      } else if (kDebugMode && _initialized) {
+        print(
+          '[PersistentSetNotifier<$T>] Skipping redundant CloudKit check for $preferenceKey.',
+        );
+      }
+      if (kDebugMode && secureValue == null && !_cloudKitChecked) {
+        print(
+          '[PersistentSetNotifier<$T>] No initial value found for $preferenceKey in Secure Storage.',
+        );
+      }
+    });
+  }
+
+  Future<bool> add(T item) async {
+    return _lock.synchronized(() async {
+      if (!state.contains(item)) {
+        final newState = Set<T>.from(state)..add(item);
+        if (mounted) {
+          state = newState;
+        } else {
+          if (kDebugMode)
+            print(
+              '[PersistentSetNotifier<$T>] Warning: add called on unmounted notifier for $preferenceKey',
+            );
+          return false; // Or handle differently?
+        }
+        return _saveState(newState);
+      }
+      return true; // Item already exists, no change needed
+    });
+  }
+
+  Future<bool> remove(T item) async {
+    return _lock.synchronized(() async {
+      if (state.contains(item)) {
+        final newState = Set<T>.from(state)..remove(item);
+        if (mounted) {
+          state = newState;
+        } else {
+          if (kDebugMode)
+            print(
+              '[PersistentSetNotifier<$T>] Warning: remove called on unmounted notifier for $preferenceKey',
+            );
+          return false; // Or handle differently?
+        }
+        return _saveState(newState);
+      }
+      return true; // Item doesn't exist, no change needed
+    });
+  }
+
+  Future<bool> clear() async {
+    return _lock.synchronized(() async {
+      if (state.isNotEmpty) {
+        const newState = <T>{};
+        if (mounted) {
+          state = newState;
+        } else {
+          if (kDebugMode)
+            print(
+              '[PersistentSetNotifier<$T>] Warning: clear called on unmounted notifier for $preferenceKey',
+            );
+          return false; // Or handle differently?
+        }
+        return _saveState(newState);
+      }
+      return true; // Already empty
+    });
+  }
+
+  // Helper to save state to SecureStorage and CloudKit
+  Future<bool> _saveState(Set<T> stateToSave) async {
+    if (!_initialized) {
+      if (kDebugMode)
+        print(
+          '[PersistentSetNotifier<$T>] Warning: Attempting to save state before initialization for $preferenceKey.',
+        );
+      // Optionally wait for init or return false
+      await init(); // Ensure init completes
+      if (!_initialized) return false; // If init failed
+    }
+
+    final jsonString = _encodeSet(stateToSave);
+    bool secureSuccess = false;
+    bool cloudSuccess = false;
+
+    try {
+      await _secureStorage.write(key: preferenceKey, value: jsonString);
+      secureSuccess = true;
+      if (kDebugMode) {
+        print(
+          '[PersistentSetNotifier<$T>] Updated Secure Storage for $preferenceKey (${stateToSave.length} items).',
+        );
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print(
+          '[PersistentSetNotifier<$T>] Error writing $preferenceKey to Secure Storage: $e',
+        );
+      }
+    }
+
+    // Save to CloudKit asynchronously (fire and forget, or await if critical)
+    _cloudKitService
+        .saveSetting(preferenceKey, jsonString)
+        .then((success) {
+          cloudSuccess = success;
+          if (kDebugMode) {
+            print(
+              '[PersistentSetNotifier<$T>] CloudKit save attempt for $preferenceKey finished. Success: $cloudSuccess',
+            );
+          }
+        })
+        .catchError((e) {
+          if (kDebugMode) {
+            print(
+              '[PersistentSetNotifier<$T>] Error syncing preference $preferenceKey to CloudKit: $e',
+            );
+          }
+        });
+
+    return secureSuccess; // Primarily report local save success
+  }
+
+  // Helper to encode the Set<T> to JSON string
+  String _encodeSet(Set<T> value) {
+    // Currently assumes T is String, adapt if needed for other types
+    if (T == String) {
+      return jsonEncode((value as Set<String>).toList());
+    }
+    // Add handling for other types if necessary
+    throw UnsupportedError(
+      'PersistentSetNotifier only supports Set<String> currently.',
+    );
+  }
+
+  // Helper to decode JSON string to Set<T>
+  Set<T> _decodeSet(String jsonString) {
+    try {
+      final decodedList = jsonDecode(jsonString);
+      if (decodedList is List) {
+        // Currently assumes T is String, adapt if needed
+        if (T == String) {
+          return Set<String>.from(
+            decodedList.map((e) => e.toString()),
+          ).cast<T>();
+        }
+        // Add handling for other types if necessary
+        throw UnsupportedError(
+          'PersistentSetNotifier only supports Set<String> currently.',
+        );
+      }
+      return <T>{};
+    } catch (e) {
+      if (kDebugMode) {
+        print(
+          '[PersistentSetNotifier<$T>] Error decoding JSON for $preferenceKey: $e',
+        );
+      }
+      return <T>{}; // Return empty set on error
+    }
+  }
 }
 
-final settingsServiceProvider = Provider<SettingsService>((ref) {
-  final service = SettingsService(ref);
-  return service;
-});
+// --- End PersistentSetNotifier ---
+
+
+// --- Settings Service ---

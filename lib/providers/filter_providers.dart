@@ -310,8 +310,14 @@ void _addToHistory(Ref ref) {
   }
 }
 
-/// Provider to control hiding notes where startDate is in the future.
-final hideFutureStartDateProvider = StateProvider<bool>((ref) {
-  // TODO: Load this preference from SharedPreferences if needed
-  return true; // Default to hiding future notes
-}, name: 'hideFutureStartDateProvider');
+// REMOVED: hideFutureStartDateProvider (logic merged into filteredNotesProvider controlled by showHiddenNotesProvider)
+// final hideFutureStartDateProvider = StateProvider<bool>((ref) {
+//   // TODO: Load this preference from SharedPreferences if needed
+//   return true; // Default to hiding future notes
+// }, name: 'hideFutureStartDateProvider');
+
+/// Provider to control whether manually hidden and future-dated notes are shown in the list.
+final showHiddenNotesProvider = StateProvider<bool>((ref) {
+  // TODO: Persist this preference if needed (e.g., using SharedPreferences or another PersistentNotifier)
+  return false; // Default to hiding the hidden notes
+}, name: 'showHiddenNotesProvider');

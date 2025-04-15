@@ -272,13 +272,18 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen> // Renamed class
   Widget build(BuildContext context) {
     // Use providers from note_providers and renamed ui_providers
     final notesState = ref.watch(note_providers.notesNotifierProvider);
-    final visibleNotes = ref.watch(note_providers.visibleNotesListProvider);
+    // Use filteredNotesProvider directly now
+    final visibleNotes = ref.watch(note_providers.filteredNotesProvider);
     final selectedPresetKey = ref.watch(quickFilterPresetProvider);
     final currentPresetLabel =
         quickFilterPresets[selectedPresetKey]?.label ?? 'Notes';
     // Use renamed providers from ui_providers
     final isMultiSelectMode = ref.watch(ui_providers.itemMultiSelectModeProvider);
     final selectedIds = ref.watch(ui_providers.selectedItemIdsForMultiSelectProvider);
+    // Watch new providers for hidden notes
+    final hiddenCount = ref.watch(note_providers.totalHiddenNoteCountProvider);
+    final showHidden = ref.watch(showHiddenNotesProvider);
+    final theme = CupertinoTheme.of(context); // Get theme for button color
 
     return CupertinoPageScaffold(
       navigationBar: isMultiSelectMode
@@ -313,10 +318,37 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen> // Renamed class
                       CupertinoIcons.checkmark_seal,
                     ),
                   ),
-                  CupertinoButton(
-                    padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                    minSize: 0,
-                    onPressed: () => _showAdvancedFilterPanel(context),
+                    // Add Show/Hide Hidden Toggle Button
+                    if (hiddenCount > 0)
+                      CupertinoButton(
+                        padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                        minSize: 0,
+                        onPressed: () {
+                          ref
+                              .read(showHiddenNotesProvider.notifier)
+                              .update((state) => !state);
+                        },
+                        child: Tooltip(
+                          message:
+                              showHidden
+                                  ? 'Hide Hidden Notes'
+                                  : 'Show Hidden Notes ($hiddenCount)',
+                          child: Icon(
+                            showHidden
+                                ? CupertinoIcons.eye_slash_fill
+                                : CupertinoIcons.eye_fill,
+                            color:
+                                showHidden
+                                    ? theme.primaryColor
+                                    : CupertinoColors.secondaryLabel
+                                        .resolveFrom(context),
+                          ),
+                        ),
+                      ),
+                    CupertinoButton(
+                      padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                      minSize: 0,
+                      onPressed: _showAdvancedFilterPanel,
                     child: const Icon(CupertinoIcons.tuningfork),
                   ),
                   CupertinoButton(
@@ -362,7 +394,25 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen> // Renamed class
                   padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 8.0),
                   child: _buildQuickFilterControl(),
                 ),
+              // Display hidden count conditionally
+              if (!isMultiSelectMode && hiddenCount > 0 && !showHidden)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16.0, 0, 16.0, 8.0),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      '$hiddenCount hidden notes',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: CupertinoColors.secondaryLabel.resolveFrom(
+                          context,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
               // Pass notesState and visibleNotes to the renamed body widget
+              // Pass the filtered notes directly to the body
               Expanded(child: _buildNotesList(notesState, visibleNotes)),
             ],
           ),
@@ -698,10 +748,19 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen> // Renamed class
   }
 
   // Renamed method to reflect it builds the notes list
-  Widget _buildNotesList(note_providers.NotesState notesState, List<NoteItem> visibleNotes) {
-    return NotesListBody( // Use renamed body widget
+  // Update signature: Accept the already filtered list
+  Widget _buildNotesList(
+    note_providers.NotesState notesState,
+    List<NoteItem> filteredNotes,
+  ) {
+    // Pass the filtered notes down to the body
+    return NotesListBody(
       scrollController: _scrollController,
-      onMoveNoteToServer: _handleMoveNoteToServer, // Pass renamed callback
+      onMoveNoteToServer: _handleMoveNoteToServer,
+      // Pass the filtered notes list directly
+      notes: filteredNotes,
+      // Pass the overall notes state for loading/error indicators
+      notesState: notesState,
     );
   }
 

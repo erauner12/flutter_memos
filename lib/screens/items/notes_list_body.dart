@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 // Import note_providers instead of memo_providers
+import 'package:flutter_memos/models/note_item.dart'; // Import NoteItem model
 import 'package:flutter_memos/providers/note_providers.dart' as note_providers;
 import 'package:flutter_memos/providers/ui_providers.dart' as ui_providers;
 // Import note_list_item instead of memo_list_item
@@ -13,10 +14,16 @@ class NotesListBody extends ConsumerStatefulWidget { // Renamed class
   // Renamed callback parameter
   final void Function(String noteId)? onMoveNoteToServer; // Renamed from onMoveMemoToServer
   final ScrollController scrollController;
+  // Add parameters to receive notes list and state directly
+  final List<NoteItem> notes;
+  final note_providers.NotesState notesState;
+
 
   const NotesListBody({ // Renamed constructor
     super.key,
     required this.scrollController,
+    required this.notes, // Make notes required
+    required this.notesState, // Make notesState required
     this.onMoveNoteToServer, // Renamed parameter
   });
 
@@ -39,7 +46,8 @@ class _NotesListBodyState extends ConsumerState<NotesListBody> { // Renamed clas
     if (!mounted) return;
 
     // Use providers from note_providers and renamed ui_providers
-    final notes = ref.read(note_providers.filteredNotesProvider);
+    // Use the notes list passed via the widget constructor
+    final notes = widget.notes;
     // Use ui_providers.selectedItemIdProvider
     final selectedId = ref.read(ui_providers.selectedItemIdProvider);
 
@@ -122,8 +130,9 @@ class _NotesListBodyState extends ConsumerState<NotesListBody> { // Renamed clas
   @override
   Widget build(BuildContext context) {
     // Use providers from note_providers
-    final notesState = ref.watch(note_providers.notesNotifierProvider);
-    final visibleNotes = ref.watch(note_providers.filteredNotesProvider);
+    // Use the state and list passed via the widget constructor
+    final notesState = widget.notesState;
+    final visibleNotes = widget.notes; // Use the passed list
     // final hasSearchResults = ref.watch(note_providers.hasSearchResultsProvider); // TODO: do we need this?
 
     // Loading State

@@ -609,36 +609,6 @@ class _AdvancedFilterPanelState extends ConsumerState<AdvancedFilterPanel> {
                                       setState(() => _contentFilter = value),
                             ),
                           ),
-                        // --- Add Hide Future Notes Toggle ---
-                        Consumer(
-                          builder: (context, ref, child) {
-                            final hideFuture = ref.watch(
-                              hideFutureStartDateProvider,
-                            );
-                            return CupertinoListTile(
-                              title: const Text('Hide Future Notes'),
-                              subtitle: const Text(
-                                'Hide notes where start date is in the future',
-                              ),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 0,
-                                vertical: 4,
-                              ), // Adjust padding
-                              trailing: CupertinoSwitch(
-                                value: hideFuture,
-                                onChanged: (value) {
-                                  ref
-                                      .read(
-                                        hideFutureStartDateProvider.notifier,
-                                      )
-                                      .state = value;
-                                },
-                              ),
-                            );
-                          },
-                        ),
-                        // ------------------------------------
-                        // REMOVED: Time Filter UI Section
                         const SizedBox(height: 16),
                         // Apply Builder Button
                         Center(
@@ -655,7 +625,6 @@ class _AdvancedFilterPanelState extends ConsumerState<AdvancedFilterPanel> {
                             ),
                           ),
                         ),
-                        // REMOVED: Reset Builder Button (handled by header Reset)
                         const SizedBox(height: 24),
 
                         // Raw CEL Filter Section
@@ -697,26 +666,6 @@ class _AdvancedFilterPanelState extends ConsumerState<AdvancedFilterPanel> {
                                     (_) =>
                                         _validateFilter(), // Re-validate on change
                               ),
-                              /* // Fallback to CupertinoTextField if needed
-                              CupertinoTextField(
-                                controller: _rawFilterController,
-                                placeholder: 'Enter a CEL filter expression...',
-                                keyboardType: TextInputType.multiline,
-                                maxLines: 4,
-                                style: TextStyle(
-                                  fontFamily: 'monospace',
-                                  fontSize: 14,
-                                  color: CupertinoColors.label.resolveFrom(context),
-                                ),
-                                decoration: BoxDecoration( // Remove default border
-                                  border: Border.all(color: CupertinoColors.transparent, width: 0),
-                                ),
-                                padding: EdgeInsets.zero, // Adjust padding as needed
-                                onChanged: (_) => _validateFilter(), // Re-validate on change
-                                autocorrect: false,
-                                enableSuggestions: false,
-                              ),
-                              */
                               if (_syntaxError.isNotEmpty)
                                 Padding(
                                   padding: const EdgeInsets.only(top: 8),
@@ -847,7 +796,6 @@ class _AdvancedFilterPanelState extends ConsumerState<AdvancedFilterPanel> {
       context,
     ); // Use label color
 
-
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),
       child: CupertinoButton(
@@ -883,7 +831,6 @@ class _AdvancedFilterPanelState extends ConsumerState<AdvancedFilterPanel> {
 
   // Updated _buildHelpSection to remove isDarkMode parameter
   Widget _buildHelpSection(BuildContext context) {
-    // final theme = CupertinoTheme.of(context); // Unused
     return Container(
       margin: const EdgeInsets.only(top: 16.0, bottom: 16.0),
       decoration: BoxDecoration(
@@ -955,16 +902,14 @@ class _AdvancedFilterPanelState extends ConsumerState<AdvancedFilterPanel> {
 // Proper syntax highlighting color mapping to Cupertino dynamic colors is needed.
 class SyntaxHighlightTextField extends StatefulWidget {
   final TextEditingController controller;
-  // final InputDecoration decoration; // Removed Material InputDecoration
   final Function(String)? onChanged;
   final int? maxLines;
-  final TextStyle? style; // Keep style for font family etc.
-  final String? placeholder; // Add placeholder
+  final TextStyle? style;
+  final String? placeholder;
 
   const SyntaxHighlightTextField({
     super.key,
     required this.controller,
-    // this.decoration = const InputDecoration(),
     this.onChanged,
     this.maxLines,
     this.style,
@@ -990,32 +935,29 @@ class _SyntaxHighlightTextFieldState extends State<SyntaxHighlightTextField> {
   }
 
   void _handleTextChanged() {
-    // Trigger rebuild to update RichText
     if (mounted) {
-      setState(() {}); // Need setState to trigger RichText rebuild
+      setState(() {});
     }
-    // Call user's onChanged callback if provided
     widget.onChanged?.call(widget.controller.text);
   }
 
-  // Placeholder: Needs proper mapping to Cupertino dynamic colors
   List<TextSpan> _buildHighlightedSpans(String text, BuildContext context) {
-     final theme = CupertinoTheme.of(context);
-    // No need for isDarkMode as colors automatically adapt with resolveFrom(context)
-
-     // Define colors based on Cupertino theme (example mapping)
-     final Color operatorColor = CupertinoColors.systemOrange.resolveFrom(context);
-     final Color keywordColor = CupertinoColors.systemBlue.resolveFrom(context);
-     final Color stringColor = CupertinoColors.systemGreen.resolveFrom(context);
-     final Color normalColor = CupertinoColors.label.resolveFrom(context);
-     final Color functionColor = CupertinoColors.systemPurple.resolveFrom(context);
-     final Color commentColor = CupertinoColors.secondaryLabel.resolveFrom(context); // Example for comments
-    final Color numberColor = CupertinoColors.systemRed.resolveFrom(
+    final theme = CupertinoTheme.of(context);
+    final Color operatorColor = CupertinoColors.systemOrange.resolveFrom(
       context,
-    ); // Example for numbers
+    );
+    final Color keywordColor = CupertinoColors.systemBlue.resolveFrom(context);
+    final Color stringColor = CupertinoColors.systemGreen.resolveFrom(context);
+    final Color normalColor = CupertinoColors.label.resolveFrom(context);
+    final Color functionColor = CupertinoColors.systemPurple.resolveFrom(
+      context,
+    );
+    final Color commentColor = CupertinoColors.secondaryLabel.resolveFrom(
+      context,
+    );
+    final Color numberColor = CupertinoColors.systemRed.resolveFrom(context);
 
-    // Regex remains the same, added number regex
-    final operatorRegex = RegExp(r'&&|\|\||!|==|!=|<=|>=|<|>|\bin\b'); // Added word boundary for 'in'
+    final operatorRegex = RegExp(r'&&|\|\||!|==|!=|<=|>=|<|>|\bin\b');
     final keywordRegex = RegExp(
       r'\b(tag|visibility|create_time|update_time|state|content|true|false|null)\b',
     );
@@ -1025,7 +967,7 @@ class _SyntaxHighlightTextFieldState extends State<SyntaxHighlightTextField> {
       r'\b(contains|size|startsWith|endsWith)\b(?=\()',
     );
     final commentRegex = RegExp(r'//.*');
-    final numberRegex = RegExp(r'\b\d+(\.\d+)?\b'); // Basic number regex
+    final numberRegex = RegExp(r'\b\d+(\.\d+)?\b');
 
     List<TextSpan> spans = [];
     int currentPosition = 0;
@@ -1063,36 +1005,29 @@ class _SyntaxHighlightTextFieldState extends State<SyntaxHighlightTextField> {
         .forEach((m) => matches.add(_HighlightMatch(m, commentColor)));
     numberRegex
         .allMatches(text)
-        .forEach(
-          (m) => matches.add(_HighlightMatch(m, numberColor)),
-        ); // Add number matches
+        .forEach((m) => matches.add(_HighlightMatch(m, numberColor)));
 
     matches.sort((a, b) => a.match.start.compareTo(b.match.start));
 
-    // Process matches and add spans, handling overlaps simply by taking the first match
     int lastMatchEnd = 0;
     for (var highlight in matches) {
-      // Skip overlapping matches
       if (highlight.match.start < lastMatchEnd) continue;
 
-      // Add normal text before the current match
       if (highlight.match.start > currentPosition) {
         addSpan(currentPosition, highlight.match.start, normalColor);
       }
-      // Add the highlighted match itself
       addSpan(highlight.match.start, highlight.match.end, highlight.color);
       currentPosition = highlight.match.end;
-      lastMatchEnd = highlight.match.end; // Update last match end
+      lastMatchEnd = highlight.match.end;
     }
 
-    // Add any remaining normal text after the last match
     if (currentPosition < text.length) {
       addSpan(currentPosition, text.length, normalColor);
     }
 
     if (spans.isEmpty && text.isEmpty) {
       final baseStyle = widget.style ?? theme.textTheme.textStyle;
-       spans.add(TextSpan(text: '', style: baseStyle));
+      spans.add(TextSpan(text: '', style: baseStyle));
     }
 
     return spans;
@@ -1106,40 +1041,34 @@ class _SyntaxHighlightTextFieldState extends State<SyntaxHighlightTextField> {
       fontSize: 14,
     );
 
-    // Build highlighted spans based on current text
     final spans = _buildHighlightedSpans(widget.controller.text, context);
 
     return Stack(
       children: [
-        // Background RichText for syntax highlighting
-        // Use Padding to align with CupertinoTextField's internal padding
         Padding(
-          padding: const EdgeInsets.symmetric(vertical: 6.0, horizontal: 8.0), // Approximate default padding
+          padding: const EdgeInsets.symmetric(vertical: 6.0, horizontal: 8.0),
           child: RichText(
             text: TextSpan(
               children: spans,
-              style: defaultTextStyle, // Base style for the TextSpan
+              style: defaultTextStyle,
             ),
             maxLines: widget.maxLines,
-            overflow: TextOverflow.clip, // Or handle overflow as needed
+            overflow: TextOverflow.clip,
           ),
         ),
-        // Transparent CupertinoTextField for input
         CupertinoTextField(
           controller: widget.controller,
-          padding: const EdgeInsets.symmetric(vertical: 6.0, horizontal: 8.0), // Match RichText padding
+          padding: const EdgeInsets.symmetric(vertical: 6.0, horizontal: 8.0),
           placeholder: widget.placeholder,
           maxLines: widget.maxLines,
-          // onChanged is handled by the listener calling widget.onChanged
-          // Make the text transparent to see the RichText underneath
           style: defaultTextStyle.copyWith(color: CupertinoColors.transparent),
-          // Remove default CupertinoTextField border/background
           decoration: const BoxDecoration(
             color: CupertinoColors.transparent,
           ),
-          // Ensure keyboard type allows multiple lines if needed
-          keyboardType: widget.maxLines != 1 ? TextInputType.multiline : TextInputType.text,
-          // Add autocorrect and spellcheck disabling for code-like input
+          keyboardType:
+              widget.maxLines != 1
+                  ? TextInputType.multiline
+                  : TextInputType.text,
           autocorrect: false,
           enableSuggestions: false,
           smartDashesType: SmartDashesType.disabled,
@@ -1150,14 +1079,11 @@ class _SyntaxHighlightTextFieldState extends State<SyntaxHighlightTextField> {
   }
 }
 
-// Helper class for sorting matches
 class _HighlightMatch {
   final RegExpMatch match;
   final Color color;
   _HighlightMatch(this.match, this.color);
 }
-
-// Removed unused _Token class
 
 extension StringExtension on String {
   String capitalizeFirstLetter() {
