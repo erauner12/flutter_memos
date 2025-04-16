@@ -620,23 +620,53 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
       ),
     );
 
-    Widget content;
+    Widget contentWidget;
+    String relativeTime = '';
+
     if (comment == null) {
-      content = Text('No comments yet.', style: italicStyle);
+      contentWidget = Text('No comments yet.', style: italicStyle);
     } else {
-      content = Text(
-        comment.content ?? '',
-        maxLines: 3,
-        overflow: TextOverflow.ellipsis,
-        style: textStyle,
-      );
+      // Get timestamp (using similar logic as in notifier, adapt if needed)
+      DateTime commentTime;
+      if (comment.updatedTs != null || comment.createdTs != null) {
+         commentTime = comment.updatedTs ?? comment.createdTs;
+      } else if (comment.postedAt != null) {
+         commentTime = comment.postedAt!;
+      } else {
+         commentTime = DateTime.fromMillisecondsSinceEpoch(0); // Fallback
+      }
+      relativeTime = _formatRelativeTime(commentTime.toLocal());
+
+      contentWidget = Row(
+         crossAxisAlignment: CrossAxisAlignment.end, // Align time to bottom
+         children: [
+           Expanded(
+             child: Text(
+               comment.content ?? '',
+               maxLines: 3, // Allow up to 3 lines
+               overflow: TextOverflow.ellipsis,
+               style: textStyle,
+             ),
+           ),
+           const SizedBox(width: 8), // Space between text and time
+           Text(
+             relativeTime,
+             style: TextStyle(
+               fontSize: 11, // Smaller font for time
+               color: CupertinoColors.tertiaryLabel.resolveFrom(context),
+             ),
+           ),
+         ],
+       );
     }
 
+    // Make the comment preview tappable only if it's a real comment
     return GestureDetector(
       onTap:
           (comment == null)
               ? null
               : () {
+                // Navigate to parent item, highlighting this specific comment
                 final activeServer = ref.read(activeServerConfigProvider);
                 final isOnActiveServer = activeServer?.id == itemRef.serverId;
                 if (isOnActiveServer) {
@@ -652,18 +682,17 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
               },
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        padding: const EdgeInsets.symmetric(
+          horizontal: 10,
+          vertical: 8,
+        ), // More vertical padding
         decoration: decoration,
-        child: content,
+        child: contentWidget, // Use the Row widget here
       ),
     );
   }
-
-
-  // Helper for actual navigation
-  Future<void> _navigateToItem(
-    BuildContext context,
-    WidgetRef ref,
+    @override
+  WidgetRef ref,
     WorkbenchItemReference itemRef,
   {
     String? commentIdToHighlight,

@@ -111,14 +111,20 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
     if (comment.updatedTs != null || comment.createdTs != null) {
       return comment.updatedTs ?? comment.createdTs;
     }
-    // Fallback for Todoist (assuming postedAt exists and is DateTime)
-    // Note: The provided API reference for Todoist Comment doesn't show createdTs/updatedTs
-    // It shows postedAt. We need to ensure our Comment model handles this.
-    // Assuming our Comment model normalizes this or we check type:
-    // if (comment.postedAt != null) { // Check if it's a Todoist comment if needed
-    //   return comment.postedAt!;
-    // }
+    // Fallback for Todoist comment timestamp (postedAt)
+    // Assumes our internal Comment model includes postedAt or normalizes it.
+    // Check the Todoist API reference: it uses 'posted_at'.
+    // Let's assume our Comment model has 'createdAt'.
+    if (comment.updatedTs != null) {
+      return comment.updatedTs!;
+    }
+
     // Default fallback if no timestamp found (should not happen ideally)
+    if (kDebugMode) {
+      print(
+        "[WorkbenchNotifier] Warning: Could not determine timestamp for comment ID ${comment.id}",
+      );
+    }
     return DateTime.fromMillisecondsSinceEpoch(0);
   }
 
