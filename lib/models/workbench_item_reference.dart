@@ -1,18 +1,23 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_memos/models/comment.dart'; // Import Comment model
-import 'package:flutter_memos/models/server_config.dart'; // For ServerType enum
+import 'package:flutter_memos/models/server_config.dart'; // For ServerType enum (including todoist)
 import 'package:uuid/uuid.dart';
 
+// Ensure this includes task
 enum WorkbenchItemType { note, comment, task }
 
 @immutable
 class WorkbenchItemReference {
   final String id; // Unique UUID for this reference itself
-  final String referencedItemId; // ID of the original NoteItem or Comment
-  final WorkbenchItemType referencedItemType; // 'note' or 'comment'
-  final String serverId; // ServerConfig.id of the server this item belongs to
-  final ServerType serverType; // Memos or Blinko
-  final String? serverName; // Optional server name at time of adding
+  final String
+  referencedItemId; // ID of the original NoteItem, Comment, or Task
+  final WorkbenchItemType referencedItemType; // 'note', 'comment', or 'task'
+  final String
+  serverId; // ServerConfig.id (for Memos/Blinko) or constant ID (for Todoist)
+  // ServerType from server_config.dart (includes memos, blinko, todoist)
+  final ServerType serverType;
+  final String?
+  serverName; // Optional server name at time of adding (or constant for Todoist)
   final String? previewContent; // Optional content snippet
   final DateTime addedTimestamp; // When the item was added
   final String?
@@ -21,7 +26,7 @@ class WorkbenchItemReference {
   // Transient fields (populated by WorkbenchNotifier, not persisted)
   final Comment? latestComment;
   final DateTime?
-  referencedItemUpdateTime; // To store the update time of the referenced NoteItem
+  referencedItemUpdateTime; // To store the update time of the referenced NoteItem/Task
   final DateTime overallLastUpdateTime; // Calculated dynamically
 
   const WorkbenchItemReference({
@@ -29,7 +34,7 @@ class WorkbenchItemReference {
     required this.referencedItemId,
     required this.referencedItemType,
     required this.serverId,
-    required this.serverType,
+    required this.serverType, // Can be memos, blinko, or todoist
     this.serverName,
     this.previewContent,
     required this.addedTimestamp,
@@ -79,33 +84,30 @@ class WorkbenchItemReference {
           newReferencedItemUpdateTime.isAfter(calculatedUpdateTime)) {
         calculatedUpdateTime = newReferencedItemUpdateTime;
       }
-      // Use createdTs and updatedTs from Comment model
-      final DateTime? commentTime =
-          newLatestComment?.updatedTs ?? newLatestComment?.createdTs;
-      if (commentTime != null) {
-        // No need to convert from milliseconds, it's already DateTime
-        if (commentTime.isAfter(calculatedUpdateTime)) {
-          calculatedUpdateTime = commentTime;
-        }
+      // Use createdTs and updatedTs from Comment model (assuming these exist and are DateTime)
+      // If Comment model changes, update this logic (e.g., Todoist comments use postedAt)
+      // TODO: Review comment time logic if models differ significantly
+      final DateTime? commentTime = newLatestComment?.createdTs;
+      if (commentTime != null && commentTime.isAfter(calculatedUpdateTime)) {
+        calculatedUpdateTime = commentTime;
       }
-      // If the original overall time was later than any component, keep it (e.g., if manually set)
-      // Check against this.overallLastUpdateTime only if overallLastUpdateTime parameter was null
+
+      // If the original overall time was later than any component, keep it
       if (this.overallLastUpdateTime.isAfter(calculatedUpdateTime)) {
         calculatedUpdateTime = this.overallLastUpdateTime;
       }
     }
-
 
     return WorkbenchItemReference(
       id: id ?? this.id,
       referencedItemId: referencedItemId ?? this.referencedItemId,
       referencedItemType: referencedItemType ?? this.referencedItemType,
       serverId: serverId ?? this.serverId,
-      serverType: serverType ?? this.serverType,
+      serverType:
+          serverType ?? this.serverType, // Can be memos, blinko, or todoist
       serverName: serverName ?? this.serverName,
       previewContent: previewContent ?? this.previewContent,
-      addedTimestamp:
-          newAddedTimestamp, // Use potentially updated addedTimestamp
+      addedTimestamp: newAddedTimestamp,
       parentNoteId: parentNoteId ?? this.parentNoteId,
       // Assign potentially updated transient fields
       latestComment: newLatestComment,
@@ -120,15 +122,14 @@ class WorkbenchItemReference {
       'id': id,
       'referencedItemId': referencedItemId,
       'referencedItemType':
-          referencedItemType
-              .name, // Store enum name as string, now supports 'task'
+          referencedItemType.name, // Supports 'note', 'comment', 'task'
       'serverId': serverId,
-      'serverType': serverType.name, // Store enum name as string
+      'serverType': serverType.name, // Supports 'memos', 'blinko', 'todoist'
       'serverName': serverName,
       'previewContent': previewContent,
-      'addedTimestamp': addedTimestamp.toIso8601String(), // Store DateTime as ISO string
+      'addedTimestamp': addedTimestamp.toIso8601String(),
       'parentNoteId': parentNoteId,
-      // DO NOT include transient fields: latestComment, referencedItemUpdateTime, overallLastUpdateTime
+      // DO NOT include transient fields
     };
   }
 
@@ -137,23 +138,36 @@ class WorkbenchItemReference {
     T? tryParseEnum<T>(List<T> enumValues, String? name) {
       if (name == null) return null;
       try {
+        // Ensure this comparison works for enums where T is the enum type itself
         return enumValues.firstWhere((e) => (e as dynamic).name == name);
       } catch (_) {
+        if (kDebugMode) {
+          print(
+            '[WorkbenchItemReference.fromJson] Warning: Enum value "$name" not found in ${T.toString()}.',
+          );
+        }
         return null; // Return null if name doesn't match any enum value
       }
     }
 
+    // Parse ServerType - crucial that it handles 'todoist' correctly
+    final parsedServerType = tryParseEnum(
+      ServerType.values,
+      json['serverType'] as String?,
+    );
+
     return WorkbenchItemReference(
-      id: json['id'] as String? ?? const Uuid().v4(), // Generate ID if missing
+      id: json['id'] as String? ?? const Uuid().v4(),
       referencedItemId: json['referencedItemId'] as String? ?? '',
       referencedItemType:
           tryParseEnum(
             WorkbenchItemType.values,
             json['referencedItemType'] as String?,
           ) ??
-          WorkbenchItemType.note, // Now supports 'task'
+          WorkbenchItemType.note, // Default to note
       serverId: json['serverId'] as String? ?? '',
-      serverType: tryParseEnum(ServerType.values, json['serverType'] as String?) ?? ServerType.memos, // Default to memos
+      // Use parsed ServerType, default to memos if parsing failed or was null
+      serverType: parsedServerType ?? ServerType.memos,
       serverName: json['serverName'] as String?,
       previewContent: json['previewContent'] as String?,
       addedTimestamp: DateTime.tryParse(json['addedTimestamp'] as String? ?? '') ?? DateTime.now(), // Default to now
@@ -201,6 +215,8 @@ class WorkbenchItemReference {
   @override
   String toString() {
     // Include transient fields for debugging
-    return 'WorkbenchItemReference(id: $id, refId: $referencedItemId, type: ${referencedItemType.name}, serverId: $serverId, serverType: ${serverType.name}, parentId: $parentNoteId, added: $addedTimestamp, lastActivity: $overallLastUpdateTime, comment: ${latestComment != null ? latestComment!.id : 'none'}, noteUpdate: $referencedItemUpdateTime)';
+    // Corrected comment details access if using Todoist model
+    final commentId = latestComment?.id ?? 'none'; // Access Todoist Comment ID
+    return 'WorkbenchItemReference(id: $id, refId: $referencedItemId, type: ${referencedItemType.name}, serverId: $serverId, serverType: ${serverType.name}, parentId: $parentNoteId, added: $addedTimestamp, lastActivity: $overallLastUpdateTime, comment: $commentId, refUpdate: $referencedItemUpdateTime)';
   }
 }

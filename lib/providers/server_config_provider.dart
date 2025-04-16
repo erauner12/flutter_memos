@@ -24,6 +24,26 @@ class MultiServerConfigNotifier extends StateNotifier<MultiServerConfigState> {
     _cloudKitService = _ref.read(cloudKitServiceProvider);
   }
 
+  /// Filters a list of ServerConfig, removing any that are identified as Todoist.
+  /// This relies on ServerConfig.fromJson defaulting legacy 'todoist' types to 'memos',
+  /// so this filter primarily acts as a safeguard or if identification logic changes.
+  /// A more robust approach might involve checking raw JSON before parsing.
+  List<ServerConfig> _filterOutTodoistConfigs(List<ServerConfig> configs) {
+    // Because ServerConfig.fromJson now defaults 'todoist' to 'memos',
+    // we might not find any with serverType == ServerType.todoist here.
+    // This filter is kept as a safeguard. If needed, identification
+    // logic would need to happen *before* ServerConfig.fromJson.
+    final filteredList =
+        configs.where((s) => s.serverType != ServerType.todoist).toList();
+    if (kDebugMode && filteredList.length != configs.length) {
+      print(
+        '[MultiServerConfigNotifier][_filterOutTodoistConfigs] Filtered out ${configs.length - filteredList.length} legacy Todoist server(s).',
+      );
+    }
+    return filteredList;
+  }
+
+
   /// Load configuration, prioritizing local cache and syncing with CloudKit.
   Future<void> loadConfiguration() async {
     if (kDebugMode) {
@@ -37,21 +57,17 @@ class MultiServerConfigNotifier extends StateNotifier<MultiServerConfigState> {
     // 1. Load initial state from local cache (or old prefs for migration)
     final cachedJsonString = prefs.getString(_serverConfigCacheKey);
     if (kDebugMode) {
-      // Log raw cache string
       print(
         '[MultiServerConfigNotifier] Raw cache JSON string ($_serverConfigCacheKey): $cachedJsonString',
       );
     }
-    final multiServerJsonString = prefs.getString(
-      _multiServerConfigKey,
-    ); // Old multi-key
+    final multiServerJsonString = prefs.getString(_multiServerConfigKey);
     if (kDebugMode) {
-      // Log raw old multi-server string
       print(
         '[MultiServerConfigNotifier] Raw old multi-server JSON string ($_multiServerConfigKey): $multiServerJsonString',
       );
     }
-    final legacyUrl = prefs.getString(_legacyServerUrlKey); // Old legacy key
+    final legacyUrl = prefs.getString(_legacyServerUrlKey);
 
     if (cachedJsonString != null) {
       try {
@@ -60,13 +76,19 @@ class MultiServerConfigNotifier extends StateNotifier<MultiServerConfigState> {
         );
         if (kDebugMode) {
           print(
-            '[MultiServerConfigNotifier] Loaded initial state from cache: ${initialStateFromCache.servers.length} servers.',
-          );
-          // Log details of loaded servers from cache
-          print(
-            '[MultiServerConfigNotifier] Cache Load Details: ${initialStateFromCache.servers.map((s) => "ID=\${s.id}, Name=\${s.name}, Type=\${s.serverType.name}").join("; ")}',
+            '[MultiServerConfigNotifier] Loaded initial state from cache (before filtering): ${initialStateFromCache.servers.length} servers.',
           );
         }
+        // Filter out any potential legacy Todoist configs loaded from cache
+        initialStateFromCache = initialStateFromCache.copyWith(
+          servers: _filterOutTodoistConfigs(initialStateFromCache.servers),
+        );
+        if (kDebugMode) {
+          print(
+            '[MultiServerConfigNotifier] State after filtering cache: ${initialStateFromCache.servers.length} servers.',
+          );
+        }
+
       } catch (e) {
         if (kDebugMode) {
           print(
@@ -84,14 +106,17 @@ class MultiServerConfigNotifier extends StateNotifier<MultiServerConfigState> {
         migrationNeededFromOldPrefs = true;
         if (kDebugMode) {
           print(
-            '[MultiServerConfigNotifier] Cache empty, using old multi-server prefs for initial state. Migration needed.',
+            '[MultiServerConfigNotifier] Cache empty, using old multi-server prefs for initial state (before filtering).',
           );
-          // Log details of loaded servers from old prefs
-          for (var server in initialStateFromCache.servers) {
-            print(
-              '[MultiServerConfigNotifier] Old Prefs Load Detail: ID=${server.id}, Name=${server.name}, Type=${server.serverType.name}',
-            );
-          }
+        }
+        // Filter out legacy Todoist configs from old prefs
+        initialStateFromCache = initialStateFromCache.copyWith(
+          servers: _filterOutTodoistConfigs(initialStateFromCache.servers),
+        );
+        if (kDebugMode) {
+          print(
+            '[MultiServerConfigNotifier] State after filtering old prefs: ${initialStateFromCache.servers.length} servers.',
+          );
         }
       } catch (e) {
         if (kDebugMode) {
@@ -104,25 +129,22 @@ class MultiServerConfigNotifier extends StateNotifier<MultiServerConfigState> {
       }
     } else if (legacyUrl != null && legacyUrl.isNotEmpty) {
       final legacyToken = prefs.getString(_legacyAuthTokenKey);
+      // Legacy config is always Memos type
       final migratedServer = ServerConfig(
         id: const Uuid().v4(),
         name: 'Migrated Server',
         serverUrl: legacyUrl,
         authToken: legacyToken ?? '',
-        serverType: ServerType.memos, // Add default serverType
+        serverType: ServerType.memos,
       );
       initialStateFromCache = MultiServerConfigState(
-        servers: [migratedServer],
+        servers: [migratedServer], // Already known to be Memos type
         defaultServerId: migratedServer.id,
       );
       migrationNeededFromOldPrefs = true;
       if (kDebugMode) {
         print(
           '[MultiServerConfigNotifier] Cache empty, using legacy prefs for initial state. Migration needed.',
-        );
-        // Log details of migrated server
-        print(
-          '[MultiServerConfigNotifier] Legacy Prefs Migration Detail: ID=${migratedServer.id}, Name=${migratedServer.name}, Type=${migratedServer.serverType.name}',
         );
       }
     } else {
@@ -135,6 +157,7 @@ class MultiServerConfigNotifier extends StateNotifier<MultiServerConfigState> {
 
     // Load default ID separately (always from prefs)
     final defaultServerId = prefs.getString('defaultServerId');
+    // Ensure default ID points to a *valid* (non-Todoist) server in the loaded state
     final effectiveDefaultId =
         (defaultServerId != null &&
                 initialStateFromCache.servers.any(
@@ -142,24 +165,30 @@ class MultiServerConfigNotifier extends StateNotifier<MultiServerConfigState> {
                 ))
             ? defaultServerId
             : null;
+
+    // Adjust initial state with the potentially nullified default ID
     initialStateFromCache = initialStateFromCache.copyWith(
       defaultServerId: () => effectiveDefaultId,
     );
 
-    // Determine initial active ID based on cached state and effective default
+
+    // Determine initial active ID based on the filtered state and effective default
     String? initialActiveId = effectiveDefaultId;
     if (initialActiveId == null && initialStateFromCache.servers.isNotEmpty) {
+      // If no default, pick the first available (non-Todoist) server
       initialActiveId = initialStateFromCache.servers.first.id;
     }
+    // Final check: ensure the derived active ID actually exists in the filtered list
     if (initialActiveId != null &&
         !initialStateFromCache.servers.any((s) => s.id == initialActiveId)) {
       initialActiveId = initialStateFromCache.servers.firstOrNull?.id;
     }
+
     initialStateFromCache = initialStateFromCache.copyWith(
       activeServerId: initialActiveId,
     );
 
-    // Log the final computed initial state before setting it
+
     if (kDebugMode) {
       print(
         '[MultiServerConfigNotifier] Computed Initial State Before Setting:',
@@ -177,7 +206,7 @@ class MultiServerConfigNotifier extends StateNotifier<MultiServerConfigState> {
       );
     }
 
-    // Set initial state immediately from cache/migration source
+    // Set initial state immediately from filtered cache/migration source
     if (mounted) {
       state = initialStateFromCache;
       if (kDebugMode) {
@@ -201,56 +230,66 @@ class MultiServerConfigNotifier extends StateNotifier<MultiServerConfigState> {
           '[MultiServerConfigNotifier] Fetching latest data from CloudKit...',
         );
       }
-      final cloudServers = await _cloudKitService.getAllServerConfigs();
+      // Fetch all raw configs from CloudKit
+      final cloudServersRaw = await _cloudKitService.getAllServerConfigs();
       if (kDebugMode) {
         print(
-          '[MultiServerConfigNotifier] CloudKit fetch successful: ${cloudServers.length} servers.',
+          '[MultiServerConfigNotifier] CloudKit fetched ${cloudServersRaw.length} raw server configs.',
         );
-        // Log details of servers fetched from CloudKit
+      }
+      // Filter out Todoist configs *after* fetching, before comparison/saving
+      final cloudServers = _filterOutTodoistConfigs(cloudServersRaw);
+
+      if (kDebugMode) {
+        print(
+          '[MultiServerConfigNotifier] CloudKit fetch result: ${cloudServers.length} filtered (Memos/Blinko) servers.',
+        );
         for (var server in cloudServers) {
           print(
-            '[MultiServerConfigNotifier] CloudKit Fetch Detail: ID=${server.id}, Name=${server.name}, Type=${server.serverType.name}',
+            '[MultiServerConfigNotifier] CloudKit Filtered Detail: ID=${server.id}, Name=${server.name}, Type=${server.serverType.name}',
           );
         }
       }
 
       final listEquals = const DeepCollectionEquality().equals;
-      final currentServers = state.servers;
+      final currentServers = state.servers; // Current state (already filtered)
 
       if (!listEquals(cloudServers, currentServers)) {
         if (kDebugMode) {
           print(
-            '[MultiServerConfigNotifier] CloudKit data differs from cache. Updating state and cache...',
+            '[MultiServerConfigNotifier] CloudKit data differs from local state. Updating state and cache...',
           );
         }
 
-        final newDefaultId = prefs.getString('defaultServerId');
+        // Re-validate default ID against the *new* filtered CloudKit list
+        final prefsDefaultId = prefs.getString(
+          'defaultServerId',
+        ); // Re-read prefs value
         final effectiveNewDefaultId =
-            (newDefaultId != null &&
-                    cloudServers.any((s) => s.id == newDefaultId))
-                ? newDefaultId
+            (prefsDefaultId != null &&
+                    cloudServers.any((s) => s.id == prefsDefaultId))
+                ? prefsDefaultId
                 : null;
 
-        // Check if the old default ID (read from prefs earlier) is now invalid
-        final oldDefaultIdFromPrefs = prefs.getString(
-          'defaultServerId',
-        ); // Re-read or use value read at start
-        if (oldDefaultIdFromPrefs != null &&
-            !cloudServers.any((s) => s.id == oldDefaultIdFromPrefs)) {
+        // Check if the default ID from prefs is now invalid (doesn't exist in filtered cloud list)
+        if (prefsDefaultId != null && effectiveNewDefaultId == null) {
           if (kDebugMode) {
             print(
-              '[MultiServerConfigNotifier] Old default server ID $oldDefaultIdFromPrefs is no longer valid after CloudKit sync. Clearing from prefs.',
+              '[MultiServerConfigNotifier] Default server ID $prefsDefaultId from prefs is no longer valid after CloudKit sync. Clearing from prefs.',
             );
           }
           await prefs.remove(
             'defaultServerId',
-          ); // Remove the invalid default ID
+          ); // Remove the invalid default ID from prefs
         }
 
+        // Determine new active ID based on the filtered cloud list and new default
         String? newActiveId = effectiveNewDefaultId;
         if (newActiveId == null && cloudServers.isNotEmpty) {
-          newActiveId = cloudServers.first.id;
+          newActiveId =
+              cloudServers.first.id; // Fallback to first filtered server
         }
+        // Final check: ensure new active ID exists in the filtered cloud list
         if (newActiveId != null &&
             !cloudServers.any((s) => s.id == newActiveId)) {
           newActiveId = cloudServers.firstOrNull?.id;
@@ -258,26 +297,16 @@ class MultiServerConfigNotifier extends StateNotifier<MultiServerConfigState> {
 
         if (mounted) {
           state = MultiServerConfigState(
-            servers: cloudServers,
-            defaultServerId: effectiveNewDefaultId,
-            activeServerId: newActiveId,
+            servers: cloudServers, // Use filtered list
+            defaultServerId: effectiveNewDefaultId, // Use validated default ID
+            activeServerId: newActiveId, // Use derived active ID
           );
           if (kDebugMode) {
             print(
               '[MultiServerConfigNotifier] State updated from CloudKit. Servers: ${state.servers.length}, ActiveId: ${state.activeServerId}, DefaultId: ${state.defaultServerId}',
             );
           }
-          // Log servers being written to cache after CloudKit sync
-          if (kDebugMode) {
-            print(
-              '[MultiServerConfigNotifier] Updating local cache after CloudKit sync with these servers:',
-            );
-            for (var server in state.servers) {
-              print(
-                '[MultiServerConfigNotifier]   Cache Write Detail: ID=${server.id}, Name=${server.name}, Type=${server.serverType.name}',
-              );
-            }
-          }
+          // Update local cache with the filtered list
           await _updateLocalCache(state.servers);
         } else {
           if (kDebugMode) {
@@ -289,17 +318,19 @@ class MultiServerConfigNotifier extends StateNotifier<MultiServerConfigState> {
       } else {
         if (kDebugMode) {
           print(
-            '[MultiServerConfigNotifier] CloudKit data matches cache. No update needed.',
+            '[MultiServerConfigNotifier] CloudKit data matches local state. No update needed.',
           );
         }
       }
 
+      // Migration logic (only runs if old prefs were used)
       if (migrationNeededFromOldPrefs) {
         if (kDebugMode) {
           print('[MultiServerConfigNotifier] Performing migration cleanup...');
         }
+        // Migrate only the filtered (non-Todoist) servers
         await _migratePrefsToCloudKit(
-          initialStateFromCache.servers,
+          initialStateFromCache.servers, // Already filtered list
           initialStateFromCache.defaultServerId,
         );
         if (multiServerJsonString != null) {
@@ -309,14 +340,18 @@ class MultiServerConfigNotifier extends StateNotifier<MultiServerConfigState> {
           await prefs.remove(_legacyServerUrlKey);
           await prefs.remove(_legacyAuthTokenKey);
         }
+        // Ensure cache reflects the filtered list after migration attempt
         await _updateLocalCache(initialStateFromCache.servers);
         if (kDebugMode) {
           print('[MultiServerConfigNotifier] Migration cleanup complete.');
         }
       } else if (cachedJsonString == null &&
           (multiServerJsonString != null || legacyUrl != null)) {
+        // If started from old prefs but no CloudKit update was needed, ensure cache is populated
         if (mounted) {
-          await _updateLocalCache(state.servers);
+          await _updateLocalCache(
+            state.servers,
+          ); // Cache the current filtered state
           if (kDebugMode) {
             print(
               '[MultiServerConfigNotifier] Populated empty cache after checking CloudKit during migration.',
@@ -327,35 +362,36 @@ class MultiServerConfigNotifier extends StateNotifier<MultiServerConfigState> {
     } catch (e) {
       if (kDebugMode) {
         print(
-          '[MultiServerConfigNotifier] Error during async CloudKit fetch: $e. Continuing with cached data.',
+          '[MultiServerConfigNotifier] Error during async CloudKit fetch/update: $e. Continuing with local data.',
         );
       }
+      // Optionally trigger explicit CloudKit cleanup for legacy Todoist items here or elsewhere
+      // await _cleanupLegacyTodoistCloudKitConfigs();
     }
   }
 
   // Helper to update the local SharedPreferences cache
   Future<bool> _updateLocalCache(List<ServerConfig> servers) async {
+    // Ensure we only cache Memos/Blinko types
+    final serversToCache = _filterOutTodoistConfigs(servers);
     try {
-      // Log details before serializing
       if (kDebugMode) {
         print(
-          '[MultiServerConfigNotifier][_updateLocalCache] Preparing to cache ${servers.length} servers:',
+          '[MultiServerConfigNotifier][_updateLocalCache] Preparing to cache ${serversToCache.length} servers (Memos/Blinko only):',
         );
-        // Log details of servers being cached
         print(
-          '[MultiServerConfigNotifier][_updateLocalCache] Caching Servers Details: ${servers.map((s) => "ID=\${s.id}, Name=\${s.name}, Type=\${s.serverType.name}").join("; ")}',
+          '[MultiServerConfigNotifier][_updateLocalCache] Caching Servers Details: ${serversToCache.map((s) => "ID=${s.id}, Name=${s.name}, Type=${s.serverType.name}").join("; ")}',
         );
       }
       final prefs = await SharedPreferences.getInstance();
-      // Pass only the servers list to the state constructor for caching
-      final cacheState = MultiServerConfigState(servers: servers);
+      final cacheState = MultiServerConfigState(servers: serversToCache);
       final success = await prefs.setString(
         _serverConfigCacheKey,
-        cacheState.toJsonString(), // Use the state's toJsonString method
+        cacheState.toJsonString(),
       );
       if (kDebugMode) {
         print(
-          '[MultiServerConfigNotifier] Updated local server cache (success: $success). Cached ${servers.length} servers.',
+          '[MultiServerConfigNotifier] Updated local server cache (success: $success). Cached ${serversToCache.length} servers.',
         );
       }
       return success;
@@ -369,17 +405,18 @@ class MultiServerConfigNotifier extends StateNotifier<MultiServerConfigState> {
     }
   }
 
-  // _migratePrefsToCloudKit remains the same...
+  // Migrate only non-Todoist servers
   Future<void> _migratePrefsToCloudKit(
     List<ServerConfig> servers,
     String? defaultId,
   ) async {
+    final serversToMigrate = _filterOutTodoistConfigs(servers);
     if (kDebugMode) {
       print(
-        '[MultiServerConfigNotifier] Attempting background migration of ${servers.length} servers to CloudKit...',
+        '[MultiServerConfigNotifier] Attempting background migration of ${serversToMigrate.length} servers (Memos/Blinko) to CloudKit...',
       );
     }
-    for (final server in servers) {
+    for (final server in serversToMigrate) {
       try {
         await _cloudKitService.saveServerConfig(server);
       } catch (e) {
@@ -395,12 +432,25 @@ class MultiServerConfigNotifier extends StateNotifier<MultiServerConfigState> {
         '[MultiServerConfigNotifier] Background migration attempt complete.',
       );
     }
+    // Note: Default ID migration isn't handled here, relies on loadConfiguration logic.
   }
+
 
   /// Save only the default server ID to SharedPreferences
   Future<bool> _saveDefaultServerIdToPreferences(
     String? defaultServerId,
   ) async {
+    // Ensure the ID being saved actually exists in the current (filtered) state
+    if (defaultServerId != null &&
+        !state.servers.any((s) => s.id == defaultServerId)) {
+      if (kDebugMode) {
+        print(
+          '[MultiServerConfigNotifier][_saveDefaultServerIdToPreferences] Attempted to save invalid default ID: $defaultServerId. Removing instead.',
+        );
+      }
+      defaultServerId = null; // Force removal if invalid
+    }
+
     try {
       final prefs = await SharedPreferences.getInstance();
       bool success;
@@ -427,13 +477,21 @@ class MultiServerConfigNotifier extends StateNotifier<MultiServerConfigState> {
 
   /// Add a new server configuration locally and sync to CloudKit
   Future<bool> addServer(ServerConfig config) async {
-    // --- Add Logging Here ---
+    // Crucial check: Do not add Todoist type servers via this method
+    if (config.serverType == ServerType.todoist) {
+      if (kDebugMode) {
+        print(
+          '[MultiServerConfigNotifier] addServer Error: Attempted to add a ServerConfig with ServerType.todoist. Operation aborted.',
+        );
+      }
+      return false;
+    }
+
     if (kDebugMode) {
       print(
         '[MultiServerConfigNotifier] addServer received config: ${config.toString()}',
       );
     }
-    // --- End Logging ---
     if (state.servers.any((s) => s.id == config.id)) {
       if (kDebugMode) {
         print(
@@ -443,7 +501,6 @@ class MultiServerConfigNotifier extends StateNotifier<MultiServerConfigState> {
       return false;
     }
 
-    // 1. Sync change to CloudKit FIRST
     final cloudSuccess = await _cloudKitService.saveServerConfig(config);
 
     if (cloudSuccess) {
@@ -456,7 +513,10 @@ class MultiServerConfigNotifier extends StateNotifier<MultiServerConfigState> {
         return true;
       }
 
-      final newServers = [...state.servers, config];
+      final newServers = [
+        ...state.servers,
+        config,
+      ]; // Add the valid (non-Todoist) server
       String? newDefaultId = state.defaultServerId;
       String? newActiveId = state.activeServerId;
       bool isFirstServer = state.servers.isEmpty;
@@ -474,7 +534,7 @@ class MultiServerConfigNotifier extends StateNotifier<MultiServerConfigState> {
         activeServerId: newActiveId,
       );
 
-      await _updateLocalCache(newServers);
+      await _updateLocalCache(newServers); // Caches filtered list
 
       if (defaultChanged) {
         await _saveDefaultServerIdToPreferences(newDefaultId);
@@ -497,24 +557,32 @@ class MultiServerConfigNotifier extends StateNotifier<MultiServerConfigState> {
 
   /// Update an existing server configuration locally and sync to CloudKit
   Future<bool> updateServer(ServerConfig updatedConfig) async {
-    // --- Add Logging Here ---
-    if (kDebugMode) {
-      print(
-        '[MultiServerConfigNotifier] updateServer received config: ${updatedConfig.toString()}',
-      );
-    }
-    // --- End Logging ---
-    final index = state.servers.indexWhere((s) => s.id == updatedConfig.id);
-    if (index == -1) {
+    // Crucial check: Do not update to Todoist type
+    if (updatedConfig.serverType == ServerType.todoist) {
       if (kDebugMode) {
         print(
-          '[MultiServerConfigNotifier] UpdateServer: Server ID ${updatedConfig.id} not found.',
+          '[MultiServerConfigNotifier] updateServer Error: Attempted to update a ServerConfig to ServerType.todoist. Operation aborted.',
         );
       }
       return false;
     }
 
-    // 1. Sync change to CloudKit FIRST
+    if (kDebugMode) {
+      print(
+        '[MultiServerConfigNotifier] updateServer received config: ${updatedConfig.toString()}',
+      );
+    }
+    final index = state.servers.indexWhere((s) => s.id == updatedConfig.id);
+    if (index == -1) {
+      if (kDebugMode) {
+        print(
+          '[MultiServerConfigNotifier] UpdateServer: Server ID ${updatedConfig.id} not found in current (filtered) state.',
+        );
+      }
+      // Maybe it was a Todoist server that got filtered out?
+      return false;
+    }
+
     final cloudSuccess = await _cloudKitService.saveServerConfig(updatedConfig);
 
     if (cloudSuccess) {
@@ -528,10 +596,11 @@ class MultiServerConfigNotifier extends StateNotifier<MultiServerConfigState> {
       }
 
       final newServers = [...state.servers];
-      newServers[index] = updatedConfig;
+      newServers[index] =
+          updatedConfig; // Update with valid (non-Todoist) config
       state = state.copyWith(servers: newServers);
 
-      await _updateLocalCache(newServers);
+      await _updateLocalCache(newServers); // Caches filtered list
       if (kDebugMode) {
         print(
           '[MultiServerConfigNotifier] Updated server ${updatedConfig.id} locally and synced to CloudKit.',
@@ -550,19 +619,22 @@ class MultiServerConfigNotifier extends StateNotifier<MultiServerConfigState> {
 
   /// Remove a server configuration locally and sync deletion to CloudKit
   Future<bool> removeServer(String serverId) async {
+    // Find server in the current (filtered) state
     final serverToRemove = state.servers.firstWhereOrNull(
       (s) => s.id == serverId,
     );
     if (serverToRemove == null) {
       if (kDebugMode) {
         print(
-          '[MultiServerConfigNotifier] RemoveServer: Server ID $serverId not found.',
+          '[MultiServerConfigNotifier] RemoveServer: Server ID $serverId not found in current (filtered) state.',
         );
       }
-      return false;
+      // It might be a legacy Todoist ID. Try deleting from CloudKit anyway.
+      // Or just return false if we assume removeServer is only called for visible servers.
+      // Let's try deleting from CloudKit regardless, as it might be cleanup.
     }
 
-    // 1. Sync deletion to CloudKit FIRST
+    // Sync deletion to CloudKit FIRST (works even if server wasn't in local state)
     final cloudSuccess = await _cloudKitService.deleteServerConfig(serverId);
 
     if (cloudSuccess) {
@@ -572,59 +644,72 @@ class MultiServerConfigNotifier extends StateNotifier<MultiServerConfigState> {
             '[MultiServerConfigNotifier] RemoveServer: Notifier unmounted after CloudKit success. State/cache not updated.',
           );
         }
-        return true;
+        return true; // CloudKit deletion succeeded
       }
 
-      final newServers = state.servers.where((s) => s.id != serverId).toList();
+      // If the server *was* in the local state, update state and cache
+      if (serverToRemove != null) {
+        final newServers =
+            state.servers.where((s) => s.id != serverId).toList();
 
-      String? newDefaultId = state.defaultServerId;
-      String? newActiveId = state.activeServerId;
-      bool defaultChanged = false;
+        String? newDefaultId = state.defaultServerId;
+        String? newActiveId = state.activeServerId;
+        bool defaultChanged = false;
 
-      if (newServers.isEmpty) {
-        if (kDebugMode) {
-          print(
-            '[MultiServerConfigNotifier] Removed the last server. Resetting active and default IDs.',
-          );
-        }
-        newDefaultId = null;
-        newActiveId = null;
-        defaultChanged = state.defaultServerId != null;
-      } else {
-        if (state.defaultServerId == serverId) {
-          newDefaultId = newServers.first.id;
-          defaultChanged = true;
-          if (kDebugMode) {
+        if (newServers.isEmpty) {
+          if (kDebugMode)
             print(
-              '[MultiServerConfigNotifier] Removed default server $serverId. Setting new default to $newDefaultId.',
+              '[MultiServerConfigNotifier] Removed the last server. Resetting active and default IDs.',
             );
+          newDefaultId = null;
+          newActiveId = null;
+          defaultChanged = state.defaultServerId != null;
+        } else {
+          if (state.defaultServerId == serverId) {
+            newDefaultId =
+                newServers.first.id; // New default is first remaining
+            defaultChanged = true;
+            if (kDebugMode)
+              print(
+                '[MultiServerConfigNotifier] Removed default server $serverId. Setting new default to $newDefaultId.',
+              );
+          }
+          if (state.activeServerId == serverId) {
+            newActiveId =
+                newDefaultId ??
+                newServers
+                    .first
+                    .id; // New active is new default or first remaining
+            if (kDebugMode)
+              print(
+                '[MultiServerConfigNotifier] Removed active server $serverId. Setting new active to $newActiveId.',
+              );
           }
         }
-        if (state.activeServerId == serverId) {
-          newActiveId = newDefaultId ?? newServers.first.id;
-          if (kDebugMode) {
-            print(
-              '[MultiServerConfigNotifier] Removed active server $serverId. Setting new active to $newActiveId.',
-            );
-          }
-        }
-      }
 
-      state = state.copyWith(
-        servers: newServers,
-        defaultServerId: () => newDefaultId,
-        activeServerId: newActiveId,
-      );
-
-      await _updateLocalCache(newServers);
-
-      if (defaultChanged) {
-        await _saveDefaultServerIdToPreferences(newDefaultId);
-      }
-      if (kDebugMode) {
-        print(
-          '[MultiServerConfigNotifier] Removed server $serverId locally and synced deletion to CloudKit.',
+        state = state.copyWith(
+          servers: newServers,
+          defaultServerId: () => newDefaultId,
+          activeServerId: newActiveId,
         );
+
+        await _updateLocalCache(newServers); // Cache the updated filtered list
+
+        if (defaultChanged) {
+          await _saveDefaultServerIdToPreferences(newDefaultId);
+        }
+        if (kDebugMode)
+          print(
+            '[MultiServerConfigNotifier] Removed server $serverId locally and synced deletion to CloudKit.',
+          );
+      } else {
+        // Server wasn't in local state, but CloudKit deletion succeeded (likely legacy cleanup)
+        if (kDebugMode)
+          print(
+            '[MultiServerConfigNotifier] Server $serverId not found locally, but deletion synced to CloudKit (likely legacy).',
+          );
+        // Optionally re-validate default/active IDs here just in case they pointed to this ID somehow
+        // (though loadConfiguration should handle this)
       }
       return true;
     } else {
@@ -639,12 +724,15 @@ class MultiServerConfigNotifier extends StateNotifier<MultiServerConfigState> {
 
   /// Set the active server for the current session (no persistence change)
   void setActiveServer(String? serverId) {
+    // Ensure ID exists in the current filtered list
     if (serverId != null && !state.servers.any((s) => s.id == serverId)) {
       if (kDebugMode) {
         print(
-          '[MultiServerConfigNotifier] Attempted to set active server to non-existent ID: $serverId',
+          '[MultiServerConfigNotifier] Attempted to set active server to non-existent (or filtered) ID: $serverId',
         );
       }
+      // Optionally set to null or first available if the target is invalid
+      // For now, just prevent setting to an invalid ID.
       return;
     }
     if (state.activeServerId != serverId) {
@@ -659,22 +747,24 @@ class MultiServerConfigNotifier extends StateNotifier<MultiServerConfigState> {
 
   /// Set the default server and save it to SharedPreferences
   Future<bool> setDefaultServer(String? serverId) async {
+    // Ensure ID exists in the current filtered list before setting
     if (serverId != null && !state.servers.any((s) => s.id == serverId)) {
       if (kDebugMode) {
         print(
-          '[MultiServerConfigNotifier] Attempted to set default server to non-existent ID: $serverId',
+          '[MultiServerConfigNotifier] Attempted to set default server to non-existent (or filtered) ID: $serverId',
         );
       }
-      return false;
+      return false; // Don't allow setting an invalid default
     }
     if (state.defaultServerId != serverId) {
       final newState = state.copyWith(defaultServerId: () => serverId);
       state = newState;
+      // Save the validated ID to prefs
       return _saveDefaultServerIdToPreferences(serverId);
     }
-    return true;
+    return true; // No change needed
   }
-  
+
   /// Resets the notifier state to default and clears associated local cache.
   Future<void> resetStateAndCache() async {
     if (kDebugMode) {
@@ -685,11 +775,10 @@ class MultiServerConfigNotifier extends StateNotifier<MultiServerConfigState> {
     if (mounted) {
       state = const MultiServerConfigState(); // Reset state
     } else {
-      if (kDebugMode) {
+      if (kDebugMode)
         print(
           '[MultiServerConfigNotifier] Notifier unmounted during reset. State not reset.',
         );
-      }
     }
 
     try {
@@ -697,14 +786,15 @@ class MultiServerConfigNotifier extends StateNotifier<MultiServerConfigState> {
       await prefs.remove(_serverConfigCacheKey); // Clear new cache key
       await prefs.remove(_multiServerConfigKey); // Clear old migration key
       await prefs.remove('defaultServerId'); // Clear default ID key
+      // Clear legacy single server keys too for good measure
+      await prefs.remove(_legacyServerUrlKey);
+      await prefs.remove(_legacyAuthTokenKey);
       if (kDebugMode) {
         print('[MultiServerConfigNotifier] Local cache keys cleared.');
       }
     } catch (e) {
-      if (kDebugMode) {
-        print('[MultiServerConfigNotifier] Error clearing local cache: \$e');
-      }
-      // Logged error, but proceed. Reset is best-effort.
+      if (kDebugMode)
+        print('[MultiServerConfigNotifier] Error clearing local cache: $e');
     }
   }
 }
@@ -725,19 +815,14 @@ final activeServerConfigProvider = Provider<ServerConfig?>((ref) {
   if (activeId == null) {
     return null;
   }
-
+  // Find in the already filtered list from the state provider
   final activeServer = multiConfigState.servers.firstWhereOrNull(
     (s) => s.id == activeId,
   );
   return activeServer;
 }, name: 'activeServerConfig');
 
-/// Provider that returns the first configured Todoist ServerConfig, or null if none exists.
-final todoistServerConfigProvider = Provider<ServerConfig?>((ref) {
-  final servers = ref.watch(multiServerConfigProvider).servers;
-  // Use firstWhereOrNull from collection package
-  return servers.firstWhereOrNull((s) => s.serverType == ServerType.todoist);
-}, name: 'todoistServerConfig'); // Added name for clarity
+// REMOVED todoistServerConfigProvider
 
 /// Provider for loading server configuration on app startup
 final loadServerConfigProvider = FutureProvider<void>((ref) async {
@@ -745,73 +830,63 @@ final loadServerConfigProvider = FutureProvider<void>((ref) async {
     print('[loadServerConfigProvider] Starting initial data load sequence...');
   }
 
+  // Load and filter server configs first
   await ref.read(multiServerConfigProvider.notifier).loadConfiguration();
   if (kDebugMode) {
     print('[loadServerConfigProvider] Server config load complete.');
   }
 
-  // ADD: Load MCP server configurations
+  // Load other providers
   try {
     await ref.read(mcpServerConfigProvider.notifier).loadConfiguration();
-    if (kDebugMode) {
+    if (kDebugMode)
       print('[loadServerConfigProvider] MCP server config load triggered.');
-    }
   } catch (e) {
-    if (kDebugMode) {
+    if (kDebugMode)
       print(
         '[loadServerConfigProvider] Error initializing MCP config provider: $e',
       );
-    }
   }
-  // END ADD
-
   try {
+    // Init Todoist API key provider (now independent of ServerConfig)
     await ref.read(todoistApiKeyProvider.notifier).init();
-    if (kDebugMode) {
+    if (kDebugMode)
       print('[loadServerConfigProvider] Todoist API key load triggered.');
-    }
   } catch (e) {
-    if (kDebugMode) {
+    if (kDebugMode)
       print(
         '[loadServerConfigProvider] Error initializing Todoist provider: $e',
       );
-    }
   }
   try {
     await ref.read(openAiApiKeyProvider.notifier).init();
-    if (kDebugMode) {
+    if (kDebugMode)
       print('[loadServerConfigProvider] OpenAI API key load triggered.');
-    }
   } catch (e) {
-    if (kDebugMode) {
+    if (kDebugMode)
       print(
         '[loadServerConfigProvider] Error initializing OpenAI provider: $e',
       );
-    }
   }
   try {
-    await ref.read(openAiModelIdProvider.notifier).init(); // Add this line
-    if (kDebugMode) {
+    await ref.read(openAiModelIdProvider.notifier).init();
+    if (kDebugMode)
       print('[loadServerConfigProvider] OpenAI Model ID load triggered.');
-    }
   } catch (e) {
-    if (kDebugMode) {
+    if (kDebugMode)
       print(
         '[loadServerConfigProvider] Error initializing OpenAI Model ID provider: $e',
       );
-    }
   }
   try {
     await ref.read(cloudKitServiceProvider).initialize();
-    if (kDebugMode) {
+    if (kDebugMode)
       print(
         '[loadServerConfigProvider] CloudKit account status check complete.',
       );
-    }
   } catch (e) {
-    if (kDebugMode) {
+    if (kDebugMode)
       print('[loadServerConfigProvider] Error checking CloudKit status: $e');
-    }
   }
 
   if (kDebugMode) {
