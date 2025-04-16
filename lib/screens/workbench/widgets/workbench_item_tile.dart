@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:math'; // For min
 
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/services.dart'; // Needed for Clipboard
 import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/models/server_config.dart';
 import 'package:flutter_memos/models/workbench_item_reference.dart';
@@ -79,10 +81,242 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
     );
   }
 
+  // --- Refactored Action Handlers ---
+
+  Future<void> _handleRemoveItem() async {
+    final preview = widget.itemReference.previewContent ?? 'Item';
+    final confirm = await showCupertinoDialog<bool>(
+      context: context,
+      builder:
+          (dialogContext) => CupertinoAlertDialog(
+            title: const Text('Remove from Workbench?'),
+            content: Text(
+              'Remove "${preview.substring(0, min(30, preview.length))}${preview.length > 30 ? '...' : ''}" from your Workbench?',
+            ),
+            actions: [
+              CupertinoDialogAction(
+                child: const Text('Cancel'),
+                onPressed: () => Navigator.pop(dialogContext, false),
+              ),
+              CupertinoDialogAction(
+                isDestructiveAction: true,
+                child: const Text('Remove'),
+                onPressed: () => Navigator.pop(dialogContext, true),
+              ),
+            ],
+          ),
+    );
+
+    if (confirm == true && mounted) {
+      unawaited(
+        ref
+            .read(workbenchProvider.notifier)
+            .removeItem(widget.itemReference.id),
+      );
+    }
+  }
+
+  Future<void> _handleToggleComplete() async {
+    if (widget.itemReference.referencedItemType != WorkbenchItemType.task)
+      return;
+
+    final activeServer = ref.read(activeServerConfigProvider);
+    final isOnActiveServer = activeServer?.id == widget.itemReference.serverId;
+    if (!isOnActiveServer) {
+      _showServerSwitchRequiredDialog(context, ref, widget.itemReference);
+      return;
+    }
+
+    try {
+      final task = await ref.read(
+        taskDetailProvider(widget.itemReference.referencedItemId).future,
+      );
+      bool success;
+      String actionVerb;
+      if (task.isCompleted) {
+        actionVerb = 'reopened';
+        success = await ref
+            .read(tasksNotifierProvider.notifier)
+            .reopenTask(task.id);
+      } else {
+        actionVerb = 'completed';
+        success = await ref
+            .read(tasksNotifierProvider.notifier)
+            .completeTask(task.id);
+      }
+      if (success && mounted) {
+        _showAlertDialog(context, 'Success', 'Task $actionVerb.');
+        unawaited(ref.read(workbenchProvider.notifier).refreshItemDetails());
+        unawaited(ref.read(tasksNotifierProvider.notifier).fetchTasks());
+      } else if (!success && mounted) {
+        _showAlertDialog(context, 'Error', 'Failed to toggle task status.');
+      }
+    } catch (e) {
+      if (mounted) {
+        _showAlertDialog(context, 'Error', 'Could not toggle task: $e');
+      }
+    }
+  }
+
+  void _copyContent() {
+    final contentToCopy = widget.itemReference.previewContent ?? '';
+    if (contentToCopy.isNotEmpty) {
+      Clipboard.setData(ClipboardData(text: contentToCopy));
+      _showAlertDialog(context, 'Success', 'Content copied to clipboard.');
+    } else {
+      _showAlertDialog(context, 'Info', 'No content available to copy.');
+    }
+  }
+
+  void _navigateToEdit() {
+    final activeServer = ref.read(activeServerConfigProvider);
+    final isOnActiveServer = activeServer?.id == widget.itemReference.serverId;
+    if (!isOnActiveServer) {
+      _showServerSwitchRequiredDialog(context, ref, widget.itemReference);
+      return;
+    }
+
+    final itemRef = widget.itemReference;
+    final bool isRootNav = Navigator.of(context).canPop() == false;
+
+    switch (itemRef.referencedItemType) {
+      case WorkbenchItemType.note:
+        Navigator.of(context, rootNavigator: isRootNav).pushNamed(
+          '/edit-entity',
+          arguments: {
+            'entityType': 'note',
+            'entityId': itemRef.referencedItemId,
+          },
+        );
+        break;
+      case WorkbenchItemType.task:
+        // Fetch task details before navigating to edit screen
+        ref
+            .read(taskDetailProvider(itemRef.referencedItemId).future)
+            .then((task) {
+              if (mounted) {
+                Navigator.of(context, rootNavigator: isRootNav).push(
+                  CupertinoPageRoute(
+                    builder: (context) => NewTaskScreen(taskToEdit: task),
+                  ),
+                );
+              }
+            })
+            .catchError((e) {
+              if (mounted) {
+                _showErrorDialog(
+                  context,
+                  'Failed to load task details for editing: $e',
+                );
+              }
+            });
+        break;
+      case WorkbenchItemType.comment:
+        _showAlertDialog(
+          context,
+          'Info',
+          'Comments cannot be edited directly.',
+        );
+        break;
+    }
+  }
+
+  // --- End Refactored Action Handlers ---
+
+  // --- Context Menu ---
+  void _showContextMenu(BuildContext context) {
+    final itemRef = widget.itemReference;
+    final bool isTask = itemRef.referencedItemType == WorkbenchItemType.task;
+    final bool isComment =
+        itemRef.referencedItemType == WorkbenchItemType.comment;
+    final bool isNote = itemRef.referencedItemType == WorkbenchItemType.note;
+
+    final activeServer = ref.read(activeServerConfigProvider);
+    final isOnActiveServer = activeServer?.id == itemRef.serverId;
+
+    showCupertinoModalPopup<void>(
+      context: context, // Use the context passed to this method
+      builder:
+          (BuildContext popupContext) => CupertinoActionSheet(
+            title: Text(
+              itemRef.previewContent?.substring(
+                    0,
+                    min(30, itemRef.previewContent?.length ?? 0),
+                  ) ??
+                  'Item Options',
+            ),
+            actions: <Widget>[
+              // View Details
+              CupertinoActionSheetAction(
+                child: const Text('View Details'),
+                onPressed: () {
+                  Navigator.pop(popupContext);
+                  if (isOnActiveServer) {
+                    _navigateToItem(
+                      context,
+                      ref,
+                      itemRef,
+                      commentIdToHighlight: null,
+                    );
+                  } else {
+                    _showServerSwitchRequiredDialog(context, ref, itemRef);
+                  }
+                },
+              ),
+              // Edit (Note/Task only)
+              if (!isComment)
+                CupertinoActionSheetAction(
+                  child: const Text('Edit'),
+                  onPressed: () {
+                    Navigator.pop(popupContext);
+                    _navigateToEdit();
+                  },
+                ),
+              // Toggle Complete (Task only)
+              if (isTask)
+                CupertinoActionSheetAction(
+                  child: const Text('Toggle Complete'),
+                  onPressed: () {
+                    Navigator.pop(popupContext);
+                    _handleToggleComplete();
+                  },
+                ),
+              // Copy Content
+              CupertinoActionSheetAction(
+                child: const Text('Copy Content'),
+                onPressed: () {
+                  Navigator.pop(popupContext);
+                  _copyContent();
+                },
+              ),
+              // Remove from Workbench
+              CupertinoActionSheetAction(
+                isDestructiveAction: true,
+                child: const Text('Remove from Workbench'),
+                onPressed: () {
+                  Navigator.pop(popupContext);
+                  _handleRemoveItem(); // Use refactored handler
+                },
+              ),
+              // Add other relevant actions here later (Pin, Archive, Dates etc.)
+              // These might require fetching full item details first.
+            ],
+            cancelButton: CupertinoActionSheetAction(
+              child: const Text('Cancel'),
+              onPressed: () {
+                Navigator.pop(popupContext);
+              },
+            ),
+          ),
+    );
+  }
+  // --- End Context Menu ---
+
   @override
   Widget build(BuildContext context) {
     final theme = CupertinoTheme.of(context);
-    final preview = widget.itemReference.previewContent ?? 'No preview available';
+    final preview =
+        widget.itemReference.previewContent ?? 'No preview available';
     final serverDisplayName =
         widget.itemReference.serverName ?? widget.itemReference.serverId;
     // Use last activity time for the header timestamp
@@ -93,21 +327,20 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
     final activeServer = ref.watch(activeServerConfigProvider);
     final isOnActiveServer = activeServer?.id == widget.itemReference.serverId;
 
-    final bool isTask = widget.itemReference.referencedItemType == WorkbenchItemType.task;
+    final bool isTask =
+        widget.itemReference.referencedItemType == WorkbenchItemType.task;
     final bool isCommentItem =
         widget.itemReference.referencedItemType == WorkbenchItemType.comment;
 
-    // Define action buttons for the hover bar
+    // Define action buttons for the hover bar, now using refactored handlers
     final List<Widget> actions = [
       // View Details / Navigate Action
       CupertinoButton(
         padding: const EdgeInsets.all(4),
         minSize: 0,
-        // tooltip: 'View Details', // Removed tooltip
         child: Icon(CupertinoIcons.eye, size: 18, color: theme.primaryColor),
         onPressed: () {
           if (isOnActiveServer) {
-            // Navigate to parent item, don't highlight specific comment from main action bar
             _navigateToItem(
               context,
               ref,
@@ -125,51 +358,12 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
         CupertinoButton(
           padding: const EdgeInsets.all(4),
           minSize: 0,
-          // tooltip: 'Toggle Complete', // Removed tooltip
-          child: Icon(CupertinoIcons.check_mark_circled, size: 18, color: theme.primaryColor),
-          onPressed: () async {
-             try {
-                final task = await ref.read(
-                  taskDetailProvider(widget.itemReference.referencedItemId).future,
-                );
-                bool success;
-                String actionVerb;
-                if (task.isCompleted) {
-                  actionVerb = 'reopened';
-                  success = await ref
-                      .read(tasksNotifierProvider.notifier)
-                      .reopenTask(task.id);
-                } else {
-                  actionVerb = 'completed';
-                  success = await ref
-                      .read(tasksNotifierProvider.notifier)
-                      .completeTask(task.id);
-                }
-                if (success && context.mounted) {
-                  _showAlertDialog(context, 'Success', 'Task $actionVerb.');
-                  unawaited(
-                    ref.read(workbenchProvider.notifier).refreshItemDetails(),
-                  );
-                  unawaited(
-                    ref.read(tasksNotifierProvider.notifier).fetchTasks(),
-                  );
-                } else if (!success && context.mounted) {
-                  _showAlertDialog(
-                    context,
-                    'Error',
-                    'Failed to toggle task status.',
-                  );
-                }
-              } catch (e) {
-                if (context.mounted) {
-                  _showAlertDialog(
-                    context,
-                    'Error',
-                    'Could not toggle task: $e',
-                  );
-                }
-              }
-          },
+          onPressed: _handleToggleComplete,
+          child: Icon(
+            CupertinoIcons.check_mark_circled,
+            size: 18,
+            color: theme.primaryColor,
+          ), // Use refactored handler
         ),
         const SizedBox(width: 6),
       ],
@@ -177,196 +371,187 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
       CupertinoButton(
         padding: const EdgeInsets.all(4),
         minSize: 0,
-        // tooltip: 'Remove from Workbench', // Removed tooltip
-        child: const Icon(CupertinoIcons.trash, size: 18, color: CupertinoColors.systemRed),
-        onPressed: () {
-           showCupertinoDialog(
-              context: context,
-              builder:
-                  (dialogContext) => CupertinoAlertDialog(
-                    title: const Text('Remove from Workbench?'),
-                    content: Text(
-                      'Remove "${preview.substring(0, preview.length > 30 ? 30 : preview.length)}..." from your Workbench?',
-                    ),
-                    actions: [
-                      CupertinoDialogAction(
-                        child: const Text('Cancel'),
-                        onPressed: () => Navigator.pop(dialogContext),
-                      ),
-                      CupertinoDialogAction(
-                        isDestructiveAction: true,
-                        child: const Text('Remove'),
-                        onPressed: () {
-                          Navigator.pop(dialogContext);
-                          unawaited(
-                            ref
-                                .read(workbenchProvider.notifier)
-                                .removeItem(widget.itemReference.id),
-                          );
-                        },
-                      ),
-                    ],
-                  ),
-            );
-        },
+        onPressed: _handleRemoveItem,
+        child: const Icon(
+          CupertinoIcons.trash,
+          size: 18,
+          color: CupertinoColors.systemRed,
+        ), // Use refactored handler
       ),
     ];
 
     return Container(
-      // Add horizontal padding to the outer container to indent the whole row slightly
       padding: const EdgeInsets.symmetric(horizontal: 8.0),
-      margin: const EdgeInsets.symmetric(vertical: 4), // Reduced vertical margin
+      margin: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start, // Align handle to top
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Drag Handle - Reduced Padding
+          // Drag Handle
           Padding(
-            // Add padding top to align better with content row
             padding: const EdgeInsets.only(top: 12.0, right: 6.0),
             child: ReorderableDragStartListener(
               index: widget.index,
               key: ValueKey('drag-handle-${widget.itemReference.id}'),
               child: Padding(
-                // Reduced horizontal padding
                 padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 4.0),
                 child: Icon(
                   CupertinoIcons.bars,
                   color: CupertinoColors.systemGrey2.resolveFrom(context),
-                  size: 20, // Slightly smaller handle
+                  size: 20,
                 ),
               ),
             ),
           ),
 
-          // Main Content Area (Expanded + Stack for hover actions)
+          // Main Content Area (Wrapped in GestureDetector for long-press)
           Expanded(
-            child: MouseRegion(
-              onEnter: (_) => setState(() => _isHovering = true),
-              onExit: (_) => setState(() => _isHovering = false),
-              child: GestureDetector(
-                 behavior: HitTestBehavior.opaque, // Ensures taps are caught over the whole area
-                 onTap: () {
-                   if (isOnActiveServer) {
-                    // Navigate to parent item, don't highlight specific comment from main tap
-                    _navigateToItem(
-                      context,
-                      ref,
-                      widget.itemReference,
-                      commentIdToHighlight: null,
-                    );
-                   } else {
-                     _showServerSwitchRequiredDialog(context, ref, widget.itemReference);
-                   }
-                 },
-                child: Stack(
-                  children: [
-                    // Main Content Column
-                    Padding(
-                      // Padding around the main content block
-                      padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Header Row: Server Icon + Name + Timestamp
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              Icon(
-                                _getServerTypeIcon(widget.itemReference.serverType),
-                                size: 16,
-                                color: CupertinoColors.secondaryLabel.resolveFrom(context),
-                              ),
-                              const SizedBox(width: 6),
-                              Expanded(
-                                child: Text(
-                                  serverDisplayName,
+            child: GestureDetector(
+              // Outer GestureDetector for long-press
+              onLongPress: () => _showContextMenu(context),
+              child: MouseRegion(
+                onEnter: (_) => setState(() => _isHovering = true),
+                onExit: (_) => setState(() => _isHovering = false),
+                child: GestureDetector(
+                  // Inner GestureDetector for tap
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () {
+                    if (isOnActiveServer) {
+                      _navigateToItem(
+                        context,
+                        ref,
+                        widget.itemReference,
+                        commentIdToHighlight: null,
+                      );
+                    } else {
+                      _showServerSwitchRequiredDialog(
+                        context,
+                        ref,
+                        widget.itemReference,
+                      );
+                    }
+                  },
+                  child: Stack(
+                    children: [
+                      // Main Content Column
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 8.0,
+                          horizontal: 4.0,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Header Row
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  _getServerTypeIcon(
+                                    widget.itemReference.serverType,
+                                  ),
+                                  size: 16,
+                                  color: CupertinoColors.secondaryLabel
+                                      .resolveFrom(context),
+                                ),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    serverDisplayName,
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      color: CupertinoColors.label.resolveFrom(
+                                        context,
+                                      ),
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                    maxLines: 1,
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  lastActivityRelative,
                                   style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
-                                    color: CupertinoColors.label.resolveFrom(context),
+                                    fontSize: 12,
+                                    color: CupertinoColors.tertiaryLabel
+                                        .resolveFrom(context),
                                   ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+
+                            // Preview Content
+                            if (!isCommentItem)
+                              Padding(
+                                padding: const EdgeInsets.only(
+                                  left: 4.0,
+                                  right: 4.0,
+                                ),
+                                child: Text(
+                                  preview,
+                                  style: TextStyle(
+                                    fontSize: 15,
+                                    color: CupertinoColors.label.resolveFrom(
+                                      context,
+                                    ),
+                                  ),
+                                  maxLines: 5,
                                   overflow: TextOverflow.ellipsis,
-                                  maxLines: 1,
                                 ),
                               ),
-                              const SizedBox(width: 6),
-                              Text(
-                                lastActivityRelative,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: CupertinoColors.tertiaryLabel.resolveFrom(context),
+                            if (!isCommentItem) const SizedBox(height: 8),
+
+                            // Comment Previews
+                            if (!isCommentItem)
+                              Padding(
+                                padding: const EdgeInsets.only(
+                                  left: 4.0,
+                                  right: 4.0,
+                                ),
+                                child: _buildCommentPreviews(
+                                  context,
+                                  ref,
+                                  widget.itemReference,
                                 ),
                               ),
-                            ],
-                          ),
-                          const SizedBox(height: 6),
-
-                          // Preview Content
-                          if (!isCommentItem) // Don't show main preview if the item *is* a comment
-                            Padding(
-                              padding: const EdgeInsets.only(
-                                left: 4.0,
-                                right: 4.0,
-                              ), // Indent slightly
-                              child: Text(
-                                preview,
-                                style: TextStyle(
-                                  fontSize: 15, // Slightly smaller main text
-                                  color: CupertinoColors.label.resolveFrom(
-                                    context,
-                                  ),
-                                ),
-                                maxLines: 5, // Allow more lines for preview
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          if (!isCommentItem)
-                            const SizedBox(
-                              height: 8,
-                            ), // Spacing only if preview exists
-
-                          // Comment Previews (if applicable)
-                          // Don't show comment previews if the item itself is a comment
-                          if (!isCommentItem)
-                            Padding(
-                              padding: const EdgeInsets.only(left: 4.0, right: 4.0), // Indent slightly
-                              child: _buildCommentPreviews(
-                                context,
-                                ref,
-                                widget.itemReference,
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-
-                    // Hover Action Bar (Top Right)
-                    if (_isHovering)
-                      Positioned(
-                        top: 4,
-                        right: 4,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: CupertinoColors.systemGrey5.resolveFrom(context),
-                            borderRadius: BorderRadius.circular(6),
-                            boxShadow: [
-                              BoxShadow(
-                                color: CupertinoColors.black.withAlpha(
-                                  (255 * 0.1).round(),
-                                ), // Use withAlpha
-                                blurRadius: 4,
-                                offset: const Offset(0, 1),
-                              )
-                            ]
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: actions,
-                          ),
+                          ],
                         ),
                       ),
-                  ],
+
+                      // Hover Action Bar
+                      if (_isHovering)
+                        Positioned(
+                          top: 4,
+                          right: 4,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: CupertinoColors.systemGrey5.resolveFrom(
+                                context,
+                              ),
+                              borderRadius: BorderRadius.circular(6),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: CupertinoColors.black.withAlpha(
+                                    (255 * 0.1).round(),
+                                  ),
+                                  blurRadius: 4,
+                                  offset: const Offset(0, 1),
+                                ),
+                              ],
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: actions,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -384,25 +569,17 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
   ) {
     final comments = itemRef.previewComments;
     if (comments.isEmpty) {
-      // Show "No comments yet" only if the item is not a comment itself
       if (itemRef.referencedItemType != WorkbenchItemType.comment) {
-        return _buildSingleCommentPreview(
-          context,
-          ref,
-          itemRef,
-          null,
-        ); // Pass null to show placeholder
+        return _buildSingleCommentPreview(context, ref, itemRef, null);
       } else {
-        return const SizedBox.shrink(); // Don't show anything if item is comment and no previews
+        return const SizedBox.shrink();
       }
     }
 
-    // Build previews for the available comments (max 2)
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: List.generate(comments.length, (index) {
         final comment = comments[index];
-        // Add spacing between comment previews
         final spacing =
             (index > 0) ? const SizedBox(height: 6) : const SizedBox.shrink();
         return Column(
@@ -417,7 +594,7 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
     );
   }
 
-  // Builds a single comment preview widget (or placeholder if comment is null)
+  // Builds a single comment preview widget
   Widget _buildSingleCommentPreview(
     BuildContext context,
     WidgetRef ref,
@@ -425,7 +602,7 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
     Comment? comment,
   ) {
     final textStyle = TextStyle(
-      fontSize: 14, // Slightly larger comment font
+      fontSize: 14,
       color: CupertinoColors.secondaryLabel.resolveFrom(context),
     );
     final italicStyle = textStyle.copyWith(
@@ -449,19 +626,17 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
     } else {
       content = Text(
         comment.content ?? '',
-        maxLines: 3, // Allow up to 3 lines
+        maxLines: 3,
         overflow: TextOverflow.ellipsis,
         style: textStyle,
       );
     }
 
-    // Make the comment preview tappable only if it's a real comment
     return GestureDetector(
       onTap:
           (comment == null)
               ? null
               : () {
-                // Navigate to parent item, highlighting this specific comment
                 final activeServer = ref.read(activeServerConfigProvider);
                 final isOnActiveServer = activeServer?.id == itemRef.serverId;
                 if (isOnActiveServer) {
@@ -477,10 +652,7 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
               },
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.symmetric(
-          horizontal: 10,
-          vertical: 8,
-        ), // More vertical padding
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         decoration: decoration,
         child: content,
       ),
@@ -488,54 +660,48 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
   }
 
 
-  // Helper for actual navigation (call AFTER server switch if needed)
-  // Added optional commentIdToHighlight parameter
+  // Helper for actual navigation
   Future<void> _navigateToItem(
     BuildContext context,
     WidgetRef ref,
     WorkbenchItemReference itemRef,
-  { String? commentIdToHighlight } // Optional parameter
+  {
+    String? commentIdToHighlight,
+  }
   ) async {
     final String itemId = itemRef.referencedItemId;
     final bool isRootNav = Navigator.of(context).canPop() == false;
 
-    // Determine the ID to navigate to (parent note/task ID)
     String targetItemId = itemId;
-    // If the workbench item *is* a comment, use its parentNoteId for navigation
     if (itemRef.referencedItemType == WorkbenchItemType.comment) {
-       targetItemId = itemRef.parentNoteId ?? itemId; // Fallback to itemId if parentNoteId is null
-       // Ensure the comment being tapped (if any) or the item itself is highlighted
+      targetItemId = itemRef.parentNoteId ?? itemId;
        commentIdToHighlight ??= itemId;
     }
 
-    // Prepare arguments, including the comment to highlight
     final Map<String, dynamic> arguments = {
       'itemId': targetItemId,
       if (commentIdToHighlight != null) 'commentIdToHighlight': commentIdToHighlight,
     };
 
-
     switch (itemRef.referencedItemType) {
       case WorkbenchItemType.note:
-      case WorkbenchItemType.comment: // Comments navigate to their parent note detail
+      case WorkbenchItemType.comment:
         if (targetItemId.isNotEmpty) {
            Navigator.of(context, rootNavigator: isRootNav).pushNamed(
-            '/item-detail', // Assuming this screen handles notes and their comments
+            '/item-detail',
             arguments: arguments,
           );
         } else {
-           _showErrorDialog(
+          _showErrorDialog(
             context,
             'Cannot navigate: Parent item ID is missing.',
           );
         }
         break;
       case WorkbenchItemType.task:
-        // Task navigation might not support comment highlighting directly in NewTaskScreen
-        // For now, just navigate to the task edit screen.
         try {
           final task = await ref.read(taskDetailProvider(itemId).future);
-          if (context.mounted) {
+          if (mounted) {
             Navigator.of(context, rootNavigator: isRootNav).push(
               CupertinoPageRoute(
                 builder: (context) => NewTaskScreen(taskToEdit: task),
@@ -543,7 +709,7 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
             );
           }
         } catch (e) {
-          if (context.mounted) {
+          if (mounted) {
             _showErrorDialog(context, 'Failed to load task details: $e');
           }
         }
@@ -570,7 +736,7 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
     );
   }
 
-  // Server Switch Dialog (remains the same)
+  // Server Switch Dialog
   void _showServerSwitchRequiredDialog(
     BuildContext context,
     WidgetRef ref,
@@ -636,12 +802,11 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
 
                   try {
                     await completer.future.timeout(const Duration(seconds: 5));
-                    if (context.mounted) {
-                      // After switching, navigate again (don't highlight comment on switch)
+                    if (mounted) {
                       _navigateToItem(context, ref, itemRef, commentIdToHighlight: null);
                     }
                   } catch (e) {
-                    if (context.mounted) {
+                    if (mounted) {
                       _showAlertDialog(
                         context,
                         'Error',
