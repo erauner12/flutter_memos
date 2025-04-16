@@ -174,83 +174,154 @@ class PersistentStringNotifier extends StateNotifier<String> {
           );
         }
 
-        // Compare CloudKit value with current state (which came from cache/prefs)
-        if (cloudValue != null && cloudValue != state) {
-          if (kDebugMode) {
-            print(
-              '[PersistentStringNotifier] CloudKit value for $preferenceKey differs. Updating state and Secure Storage.',
-            );
-          }
-          if (mounted) {
-            state = cloudValue; // Update state
-          }
-          await _secureStorage.write(
-            key: preferenceKey,
-            value: cloudValue,
-          ); // Update cache
-          migrationNeededFromPrefs = false;
-          if (oldPrefsValue != null) {
-            await prefs.remove(preferenceKey);
-            if (kDebugMode) {
-              print(
-                '[PersistentStringNotifier] Cleaned up stale SharedPreferences value for $preferenceKey after CloudKit update.',
+        // --- START REVISED CloudKit vs Local State Logic ---
+        if (cloudValue != null) {
+          // CloudKit has a value (could be empty string)
+          if (cloudValue != state) {
+            // CloudKit value differs from local state
+            if (cloudValue.isEmpty && state.isNotEmpty) {
+              // CloudKit is empty, but local state is not. Upload local state.
+              if (kDebugMode) {
+                print(
+                  '[PersistentStringNotifier] CloudKit value for $preferenceKey is empty, but local state exists. Uploading local state...',
+                );
+              }
+              final uploadSuccess = await _cloudKitService.saveSetting(
+                preferenceKey,
+                state,
               );
+              // Handle migration cleanup if needed after upload
+              if (uploadSuccess &&
+                  migrationNeededFromPrefs &&
+                  oldPrefsValue != null) {
+                await prefs.remove(preferenceKey);
+                if (kDebugMode) {
+                  print(
+                    '[PersistentStringNotifier] Migration cleanup complete for $preferenceKey after successful upload (CloudKit was empty).',
+                  );
+                }
+                migrationNeededFromPrefs = false;
+              }
+            } else {
+              // CloudKit has a non-empty value different from local state. CloudKit wins.
+              if (kDebugMode) {
+                print(
+                  '[PersistentStringNotifier] CloudKit value for $preferenceKey differs and is non-empty. Updating state and Secure Storage.',
+                );
+              }
+              if (mounted) {
+                state = cloudValue; // Update state
+              }
+              await _secureStorage.write(
+                key: preferenceKey,
+                value: cloudValue,
+              ); // Update cache
+              migrationNeededFromPrefs =
+                  false; // CloudKit value overrides potential migration
+              if (oldPrefsValue != null) {
+                await prefs.remove(preferenceKey);
+                if (kDebugMode) {
+                  print(
+                    '[PersistentStringNotifier] Cleaned up stale SharedPreferences value for $preferenceKey after CloudKit update.',
+                  );
+                }
+              }
+            }
+          } else {
+            // CloudKit value matches local state. Check if migration cleanup is needed.
+            if (migrationNeededFromPrefs && oldPrefsValue != null) {
+              await prefs.remove(preferenceKey);
+              if (kDebugMode) {
+                print(
+                  '[PersistentStringNotifier] CloudKit matched migrated value. Cleaned up SharedPreferences for $preferenceKey.',
+                );
+              }
+              migrationNeededFromPrefs = false;
             }
           }
-        } else if (cloudValue == null && state.isNotEmpty) {
-          if (kDebugMode) {
-            print(
-              '[PersistentStringNotifier] Value for $preferenceKey exists locally but not in CloudKit. Uploading...',
-            );
-          }
-          final uploadSuccess = await _cloudKitService.saveSetting(
-            preferenceKey,
-            state,
-          );
-          if (uploadSuccess &&
-              migrationNeededFromPrefs &&
-              oldPrefsValue != null) {
-            await prefs.remove(preferenceKey);
+        } else {
+          // cloudValue == null
+          // CloudKit has no value
+          if (state.isNotEmpty) {
+            // Local state exists. Upload it.
             if (kDebugMode) {
               print(
-                '[PersistentStringNotifier] Migration cleanup complete for $preferenceKey after successful upload.',
+                '[PersistentStringNotifier] Value for $preferenceKey exists locally but not in CloudKit. Uploading...',
               );
             }
-            migrationNeededFromPrefs = false;
-          }
-        } else if (cloudValue != null &&
-            migrationNeededFromPrefs &&
-            oldPrefsValue != null &&
-            cloudValue == oldPrefsValue) {
-          await prefs.remove(preferenceKey);
-          if (kDebugMode) {
-            print(
-              '[PersistentStringNotifier] CloudKit matched migrated value. Cleaned up SharedPreferences for $preferenceKey.',
+            final uploadSuccess = await _cloudKitService.saveSetting(
+              preferenceKey,
+              state,
             );
+            // Handle migration cleanup if needed after upload
+            if (uploadSuccess &&
+                migrationNeededFromPrefs &&
+                oldPrefsValue != null) {
+              await prefs.remove(preferenceKey);
+              if (kDebugMode) {
+                print(
+                  '[PersistentStringNotifier] Migration cleanup complete for $preferenceKey after successful upload (CloudKit was null).',
+                );
+              }
+              migrationNeededFromPrefs = false;
+            }
+          } else {
+            // Both local and CloudKit are empty/null. Check migration.
+            if (migrationNeededFromPrefs && oldPrefsValue != null) {
+              // This case shouldn't really happen if oldPrefsValue was used for initial state
+              // but handle defensively. Write migrated value to secure storage.
+              if (kDebugMode) {
+                print(
+                  '[PersistentStringNotifier] Performing migration cleanup for $preferenceKey (CloudKit null, state empty)...',
+                );
+              }
+              await _secureStorage.write(
+                key: preferenceKey,
+                value: oldPrefsValue,
+              );
+              await prefs.remove(preferenceKey);
+              migrationNeededFromPrefs = false;
+            }
           }
-          migrationNeededFromPrefs = false;
         }
 
+        // Final migration cleanup if it wasn't handled above (e.g., CloudKit check failed)
         if (migrationNeededFromPrefs && oldPrefsValue != null) {
           if (kDebugMode) {
             print(
-              '[PersistentStringNotifier] Performing migration cleanup for $preferenceKey (post-CloudKit check)...',
+              '[PersistentStringNotifier] Performing final migration cleanup for $preferenceKey (post-CloudKit check)...',
             );
           }
           await _secureStorage.write(key: preferenceKey, value: oldPrefsValue);
           await prefs.remove(preferenceKey);
           if (kDebugMode) {
             print(
-              '[PersistentStringNotifier] Migration cleanup complete for $preferenceKey.',
+              '[PersistentStringNotifier] Final migration cleanup complete for $preferenceKey.',
             );
           }
         }
+        // --- END REVISED CloudKit vs Local State Logic ---
 
       } catch (e) {
         if (kDebugMode) {
           print(
             '[PersistentStringNotifier] Error during async CloudKit check for $preferenceKey: $e',
           );
+        }
+        // If CloudKit check fails, ensure migration cleanup still happens if needed
+        if (migrationNeededFromPrefs && oldPrefsValue != null) {
+          if (kDebugMode) {
+            print(
+              '[PersistentStringNotifier] Performing migration cleanup for $preferenceKey after CloudKit error...',
+            );
+          }
+          await _secureStorage.write(key: preferenceKey, value: oldPrefsValue);
+          await prefs.remove(preferenceKey);
+          if (kDebugMode) {
+            print(
+              '[PersistentStringNotifier] Migration cleanup complete for $preferenceKey after CloudKit error.',
+            );
+          }
         }
       }
     } else {
