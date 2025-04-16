@@ -10,6 +10,7 @@ import 'package:flutter_memos/providers/server_config_provider.dart';
 import 'package:flutter_memos/providers/settings_provider.dart'; // Import settings provider
 import 'package:flutter_memos/screens/add_edit_mcp_server_screen.dart'; // Will be created next
 import 'package:flutter_memos/screens/add_edit_server_screen.dart';
+import 'package:flutter_memos/services/base_api_service.dart'; // Import BaseApiService
 // Import MCP client provider (for status later)
 import 'package:flutter_memos/services/mcp_client_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -23,7 +24,7 @@ class SettingsScreen extends ConsumerStatefulWidget {
 }
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
-  // Memos server state
+  // Memos/Blinko server state
   bool _isTestingConnection = false;
 
   // Todoist state
@@ -48,8 +49,24 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     // Initialize controllers after the first frame ensures providers are ready
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-        final initialTodoistKey = ref.read(todoistApiKeyProvider);
+        // Find the Todoist "server" config to initialize the key field, if one exists
+        final serverConfigs = ref.read(multiServerConfigProvider).servers;
+        final todoistConfig = serverConfigs.firstWhere(
+          (s) => s.serverType == ServerType.todoist,
+          orElse:
+              () => ServerConfig(
+                serverUrl: '',
+                authToken: '',
+                serverType: ServerType.todoist,
+              ), // Return dummy if none found
+        );
+        // Use the globally persisted key first, then fallback to config if needed
+        final initialTodoistKey =
+            ref.read(todoistApiKeyProvider).isNotEmpty
+                ? ref.read(todoistApiKeyProvider)
+                : todoistConfig.authToken; // Fallback to config's token
         _todoistApiKeyController.text = initialTodoistKey;
+
 
         final initialOpenAiKey = ref.read(openAiApiKeyProvider);
         _openaiApiKeyController.text = initialOpenAiKey;
@@ -131,7 +148,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
-  // Test Memos connection
+  // Test Memos/Blinko connection (should not be called for Todoist)
   Future<void> _testConnection() async {
     FocusScope.of(context).unfocus();
     final activeConfig = ref.read(activeServerConfigProvider);
@@ -139,32 +156,62 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     if (activeConfig == null) {
       _showResultDialog(
         'No Active Server',
-        'Please select or add a Memos server configuration first.',
+        'Please select or add a server configuration first.',
         isError: true,
       );
       return;
     }
 
+    // This button should be disabled if active server is Todoist
+    if (activeConfig.serverType == ServerType.todoist) {
+      _showResultDialog(
+        'Info',
+        'Test Todoist connection via the Integrations section below.',
+      );
+      return;
+    }
+
     setState(() => _isTestingConnection = true);
+    // Get the service (already configured by the provider)
     final apiService = ref.read(apiServiceProvider);
 
+    // Check if it's a dummy service (e.g., URL was empty)
+    if (apiService is DummyApiService || !apiService.isConfigured) {
+      _showResultDialog(
+        'Configuration Error',
+        'The active server is not properly configured.',
+        isError: true,
+      );
+      setState(() => _isTestingConnection = false);
+      return;
+    }
+
+
     try {
-      // Use listNotes with minimal parameters for health check
-      await apiService.listNotes(pageSize: 1);
+      // Use checkHealth for Memos/Blinko
+      final isHealthy = await apiService.checkHealth();
       if (mounted) {
-        _showResultDialog(
-          'Success',
-          'Connection to Memos server "${activeConfig.name ?? activeConfig.serverUrl}" successful!',
-        );
+        if (isHealthy) {
+          _showResultDialog(
+            'Success',
+            'Connection to ${activeConfig.serverType.name} server "${activeConfig.name ?? activeConfig.serverUrl}" successful!',
+          );
+        } else {
+          _showResultDialog(
+            'Connection Failed',
+            'Could not connect to ${activeConfig.serverType.name} server "${activeConfig.name ?? activeConfig.serverUrl}". Check configuration.',
+            isError: true,
+          );
+        }
       }
     } catch (e) {
       if (kDebugMode) {
-        print("[SettingsScreen] Test Memos Connection Error: \$e");
+        print("[SettingsScreen] Test Connection Error: \$e");
       }
       if (mounted) {
         _showResultDialog(
           'Connection Failed',
-          'Could not connect to Memos server "${activeConfig.name ?? activeConfig.serverUrl}".\n\nError: ${e.toString()}',
+          'Could not connect to ${activeConfig.serverType.name} server "${activeConfig.name ?? activeConfig.serverUrl}".\n\nError: ${e.toString()}',
           isError: true,
         );
       }
@@ -173,11 +220,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
   }
 
-  // Test Todoist connection
+  // Test Todoist connection (using the dedicated service provider)
   Future<void> _testTodoistConnection() async {
     FocusScope.of(context).unfocus();
+    // Use the dedicated Todoist service provider
     final todoistService = ref.read(todoistApiServiceProvider);
-    final currentKey = ref.read(todoistApiKeyProvider);
+    final currentKey = ref.read(
+      todoistApiKeyProvider,
+    ); // Read the globally saved key
 
     if (currentKey.isEmpty) {
       _showResultDialog(
@@ -187,6 +237,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       );
       return;
     }
+    // Check if the dedicated service is configured (it should be if key is not empty)
     if (!todoistService.isConfigured) {
       _showResultDialog(
         'Service Not Configured',
@@ -199,6 +250,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     setState(() => _isTestingTodoistConnection = true);
 
     try {
+      // Use the checkHealth method of the TodoistApiService instance
       final isHealthy = await todoistService.checkHealth();
       if (mounted) {
         if (isHealthy) {
@@ -281,6 +333,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
   }
 
+  // Show actions for Memos/Blinko/Todoist servers
   void _showServerActions(
     BuildContext context,
     ServerConfig server,
@@ -288,14 +341,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     bool isActive,
     bool isDefault,
   ) {
+    final bool isTodoist = server.serverType == ServerType.todoist;
+    final String displayName =
+        server.name ?? (isTodoist ? 'Todoist Config' : server.serverUrl);
+    final String subtitle =
+        isTodoist ? 'Todoist Integration' : server.serverUrl;
+
     showCupertinoModalPopup<void>(
       context: context,
       builder:
           (BuildContext context) => CupertinoActionSheet(
-            title: Text(server.name ?? server.serverUrl),
-            // Update message based on connection type - ALWAYS SHOW HOST/PORT
+            title: Text(displayName),
             message: Text(
-              server.serverUrl,
+              subtitle,
               style: const TextStyle(fontSize: 13),
             ),
             actions: <CupertinoActionSheetAction>[
@@ -320,6 +378,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     Navigator.pop(context);
                   },
                 ),
+              // Default setting might be less relevant for Todoist, but keep for consistency?
               if (!isDefault)
                 CupertinoActionSheetAction(
                   child: const Text('Set Default'),
@@ -347,7 +406,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         (context) => CupertinoAlertDialog(
                           title: const Text('Delete Server?'),
                           content: Text(
-                            'Are you sure you want to delete "${server.name ?? server.serverUrl}"?',
+                            'Are you sure you want to delete "$displayName"?',
                           ),
                           actions: [
                             CupertinoDialogAction(
@@ -363,21 +422,24 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         ),
                   );
                   if (confirmed == true) {
-                    // MODIFY: Call removeServer on the new notifier
+                    // Use the correct notifier (multiServerConfigProvider)
                     final success = await ref
-                        .read(mcpServerConfigProvider.notifier)
+                        .read(multiServerConfigProvider.notifier)
                         .removeServer(server.id);
                     if (!success && mounted) {
                       _showResultDialog(
                         'Error',
-                        'Failed to delete MCP server.',
+                        'Failed to delete server.',
                         isError: true,
                       );
                     } else if (success && mounted) {
                       _showResultDialog(
                         'Deleted',
-                        'MCP Server "${server.name}" deleted.',
+                        'Server "$displayName" deleted.',
                       );
+                      // If the deleted server was Todoist, clear the global key?
+                      // Or assume the user manages the key separately in Integrations.
+                      // Let's keep them separate for now.
                     }
                   }
                 },
@@ -524,52 +586,58 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 },
               ),
               // Add other actions if needed (e.g., Duplicate)
+              CupertinoActionSheetAction(
+                // Make Delete an action, not the cancel button
+                isDestructiveAction: true,
+                child: const Text('Delete'),
+                onPressed: () async {
+                  Navigator.pop(context); // Close action sheet
+                  final confirmed = await showCupertinoDialog<bool>(
+                    context: context,
+                    builder:
+                        (context) => CupertinoAlertDialog(
+                          title: const Text('Delete MCP Server?'),
+                          content: Text(
+                            'Are you sure you want to delete "${server.name}"?',
+                          ),
+                          actions: [
+                            CupertinoDialogAction(
+                              child: const Text('Cancel'),
+                              onPressed: () => Navigator.of(context).pop(false),
+                            ),
+                            CupertinoDialogAction(
+                              isDestructiveAction: true,
+                              child: const Text('Delete'),
+                              onPressed: () => Navigator.of(context).pop(true),
+                            ),
+                          ],
+                        ),
+                  );
+                  if (confirmed == true) {
+                    // MODIFY: Call removeServer on the new notifier
+                    final success = await ref
+                        .read(mcpServerConfigProvider.notifier)
+                        .removeServer(server.id);
+                    if (!success && mounted) {
+                      _showResultDialog(
+                        'Error',
+                        'Failed to delete MCP server.',
+                        isError: true,
+                      );
+                    } else if (success && mounted) {
+                      _showResultDialog(
+                        'Deleted',
+                        'MCP Server "${server.name}" deleted.',
+                      );
+                    }
+                  }
+                },
+              ),
             ],
             cancelButton: CupertinoActionSheetAction(
-              isDestructiveAction: true,
-              child: const Text('Delete'),
-              onPressed: () async {
-                Navigator.pop(context); // Close action sheet
-                final confirmed = await showCupertinoDialog<bool>(
-                  context: context,
-                  builder:
-                      (context) => CupertinoAlertDialog(
-                        title: const Text('Delete MCP Server?'),
-                        content: Text(
-                          'Are you sure you want to delete "${server.name}"?',
-                        ),
-                        actions: [
-                          CupertinoDialogAction(
-                            child: const Text('Cancel'),
-                            onPressed: () => Navigator.of(context).pop(false),
-                          ),
-                          CupertinoDialogAction(
-                            isDestructiveAction: true,
-                            child: const Text('Delete'),
-                            onPressed: () => Navigator.of(context).pop(true),
-                          ),
-                        ],
-                      ),
-                );
-                if (confirmed == true) {
-                  // MODIFY: Call removeServer on the new notifier
-                  final success = await ref
-                      .read(mcpServerConfigProvider.notifier)
-                      .removeServer(server.id);
-                  if (!success && mounted) {
-                    _showResultDialog(
-                      'Error',
-                      'Failed to delete MCP server.',
-                      isError: true,
-                    );
-                  } else if (success && mounted) {
-                    _showResultDialog(
-                      'Deleted',
-                      'MCP Server "${server.name}" deleted.',
-                    );
-                  }
-                }
-              },
+              // Add a separate Cancel button
+              child: const Text('Cancel'),
+              onPressed: () => Navigator.pop(context),
             ),
           ),
     );
@@ -673,6 +741,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
+  // Helper to get appropriate icon for server type
+  IconData _getServerIcon(ServerType type) {
+    switch (type) {
+      case ServerType.memos:
+        return CupertinoIcons.bolt_horizontal_circle_fill;
+      case ServerType.blinko:
+        return CupertinoIcons.sparkles;
+      case ServerType.todoist:
+        return CupertinoIcons.check_mark_circled; // Example icon for Todoist
+    }
+  }
+
+
   @override
   Widget build(BuildContext context) {
     final multiServerState = ref.watch(multiServerConfigProvider);
@@ -680,6 +761,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final activeServerId = multiServerState.activeServerId;
     final defaultServerId = multiServerState.defaultServerId;
     final notifier = ref.read(multiServerConfigProvider.notifier);
+
+    // Get active config to check its type for the test button
+    final activeConfig = ref.watch(activeServerConfigProvider);
+    final bool isTodoistActive = activeConfig?.serverType == ServerType.todoist;
 
     final bool automaticallyImplyLeading = !widget.isInitialSetup;
 
@@ -693,7 +778,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Button to add Memos server
+              // Button to add Memos/Blinko/Todoist server
               CupertinoButton(
                 padding: EdgeInsets.zero,
                 onPressed: () {
@@ -752,7 +837,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            'Please add your Memos server details to get started.',
+                            'Please add your Memos/Blinko/Todoist server details to get started.', // Updated text
                             style: TextStyle(color: CupertinoColors.systemBlue),
                           ),
                         ),
@@ -760,9 +845,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     ),
                   ),
                 ),
-              // Server List Section
+              // Server List Section (Memos/Blinko/Todoist)
               CupertinoListSection.insetGrouped(
-                header: const Text('MEMOS SERVERS'),
+                header: const Text(
+                  'SERVERS (Memos, Blinko, Todoist)',
+                ), // Updated header
                 footer:
                     servers.isEmpty
                         ? const Padding(
@@ -781,10 +868,22 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ...servers.map((server) {
                     final bool isActive = server.id == activeServerId;
                     final bool isDefault = server.id == defaultServerId;
+                    final bool isTodoist =
+                        server.serverType == ServerType.todoist;
+                    final String displayName =
+                        server.name ??
+                        (isTodoist ? 'Todoist Config' : server.serverUrl);
+                    final String subtitle =
+                        isTodoist
+                            ? 'Todoist Integration'
+                            : (server.name != null
+                                ? server.serverUrl
+                                : 'No name');
+
                     return CupertinoListTile(
-                      title: Text(server.name ?? server.serverUrl),
+                      title: Text(displayName),
                       subtitle: Text(
-                        server.name != null ? server.serverUrl : 'No name',
+                        subtitle,
                         style: TextStyle(
                           fontSize: 12,
                           color: CupertinoColors.secondaryLabel.resolveFrom(
@@ -793,6 +892,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         ),
                       ),
                       leading: Icon(
+                        // Use leading icon for active status
                         isActive
                             ? CupertinoIcons.check_mark_circled_solid
                             : CupertinoIcons.circle,
@@ -804,6 +904,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
+                          Padding(
+                            // Add server type icon before default star
+                            padding: const EdgeInsets.only(right: 8.0),
+                            child: Icon(
+                              _getServerIcon(server.serverType),
+                              size: 18,
+                              color: CupertinoColors.tertiaryLabel.resolveFrom(
+                                context,
+                              ),
+                            ),
+                          ),
                           if (isDefault)
                             const Padding(
                               padding: EdgeInsets.only(right: 8.0),
@@ -835,7 +946,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   }),
                 ],
               ),
-              // Test Memos Connection Button
+              // Test Active Connection Button
               Padding(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 16.0,
@@ -843,8 +954,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ),
                 child: CupertinoButton.filled(
                   padding: const EdgeInsets.symmetric(vertical: 12),
+                  // Disable if testing, no active server, or active server is Todoist
                   onPressed:
-                      _isTestingConnection || activeServerId == null
+                      _isTestingConnection ||
+                              activeServerId == null ||
+                              isTodoistActive
                           ? null
                           : _testConnection,
                   child:
@@ -852,12 +966,20 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           ? const CupertinoActivityIndicator(
                             color: CupertinoColors.white,
                           )
-                          : const Row(
+                          : Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(CupertinoIcons.link),
-                              SizedBox(width: 8),
-                              Text('Test Active Memos Connection'),
+                              Icon(
+                                isTodoistActive
+                                    ? CupertinoIcons.nosign
+                                    : CupertinoIcons.link,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                isTodoistActive
+                                    ? 'Test Todoist via Integrations'
+                                    : 'Test Active Connection',
+                              ),
                             ],
                           ),
                 ),
@@ -898,16 +1020,68 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           CupertinoButton(
                             padding: const EdgeInsets.symmetric(horizontal: 16),
                             color: CupertinoColors.activeBlue,
-                            onPressed: () {
-                              final newKey = _todoistApiKeyController.text;
-                              ref
+                            onPressed: () async {
+                              // Make async
+                              final newKey =
+                                  _todoistApiKeyController.text.trim();
+                              // Save the key globally using the settings provider
+                              final success = await ref
                                   .read(todoistApiKeyProvider.notifier)
                                   .set(newKey);
+
                               FocusScope.of(context).unfocus();
-                              _showResultDialog(
-                                'API Key Updated',
-                                'Todoist API key has been saved.',
-                              );
+
+                              if (success) {
+                                // Also update the token in the *first* Todoist server config found
+                                final serverNotifier = ref.read(
+                                  multiServerConfigProvider.notifier,
+                                );
+                                final todoistServer = ref
+                                    .read(multiServerConfigProvider)
+                                    .servers
+                                    .firstWhere(
+                                      (s) => s.serverType == ServerType.todoist,
+                                      orElse:
+                                          () => ServerConfig(
+                                            serverUrl: '',
+                                            authToken: '',
+                                            serverType: ServerType.todoist,
+                                          ), // Dummy
+                                    );
+                                // Check if a real Todoist config exists before updating
+                                if (todoistServer.id.isNotEmpty &&
+                                    todoistServer.authToken != newKey) {
+                                  await serverNotifier.updateServer(
+                                    todoistServer.copyWith(authToken: newKey),
+                                  );
+                                  if (kDebugMode) {
+                                    print(
+                                      "[SettingsScreen] Updated Todoist server config token.",
+                                    );
+                                  }
+                                } else if (todoistServer.id.isEmpty &&
+                                    newKey.isNotEmpty) {
+                                  // Optionally prompt user to create a Todoist server config if none exists
+                                  if (kDebugMode) {
+                                    print(
+                                      "[SettingsScreen] Todoist API key saved, but no Todoist server config found.",
+                                    );
+                                  }
+                                }
+
+                                _showResultDialog(
+                                  'API Key Updated',
+                                  'Todoist API key has been saved.',
+                                );
+                                // Trigger health check after saving
+                                ref.read(todoistApiHealthCheckerProvider);
+                              } else {
+                                _showResultDialog(
+                                  'Error',
+                                  'Failed to save Todoist API key.',
+                                  isError: true,
+                                );
+                              }
                             },
                             child: const Text(
                               'Save',
@@ -984,7 +1158,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                   'API Key Updated',
                                   'OpenAI API key has been saved.',
                                 );
-                                _fetchModels();
+                                _fetchModels(); // Fetch models after saving key
+                                // Trigger health check
+                                ref.read(openaiApiHealthCheckerProvider);
                               } else {
                                 _showResultDialog(
                                   'Error',
@@ -1125,6 +1301,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                   'API Key Updated',
                                   'Gemini API key has been saved.',
                                 );
+                                // TODO: Add Gemini health check trigger if implemented
                               } else {
                                 _showResultDialog(
                                   'Error',
@@ -1229,7 +1406,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       ),
                       SizedBox(height: 8),
                       Text(
-                        'Tap a server to make it active.\nUse "..." to Edit, Delete, or set a Default server.\n\nThe Memos authentication token (Access Token) is under Settings > My Account on your server.',
+                        'Tap a server to make it active.\nUse "..." to Edit, Delete, or set a Default server.\n\nFor Memos/Blinko, the authentication token (Access Token) is under Settings > My Account on your server.\n\nFor Todoist, add a server entry and use your Todoist API Key (found in Todoist Settings > Integrations > Developer).', // Updated help text
                         style: TextStyle(fontSize: 14),
                       ),
                       SizedBox(height: 12),
@@ -1248,7 +1425,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       ),
                       SizedBox(height: 8),
                       Text(
-                        'API keys for integrations like Todoist, OpenAI, and Gemini are stored locally on your device.',
+                        'API keys for integrations like Todoist, OpenAI, and Gemini are stored locally on your device. The Todoist key entered here is used for the integration.', // Updated help text
                         style: TextStyle(fontSize: 14),
                       ),
                     ],
