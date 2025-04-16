@@ -33,12 +33,6 @@ final Map<String, QuickFilterPreset> quickFilterPresets = {
     celFilter: FilterPresets.todayFilter(),
     icon: CupertinoIcons.today,
   ),
-  'tagged': QuickFilterPreset(
-    key: 'tagged',
-    label: 'Tagged',
-    celFilter: FilterPresets.taggedFilter(),
-    icon: CupertinoIcons.tag,
-  ),
   'all': QuickFilterPreset(
     key: 'all',
     label: 'All',
@@ -104,9 +98,6 @@ final filterKeyProvider = StateProvider<String>(
   }
   if (presetKey == 'all') {
     return 'all'; // Assuming 'all' preset maps to 'all' key
-  }
-  if (presetKey == 'tagged') {
-    return 'all'; // Example: Maybe 'tagged' should show 'all' states? Adjust as needed.
   }
   if (presetKey == 'today') {
     return 'all'; // Example: Maybe 'today' should show 'all' states? Adjust as needed.

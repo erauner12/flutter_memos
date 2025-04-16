@@ -418,11 +418,10 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
     final selectedPresetKey = ref.watch(quickFilterPresetProvider);
     final theme = CupertinoTheme.of(context);
 
-    // Define the desired order, starting with 'today'
+    // Define the desired order, starting with 'today', removing 'tagged'
     const List<String> desiredOrder = [
       'today',
       'inbox',
-      'tagged',
       'all',
       'hidden',
     ];

@@ -264,9 +264,6 @@ class _AdvancedFilterPanelState extends ConsumerState<AdvancedFilterPanel> {
       case 'untagged':
         filter = FilterPresets.untaggedFilter();
         break;
-      case 'tagged':
-        filter = FilterPresets.taggedFilter();
-        break;
       case 'public':
         filter = 'visibility == "PUBLIC"';
         break;
@@ -461,7 +458,6 @@ class _AdvancedFilterPanelState extends ConsumerState<AdvancedFilterPanel> {
                             _buildPresetChip('this_week', 'This Week'),
                             _buildPresetChip('important', 'Important'),
                             _buildPresetChip('untagged', 'Untagged'),
-                            _buildPresetChip('tagged', 'Tagged'),
                             _buildPresetChip('public', 'Public'),
                             _buildPresetChip('private', 'Private'),
                           ],
