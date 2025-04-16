@@ -469,8 +469,11 @@ class TodoistApiService implements TaskApiService {
       final commentItems =
           comments
               ?.map(
-                (c) => Comment.fromTodoistComment(c, taskId),
-              ) // Assuming a factory exists
+                (c) => Comment.fromTodoistComment(
+                  c,
+                  taskId,
+                ), // Pass taskId as context
+              )
               .toList() ??
           [];
 
@@ -516,9 +519,7 @@ class TodoistApiService implements TaskApiService {
       }
 
       // Map to app's Comment model
-      // We need the parent task ID for context, which isn't directly available from getComment response easily
-      // This highlights a potential mismatch if the app's Comment model *requires* parentId.
-      // Let's assume the factory can handle a potentially null parentId or we fetch it separately if needed.
+      // Pass the taskId from the fetched comment as context
       final commentItem = Comment.fromTodoistComment(
         todoistComment,
         todoistComment.taskId,
@@ -577,7 +578,7 @@ class TodoistApiService implements TaskApiService {
       // Map back to app's Comment model
       final createdCommentItem = Comment.fromTodoistComment(
         createdTodoistComment,
-        taskId,
+        taskId, // Provide taskId context
       );
 
       if (verboseLogging) {
@@ -629,6 +630,7 @@ class TodoistApiService implements TaskApiService {
       }
 
       // Map back to app's Comment model
+      // Pass taskId from the updated comment object as context
       final updatedCommentItem = Comment.fromTodoistComment(
         updatedTodoistComment,
         updatedTodoistComment.taskId,
