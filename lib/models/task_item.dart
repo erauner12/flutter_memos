@@ -49,30 +49,50 @@ class TaskItem {
 
   /// Factory to create TaskItem from a todoist.Task
   factory TaskItem.fromTodoistTask(todoist.Task task, String serverId) {
+    // Access the nested Due object within TaskDue
+    final todoistDue = task.due?.dueObject;
+
     // Prefer datetime if available, else date, else null
-    DateTime? dueDate;
-    if (task.due?.dueObject?.datetime != null) {
-      dueDate = task.due!.dueObject!.datetime;
-    } else if (task.due?.dueObject?.date != null) {
-      dueDate = task.due!.dueObject!.date;
+    DateTime? parsedDueDate;
+    if (todoistDue?.datetime != null) {
+      parsedDueDate = todoistDue!.datetime;
+    } else if (todoistDue?.date != null) {
+      // Todoist date is just YYYY-MM-DD, parse it as such.
+      // DateTime.tryParse might require time components, use specific format parsing if needed
+      // For simplicity, assuming DateTime.tryParse handles 'YYYY-MM-DD' correctly,
+      // or consider using a date formatting library if issues arise.
+      // Let's ensure it parses correctly, assuming local timezone for date-only values.
+      try {
+        parsedDueDate = DateTime.parse(
+          todoistDue!.date.toIso8601String().substring(0, 10),
+        );
+      } catch (e) {
+        if (kDebugMode) {
+          print("Error parsing todoist date string ${todoistDue!.date}: $e");
+        }
+        // Fallback or leave null
+      }
     }
 
     return TaskItem(
-      id: task.id?.toString() ?? '',
+      // Ensure ID is treated as String consistently
+      id: task.id ?? '', // Todoist Task ID is String
       serverId: serverId,
       content: task.content ?? '',
-      description: task.description,
+      description: task.description ?? '', // Default to empty string if null
       isCompleted: task.isCompleted ?? false,
       priority: task.priority ?? 1,
-      dueDate: dueDate,
-      dueString: task.due?.dueObject?.string,
-      isRecurring: task.due?.dueObject?.isRecurring ?? false,
-      labels: task.labels,
+      dueDate: parsedDueDate,
+      dueString: todoistDue?.string,
+      isRecurring: todoistDue?.isRecurring ?? false,
+      labels: task.labels, // Ensure labels list is not null
       projectId: task.projectId,
       sectionId: task.sectionId,
       parentId: task.parentId,
       commentCount: task.commentCount ?? 0,
-      createdAt: DateTime.tryParse(task.createdAt ?? '') ?? DateTime.now(),
+      createdAt:
+          DateTime.tryParse(task.createdAt ?? '') ??
+          DateTime.now(), // API provides string date
       creatorId: task.creatorId,
       assigneeId: task.assigneeId,
     );

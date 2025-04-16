@@ -111,6 +111,32 @@ final apiServiceProvider = Provider<BaseApiService>((ref) {
       if (kDebugMode) {
         print('[apiServiceProvider] Switch case: Matched ServerType.todoist');
       }
+      // Todoist service uses a global API key from settings, not the server config's authToken.
+      // We get the globally configured instance.
+      final todoistService = ref.watch(todoistApiServiceProvider);
+      if (!todoistService.isConfigured) {
+        if (kDebugMode) {
+          print(
+            '[apiServiceProvider] Warning: Todoist selected but API key not configured in settings.',
+          );
+        }
+        // Return a dummy service to prevent errors, although UI should ideally prevent selection
+        // of Todoist server if the key isn't set.
+        service = DummyApiService(); // Or potentially a specific DummyTaskService if created
+      } else {
+        // The TodoistApiService implements TaskApiService, which extends BaseApiService.
+        // We return it cast as BaseApiService as per the provider's type signature.
+        // Callers will need to check the type and cast to TaskApiService to use task-specific methods.
+        service = todoistService; // Direct assignment works due to interface inheritance
+      }
+      break;
+    // No default needed if all enum cases are handled. Add if ServerType might expand.
+    // default:
+    //   print('[apiServiceProvider] Error: Unsupported server type: $serverType');
+    //   service = DummyApiService();
+  }
+
+  if (kDebugMode) {
       final todoistService = ref.watch(todoistApiServiceProvider);
       if (!todoistService.isConfigured) {
         if (kDebugMode) {
@@ -120,13 +146,16 @@ final apiServiceProvider = Provider<BaseApiService>((ref) {
         }
         service = DummyApiService();
       } else {
-        // WARNING: This cast is only to satisfy the provider's type.
-        // TodoistApiService does NOT implement BaseApiService.
-        // Do NOT call BaseApiService methods on this instance.
-        service = todoistService as BaseApiService;
+        // The TodoistApiService implements TaskApiService, which extends BaseApiService.
+        // We return it cast as BaseApiService as per the provider's type signature.
+        // Callers will need to check the type and cast to TaskApiService to use task-specific methods.
+        service = todoistService; // Direct assignment works due to interface inheritance
       }
       break;
-    // Remove the default clause, as all ServerType enum values are covered.
+    // No default needed if all enum cases are handled. Add if ServerType might expand.
+    // default:
+    //   print('[apiServiceProvider] Error: Unsupported server type: $serverType');
+    //   service = DummyApiService();
   }
 
   if (kDebugMode) {
