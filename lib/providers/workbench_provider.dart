@@ -105,27 +105,13 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
     }
   }
 
-  // Helper to get comment timestamp (handles Memos/Todoist)
+  // Helper to get comment timestamp (handles Memos/Blinko)
   DateTime _getCommentTimestamp(Comment comment) {
-    // Prioritize Memos/Blinko fields first
-    if (comment.updatedTs != null || comment.createdTs != null) {
-      return comment.updatedTs ?? comment.createdTs;
-    }
-    // Fallback for Todoist comment timestamp (postedAt)
-    // Assumes our internal Comment model includes postedAt or normalizes it.
-    // Check the Todoist API reference: it uses 'posted_at'.
-    // Let's assume our Comment model has 'createdAt'.
-    if (comment.updatedTs != null) {
-      return comment.updatedTs!;
-    }
-
-    // Default fallback if no timestamp found (should not happen ideally)
-    if (kDebugMode) {
-      print(
-        "[WorkbenchNotifier] Warning: Could not determine timestamp for comment ID ${comment.id}",
-      );
-    }
-    return DateTime.fromMillisecondsSinceEpoch(0);
+    // Use updatedTs if available, otherwise createdTs.
+    // Assumes the internal Comment model has these fields from Memos/Blinko.
+    // Todoist comments might need specific handling if their timestamps aren't mapped to these fields.
+    final timestamp = comment.updatedTs ?? comment.createdTs;
+    return timestamp;
   }
 
 

@@ -229,7 +229,7 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
     final bool isTask = itemRef.referencedItemType == WorkbenchItemType.task;
     final bool isComment =
         itemRef.referencedItemType == WorkbenchItemType.comment;
-    final bool isNote = itemRef.referencedItemType == WorkbenchItemType.note;
+    // final bool isNote = itemRef.referencedItemType == WorkbenchItemType.note; // Removed unused variable
 
     final activeServer = ref.read(activeServerConfigProvider);
     final isOnActiveServer = activeServer?.id == itemRef.serverId;
@@ -626,15 +626,11 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
     if (comment == null) {
       contentWidget = Text('No comments yet.', style: italicStyle);
     } else {
-      // Get timestamp (using similar logic as in notifier, adapt if needed)
-      DateTime commentTime;
-      if (comment.updatedTs != null || comment.createdTs != null) {
-         commentTime = comment.updatedTs ?? comment.createdTs;
-      } else if (comment.postedAt != null) {
-         commentTime = comment.postedAt!;
-      } else {
-         commentTime = DateTime.fromMillisecondsSinceEpoch(0); // Fallback
-      }
+      // Get timestamp using only updatedTs or createdTs
+      DateTime commentTime =
+          comment.updatedTs ??
+          comment.createdTs ??
+          DateTime.fromMillisecondsSinceEpoch(0);
       relativeTime = _formatRelativeTime(commentTime.toLocal());
 
       contentWidget = Row(
@@ -691,8 +687,11 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
       ),
     );
   }
-    @override
-  WidgetRef ref,
+
+  // Helper for actual navigation (Moved inside the State class)
+  Future<void> _navigateToItem(
+    BuildContext context,
+    WidgetRef ref,
     WorkbenchItemReference itemRef,
   {
     String? commentIdToHighlight,
@@ -746,7 +745,7 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
     }
   }
 
-  // Helper to show error dialog
+  // Helper to show error dialog (Moved inside the State class)
   void _showErrorDialog(BuildContext context, String message) {
     showCupertinoDialog(
       context: context,
@@ -765,7 +764,7 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
     );
   }
 
-  // Server Switch Dialog
+  // Server Switch Dialog (Moved inside the State class)
   void _showServerSwitchRequiredDialog(
     BuildContext context,
     WidgetRef ref,
