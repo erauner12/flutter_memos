@@ -1,6 +1,4 @@
 import 'package:flutter/foundation.dart'; // Import Uint8List
-// Note: Comment model is now defined in the app, not directly from API generation
-import 'package:flutter_memos/models/comment.dart';
 // Keep ServerConfig import
 import 'package:flutter_memos/models/server_config.dart';
 
@@ -39,49 +37,22 @@ abstract class BaseApiService {
     ServerConfig? targetServerOverride,
   });
 
+  // --- Note Operations (Moved to NoteApiService) ---
+  // Future<ListNotesResponse> listNotes(...);
+  // Future<NoteItem> getNote(...);
+  // Future<NoteItem> createNote(...);
+  // Future<NoteItem> updateNote(...);
+  // Future<void> deleteNote(...);
+  // Future<NoteItem> archiveNote(...);
+  // Future<NoteItem> togglePinNote(...);
+  // Future<void> setNoteRelations(...);
 
-  // --- Comments (Potentially Common Concept - Interface only) ---
-  // While comments exist in Memos/Blinko (Notes) and Todoist (Tasks/Projects),
-  // the structure and API calls differ significantly. Defining them here
-  // provides a common interface name, but implementations will vary widely.
-  // Consider if these truly belong in the *base* or specific interfaces.
-  // Keeping them here for now as the concept exists across types.
-
-  /// List comments associated with a parent entity (Note or Task).
-  /// Caller needs to know the type of entity `parentId` refers to.
-  Future<List<Comment>> listComments(
-    String parentId, {
-    ServerConfig? targetServerOverride,
-  });
-
-  /// Get a single comment by its ID.
-  Future<Comment> getComment(
-    String commentId, {
-    ServerConfig? targetServerOverride,
-  });
-
-  /// Create a comment associated with a parent entity (Note or Task).
-  Future<Comment> createComment(
-    String parentId,
-    Comment comment, {
-    ServerConfig? targetServerOverride,
-    List<Map<String, dynamic>>? resources, // Optional resources
-  });
-
-  /// Update an existing comment.
-  Future<Comment> updateComment(
-    String commentId,
-    Comment comment, {
-    ServerConfig? targetServerOverride,
-  });
-
-  /// Delete a comment.
-  Future<void> deleteComment(
-    String
-    parentId, // May not be needed by all APIs (e.g., if commentId is globally unique)
-    String commentId, {
-    ServerConfig? targetServerOverride,
-  });
+  // --- Comment Operations (Moved to NoteApiService / TaskApiService) ---
+  // Future<List<Comment>> listComments(...);
+  // Future<Comment> getComment(...);
+  // Future<Comment> createComment(...);
+  // Future<Comment> updateComment(...);
+  // Future<void> deleteComment(...);
 }
 
 // --- Dummy Implementation ---
@@ -120,49 +91,5 @@ class DummyApiService implements BaseApiService {
     ServerConfig? targetServerOverride,
   }) async {
     throw UnimplementedError("Service not configured (getResourceData)");
-  }
-
-  @override
-  Future<List<Comment>> listComments(
-    String parentId, {
-    ServerConfig? targetServerOverride,
-  }) async {
-    throw UnimplementedError("Service not configured (listComments)");
-  }
-
-  @override
-  Future<Comment> getComment(
-    String commentId, {
-    ServerConfig? targetServerOverride,
-  }) async {
-    throw UnimplementedError("Service not configured (getComment)");
-  }
-
-  @override
-  Future<Comment> createComment(
-    String parentId,
-    Comment comment, {
-    ServerConfig? targetServerOverride,
-    List<Map<String, dynamic>>? resources,
-  }) async {
-    throw UnimplementedError("Service not configured (createComment)");
-  }
-
-  @override
-  Future<Comment> updateComment(
-    String commentId,
-    Comment comment, {
-    ServerConfig? targetServerOverride,
-  }) async {
-    throw UnimplementedError("Service not configured (updateComment)");
-  }
-
-  @override
-  Future<void> deleteComment(
-    String parentId,
-    String commentId, {
-    ServerConfig? targetServerOverride,
-  }) async {
-    throw UnimplementedError("Service not configured (deleteComment)");
   }
 }

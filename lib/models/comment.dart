@@ -1,7 +1,9 @@
 import 'package:flutter/foundation.dart';
-// Removed: import 'package:flutter_memos/models/user.dart';
 import 'package:flutter_memos/todoist_api/lib/api.dart'
     as todoist; // Import todoist models
+
+// Add CommentState enum
+enum CommentState { normal, archived, deleted }
 
 /// Represents a comment, adaptable for different sources (Memos, Todoist).
 @immutable
@@ -18,10 +20,11 @@ class Comment {
   resources; // Raw resource list (source-specific format)
   final List<Map<String, dynamic>>
   relations; // Raw relation list (source-specific format)
-  // Removed: final User? creator;
   final String parentId; // The ID of the parent entity (Note ID or Task ID)
   final String serverId; // ID of the server config this comment belongs to
   final Object? attachment; // Todoist-specific attachment metadata
+  final bool pinned; // Added pinned state
+  final CommentState state; // Added state
 
   const Comment({
     required this.id,
@@ -31,10 +34,11 @@ class Comment {
     this.content, // Made nullable
     this.resources = const [],
     this.relations = const [],
-    // Removed: this.creator,
     required this.parentId,
     required this.serverId,
     this.attachment, // Added for Todoist
+    this.pinned = false, // Default to false
+    this.state = CommentState.normal, // Default to normal
   });
 
   // Factory constructor from Memos API JSON
@@ -42,8 +46,18 @@ class Comment {
     Map<String, dynamic> json, {
     required String parentId, // Pass parent note ID for context
     required String serverId, // Pass server ID for context
-    // Removed: User? creatorDetails,
   }) {
+    // Helper function to parse state safely
+    CommentState parseState(String? stateStr) {
+      switch (stateStr?.toUpperCase()) {
+        case 'ARCHIVED':
+          return CommentState.archived;
+        case 'NORMAL':
+        default:
+          return CommentState.normal;
+      }
+    }
+
     return Comment(
       id:
           json['name'] ??
@@ -54,10 +68,11 @@ class Comment {
       content: json['content'], // Keep potentially null
       resources: List<Map<String, dynamic>>.from(json['resources'] ?? []),
       relations: List<Map<String, dynamic>>.from(json['relations'] ?? []),
-      // Removed: creator: creatorDetails,
       parentId: parentId,
       serverId: serverId,
       attachment: null, // Memos doesn't have this field directly
+      pinned: json['pinned'] ?? false, // Parse pinned state
+      state: parseState(json['state']), // Parse state
     );
   }
 
@@ -87,19 +102,18 @@ class Comment {
       content: todoistComment.content, // Keep potentially null
       resources: const [], // Map attachment if needed, structure differs
       relations: const [], // Not applicable to Todoist comments
-      // Removed: creator: null,
       parentId: effectiveParentId,
       serverId: defaultServerId, // Use a consistent serverId for Todoist items
       attachment:
           todoistComment.attachment, // Store the raw attachment metadata
+      pinned: false, // Todoist comments don't have a pinned state
+      state: CommentState.normal, // Todoist comments don't have a state
     );
   }
 
 
   // Convert to JSON (mainly for potential caching or sending updates)
-  // Note: This needs to be adapted depending on the target API if sending updates
   Map<String, dynamic> toJson() {
-    // Generic representation, might need tailoring for specific API update payloads
     return {
       'id': id, // Use 'id' consistently for local storage
       'creatorId': creatorId,
@@ -111,6 +125,8 @@ class Comment {
       'parentId': parentId,
       'serverId': serverId,
       'attachment': attachment, // Include if needed for local caching
+      'pinned': pinned, // Include pinned
+      'state': state.name, // Store state enum name
     };
   }
 
@@ -123,10 +139,11 @@ class Comment {
     ValueGetter<String?>? content, // Use ValueGetter
     List<Map<String, dynamic>>? resources,
     List<Map<String, dynamic>>? relations,
-    // Removed: ValueGetter<User?>? creator,
     String? parentId,
     String? serverId,
     ValueGetter<Object?>? attachment,
+    bool? pinned, // Add pinned
+    CommentState? state, // Add state
   }) {
     return Comment(
       id: id ?? this.id,
@@ -136,10 +153,11 @@ class Comment {
       content: content != null ? content() : this.content,
       resources: resources ?? this.resources,
       relations: relations ?? this.relations,
-      // Removed: creator: creator != null ? creator() : this.creator,
       parentId: parentId ?? this.parentId,
       serverId: serverId ?? this.serverId,
       attachment: attachment != null ? attachment() : this.attachment,
+      pinned: pinned ?? this.pinned, // Copy pinned
+      state: state ?? this.state, // Copy state
     );
   }
 }

@@ -1,3 +1,4 @@
+import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/models/list_notes_response.dart';
 import 'package:flutter_memos/models/note_item.dart';
 import 'package:flutter_memos/models/server_config.dart';
@@ -9,10 +10,10 @@ abstract class NoteApiService extends BaseApiService {
   Future<ListNotesResponse> listNotes({
     int? pageSize,
     String? pageToken,
-    String? filter, // Implementation specific filter string
-    String? state, // e.g., 'NORMAL', 'ARCHIVED'
-    String? sort, // e.g., 'updateTime'
-    String? direction, // e.g., 'DESC'
+    String? filter,
+    String? state,
+    String? sort,
+    String? direction,
     ServerConfig? targetServerOverride,
   });
 
@@ -31,24 +32,50 @@ abstract class NoteApiService extends BaseApiService {
 
   Future<void> deleteNote(String id, {ServerConfig? targetServerOverride});
 
-  // --- Note Actions ---
   Future<NoteItem> archiveNote(String id, {ServerConfig? targetServerOverride});
+
   Future<NoteItem> togglePinNote(
     String id, {
     ServerConfig? targetServerOverride,
   });
 
-  // --- Note Relations ---
   Future<void> setNoteRelations(
     String noteId,
-    List<Map<String, dynamic>> relations, // Type specific to Memos/Blinko
-    {ServerConfig? targetServerOverride}
-  );
+    List<Map<String, dynamic>> relations, {
+    ServerConfig? targetServerOverride,
+  });
 
-  // --- Note Comments (Potentially override BaseApiService behavior if needed) ---
-  // Default implementations from BaseApiService might suffice, but can be overridden
-  // if Note comments behave differently. For now, we assume base is sufficient.
-  // Future<List<Comment>> listNoteComments(...); // Renamed for clarity?
-  // Future<Comment> createNoteComment(...);
-  // etc.
+  // --- Note Comment Operations ---
+  // These specifically interact with note comments via the underlying API.
+  // These override the generic comment methods from BaseApiService if they existed,
+  // or simply define the expected interface for note-based services.
+
+  Future<List<Comment>> listNoteComments(
+    String noteId, {
+    ServerConfig? targetServerOverride,
+  });
+
+  Future<Comment> getNoteComment(
+    String commentId, {
+    ServerConfig? targetServerOverride,
+  });
+
+  Future<Comment> createNoteComment(
+    String noteId,
+    Comment comment, {
+    ServerConfig? targetServerOverride,
+    List<Map<String, dynamic>>? resources, // Optional resources
+  });
+
+  Future<Comment> updateNoteComment(
+    String commentId,
+    Comment comment, {
+    ServerConfig? targetServerOverride,
+  });
+
+  Future<void> deleteNoteComment(
+    String noteId, // May need noteId for context/permissions
+    String commentId, {
+    ServerConfig? targetServerOverride,
+  });
 }
