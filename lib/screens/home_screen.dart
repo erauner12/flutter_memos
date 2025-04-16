@@ -1,6 +1,8 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_memos/screens/items/items_screen.dart';
 import 'package:flutter_memos/screens/settings_screen.dart';
+import 'package:flutter_memos/screens/tasks/tasks_screen.dart'; // Import TasksScreen
+import 'package:flutter_memos/screens/workbench/widgets/workbench_item_tile.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'chat_screen.dart';
@@ -18,7 +20,15 @@ class HomeScreen extends ConsumerWidget {
             icon: Icon(CupertinoIcons.home),
             label: 'Memos',
           ),
-          // Add the new Chat tab item
+          // Add the Tasks tab item
+          BottomNavigationBarItem(
+            icon: Icon(CupertinoIcons.check_mark_circled),
+            label: 'Tasks',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(CupertinoIcons.briefcase), // Or another suitable icon
+            label: 'Workbench',
+          ),
           BottomNavigationBarItem(
             icon: Icon(CupertinoIcons.chat_bubble),
             label: 'Chat',
@@ -27,70 +37,71 @@ class HomeScreen extends ConsumerWidget {
             icon: Icon(CupertinoIcons.settings),
             label: 'Settings',
           ),
-          // Add the new Workbench tab item
-          BottomNavigationBarItem(
-            icon: Icon(CupertinoIcons.briefcase), // Or another suitable icon
-            label: 'Workbench',
-          ),
         ],
       ),
       tabBuilder: (BuildContext context, int index) {
         switch (index) {
-          case 0:
+          case 0: // Memos
             return CupertinoTabView(
-              // Define a default route through builder to ensure navigation stack is not empty
               builder: (context) {
-                return const CupertinoPageScaffold(child: ItemsScreen(),
-                );
+                return const CupertinoPageScaffold(child: ItemsScreen());
               },
-              // Routes for additional navigation
               routes: {
                 '/':
                     (context) =>
                         const CupertinoPageScaffold(child: ItemsScreen()),
               },
             );
-          case 1:
+          case 1: // Tasks (New)
             return CupertinoTabView(
-              // Define a default route through builder to ensure navigation stack is not empty
               builder: (context) {
-                return const CupertinoPageScaffold(child: ChatScreen(),
-                );
+                return const CupertinoPageScaffold(child: TasksScreen());
               },
-              // Routes for additional navigation
               routes: {
                 '/':
                     (context) =>
-                        const CupertinoPageScaffold(child: ChatScreen()),
+                        const CupertinoPageScaffold(child: TasksScreen()),
+                // Add routes for task detail/edit if needed within this tab's navigator
+                '/tasks/new':
+                    (context) =>
+                        const CupertinoPageScaffold(child: NewTaskScreen()),
+                // '/tasks/edit': (context) => CupertinoPageScaffold(child: EditTaskScreen(...)), // Placeholder
               },
             );
-          case 2:
-            return CupertinoTabView(
-              // Define a default route through builder to ensure navigation stack is not empty
-              builder: (context) {
-                return const CupertinoPageScaffold(
-                  child: SettingsScreen(isInitialSetup: false),
-                );
-              },
-              // Routes for additional navigation
-              routes: {
-                '/':
-                    (context) => const CupertinoPageScaffold(
-                      child: SettingsScreen(isInitialSetup: false),
-                    ),
-              },
-            );
-          case 3: // Add case for the new Workbench tab (index 3)
+          case 2: // Workbench
             return CupertinoTabView(
               builder: (context) {
-                // Import WorkbenchScreen at the top of the file
-                // import 'package:flutter_memos/screens/workbench/workbench_screen.dart';
                 return const CupertinoPageScaffold(child: WorkbenchScreen());
               },
               routes: {
                 '/':
                     (context) =>
                         const CupertinoPageScaffold(child: WorkbenchScreen()),
+              },
+            );
+          case 3: // Chat
+            return CupertinoTabView(
+              builder: (context) {
+                return const CupertinoPageScaffold(child: ChatScreen());
+              },
+              routes: {
+                '/':
+                    (context) =>
+                        const CupertinoPageScaffold(child: ChatScreen()),
+              },
+            );
+          case 4: // Settings
+            return CupertinoTabView(
+              builder: (context) {
+                return const CupertinoPageScaffold(
+                  child: SettingsScreen(isInitialSetup: false),
+                );
+              },
+              routes: {
+                '/':
+                    (context) => const CupertinoPageScaffold(
+                      child: SettingsScreen(isInitialSetup: false),
+                    ),
               },
             );
           default:

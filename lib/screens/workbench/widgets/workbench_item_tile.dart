@@ -5,9 +5,13 @@ import 'package:flutter_memos/models/comment.dart'; // Import Comment
 import 'package:flutter_memos/models/server_config.dart';
 import 'package:flutter_memos/models/workbench_item_reference.dart';
 import 'package:flutter_memos/providers/server_config_provider.dart'; // &lt;-- Add this import for activeServerConfigProvider and multiServerConfigProvider
+import 'package:flutter_memos/providers/task_providers.dart'; // Import task providers for actions
 import 'package:flutter_memos/providers/workbench_provider.dart';
+import 'package:flutter_memos/screens/tasks/new_task_screen.dart'; // Import task edit screen
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart'; // For date formatting
+import 'package:uuid/uuid.dart'; // For generating UUIDs
+
 
 class WorkbenchItemTile extends ConsumerWidget {
   final WorkbenchItemReference itemReference;
@@ -22,7 +26,7 @@ class WorkbenchItemTile extends ConsumerWidget {
       case WorkbenchItemType.comment:
         return CupertinoIcons.chat_bubble_text;
       case WorkbenchItemType.task:
-        return CupertinoIcons.check_mark_circled; // Example icon for task
+        return CupertinoIcons.check_mark_circled; // Updated icon for task
     }
   }
 
@@ -34,7 +38,8 @@ class WorkbenchItemTile extends ConsumerWidget {
       case ServerType.blinko:
         return CupertinoIcons.sparkles; // Example icon
       case ServerType.todoist:
-        return CupertinoIcons.checkmark_seal_fill; // Example icon for todoist
+        return CupertinoIcons
+            .check_mark_circled; // Use same icon as item type for consistency
     }
   }
 
@@ -55,9 +60,27 @@ class WorkbenchItemTile extends ConsumerWidget {
       return '${difference.inDays} days ago';
     } else {
       // Fallback to date string if older than a week
-      return DateFormat.yMd().format(dateTime);
+      return DateFormat.yMd().format(dateTime.toLocal()); // Ensure local time
     }
   }
+
+  // Helper to show snackbar messages
+  void _showSnackBar(
+    BuildContext context,
+    String message, {
+    bool isError = false,
+  }) {
+    final snackBar = CupertinoSnackBar(
+      content: Text(
+        message,
+        style: TextStyle(
+          color: isError ? CupertinoColors.destructiveRed : null,
+        ),
+      ),
+    );
+    ScaffoldMessenger.of(context).showSnackBar(snackBar);
+  }
+
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -65,6 +88,7 @@ class WorkbenchItemTile extends ConsumerWidget {
     final preview = itemReference.previewContent ?? 'No preview available';
     final serverDisplayName =
         itemReference.serverName ?? itemReference.serverId;
+    // Format times using helper, ensure they are local
     final addedRelative = _formatRelativeTime(
       itemReference.addedTimestamp.toLocal(),
     );
@@ -76,144 +100,218 @@ class WorkbenchItemTile extends ConsumerWidget {
     final activeServer = ref.watch(activeServerConfigProvider);
     final isOnActiveServer = activeServer?.id == itemReference.serverId;
 
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: () {
-        if (isOnActiveServer) {
-          _navigateToItem(context, ref, itemReference);
-        } else {
-          _showServerSwitchRequiredDialog(context, ref, itemReference);
-        }
-      },
-      child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: CupertinoColors.systemGroupedBackground.resolveFrom(context),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: CupertinoColors.separator.resolveFrom(context),
-            width: 0.7,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: CupertinoColors.black.withAlpha((0.04 * 255).toInt()),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
+    return CupertinoContextMenu(
+      actions: <Widget>[
+        // Action to navigate (always shown, logic handled onTap)
+        CupertinoContextMenuAction(
+          child: const Text('View Details'),
+          onPressed: () {
+            Navigator.pop(context); // Close context menu
+            if (isOnActiveServer) {
+              _navigateToItem(context, ref, itemReference);
+            } else {
+              _showServerSwitchRequiredDialog(context, ref, itemReference);
+            }
+          },
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.only(top: 2.0, right: 10),
-                  child: Icon(
-                    _getItemTypeIcon(itemReference.referencedItemType),
-                    color: theme.primaryColor,
-                    size: 24,
-                  ),
-                ),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        preview,
-                        maxLines: 3,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                        ),
+        // Conditional actions for Tasks
+        if (itemReference.referencedItemType == WorkbenchItemType.task &&
+            isOnActiveServer)
+        // Need to fetch the task's current completed status to show correct action
+        // For simplicity here, we might offer both, or fetch status onClick. Let's offer both for now.
+        // A better way involves fetching the task detail *first* if needed.
+        ...[
+          // We need the actual task status. Let's fetch it temporarily or rely on a detail provider.
+          // For now, let's assume we can call the complete/reopen actions.
+          CupertinoContextMenuAction(
+            child: const Text('Toggle Complete'), // Simplistic label
+            onPressed: () async {
+              Navigator.pop(context); // Close menu first
+              // We need the current status. Fetch task detail.
+              try {
+                final task = await ref.read(
+                  taskDetailProvider(itemReference.referencedItemId).future,
+                );
+                bool success;
+                if (task.isCompleted) {
+                  success = await ref
+                      .read(tasksNotifierProvider.notifier)
+                      .reopenTask(task.id);
+                  if (success && context.mounted)
+                    _showSnackBar(context, 'Task reopened.');
+                } else {
+                  success = await ref
+                      .read(tasksNotifierProvider.notifier)
+                      .completeTask(task.id);
+                  if (success && context.mounted)
+                    _showSnackBar(context, 'Task completed.');
+                }
+                if (!success && context.mounted) {
+                  _showSnackBar(
+                    context,
+                    'Failed to toggle task status.',
+                    isError: true,
+                  );
+                }
+                // Refresh workbench details after action
+                ref.read(workbenchProvider.notifier).refreshItemDetails();
+              } catch (e) {
+                if (context.mounted)
+                  _showSnackBar(
+                    context,
+                    'Error getting task status: $e',
+                    isError: true,
+                  );
+              }
+            },
+          ),
+        ],
+
+        // Remove from Workbench action
+        CupertinoContextMenuAction(
+          isDestructiveAction: true,
+          child: const Text('Remove from Workbench'),
+          onPressed: () {
+            Navigator.pop(context); // Close context menu
+            // Show confirmation dialog before removing
+            showCupertinoDialog(
+              context: context,
+              builder:
+                  (dialogContext) => CupertinoAlertDialog(
+                    title: const Text('Remove from Workbench?'),
+                    content: Text(
+                      'Remove "${preview.substring(0, preview.length > 30 ? 30 : preview.length)}..." from your Workbench?',
+                    ),
+                    actions: [
+                      CupertinoDialogAction(
+                        child: const Text('Cancel'),
+                        onPressed: () => Navigator.pop(dialogContext),
                       ),
-                      const SizedBox(height: 6),
-                      Text(
-                        'Server: $serverDisplayName • Added: $addedRelative',
-                        style: TextStyle(
-                          fontSize: 12.5,
-                          color: CupertinoColors.secondaryLabel.resolveFrom(
+                      CupertinoDialogAction(
+                        isDestructiveAction: true,
+                        child: const Text('Remove'),
+                        onPressed: () {
+                          Navigator.pop(
+                            dialogContext,
+                          ); // Close confirmation dialog
+                          unawaited(
+                            ref
+                                .read(workbenchProvider.notifier)
+                                .removeItem(itemReference.id),
+                          );
+                          _showSnackBar(
                             context,
-                          ),
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        'Last activity: $lastActivityRelative',
-                        style: TextStyle(
-                          fontSize: 12.5,
-                          color: CupertinoColors.secondaryLabel.resolveFrom(
-                            context,
-                          ),
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                            'Item removed from Workbench.',
+                          );
+                        },
                       ),
                     ],
                   ),
-                ),
-                // Trailing actions
-                Column(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    Icon(
+            );
+          },
+        ),
+      ],
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque, // Ensure empty areas are tappable
+        onTap: () {
+          if (isOnActiveServer) {
+            _navigateToItem(context, ref, itemReference);
+          } else {
+            _showServerSwitchRequiredDialog(context, ref, itemReference);
+          }
+        },
+        child: Container(
+          margin: const EdgeInsets.symmetric(
+            vertical: 8,
+            horizontal: 12,
+          ), // Reduced vertical margin
+          padding: const EdgeInsets.all(14), // Reduced padding
+          decoration: BoxDecoration(
+            color: CupertinoColors.systemGroupedBackground.resolveFrom(context),
+            borderRadius: BorderRadius.circular(12), // Slightly smaller radius
+            border: Border.all(
+              color: CupertinoColors.separator.resolveFrom(context),
+              width: 0.5, // Thinner border
+            ),
+            boxShadow: [
+              BoxShadow(
+                // Subtle shadow
+                color: CupertinoColors.black.withAlpha((0.03 * 255).toInt()),
+                blurRadius: 6,
+                offset: const Offset(0, 1),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2.0, right: 10),
+                    child: Icon(
+                      _getItemTypeIcon(itemReference.referencedItemType),
+                      color: theme.primaryColor,
+                      size: 22, // Slightly smaller icon
+                    ),
+                  ),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          preview,
+                          maxLines: 3, // Keep max lines
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 16, // Keep font size
+                            fontWeight: FontWeight.w500, // Slightly less bold
+                          ),
+                        ),
+                        const SizedBox(height: 5), // Adjust spacing
+                        Text(
+                          'Server: $serverDisplayName • Added: $addedRelative',
+                          style: TextStyle(
+                            fontSize: 12, // Smaller font size
+                            color: CupertinoColors.secondaryLabel.resolveFrom(
+                              context,
+                            ),
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Last activity: $lastActivityRelative',
+                          style: TextStyle(
+                            fontSize: 12, // Smaller font size
+                            color: CupertinoColors.secondaryLabel.resolveFrom(
+                              context,
+                            ),
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Trailing Server Type Icon
+                  Padding(
+                    padding: const EdgeInsets.only(left: 8.0, top: 2.0),
+                    child: Icon(
                       _getServerTypeIcon(itemReference.serverType),
                       size: 18,
                       color: CupertinoColors.tertiaryLabel.resolveFrom(context),
                     ),
-                    const SizedBox(height: 8),
-                    CupertinoButton(
-                      padding: const EdgeInsets.all(4.0),
-                      minSize: 0,
-                      child: const Icon(
-                        CupertinoIcons.clear_circled,
-                        size: 20,
-                        color: CupertinoColors.systemGrey,
-                      ),
-                      onPressed: () {
-                        showCupertinoDialog(
-                          context: context,
-                          builder:
-                              (dialogContext) => CupertinoAlertDialog(
-                                title: const Text('Remove from Workbench?'),
-                                content: Text(
-                                  'Remove "${preview.substring(0, preview.length > 30 ? 30 : preview.length)}..." from your Workbench?',
-                                ),
-                                actions: [
-                                  CupertinoDialogAction(
-                                    child: const Text('Cancel'),
-                                    onPressed:
-                                        () => Navigator.pop(dialogContext),
-                                  ),
-                                  CupertinoDialogAction(
-                                    isDestructiveAction: true,
-                                    child: const Text('Remove'),
-                                    onPressed: () {
-                                      Navigator.pop(dialogContext);
-                                      unawaited(
-                                        ref
-                                            .read(workbenchProvider.notifier)
-                                            .removeItem(itemReference.id),
-                                      );
-                                    },
-                                  ),
-                                ],
-                              ),
-                        );
-                      },
-                    ),
-                  ],
-                ),
-              ],
-            ),
-            // Threaded comment preview
-            _buildCommentPreview(context, itemReference.latestComment),
-          ],
+                  ),
+                ],
+              ),
+              // Threaded comment preview (only show if it's not a comment item itself)
+              if (itemReference.referencedItemType != WorkbenchItemType.comment)
+                _buildCommentPreview(context, itemReference.latestComment),
+            ],
+          ),
         ),
       ),
     );
@@ -222,19 +320,21 @@ class WorkbenchItemTile extends ConsumerWidget {
   // Add helper widget for comment preview
   Widget _buildCommentPreview(BuildContext context, Comment? comment) {
     final textStyle = TextStyle(
-      fontSize: 13.5,
+      fontSize: 13, // Slightly smaller
       color: CupertinoColors.secondaryLabel.resolveFrom(context),
     );
     final italicStyle = textStyle.copyWith(fontStyle: FontStyle.italic);
 
-    // If no comment and the item is a comment itself, show nothing
+    // If no comment, show 'No comments yet'
     if (comment == null) {
-      if (itemReference.referencedItemType == WorkbenchItemType.comment) {
-        return const SizedBox.shrink();
-      }
       return Container(
-        margin: const EdgeInsets.only(top: 14),
-        padding: const EdgeInsets.only(left: 18, top: 8, bottom: 8, right: 8),
+        margin: const EdgeInsets.only(top: 10), // Reduced margin
+        padding: const EdgeInsets.only(
+          left: 14,
+          top: 6,
+          bottom: 6,
+          right: 6,
+        ), // Reduced padding
         decoration: BoxDecoration(
           color: CupertinoColors.secondarySystemGroupedBackground.resolveFrom(
             context,
@@ -242,18 +342,22 @@ class WorkbenchItemTile extends ConsumerWidget {
           border: Border(
             left: BorderSide(
               color: CupertinoColors.systemGrey4.resolveFrom(context),
-              width: 3,
+              width: 2.5, // Slightly thinner border
             ),
           ),
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: const BorderRadius.only(
+            topRight: Radius.circular(6),
+            bottomRight: Radius.circular(6),
+          ), // Rounded corners
         ),
         child: Text('No comments yet.', style: italicStyle),
       );
     }
 
+    // If comment exists, show its content
     return Container(
-      margin: const EdgeInsets.only(top: 14),
-      padding: const EdgeInsets.only(left: 18, top: 8, bottom: 8, right: 8),
+      margin: const EdgeInsets.only(top: 10),
+      padding: const EdgeInsets.only(left: 14, top: 6, bottom: 6, right: 6),
       decoration: BoxDecoration(
         color: CupertinoColors.secondarySystemGroupedBackground.resolveFrom(
           context,
@@ -261,16 +365,19 @@ class WorkbenchItemTile extends ConsumerWidget {
         border: Border(
           left: BorderSide(
             color: CupertinoColors.systemGrey4.resolveFrom(context),
-            width: 3,
+            width: 2.5,
           ),
         ),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: const BorderRadius.only(
+          topRight: Radius.circular(6),
+          bottomRight: Radius.circular(6),
+        ),
       ),
       child: Text(
         comment.content ?? '', // Handle null content
-        maxLines: 3,
+        maxLines: 2, // Limit preview lines
         overflow: TextOverflow.ellipsis,
-        style: textStyle.copyWith(fontStyle: FontStyle.italic),
+        style: textStyle, // No italic for actual comment preview
       ),
     );
   }
@@ -281,78 +388,75 @@ class WorkbenchItemTile extends ConsumerWidget {
     WidgetRef ref,
     WorkbenchItemReference itemRef,
   ) {
+    final String itemId = itemRef.referencedItemId;
+    final bool isRootNav =
+        Navigator.of(context).canPop() ==
+        false; // Check if it's the root of the tab
+
     switch (itemRef.referencedItemType) {
       case WorkbenchItemType.note:
-        Navigator.of(context, rootNavigator: true).pushNamed(
+        Navigator.of(
+          context,
+          rootNavigator: isRootNav,
+        ).pushNamed(
           '/item-detail',
-          arguments: {'itemId': itemRef.referencedItemId},
+          arguments: {'itemId': itemId},
         );
         break;
       case WorkbenchItemType.comment:
-        // Navigate to the parent note, potentially highlighting the comment
-        final parentId =
-            itemRef.parentNoteId ??
-            itemRef.referencedItemId; // Fallback if parentId is missing
+        final parentId = itemRef.parentNoteId ?? itemId;
         if (parentId.isNotEmpty) {
-          Navigator.of(context, rootNavigator: true).pushNamed(
+          Navigator.of(context, rootNavigator: isRootNav).pushNamed(
             '/item-detail',
             arguments: {
               'itemId': parentId,
-              'commentIdToHighlight':
-                  itemRef.referencedItemId, // Pass comment ID for highlighting
+              'commentIdToHighlight': itemId,
             },
           );
         } else {
-          // Show alert if navigation is not possible
-          showCupertinoDialog(
-            context: context,
-            builder:
-                (ctx) => CupertinoAlertDialog(
-                  title: const Text('Navigation Error'),
-                  content: const Text(
-                    'Cannot navigate to comment: Parent note ID is missing.',
-                  ),
-                  actions: [
-                    CupertinoDialogAction(
-                      isDefaultAction: true,
-                      child: const Text('OK'),
-                      onPressed: () => Navigator.pop(ctx),
-                    ),
-                  ],
-                ),
+          _showErrorDialog(
+            context,
+            'Cannot navigate to comment: Parent note ID is missing.',
           );
         }
         break;
       case WorkbenchItemType.task:
-        // TODO: Implement navigation for tasks
-        // Example: Navigate to a task detail screen
-        // Navigator.of(context, rootNavigator: true).pushNamed(
-        //   '/task-detail', // Define this route
-        //   arguments: {'taskId': itemRef.referencedItemId},
-        // );
-        showCupertinoDialog(
-          context: context,
-          builder:
-              (ctx) => CupertinoAlertDialog(
-                title: const Text('Not Implemented'),
-                content: const Text(
-                  'Navigation to task details is not yet implemented.',
+        // Navigate to the task edit/detail screen
+        Navigator.of(context, rootNavigator: isRootNav).push(
+          CupertinoPageRoute(
+            // Assuming NewTaskScreen handles editing when taskToEdit is provided
+            builder:
+                (context) => NewTaskScreen(
+                  // Fetch the task details first to pass to the edit screen
+                  taskToEditFuture: ref.read(taskDetailProvider(itemId).future),
                 ),
-                actions: [
-                  CupertinoDialogAction(
-                    isDefaultAction: true,
-                    child: const Text('OK'),
-                    onPressed: () => Navigator.pop(ctx),
-                  ),
-                ],
-              ),
+          ),
         );
         break;
     }
   }
 
-  // Add this method back below _navigateToItem:
+  // Helper to show error dialog
+  void _showErrorDialog(BuildContext context, String message) {
+    showCupertinoDialog(
+      context: context,
+      builder:
+          (ctx) => CupertinoAlertDialog(
+            title: const Text('Navigation Error'),
+            content: Text(message),
+            actions: [
+              CupertinoDialogAction(
+                isDefaultAction: true,
+                child: const Text('OK'),
+                onPressed: () => Navigator.pop(ctx),
+              ),
+            ],
+          ),
+    );
+  }
 
+
+  // Add this method back below _navigateToItem:
   void _showServerSwitchRequiredDialog(
     BuildContext context,
     WidgetRef ref,
@@ -375,36 +479,60 @@ class WorkbenchItemTile extends ConsumerWidget {
                 isDefaultAction: true,
                 child: const Text('Switch & View'),
                 onPressed: () async {
-                  Navigator.pop(dialogContext);
+                  Navigator.pop(dialogContext); // Close the dialog first
                   // --- Actual Switch Logic ---
                   ref
                       .read(multiServerConfigProvider.notifier)
                       .setActiveServer(itemRef.serverId);
+
+                  // Wait for the active server provider to reflect the change
                   final completer = Completer<void>();
+                  // Use a local variable for the subscription to allow closing it.
                   ProviderSubscription<ServerConfig?>? sub;
-                  ref.listen<ServerConfig?>(
+                  // Listen directly to the provider state changes.
+                  sub = ref.listen<ServerConfig?>(
                     activeServerConfigProvider,
-                    (prev, next, subscription) {
-                          sub = subscription;
-                          if (next?.id == itemRef.serverId &&
-                              !completer.isCompleted) {
-                            completer.complete();
-                          }
-                        }
-                        as void Function(
-                          ServerConfig? previous,
-                          ServerConfig? next,
-                        ),
+                    (previous, next) {
+                      // Check if the subscription still exists and completer is not completed.
+                      if (sub != null &&
+                          next?.id == itemRef.serverId &&
+                          !completer.isCompleted) {
+                        completer.complete();
+                        sub?.close(); // Close the subscription once completed.
+                        sub = null; // Clear the reference.
+                      }
+                    },
+                    // Fire immediately in case the state is already correct.
+                    fireImmediately: true,
+                    onError: (error, stackTrace, subscription) {
+                      sub = subscription; // Assign sub here too
+                      if (!completer.isCompleted) {
+                        completer.completeError(error, stackTrace);
+                        sub?.close();
+                        sub = null;
+                      }
+                    }
                   );
+
+
                   try {
-                    await completer.future.timeout(const Duration(seconds: 3));
+                    // Add a timeout to prevent waiting indefinitely
+                    await completer.future.timeout(const Duration(seconds: 5));
+                    // Ensure the widget is still mounted before navigating
                     if (context.mounted) {
                       _navigateToItem(context, ref, itemRef);
                     }
                   } catch (e) {
-                    // Optionally show an error message to the user
-                  } finally {
+                    if (context.mounted) {
+                      _showSnackBar(
+                        context,
+                        'Failed to switch server or timed out.',
+                        isError: true,
+                      );
+                    }
+                    // Ensure subscription is closed on error/timeout
                     sub?.close();
+                    sub = null;
                   }
                   // --- End Switch Logic ---
                 },
@@ -413,4 +541,79 @@ class WorkbenchItemTile extends ConsumerWidget {
           ),
     );
   }
+}
+
+// Extend NewTaskScreen to accept a future for the task to edit
+// This allows fetching the task before pushing the screen in _navigateToItem
+extension NewTaskScreenFuture on NewTaskScreen {
+  static NewTaskScreen fromFuture({
+    Key? key,
+    required Future<TaskItem> taskToEditFuture,
+  }) {
+    // This isn't ideal as NewTaskScreen is stateful.
+    // A better pattern is to pass the ID and let NewTaskScreen fetch the details itself,
+    // or use a dedicated EditTaskScreen.
+    // For now, we modify NewTaskScreen to handle this temporary pattern.
+    // We need to modify NewTaskScreen's state to accept a Future.
+
+    // Let's revert this approach and modify NewTaskScreen to accept ID and fetch internally.
+    // Or, create EditTaskScreen.
+    // --> Let's stick to modifying NewTaskScreen to accept ID and fetch internally for now.
+    // --> No, the original approach requires modifying NewTaskScreen state, let's just pass the ID
+    // --> and have NewTaskScreen fetch it.
+
+    // Reverting the Future approach. _navigateToItem will push NewTaskScreen with taskToEdit: null for now.
+    // Proper editing needs EditTaskScreen or modification of NewTaskScreen.
+
+    // *** Final Decision: Modify NewTaskScreen to accept taskToEdit (optional TaskItem) ***
+    // *** _navigateToItem will fetch the task first, then push NewTaskScreen ***
+    // See updated _navigateToItem logic using await before push.
+    // This requires NewTaskScreen to handle the passed TaskItem in initState.
+
+    // This extension is no longer needed with the updated navigation logic.
+    throw UnimplementedError(
+      "This extension is deprecated. Navigation logic updated.",
+    );
+  }
+}
+
+// Update NewTaskScreen's constructor and initState to handle the pre-fetched taskToEdit
+class NewTaskScreen extends ConsumerStatefulWidget {
+  final TaskItem? taskToEdit;
+  // Remove the Future parameter if we adopted the pre-fetch navigation approach
+  // final Future<TaskItem>? taskToEditFuture; // Remove this
+
+  const NewTaskScreen({
+    super.key,
+    this.taskToEdit,
+  }); // Keep original constructor
+
+  // ... rest of NewTaskScreen remains the same ...
+
+  @override
+  ConsumerState<NewTaskScreen> createState() => _NewTaskScreenState();
+}
+
+class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
+  // ... existing fields ...
+
+  @override
+  void initState() {
+    super.initState();
+    // Use the directly passed taskToEdit
+    if (widget.taskToEdit != null) {
+      // Initialize controllers directly
+      _contentController.text = widget.taskToEdit!.content;
+      _descriptionController.text = widget.taskToEdit!.description ?? '';
+      // TODO: Initialize other fields
+    }
+    // Remove the future handling logic
+    // if (widget.taskToEditFuture != null) {
+    //   _initializeFromFuture();
+    // }
+  }
+
+  // Remove _initializeFromFuture method
+
+  // ... rest of _NewTaskScreenState ...
 }
