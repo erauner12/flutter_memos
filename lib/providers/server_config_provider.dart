@@ -657,10 +657,11 @@ class MultiServerConfigNotifier extends StateNotifier<MultiServerConfigState> {
         bool defaultChanged = false;
 
         if (newServers.isEmpty) {
-          if (kDebugMode)
+          if (kDebugMode) {
             print(
               '[MultiServerConfigNotifier] Removed the last server. Resetting active and default IDs.',
             );
+          }
           newDefaultId = null;
           newActiveId = null;
           defaultChanged = state.defaultServerId != null;
@@ -669,10 +670,11 @@ class MultiServerConfigNotifier extends StateNotifier<MultiServerConfigState> {
             newDefaultId =
                 newServers.first.id; // New default is first remaining
             defaultChanged = true;
-            if (kDebugMode)
+            if (kDebugMode) {
               print(
                 '[MultiServerConfigNotifier] Removed default server $serverId. Setting new default to $newDefaultId.',
               );
+            }
           }
           if (state.activeServerId == serverId) {
             newActiveId =
@@ -680,10 +682,11 @@ class MultiServerConfigNotifier extends StateNotifier<MultiServerConfigState> {
                 newServers
                     .first
                     .id; // New active is new default or first remaining
-            if (kDebugMode)
+            if (kDebugMode) {
               print(
                 '[MultiServerConfigNotifier] Removed active server $serverId. Setting new active to $newActiveId.',
               );
+            }
           }
         }
 
@@ -698,16 +701,18 @@ class MultiServerConfigNotifier extends StateNotifier<MultiServerConfigState> {
         if (defaultChanged) {
           await _saveDefaultServerIdToPreferences(newDefaultId);
         }
-        if (kDebugMode)
+        if (kDebugMode) {
           print(
             '[MultiServerConfigNotifier] Removed server $serverId locally and synced deletion to CloudKit.',
           );
+        }
       } else {
         // Server wasn't in local state, but CloudKit deletion succeeded (likely legacy cleanup)
-        if (kDebugMode)
+        if (kDebugMode) {
           print(
             '[MultiServerConfigNotifier] Server $serverId not found locally, but deletion synced to CloudKit (likely legacy).',
           );
+        }
         // Optionally re-validate default/active IDs here just in case they pointed to this ID somehow
         // (though loadConfiguration should handle this)
       }
@@ -775,10 +780,11 @@ class MultiServerConfigNotifier extends StateNotifier<MultiServerConfigState> {
     if (mounted) {
       state = const MultiServerConfigState(); // Reset state
     } else {
-      if (kDebugMode)
+      if (kDebugMode) {
         print(
           '[MultiServerConfigNotifier] Notifier unmounted during reset. State not reset.',
         );
+      }
     }
 
     try {
@@ -793,8 +799,9 @@ class MultiServerConfigNotifier extends StateNotifier<MultiServerConfigState> {
         print('[MultiServerConfigNotifier] Local cache keys cleared.');
       }
     } catch (e) {
-      if (kDebugMode)
+      if (kDebugMode) {
         print('[MultiServerConfigNotifier] Error clearing local cache: $e');
+      }
     }
   }
 }
@@ -839,54 +846,64 @@ final loadServerConfigProvider = FutureProvider<void>((ref) async {
   // Load other providers
   try {
     await ref.read(mcpServerConfigProvider.notifier).loadConfiguration();
-    if (kDebugMode)
+    if (kDebugMode) {
       print('[loadServerConfigProvider] MCP server config load triggered.');
+    }
   } catch (e) {
-    if (kDebugMode)
+    if (kDebugMode) {
       print(
         '[loadServerConfigProvider] Error initializing MCP config provider: $e',
       );
+    }
   }
   try {
     // Init Todoist API key provider (now independent of ServerConfig)
     await ref.read(todoistApiKeyProvider.notifier).init();
-    if (kDebugMode)
+    if (kDebugMode) {
       print('[loadServerConfigProvider] Todoist API key load triggered.');
+    }
   } catch (e) {
-    if (kDebugMode)
+    if (kDebugMode) {
       print(
         '[loadServerConfigProvider] Error initializing Todoist provider: $e',
       );
+    }
   }
   try {
     await ref.read(openAiApiKeyProvider.notifier).init();
-    if (kDebugMode)
+    if (kDebugMode) {
       print('[loadServerConfigProvider] OpenAI API key load triggered.');
+    }
   } catch (e) {
-    if (kDebugMode)
+    if (kDebugMode) {
       print(
         '[loadServerConfigProvider] Error initializing OpenAI provider: $e',
       );
+    }
   }
   try {
     await ref.read(openAiModelIdProvider.notifier).init();
-    if (kDebugMode)
+    if (kDebugMode) {
       print('[loadServerConfigProvider] OpenAI Model ID load triggered.');
+    }
   } catch (e) {
-    if (kDebugMode)
+    if (kDebugMode) {
       print(
         '[loadServerConfigProvider] Error initializing OpenAI Model ID provider: $e',
       );
+    }
   }
   try {
     await ref.read(cloudKitServiceProvider).initialize();
-    if (kDebugMode)
+    if (kDebugMode) {
       print(
         '[loadServerConfigProvider] CloudKit account status check complete.',
       );
+    }
   } catch (e) {
-    if (kDebugMode)
+    if (kDebugMode) {
       print('[loadServerConfigProvider] Error checking CloudKit status: $e');
+    }
   }
 
   if (kDebugMode) {

@@ -274,7 +274,7 @@ void main() {
       );
 
       // Access resource data as Map
-      final resourceInComment = resultComment.resources!.first;
+      final resourceInComment = resultComment.resources.first;
       expect(
         resourceInComment['name'],
         equals(uploadedResourceMap['name']),
@@ -312,7 +312,7 @@ void main() {
           hasLength(1),
           reason: 'Fetched comment should have one resource',
         );
-        final fetchedResource = fetchedComment.resources!.first;
+        final fetchedResource = fetchedComment.resources.first;
         expect(
           fetchedResource['name'],
           equals(uploadedResourceMap['name']),

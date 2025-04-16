@@ -164,10 +164,11 @@ class NotesNotifier extends StateNotifier<NotesState> {
 
     final baseApiService = _ref.read(api_p.apiServiceProvider);
     if (baseApiService is! NoteApiService) {
-      if (kDebugMode)
+      if (kDebugMode) {
         print(
           '[NotesNotifier._fetchPage] Active service is not NoteApiService. Aborting fetch.',
         );
+      }
       state = state.copyWith(
         isLoading: false,
         isLoadingMore: false,
@@ -895,7 +896,7 @@ final updateNoteProvider =
         print('[updateNoteProvider] Note \$id updated successfully.');
       }
       return result;
-    } catch (e, stackTrace) {
+    } catch (e) {
       // Added stackTrace
       if (kDebugMode) {
         print('[updateNoteProvider] Error updating note: \$e\n\$stackTrace');
@@ -929,7 +930,7 @@ final togglePinNoteProvider = Provider.family<
           .read(noteDetailCacheProvider.notifier)
           .update((state) => {...state, result.id: result});
       return result;
-    } catch (e, stackTrace) {
+    } catch (e) {
       // Added stackTrace
       if (kDebugMode) {
         print(
@@ -1123,10 +1124,11 @@ final moveNoteProvider = Provider.family<
       }
       createdNoteOnTarget = await (targetApiService)
           .createNote(noteDataForTarget);
-      if (kDebugMode)
+      if (kDebugMode) {
         print(
           '[moveNoteProvider] Note created on target with ID: \${createdNoteOnTarget!.id}',
         ); // Added null check
+      }
 
       // Adapt and Create Comments on Target
       if (sourceComments.isNotEmpty) {
@@ -1218,10 +1220,11 @@ final prefetchNoteDetailsProvider = Provider<
     final uncachedIds = ids.where((id) => !cache.containsKey(id)).toList();
     if (uncachedIds.isEmpty) return;
     if (apiService is! NoteApiService) {
-      if (kDebugMode)
+      if (kDebugMode) {
         print(
           '[prefetchNoteDetailsProvider] Active service does not support note operations. Skipping prefetch.',
         );
+      }
       return;
     }
     final NoteApiService noteApiService = apiService; // Cast

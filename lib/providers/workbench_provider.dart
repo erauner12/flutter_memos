@@ -141,10 +141,11 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
           );
 
       if (serverConfig == null) {
-        if (kDebugMode)
+        if (kDebugMode) {
           print(
             '[WorkbenchNotifier] Server config not found for $serverId. Skipping detail fetch for its items.',
           );
+        }
         continue; // Skip if server config doesn't exist anymore
       }
 
@@ -168,10 +169,11 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
       // We'll log a warning and skip detail fetching for these items.
       // TODO: Implement fetching details from non-active servers (e.g., using a service provider family or temporary instantiation).
       if (serverConfig.id != _ref.read(activeServerConfigProvider)?.id) {
-        if (kDebugMode)
+        if (kDebugMode) {
           print(
             '[WorkbenchNotifier] Skipping detail fetch for items on non-active server $serverId (${serverConfig.serverType.name}).',
           );
+        }
         // Add original items to futures list so they aren't lost
         detailFetchFutures.addAll(
           serverItems.map((item) => Future.value(item)),
@@ -180,10 +182,11 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
       }
       // If the active server *is* the one we're processing, ensure the service type is correct.
       if (!serviceTypeMatches) {
-        if (kDebugMode)
+        if (kDebugMode) {
           print(
             '[WorkbenchNotifier] Active API service type (${baseApiService.runtimeType}) does not match required type for server $serverId (${serverConfig.serverType.name}). Skipping detail fetch.',
           );
+        }
         detailFetchFutures.addAll(
           serverItems.map((item) => Future.value(item)),
         );
@@ -230,10 +233,11 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
                   overallLastUpdateTime = referencedItemUpdateTime;
                 }
               } catch (e) {
-                if (kDebugMode)
+                if (kDebugMode) {
                   print(
                     '[WorkbenchNotifier] Error fetching note ${itemRef.referencedItemId} on server $serverId: $e',
                   );
+                }
                 // Keep original preview/times if fetch fails
               }
 
@@ -258,10 +262,11 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
                   }
                 }
               } catch (e) {
-                if (kDebugMode)
+                if (kDebugMode) {
                   print(
                     '[WorkbenchNotifier] Error fetching comments for note ${itemRef.referencedItemId} on server $serverId: $e',
                   );
+                }
               }
             } else if (itemRef.referencedItemType == WorkbenchItemType.task &&
                 taskApiService != null) {
@@ -307,16 +312,18 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
                     }
                   }
                 } catch (e) {
-                  if (kDebugMode)
+                  if (kDebugMode) {
                     print(
                       '[WorkbenchNotifier] Error fetching comments for task ${itemRef.referencedItemId} on server $serverId: $e',
                     );
+                  }
                 }
               } catch (e) {
-                if (kDebugMode)
+                if (kDebugMode) {
                   print(
                     '[WorkbenchNotifier] Error fetching task ${itemRef.referencedItemId} on server $serverId: $e',
                   );
+                }
                 // Keep original preview/times if fetch fails
               }
             }
@@ -332,10 +339,11 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
               previewContent: updatedPreviewContent, // Update preview content
             );
           } catch (e) {
-            if (kDebugMode)
+            if (kDebugMode) {
               print(
                 '[WorkbenchNotifier] Error processing item ${itemRef.id} (refId: ${itemRef.referencedItemId}) on server $serverId: $e',
               );
+            }
             return itemRef; // Return original item on error for this specific item
           }
         }()); // Immediately invoke the async closure
@@ -383,8 +391,9 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
 
     // Check if there are items to refresh
     if (state.items.isEmpty) {
-      if (kDebugMode)
+      if (kDebugMode) {
         print('[WorkbenchNotifier] No items to refresh details for.');
+      }
       return;
     }
 
@@ -529,8 +538,9 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
   void reorderItems(int oldIndex, int newIndex) {
     if (!mounted) return;
     if (oldIndex < 0 || oldIndex >= state.items.length) return;
-    if (newIndex < 0 || newIndex > state.items.length)
+    if (newIndex < 0 || newIndex > state.items.length) {
       return; // Allow newIndex == length
+    }
 
     final currentItems = List<WorkbenchItemReference>.from(state.items);
     final item = currentItems.removeAt(oldIndex);
@@ -539,8 +549,9 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
     final effectiveNewIndex = (newIndex > oldIndex) ? newIndex - 1 : newIndex;
 
     // Ensure effectiveNewIndex is within bounds after removal
-    if (effectiveNewIndex < 0 || effectiveNewIndex > currentItems.length)
+    if (effectiveNewIndex < 0 || effectiveNewIndex > currentItems.length) {
       return;
+    }
 
     currentItems.insert(effectiveNewIndex, item);
     if (mounted) {
@@ -567,8 +578,9 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
     // Optimistic update: Clear local state immediately
     if (mounted) {
       state = state.copyWith(items: [], clearError: true);
-      if (kDebugMode)
+      if (kDebugMode) {
         print('[WorkbenchNotifier] Cleared local items optimistically.');
+      }
     }
 
     List<String> failedToDeleteIds = [];
@@ -582,18 +594,20 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
         );
         if (!success) {
           failedToDeleteIds.add(item.id);
-          if (kDebugMode)
+          if (kDebugMode) {
             print(
               '[WorkbenchNotifier] Failed to delete item ${item.id} from CloudKit.',
             );
+          }
         }
       } catch (e, s) {
         failedToDeleteIds.add(item.id);
         firstError ??= e; // Store the first error encountered
-        if (kDebugMode)
+        if (kDebugMode) {
           print(
             '[WorkbenchNotifier] Error deleting item ${item.id} from CloudKit: $e\n$s',
           );
+        }
       }
     }
 
@@ -613,16 +627,18 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
             firstError ??
             Exception('Failed to delete some items from CloudKit'),
       );
-      if (kDebugMode)
+      if (kDebugMode) {
         print(
           '[WorkbenchNotifier] Reverted state due to CloudKit deletion failures. ${remainingItems.length} items remain.',
         );
+      }
     } else if (mounted) {
       // If all deletions succeeded or no failures occurred and still mounted
-      if (kDebugMode)
+      if (kDebugMode) {
         print(
           '[WorkbenchNotifier] All items successfully cleared from CloudKit.',
         );
+      }
       // State is already cleared optimistically, ensure error is null if successful
       if (state.error != null) {
         state = state.copyWith(clearError: true);

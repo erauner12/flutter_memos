@@ -722,7 +722,7 @@ void main() {
         expect(resultComment.content, equals(commentContent));
         expect(resultComment.resources, isNotNull);
         expect(resultComment.resources, hasLength(1));
-        final finalResource = resultComment.resources!.first;
+        final finalResource = resultComment.resources.first;
         expect(finalResource['name'], equals(mockResourceName));
         expect(finalResource['filename'], equals(mockFilename));
         expect(
