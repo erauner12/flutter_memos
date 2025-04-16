@@ -1,20 +1,17 @@
 import 'dart:async';
 
-import 'dart:async';
-
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_memos/models/comment.dart'; // Import Comment
 import 'package:flutter_memos/models/server_config.dart';
 import 'package:flutter_memos/models/task_item.dart'; // Import TaskItem
 import 'package:flutter_memos/models/workbench_item_reference.dart';
-import 'package:flutter_memos/providers/server_config_provider.dart'; // &lt;-- Add this import for activeServerConfigProvider and multiServerConfigProvider
+import 'package:flutter_memos/providers/server_config_provider.dart'; // Add this import for activeServerConfigProvider and multiServerConfigProvider
 import 'package:flutter_memos/providers/task_providers.dart'; // Import task providers for actions
 import 'package:flutter_memos/providers/workbench_provider.dart';
 import 'package:flutter_memos/screens/tasks/new_task_screen.dart'; // Import task edit screen
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart'; // For date formatting
 import 'package:uuid/uuid.dart'; // For generating UUIDs
-
 
 class WorkbenchItemTile extends ConsumerWidget {
   final WorkbenchItemReference itemReference;
@@ -67,9 +64,8 @@ class WorkbenchItemTile extends ConsumerWidget {
     }
   }
 
-   // Helper to show simple alert dialogs
+  // Helper to show simple alert dialogs
   void _showAlertDialog(BuildContext context, String title, String message) {
-    if (!mounted) return; // Basic mounted check
     showCupertinoDialog(
       context: context,
       builder: (context) => CupertinoAlertDialog(
@@ -86,12 +82,22 @@ class WorkbenchItemTile extends ConsumerWidget {
     );
   }
 
-
-  @override
+  // Helper to show snackbar messages
+  void _showSnackBar(
+    BuildContext context,
+    String message, {
+    bool isError = false,
+  }) {
+    final snackBar = SnackBar(
+      content: Text(
+        message,
+        style: TextStyle(
+          color: isError ? CupertinoColors.destructiveRed : null,
+        ),
+      ),
     );
     ScaffoldMessenger.of(context).showSnackBar(snackBar);
   }
-
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -128,17 +134,11 @@ class WorkbenchItemTile extends ConsumerWidget {
         // Conditional actions for Tasks
         if (itemReference.referencedItemType == WorkbenchItemType.task &&
             isOnActiveServer)
-        // Need to fetch the task's current completed status to show correct action
-        // For simplicity here, we might offer both, or fetch status onClick. Let's offer both for now.
-        // A better way involves fetching the task detail *first* if needed.
         ...[
-          // We need the actual task status. Let's fetch it temporarily or rely on a detail provider.
-          // For now, let's assume we can call the complete/reopen actions.
           CupertinoContextMenuAction(
             child: const Text('Toggle Complete'), // Simplistic label
             onPressed: () async {
               Navigator.pop(context); // Close menu first
-              // We need the current status. Fetch task detail.
               try {
                 final task = await ref.read(
                   taskDetailProvider(itemReference.referencedItemId).future,
@@ -148,14 +148,16 @@ class WorkbenchItemTile extends ConsumerWidget {
                   success = await ref
                       .read(tasksNotifierProvider.notifier)
                       .reopenTask(task.id);
-                  if (success && context.mounted)
+                  if (success && context.mounted) {
                     _showSnackBar(context, 'Task reopened.');
+                  }
                 } else {
                   success = await ref
                       .read(tasksNotifierProvider.notifier)
                       .completeTask(task.id);
-                  if (success && context.mounted)
+                  if (success && context.mounted) {
                     _showSnackBar(context, 'Task completed.');
+                  }
                 }
                 if (!success && context.mounted) {
                   _showSnackBar(
@@ -164,15 +166,15 @@ class WorkbenchItemTile extends ConsumerWidget {
                     isError: true,
                   );
                 }
-                // Refresh workbench details after action
                 ref.read(workbenchProvider.notifier).refreshItemDetails();
               } catch (e) {
-                if (context.mounted)
+                if (context.mounted) {
                   _showSnackBar(
                     context,
                     'Error getting task status: $e',
                     isError: true,
                   );
+                }
               }
             },
           ),
@@ -184,7 +186,6 @@ class WorkbenchItemTile extends ConsumerWidget {
           child: const Text('Remove from Workbench'),
           onPressed: () {
             Navigator.pop(context); // Close context menu
-            // Show confirmation dialog before removing
             showCupertinoDialog(
               context: context,
               builder:
@@ -246,7 +247,6 @@ class WorkbenchItemTile extends ConsumerWidget {
             ),
             boxShadow: [
               BoxShadow(
-                // Subtle shadow
                 color: CupertinoColors.black.withAlpha((0.03 * 255).toInt()),
                 blurRadius: 6,
                 offset: const Offset(0, 1),
@@ -307,7 +307,6 @@ class WorkbenchItemTile extends ConsumerWidget {
                       ],
                     ),
                   ),
-                  // Trailing Server Type Icon
                   Padding(
                     padding: const EdgeInsets.only(left: 8.0, top: 2.0),
                     child: Icon(
@@ -318,7 +317,6 @@ class WorkbenchItemTile extends ConsumerWidget {
                   ),
                 ],
               ),
-              // Threaded comment preview (only show if it's not a comment item itself)
               if (itemReference.referencedItemType != WorkbenchItemType.comment)
                 _buildCommentPreview(context, itemReference.latestComment),
             ],
@@ -336,7 +334,6 @@ class WorkbenchItemTile extends ConsumerWidget {
     );
     final italicStyle = textStyle.copyWith(fontStyle: FontStyle.italic);
 
-    // If no comment, show 'No comments yet'
     if (comment == null) {
       return Container(
         margin: const EdgeInsets.only(top: 10), // Reduced margin
@@ -365,7 +362,6 @@ class WorkbenchItemTile extends ConsumerWidget {
       );
     }
 
-    // If comment exists, show its content
     return Container(
       margin: const EdgeInsets.only(top: 10),
       padding: const EdgeInsets.only(left: 14, top: 6, bottom: 6, right: 6),
@@ -394,11 +390,11 @@ class WorkbenchItemTile extends ConsumerWidget {
   }
 
   // Helper for actual navigation (call AFTER server switch if needed)
-  void _navigateToItem(
+  Future<void> _navigateToItem(
     BuildContext context,
     WidgetRef ref,
     WorkbenchItemReference itemRef,
-  ) {
+  ) async {
     final String itemId = itemRef.referencedItemId;
     final bool isRootNav =
         Navigator.of(context).canPop() ==
@@ -429,27 +425,23 @@ class WorkbenchItemTile extends ConsumerWidget {
             context,
             'Cannot navigate to comment: Parent note ID is missing.',
           );
-        } else {
-           _showErrorDialog(context, 'Cannot navigate to comment: Parent note ID is missing.');
         }
         break;
       case WorkbenchItemType.task:
-         // Fetch the task details first
         try {
-           final task = await ref.read(taskDetailProvider(itemId).future);
-           if (context.mounted) { // Check mounted again after await
-             Navigator.of(context, rootNavigator: isRootNav).push(
-               CupertinoPageRoute(
-                 builder: (context) => NewTaskScreen(taskToEdit: task),
-               ),
-             );
-           }
+          final task = await ref.read(taskDetailProvider(itemId).future);
+          if (context.mounted) {
+            Navigator.of(context, rootNavigator: isRootNav).push(
+              CupertinoPageRoute(
+                builder: (context) => NewTaskScreen(taskToEdit: task),
+              ),
+            );
+          }
         } catch (e) {
-           if (context.mounted) { // Check mounted in catch block
-             _showErrorDialog(context, 'Failed to load task details: $e');
-           }
+          if (context.mounted) {
+            _showErrorDialog(context, 'Failed to load task details: $e');
+          }
         }
-        );
         break;
     }
   }
@@ -472,7 +464,6 @@ class WorkbenchItemTile extends ConsumerWidget {
           ),
     );
   }
-
 
   // Add this method back below _navigateToItem:
   void _showServerSwitchRequiredDialog(
@@ -498,67 +489,56 @@ class WorkbenchItemTile extends ConsumerWidget {
                 child: const Text('Switch & View'),
                 onPressed: () async {
                   Navigator.pop(dialogContext); // Close the dialog first
-                  // --- Actual Switch Logic ---
                   ref
                       .read(multiServerConfigProvider.notifier)
                       .setActiveServer(itemRef.serverId);
 
-                  // Wait for the active server provider to reflect the change
                   final completer = Completer<void>();
-                  // Use a local variable for the subscription to allow closing it.
                   ProviderSubscription<ServerConfig?>? sub;
-                  // Listen directly to the provider state changes.
                   sub = ref.listen<ServerConfig?>(
                     activeServerConfigProvider,
                     (previous, next) {
-                      // Check if the subscription still exists and completer is not completed.
                       if (sub != null &&
                           next?.id == itemRef.serverId &&
                           !completer.isCompleted) {
                         completer.complete();
-                        sub?.close(); // Close the subscription once completed.
-                        sub = null; // Clear the reference.
+                        sub?.close();
+                        sub = null;
                       }
                     },
-                 // Add onError callback correctly
-                  onError: (error, stackTrace) {
-                     if (!completer.isCompleted) {
-                       completer.completeError(error, stackTrace);
-                       sub?.close();
-                       sub = null;
-                     }
-                  }
-               );
-                // Check initial state synchronously after listener setup
-                // This replaces fireImmediately: true functionality
-                final currentState = ref.read(activeServerConfigProvider);
-                if (currentState?.id == itemRef.serverId && !completer.isCompleted) {
-                    completer.complete();
-                    sub?.close(); // Close the subscription
-                    sub = null;
-                }
-
-
-                  try {
-                    // Add a timeout to prevent waiting indefinitely
-                    await completer.future.timeout(const Duration(seconds: 5));
-                    // Ensure the widget is still mounted before navigating
-                    if (context.mounted) {
-                      _navigateToItem(context, ref, itemRef);
-                    }
-                    } catch (e) {
-                      if (context.mounted) {
-                        _showAlertDialog(context, 'Error', 'Failed to switch server or timed out.');
+                    onError: (error, stackTrace) {
+                      if (!completer.isCompleted) {
+                        completer.completeError(error, stackTrace);
+                        sub?.close();
+                        sub = null;
                       }
-                      // Ensure subscription is closed on error/timeout
-                      sub?.close();
-                      );
-                    }
-                    // Ensure subscription is closed on error/timeout
+                    },
+                  );
+
+                  final currentState = ref.read(activeServerConfigProvider);
+                  if (currentState?.id == itemRef.serverId &&
+                      !completer.isCompleted) {
+                    completer.complete();
                     sub?.close();
                     sub = null;
                   }
-                  // --- End Switch Logic ---
+
+                  try {
+                    await completer.future.timeout(const Duration(seconds: 5));
+                    if (context.mounted) {
+                      _navigateToItem(context, ref, itemRef);
+                    }
+                  } catch (e) {
+                    if (context.mounted) {
+                      _showAlertDialog(
+                        context,
+                        'Error',
+                        'Failed to switch server or timed out.',
+                      );
+                    }
+                    sub?.close();
+                    sub = null;
+                  }
                 },
               ),
             ],
@@ -566,4 +546,3 @@ class WorkbenchItemTile extends ConsumerWidget {
     );
   }
 }
-// Removed invalid extension and misplaced State class definition
