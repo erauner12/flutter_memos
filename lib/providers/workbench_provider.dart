@@ -104,7 +104,6 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
     }
   }
 
-  // Add this new private method inside WorkbenchNotifier class
   Future<void> _fetchAndPopulateDetails(
     List<WorkbenchItemReference> itemsToProcess,
   ) async {
@@ -153,7 +152,6 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
       // We might need to instantiate a temporary service if it's not the active one.
       // For simplicity now, we'll assume the active service provider correctly reflects
       // the necessary type IF the server matches the active one, or fetch fails gracefully.
-      // A better approach might involve a family provider for services.
       final baseApiService = _ref.read(
         apiServiceProvider,
       ); // This reflects the ACTIVE server's service
@@ -193,6 +191,7 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
       }
 
       // Cast the active service to the correct type based on the serverConfig
+      // Ensure the active service matches the server type being processed
       final NoteApiService? noteApiService =
           baseApiService is NoteApiService &&
                   (serverConfig.serverType == ServerType.memos ||
@@ -205,7 +204,6 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
               ? baseApiService
               : null;
 
-
       for (final itemRef in serverItems) {
         detailFetchFutures.add(() async {
           try {
@@ -213,6 +211,7 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
             DateTime? referencedItemUpdateTime;
             String? updatedPreviewContent =
                 itemRef.previewContent; // Keep original unless updated
+            // Initialize with addedTimestamp, update if newer activity found
             DateTime overallLastUpdateTime = itemRef.addedTimestamp;
 
             if (itemRef.referencedItemType == WorkbenchItemType.note &&
@@ -226,6 +225,7 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
                 referencedItemUpdateTime = note.updateTime;
                 updatedPreviewContent =
                     note.content; // Update preview from latest note content
+                // Update overall time if note update is newer than added time
                 if (referencedItemUpdateTime.isAfter(overallLastUpdateTime)) {
                   overallLastUpdateTime = referencedItemUpdateTime;
                 }
@@ -234,6 +234,7 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
                   print(
                     '[WorkbenchNotifier] Error fetching note ${itemRef.referencedItemId} on server $serverId: $e',
                   );
+                // Keep original preview/times if fetch fails
               }
 
               // Fetch comments for Note
@@ -251,6 +252,7 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
                   latestComment = comments.first;
                   final DateTime commentTime =
                       latestComment.updatedTs ?? latestComment.createdTs;
+                  // Update overall time if latest comment is newer
                   if (commentTime.isAfter(overallLastUpdateTime)) {
                     overallLastUpdateTime = commentTime;
                   }
@@ -269,26 +271,28 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
                 final task = await taskApiService.getTask(
                   itemRef.referencedItemId,
                 );
-                // Use task creation or a hypothetical update time if available
-                // Todoist API v2 task object has 'created_at', but not obviously 'updated_at'. Use createdAt for now.
+                // Use task creation time as the primary update time for the task itself
+                // Todoist API v2 task object has 'created_at', but not obviously 'updated_at'.
                 referencedItemUpdateTime = task.createdAt;
                 updatedPreviewContent =
                     task.content; // Update preview from latest task content
-                // Determine overall last update time (e.g., creation time, maybe due date?)
+
+                // Determine overall last update time: start with task creation time
                 DateTime taskActivityTime = task.createdAt;
-                // Consider due date as activity? Maybe not, stick to creation/modification.
-                // if (task.dueDate != null && task.dueDate!.isAfter(taskActivityTime)) {
-                //   taskActivityTime = task.dueDate!;
-                // }
+
+                // Update overall time if task creation is newer than added time
                 if (taskActivityTime.isAfter(overallLastUpdateTime)) {
                   overallLastUpdateTime = taskActivityTime;
                 }
+
                 // Fetch comments for Task
                 try {
+                  // Use the task-specific listComments method
                   final comments = await taskApiService.listComments(
-                    itemRef.referencedItemId,
+                    itemRef.referencedItemId, // Pass task ID here
                   );
                   if (comments.isNotEmpty) {
+                    // Sort comments by update/creation time descending
                     comments.sort(
                       (a, b) => (b.updatedTs ?? b.createdTs).compareTo(
                         a.updatedTs ?? a.createdTs,
@@ -297,6 +301,7 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
                     latestComment = comments.first;
                     final DateTime commentTime =
                         latestComment.updatedTs ?? latestComment.createdTs;
+                    // Update overall time if latest comment is newer
                     if (commentTime.isAfter(overallLastUpdateTime)) {
                       overallLastUpdateTime = commentTime;
                     }
@@ -312,20 +317,24 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
                   print(
                     '[WorkbenchNotifier] Error fetching task ${itemRef.referencedItemId} on server $serverId: $e',
                   );
+                // Keep original preview/times if fetch fails
               }
             }
             // else: If item is a comment, overallLastUpdateTime remains addedTimestamp for now
 
+            // Return the updated reference
             return itemRef.copyWith(
-              latestComment: () => latestComment, // Use ValueGetter for null
-              referencedItemUpdateTime: () => referencedItemUpdateTime,
-              overallLastUpdateTime: overallLastUpdateTime,
+              latestComment:
+                  () => latestComment, // Use ValueGetter for nullability
+              referencedItemUpdateTime:
+                  () => referencedItemUpdateTime, // Use ValueGetter
+              overallLastUpdateTime: overallLastUpdateTime, // Pass directly
               previewContent: updatedPreviewContent, // Update preview content
             );
           } catch (e) {
             if (kDebugMode)
               print(
-                '[WorkbenchNotifier] Error processing item ${itemRef.id} on server $serverId: $e',
+                '[WorkbenchNotifier] Error processing item ${itemRef.id} (refId: ${itemRef.referencedItemId}) on server $serverId: $e',
               );
             return itemRef; // Return original item on error for this specific item
           }
@@ -367,7 +376,6 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
     }
   }
 
-  // Add this new public method inside WorkbenchNotifier class
   Future<void> refreshItemDetails() async {
     // Prevent concurrent loads/refreshes
     if (state.isLoading || state.isRefreshingDetails) return;

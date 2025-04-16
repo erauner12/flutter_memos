@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
+import 'package:flutter_hooks/flutter_hooks.dart'; // Add import for hooks
 import 'package:flutter_memos/models/server_config.dart';
 import 'package:flutter_memos/models/task_item.dart';
 import 'package:flutter_memos/models/workbench_item_reference.dart';
@@ -23,42 +24,19 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
   @override
   void initState() {
     super.initState();
-    // Fetch tasks when the screen is initialized if the active server is Todoist
-    // Use addPostFrameCallback to ensure ref is accessible.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _triggerFetchTasks();
-      // Listen for active server changes to refetch if Todoist becomes active
-      ref.listen(activeServerConfigProvider, (previous, next) {
-        if (next?.serverType == ServerType.todoist) {
-           Future.microtask(() => _triggerFetchTasks()); // Use microtask for safety
-        } else {
-          // Clear tasks if server switches away from Todoist
-           Future.microtask(() => ref.read(tasksNotifierProvider.notifier).clearTasksForNonTodoist());
-        }
-      });
-    });
+    // Initial fetch can still be triggered here if needed,
+    // but the effect in build might be sufficient and safer.
+    // We'll rely on the effect in build for the initial fetch.
+    // WidgetsBinding.instance.addPostFrameCallback((_) {
+    //   _triggerFetchTasks(); // Keep this if you want an immediate fetch attempt on first load
+    // });
   }
 
-  // Helper to safely trigger fetchTasks
+  // Helper to safely trigger fetchTasks (can be kept for refresh logic)
   void _triggerFetchTasks() {
     // Check mounted state and server type before fetching
     if (mounted && ref.read(activeServerConfigProvider)?.serverType == ServerType.todoist) {
       ref.read(tasksNotifierProvider.notifier).fetchTasks();
-    }
-  }
-
-
-  Future<void> _handleRefresh() async {
-    // Check if the active server is Todoist before refreshing
-    final activeServer = ref.read(activeServerConfigProvider);
-    if (activeServer?.serverType == ServerType.todoist) {
-      await ref.read(tasksNotifierProvider.notifier).fetchTasks();
-    } else {
-      // Optionally show a message or just do nothing
-      debugPrint(
-        // Changed from print
-        "Refresh skipped: Active server is not Todoist.",
-      );
     }
   }
 
@@ -110,22 +88,65 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Watch necessary providers
+    final activeServer = ref.watch(activeServerConfigProvider);
     final tasksState = ref.watch(tasksNotifierProvider);
     final tasks = ref.watch(filteredTasksProvider); // Watch the filtered list
-    final activeServer = ref.watch(activeServerConfigProvider);
     final bool isTodoistActive = activeServer?.serverType == ServerType.todoist;
+
+    // Use useEffect to handle side effects like fetching data based on state changes
+    useEffect(
+      () {
+        // Check if the widget is still mounted before proceeding
+        if (!mounted) return null;
+
+        if (isTodoistActive) {
+          // Fetch only if Todoist is active, tasks are empty, not loading, and no error
+          // This prevents fetching on every rebuild.
+          if (tasksState.tasks.isEmpty &&
+              !tasksState.isLoading &&
+              tasksState.error == null) {
+            Future.microtask(
+              () => ref.read(tasksNotifierProvider.notifier).fetchTasks(),
+            );
+          }
+        } else {
+          // If not Todoist active and tasks are currently loaded, clear them
+          if (tasksState.tasks.isNotEmpty) {
+            Future.microtask(
+              () =>
+                  ref
+                      .read(tasksNotifierProvider.notifier)
+                      .clearTasksForNonTodoist(),
+            );
+          }
+        }
+        // Return null as there's no cleanup function needed for this effect.
+        // Dependencies: run this effect when isTodoistActive changes, or when loading/error state resets.
+        return null;
+      },
+      [
+        isTodoistActive,
+        tasksState.isLoading,
+        tasksState.error,
+        tasksState.tasks.isEmpty,
+      ],
+    );
+
 
     return CupertinoPageScaffold(
       navigationBar: CupertinoNavigationBar(
         middle: const Text('Tasks'),
         leading: CupertinoButton(
           padding: EdgeInsets.zero,
+          // Disable refresh if not Todoist or already loading
           onPressed:
               tasksState.isLoading || !isTodoistActive ? null : _handleRefresh,
           child: const Icon(CupertinoIcons.refresh),
         ),
         trailing: CupertinoButton(
           padding: EdgeInsets.zero,
+          // Disable add button if not Todoist active
           onPressed: !isTodoistActive ? null : () {
             // Navigate to a New Task Screen
             Navigator.of(context).push(
@@ -143,18 +164,24 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
           builder: (context) {
             if (!isTodoistActive) {
               return const Center(
-                child: Text(
-                  'Select a Todoist server in Settings to view tasks.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: CupertinoColors.secondaryLabel),
+                child: Padding(
+                  // Add padding for better spacing
+                  padding: EdgeInsets.all(16.0),
+                  child: Text(
+                    'Select a Todoist server in Settings to view tasks.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: CupertinoColors.secondaryLabel),
+                  ),
                 ),
               );
             }
 
+            // Show loading indicator ONLY if loading AND tasks list is empty
             if (tasksState.isLoading && tasks.isEmpty) {
               return const Center(child: CupertinoActivityIndicator());
             }
 
+            // Show error message ONLY if error exists AND tasks list is empty
             if (tasksState.error != null && tasks.isEmpty) {
               return Center(
                 child: Padding(
@@ -168,24 +195,35 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
               );
             }
 
-            if (tasks.isEmpty && !tasksState.isLoading) {
+            // Show "No tasks" message ONLY if not loading, no error, and tasks list is empty
+            if (tasks.isEmpty &&
+                !tasksState.isLoading &&
+                tasksState.error == null) {
               return Center(
-                child: Text(
-                  'No tasks found.\nPull down to refresh or add a new task.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: CupertinoColors.secondaryLabel.resolveFrom(context),
+                child: Padding(
+                  // Add padding
+                  padding: const EdgeInsets.all(16.0),
+                  child: Text(
+                    'No tasks found.\nPull down to refresh or add a new task.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: CupertinoColors.secondaryLabel.resolveFrom(
+                        context,
+                      ),
+                    ),
                   ),
                 ),
               );
             }
 
+            // Display the list (or potentially loading indicator on top if refreshing)
             // Use CustomScrollView for pull-to-refresh
             return CustomScrollView(
               slivers: [
                 CupertinoSliverRefreshControl(
                   onRefresh: _handleRefresh,
                 ),
+                // Show list even if loading is true (for pull-to-refresh indicator)
                 SliverList(
                   delegate: SliverChildBuilderDelegate(
                     (context, index) {
@@ -198,7 +236,8 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
                             success = await ref.read(tasksNotifierProvider.notifier).completeTask(task.id);
                           } else {
                             success = await ref.read(tasksNotifierProvider.notifier).reopenTask(task.id);
-                            _handleRefresh();
+                          // Consider refreshing list after reopen if sort order might change
+                          // _handleRefresh(); // Or just rely on optimistic update
                         }
 
                         if (!success && mounted) {
@@ -234,10 +273,11 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
                                 // Refresh on error to potentially correct state
                                 _handleRefresh();
                               } else if (success && mounted) {
-                            _showAlertDialog(
-                              'Deleted',
-                              'Task "${task.content}" deleted.',
-                            );
+                            // Optional: Show confirmation, but might be annoying
+                            // _showAlertDialog(
+                            //   'Deleted',
+                            //   'Task "${task.content}" deleted.',
+                            // );
                               }
                             }
                         },
