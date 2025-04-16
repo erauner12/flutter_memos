@@ -95,9 +95,9 @@ class TodoistApiService implements TaskApiService {
     } catch (e) {
       // Use stderr.writeln for errors
       stderr.writeln(
-        '[TodoistApiService] Error initializing client: \$e',
+        '[TodoistApiService] Error initializing client: $e',
       );
-      throw Exception('Failed to initialize Todoist API client: \$e');
+      throw Exception('Failed to initialize Todoist API client: $e');
     }
   }
 
@@ -122,7 +122,7 @@ class TodoistApiService implements TaskApiService {
     } catch (e) {
       if (verboseLogging) {
         // Use stderr.writeln for server-side logging
-        stderr.writeln('[TodoistApiService] Health check failed: \$e');
+        stderr.writeln('[TodoistApiService] Health check failed: $e');
       }
       return false;
     }
@@ -147,7 +147,7 @@ class TodoistApiService implements TaskApiService {
 
       if (verboseLogging) {
         stderr.writeln(
-          '[TodoistApiService] Retrieved \${tasks?.length ?? 0} raw tasks',
+          '[TodoistApiService] Retrieved ${tasks?.length ?? 0} raw tasks',
         );
       }
 
@@ -161,7 +161,7 @@ class TodoistApiService implements TaskApiService {
 
       if (verboseLogging) {
         stderr.writeln(
-          '[TodoistApiService] Mapped to \${taskItems.length} TaskItems',
+          '[TodoistApiService] Mapped to ${taskItems.length} TaskItems',
         );
       }
 
@@ -182,25 +182,27 @@ class TodoistApiService implements TaskApiService {
   }) async {
     if (verboseLogging) {
       stderr.writeln(
-        '[TodoistApiService] Getting active task by ID (getTask): \$id',
+        '[TodoistApiService] Getting active task by ID (getTask): $id',
       );
     }
 
     try {
       final taskIdInt = int.tryParse(id);
       if (taskIdInt == null) {
-        stderr.writeln('[TodoistApiService] Error: Invalid task ID format provided: "\$id"');
-        throw ArgumentError('Invalid task ID format: \$id');
+        stderr.writeln(
+          '[TodoistApiService] Error: Invalid task ID format provided: "$id"',
+        );
+        throw ArgumentError('Invalid task ID format: $id');
       }
       final task = await _tasksApi.getActiveTask(taskIdInt);
 
       if (task == null) {
-        throw Exception('Task with ID \$id not found.');
+        throw Exception('Task with ID $id not found.');
       }
 
       if (verboseLogging) {
         stderr.writeln(
-          '[TodoistApiService] Retrieved raw task: \${task.content}',
+          '[TodoistApiService] Retrieved raw task: ${task.content}',
         );
       }
 
@@ -215,7 +217,7 @@ class TodoistApiService implements TaskApiService {
       return taskItem;
 
     } catch (e) {
-      _handleApiError('Error getting task by ID \$id (getTask)', e);
+      _handleApiError('Error getting task by ID $id (getTask)', e);
       rethrow;
     }
   }
@@ -229,7 +231,7 @@ class TodoistApiService implements TaskApiService {
   }) async {
     if (verboseLogging) {
       stderr.writeln(
-        '[TodoistApiService] Creating task from TaskItem: \${taskItem.content}',
+        '[TodoistApiService] Creating task from TaskItem: ${taskItem.content}',
       );
     }
 
@@ -254,7 +256,7 @@ class TodoistApiService implements TaskApiService {
 
       if (verboseLogging) {
         stderr.writeln(
-          '[TodoistApiService] Raw Task created successfully with ID: \${createdTodoistTask.id}',
+          '[TodoistApiService] Raw Task created successfully with ID: ${createdTodoistTask.id}',
         );
       }
 
@@ -287,7 +289,7 @@ class TodoistApiService implements TaskApiService {
     ServerConfig? targetServerOverride /* Ignored */,
   }) async {
     if (verboseLogging) {
-      stderr.writeln('[TodoistApiService] Updating task from TaskItem: \$id');
+      stderr.writeln('[TodoistApiService] Updating task from TaskItem: $id');
     }
 
     // Map TaskItem fields to todoist.UpdateTaskRequest
@@ -312,14 +314,14 @@ class TodoistApiService implements TaskApiService {
          // Fetch the task again to return the updated TaskItem.
          if (verboseLogging) {
            stderr.writeln(
-             '[TodoistApiService] Task \$id updated successfully (204). Fetching updated task...',
+            '[TodoistApiService] Task $id updated successfully (204). Fetching updated task...',
            );
          }
          return await getTask(id, targetServerOverride: targetServerOverride);
       } else if (response.statusCode >= HttpStatus.ok && response.statusCode < HttpStatus.multipleChoices) {
          // If the API *did* return a body (unexpected based on spec, but handle defensively)
          stderr.writeln(
-           '[TodoistApiService] Warning: updateTask API returned status \${response.statusCode} with body, expected 204. Attempting to parse.',
+          '[TodoistApiService] Warning: updateTask API returned status ${response.statusCode} with body, expected 204. Attempting to parse.',
          );
          if (response.body.isNotEmpty) {
             final updatedTodoistTask = await _apiClient.deserializeAsync((await _decodeBodyBytes(response)) as String, 'Task') as todoist.Task?;
@@ -330,7 +332,7 @@ class TodoistApiService implements TaskApiService {
          }
          // Fallback: If parsing failed or body was empty despite 2xx status, fetch manually
          stderr.writeln(
-           '[TodoistApiService] Fallback: Fetching task \$id manually after unexpected update response.',
+          '[TodoistApiService] Fallback: Fetching task $id manually after unexpected update response.',
          );
          return await getTask(id, targetServerOverride: targetServerOverride);
       } else {
@@ -339,7 +341,7 @@ class TodoistApiService implements TaskApiService {
       }
 
     } catch (e) {
-      _handleApiError('Error updating task \$id from TaskItem', e);
+      _handleApiError('Error updating task $id from TaskItem', e);
       rethrow; // Rethrow the original error
     }
   }
@@ -352,23 +354,23 @@ class TodoistApiService implements TaskApiService {
     ServerConfig? targetServerOverride /* Ignored */,
   }) async {
     if (verboseLogging) {
-      stderr.writeln('[TodoistApiService] Deleting task (deleteTask): \$id');
+      stderr.writeln('[TodoistApiService] Deleting task (deleteTask): $id');
     }
 
     try {
       final taskIdInt = int.tryParse(id);
       if (taskIdInt == null) {
-        throw ArgumentError('Invalid task ID format: \$id');
+        throw ArgumentError('Invalid task ID format: $id');
       }
       await _tasksApi.deleteTask(taskIdInt);
 
       if (verboseLogging) {
         stderr.writeln(
-          '[TodoistApiService] Task \$id deleted successfully',
+          '[TodoistApiService] Task $id deleted successfully',
         );
       }
     } catch (e) {
-      _handleApiError('Error deleting task \$id', e);
+      _handleApiError('Error deleting task $id', e);
       rethrow;
     }
   }
@@ -383,23 +385,23 @@ class TodoistApiService implements TaskApiService {
     ServerConfig? targetServerOverride /* Ignored */,
   }) async {
     if (verboseLogging) {
-      stderr.writeln('[TodoistApiService] Closing task (completeTask): \$id');
+      stderr.writeln('[TodoistApiService] Closing task (completeTask): $id');
     }
 
     try {
       final taskIdInt = int.tryParse(id);
       if (taskIdInt == null) {
-        throw ArgumentError('Invalid task ID format: \$id');
+        throw ArgumentError('Invalid task ID format: $id');
       }
       await _tasksApi.closeTask(taskIdInt);
 
       if (verboseLogging) {
         stderr.writeln(
-          '[TodoistApiService] Task \$id closed successfully',
+          '[TodoistApiService] Task $id closed successfully',
         );
       }
     } catch (e) {
-      _handleApiError('Error closing task \$id', e);
+      _handleApiError('Error closing task $id', e);
       rethrow;
     }
   }
@@ -412,23 +414,23 @@ class TodoistApiService implements TaskApiService {
     ServerConfig? targetServerOverride /* Ignored */,
   }) async {
     if (verboseLogging) {
-      stderr.writeln('[TodoistApiService] Reopening task (reopenTask): \$id');
+      stderr.writeln('[TodoistApiService] Reopening task (reopenTask): $id');
     }
 
     try {
       final taskIdInt = int.tryParse(id);
       if (taskIdInt == null) {
-        throw ArgumentError('Invalid task ID format: \$id');
+        throw ArgumentError('Invalid task ID format: $id');
       }
       await _tasksApi.reopenTask(taskIdInt);
 
       if (verboseLogging) {
         stderr.writeln(
-          '[TodoistApiService] Task \$id reopened successfully',
+          '[TodoistApiService] Task $id reopened successfully',
         );
       }
     } catch (e) {
-      _handleApiError('Error reopening task \$id', e);
+      _handleApiError('Error reopening task $id', e);
       rethrow;
     }
   }
@@ -444,7 +446,7 @@ class TodoistApiService implements TaskApiService {
   }) async {
     if (verboseLogging) {
       stderr.writeln(
-        '[TodoistApiService] Getting comments for task \$taskId (listComments)',
+        '[TodoistApiService] Getting comments for task $taskId (listComments)',
       );
     }
 
@@ -453,7 +455,7 @@ class TodoistApiService implements TaskApiService {
 
       if (verboseLogging) {
         stderr.writeln(
-          '[TodoistApiService] Retrieved \${comments?.length ?? 0} raw comments for task \$taskId',
+          '[TodoistApiService] Retrieved ${comments?.length ?? 0} raw comments for task $taskId',
         );
       }
 
@@ -470,13 +472,13 @@ class TodoistApiService implements TaskApiService {
 
       if (verboseLogging) {
         stderr.writeln(
-          '[TodoistApiService] Mapped to \${commentItems.length} Comment models',
+          '[TodoistApiService] Mapped to ${commentItems.length} Comment models',
         );
       }
 
       return commentItems;
     } catch (e) {
-      _handleApiError('Error getting comments for task \$taskId', e);
+      _handleApiError('Error getting comments for task $taskId', e);
       rethrow;
     }
   }
@@ -489,23 +491,23 @@ class TodoistApiService implements TaskApiService {
   }) async {
     if (verboseLogging) {
       stderr.writeln(
-        '[TodoistApiService] Getting comment by ID (getComment): \$commentId',
+        '[TodoistApiService] Getting comment by ID (getComment): $commentId',
       );
     }
     try {
       final commentIdInt = int.tryParse(commentId);
       if (commentIdInt == null) {
-        throw ArgumentError('Invalid comment ID format: \$commentId');
+        throw ArgumentError('Invalid comment ID format: $commentId');
       }
       final todoistComment = await _commentsApi.getComment(commentIdInt);
 
       if (todoistComment == null) {
-        throw Exception('Comment with ID \$commentId not found.');
+        throw Exception('Comment with ID $commentId not found.');
       }
 
       if (verboseLogging) {
         stderr.writeln(
-          '[TodoistApiService] Retrieved raw comment: \${todoistComment.content}',
+          '[TodoistApiService] Retrieved raw comment: ${todoistComment.content}',
         );
       }
 
@@ -520,7 +522,7 @@ class TodoistApiService implements TaskApiService {
 
       return commentItem;
     } catch (e) {
-      _handleApiError('Error getting comment by ID \$commentId', e);
+      _handleApiError('Error getting comment by ID $commentId', e);
       rethrow;
     }
   }
@@ -535,7 +537,7 @@ class TodoistApiService implements TaskApiService {
     List<Map<String, dynamic>>? resources /* TODO: Handle attachments */,
   }) async {
     if (verboseLogging) {
-      stderr.writeln('[TodoistApiService] Creating comment for task \$taskId');
+      stderr.writeln('[TodoistApiService] Creating comment for task $taskId');
     }
 
     todoist.CreateCommentAttachmentParameter? attachmentParam;
@@ -553,7 +555,7 @@ class TodoistApiService implements TaskApiService {
 
       if (verboseLogging) {
         stderr.writeln(
-          '[TodoistApiService] Raw comment created successfully with ID: \${createdTodoistComment.id}',
+          '[TodoistApiService] Raw comment created successfully with ID: ${createdTodoistComment.id}',
         );
       }
 
@@ -571,7 +573,7 @@ class TodoistApiService implements TaskApiService {
       return createdCommentItem;
 
     } catch (e) {
-      _handleApiError('Error creating comment for task \$taskId', e);
+      _handleApiError('Error creating comment for task $taskId', e);
       rethrow;
     }
   }
@@ -585,7 +587,7 @@ class TodoistApiService implements TaskApiService {
     ServerConfig? targetServerOverride /* Ignored */,
   }) async {
     if (verboseLogging) {
-      stderr.writeln('[TodoistApiService] Updating comment \$commentId');
+      stderr.writeln('[TodoistApiService] Updating comment $commentId');
     }
 
     try {
@@ -600,7 +602,7 @@ class TodoistApiService implements TaskApiService {
 
       if (verboseLogging) {
         stderr.writeln(
-          '[TodoistApiService] Raw comment updated successfully: \${updatedTodoistComment.id}',
+          '[TodoistApiService] Raw comment updated successfully: ${updatedTodoistComment.id}',
         );
       }
 
@@ -617,7 +619,7 @@ class TodoistApiService implements TaskApiService {
 
       return updatedCommentItem;
     } catch (e) {
-      _handleApiError('Error updating comment \$commentId', e);
+      _handleApiError('Error updating comment $commentId', e);
       rethrow;
     }
   }
@@ -632,24 +634,24 @@ class TodoistApiService implements TaskApiService {
   }) async {
     if (verboseLogging) {
       stderr.writeln(
-        '[TodoistApiService] Deleting comment \$commentId (task \$taskId)',
+        '[TodoistApiService] Deleting comment $commentId (task $taskId)',
       );
     }
 
     try {
       final commentIdInt = int.tryParse(commentId);
       if (commentIdInt == null) {
-        throw ArgumentError('Invalid comment ID format: \$commentId');
+        throw ArgumentError('Invalid comment ID format: $commentId');
       }
       await _commentsApi.deleteComment(commentIdInt);
 
       if (verboseLogging) {
         stderr.writeln(
-          '[TodoistApiService] Comment \$commentId deleted successfully',
+          '[TodoistApiService] Comment $commentId deleted successfully',
         );
       }
     } catch (e) {
-      _handleApiError('Error deleting comment \$commentId', e);
+      _handleApiError('Error deleting comment $commentId', e);
       rethrow;
     }
   }
@@ -697,7 +699,7 @@ class TodoistApiService implements TaskApiService {
       final projects = await _projectsApi.getAllProjects();
       if (verboseLogging) {
         stderr.writeln(
-          '[TodoistApiService] Retrieved \${projects?.length ?? 0} projects',
+          '[TodoistApiService] Retrieved ${projects?.length ?? 0} projects',
         );
       }
       return projects ?? [];
@@ -719,7 +721,7 @@ class TodoistApiService implements TaskApiService {
       final labels = await _labelsApi.getAllPersonalLabels();
       if (verboseLogging) {
         stderr.writeln(
-          '[TodoistApiService] Retrieved \${labels?.length ?? 0} labels',
+          '[TodoistApiService] Retrieved ${labels?.length ?? 0} labels',
         );
       }
       return labels ?? [];
@@ -734,14 +736,14 @@ class TodoistApiService implements TaskApiService {
   Future<List<todoist.Section>> listSections({String? projectId}) async {
     if (verboseLogging) {
       stderr.writeln(
-        '[TodoistApiService] Getting all sections\${projectId != null ? ' for project \${projectId}' : ''} (listSections)',
+        '[TodoistApiService] Getting all sections${projectId != null ? ' for project $projectId' : ''} (listSections)',
       );
     }
     try {
       final sections = await _sectionsApi.getAllSections(projectId: projectId);
       if (verboseLogging) {
         stderr.writeln(
-          '[TodoistApiService] Retrieved \${sections?.length ?? 0} sections',
+          '[TodoistApiService] Retrieved ${sections?.length ?? 0} sections',
         );
       }
       return sections ?? [];
@@ -779,7 +781,7 @@ class TodoistApiService implements TaskApiService {
 
       if (verboseLogging) {
         stderr.writeln(
-          '[TodoistApiService] Retrieved \${tasks?.length ?? 0} tasks',
+          '[TodoistApiService] Retrieved ${tasks?.length ?? 0} tasks',
         );
       }
 
@@ -801,10 +803,10 @@ class TodoistApiService implements TaskApiService {
   void _handleApiError(String context, dynamic error) {
     if (error is todoist.ApiException) {
       stderr.writeln(
-        '[TodoistApiService] API Error - \$context: \${error.message} (Code: \${error.code})',
+        '[TodoistApiService] API Error - $context: ${error.message} (Code: ${error.code})',
       );
     } else {
-      stderr.writeln('[TodoistApiService] Error - \$context: \$error');
+      stderr.writeln('[TodoistApiService] Error - $context: $error');
       if (verboseLogging && error is Error) {
         stderr.writeln(error.stackTrace);
       }
