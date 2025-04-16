@@ -1,8 +1,11 @@
 import 'dart:async';
 
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_memos/models/comment.dart'; // Import Comment
 import 'package:flutter_memos/models/server_config.dart';
+import 'package:flutter_memos/models/task_item.dart'; // Import TaskItem
 import 'package:flutter_memos/models/workbench_item_reference.dart';
 import 'package:flutter_memos/providers/server_config_provider.dart'; // &lt;-- Add this import for activeServerConfigProvider and multiServerConfigProvider
 import 'package:flutter_memos/providers/task_providers.dart'; // Import task providers for actions
@@ -64,19 +67,27 @@ class WorkbenchItemTile extends ConsumerWidget {
     }
   }
 
-  // Helper to show snackbar messages
-  void _showSnackBar(
-    BuildContext context,
-    String message, {
-    bool isError = false,
-  }) {
-    final snackBar = CupertinoSnackBar(
-      content: Text(
-        message,
-        style: TextStyle(
-          color: isError ? CupertinoColors.destructiveRed : null,
-        ),
+   // Helper to show simple alert dialogs
+  void _showAlertDialog(BuildContext context, String title, String message) {
+    if (!mounted) return; // Basic mounted check
+    showCupertinoDialog(
+      context: context,
+      builder: (context) => CupertinoAlertDialog(
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          CupertinoDialogAction(
+            isDefaultAction: true,
+            child: const Text('OK'),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+        ],
       ),
+    );
+  }
+
+
+  @override
     );
     ScaffoldMessenger.of(context).showSnackBar(snackBar);
   }
@@ -418,19 +429,26 @@ class WorkbenchItemTile extends ConsumerWidget {
             context,
             'Cannot navigate to comment: Parent note ID is missing.',
           );
+        } else {
+           _showErrorDialog(context, 'Cannot navigate to comment: Parent note ID is missing.');
         }
         break;
       case WorkbenchItemType.task:
-        // Navigate to the task edit/detail screen
-        Navigator.of(context, rootNavigator: isRootNav).push(
-          CupertinoPageRoute(
-            // Assuming NewTaskScreen handles editing when taskToEdit is provided
-            builder:
-                (context) => NewTaskScreen(
-                  // Fetch the task details first to pass to the edit screen
-                  taskToEditFuture: ref.read(taskDetailProvider(itemId).future),
-                ),
-          ),
+         // Fetch the task details first
+        try {
+           final task = await ref.read(taskDetailProvider(itemId).future);
+           if (context.mounted) { // Check mounted again after await
+             Navigator.of(context, rootNavigator: isRootNav).push(
+               CupertinoPageRoute(
+                 builder: (context) => NewTaskScreen(taskToEdit: task),
+               ),
+             );
+           }
+        } catch (e) {
+           if (context.mounted) { // Check mounted in catch block
+             _showErrorDialog(context, 'Failed to load task details: $e');
+           }
+        }
         );
         break;
     }
@@ -502,17 +520,23 @@ class WorkbenchItemTile extends ConsumerWidget {
                         sub = null; // Clear the reference.
                       }
                     },
-                    // Fire immediately in case the state is already correct.
-                    fireImmediately: true,
-                    onError: (error, stackTrace, subscription) {
-                      sub = subscription; // Assign sub here too
-                      if (!completer.isCompleted) {
-                        completer.completeError(error, stackTrace);
-                        sub?.close();
-                        sub = null;
-                      }
-                    }
-                  );
+                 // Add onError callback correctly
+                  onError: (error, stackTrace) {
+                     if (!completer.isCompleted) {
+                       completer.completeError(error, stackTrace);
+                       sub?.close();
+                       sub = null;
+                     }
+                  }
+               );
+                // Check initial state synchronously after listener setup
+                // This replaces fireImmediately: true functionality
+                final currentState = ref.read(activeServerConfigProvider);
+                if (currentState?.id == itemRef.serverId && !completer.isCompleted) {
+                    completer.complete();
+                    sub?.close(); // Close the subscription
+                    sub = null;
+                }
 
 
                   try {
@@ -522,12 +546,12 @@ class WorkbenchItemTile extends ConsumerWidget {
                     if (context.mounted) {
                       _navigateToItem(context, ref, itemRef);
                     }
-                  } catch (e) {
-                    if (context.mounted) {
-                      _showSnackBar(
-                        context,
-                        'Failed to switch server or timed out.',
-                        isError: true,
+                    } catch (e) {
+                      if (context.mounted) {
+                        _showAlertDialog(context, 'Error', 'Failed to switch server or timed out.');
+                      }
+                      // Ensure subscription is closed on error/timeout
+                      sub?.close();
                       );
                     }
                     // Ensure subscription is closed on error/timeout
@@ -542,78 +566,4 @@ class WorkbenchItemTile extends ConsumerWidget {
     );
   }
 }
-
-// Extend NewTaskScreen to accept a future for the task to edit
-// This allows fetching the task before pushing the screen in _navigateToItem
-extension NewTaskScreenFuture on NewTaskScreen {
-  static NewTaskScreen fromFuture({
-    Key? key,
-    required Future<TaskItem> taskToEditFuture,
-  }) {
-    // This isn't ideal as NewTaskScreen is stateful.
-    // A better pattern is to pass the ID and let NewTaskScreen fetch the details itself,
-    // or use a dedicated EditTaskScreen.
-    // For now, we modify NewTaskScreen to handle this temporary pattern.
-    // We need to modify NewTaskScreen's state to accept a Future.
-
-    // Let's revert this approach and modify NewTaskScreen to accept ID and fetch internally.
-    // Or, create EditTaskScreen.
-    // --> Let's stick to modifying NewTaskScreen to accept ID and fetch internally for now.
-    // --> No, the original approach requires modifying NewTaskScreen state, let's just pass the ID
-    // --> and have NewTaskScreen fetch it.
-
-    // Reverting the Future approach. _navigateToItem will push NewTaskScreen with taskToEdit: null for now.
-    // Proper editing needs EditTaskScreen or modification of NewTaskScreen.
-
-    // *** Final Decision: Modify NewTaskScreen to accept taskToEdit (optional TaskItem) ***
-    // *** _navigateToItem will fetch the task first, then push NewTaskScreen ***
-    // See updated _navigateToItem logic using await before push.
-    // This requires NewTaskScreen to handle the passed TaskItem in initState.
-
-    // This extension is no longer needed with the updated navigation logic.
-    throw UnimplementedError(
-      "This extension is deprecated. Navigation logic updated.",
-    );
-  }
-}
-
-// Update NewTaskScreen's constructor and initState to handle the pre-fetched taskToEdit
-class NewTaskScreen extends ConsumerStatefulWidget {
-  final TaskItem? taskToEdit;
-  // Remove the Future parameter if we adopted the pre-fetch navigation approach
-  // final Future<TaskItem>? taskToEditFuture; // Remove this
-
-  const NewTaskScreen({
-    super.key,
-    this.taskToEdit,
-  }); // Keep original constructor
-
-  // ... rest of NewTaskScreen remains the same ...
-
-  @override
-  ConsumerState<NewTaskScreen> createState() => _NewTaskScreenState();
-}
-
-class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
-  // ... existing fields ...
-
-  @override
-  void initState() {
-    super.initState();
-    // Use the directly passed taskToEdit
-    if (widget.taskToEdit != null) {
-      // Initialize controllers directly
-      _contentController.text = widget.taskToEdit!.content;
-      _descriptionController.text = widget.taskToEdit!.description ?? '';
-      // TODO: Initialize other fields
-    }
-    // Remove the future handling logic
-    // if (widget.taskToEditFuture != null) {
-    //   _initializeFromFuture();
-    // }
-  }
-
-  // Remove _initializeFromFuture method
-
-  // ... rest of _NewTaskScreenState ...
-}
+// Removed invalid extension and misplaced State class definition

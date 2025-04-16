@@ -4,13 +4,13 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_memos/models/server_config.dart';
 import 'package:flutter_memos/models/task_item.dart';
 import 'package:flutter_memos/models/workbench_item_reference.dart';
-import 'package:flutter_memos/providers/api_providers.dart';
 import 'package:flutter_memos/providers/server_config_provider.dart';
 import 'package:flutter_memos/providers/task_providers.dart';
 import 'package:flutter_memos/providers/workbench_provider.dart';
 import 'package:flutter_memos/screens/tasks/new_task_screen.dart'; // Import New Task Screen
 import 'package:flutter_memos/screens/tasks/widgets/task_list_item.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:uuid/uuid.dart'; // Import Uuid
 
 class TasksScreen extends ConsumerStatefulWidget {
   const TasksScreen({super.key});
@@ -55,29 +55,40 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
       await ref.read(tasksNotifierProvider.notifier).fetchTasks();
     } else {
       // Optionally show a message or just do nothing
-      print(
+      debugPrint(
+        // Changed from print
         "Refresh skipped: Active server is not Todoist.",
       );
     }
   }
 
-  void _showSnackBar(String message, {bool isError = false}) {
+  // Helper to show simple alert dialogs
+  void _showAlertDialog(String title, String message) {
     if (!mounted) return;
-    final snackBar = CupertinoSnackBar(
-      content: Text(
-        message,
-        style: TextStyle(
-          color: isError ? CupertinoColors.destructiveRed : null,
-        ),
-      ),
+    showCupertinoDialog(
+      context: context,
+      builder:
+          (context) => CupertinoAlertDialog(
+            title: Text(title),
+            content: Text(message),
+            actions: [
+              CupertinoDialogAction(
+                isDefaultAction: true,
+                child: const Text('OK'),
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+            ],
+          ),
     );
-    ScaffoldMessenger.of(context).showSnackBar(snackBar);
   }
 
   void _addTaskToWorkbench(TaskItem task) {
     final serverConfig = ref.read(activeServerConfigProvider);
     if (serverConfig == null || serverConfig.serverType != ServerType.todoist) {
-      _showSnackBar('Cannot add task: Active server is not Todoist.', isError: true);
+      _showAlertDialog(
+        'Error',
+        'Cannot add task: Active server is not Todoist.',
+      );
       return;
     }
 
@@ -94,7 +105,7 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
     );
 
     unawaited(ref.read(workbenchProvider.notifier).addItem(reference));
-    _showSnackBar('Task "${task.content}" added to Workbench.');
+    _showAlertDialog('Success', 'Task "${task.content}" added to Workbench.');
   }
 
   @override
@@ -192,6 +203,11 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
                             _showSnackBar('Failed to update task status.', isError: true);
                             // Optionally trigger a refresh to ensure state consistency
                             _handleRefresh();
+                        } else if (!success && mounted) {
+                          _showAlertDialog(
+                            'Error',
+                            'Failed to update task status.',
+                          );
                           }
                         },
                         onDelete: () async {
@@ -217,11 +233,14 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
                             if (confirmed) {
                               final success = await ref.read(tasksNotifierProvider.notifier).deleteTask(task.id);
                               if (!success && mounted) {
-                                _showSnackBar('Failed to delete task.', isError: true);
+                            _showAlertDialog('Error', 'Failed to delete task.');
                                 // Refresh on error to potentially correct state
                                 _handleRefresh();
                               } else if (success && mounted) {
-                                _showSnackBar('Task "${task.content}" deleted.');
+                            _showAlertDialog(
+                              'Deleted',
+                              'Task "${task.content}" deleted.',
+                            );
                               }
                             }
                         },
