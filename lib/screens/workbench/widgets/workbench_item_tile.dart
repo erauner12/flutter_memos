@@ -49,9 +49,7 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
       case ServerType.blinko:
         return CupertinoIcons.sparkles;
       case ServerType.todoist:
-        // Using checkmark for task type icon, maybe something else for server?
-        // Let's use a generic cloud for Todoist server type for now.
-        return CupertinoIcons.cloud;
+        return CupertinoIcons.cloud; // Using cloud for Todoist server
     }
   }
 
@@ -108,6 +106,8 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
     final isOnActiveServer = activeServer?.id == widget.itemReference.serverId;
 
     final bool isTask = widget.itemReference.referencedItemType == WorkbenchItemType.task;
+    final bool isCommentItem =
+        widget.itemReference.referencedItemType == WorkbenchItemType.comment;
 
     // Define action buttons for the hover bar
     final List<Widget> actions = [
@@ -115,10 +115,17 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
       CupertinoButton(
         padding: const EdgeInsets.all(4),
         minSize: 0,
+        tooltip: 'View Details',
         child: Icon(CupertinoIcons.eye, size: 18, color: theme.primaryColor),
         onPressed: () {
           if (isOnActiveServer) {
-            _navigateToItem(context, ref, widget.itemReference);
+            // Navigate to parent item, don't highlight specific comment from main action bar
+            _navigateToItem(
+              context,
+              ref,
+              widget.itemReference,
+              commentIdToHighlight: null,
+            );
           } else {
             _showServerSwitchRequiredDialog(context, ref, widget.itemReference);
           }
@@ -130,6 +137,7 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
         CupertinoButton(
           padding: const EdgeInsets.all(4),
           minSize: 0,
+          tooltip: 'Toggle Complete',
           child: Icon(CupertinoIcons.check_mark_circled, size: 18, color: theme.primaryColor),
           onPressed: () async {
              try {
@@ -181,6 +189,7 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
       CupertinoButton(
         padding: const EdgeInsets.all(4),
         minSize: 0,
+        tooltip: 'Remove from Workbench',
         child: const Icon(CupertinoIcons.trash, size: 18, color: CupertinoColors.systemRed),
         onPressed: () {
            showCupertinoDialog(
@@ -250,7 +259,13 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
                  behavior: HitTestBehavior.opaque, // Ensures taps are caught over the whole area
                  onTap: () {
                    if (isOnActiveServer) {
-                     _navigateToItem(context, ref, widget.itemReference);
+                    // Navigate to parent item, don't highlight specific comment from main tap
+                    _navigateToItem(
+                      context,
+                      ref,
+                      widget.itemReference,
+                      commentIdToHighlight: null,
+                    );
                    } else {
                      _showServerSwitchRequiredDialog(context, ref, widget.itemReference);
                    }
@@ -299,25 +314,39 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
                           const SizedBox(height: 6),
 
                           // Preview Content
-                          Padding(
-                            padding: const EdgeInsets.only(left: 4.0, right: 4.0), // Indent slightly
-                            child: Text(
-                              preview,
-                              style: TextStyle(
-                                fontSize: 15, // Slightly smaller main text
-                                color: CupertinoColors.label.resolveFrom(context),
+                          if (!isCommentItem) // Don't show main preview if the item *is* a comment
+                            Padding(
+                              padding: const EdgeInsets.only(
+                                left: 4.0,
+                                right: 4.0,
+                              ), // Indent slightly
+                              child: Text(
+                                preview,
+                                style: TextStyle(
+                                  fontSize: 15, // Slightly smaller main text
+                                  color: CupertinoColors.label.resolveFrom(
+                                    context,
+                                  ),
+                                ),
+                                maxLines: 5, // Allow more lines for preview
+                                overflow: TextOverflow.ellipsis,
                               ),
-                              maxLines: 5, // Allow more lines for preview
-                              overflow: TextOverflow.ellipsis,
                             ),
-                          ),
-                          const SizedBox(height: 8),
+                          if (!isCommentItem)
+                            const SizedBox(
+                              height: 8,
+                            ), // Spacing only if preview exists
 
-                          // Comment Preview (if applicable)
-                          if (widget.itemReference.referencedItemType != WorkbenchItemType.comment)
+                          // Comment Previews (if applicable)
+                          // Don't show comment previews if the item itself is a comment
+                          if (!isCommentItem)
                             Padding(
                               padding: const EdgeInsets.only(left: 4.0, right: 4.0), // Indent slightly
-                              child: _buildCommentPreview(context, widget.itemReference.latestComment),
+                              child: _buildCommentPreviews(
+                                context,
+                                ref,
+                                widget.itemReference,
+                              ),
                             ),
                         ],
                       ),
@@ -357,81 +386,163 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
     );
   }
 
-  // Comment Preview Widget (Modified Styling)
-  Widget _buildCommentPreview(BuildContext context, Comment? comment) {
+  // Builds the list of comment previews
+  Widget _buildCommentPreviews(
+    BuildContext context,
+    WidgetRef ref,
+    WorkbenchItemReference itemRef,
+  ) {
+    final comments = itemRef.previewComments;
+    if (comments.isEmpty) {
+      // Show "No comments yet" only if the item is not a comment itself
+      if (itemRef.referencedItemType != WorkbenchItemType.comment) {
+        return _buildSingleCommentPreview(
+          context,
+          ref,
+          itemRef,
+          null,
+        ); // Pass null to show placeholder
+      } else {
+        return const SizedBox.shrink(); // Don't show anything if item is comment and no previews
+      }
+    }
+
+    // Build previews for the available comments (max 2)
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: List.generate(comments.length, (index) {
+        final comment = comments[index];
+        // Add spacing between comment previews
+        final spacing =
+            (index > 0) ? const SizedBox(height: 6) : const SizedBox.shrink();
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            spacing,
+            _buildSingleCommentPreview(context, ref, itemRef, comment),
+          ],
+        );
+      }),
+    );
+  }
+
+  // Builds a single comment preview widget (or placeholder if comment is null)
+  Widget _buildSingleCommentPreview(
+    BuildContext context,
+    WidgetRef ref,
+    WorkbenchItemReference itemRef,
+    Comment? comment,
+  ) {
     final textStyle = TextStyle(
-      fontSize: 13,
+      fontSize: 14, // Slightly larger comment font
       color: CupertinoColors.secondaryLabel.resolveFrom(context),
     );
-    final italicStyle = textStyle.copyWith(fontStyle: FontStyle.italic);
-
-    final BoxDecoration decoration = BoxDecoration(
-      color: CupertinoColors.systemGrey6.resolveFrom(context), // Subtle background
-      border: Border(
-        left: BorderSide(
-          color: CupertinoColors.systemGrey3.resolveFrom(context), // Slightly darker border
-          width: 3, // Thicker border
-        ),
-      ),
-      // Removed corner radius for a blockier look like Slack quote
+    final italicStyle = textStyle.copyWith(
+      fontStyle: FontStyle.italic,
+      fontSize: 13,
     );
 
+    final BoxDecoration decoration = BoxDecoration(
+      color: CupertinoColors.systemGrey6.resolveFrom(context),
+      border: Border(
+        left: BorderSide(
+          color: CupertinoColors.systemGrey3.resolveFrom(context),
+          width: 3,
+        ),
+      ),
+    );
+
+    Widget content;
     if (comment == null) {
-      return Container(
-        width: double.infinity, // Take full width
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: decoration,
-        child: Text('No comments yet.', style: italicStyle),
+      content = Text('No comments yet.', style: italicStyle);
+    } else {
+      content = Text(
+        comment.content ?? '',
+        maxLines: 3, // Allow up to 3 lines
+        overflow: TextOverflow.ellipsis,
+        style: textStyle,
       );
     }
 
-    return Container(
-      width: double.infinity, // Take full width
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: decoration,
-      child: Text(
-        comment.content ?? '',
-        maxLines: 2,
-        overflow: TextOverflow.ellipsis,
-        style: textStyle,
+    // Make the comment preview tappable only if it's a real comment
+    return GestureDetector(
+      onTap:
+          (comment == null)
+              ? null
+              : () {
+                // Navigate to parent item, highlighting this specific comment
+                final activeServer = ref.read(activeServerConfigProvider);
+                final isOnActiveServer = activeServer?.id == itemRef.serverId;
+                if (isOnActiveServer) {
+                  _navigateToItem(
+                    context,
+                    ref,
+                    itemRef,
+                    commentIdToHighlight: comment.id,
+                  );
+                } else {
+                  _showServerSwitchRequiredDialog(context, ref, itemRef);
+                }
+              },
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(
+          horizontal: 10,
+          vertical: 8,
+        ), // More vertical padding
+        decoration: decoration,
+        child: content,
       ),
     );
   }
 
+
   // Helper for actual navigation (call AFTER server switch if needed)
+  // Added optional commentIdToHighlight parameter
   Future<void> _navigateToItem(
     BuildContext context,
     WidgetRef ref,
     WorkbenchItemReference itemRef,
+  { String? commentIdToHighlight } // Optional parameter
   ) async {
     final String itemId = itemRef.referencedItemId;
     final bool isRootNav = Navigator.of(context).canPop() == false;
 
+    // Determine the ID to navigate to (parent note/task ID)
+    String targetItemId = itemId;
+    // If the workbench item *is* a comment, use its parentNoteId for navigation
+    if (itemRef.referencedItemType == WorkbenchItemType.comment) {
+       targetItemId = itemRef.parentNoteId ?? itemId; // Fallback to itemId if parentNoteId is null
+       // Ensure the comment being tapped (if any) or the item itself is highlighted
+       commentIdToHighlight ??= itemId;
+    }
+
+    // Prepare arguments, including the comment to highlight
+    final Map<String, dynamic> arguments = {
+      'itemId': targetItemId,
+      if (commentIdToHighlight != null) 'commentIdToHighlight': commentIdToHighlight,
+    };
+
+
     switch (itemRef.referencedItemType) {
       case WorkbenchItemType.note:
-        Navigator.of(context, rootNavigator: isRootNav).pushNamed(
-          '/item-detail',
-          arguments: {'itemId': itemId},
-        );
-        break;
-      case WorkbenchItemType.comment:
-        final parentId = itemRef.parentNoteId ?? itemId;
-        if (parentId.isNotEmpty) {
-          Navigator.of(context, rootNavigator: isRootNav).pushNamed(
-            '/item-detail',
-            arguments: {
-              'itemId': parentId,
-              'commentIdToHighlight': itemId,
-            },
+      case WorkbenchItemType.comment: // Comments navigate to their parent note detail
+        if (targetItemId.isNotEmpty) {
+           Navigator.of(context, rootNavigator: isRootNav).pushNamed(
+            '/item-detail', // Assuming this screen handles notes and their comments
+            arguments: arguments,
           );
         } else {
-          _showErrorDialog(
+           _showErrorDialog(
             context,
-            'Cannot navigate to comment: Parent note ID is missing.',
+            'Cannot navigate: Parent item ID is missing.',
           );
         }
         break;
       case WorkbenchItemType.task:
+        // Task navigation might not support comment highlighting directly in NewTaskScreen
+        // For now, just navigate to the task edit screen.
         try {
           final task = await ref.read(taskDetailProvider(itemId).future);
           if (context.mounted) {
@@ -536,7 +647,8 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
                   try {
                     await completer.future.timeout(const Duration(seconds: 5));
                     if (context.mounted) {
-                      _navigateToItem(context, ref, itemRef);
+                      // After switching, navigate again (don't highlight comment on switch)
+                      _navigateToItem(context, ref, itemRef, commentIdToHighlight: null);
                     }
                   } catch (e) {
                     if (context.mounted) {

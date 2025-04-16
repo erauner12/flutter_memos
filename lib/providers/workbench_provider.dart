@@ -65,6 +65,7 @@ class WorkbenchState {
 class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
   final Ref _ref; // Keep ref
   late final CloudKitService _cloudKitService;
+  static const int _maxPreviewComments = 2; // Max comments to store for preview
 
   // Constructor takes Ref, initial state is not loading
   WorkbenchNotifier(this._ref) : super(const WorkbenchState()) {
@@ -104,6 +105,24 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
     }
   }
 
+  // Helper to get comment timestamp (handles Memos/Todoist)
+  DateTime _getCommentTimestamp(Comment comment) {
+    // Prioritize Memos/Blinko fields first
+    if (comment.updatedTs != null || comment.createdTs != null) {
+      return comment.updatedTs ?? comment.createdTs;
+    }
+    // Fallback for Todoist (assuming postedAt exists and is DateTime)
+    // Note: The provided API reference for Todoist Comment doesn't show createdTs/updatedTs
+    // It shows postedAt. We need to ensure our Comment model handles this.
+    // Assuming our Comment model normalizes this or we check type:
+    // if (comment.postedAt != null) { // Check if it's a Todoist comment if needed
+    //   return comment.postedAt!;
+    // }
+    // Default fallback if no timestamp found (should not happen ideally)
+    return DateTime.fromMillisecondsSinceEpoch(0);
+  }
+
+
   Future<void> _fetchAndPopulateDetails(
     List<WorkbenchItemReference> itemsToProcess,
   ) async {
@@ -141,23 +160,23 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
           );
 
       if (serverConfig == null) {
-        if (kDebugMode) {
+        if (kDebugMode)
           print(
             '[WorkbenchNotifier] Server config not found for $serverId. Skipping detail fetch for its items.',
           );
-        }
+        // Add original items to futures list so they aren't lost
+        detailFetchFutures.addAll(
+          serverItems.map((item) => Future.value(item)),
+        );
         continue; // Skip if server config doesn't exist anymore
       }
 
       // Get the appropriate API service for this server type
-      // We might need to instantiate a temporary service if it's not the active one.
-      // For simplicity now, we'll assume the active service provider correctly reflects
-      // the necessary type IF the server matches the active one, or fetch fails gracefully.
       final baseApiService = _ref.read(
         apiServiceProvider,
       ); // This reflects the ACTIVE server's service
 
-      // Check if the ACTIVE service matches the type needed for the CURRENTLY PROCESSED server's items
+      // Check if the active service matches the type needed for the CURRENTLY PROCESSED server's items
       bool serviceTypeMatches =
           (serverConfig.serverType == ServerType.memos ||
                   serverConfig.serverType == ServerType.blinko) &&
@@ -166,14 +185,11 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
               baseApiService is TaskApiService;
 
       // If the active service doesn't match the server type, we can't fetch details easily right now.
-      // We'll log a warning and skip detail fetching for these items.
-      // TODO: Implement fetching details from non-active servers (e.g., using a service provider family or temporary instantiation).
       if (serverConfig.id != _ref.read(activeServerConfigProvider)?.id) {
-        if (kDebugMode) {
+        if (kDebugMode)
           print(
             '[WorkbenchNotifier] Skipping detail fetch for items on non-active server $serverId (${serverConfig.serverType.name}).',
           );
-        }
         // Add original items to futures list so they aren't lost
         detailFetchFutures.addAll(
           serverItems.map((item) => Future.value(item)),
@@ -182,11 +198,10 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
       }
       // If the active server *is* the one we're processing, ensure the service type is correct.
       if (!serviceTypeMatches) {
-        if (kDebugMode) {
+        if (kDebugMode)
           print(
             '[WorkbenchNotifier] Active API service type (${baseApiService.runtimeType}) does not match required type for server $serverId (${serverConfig.serverType.name}). Skipping detail fetch.',
           );
-        }
         detailFetchFutures.addAll(
           serverItems.map((item) => Future.value(item)),
         );
@@ -194,7 +209,6 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
       }
 
       // Cast the active service to the correct type based on the serverConfig
-      // Ensure the active service matches the server type being processed
       final NoteApiService? noteApiService =
           baseApiService is NoteApiService &&
                   (serverConfig.serverType == ServerType.memos ||
@@ -210,7 +224,8 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
       for (final itemRef in serverItems) {
         detailFetchFutures.add(() async {
           try {
-            Comment? latestComment;
+            List<Comment> fetchedComments = [];
+            DateTime? latestCommentTimestamp;
             DateTime? referencedItemUpdateTime;
             String? updatedPreviewContent =
                 itemRef.previewContent; // Keep original unless updated
@@ -221,7 +236,6 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
                 noteApiService != null) {
               // Fetch Note Item details
               try {
-                // Note: Using active service, assuming serverConfig matches active server
                 final note = await noteApiService.getNote(
                   itemRef.referencedItemId,
                 );
@@ -233,117 +247,102 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
                   overallLastUpdateTime = referencedItemUpdateTime;
                 }
               } catch (e) {
-                if (kDebugMode) {
+                if (kDebugMode)
                   print(
                     '[WorkbenchNotifier] Error fetching note ${itemRef.referencedItemId} on server $serverId: $e',
                   );
-                }
                 // Keep original preview/times if fetch fails
               }
 
               // Fetch comments for Note
               try {
-                // Note: Using active service, assuming serverConfig matches active server
-                final comments = await noteApiService.listNoteComments(
+                fetchedComments = await noteApiService.listNoteComments(
                   itemRef.referencedItemId,
                 );
-                if (comments.isNotEmpty) {
-                  comments.sort(
-                    (a, b) => (b.updatedTs ?? b.createdTs).compareTo(
-                      a.updatedTs ?? a.createdTs,
-                    ),
-                  );
-                  latestComment = comments.first;
-                  final DateTime commentTime =
-                      latestComment.updatedTs ?? latestComment.createdTs;
-                  // Update overall time if latest comment is newer
-                  if (commentTime.isAfter(overallLastUpdateTime)) {
-                    overallLastUpdateTime = commentTime;
-                  }
-                }
               } catch (e) {
-                if (kDebugMode) {
+                if (kDebugMode)
                   print(
                     '[WorkbenchNotifier] Error fetching comments for note ${itemRef.referencedItemId} on server $serverId: $e',
                   );
-                }
               }
             } else if (itemRef.referencedItemType == WorkbenchItemType.task &&
                 taskApiService != null) {
               // Fetch Task Item details
               try {
-                // Note: Using active service, assuming serverConfig matches active server
                 final task = await taskApiService.getTask(
                   itemRef.referencedItemId,
                 );
                 // Use task creation time as the primary update time for the task itself
-                // Todoist API v2 task object has 'created_at', but not obviously 'updated_at'.
                 referencedItemUpdateTime = task.createdAt;
                 updatedPreviewContent =
                     task.content; // Update preview from latest task content
 
-                // Determine overall last update time: start with task creation time
-                DateTime taskActivityTime = task.createdAt;
-
                 // Update overall time if task creation is newer than added time
-                if (taskActivityTime.isAfter(overallLastUpdateTime)) {
-                  overallLastUpdateTime = taskActivityTime;
+                if (referencedItemUpdateTime.isAfter(overallLastUpdateTime)) {
+                  overallLastUpdateTime = referencedItemUpdateTime;
                 }
 
                 // Fetch comments for Task
                 try {
                   // Use the task-specific listComments method
-                  final comments = await taskApiService.listComments(
+                  fetchedComments = await taskApiService.listComments(
                     itemRef.referencedItemId, // Pass task ID here
                   );
-                  if (comments.isNotEmpty) {
-                    // Sort comments by update/creation time descending
-                    comments.sort(
-                      (a, b) => (b.updatedTs ?? b.createdTs).compareTo(
-                        a.updatedTs ?? a.createdTs,
-                      ),
-                    );
-                    latestComment = comments.first;
-                    final DateTime commentTime =
-                        latestComment.updatedTs ?? latestComment.createdTs;
-                    // Update overall time if latest comment is newer
-                    if (commentTime.isAfter(overallLastUpdateTime)) {
-                      overallLastUpdateTime = commentTime;
-                    }
-                  }
                 } catch (e) {
-                  if (kDebugMode) {
+                  if (kDebugMode)
                     print(
                       '[WorkbenchNotifier] Error fetching comments for task ${itemRef.referencedItemId} on server $serverId: $e',
                     );
-                  }
                 }
               } catch (e) {
-                if (kDebugMode) {
+                if (kDebugMode)
                   print(
                     '[WorkbenchNotifier] Error fetching task ${itemRef.referencedItemId} on server $serverId: $e',
                   );
-                }
                 // Keep original preview/times if fetch fails
               }
             }
             // else: If item is a comment, overallLastUpdateTime remains addedTimestamp for now
 
+            // Process fetched comments (common logic for notes and tasks)
+            List<Comment> previewComments = [];
+            if (fetchedComments.isNotEmpty) {
+              // Sort comments by timestamp descending (newest first)
+              fetchedComments.sort(
+                (a, b) =>
+                    _getCommentTimestamp(b).compareTo(_getCommentTimestamp(a)),
+              );
+
+              // Get the timestamp of the absolute latest comment
+              latestCommentTimestamp = _getCommentTimestamp(
+                fetchedComments.first,
+              );
+
+              // Update overall time if latest comment is newer
+              if (latestCommentTimestamp.isAfter(overallLastUpdateTime)) {
+                overallLastUpdateTime = latestCommentTimestamp;
+              }
+
+              // Select comments for preview
+              previewComments =
+                  fetchedComments.take(_maxPreviewComments).toList();
+            }
+
+
             // Return the updated reference
             return itemRef.copyWith(
-              latestComment:
-                  () => latestComment, // Use ValueGetter for nullability
+              previewComments: previewComments, // Pass the list of comments
               referencedItemUpdateTime:
                   () => referencedItemUpdateTime, // Use ValueGetter
-              overallLastUpdateTime: overallLastUpdateTime, // Pass directly
+              overallLastUpdateTime:
+                  overallLastUpdateTime, // Pass calculated time
               previewContent: updatedPreviewContent, // Update preview content
             );
           } catch (e) {
-            if (kDebugMode) {
+            if (kDebugMode)
               print(
                 '[WorkbenchNotifier] Error processing item ${itemRef.id} (refId: ${itemRef.referencedItemId}) on server $serverId: $e',
               );
-            }
             return itemRef; // Return original item on error for this specific item
           }
         }()); // Immediately invoke the async closure
@@ -391,9 +390,8 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
 
     // Check if there are items to refresh
     if (state.items.isEmpty) {
-      if (kDebugMode) {
+      if (kDebugMode)
         print('[WorkbenchNotifier] No items to refresh details for.');
-      }
       return;
     }
 
@@ -451,7 +449,11 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
 
     // Optimistic update
     final originalItems = List<WorkbenchItemReference>.from(state.items);
-    final newItems = [...originalItems, item];
+    // Add the new item (details will be fetched later)
+    final newItemWithDefaults = item.copyWith(
+      overallLastUpdateTime: item.addedTimestamp,
+    ); // Ensure initial sort is correct
+    final newItems = [...originalItems, newItemWithDefaults];
     // Sort immediately after adding based on current logic (overallLastUpdateTime)
     newItems.sort(
       (a, b) => b.overallLastUpdateTime.compareTo(a.overallLastUpdateTime),
@@ -469,7 +471,12 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
         print('[WorkbenchNotifier] Added item ${item.id} successfully.');
       }
       // Fetch details for the newly added item asynchronously
-      unawaited(_fetchAndPopulateDetails([item]));
+      // Find the added item in the current state to pass its potentially updated reference
+      final addedItemInState = state.items.firstWhere(
+        (i) => i.id == item.id,
+        orElse: () => newItemWithDefaults,
+      );
+      unawaited(_fetchAndPopulateDetails([addedItemInState]));
     } catch (e, s) {
       if (kDebugMode) {
         print('[WorkbenchNotifier] Error adding item ${item.id}: $e\n$s');
@@ -538,9 +545,8 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
   void reorderItems(int oldIndex, int newIndex) {
     if (!mounted) return;
     if (oldIndex < 0 || oldIndex >= state.items.length) return;
-    if (newIndex < 0 || newIndex > state.items.length) {
+    if (newIndex < 0 || newIndex > state.items.length)
       return; // Allow newIndex == length
-    }
 
     final currentItems = List<WorkbenchItemReference>.from(state.items);
     final item = currentItems.removeAt(oldIndex);
@@ -549,9 +555,8 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
     final effectiveNewIndex = (newIndex > oldIndex) ? newIndex - 1 : newIndex;
 
     // Ensure effectiveNewIndex is within bounds after removal
-    if (effectiveNewIndex < 0 || effectiveNewIndex > currentItems.length) {
+    if (effectiveNewIndex < 0 || effectiveNewIndex > currentItems.length)
       return;
-    }
 
     currentItems.insert(effectiveNewIndex, item);
     if (mounted) {
@@ -578,9 +583,8 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
     // Optimistic update: Clear local state immediately
     if (mounted) {
       state = state.copyWith(items: [], clearError: true);
-      if (kDebugMode) {
+      if (kDebugMode)
         print('[WorkbenchNotifier] Cleared local items optimistically.');
-      }
     }
 
     List<String> failedToDeleteIds = [];
@@ -594,20 +598,18 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
         );
         if (!success) {
           failedToDeleteIds.add(item.id);
-          if (kDebugMode) {
+          if (kDebugMode)
             print(
               '[WorkbenchNotifier] Failed to delete item ${item.id} from CloudKit.',
             );
-          }
         }
       } catch (e, s) {
         failedToDeleteIds.add(item.id);
         firstError ??= e; // Store the first error encountered
-        if (kDebugMode) {
+        if (kDebugMode)
           print(
             '[WorkbenchNotifier] Error deleting item ${item.id} from CloudKit: $e\n$s',
           );
-        }
       }
     }
 
@@ -627,18 +629,16 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
             firstError ??
             Exception('Failed to delete some items from CloudKit'),
       );
-      if (kDebugMode) {
+      if (kDebugMode)
         print(
           '[WorkbenchNotifier] Reverted state due to CloudKit deletion failures. ${remainingItems.length} items remain.',
         );
-      }
     } else if (mounted) {
       // If all deletions succeeded or no failures occurred and still mounted
-      if (kDebugMode) {
+      if (kDebugMode)
         print(
           '[WorkbenchNotifier] All items successfully cleared from CloudKit.',
         );
-      }
       // State is already cleared optimistically, ensure error is null if successful
       if (state.error != null) {
         state = state.copyWith(clearError: true);

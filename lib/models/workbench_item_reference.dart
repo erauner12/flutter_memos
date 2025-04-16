@@ -24,7 +24,7 @@ class WorkbenchItemReference {
   parentNoteId; // Optional: ID of the parent note (useful for comments)
 
   // Transient fields (populated by WorkbenchNotifier, not persisted)
-  final Comment? latestComment;
+  final List<Comment> previewComments; // Store latest 1 or 2 comments
   final DateTime?
   referencedItemUpdateTime; // To store the update time of the referenced NoteItem/Task
   final DateTime overallLastUpdateTime; // Calculated dynamically
@@ -40,12 +40,22 @@ class WorkbenchItemReference {
     required this.addedTimestamp,
     this.parentNoteId,
     // Transient fields
-    this.latestComment,
+    this.previewComments = const [], // Default to empty list
     this.referencedItemUpdateTime,
     DateTime? overallLastUpdateTime, // Allow passing calculated time
   }) : overallLastUpdateTime =
            overallLastUpdateTime ??
            addedTimestamp; // Use passed value or default to added
+
+  // Helper to get the timestamp of the latest comment in the preview list
+  DateTime? get _latestPreviewCommentTimestamp {
+    if (previewComments.isEmpty) return null;
+    // Assuming previewComments are sorted newest first
+    final latestComment = previewComments.first;
+    // Handle different comment models (Memos vs Todoist)
+    return latestComment.updatedTs ?? latestComment.createdTs; // Memos/Blinko
+    // Add Todoist logic if needed, e.g. latestComment.postedAt
+  }
 
   WorkbenchItemReference copyWith({
     String? id,
@@ -57,15 +67,16 @@ class WorkbenchItemReference {
     String? previewContent,
     DateTime? addedTimestamp,
     String? parentNoteId,
-    // Use ValueGetter for explicit null setting of transient fields
-    ValueGetter<Comment?>? latestComment,
+    // Pass the list directly, null means keep existing
+    List<Comment>? previewComments,
+    // Use ValueGetter for explicit null setting of single nullable fields
     ValueGetter<DateTime?>? referencedItemUpdateTime,
     // Allow explicitly passing the new calculated time, otherwise use existing
     DateTime? overallLastUpdateTime,
   }) {
     // Determine the values for transient fields
-    final Comment? newLatestComment =
-        latestComment != null ? latestComment() : this.latestComment;
+    final List<Comment> newPreviewComments =
+        previewComments ?? this.previewComments;
     final DateTime? newReferencedItemUpdateTime =
         referencedItemUpdateTime != null
             ? referencedItemUpdateTime()
@@ -84,18 +95,26 @@ class WorkbenchItemReference {
           newReferencedItemUpdateTime.isAfter(calculatedUpdateTime)) {
         calculatedUpdateTime = newReferencedItemUpdateTime;
       }
-      // Use createdTs and updatedTs from Comment model (assuming these exist and are DateTime)
-      // If Comment model changes, update this logic (e.g., Todoist comments use postedAt)
-      // TODO: Review comment time logic if models differ significantly
-      final DateTime? commentTime = newLatestComment?.createdTs;
-      if (commentTime != null && commentTime.isAfter(calculatedUpdateTime)) {
-        calculatedUpdateTime = commentTime;
+
+      // Get timestamp of the latest comment *in the new list*
+      DateTime? latestCommentTime;
+      if (newPreviewComments.isNotEmpty) {
+        final latestComment =
+            newPreviewComments.first; // Assuming sorted newest first
+        latestCommentTime = latestComment.updatedTs ?? latestComment.createdTs;
+        // Add Todoist logic: latestCommentTime = latestComment.postedAt;
+      }
+
+      if (latestCommentTime != null &&
+          latestCommentTime.isAfter(calculatedUpdateTime)) {
+        calculatedUpdateTime = latestCommentTime;
       }
 
       // If the original overall time was later than any component, keep it
-      if (this.overallLastUpdateTime.isAfter(calculatedUpdateTime)) {
-        calculatedUpdateTime = this.overallLastUpdateTime;
-      }
+      // (This case might be less relevant now if overallLastUpdateTime is always recalculated)
+      // if (this.overallLastUpdateTime.isAfter(calculatedUpdateTime)) {
+      //   calculatedUpdateTime = this.overallLastUpdateTime;
+      // }
     }
 
     return WorkbenchItemReference(
@@ -110,7 +129,7 @@ class WorkbenchItemReference {
       addedTimestamp: newAddedTimestamp,
       parentNoteId: parentNoteId ?? this.parentNoteId,
       // Assign potentially updated transient fields
-      latestComment: newLatestComment,
+      previewComments: newPreviewComments,
       referencedItemUpdateTime: newReferencedItemUpdateTime,
       // Assign the final calculated or provided overallLastUpdateTime
       overallLastUpdateTime: calculatedUpdateTime,
@@ -129,7 +148,7 @@ class WorkbenchItemReference {
       'previewContent': previewContent,
       'addedTimestamp': addedTimestamp.toIso8601String(),
       'parentNoteId': parentNoteId,
-      // DO NOT include transient fields
+      // DO NOT include transient fields (previewComments, referencedItemUpdateTime)
     };
   }
 
@@ -172,7 +191,7 @@ class WorkbenchItemReference {
       previewContent: json['previewContent'] as String?,
       addedTimestamp: DateTime.tryParse(json['addedTimestamp'] as String? ?? '') ?? DateTime.now(), // Default to now
       parentNoteId: json['parentNoteId'] as String?,
-      // DO NOT parse transient fields from JSON. They default to null/addedTimestamp in constructor.
+      // DO NOT parse transient fields from JSON. They default to empty/null/addedTimestamp in constructor.
     );
   }
 
@@ -190,8 +209,10 @@ class WorkbenchItemReference {
         other.previewContent == previewContent &&
         other.addedTimestamp == addedTimestamp &&
         other.parentNoteId == parentNoteId &&
-        // Compare calculated time, but not the comment object or referencedItemUpdateTime itself
-        other.overallLastUpdateTime == overallLastUpdateTime;
+        // Compare calculated time, but not the comment list or referencedItemUpdateTime itself
+        other.overallLastUpdateTime == overallLastUpdateTime &&
+        // Compare preview comments list (important for UI updates)
+        listEquals(other.previewComments, previewComments);
   }
 
   @override
@@ -208,15 +229,16 @@ class WorkbenchItemReference {
       parentNoteId,
       // Hash calculated time
       overallLastUpdateTime,
-      // DO NOT hash latestComment or referencedItemUpdateTime
+      // Hash the preview comments list
+      Object.hashAll(previewComments),
+      // DO NOT hash referencedItemUpdateTime
     );
   }
 
   @override
   String toString() {
     // Include transient fields for debugging
-    // Corrected comment details access if using Todoist model
-    final commentId = latestComment?.id ?? 'none'; // Access Todoist Comment ID
-    return 'WorkbenchItemReference(id: $id, refId: $referencedItemId, type: ${referencedItemType.name}, serverId: $serverId, serverType: ${serverType.name}, parentId: $parentNoteId, added: $addedTimestamp, lastActivity: $overallLastUpdateTime, comment: $commentId, refUpdate: $referencedItemUpdateTime)';
+    final commentIds = previewComments.map((c) => c.id ?? 'null_id').join(', ');
+    return 'WorkbenchItemReference(id: $id, refId: $referencedItemId, type: ${referencedItemType.name}, serverId: $serverId, serverType: ${serverType.name}, parentId: $parentNoteId, added: $addedTimestamp, lastActivity: $overallLastUpdateTime, comments: [$commentIds], refUpdate: $referencedItemUpdateTime)';
   }
 }
