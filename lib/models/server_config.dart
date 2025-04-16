@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart'; // Add uuid import
 
 // Add ServerType enum
-enum ServerType { memos, blinko }
+enum ServerType { memos, blinko, todoist }
 
 /// Server configuration model for device-level storage
 class ServerConfig {

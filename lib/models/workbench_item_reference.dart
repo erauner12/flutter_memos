@@ -3,7 +3,7 @@ import 'package:flutter_memos/models/comment.dart'; // Import Comment model
 import 'package:flutter_memos/models/server_config.dart'; // For ServerType enum
 import 'package:uuid/uuid.dart';
 
-enum WorkbenchItemType { note, comment }
+enum WorkbenchItemType { note, comment, task }
 
 @immutable
 class WorkbenchItemReference {
