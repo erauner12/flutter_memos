@@ -1,60 +1,28 @@
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
-import 'package:flutter_hooks/flutter_hooks.dart'; // Add import for hooks
+import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:flutter_memos/models/server_config.dart';
 import 'package:flutter_memos/models/task_item.dart';
 import 'package:flutter_memos/models/workbench_item_reference.dart';
 import 'package:flutter_memos/providers/server_config_provider.dart';
 import 'package:flutter_memos/providers/task_providers.dart';
 import 'package:flutter_memos/providers/workbench_provider.dart';
-import 'package:flutter_memos/screens/tasks/new_task_screen.dart'; // Import New Task Screen
+import 'package:flutter_memos/screens/tasks/new_task_screen.dart';
 import 'package:flutter_memos/screens/tasks/widgets/task_list_item.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:uuid/uuid.dart'; // Import Uuid
+import 'package:hooks_riverpod/hooks_riverpod.dart'; // Import hooks_riverpod
+import 'package:uuid/uuid.dart';
 
-class TasksScreen extends ConsumerStatefulWidget {
+// Change from ConsumerStatefulWidget to HookConsumerWidget
+class TasksScreen extends HookConsumerWidget {
   const TasksScreen({super.key});
 
-  @override
-  ConsumerState<TasksScreen> createState() => _TasksScreenState();
-}
+  // Remove createState method
 
-class _TasksScreenState extends ConsumerState<TasksScreen> {
-  @override
-  void initState() {
-    super.initState();
-    // Initial fetch can still be triggered here if needed,
-    // but the effect in build might be sufficient and safer.
-    // We'll rely on the effect in build for the initial fetch.
-    // WidgetsBinding.instance.addPostFrameCallback((_) {
-    //   _triggerFetchTasks(); // Keep this if you want an immediate fetch attempt on first load
-    // });
-  }
-
-  // Helper to safely trigger fetchTasks (can be kept for refresh logic)
-  void _triggerFetchTasks() {
-    // Check mounted state and server type before fetching
-    if (mounted && ref.read(activeServerConfigProvider)?.serverType == ServerType.todoist) {
-      ref.read(tasksNotifierProvider.notifier).fetchTasks();
-    }
-  }
-
-  // Define the refresh handler
-  Future<void> _handleRefresh() async {
-    // Check if Todoist is active before attempting refresh
-    if (ref.read(activeServerConfigProvider)?.serverType ==
-        ServerType.todoist) {
-      // Trigger the fetchTasks method from the notifier
-      // The Future returned by fetchTasks will be awaited by the RefreshIndicator
-      await ref.read(tasksNotifierProvider.notifier).fetchTasks();
-    }
-    // If not Todoist, the refresh indicator will simply stop without fetching.
-  }
-
-  // Helper to show simple alert dialogs
-  void _showAlertDialog(String title, String message) {
-    if (!mounted) return;
+  // Move helper methods inside or make them static/top-level if they don't need context/ref directly
+  // Helper to show simple alert dialogs (needs context)
+  void _showAlertDialog(BuildContext context, String title, String message) {
+    // No need for mounted check here as it's called within build context scope
     showCupertinoDialog(
       context: context,
       builder:
@@ -72,10 +40,12 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
     );
   }
 
-  void _addTaskToWorkbench(TaskItem task) {
+  // Add task to workbench (needs ref and context)
+  void _addTaskToWorkbench(BuildContext context, WidgetRef ref, TaskItem task) {
     final serverConfig = ref.read(activeServerConfigProvider);
     if (serverConfig == null || serverConfig.serverType != ServerType.todoist) {
       _showAlertDialog(
+        context, // Pass context
         'Error',
         'Cannot add task: Active server is not Todoist.',
       );
@@ -91,33 +61,44 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
       serverName: serverConfig.name,
       previewContent: task.content,
       addedTimestamp: DateTime.now(),
-      // parentNoteId is not applicable for tasks
     );
 
     unawaited(ref.read(workbenchProvider.notifier).addItem(reference));
-    _showAlertDialog('Success', 'Task "${task.content}" added to Workbench.');
+    _showAlertDialog(
+      context, // Pass context
+      'Success',
+      'Task "${task.content}" added to Workbench.',
+    );
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Define the refresh handler directly within build or as a local function
+    Future<void> handleRefresh() async {
+      if (ref.read(activeServerConfigProvider)?.serverType ==
+          ServerType.todoist) {
+        // Use await directly on the future returned by fetchTasks
+        await ref.read(tasksNotifierProvider.notifier).fetchTasks();
+      }
+    }
+
     // Watch necessary providers
     final activeServer = ref.watch(activeServerConfigProvider);
     final tasksState = ref.watch(tasksNotifierProvider);
     final tasks = ref.watch(filteredTasksProvider); // Watch the filtered list
     final bool isTodoistActive = activeServer?.serverType == ServerType.todoist;
 
-    // Use useEffect to handle side effects like fetching data based on state changes
+    // Use useEffect here - now it's correctly inside a HookConsumerWidget's build method
     useEffect(
       () {
-        // Check if the widget is still mounted before proceeding
-        if (!mounted) return null;
+        // No need for mounted check inside useEffect's setup function
 
         if (isTodoistActive) {
           // Fetch only if Todoist is active, tasks are empty, not loading, and no error
-          // This prevents fetching on every rebuild.
           if (tasksState.tasks.isEmpty &&
               !tasksState.isLoading &&
               tasksState.error == null) {
+            // Use Future.microtask to schedule the fetch after the current build cycle
             Future.microtask(
               () => ref.read(tasksNotifierProvider.notifier).fetchTasks(),
             );
@@ -134,50 +115,47 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
           }
         }
         // Return null as there's no cleanup function needed for this effect.
-        // Dependencies: run this effect when isTodoistActive changes, or when loading/error state resets.
         return null;
       },
       [
         isTodoistActive,
         tasksState.isLoading,
         tasksState.error,
-        tasksState.tasks.isEmpty,
+        tasksState.tasks.isEmpty, // Add tasks.isEmpty to dependencies
       ],
     );
 
-
+    // --- Rest of the build method from _TasksScreenState ---
     return CupertinoPageScaffold(
       navigationBar: CupertinoNavigationBar(
         middle: const Text('Tasks'),
         leading: CupertinoButton(
           padding: EdgeInsets.zero,
-          // Disable refresh if not Todoist or already loading
           onPressed:
-              tasksState.isLoading || !isTodoistActive ? null : _handleRefresh,
+              tasksState.isLoading || !isTodoistActive ? null : handleRefresh,
           child: const Icon(CupertinoIcons.refresh),
         ),
         trailing: CupertinoButton(
           padding: EdgeInsets.zero,
-          // Disable add button if not Todoist active
-          onPressed: !isTodoistActive ? null : () {
-            // Navigate to a New Task Screen
-            Navigator.of(context).push(
-              CupertinoPageRoute(
-                builder: (context) => const NewTaskScreen(),
-                // Consider fullscreenDialog: true
-              ),
-            );
-          },
+          onPressed:
+              !isTodoistActive
+                  ? null
+                  : () {
+                    Navigator.of(context).push(
+                      CupertinoPageRoute(
+                        builder: (context) => const NewTaskScreen(),
+                      ),
+                    );
+                  },
           child: const Icon(CupertinoIcons.add),
         ),
       ),
       child: SafeArea(
-        child: Builder( // Use Builder to get context for ScaffoldMessenger
+        child: Builder(
           builder: (context) {
             if (!isTodoistActive) {
               return const Center(
                 child: Padding(
-                  // Add padding for better spacing
                   padding: EdgeInsets.all(16.0),
                   child: Text(
                     'Select a Todoist server in Settings to view tasks.',
@@ -188,12 +166,10 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
               );
             }
 
-            // Show loading indicator ONLY if loading AND tasks list is empty
             if (tasksState.isLoading && tasks.isEmpty) {
               return const Center(child: CupertinoActivityIndicator());
             }
 
-            // Show error message ONLY if error exists AND tasks list is empty
             if (tasksState.error != null && tasks.isEmpty) {
               return Center(
                 child: Padding(
@@ -207,13 +183,11 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
               );
             }
 
-            // Show "No tasks" message ONLY if not loading, no error, and tasks list is empty
             if (tasks.isEmpty &&
                 !tasksState.isLoading &&
                 tasksState.error == null) {
               return Center(
                 child: Padding(
-                  // Add padding
                   padding: const EdgeInsets.all(16.0),
                   child: Text(
                     'No tasks found.\nPull down to refresh or add a new task.',
@@ -228,14 +202,11 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
               );
             }
 
-            // Display the list (or potentially loading indicator on top if refreshing)
-            // Use CustomScrollView for pull-to-refresh
             return CustomScrollView(
               slivers: [
                 CupertinoSliverRefreshControl(
-                  onRefresh: _handleRefresh, // Now defined
+                  onRefresh: handleRefresh, // Use the local handler
                 ),
-                // Show list even if loading is true (for pull-to-refresh indicator)
                 SliverList(
                   delegate: SliverChildBuilderDelegate(
                     (context, index) {
@@ -245,62 +216,86 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
                         onToggleComplete: (isCompleted) async {
                           bool success;
                           if (isCompleted) {
-                            success = await ref.read(tasksNotifierProvider.notifier).completeTask(task.id);
+                          success = await ref
+                              .read(tasksNotifierProvider.notifier)
+                              .completeTask(task.id);
                           } else {
-                            success = await ref.read(tasksNotifierProvider.notifier).reopenTask(task.id);
-                          // Consider refreshing list after reopen if sort order might change
-                          // _handleRefresh(); // Or just rely on optimistic update
+                          success = await ref
+                              .read(tasksNotifierProvider.notifier)
+                              .reopenTask(task.id);
                         }
 
-                        if (!success && mounted) {
-                            _showAlertDialog('Error', 'Failed to update task status.');
-                            // Optionally trigger a refresh to ensure state consistency
-                          _handleRefresh(); // Now defined
+                        // Check context.mounted before showing dialog
+                        if (!success && context.mounted) {
+                          _showAlertDialog(
+                            context,
+                            'Error',
+                            'Failed to update task status.',
+                          );
+                          // Optionally trigger a refresh
+                          await handleRefresh();
                           }
                       },
                         onDelete: () async {
-                           final confirmed = await showCupertinoDialog<bool>(
+                        final confirmed =
+                            await showCupertinoDialog<bool>(
                               context: context,
-                              builder: (dialogContext) => CupertinoAlertDialog(
-                                title: const Text('Delete Task?'),
-                                content: Text('Are you sure you want to delete "${task.content}"? This cannot be undone.'),
-                                actions: [
-                                  CupertinoDialogAction(
-                                    child: const Text('Cancel'),
-                                    onPressed: () => Navigator.pop(dialogContext, false),
+                              builder:
+                                  (dialogContext) => CupertinoAlertDialog(
+                                    title: const Text('Delete Task?'),
+                                    content: Text(
+                                      'Are you sure you want to delete "${task.content}"? This cannot be undone.',
+                                    ),
+                                    actions: [
+                                      CupertinoDialogAction(
+                                        child: const Text('Cancel'),
+                                        onPressed:
+                                            () => Navigator.pop(
+                                              dialogContext,
+                                              false,
+                                            ),
+                                      ),
+                                      CupertinoDialogAction(
+                                        isDestructiveAction: true,
+                                        child: const Text('Delete'),
+                                        onPressed:
+                                            () => Navigator.pop(
+                                              dialogContext,
+                                              true,
+                                            ),
+                                      ),
+                                    ],
                                   ),
-                                  CupertinoDialogAction(
-                                    isDestructiveAction: true,
-                                    child: const Text('Delete'),
-                                    onPressed: () => Navigator.pop(dialogContext, true),
-                                  ),
-                                ],
-                              ),
-                            ) ?? false; // Default to false if dialog dismissed
+                            ) ??
+                            false;
 
-                            if (confirmed) {
-                              final success = await ref.read(tasksNotifierProvider.notifier).deleteTask(task.id);
-                              if (!success && mounted) {
-                            _showAlertDialog('Error', 'Failed to delete task.');
-                                // Refresh on error to potentially correct state
-                            _handleRefresh(); // Now defined
-                              } else if (success && mounted) {
-                            // Optional: Show confirmation, but might be annoying
-                            // _showAlertDialog(
-                            //   'Deleted',
-                            //   'Task "${task.content}" deleted.',
-                            // );
-                              }
-                            }
+                        if (confirmed) {
+                          final success = await ref
+                              .read(tasksNotifierProvider.notifier)
+                              .deleteTask(task.id);
+                          // Check context.mounted before showing dialog
+                          if (!success && context.mounted) {
+                            _showAlertDialog(
+                              context,
+                              'Error',
+                              'Failed to delete task.',
+                            );
+                            await handleRefresh();
+                          }
+                        }
                         },
                         onAddToWorkbench: () {
-                           _addTaskToWorkbench(task);
+                        _addTaskToWorkbench(
+                          context,
+                          ref,
+                          task,
+                        ); // Pass context and ref
                         },
-                        onTap: () {
-                           // Navigate to edit screen (passing task id or task object)
-                           Navigator.of(context).push(
+                      onTap: () {
+                        Navigator.of(context).push(
                             CupertinoPageRoute(
-                              builder: (context) => NewTaskScreen(taskToEdit: task), // Pass task for editing
+                            builder:
+                                (context) => NewTaskScreen(taskToEdit: task),
                             ),
                           );
                         },
@@ -311,7 +306,7 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
                 ),
               ],
             );
-          }
+          },
         ),
       ),
     );
