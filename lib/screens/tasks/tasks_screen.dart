@@ -41,13 +41,19 @@ class TasksScreen extends HookConsumerWidget {
   }
 
   // Add task to workbench (needs ref and context)
-  void _addTaskToWorkbench(BuildContext context, WidgetRef ref, TaskItem task) {
-    final serverConfig = ref.read(activeServerConfigProvider);
-    if (serverConfig == null || serverConfig.serverType != ServerType.todoist) {
+  // Modify signature to accept the specific todoistServer config
+  void _addTaskToWorkbench(
+    BuildContext context,
+    WidgetRef ref,
+    TaskItem task,
+    ServerConfig? todoistServer,
+  ) {
+    // Check if the passed server config exists
+    if (todoistServer == null) {
       _showAlertDialog(
         context, // Pass context
         'Error',
-        'Cannot add task: Active server is not Todoist.',
+        'Cannot add task: Todoist is not configured in Settings.', // Update message
       );
       return;
     }
@@ -56,9 +62,13 @@ class TasksScreen extends HookConsumerWidget {
       id: const Uuid().v4(),
       referencedItemId: task.id,
       referencedItemType: WorkbenchItemType.task,
-      serverId: serverConfig.id,
-      serverType: serverConfig.serverType,
-      serverName: serverConfig.name,
+      serverId:
+          todoistServer
+              .id, // Use the ID from the specific Todoist server config
+      serverType: ServerType.todoist, // It's always Todoist here now
+      serverName:
+          todoistServer
+              .name, // Use the name from the specific Todoist server config
       previewContent: task.content,
       addedTimestamp: DateTime.now(),
     );
@@ -75,26 +85,29 @@ class TasksScreen extends HookConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     // Define the refresh handler directly within build or as a local function
     Future<void> handleRefresh() async {
-      if (ref.read(activeServerConfigProvider)?.serverType ==
-          ServerType.todoist) {
-        // Use await directly on the future returned by fetchTasks
+      // Check if configured, not active
+      final isTodoistConfigured = ref.read(todoistServerConfigProvider) != null;
+      if (isTodoistConfigured) {
         await ref.read(tasksNotifierProvider.notifier).fetchTasks();
       }
     }
 
     // Watch necessary providers
-    final activeServer = ref.watch(activeServerConfigProvider);
+    // Watch the new provider instead of activeServerConfigProvider for Todoist check
+    final todoistServer = ref.watch(todoistServerConfigProvider);
+    final bool isTodoistConfigured =
+        todoistServer != null; // Check if a Todoist config exists
     final tasksState = ref.watch(tasksNotifierProvider);
     final tasks = ref.watch(filteredTasksProvider); // Watch the filtered list
-    final bool isTodoistActive = activeServer?.serverType == ServerType.todoist;
 
     // Use useEffect here - now it's correctly inside a HookConsumerWidget's build method
     useEffect(
       () {
         // No need for mounted check inside useEffect's setup function
 
-        if (isTodoistActive) {
-          // Fetch only if Todoist is active, tasks are empty, not loading, and no error
+        // Use the new flag
+        if (isTodoistConfigured) {
+          // Fetch only if Todoist is configured, tasks are empty, not loading, and no error
           if (tasksState.tasks.isEmpty &&
               !tasksState.isLoading &&
               tasksState.error == null) {
@@ -104,24 +117,26 @@ class TasksScreen extends HookConsumerWidget {
             );
           }
         } else {
-          // If not Todoist active and tasks are currently loaded, clear them
+          // If Todoist is *not* configured
+          // If not Todoist configured and tasks are currently loaded, clear them
           if (tasksState.tasks.isNotEmpty) {
             Future.microtask(
               () =>
                   ref
                       .read(tasksNotifierProvider.notifier)
-                      .clearTasksForNonTodoist(),
+                      .clearTasksForNonTodoist(), // Keep existing clear logic name for now
             );
           }
         }
         // Return null as there's no cleanup function needed for this effect.
         return null;
       },
+      // Update dependency array
       [
-        isTodoistActive,
+        isTodoistConfigured,
         tasksState.isLoading,
         tasksState.error,
-        tasksState.tasks.isEmpty, // Add tasks.isEmpty to dependencies
+        tasksState.tasks.isEmpty,
       ],
     );
 
@@ -131,14 +146,18 @@ class TasksScreen extends HookConsumerWidget {
         middle: const Text('Tasks'),
         leading: CupertinoButton(
           padding: EdgeInsets.zero,
+          // Use the new flag for enabling/disabling
           onPressed:
-              tasksState.isLoading || !isTodoistActive ? null : handleRefresh,
+              tasksState.isLoading || !isTodoistConfigured
+                  ? null
+                  : handleRefresh,
           child: const Icon(CupertinoIcons.refresh),
         ),
         trailing: CupertinoButton(
           padding: EdgeInsets.zero,
+          // Use the new flag for enabling/disabling
           onPressed:
-              !isTodoistActive
+              !isTodoistConfigured
                   ? null
                   : () {
                     Navigator.of(context).push(
@@ -153,12 +172,13 @@ class TasksScreen extends HookConsumerWidget {
       child: SafeArea(
         child: Builder(
           builder: (context) {
-            if (!isTodoistActive) {
+            // Use the new flag and update the message
+            if (!isTodoistConfigured) {
               return const Center(
                 child: Padding(
                   padding: EdgeInsets.all(16.0),
                   child: Text(
-                    'Select a Todoist server in Settings to view tasks.',
+                    'Please configure the Todoist integration in Settings to view tasks.', // New message
                     textAlign: TextAlign.center,
                     style: TextStyle(color: CupertinoColors.secondaryLabel),
                   ),
@@ -166,6 +186,7 @@ class TasksScreen extends HookConsumerWidget {
               );
             }
 
+            // Rest of the builder logic remains the same...
             if (tasksState.isLoading && tasks.isEmpty) {
               return const Center(child: CupertinoActivityIndicator());
             }
@@ -285,11 +306,13 @@ class TasksScreen extends HookConsumerWidget {
                         }
                         },
                         onAddToWorkbench: () {
+                        // Pass context, ref, task, and the specific todoistServer config
                         _addTaskToWorkbench(
                           context,
                           ref,
                           task,
-                        ); // Pass context and ref
+                          todoistServer, // Pass the watched todoistServer object
+                        );
                         },
                       onTap: () {
                         Navigator.of(context).push(

@@ -5,7 +5,7 @@ import 'package:flutter_memos/models/server_config.dart';
 import 'package:flutter_memos/providers/mcp_server_config_provider.dart';
 import 'package:flutter_memos/providers/service_providers.dart'; // Import service provider
 import 'package:flutter_memos/providers/settings_provider.dart';
-import 'package:flutter_memos/services/cloud_kit_service.dart'; // <<< Add this import
+import 'package:flutter_memos/services/cloud_kit_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart'; // Import Uuid
@@ -430,14 +430,14 @@ class MultiServerConfigNotifier extends StateNotifier<MultiServerConfigState> {
     // --- Add Logging Here ---
     if (kDebugMode) {
       print(
-        '[MultiServerConfigNotifier] addServer received config: \${config.toString()}',
+        '[MultiServerConfigNotifier] addServer received config: ${config.toString()}',
       );
     }
     // --- End Logging ---
     if (state.servers.any((s) => s.id == config.id)) {
       if (kDebugMode) {
         print(
-          '[MultiServerConfigNotifier] Attempted to add server with duplicate ID: \${config.id}',
+          '[MultiServerConfigNotifier] Attempted to add server with duplicate ID: ${config.id}',
         );
       }
       return false;
@@ -481,14 +481,14 @@ class MultiServerConfigNotifier extends StateNotifier<MultiServerConfigState> {
       }
       if (kDebugMode) {
         print(
-          '[MultiServerConfigNotifier] Added server \${config.id} locally and synced to CloudKit.',
+          '[MultiServerConfigNotifier] Added server ${config.id} locally and synced to CloudKit.',
         );
       }
       return true;
     } else {
       if (kDebugMode) {
         print(
-          '[MultiServerConfigNotifier] Failed to sync added server \${config.id} to CloudKit. Local state/cache not changed.',
+          '[MultiServerConfigNotifier] Failed to sync added server ${config.id} to CloudKit. Local state/cache not changed.',
         );
       }
       return false;
@@ -500,7 +500,7 @@ class MultiServerConfigNotifier extends StateNotifier<MultiServerConfigState> {
     // --- Add Logging Here ---
     if (kDebugMode) {
       print(
-        '[MultiServerConfigNotifier] updateServer received config: \${updatedConfig.toString()}',
+        '[MultiServerConfigNotifier] updateServer received config: ${updatedConfig.toString()}',
       );
     }
     // --- End Logging ---
@@ -508,7 +508,7 @@ class MultiServerConfigNotifier extends StateNotifier<MultiServerConfigState> {
     if (index == -1) {
       if (kDebugMode) {
         print(
-          '[MultiServerConfigNotifier] UpdateServer: Server ID \${updatedConfig.id} not found.',
+          '[MultiServerConfigNotifier] UpdateServer: Server ID ${updatedConfig.id} not found.',
         );
       }
       return false;
@@ -534,14 +534,14 @@ class MultiServerConfigNotifier extends StateNotifier<MultiServerConfigState> {
       await _updateLocalCache(newServers);
       if (kDebugMode) {
         print(
-          '[MultiServerConfigNotifier] Updated server \${updatedConfig.id} locally and synced to CloudKit.',
+          '[MultiServerConfigNotifier] Updated server ${updatedConfig.id} locally and synced to CloudKit.',
         );
       }
       return true;
     } else {
       if (kDebugMode) {
         print(
-          '[MultiServerConfigNotifier] Failed to sync updated server \${updatedConfig.id} to CloudKit. Local state/cache not changed.',
+          '[MultiServerConfigNotifier] Failed to sync updated server ${updatedConfig.id} to CloudKit. Local state/cache not changed.',
         );
       }
       return false;
@@ -731,6 +731,13 @@ final activeServerConfigProvider = Provider<ServerConfig?>((ref) {
   );
   return activeServer;
 }, name: 'activeServerConfig');
+
+/// Provider that returns the first configured Todoist ServerConfig, or null if none exists.
+final todoistServerConfigProvider = Provider<ServerConfig?>((ref) {
+  final servers = ref.watch(multiServerConfigProvider).servers;
+  // Use firstWhereOrNull from collection package
+  return servers.firstWhereOrNull((s) => s.serverType == ServerType.todoist);
+}, name: 'todoistServerConfig'); // Added name for clarity
 
 /// Provider for loading server configuration on app startup
 final loadServerConfigProvider = FutureProvider<void>((ref) async {
