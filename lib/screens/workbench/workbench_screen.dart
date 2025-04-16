@@ -100,19 +100,19 @@ class _WorkbenchScreenState extends ConsumerState<WorkbenchScreen> {
               );
             }
 
-            // Remove vertical padding here, as each tile has its own margin
+            // Use ReorderableListView with custom drag handles
             return ReorderableListView.builder(
+              // Ensure this is false to use the handles inside WorkbenchItemTile
               buildDefaultDragHandles: false,
               itemCount: items.length,
               itemBuilder: (context, index) {
                 final item = items[index];
-                return ReorderableDragStartListener(
-                  index: index,
-                  key: ValueKey('drag-${item.id}'),
-                  child: WorkbenchItemTile(
-                    key: ValueKey(item.id),
-                    itemReference: item,
-                  ),
+                // Return the tile directly, passing the index and using item.id for the main key.
+                // The ReorderableDragStartListener is now *inside* WorkbenchItemTile.
+                return WorkbenchItemTile(
+                  key: ValueKey(item.id), // Key for the tile widget itself
+                  itemReference: item,
+                  index: index, // Pass the index down
                 );
               },
               onReorder: (oldIndex, newIndex) {
@@ -120,6 +120,8 @@ class _WorkbenchScreenState extends ConsumerState<WorkbenchScreen> {
                     .read(workbenchProvider.notifier)
                     .reorderItems(oldIndex, newIndex);
               },
+              // Optional: Add padding to the list view itself if needed
+              // padding: EdgeInsets.symmetric(vertical: 8),
             );
           }
         ),
