@@ -380,184 +380,202 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
       ),
     ];
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8.0),
-      margin: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Drag Handle
-          Padding(
-            padding: const EdgeInsets.only(top: 12.0, right: 6.0),
-            child: ReorderableDragStartListener(
-              index: widget.index,
-              key: ValueKey('drag-handle-${widget.itemReference.id}'),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 4.0),
-                child: Icon(
-                  CupertinoIcons.bars,
-                  color: CupertinoColors.systemGrey2.resolveFrom(context),
-                  size: 20,
-                ),
-              ),
-            ),
-          ),
-
-          // Main Content Area (Wrapped in GestureDetector for long-press)
-          Expanded(
-            child: GestureDetector(
-              // Outer GestureDetector for long-press
-              onLongPress: () => _showContextMenu(context),
-              child: MouseRegion(
-                onEnter: (_) => setState(() => _isHovering = true),
-                onExit: (_) => setState(() => _isHovering = false),
-                child: GestureDetector(
-                  // Inner GestureDetector for tap
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () {
-                    if (isOnActiveServer) {
-                      _navigateToItem(
-                        context,
-                        ref,
-                        widget.itemReference,
-                        commentIdToHighlight: null,
-                      );
-                    } else {
-                      _showServerSwitchRequiredDialog(
-                        context,
-                        ref,
-                        widget.itemReference,
-                      );
-                    }
-                  },
-                  child: Stack(
-                    children: [
-                      // Main Content Column
-                      Padding(
-                        padding: const EdgeInsets.symmetric(
-                          vertical: 8.0,
-                          horizontal: 4.0,
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // Header Row
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  _getServerTypeIcon(
-                                    widget.itemReference.serverType,
-                                  ),
-                                  size: 16,
-                                  color: CupertinoColors.secondaryLabel
-                                      .resolveFrom(context),
-                                ),
-                                const SizedBox(width: 6),
-                                Expanded(
-                                  child: Text(
-                                    serverDisplayName,
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w600,
-                                      color: CupertinoColors.label.resolveFrom(
-                                        context,
-                                      ),
-                                    ),
-                                    overflow: TextOverflow.ellipsis,
-                                    maxLines: 1,
-                                  ),
-                                ),
-                                const SizedBox(width: 6),
-                                Text(
-                                  lastActivityRelative,
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: CupertinoColors.tertiaryLabel
-                                        .resolveFrom(context),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 6),
-
-                            // Preview Content
-                            if (!isCommentItem)
-                              Padding(
-                                padding: const EdgeInsets.only(
-                                  left: 4.0,
-                                  right: 4.0,
-                                ),
-                                child: Text(
-                                  preview,
-                                  style: TextStyle(
-                                    fontSize: 15,
-                                    color: CupertinoColors.label.resolveFrom(
-                                      context,
-                                    ),
-                                  ),
-                                  maxLines: 5,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            if (!isCommentItem) const SizedBox(height: 8),
-
-                            // Comment Previews
-                            if (!isCommentItem)
-                              Padding(
-                                padding: const EdgeInsets.only(
-                                  left: 4.0,
-                                  right: 4.0,
-                                ),
-                                child: _buildCommentPreviews(
-                                  context,
-                                  ref,
-                                  widget.itemReference,
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-
-                      // Hover Action Bar
-                      if (_isHovering)
-                        Positioned(
-                          top: 4,
-                          right: 4,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 3,
-                            ),
-                            decoration: BoxDecoration(
-                              color: CupertinoColors.systemGrey5.resolveFrom(
-                                context,
-                              ),
-                              borderRadius: BorderRadius.circular(6),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: CupertinoColors.black.withAlpha(
-                                    (255 * 0.1).round(),
-                                  ),
-                                  blurRadius: 4,
-                                  offset: const Offset(0, 1),
-                                ),
-                              ],
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: actions,
-                            ),
-                          ),
-                        ),
-                    ],
+    // Wrap the entire tile content (Container with Row) in a Column
+    // to add a Divider below it.
+    return Column(
+      mainAxisSize: MainAxisSize.min, // Take minimum vertical space
+      children: [
+        Container(
+          // Add horizontal padding to the outer container to indent the whole row slightly
+          padding: const EdgeInsets.symmetric(horizontal: 8.0),
+          // Adjust margin: Add bottom margin for space above the divider
+          margin: const EdgeInsets.only(top: 6, bottom: 6),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start, // Align handle to top
+            children: [
+              // Drag Handle
+              Padding(
+                padding: const EdgeInsets.only(top: 12.0, right: 6.0),
+                child: ReorderableDragStartListener(
+                  index: widget.index,
+                  key: ValueKey('drag-handle-${widget.itemReference.id}'),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6.0,
+                      vertical: 4.0,
+                    ),
+                    child: Icon(
+                      CupertinoIcons.bars,
+                      color: CupertinoColors.systemGrey2.resolveFrom(context),
+                      size: 20,
+                    ),
                   ),
                 ),
               ),
-            ),
+
+              // Main Content Area (Wrapped in GestureDetector for long-press)
+              Expanded(
+                child: GestureDetector(
+                  // Outer GestureDetector for long-press
+                  onLongPress: () => _showContextMenu(context),
+                  child: MouseRegion(
+                    onEnter: (_) => setState(() => _isHovering = true),
+                    onExit: (_) => setState(() => _isHovering = false),
+                    child: GestureDetector(
+                      // Inner GestureDetector for tap
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () {
+                        if (isOnActiveServer) {
+                          _navigateToItem(
+                            context,
+                            ref,
+                            widget.itemReference,
+                            commentIdToHighlight: null,
+                          );
+                        } else {
+                          _showServerSwitchRequiredDialog(
+                            context,
+                            ref,
+                            widget.itemReference,
+                          );
+                        }
+                      },
+                      child: Stack(
+                        children: [
+                          // Main Content Column
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                              vertical: 8.0,
+                              horizontal: 4.0,
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // Header Row
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      _getServerTypeIcon(
+                                        widget.itemReference.serverType,
+                                      ),
+                                      size: 16,
+                                      color: CupertinoColors.secondaryLabel
+                                          .resolveFrom(context),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Expanded(
+                                      child: Text(
+                                        serverDisplayName,
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600,
+                                          color: CupertinoColors.label
+                                              .resolveFrom(context),
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                        maxLines: 1,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      lastActivityRelative,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: CupertinoColors.tertiaryLabel
+                                            .resolveFrom(context),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 6),
+
+                                // Preview Content
+                                if (!isCommentItem)
+                                  Padding(
+                                    padding: const EdgeInsets.only(
+                                      left: 4.0,
+                                      right: 4.0,
+                                    ),
+                                    child: Text(
+                                      preview,
+                                      style: TextStyle(
+                                        fontSize: 15,
+                                        color: CupertinoColors.label
+                                            .resolveFrom(context),
+                                      ),
+                                      maxLines: 5,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                if (!isCommentItem) const SizedBox(height: 8),
+
+                                // Comment Previews
+                                if (!isCommentItem)
+                                  Padding(
+                                    padding: const EdgeInsets.only(
+                                      left: 4.0,
+                                      right: 4.0,
+                                    ),
+                                    child: _buildCommentPreviews(
+                                      context,
+                                      ref,
+                                      widget.itemReference,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+
+                          // Hover Action Bar
+                          if (_isHovering)
+                            Positioned(
+                              top: 4,
+                              right: 4,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 3,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: CupertinoColors.systemGrey5
+                                      .resolveFrom(context),
+                                  borderRadius: BorderRadius.circular(6),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: CupertinoColors.black.withAlpha(
+                                        (255 * 0.1).round(),
+                                      ),
+                                      blurRadius: 4,
+                                      offset: const Offset(0, 1),
+                                    ),
+                                  ],
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: actions,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
+        ), // End of main content Container
+        // Add a subtle divider below the content
+        Padding(
+          // Add horizontal padding to match content indentation
+          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+          child: Container(
+            height: 0.5, // Very thin divider
+            color: CupertinoColors.separator.resolveFrom(context),
+          ),
+        ),
+      ], // End of outer Column
     );
   }
 
