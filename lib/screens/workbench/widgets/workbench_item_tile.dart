@@ -29,18 +29,6 @@ class WorkbenchItemTile extends ConsumerStatefulWidget {
 class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
   bool _isHovering = false;
 
-  // Helper to get icon based on type (remains the same)
-  IconData _getItemTypeIcon(WorkbenchItemType type) {
-    switch (type) {
-      case WorkbenchItemType.note:
-        return CupertinoIcons.doc_text;
-      case WorkbenchItemType.comment:
-        return CupertinoIcons.chat_bubble_text;
-      case WorkbenchItemType.task:
-        return CupertinoIcons.check_mark_circled;
-    }
-  }
-
   // Helper to get icon based on server type (remains the same)
   IconData _getServerTypeIcon(ServerType type) {
     switch (type) {
@@ -115,7 +103,7 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
       CupertinoButton(
         padding: const EdgeInsets.all(4),
         minSize: 0,
-        tooltip: 'View Details',
+        // tooltip: 'View Details', // Removed tooltip
         child: Icon(CupertinoIcons.eye, size: 18, color: theme.primaryColor),
         onPressed: () {
           if (isOnActiveServer) {
@@ -137,7 +125,7 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
         CupertinoButton(
           padding: const EdgeInsets.all(4),
           minSize: 0,
-          tooltip: 'Toggle Complete',
+          // tooltip: 'Toggle Complete', // Removed tooltip
           child: Icon(CupertinoIcons.check_mark_circled, size: 18, color: theme.primaryColor),
           onPressed: () async {
              try {
@@ -189,7 +177,7 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
       CupertinoButton(
         padding: const EdgeInsets.all(4),
         minSize: 0,
-        tooltip: 'Remove from Workbench',
+        // tooltip: 'Remove from Workbench', // Removed tooltip
         child: const Icon(CupertinoIcons.trash, size: 18, color: CupertinoColors.systemRed),
         onPressed: () {
            showCupertinoDialog(
@@ -364,7 +352,9 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
                             borderRadius: BorderRadius.circular(6),
                             boxShadow: [
                               BoxShadow(
-                                color: CupertinoColors.black.withOpacity(0.1),
+                                color: CupertinoColors.black.withAlpha(
+                                  (255 * 0.1).round(),
+                                ), // Use withAlpha
                                 blurRadius: 4,
                                 offset: const Offset(0, 1),
                               )
