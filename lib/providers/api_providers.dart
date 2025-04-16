@@ -52,17 +52,28 @@ final apiServiceProvider = Provider<BaseApiService>((ref) {
   }
   // *** END ADDED LOGGING ***
 
-  if (activeServerConfig == null || activeServerConfig.serverUrl.isEmpty) {
+  if (activeServerConfig == null) {
     if (kDebugMode) {
       print(
-        '[apiServiceProvider] Warning: No active server configured or URL is empty. Returning DummyApiService.',
+        '[apiServiceProvider] Warning: No active server configured. Returning DummyApiService.',
+      );
+    }
+    return DummyApiService();
+  }
+
+  // Handle Todoist potentially having an empty URL
+  if (activeServerConfig.serverType != ServerType.todoist &&
+      activeServerConfig.serverUrl.isEmpty) {
+    if (kDebugMode) {
+      print(
+        '[apiServiceProvider] Warning: Active server (${activeServerConfig.serverType.name}) URL is empty. Returning DummyApiService.',
       );
     }
     // Return a non-functional dummy service to avoid null errors downstream
     return DummyApiService();
   }
 
-  final serverUrl = activeServerConfig.serverUrl;
+  final serverUrl = activeServerConfig.serverUrl; // Might be empty for Todoist
   final authToken = activeServerConfig.authToken;
   // Get the type *after* logging the object
   final serverType = activeServerConfig.serverType;
@@ -147,8 +158,10 @@ final apiServiceProvider = Provider<BaseApiService>((ref) {
 
   ref.onDispose(() {
     if (kDebugMode) {
+      // Use a local copy of serverType because activeServerConfig might change before disposal
+      final disposedServerType = activeServerConfig.serverType;
       print(
-        '[apiServiceProvider] Disposing API service provider for ${serverType.name}',
+        '[apiServiceProvider] Disposing API service provider for ${disposedServerType.name}',
       );
       // Add any cleanup specific to the service type if needed
     }
@@ -224,7 +237,8 @@ Future<void> _checkApiHealth(Ref ref) async {
     final isHealthy = await apiService.checkHealth();
 
     // Check if config is still the same before updating state
-    if (ref.read(activeServerConfigProvider)?.id == activeConfig.id &&
+    final potentiallyChangedConfig = ref.read(activeServerConfigProvider);
+    if (potentiallyChangedConfig?.id == activeConfig.id &&
         ref.read(apiStatusProvider) == 'checking') {
       ref.read(apiStatusProvider.notifier).state =
           isHealthy ? 'available' : 'unavailable';
@@ -241,7 +255,8 @@ Future<void> _checkApiHealth(Ref ref) async {
       );
     }
     // Check if config is still the same before updating state
-    if (ref.read(activeServerConfigProvider)?.id == activeConfig.id &&
+    final potentiallyChangedConfig = ref.read(activeServerConfigProvider);
+    if (potentiallyChangedConfig?.id == activeConfig.id &&
         ref.read(apiStatusProvider) == 'checking') {
       ref.read(apiStatusProvider.notifier).state = 'unavailable'; // Or 'error'
     }
@@ -268,9 +283,11 @@ final todoistApiServiceProvider = Provider<TodoistApiService>((ref) {
     }
     // Return unconfigured service, which will fail if used
     // Ensure the service is initialized even without a token
-    todoistApiService.configureService(authToken: '');
+    // Pass dummy baseUrl as required by the interface signature
+    todoistApiService.configureService(baseUrl: '', authToken: '');
   } else {
-    todoistApiService.configureService(authToken: todoistToken);
+    // Pass dummy baseUrl as required by the interface signature
+    todoistApiService.configureService(baseUrl: '', authToken: todoistToken);
     if (kDebugMode) {
       print(
         '[todoistApiServiceProvider] Todoist API service configured successfully via provider.',
@@ -379,9 +396,11 @@ final openaiApiServiceProvider = Provider<MinimalOpenAiService>((ref) {
       );
     }
     // Configure with empty token (service handles initialization state)
-    openaiApiService.configureService(authToken: '');
+    // Pass dummy baseUrl as required by the interface signature
+    openaiApiService.configureService(baseUrl: '', authToken: '');
   } else {
-    openaiApiService.configureService(authToken: openaiToken);
+    // Pass dummy baseUrl as required by the interface signature
+    openaiApiService.configureService(baseUrl: '', authToken: openaiToken);
     if (kDebugMode) {
       print(
         '[openaiApiServiceProvider] OpenAI API service configured successfully via provider.',

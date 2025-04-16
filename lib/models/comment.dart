@@ -1,148 +1,146 @@
-import 'package:flutter_memos/utils/deep_equality.dart'; // Import for deep equality check
+import 'package:flutter/foundation.dart';
+import 'package:flutter_memos/models/user.dart';
+import 'package:flutter_memos/todoist_api/lib/api.dart'
+    as todoist; // Import todoist models
 
-/// Enum for comment states
-enum CommentState { normal, archived, deleted }
-
-/// Model class for memo comments
+/// Represents a comment, adaptable for different sources (Memos, Todoist).
+@immutable
 class Comment {
-  final String id;
-  final String content;
-  final String? creatorId;
-  final int createTime; // Milliseconds since epoch
-  final int? updateTime; // Milliseconds since epoch
-  final CommentState state;
-  final bool pinned;
-  final List<Map<String, dynamic>>? resources; // Change type here
+  final String
+  id; // Unique comment ID (source-specific format, e.g., "notes/1/comments/1" or Todoist ID)
+  final String?
+  creatorId; // Source-specific user ID string (e.g., "users/1" or null for Todoist)
+  final DateTime createdTs; // Timestamp converted to DateTime
+  final DateTime?
+  updatedTs; // Timestamp converted to DateTime (nullable for Todoist?)
+  final String? content; // The actual comment text (nullable)
+  final List<Map<String, dynamic>>
+  resources; // Raw resource list (source-specific format)
+  final List<Map<String, dynamic>>
+  relations; // Raw relation list (source-specific format)
+  final User? creator; // Optional: Populated creator details (Memos concept)
+  final String parentId; // The ID of the parent entity (Note ID or Task ID)
+  final String serverId; // ID of the server config this comment belongs to
+  final Object? attachment; // Todoist-specific attachment metadata
 
-  Comment({
+  const Comment({
     required this.id,
-    required this.content,
     this.creatorId,
-    required this.createTime,
-    this.updateTime,
-    this.state = CommentState.normal,
-    this.pinned = false,
-    this.resources, // Update constructor parameter
+    required this.createdTs,
+    this.updatedTs,
+    this.content, // Made nullable
+    this.resources = const [],
+    this.relations = const [],
+    this.creator,
+    required this.parentId,
+    required this.serverId,
+    this.attachment, // Added for Todoist
   });
 
-  /// Create a copy of this comment with some fields replaced
-  Comment copyWith({
-    String? id, // Allow copying ID as well
-    String? content,
-    String? creatorId, // Allow copying creatorId
-    int? createTime, // Allow copying createTime
-    int? updateTime, 
-    CommentState? state,
-    bool? pinned,
-    List<Map<String, dynamic>>? resources, // Update resources parameter type
-    bool clearUpdateTime = false, // Helper to explicitly nullify updateTime
+  // Factory constructor from Memos API JSON
+  factory Comment.fromMemosJson(
+    Map<String, dynamic> json, {
+    required String parentId, // Pass parent note ID for context
+    required String serverId, // Pass server ID for context
+    User? creatorDetails, // Optional pre-fetched user details
   }) {
     return Comment(
-      id: id ?? this.id,
-      content: content ?? this.content,
-      creatorId: creatorId ?? this.creatorId,
-      createTime: createTime ?? this.createTime,
-      updateTime: clearUpdateTime ? null : (updateTime ?? this.updateTime),
-      state: state ?? this.state,
-      pinned: pinned ?? this.pinned,
-      resources: resources ?? this.resources, // Assign resources
+      id:
+          json['name'] ??
+          '', // Assuming 'name' is the unique identifier for Memos comment
+      creatorId: json['creator'] ?? '',
+      createdTs: DateTime.tryParse(json['createTime'] ?? '') ?? DateTime.now(),
+      updatedTs: DateTime.tryParse(json['updateTime'] ?? '') ?? DateTime.now(),
+      content: json['content'], // Keep potentially null
+      resources: List<Map<String, dynamic>>.from(json['resources'] ?? []),
+      relations: List<Map<String, dynamic>>.from(json['relations'] ?? []),
+      creator: creatorDetails, // Use passed-in details if available
+      parentId: parentId,
+      serverId: serverId,
+      attachment: null, // Memos doesn't have this field directly
     );
   }
 
-  /// Convert from JSON representation (assuming API conversion happens elsewhere)
-  factory Comment.fromJson(Map<String, dynamic> json) {
-    // This factory might not be directly used if conversion happens in ApiService,
-    // but it's good practice to have it.
+  /// Factory constructor from Todoist Comment
+  factory Comment.fromTodoistComment(
+    todoist.Comment todoistComment,
+    String? parentIdContext,
+  ) {
+    // Determine the parentId: Use context first, then task ID, then project ID from comment
+    final String effectiveParentId =
+        parentIdContext ??
+        todoistComment.taskId ??
+        todoistComment.projectId ??
+        '';
+    // Use a default serverId or determine dynamically if needed
+    const String defaultServerId = 'todoist_default';
+
     return Comment(
-      id: json['id'] as String,
-      content: json['content'] as String,
-      creatorId: json['creatorId'] as String?,
-      createTime: json['createTime'] as int,
-      updateTime: json['updateTime'] as int?,
-      state: _parseState(json['state']),
-      pinned: json['pinned'] as bool? ?? false,
-      // Assuming resources are decoded elsewhere or handled during API conversion
-      // Ensure resources are correctly parsed as List<Map<String, dynamic>>
-      resources:
-          json['resources'] != null
-              ? List<Map<String, dynamic>>.from(
-                (json['resources'] as List).map(
-                  (r) => Map<String, dynamic>.from(r as Map),
-                ),
-              )
-              : null,
+      id: todoistComment.id ?? '', // Ensure non-null ID
+      creatorId:
+          null, // Todoist API doesn't provide creator ID directly in comment object
+      createdTs:
+          todoistComment.postedAt ??
+          DateTime.now(), // Ensure non-null creation time
+      updatedTs:
+          null, // Todoist comment object doesn't have an update timestamp
+      content: todoistComment.content, // Keep potentially null
+      resources: const [], // Map attachment if needed, structure differs
+      relations: const [], // Not applicable to Todoist comments
+      creator: null, // Not applicable
+      parentId: effectiveParentId,
+      serverId: defaultServerId, // Use a consistent serverId for Todoist items
+      attachment:
+          todoistComment.attachment, // Store the raw attachment metadata
     );
   }
 
-  /// Convert to JSON representation
+
+  // Convert to JSON (mainly for potential caching or sending updates)
+  // Note: This needs to be adapted depending on the target API if sending updates
   Map<String, dynamic> toJson() {
+    // Generic representation, might need tailoring for specific API update payloads
     return {
-      'id': id,
-      'content': content,
+      'id': id, // Use 'id' consistently for local storage
       'creatorId': creatorId,
-      'createTime': createTime,
-      'updateTime': updateTime,
-      'state':
-          state.toString().split('.').last, // Use simple string representation
-      'pinned': pinned,
-      // Serialize resources (already List<Map<String, dynamic>>)
+      'createdTs': createdTs.toIso8601String(),
+      'updatedTs': updatedTs?.toIso8601String(),
+      'content': content,
       'resources': resources,
+      'relations': relations,
+      'parentId': parentId,
+      'serverId': serverId,
+      'attachment': attachment, // Include if needed for local caching
+      // 'creator': creator?.toJson(), // Avoid nested objects if not needed
     };
   }
 
-  /// Helper method to parse state from JSON
-  static CommentState _parseState(dynamic stateValue) {
-    if (stateValue == null) return CommentState.normal;
-
-    if (stateValue is String) {
-      switch (stateValue.toUpperCase()) {
-        case 'ARCHIVED':
-          return CommentState.archived;
-        case 'DELETED': // Handle DELETED if needed, mapping to archived for now
-          return CommentState.archived;
-        case 'NORMAL':
-        default:
-          return CommentState.normal;
-      }
-    }
-
-    // Handle potential enum values if API changes
-    if (stateValue is CommentState) {
-      return stateValue;
-    }
-
-    return CommentState.normal;
+  // copyWith method
+  Comment copyWith({
+    String? id,
+    ValueGetter<String?>? creatorId, // Use ValueGetter for nullable fields
+    DateTime? createdTs,
+    ValueGetter<DateTime?>? updatedTs,
+    ValueGetter<String?>? content, // Use ValueGetter
+    List<Map<String, dynamic>>? resources,
+    List<Map<String, dynamic>>? relations,
+    ValueGetter<User?>? creator,
+    String? parentId,
+    String? serverId,
+    ValueGetter<Object?>? attachment,
+  }) {
+    return Comment(
+      id: id ?? this.id,
+      creatorId: creatorId != null ? creatorId() : this.creatorId,
+      createdTs: createdTs ?? this.createdTs,
+      updatedTs: updatedTs != null ? updatedTs() : this.updatedTs,
+      content: content != null ? content() : this.content,
+      resources: resources ?? this.resources,
+      relations: relations ?? this.relations,
+      creator: creator != null ? creator() : this.creator,
+      parentId: parentId ?? this.parentId,
+      serverId: serverId ?? this.serverId,
+      attachment: attachment != null ? attachment() : this.attachment,
+    );
   }
-
-  @override
-  String toString() {
-    return 'Comment(id: $id, content: "$content", creatorId: $creatorId, createTime: $createTime, updateTime: $updateTime, state: $state, pinned: $pinned, resources: ${resources?.length ?? 0})';
-  }
-
-  // Add deep equality check
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is Comment &&
-          runtimeType == other.runtimeType &&
-          id == other.id &&
-          content == other.content &&
-          creatorId == other.creatorId &&
-          createTime == other.createTime &&
-          updateTime == other.updateTime &&
-          state == other.state &&
-          pinned == other.pinned &&
-          deepEquality.equals(resources, other.resources); // Use deep equality for lists of maps
-
-  @override
-  int get hashCode => Object.hash(
-    id,
-    content,
-    creatorId,
-    createTime,
-    updateTime,
-    state,
-    pinned,
-    deepEquality.hash(resources), // Use deep equality hash for lists of maps
-  );
 }
