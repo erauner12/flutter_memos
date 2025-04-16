@@ -383,7 +383,7 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
                     child: CupertinoButton(
                       padding: EdgeInsets.zero,
                       minSize: 0,
-                      onPressed: _showUnhideAllConfirmation, // New method
+                      onPressed: _showUnhideAllConfirmation,
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -413,34 +413,46 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
     );
   }
 
+  // Updated _buildQuickFilterControl with reordered segments
   Widget _buildQuickFilterControl() {
     final selectedPresetKey = ref.watch(quickFilterPresetProvider);
     final theme = CupertinoTheme.of(context);
 
-    final Map<String, Widget> segments = {
-      for (var preset in quickFilterPresets.values)
-        if (preset.key != 'custom')
-          preset.key: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 6.0),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                if (preset.icon != null)
-                  Icon(
-                    preset.icon,
-                    size: 18,
-                  ),
-                if (preset.icon != null) const SizedBox(width: 4),
-                Text(preset.label),
-              ],
-            ),
+    // Define the desired order, starting with 'today'
+    const List<String> desiredOrder = [
+      'today',
+      'inbox',
+      'tagged',
+      'all',
+      'hidden',
+    ];
+
+    // Build the segments map respecting the desired order
+    final Map<String, Widget> segments = {};
+    for (var key in desiredOrder) {
+      final preset = quickFilterPresets[key];
+      // Ensure the preset exists and is not the 'custom' placeholder
+      if (preset != null && preset.key != 'custom') {
+        segments[preset.key] = Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 6.0),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (preset.icon != null) Icon(preset.icon, size: 18),
+              if (preset.icon != null) const SizedBox(width: 4),
+              Text(preset.label),
+            ],
           ),
-    };
+        );
+      }
+    }
 
     return SizedBox(
       width: double.infinity,
       child: CupertinoSlidingSegmentedControl<String>(
+        // Use the ordered segments map
+        children: segments,
         groupValue: selectedPresetKey == 'custom' ? null : selectedPresetKey,
         thumbColor: theme.primaryColor,
         backgroundColor: CupertinoColors.secondarySystemFill.resolveFrom(context),
@@ -450,13 +462,14 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
               print('[ItemsScreen] Quick filter selected: $newPresetKey');
             }
             ref.read(quickFilterPresetProvider.notifier).state = newPresetKey;
+            // Clear raw filter if a preset is selected
             if (ref.read(rawCelFilterProvider).isNotEmpty) {
               ref.read(rawCelFilterProvider.notifier).state = '';
             }
+            // Save the selected preset preference
             ref.read(filterPreferencesProvider)(newPresetKey);
           }
         },
-        children: segments,
       ),
     );
   }
@@ -791,11 +804,11 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
         ref
             .read(note_providers.unhideAllNotesProvider)()
             .then((_) {
-              // Optionally switch back to a different view after unhiding
+              // Switch back to the 'today' view after unhiding
               if (mounted && ref.read(quickFilterPresetProvider) == 'hidden') {
                 ref.read(quickFilterPresetProvider.notifier).state =
-                    'inbox'; // Or 'all'
-                ref.read(filterPreferencesProvider)('inbox'); // Save preference
+                    'today'; // Default back to 'today'
+                ref.read(filterPreferencesProvider)('today'); // Save preference
               }
             })
             .catchError((e, s) {

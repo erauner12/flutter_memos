@@ -62,9 +62,9 @@ final Map<String, QuickFilterPreset> quickFilterPresets = {
 };
 
 /// Provider for the key of the currently selected quick filter preset.
-/// Defaults to 'inbox'.
+/// Defaults to 'today'.
 final quickFilterPresetProvider = StateProvider<String>(
-  (ref) => 'inbox', // Default preset
+  (ref) => 'today', // Default preset changed to 'today'
   name: 'quickFilterPresetProvider',
 );
 
@@ -197,7 +197,7 @@ final filterPreferencesProvider = Provider<
       final keyToSave =
           quickFilterPresets.containsKey(presetKey) && presetKey != 'custom'
               ? presetKey
-              : 'inbox'; // Default to 'inbox' if invalid or 'custom'
+              : 'today'; // Default to 'today' if invalid or 'custom'
       final success = await prefs.setString('last_quick_preset', keyToSave);
 
       if (kDebugMode) {
@@ -227,8 +227,11 @@ final loadFilterPreferencesProvider = FutureProvider<bool>((ref) async {
     // Load the saved preset if it's valid and exists in our map
     if (lastPresetKey != null &&
         quickFilterPresets.containsKey(lastPresetKey)) {
-      // Do not load 'custom' as the initial state, default to 'inbox' instead
-      final keyToLoad = lastPresetKey == 'custom' ? 'inbox' : lastPresetKey;
+      // Do not load 'custom' as the initial state, default to 'today' instead
+      final keyToLoad =
+          lastPresetKey == 'custom'
+              ? 'today'
+              : lastPresetKey; // Default to 'today'
       ref.read(quickFilterPresetProvider.notifier).state = keyToLoad;
       if (kDebugMode) {
         print(
@@ -242,10 +245,10 @@ final loadFilterPreferencesProvider = FutureProvider<bool>((ref) async {
         );
       }
       // Optionally set to default if saved key is invalid
-      // ref.read(quickFilterPresetProvider.notifier).state = 'inbox';
+      // ref.read(quickFilterPresetProvider.notifier).state = 'today'; // Default to 'today'
     } else {
       // If no preference saved, ensure default is set (although provider default handles this)
-      // ref.read(quickFilterPresetProvider.notifier).state = 'inbox';
+      // ref.read(quickFilterPresetProvider.notifier).state = 'today'; // Default to 'today'
     }
 
     return true;
