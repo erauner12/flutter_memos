@@ -198,18 +198,15 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
                             success = await ref.read(tasksNotifierProvider.notifier).completeTask(task.id);
                           } else {
                             success = await ref.read(tasksNotifierProvider.notifier).reopenTask(task.id);
-                          }
-                          if (!success && mounted) {
-                            _showSnackBar('Failed to update task status.', isError: true);
+                            _handleRefresh();
+                        }
+
+                        if (!success && mounted) {
+                            _showAlertDialog('Error', 'Failed to update task status.');
                             // Optionally trigger a refresh to ensure state consistency
                             _handleRefresh();
-                        } else if (!success && mounted) {
-                          _showAlertDialog(
-                            'Error',
-                            'Failed to update task status.',
-                          );
                           }
-                        },
+                      },
                         onDelete: () async {
                            final confirmed = await showCupertinoDialog<bool>(
                               context: context,

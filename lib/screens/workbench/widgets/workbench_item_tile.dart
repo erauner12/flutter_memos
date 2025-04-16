@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_memos/models/comment.dart'; // Import Comment
 import 'package:flutter_memos/models/server_config.dart';
-import 'package:flutter_memos/models/task_item.dart'; // Import TaskItem
 import 'package:flutter_memos/models/workbench_item_reference.dart';
 import 'package:flutter_memos/providers/server_config_provider.dart'; // Add this import for activeServerConfigProvider and multiServerConfigProvider
 import 'package:flutter_memos/providers/task_providers.dart'; // Import task providers for actions
@@ -11,7 +10,7 @@ import 'package:flutter_memos/providers/workbench_provider.dart';
 import 'package:flutter_memos/screens/tasks/new_task_screen.dart'; // Import task edit screen
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart'; // For date formatting
-import 'package:uuid/uuid.dart'; // For generating UUIDs
+// Removed Uuid import as it's not used directly here anymore
 
 class WorkbenchItemTile extends ConsumerWidget {
   final WorkbenchItemReference itemReference;
@@ -66,6 +65,8 @@ class WorkbenchItemTile extends ConsumerWidget {
 
   // Helper to show simple alert dialogs
   void _showAlertDialog(BuildContext context, String title, String message) {
+    // Basic mounted check (though less critical in StatelessWidget build method)
+    // if (!context.mounted) return;
     showCupertinoDialog(
       context: context,
       builder: (context) => CupertinoAlertDialog(
@@ -79,25 +80,8 @@ class WorkbenchItemTile extends ConsumerWidget {
           ),
         ],
       ),
-    );
-  }
-
-  // Helper to show snackbar messages
-  void _showSnackBar(
-    BuildContext context,
-    String message, {
-    bool isError = false,
-  }) {
-    final snackBar = SnackBar(
-      content: Text(
-        message,
-        style: TextStyle(
-          color: isError ? CupertinoColors.destructiveRed : null,
-        ),
-      ),
-    );
-    ScaffoldMessenger.of(context).showSnackBar(snackBar);
-  }
+     );
+   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -140,6 +124,7 @@ class WorkbenchItemTile extends ConsumerWidget {
             onPressed: () async {
               Navigator.pop(context); // Close menu first
               try {
+                // Fetch the task detail first to know the current state
                 final task = await ref.read(
                   taskDetailProvider(itemReference.referencedItemId).future,
                 );
@@ -149,30 +134,31 @@ class WorkbenchItemTile extends ConsumerWidget {
                       .read(tasksNotifierProvider.notifier)
                       .reopenTask(task.id);
                   if (success && context.mounted) {
-                    _showSnackBar(context, 'Task reopened.');
+                    _showAlertDialog(context, 'Success', 'Task reopened.');
                   }
                 } else {
                   success = await ref
                       .read(tasksNotifierProvider.notifier)
                       .completeTask(task.id);
                   if (success && context.mounted) {
-                    _showSnackBar(context, 'Task completed.');
+                    _showAlertDialog(context, 'Success', 'Task completed.');
                   }
                 }
                 if (!success && context.mounted) {
-                  _showSnackBar(
+                  _showAlertDialog(
                     context,
+                    'Error',
                     'Failed to toggle task status.',
-                    isError: true,
                   );
                 }
+                // Refresh workbench details after action
                 ref.read(workbenchProvider.notifier).refreshItemDetails();
               } catch (e) {
                 if (context.mounted) {
-                  _showSnackBar(
+                  _showAlertDialog(
                     context,
+                    'Error',
                     'Error getting task status: $e',
-                    isError: true,
                   );
                 }
               }
@@ -203,16 +189,15 @@ class WorkbenchItemTile extends ConsumerWidget {
                         isDestructiveAction: true,
                         child: const Text('Remove'),
                         onPressed: () {
+                          // No ref needed here, just pop the dialog
                           Navigator.pop(
                             dialogContext,
                           ); // Close confirmation dialog
-                          unawaited(
-                            ref
-                                .read(workbenchProvider.notifier)
-                                .removeItem(itemReference.id),
-                          );
-                          _showSnackBar(
+                          // Use the context from the build method or ensure the original context is available
+                          unawaited(ref.read(workbenchProvider.notifier).removeItem(itemReference.id));
+                          _showAlertDialog(
                             context,
+                            'Removed',
                             'Item removed from Workbench.',
                           );
                         },
@@ -448,6 +433,8 @@ class WorkbenchItemTile extends ConsumerWidget {
 
   // Helper to show error dialog
   void _showErrorDialog(BuildContext context, String message) {
+    // No need for mounted check here as it's called from build or methods triggered by user action
+    // where context is assumed valid.
     showCupertinoDialog(
       context: context,
       builder:
@@ -493,35 +480,46 @@ class WorkbenchItemTile extends ConsumerWidget {
                       .read(multiServerConfigProvider.notifier)
                       .setActiveServer(itemRef.serverId);
 
+                  // --- Corrected Listener Logic ---
                   final completer = Completer<void>();
                   ProviderSubscription<ServerConfig?>? sub;
-                  sub = ref.listen<ServerConfig?>(
-                    activeServerConfigProvider,
-                    (previous, next) {
-                      if (sub != null &&
-                          next?.id == itemRef.serverId &&
-                          !completer.isCompleted) {
-                        completer.complete();
-                        sub?.close();
-                        sub = null;
-                      }
-                    },
-                    onError: (error, stackTrace) {
-                      if (!completer.isCompleted) {
-                        completer.completeError(error, stackTrace);
-                        sub?.close();
-                        sub = null;
-                      }
-                    },
-                  );
 
+                  // Define the listener function separately for clarity
+                  void listener(ServerConfig? previous, ServerConfig? next) {
+                    if (sub != null &&
+                        next?.id == itemRef.serverId &&
+                        !completer.isCompleted) {
+                      completer.complete();
+                      sub!.close(); // Close the subscription
+                      sub = null;
+                    }
+                  }
+                  // Define the error handler separately
+                  void errorHandler(Object error, StackTrace stackTrace) {
+                    if (!completer.isCompleted) {
+                      completer.completeError(error, stackTrace);
+                      sub?.close();
+                      sub = null;
+                    }
+                  }
+
+                  // Start listening
+                  final tempSub = ref.listen<ServerConfig?>(
+                    activeServerConfigProvider,
+                    listener,
+                    onError: errorHandler,
+                  );
+                  sub = tempSub as ProviderSubscription<ServerConfig?>?;
+
+                  // Check initial state synchronously AFTER setting up the listener
                   final currentState = ref.read(activeServerConfigProvider);
                   if (currentState?.id == itemRef.serverId &&
                       !completer.isCompleted) {
                     completer.complete();
-                    sub?.close();
+                    sub?.close(); // Close the subscription
                     sub = null;
                   }
+                  // --- End Corrected Listener Logic ---
 
                   try {
                     await completer.future.timeout(const Duration(seconds: 5));
