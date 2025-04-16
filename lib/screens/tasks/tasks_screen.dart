@@ -40,6 +40,18 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
     }
   }
 
+  // Define the refresh handler
+  Future<void> _handleRefresh() async {
+    // Check if Todoist is active before attempting refresh
+    if (ref.read(activeServerConfigProvider)?.serverType ==
+        ServerType.todoist) {
+      // Trigger the fetchTasks method from the notifier
+      // The Future returned by fetchTasks will be awaited by the RefreshIndicator
+      await ref.read(tasksNotifierProvider.notifier).fetchTasks();
+    }
+    // If not Todoist, the refresh indicator will simply stop without fetching.
+  }
+
   // Helper to show simple alert dialogs
   void _showAlertDialog(String title, String message) {
     if (!mounted) return;
@@ -221,7 +233,7 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
             return CustomScrollView(
               slivers: [
                 CupertinoSliverRefreshControl(
-                  onRefresh: _handleRefresh,
+                  onRefresh: _handleRefresh, // Now defined
                 ),
                 // Show list even if loading is true (for pull-to-refresh indicator)
                 SliverList(
@@ -243,7 +255,7 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
                         if (!success && mounted) {
                             _showAlertDialog('Error', 'Failed to update task status.');
                             // Optionally trigger a refresh to ensure state consistency
-                            _handleRefresh();
+                          _handleRefresh(); // Now defined
                           }
                       },
                         onDelete: () async {
@@ -271,7 +283,7 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
                               if (!success && mounted) {
                             _showAlertDialog('Error', 'Failed to delete task.');
                                 // Refresh on error to potentially correct state
-                                _handleRefresh();
+                            _handleRefresh(); // Now defined
                               } else if (success && mounted) {
                             // Optional: Show confirmation, but might be annoying
                             // _showAlertDialog(
