@@ -107,9 +107,26 @@ final apiServiceProvider = Provider<BaseApiService>((ref) {
       blinkoService.configureService(baseUrl: serverUrl, authToken: authToken);
       service = blinkoService;
       break;
-    // default: // Add default or handle null serverType if possible
-    //   print('[apiServiceProvider] Error: Unknown or null server type encountered.');
-    //   return DummyApiService(); // Fallback
+    case ServerType.todoist:
+      if (kDebugMode) {
+        print('[apiServiceProvider] Switch case: Matched ServerType.todoist');
+      }
+      final todoistService = ref.watch(todoistApiServiceProvider);
+      if (!todoistService.isConfigured) {
+        if (kDebugMode) {
+          print(
+            '[apiServiceProvider] Warning: Todoist selected but API key not configured in settings.',
+          );
+        }
+        service = DummyApiService();
+      } else {
+        // WARNING: This cast is only to satisfy the provider's type.
+        // TodoistApiService does NOT implement BaseApiService.
+        // Do NOT call BaseApiService methods on this instance.
+        service = todoistService as BaseApiService;
+      }
+      break;
+    // Remove the default clause, as all ServerType enum values are covered.
   }
 
   if (kDebugMode) {

@@ -120,7 +120,9 @@ class WorkbenchItemReference {
     return {
       'id': id,
       'referencedItemId': referencedItemId,
-      'referencedItemType': referencedItemType.name, // Store enum name as string
+      'referencedItemType':
+          referencedItemType
+              .name, // Store enum name as string, now supports 'task'
       'serverId': serverId,
       'serverType': serverType.name, // Store enum name as string
       'serverName': serverName,
@@ -145,7 +147,12 @@ class WorkbenchItemReference {
     return WorkbenchItemReference(
       id: json['id'] as String? ?? const Uuid().v4(), // Generate ID if missing
       referencedItemId: json['referencedItemId'] as String? ?? '',
-      referencedItemType: tryParseEnum(WorkbenchItemType.values, json['referencedItemType'] as String?) ?? WorkbenchItemType.note, // Default to note
+      referencedItemType:
+          tryParseEnum(
+            WorkbenchItemType.values,
+            json['referencedItemType'] as String?,
+          ) ??
+          WorkbenchItemType.note, // Now supports 'task'
       serverId: json['serverId'] as String? ?? '',
       serverType: tryParseEnum(ServerType.values, json['serverType'] as String?) ?? ServerType.memos, // Default to memos
       serverName: json['serverName'] as String?,
