@@ -137,36 +137,12 @@ final apiServiceProvider = Provider<BaseApiService>((ref) {
   }
 
   if (kDebugMode) {
-      final todoistService = ref.watch(todoistApiServiceProvider);
-      if (!todoistService.isConfigured) {
-        if (kDebugMode) {
-          print(
-            '[apiServiceProvider] Warning: Todoist selected but API key not configured in settings.',
-          );
-        }
-        service = DummyApiService();
-      } else {
-        // The TodoistApiService implements TaskApiService, which extends BaseApiService.
-        // We return it cast as BaseApiService as per the provider's type signature.
-        // Callers will need to check the type and cast to TaskApiService to use task-specific methods.
-        service = todoistService; // Direct assignment works due to interface inheritance
-      }
-      break;
-    // No default needed if all enum cases are handled. Add if ServerType might expand.
-    // default:
-    //   print('[apiServiceProvider] Error: Unsupported server type: $serverType');
-    //   service = DummyApiService();
-  }
-
-  if (kDebugMode) {
     print(
       '[apiServiceProvider] Configured ${serverType.name} service for server: ${activeServerConfig.name ?? activeServerConfig.id}',
     );
-    // *** ADD THIS LOG ***
     print(
       '[apiServiceProvider] Returning service of type: ${service.runtimeType}',
     );
-    // *** END ADDED LOG ***
   }
 
   ref.onDispose(() {
@@ -203,8 +179,27 @@ final apiHealthCheckerProvider = Provider<void>((ref) {
 // Helper function to check API health for the *active* server
 Future<void> _checkApiHealth(Ref ref) async {
   final activeConfig = ref.read(activeServerConfigProvider);
+
+  // Special handling for Todoist: It uses a global key, not server-specific URL/token
+  if (activeConfig != null && activeConfig.serverType == ServerType.todoist) {
+    // For Todoist, we rely on its specific health check triggered elsewhere (settings)
+    // We can read the status from the dedicated Todoist status provider
+    final todoistStatus = ref.read(todoistApiStatusProvider);
+    final currentApiStatus = ref.read(apiStatusProvider);
+    if (currentApiStatus != todoistStatus) {
+       ref.read(apiStatusProvider.notifier).state = todoistStatus;
+       if (kDebugMode) {
+          print('[apiHealthChecker] Setting general API status based on Todoist status: $todoistStatus');
+       }
+    }
+     return; // Don't proceed with generic check for Todoist
+  }
+
+  // Generic check for Memos/Blinko
   if (activeConfig == null || activeConfig.serverUrl.isEmpty) {
-    ref.read(apiStatusProvider.notifier).state = 'unconfigured';
+    if (ref.read(apiStatusProvider) != 'unconfigured') {
+       ref.read(apiStatusProvider.notifier).state = 'unconfigured';
+    }
     return;
   }
 
@@ -212,8 +207,8 @@ Future<void> _checkApiHealth(Ref ref) async {
   final apiService = ref.read(apiServiceProvider);
 
   // Check if the service is actually configured (not the DummyApiService)
-  if (!apiService.isConfigured) {
-    // This case might happen briefly during config changes
+  // This check also covers the Todoist case returning DummyApiService if not configured
+  if (!apiService.isConfigured || apiService is DummyApiService) {
     if (ref.read(apiStatusProvider) != 'unconfigured') {
       ref.read(apiStatusProvider.notifier).state = 'unconfigured';
     }
@@ -245,6 +240,7 @@ Future<void> _checkApiHealth(Ref ref) async {
         '[apiHealthChecker] API health check failed for ${activeConfig.name ?? activeConfig.id}: $e',
       );
     }
+    // Check if config is still the same before updating state
     if (ref.read(activeServerConfigProvider)?.id == activeConfig.id &&
         ref.read(apiStatusProvider) == 'checking') {
       ref.read(apiStatusProvider.notifier).state = 'unavailable'; // Or 'error'

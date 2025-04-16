@@ -42,9 +42,14 @@ class TodoistApiService implements TaskApiService {
     _initializeClient('');
   }
 
-  /// Configure the Todoist API service with authentication token
+  /// Configure the Todoist API service with authentication token.
+  /// Implements BaseApiService.configureService. The baseUrl is ignored for Todoist.
   @override
-  void configureService({required String authToken}) {
+  Future<void> configureService({
+    required String baseUrl, // Ignored, Todoist URL is fixed
+    required String authToken,
+  }) async {
+    // Make async to match Future<void> return type
     if (_authToken == authToken && _authToken.isNotEmpty) {
       if (verboseLogging) {
         // Use stderr.writeln for server-side logging
@@ -98,8 +103,7 @@ class TodoistApiService implements TaskApiService {
 
   // --- BaseApiService Implementation ---
 
-  @override
-  String get apiBaseUrl => _baseUrl;
+  // apiBaseUrl is already defined as a class property getter
 
   @override
   bool get isConfigured => _authToken.isNotEmpty;
@@ -555,7 +559,7 @@ class TodoistApiService implements TaskApiService {
     try {
       // Call the underlying API method
       final createdTodoistComment = await _commentsApi.createComment(
-        comment.content ?? '', // Use content from app's Comment model
+        comment.content ?? '', // Pass empty string if content is null
         taskId: taskId,
         attachment: attachmentParam,
       );
@@ -606,7 +610,7 @@ class TodoistApiService implements TaskApiService {
       // Call the underlying API. Note: Todoist API uses POST for update here.
       final updatedTodoistComment = await _commentsApi.updateComment(
         commentId,
-        comment.content ?? '', // Pass the new content from app's Comment model
+        comment.content ?? '', // Pass empty string if content is null
       );
 
       if (updatedTodoistComment == null) {
@@ -832,10 +836,12 @@ class TodoistApiService implements TaskApiService {
   void _handleApiError(String context, dynamic error) {
     // Use stderr.writeln for errors
     if (error is todoist.ApiException) {
+      // Access the message property for the error description
       stderr.writeln(
-        '[TodoistApiService] API Error - $context: ${error.message} (Code: ${error.code}) Body: ${error.body}',
+        '[TodoistApiService] API Error - $context: ${error.message} (Code: ${error.code})',
       );
-      // Additional error handling logic could be added here
+      // Optionally log the response body if available and needed for debugging
+      // stderr.writeln('[TodoistApiService] Response Body: ${error.body}'); // If error.body existed
     } else {
       stderr.writeln('[TodoistApiService] Error - $context: $error');
       // Consider logging stack trace in verbose mode
