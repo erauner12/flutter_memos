@@ -155,8 +155,9 @@ class _EditEntityFormState extends ConsumerState<EditEntityForm> // Renamed clas
       dynamic entityToSave;
       if (widget.entityType == 'comment') {
         final originalComment = widget.entity as Comment;
+        final newContent = _contentController.text.trim();
         entityToSave = originalComment.copyWith(
-          content: _contentController.text.trim(),
+          content: () => newContent, // Use ValueGetter for nullable content
           pinned: _pinned,
           state: _archived ? CommentState.archived : CommentState.normal,
         );

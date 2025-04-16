@@ -8,6 +8,7 @@ import 'package:flutter_memos/providers/api_providers.dart' as api_providers;
 // Import note_providers instead of memo_providers
 import 'package:flutter_memos/providers/note_providers.dart' as note_providers;
 import 'package:flutter_memos/providers/server_config_provider.dart';
+import 'package:flutter_memos/services/note_api_service.dart';
 import 'package:flutter_memos/utils/keyboard_navigation.dart';
 import 'package:flutter_memos/utils/url_helper.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -17,11 +18,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 final createNoteProvider = Provider<
   Future<NoteItem> Function(NoteItem note, {ServerConfig? targetServerOverride})
 >((ref) {
-  final apiService = ref.watch(api_providers.apiServiceProvider);
-  return (note, {targetServerOverride}) => apiService.createNote(
-    note,
-    targetServerOverride: targetServerOverride,
-  );
+  final baseApiService = ref.watch(api_providers.apiServiceProvider);
+  return (note, {targetServerOverride}) async {
+    if (baseApiService is! NoteApiService) {
+      throw Exception('Active service does not support note operations.');
+    }
+    final NoteApiService apiService = baseApiService; // Cast
+    return apiService.createNote(
+      note,
+      targetServerOverride: targetServerOverride,
+    );
+  };
 });
 
 class NewNoteForm extends ConsumerStatefulWidget { // Renamed class

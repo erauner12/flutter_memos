@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_memos/models/comment.dart';
+import 'package:flutter_memos/models/task_item.dart';
 import 'package:flutter_memos/providers/api_providers.dart';
 import 'package:flutter_memos/providers/comment_providers.dart';
 import 'package:flutter_memos/providers/ui_providers.dart';
@@ -74,7 +75,7 @@ class _CommentCardState extends ConsumerState<CommentCard> {
     }
 
     // 2. Parse content for pre-population
-    final fullContent = comment.content.trim();
+    final fullContent = comment.content?.trim() ?? ''; // Handle null content
     if (fullContent.isEmpty) {
       _showDialog(
         'Empty Comment',
@@ -90,10 +91,10 @@ class _CommentCardState extends ConsumerState<CommentCard> {
 
     if (newlineIndex != -1) {
       initialTitle = fullContent.substring(0, newlineIndex).trim();
-      initialDescription = fullContent;
+      initialDescription = fullContent; // Keep full content for description
     } else {
       initialTitle = fullContent;
-      initialDescription = fullContent;
+      initialDescription = fullContent; // Keep full content for description
     }
 
     // 3. Show form dialog
@@ -102,14 +103,14 @@ class _CommentCardState extends ConsumerState<CommentCard> {
       initialTitle: initialTitle,
       initialDescription: initialDescription,
     );
-    
+
     // If user cancelled, result will be null
     if (result == null) return;
-    
+
     // 4. Extract form values
     final taskContent = result['title'] as String;
     final taskDescription = result['description'] as String;
-    
+
     if (taskContent.isEmpty) {
       _showDialog(
         'Empty Title',
@@ -129,11 +130,20 @@ class _CommentCardState extends ConsumerState<CommentCard> {
           '[Todoist Send] Creating task: "$taskContent" / Desc: "$taskDescription"',
         );
       }
-      final createdTask = await todoistService.createTask(
+      // Create a TaskItem to pass to createTask
+      final taskToCreate = TaskItem(
+        id: '', // ID will be assigned by API
+        serverId: 'todoist_default', // Or get from config if needed
         content: taskContent,
         description: taskDescription,
-        // Add other default parameters if desired (e.g., projectId, labels)
+        isCompleted: false,
+        priority: 1, // Default priority
+        isRecurring: false,
+        labels: [],
+        commentCount: 0,
+        createdAt: DateTime.now(),
       );
+      final createdTask = await todoistService.createTask(taskToCreate);
 
       if (kDebugMode) {
         print('[Todoist Send] Success! Task ID: ${createdTask.id}');
@@ -398,7 +408,9 @@ class _CommentCardState extends ConsumerState<CommentCard> {
             child: const Text('Copy Content'),
             onPressed: () async {
               Navigator.pop(context);
-              await Clipboard.setData(ClipboardData(text: widget.comment.content));
+                  await Clipboard.setData(
+                    ClipboardData(text: widget.comment.content ?? ''),
+                  );
                   _showDialog('Copied', 'Comment copied to clipboard.');
             },
           ),
@@ -559,10 +571,8 @@ class _CommentCardState extends ConsumerState<CommentCard> {
             ? CupertinoColors.systemBlue.resolveFrom(context)
             : CupertinoColors.label.resolveFrom(context);
 
-    // Use updateTime with fallback to createTime
-    final dateTime = DateTime.fromMillisecondsSinceEpoch(
-      widget.comment.updateTime ?? widget.comment.createTime,
-    );
+    // Use updatedTs with fallback to createdTs
+    final dateTime = widget.comment.updatedTs ?? widget.comment.createdTs;
     final dateFormat = DateFormat('MMM d, yyyy h:mm a');
     final formattedDate = dateFormat.format(dateTime);
     final isMultiSelectMode = ref.watch(commentMultiSelectModeProvider);
@@ -625,6 +635,8 @@ class _CommentCardState extends ConsumerState<CommentCard> {
                 ? Key('selected-comment-card-${widget.comment.id}')
                 : null);
 
+    final commentContent = widget.comment.content ?? ''; // Handle null content
+
     Widget commentCardWidget = Container(
       key: cardKey,
       margin: const EdgeInsets.symmetric(vertical: 6.0, horizontal: 0),
@@ -655,9 +667,9 @@ class _CommentCardState extends ConsumerState<CommentCard> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (widget.comment.content.isNotEmpty)
+              if (commentContent.isNotEmpty) // Check non-null content
                 MarkdownBody(
-                  data: widget.comment.content,
+                  data: commentContent, // Use non-null content
                   selectable: true,
                   styleSheet: MarkdownStyleSheet(
                     p: TextStyle(
@@ -682,11 +694,13 @@ class _CommentCardState extends ConsumerState<CommentCard> {
                     }
                   },
                 ),
-              if (widget.comment.resources != null &&
-                  widget.comment.resources!.isNotEmpty)
+              if (widget.comment.resources.isNotEmpty)
                 Padding(
                   padding: EdgeInsets.only(
-                    top: widget.comment.content.isNotEmpty ? 8.0 : 0.0,
+                    top:
+                        commentContent.isNotEmpty
+                            ? 8.0
+                            : 0.0, // Use non-null content
                   ),
                   child: Wrap(
                     spacing: 8.0,
@@ -796,9 +810,8 @@ class _CommentCardState extends ConsumerState<CommentCard> {
                             .toList(),
                   ),
                 ),
-              if (widget.comment.content.isNotEmpty &&
-                  widget.comment.resources != null &&
-                  widget.comment.resources!.isNotEmpty)
+              if (commentContent.isNotEmpty &&
+                  widget.comment.resources.isNotEmpty)
                 const SizedBox(height: 8),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,

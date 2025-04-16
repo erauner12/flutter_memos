@@ -12,6 +12,7 @@ import 'package:flutter_memos/providers/comment_providers.dart'
     as comment_providers;
 // Import note_providers instead of memo_providers
 import 'package:flutter_memos/providers/note_providers.dart' as note_providers;
+import 'package:flutter_memos/providers/server_config_provider.dart';
 import 'package:flutter_memos/providers/ui_providers.dart' as ui_providers;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -89,8 +90,11 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
     final newComment = Comment(
       id: 'temp-${DateTime.now().millisecondsSinceEpoch}',
       content: content,
-      creatorId: '1',
-      createTime: DateTime.now().millisecondsSinceEpoch,
+      creatorId: '1', // Assuming '1' is a placeholder or default
+      createdTs: DateTime.now(), // Use DateTime directly
+      parentId: memoId, // Pass parent ID
+      serverId:
+          ref.read(activeServerConfigProvider)?.id ?? '', // Pass server ID
     );
     await ref.read(comment_providers.createCommentProvider(memoId))(
       newComment,
@@ -695,8 +699,8 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
           note_providers.noteCommentsProvider(memoId),
         );
         final comments = commentsAsync.valueOrNull ?? [];
-        // Sort comments by createTime to reliably get the last one
-        comments.sort((a, b) => a.createTime.compareTo(b.createTime));
+        // Sort comments by createdTs to reliably get the last one
+        comments.sort((a, b) => a.createdTs.compareTo(b.createdTs));
         final lastComment = comments.isNotEmpty ? comments.last : null;
 
         // Use note_providers.noteDetailProvider
@@ -724,9 +728,10 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
             break;
           case SubmitAction.appendToLastComment:
             if (lastComment != null) {
-              // Ensure double newline
+              // Ensure double newline and handle null content
+              final lastContent = lastComment.content ?? '';
               final updatedContent =
-                  "${lastComment.content}\n\n$currentContent";
+                  "$lastContent\n\n$currentContent";
               // Call updateCommentProvider (assuming it exists and takes these args)
               await ref.read(comment_providers.updateCommentProvider)(
                 memoId,
@@ -741,9 +746,10 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
             break;
           case SubmitAction.prependToLastComment:
             if (lastComment != null) {
-              // Ensure double newline
+              // Ensure double newline and handle null content
+              final lastContent = lastComment.content ?? '';
               final updatedContent =
-                  "$currentContent\n\n${lastComment.content}";
+                  "$currentContent\n\n$lastContent";
               // Call updateCommentProvider
               await ref.read(comment_providers.updateCommentProvider)(
                 memoId,

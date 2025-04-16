@@ -2,7 +2,7 @@ import 'package:flutter_memos/models/comment.dart';
 
 /// Utility class for comment-related operations
 class CommentUtils {
-  /// Sort comments by pinned status first, then by creation time
+  /// Sort comments by pinned status first, then by creation time (newest first)
   static void sortByPinnedThenCreateTime(List<Comment> comments) {
     comments.sort((a, b) {
       // 1) Pinned comments first
@@ -10,7 +10,7 @@ class CommentUtils {
       if (!a.pinned && b.pinned) return 1;
 
       // 2) Then compare creation time (newest first)
-      return b.createTime.compareTo(a.createTime);
+      return b.createdTs.compareTo(a.createdTs); // Use createdTs
     });
   }
 
@@ -23,7 +23,7 @@ class CommentUtils {
       if (!a.pinned && b.pinned) return 1;
 
       // 2) Then compare creation time (oldest first)
-      return a.createTime.compareTo(b.createTime);
+      return a.createdTs.compareTo(b.createdTs); // Use createdTs
     });
   }
 
@@ -35,10 +35,9 @@ class CommentUtils {
       if (!a.pinned && b.pinned) return 1;
 
       // 2) Then compare update time (newest first)
-      // Treat null updateTime as older than non-null
-      final updateTimeA =
-          a.updateTime ?? 0; // Use 0 or a very small number for null
-      final updateTimeB = b.updateTime ?? 0;
+      // Use updatedTs (nullable DateTime) or fallback to createdTs
+      final updateTimeA = a.updatedTs ?? a.createdTs;
+      final updateTimeB = b.updatedTs ?? b.createdTs;
       return updateTimeB.compareTo(updateTimeA);
     });
   }

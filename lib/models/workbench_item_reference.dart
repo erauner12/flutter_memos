@@ -79,14 +79,13 @@ class WorkbenchItemReference {
           newReferencedItemUpdateTime.isAfter(calculatedUpdateTime)) {
         calculatedUpdateTime = newReferencedItemUpdateTime;
       }
-      final commentTime =
-          newLatestComment?.updateTime ?? newLatestComment?.createTime;
+      // Use createdTs and updatedTs from Comment model
+      final DateTime? commentTime =
+          newLatestComment?.updatedTs ?? newLatestComment?.createdTs;
       if (commentTime != null) {
-        final commentDateTime = DateTime.fromMillisecondsSinceEpoch(
-          commentTime,
-        );
-        if (commentDateTime.isAfter(calculatedUpdateTime)) {
-          calculatedUpdateTime = commentDateTime;
+        // No need to convert from milliseconds, it's already DateTime
+        if (commentTime.isAfter(calculatedUpdateTime)) {
+          calculatedUpdateTime = commentTime;
         }
       }
       // If the original overall time was later than any component, keep it (e.g., if manually set)

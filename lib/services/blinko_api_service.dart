@@ -712,7 +712,7 @@ class BlinkoApiService implements BaseApiService {
     }
     final request = blinko_api.CommentsCreateRequest(
       noteId: noteIdNum,
-      content: comment.content,
+      content: comment.content ?? '', // Handle nullable content
       guestName:
           '', // Blinko specific, maybe map from comment.creatorId if needed?
       parentId:
@@ -759,7 +759,7 @@ class BlinkoApiService implements BaseApiService {
     }
     final request = blinko_api.CommentsUpdateRequest(
       id: commentIdNum,
-      content: comment.content,
+      content: comment.content ?? '', // Handle nullable content
     );
     try {
       final response = await commentApi.commentsUpdateWithHttpInfo(request);
@@ -1145,11 +1145,13 @@ class BlinkoApiService implements BaseApiService {
     return Comment(
       id: idStr,
       content: contentStr,
-      createTime: createdAt.millisecondsSinceEpoch,
-      updateTime: updatedAt.millisecondsSinceEpoch,
+      createdTs: createdAt, // Use DateTime
+      updatedTs: updatedAt, // Use DateTime?
       creatorId: creatorIdStr,
       pinned: pinned,
       state: state,
+      parentId: blinkoComment.noteId.toString() ?? '', // Use noteId as parentId
+      serverId: _apiClient.basePath, // Use base path as serverId
       resources:
           [], // Blinko comments don't seem to have resources in the model
     );

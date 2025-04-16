@@ -21,6 +21,8 @@ class WorkbenchItemTile extends ConsumerWidget {
         return CupertinoIcons.doc_text;
       case WorkbenchItemType.comment:
         return CupertinoIcons.chat_bubble_text;
+      case WorkbenchItemType.task:
+        return CupertinoIcons.check_mark_circled; // Example icon for task
     }
   }
 
@@ -31,6 +33,8 @@ class WorkbenchItemTile extends ConsumerWidget {
         return CupertinoIcons.bolt_horizontal_circle_fill; // Example icon
       case ServerType.blinko:
         return CupertinoIcons.sparkles; // Example icon
+      case ServerType.todoist:
+        return CupertinoIcons.checkmark_seal_fill; // Example icon for todoist
     }
   }
 
@@ -263,7 +267,7 @@ class WorkbenchItemTile extends ConsumerWidget {
         borderRadius: BorderRadius.circular(8),
       ),
       child: Text(
-        comment.content,
+        comment.content ?? '', // Handle null content
         maxLines: 3,
         overflow: TextOverflow.ellipsis,
         style: textStyle.copyWith(fontStyle: FontStyle.italic),
@@ -318,6 +322,31 @@ class WorkbenchItemTile extends ConsumerWidget {
                 ),
           );
         }
+        break;
+      case WorkbenchItemType.task:
+        // TODO: Implement navigation for tasks
+        // Example: Navigate to a task detail screen
+        // Navigator.of(context, rootNavigator: true).pushNamed(
+        //   '/task-detail', // Define this route
+        //   arguments: {'taskId': itemRef.referencedItemId},
+        // );
+        showCupertinoDialog(
+          context: context,
+          builder:
+              (ctx) => CupertinoAlertDialog(
+                title: const Text('Not Implemented'),
+                content: const Text(
+                  'Navigation to task details is not yet implemented.',
+                ),
+                actions: [
+                  CupertinoDialogAction(
+                    isDefaultAction: true,
+                    child: const Text('OK'),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ],
+              ),
+        );
         break;
     }
   }

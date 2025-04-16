@@ -3,8 +3,8 @@ import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/models/note_item.dart'; // Import NoteItem
 // Import note_providers instead of memo_providers
 import 'package:flutter_memos/providers/note_providers.dart' as note_providers;
-import 'package:flutter_memos/services/base_api_service.dart'; // Import BaseApiService
 import 'package:flutter_memos/services/minimal_openai_service.dart'; // Import MinimalOpenAiService
+import 'package:flutter_memos/services/note_api_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'api_providers.dart' as api_p;
@@ -17,9 +17,13 @@ final hiddenCommentIdsProvider = StateProvider<Set<String>>((ref) => {});
 final archiveCommentProvider = Provider.family<Future<void> Function(), String>(
   (ref, id) {
     return () async {
-      final apiService = ref.read(
-        api_p.apiServiceProvider,
-      ); // Use BaseApiService
+      final baseApiService = ref.read(api_p.apiServiceProvider);
+      if (baseApiService is! NoteApiService) {
+        throw Exception(
+          'Active service does not support note/comment operations.',
+        );
+      }
+      final NoteApiService apiService = baseApiService; // Cast
 
       try {
         // Extract memoId from combined ID (format: "memoId/commentId")
@@ -70,7 +74,13 @@ final deleteCommentProvider = Provider.family<Future<void> Function(), String>((
   id,
 ) {
   return () async {
-    final apiService = ref.read(api_p.apiServiceProvider); // Use BaseApiService
+    final baseApiService = ref.read(api_p.apiServiceProvider);
+    if (baseApiService is! NoteApiService) {
+      throw Exception(
+        'Active service does not support note/comment operations.',
+      );
+    }
+    final NoteApiService apiService = baseApiService; // Cast
 
     try {
       // Extract parts from the combined ID (format: "memoId/commentId")
@@ -78,7 +88,7 @@ final deleteCommentProvider = Provider.family<Future<void> Function(), String>((
       final memoId = parts.isNotEmpty ? parts.first : '';
       final commentId = parts.length > 1 ? parts.last : id;
 
-      // Delete the comment using BaseApiService
+      // Delete the comment using NoteApiService
       await apiService.deleteNoteComment(
         memoId,
         commentId,
@@ -106,7 +116,13 @@ final deleteCommentProvider = Provider.family<Future<void> Function(), String>((
 final togglePinCommentProvider =
     Provider.family<Future<void> Function(), String>((ref, id) {
   return () async {
-    final apiService = ref.read(api_p.apiServiceProvider); // Use BaseApiService
+        final baseApiService = ref.read(api_p.apiServiceProvider);
+        if (baseApiService is! NoteApiService) {
+          throw Exception(
+            'Active service does not support note/comment operations.',
+          );
+        }
+        final NoteApiService apiService = baseApiService; // Cast
 
     try {
       // Extract memoId from combined ID (format: "memoId/commentId")
@@ -159,7 +175,13 @@ final convertCommentToNoteProvider = Provider.family<
   String
 >((ref, id) {
   return () async {
-    final apiService = ref.read(api_p.apiServiceProvider); // Use BaseApiService
+    final baseApiService = ref.read(api_p.apiServiceProvider);
+    if (baseApiService is! NoteApiService) {
+      throw Exception(
+        'Active service does not support note/comment operations.',
+      );
+    }
+    final NoteApiService apiService = baseApiService; // Cast
 
     try {
       // Extract parts from the combined ID (format: "memoId/commentId")
@@ -181,7 +203,7 @@ final convertCommentToNoteProvider = Provider.family<
       // Create a new note from the comment's content
       final newNote = NoteItem(
         id: 'temp-${DateTime.now().millisecondsSinceEpoch}',
-        content: comment.content,
+        content: comment.content ?? '', // Handle nullable content
         pinned: false, // Reset pinned state for the new note
         state: NoteState.normal, // Use enum
         visibility: NoteVisibility.public, // Default visibility, use enum
@@ -190,7 +212,7 @@ final convertCommentToNoteProvider = Provider.family<
         displayTime: DateTime.now(), // Placeholder
       );
 
-      // Create the new note using BaseApiService
+      // Create the new note using NoteApiService
       final createdNote = await apiService.createNote(
         newNote,
       ); // Use createNote
@@ -292,17 +314,25 @@ final createCommentProvider = Provider.family<
       );
     }
 
-    final apiService = ref.read(api_p.apiServiceProvider); // Use BaseApiService
+    final baseApiService = ref.read(api_p.apiServiceProvider);
+    if (baseApiService is! NoteApiService) {
+      throw Exception(
+        'Active service does not support note/comment operations.',
+      );
+    }
+    final NoteApiService apiService = baseApiService; // Cast
+
     List<Map<String, dynamic>>? uploadedResourceData; // Store as list of maps
 
     try {
-      // 1. Upload resource if provided using BaseApiService
+      // 1. Upload resource if provided using NoteApiService (or BaseApiService if kept there)
       if (fileBytes != null && filename != null && contentType != null) {
         if (kDebugMode) {
           print(
             '[createCommentProvider] Uploading attachment: $filename ($contentType, ${fileBytes.length} bytes)',
           );
         }
+        // Assuming uploadResource is still on BaseApiService or moved to NoteApiService
         final Map<String, dynamic> uploadedResourceMap = await apiService
             .uploadResource(fileBytes, filename, contentType); // Expect map
         uploadedResourceData = [uploadedResourceMap];
@@ -313,7 +343,7 @@ final createCommentProvider = Provider.family<
         }
       }
 
-      // 2. Create the comment, passing uploaded resources using BaseApiService
+      // 2. Create the comment, passing uploaded resources using NoteApiService
       if (kDebugMode) {
         print(
           '[createCommentProvider] Creating comment for memo $memoId with ${uploadedResourceData?.length ?? 0} attachments.',
@@ -368,7 +398,14 @@ final updateCommentProvider = Provider<
   Future<Comment> Function(String memoId, String commentId, String newContent)
 >((ref) {
   return (String memoId, String commentId, String newContent) async {
-    final apiService = ref.read(api_p.apiServiceProvider); // Use BaseApiService
+    final baseApiService = ref.read(api_p.apiServiceProvider);
+    if (baseApiService is! NoteApiService) {
+      throw Exception(
+        'Active service does not support note/comment operations.',
+      );
+    }
+    final NoteApiService apiService = baseApiService; // Cast
+
     if (kDebugMode) {
       print(
         '[updateCommentProvider] Updating comment $commentId for memo $memoId',
@@ -382,7 +419,10 @@ final updateCommentProvider = Provider<
       ); // Use getNoteComment
 
       // 2. Create the updated comment object with new content
-      final updatedCommentData = existingComment.copyWith(content: newContent);
+      // Use ValueGetter for nullable content
+      final updatedCommentData = existingComment.copyWith(
+        content: () => newContent,
+      );
 
       // 3. Call the API service to update the comment
       final resultComment = await apiService.updateNoteComment(
@@ -445,11 +485,19 @@ final fixCommentGrammarProvider = FutureProvider.family<void, String>((
     if (kDebugMode) {
       print('[fixCommentGrammarProvider] Fetching comment content...');
     }
-    final BaseApiService apiService = ref.read(api_p.apiServiceProvider);
+    final baseApiService = ref.read(api_p.apiServiceProvider);
+    if (baseApiService is! NoteApiService) {
+      throw Exception(
+        'Active service does not support note/comment operations.',
+      );
+    }
+    final NoteApiService apiService = baseApiService; // Cast
+
     final Comment currentComment = await apiService.getNoteComment(
       actualCommentId,
     );
-    final String originalContent = currentComment.content;
+    final String originalContent =
+        currentComment.content ?? ''; // Handle nullable
 
     if (originalContent.trim().isEmpty) {
       if (kDebugMode) {
@@ -486,8 +534,9 @@ final fixCommentGrammarProvider = FutureProvider.family<void, String>((
       );
     }
 
+    // Use ValueGetter for nullable content
     final Comment updatedCommentData = currentComment.copyWith(
-      content: correctedContent,
+      content: () => correctedContent,
     );
     await apiService.updateNoteComment(actualCommentId, updatedCommentData);
 

@@ -7,8 +7,8 @@ import 'package:flutter_memos/models/workbench_item_reference.dart';
 import 'package:flutter_memos/providers/api_providers.dart'; // Import API providers
 import 'package:flutter_memos/providers/server_config_provider.dart'; // Import server config provider
 import 'package:flutter_memos/providers/service_providers.dart'; // To get CloudKitService
-import 'package:flutter_memos/services/base_api_service.dart'; // Import BaseApiService
 import 'package:flutter_memos/services/cloud_kit_service.dart';
+import 'package:flutter_memos/services/note_api_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 @immutable
@@ -145,7 +145,19 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
       // For fetching details of non-active servers, a different approach (e.g., family provider or direct instantiation) would be needed.
       // For now, we proceed assuming the active server matches the items being processed or that the service handles overrides.
       // Let's try getting the active service and passing the override.
-      final BaseApiService apiService = _ref.read(apiServiceProvider);
+      final baseApiService = _ref.read(apiServiceProvider);
+      // Check if the service supports Note operations for this server
+      if (baseApiService is! NoteApiService &&
+          serverConfig?.serverType != ServerType.todoist) {
+        if (kDebugMode)
+          print(
+            '[WorkbenchNotifier] Service for server $serverId does not support Note operations. Skipping detail fetch.',
+          );
+        continue; // Skip this server if the service doesn't match
+      }
+      // Cast only if it's a NoteApiService
+      final NoteApiService? noteApiService =
+          baseApiService is NoteApiService ? baseApiService : null;
 
       for (final itemRef in serverItems) {
         detailFetchFutures.add(() async {
@@ -154,12 +166,14 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
             DateTime? noteUpdateTime;
             DateTime overallLastUpdateTime = itemRef.addedTimestamp;
 
-            // Only fetch comments/note details for NOTE items
-            if (itemRef.referencedItemType == WorkbenchItemType.note) {
+            // Only fetch comments/note details for NOTE items using NoteApiService
+            if (itemRef.referencedItemType == WorkbenchItemType.note &&
+                noteApiService != null) {
               // Fetch Note Item to get its update time
               try {
                 // Pass the specific server config to the API call if supported
-                final note = await apiService.getNote(
+                final note = await noteApiService.getNote(
+                  // Use casted service
                   itemRef.referencedItemId,
                   targetServerOverride: serverConfig,
                 );
@@ -178,25 +192,24 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
               // Fetch comments
               try {
                 // Pass the specific server config to the API call if supported
-                final comments = await apiService.listNoteComments(
+                final comments = await noteApiService.listNoteComments(
+                  // Use casted service
                   itemRef.referencedItemId,
                   targetServerOverride: serverConfig,
                 );
                 if (comments.isNotEmpty) {
-                  // Sort comments to find the latest (by updateTime or createTime)
+                  // Sort comments to find the latest (by updatedTs or createdTs)
                   comments.sort((a, b) {
-                    final timeA = a.updateTime ?? a.createTime;
-                    final timeB = b.updateTime ?? b.createTime;
+                    final timeA = a.updatedTs ?? a.createdTs;
+                    final timeB = b.updatedTs ?? b.createdTs;
                     return timeB.compareTo(timeA); // Descending
                   });
                   latestComment = comments.first;
-                  final commentTime =
-                      latestComment.updateTime ?? latestComment.createTime;
-                  final commentDateTime = DateTime.fromMillisecondsSinceEpoch(
-                    commentTime,
-                  );
-                  if (commentDateTime.isAfter(overallLastUpdateTime)) {
-                    overallLastUpdateTime = commentDateTime;
+                  final DateTime commentTime =
+                      latestComment.updatedTs ?? latestComment.createdTs;
+                  // No need to convert from milliseconds
+                  if (commentTime.isAfter(overallLastUpdateTime)) {
+                    overallLastUpdateTime = commentTime;
                   }
                 }
               } catch (e) {
@@ -207,7 +220,8 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
                 // Continue without comments
               }
             }
-            // else: If item is a comment, overallLastUpdateTime remains addedTimestamp
+            // else: If item is a comment or task, overallLastUpdateTime remains addedTimestamp for now
+            // TODO: Add logic to fetch Task details if itemRef.referencedItemType == WorkbenchItemType.task
 
             return itemRef.copyWith(
               latestComment: () => latestComment, // Use ValueGetter for null

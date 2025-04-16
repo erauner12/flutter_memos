@@ -8,18 +8,13 @@ enum CommentState { normal, archived, deleted }
 /// Represents a comment, adaptable for different sources (Memos, Todoist).
 @immutable
 class Comment {
-  final String
-  id; // Unique comment ID (source-specific format, e.g., "notes/1/comments/1" or Todoist ID)
-  final String?
-  creatorId; // Source-specific user ID string (e.g., "users/1" or null for Todoist)
+  final String id; // Unique comment ID (source-specific format)
+  final String? creatorId; // Source-specific user ID string
   final DateTime createdTs; // Timestamp converted to DateTime
-  final DateTime?
-  updatedTs; // Timestamp converted to DateTime (nullable for Todoist?)
+  final DateTime? updatedTs; // Timestamp converted to DateTime
   final String? content; // The actual comment text (nullable)
-  final List<Map<String, dynamic>>
-  resources; // Raw resource list (source-specific format)
-  final List<Map<String, dynamic>>
-  relations; // Raw relation list (source-specific format)
+  final List<Map<String, dynamic>> resources; // Raw resource list
+  final List<Map<String, dynamic>> relations; // Raw relation list
   final String parentId; // The ID of the parent entity (Note ID or Task ID)
   final String serverId; // ID of the server config this comment belongs to
   final Object? attachment; // Todoist-specific attachment metadata
@@ -31,14 +26,14 @@ class Comment {
     this.creatorId,
     required this.createdTs,
     this.updatedTs,
-    this.content, // Made nullable
+    this.content, // Nullable content
     this.resources = const [],
     this.relations = const [],
     required this.parentId,
     required this.serverId,
-    this.attachment, // Added for Todoist
-    this.pinned = false, // Default to false
-    this.state = CommentState.normal, // Default to normal
+    this.attachment,
+    this.pinned = false,
+    this.state = CommentState.normal,
   });
 
   // Factory constructor from Memos API JSON
@@ -115,18 +110,18 @@ class Comment {
   // Convert to JSON (mainly for potential caching or sending updates)
   Map<String, dynamic> toJson() {
     return {
-      'id': id, // Use 'id' consistently for local storage
+      'id': id,
       'creatorId': creatorId,
-      'createdTs': createdTs.toIso8601String(),
-      'updatedTs': updatedTs?.toIso8601String(),
+      'createdTs': createdTs.toIso8601String(), // Use createdTs
+      'updatedTs': updatedTs?.toIso8601String(), // Use updatedTs
       'content': content,
       'resources': resources,
       'relations': relations,
       'parentId': parentId,
       'serverId': serverId,
-      'attachment': attachment, // Include if needed for local caching
-      'pinned': pinned, // Include pinned
-      'state': state.name, // Store state enum name
+      'attachment': attachment,
+      'pinned': pinned,
+      'state': state.name,
     };
   }
 

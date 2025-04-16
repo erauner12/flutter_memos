@@ -14,6 +14,7 @@ import 'package:flutter_memos/services/blinko_api_service.dart';
 // Update this import path
 import 'package:flutter_memos/services/memos_api_service.dart';
 import 'package:flutter_memos/services/minimal_openai_service.dart';
+import 'package:flutter_memos/services/note_api_service.dart';
 import 'package:flutter_memos/utils/comment_utils.dart';
 import 'package:flutter_memos/utils/filter_builder.dart';
 import 'package:flutter_memos/utils/migration_utils.dart';
@@ -161,7 +162,21 @@ class NotesNotifier extends StateNotifier<NotesState> {
       );
     }
 
-    final BaseApiService apiService = _ref.read(api_p.apiServiceProvider);
+    final baseApiService = _ref.read(api_p.apiServiceProvider);
+    if (baseApiService is! NoteApiService) {
+      if (kDebugMode)
+        print(
+          '[NotesNotifier._fetchPage] Active service is not NoteApiService. Aborting fetch.',
+        );
+      state = state.copyWith(
+        isLoading: false,
+        isLoadingMore: false,
+        error: 'Active service does not support notes.',
+      );
+      return;
+    }
+    final NoteApiService apiService = baseApiService; // Cast
+
     final combinedFilter = _ref.read(combinedFilterProvider);
     final filterKey = _ref.read(filterKeyProvider);
     String stateFilter = '';
@@ -432,7 +447,11 @@ class NotesNotifier extends StateNotifier<NotesState> {
     }
 
     try {
-      final BaseApiService apiService = _ref.read(api_p.apiServiceProvider);
+      final baseApiService = _ref.read(api_p.apiServiceProvider);
+      if (baseApiService is! NoteApiService) {
+        throw Exception('Active service does not support note operations.');
+      }
+      final NoteApiService apiService = baseApiService; // Cast
       final NoteItem confirmedNoteFromApi = await apiService.updateNote(
         noteId,
         updatedNote,
@@ -735,7 +754,12 @@ final archiveNoteProvider = Provider.family<Future<void> Function(), String>((
   id,
 ) {
   return () async {
-    final BaseApiService apiService = ref.read(api_p.apiServiceProvider);
+    final baseApiService = ref.read(api_p.apiServiceProvider);
+    if (baseApiService is! NoteApiService) {
+      throw Exception('Active service does not support note operations.');
+    }
+    final NoteApiService apiService = baseApiService; // Cast to specific type
+
     final currentSelectedId = ref.read(ui_providers.selectedItemIdProvider);
     final notesBeforeAction = ref.read(filteredNotesProvider);
     String? nextSelectedId = currentSelectedId;
@@ -775,7 +799,12 @@ final deleteNoteProvider = Provider.family<Future<void> Function(), String>((
 ) {
   return () async {
     if (kDebugMode) print('[deleteNoteProvider] Deleting note: \$id');
-    final BaseApiService apiService = ref.read(api_p.apiServiceProvider);
+    final baseApiService = ref.read(api_p.apiServiceProvider);
+    if (baseApiService is! NoteApiService) {
+      throw Exception('Active service does not support note operations.');
+    }
+    final NoteApiService apiService = baseApiService; // Cast to specific type
+
     final currentSelectedId = ref.read(ui_providers.selectedItemIdProvider);
     final notesBeforeAction = ref.read(filteredNotesProvider);
     String? nextSelectedId = currentSelectedId;
@@ -822,7 +851,11 @@ final bumpNoteProvider = Provider.family<Future<void> Function(), String>((
 ) {
   return () async {
     if (kDebugMode) print('[bumpNoteProvider] Bumping note: \$id');
-    final BaseApiService apiService = ref.read(api_p.apiServiceProvider);
+    final baseApiService = ref.read(api_p.apiServiceProvider);
+    if (baseApiService is! NoteApiService) {
+      throw Exception('Active service does not support note operations.');
+    }
+    final NoteApiService apiService = baseApiService; // Cast to specific type
 
     ref.read(notesNotifierProvider.notifier).bumpNoteOptimistically(id);
     try {
@@ -846,7 +879,11 @@ final updateNoteProvider =
     Provider.family<Future<NoteItem> Function(NoteItem), String>((ref, id) {
   return (NoteItem updatedNote) async {
     if (kDebugMode) print('[updateNoteProvider] Updating note: \$id');
-    final BaseApiService apiService = ref.read(api_p.apiServiceProvider);
+    final baseApiService = ref.read(api_p.apiServiceProvider);
+    if (baseApiService is! NoteApiService) {
+      throw Exception('Active service does not support note operations.');
+    }
+    final NoteApiService apiService = baseApiService; // Cast to specific type
 
     try {
       final NoteItem result = await apiService.updateNote(id, updatedNote);
@@ -858,7 +895,8 @@ final updateNoteProvider =
         print('[updateNoteProvider] Note \$id updated successfully.');
       }
       return result;
-    } catch (e) {
+    } catch (e, stackTrace) {
+      // Added stackTrace
       if (kDebugMode) {
         print('[updateNoteProvider] Error updating note: \$e\n\$stackTrace');
       }
@@ -877,7 +915,11 @@ final togglePinNoteProvider = Provider.family<
     if (kDebugMode) {
       print('[togglePinNoteProvider] Toggling pin state for note: \$id');
     }
-    final BaseApiService apiService = ref.read(api_p.apiServiceProvider);
+    final baseApiService = ref.read(api_p.apiServiceProvider);
+    if (baseApiService is! NoteApiService) {
+      throw Exception('Active service does not support note operations.');
+    }
+    final NoteApiService apiService = baseApiService; // Cast to specific type
 
     ref.read(notesNotifierProvider.notifier).togglePinOptimistically(id);
 
@@ -887,7 +929,8 @@ final togglePinNoteProvider = Provider.family<
           .read(noteDetailCacheProvider.notifier)
           .update((state) => {...state, result.id: result});
       return result;
-    } catch (e) {
+    } catch (e, stackTrace) {
+      // Added stackTrace
       if (kDebugMode) {
         print(
           '[togglePinNoteProvider] Error toggling pin state for note: \$id\n\$stackTrace',
@@ -992,11 +1035,17 @@ final moveNoteProvider = Provider.family<
     try {
       // --- 1. Fetch Data from Source ---
       if (kDebugMode) print('[moveNoteProvider] Fetching note details from source...');
-      sourceNoteData = await sourceApiService.getNote(noteId);
+      if (sourceApiService is! NoteApiService) {
+        throw Exception('Source service does not support note operations.');
+      }
+      sourceNoteData = await (sourceApiService).getNote(
+        noteId,
+      );
 
       if (kDebugMode) print('[moveNoteProvider] Fetching comments from source...');
       try {
-        sourceComments = await sourceApiService.listNoteComments(noteId);
+        sourceComments = await (sourceApiService)
+            .listNoteComments(noteId);
         if (kDebugMode) print('[moveNoteProvider] Found \${sourceComments.length} comments on source.');
       } catch (e) {
         if (kDebugMode) print('[moveNoteProvider] Warning: Failed to fetch comments from source: \$e. Proceeding without comments.');
@@ -1069,8 +1118,15 @@ final moveNoteProvider = Provider.family<
       );
 
       if (kDebugMode) print('[moveNoteProvider] Creating note on target server with adapted data...');
-      createdNoteOnTarget = await targetApiService.createNote(noteDataForTarget);
-      if (kDebugMode) print('[moveNoteProvider] Note created on target with ID: \${createdNoteOnTarget.id}');
+      if (targetApiService is! NoteApiService) {
+        throw Exception('Target service does not support note operations.');
+      }
+      createdNoteOnTarget = await (targetApiService)
+          .createNote(noteDataForTarget);
+      if (kDebugMode)
+        print(
+          '[moveNoteProvider] Note created on target with ID: \${createdNoteOnTarget!.id}',
+        ); // Added null check
 
       // Adapt and Create Comments on Target
       if (sourceComments.isNotEmpty) {
@@ -1081,8 +1137,9 @@ final moveNoteProvider = Provider.family<
               sourceComment,
               targetServer.serverType,
             );
-            await targetApiService.createNoteComment(
-              createdNoteOnTarget.id,
+            // Ensure createdNoteOnTarget is not null before accessing its ID
+            await (targetApiService).createNoteComment(
+              createdNoteOnTarget.id, // Use ! after null check
               commentDataForTarget,
             );
           } catch (e) {
@@ -1092,10 +1149,12 @@ final moveNoteProvider = Provider.family<
         if (kDebugMode) print('[moveNoteProvider] Finished creating comments on target.');
       }
 
-      // --- 3. Delete from Source (Only if Target Creation Succeeded) ---
+      // --- 3. Delete from Source (Only if Target Creation Succeeded and Note Exists) ---
+      // Only delete if target creation was successful
       if (kDebugMode) print('[moveNoteProvider] Deleting note from source server...');
-      await sourceApiService.deleteNote(noteId);
+      await (sourceApiService).deleteNote(noteId);
       if (kDebugMode) print('[moveNoteProvider] Note \$noteId successfully deleted from source.');
+    
 
       if (kDebugMode) print('[moveNoteProvider] Move completed successfully for note \$noteId.');
     } catch (e, st) {
@@ -1158,6 +1217,15 @@ final prefetchNoteDetailsProvider = Provider<
     final cache = ref.read(noteDetailCacheProvider);
     final uncachedIds = ids.where((id) => !cache.containsKey(id)).toList();
     if (uncachedIds.isEmpty) return;
+    if (apiService is! NoteApiService) {
+      if (kDebugMode)
+        print(
+          '[prefetchNoteDetailsProvider] Active service does not support note operations. Skipping prefetch.',
+        );
+      return;
+    }
+    final NoteApiService noteApiService = apiService; // Cast
+
     const batchSize = 5;
     for (var i = 0; i < uncachedIds.length; i += batchSize) {
       final end =
@@ -1167,7 +1235,7 @@ final prefetchNoteDetailsProvider = Provider<
       final batch = uncachedIds.sublist(i, end);
       try {
         final List<NoteItem> notes = await Future.wait(
-          batch.map((id) => apiService.getNote(id)),
+          batch.map((id) => noteApiService.getNote(id)), // Use casted service
         );
         final updatedCache = Map<String, NoteItem>.from(cache);
         for (var note in notes) {
@@ -1187,8 +1255,12 @@ final prefetchNoteDetailsProvider = Provider<
 }, name: 'prefetchNoteDetailsProvider');
 
 final createNoteProvider = Provider<Future<void> Function(NoteItem)>((ref) {
-  final BaseApiService apiService = ref.watch(api_p.apiServiceProvider);
+  final baseApiService = ref.watch(api_p.apiServiceProvider);
   return (NoteItem note) async {
+    if (baseApiService is! NoteApiService) {
+      throw Exception('Active service does not support note operations.');
+    }
+    final NoteApiService apiService = baseApiService; // Cast
     try {
       await apiService.createNote(note);
     } catch (e) {
@@ -1215,7 +1287,12 @@ final fixNoteGrammarProvider = FutureProvider.family<void, String>((
     print('[fixNoteGrammarProvider] Starting grammar fix for note: \$noteId');
   }
 
-  final BaseApiService notesApiService = ref.read(api_p.apiServiceProvider);
+  final baseApiService = ref.read(api_p.apiServiceProvider);
+  if (baseApiService is! NoteApiService) {
+    throw Exception('Active service does not support note operations.');
+  }
+  final NoteApiService notesApiService = baseApiService; // Cast
+
   final MinimalOpenAiService openaiApiService = ref.read(
     api_p.openaiApiServiceProvider,
   );
@@ -1301,7 +1378,11 @@ final noteDetailProvider = FutureProvider.family<NoteItem, String>((
   ref,
   id,
 ) async {
-  final apiService = ref.watch(api_p.apiServiceProvider);
+  final baseApiService = ref.watch(api_p.apiServiceProvider);
+  if (baseApiService is! NoteApiService) {
+    throw Exception('Active service does not support note operations.');
+  }
+  final NoteApiService apiService = baseApiService; // Cast
   return apiService.getNote(id);
 }, name: 'noteDetailProvider');
 
@@ -1309,7 +1390,11 @@ final noteCommentsProvider = FutureProvider.family<List<Comment>, String>((
   ref,
   noteId,
 ) async {
-  final apiService = ref.watch(api_p.apiServiceProvider);
+  final baseApiService = ref.watch(api_p.apiServiceProvider);
+  if (baseApiService is! NoteApiService) {
+    throw Exception('Active service does not support note operations.');
+  }
+  final NoteApiService apiService = baseApiService; // Cast
   final comments = await apiService.listNoteComments(noteId);
   CommentUtils.sortByPinnedThenUpdateTime(comments);
   return comments;

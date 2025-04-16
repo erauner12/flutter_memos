@@ -6,6 +6,7 @@ import 'package:flutter_memos/providers/api_providers.dart';
 import 'package:flutter_memos/providers/note_providers.dart' as note_providers;
 // Import settings_provider for manuallyHiddenNoteIdsProvider
 import 'package:flutter_memos/providers/settings_provider.dart' as settings_p;
+import 'package:flutter_memos/services/note_api_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// Parameter class for entity providers to ensure consistent == checks.
@@ -35,7 +36,14 @@ class EntityProviderParams {
 // Provider to fetch the entity (note or comment) to be edited
 final editEntityProvider = FutureProvider.family<dynamic, EntityProviderParams>(
   (ref, params) async {
-    final apiService = ref.read(apiServiceProvider);
+    final baseApiService = ref.read(apiServiceProvider);
+    if (baseApiService is! NoteApiService) {
+      throw Exception(
+        'Active service does not support note/comment operations.',
+      );
+    }
+    final NoteApiService apiService = baseApiService; // Cast
+
     final id = params.id;
     final type = params.type;
 
@@ -45,7 +53,12 @@ final editEntityProvider = FutureProvider.family<dynamic, EntityProviderParams>(
 
   if (type == 'comment') {
       // Assuming commentId format is "noteId/commentId" for getNoteComment
-      return apiService.getNoteComment(id); // Use getNoteComment
+      // The getNoteComment expects the actual comment ID, not the combined one.
+      final parts = id.split('/');
+      final actualCommentId = parts.length > 1 ? parts.last : id;
+      return apiService.getNoteComment(
+        actualCommentId,
+      ); // Use getNoteComment with actual ID
   } else {
       // Default 'note'
       return apiService.getNote(id); // Use getNote
@@ -61,7 +74,13 @@ final saveEntityProvider = Provider.family<
   final type = params.type; // Access type from params
 
   return (dynamic updatedEntity) async {
-    final apiService = ref.read(apiServiceProvider);
+    final baseApiService = ref.read(apiServiceProvider);
+    if (baseApiService is! NoteApiService) {
+      throw Exception(
+        'Active service does not support note/comment operations.',
+      );
+    }
+    final NoteApiService apiService = baseApiService; // Cast
 
     if (kDebugMode) {
       print('[saveEntityProvider] Saving $type with ID: $id');
