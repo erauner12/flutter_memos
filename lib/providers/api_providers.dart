@@ -200,18 +200,20 @@ Future<void> _checkApiHealth(Ref ref) async {
     final todoistStatus = ref.read(todoistApiStatusProvider);
     final currentApiStatus = ref.read(apiStatusProvider);
     if (currentApiStatus != todoistStatus) {
-       ref.read(apiStatusProvider.notifier).state = todoistStatus;
-       if (kDebugMode) {
-          print('[apiHealthChecker] Setting general API status based on Todoist status: $todoistStatus');
-       }
+      ref.read(apiStatusProvider.notifier).state = todoistStatus;
+      if (kDebugMode) {
+        print(
+          '[apiHealthChecker] Setting general API status based on Todoist status: $todoistStatus',
+        );
+      }
     }
-     return; // Don't proceed with generic check for Todoist
+    return; // Don't proceed with generic check for Todoist
   }
 
   // Generic check for Memos/Blinko
   if (activeConfig == null || activeConfig.serverUrl.isEmpty) {
     if (ref.read(apiStatusProvider) != 'unconfigured') {
-       ref.read(apiStatusProvider.notifier).state = 'unconfigured';
+      ref.read(apiStatusProvider.notifier).state = 'unconfigured';
     }
     return;
   }
@@ -396,11 +398,11 @@ final openaiApiServiceProvider = Provider<MinimalOpenAiService>((ref) {
       );
     }
     // Configure with empty token (service handles initialization state)
-    // Pass dummy baseUrl as required by the interface signature
-    openaiApiService.configureService(baseUrl: '', authToken: '');
+    // MinimalOpenAiService likely only needs authToken
+    openaiApiService.configureService(authToken: '');
   } else {
-    // Pass dummy baseUrl as required by the interface signature
-    openaiApiService.configureService(baseUrl: '', authToken: openaiToken);
+    // MinimalOpenAiService likely only needs authToken
+    openaiApiService.configureService(authToken: openaiToken);
     if (kDebugMode) {
       print(
         '[openaiApiServiceProvider] OpenAI API service configured successfully via provider.',

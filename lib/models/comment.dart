@@ -1,5 +1,5 @@
 import 'package:flutter/foundation.dart';
-import 'package:flutter_memos/models/user.dart';
+// Removed: import 'package:flutter_memos/models/user.dart';
 import 'package:flutter_memos/todoist_api/lib/api.dart'
     as todoist; // Import todoist models
 
@@ -18,7 +18,7 @@ class Comment {
   resources; // Raw resource list (source-specific format)
   final List<Map<String, dynamic>>
   relations; // Raw relation list (source-specific format)
-  final User? creator; // Optional: Populated creator details (Memos concept)
+  // Removed: final User? creator;
   final String parentId; // The ID of the parent entity (Note ID or Task ID)
   final String serverId; // ID of the server config this comment belongs to
   final Object? attachment; // Todoist-specific attachment metadata
@@ -31,7 +31,7 @@ class Comment {
     this.content, // Made nullable
     this.resources = const [],
     this.relations = const [],
-    this.creator,
+    // Removed: this.creator,
     required this.parentId,
     required this.serverId,
     this.attachment, // Added for Todoist
@@ -42,7 +42,7 @@ class Comment {
     Map<String, dynamic> json, {
     required String parentId, // Pass parent note ID for context
     required String serverId, // Pass server ID for context
-    User? creatorDetails, // Optional pre-fetched user details
+    // Removed: User? creatorDetails,
   }) {
     return Comment(
       id:
@@ -54,7 +54,7 @@ class Comment {
       content: json['content'], // Keep potentially null
       resources: List<Map<String, dynamic>>.from(json['resources'] ?? []),
       relations: List<Map<String, dynamic>>.from(json['relations'] ?? []),
-      creator: creatorDetails, // Use passed-in details if available
+      // Removed: creator: creatorDetails,
       parentId: parentId,
       serverId: serverId,
       attachment: null, // Memos doesn't have this field directly
@@ -87,7 +87,7 @@ class Comment {
       content: todoistComment.content, // Keep potentially null
       resources: const [], // Map attachment if needed, structure differs
       relations: const [], // Not applicable to Todoist comments
-      creator: null, // Not applicable
+      // Removed: creator: null,
       parentId: effectiveParentId,
       serverId: defaultServerId, // Use a consistent serverId for Todoist items
       attachment:
@@ -111,7 +111,6 @@ class Comment {
       'parentId': parentId,
       'serverId': serverId,
       'attachment': attachment, // Include if needed for local caching
-      // 'creator': creator?.toJson(), // Avoid nested objects if not needed
     };
   }
 
@@ -124,7 +123,7 @@ class Comment {
     ValueGetter<String?>? content, // Use ValueGetter
     List<Map<String, dynamic>>? resources,
     List<Map<String, dynamic>>? relations,
-    ValueGetter<User?>? creator,
+    // Removed: ValueGetter<User?>? creator,
     String? parentId,
     String? serverId,
     ValueGetter<Object?>? attachment,
@@ -137,7 +136,7 @@ class Comment {
       content: content != null ? content() : this.content,
       resources: resources ?? this.resources,
       relations: relations ?? this.relations,
-      creator: creator != null ? creator() : this.creator,
+      // Removed: creator: creator != null ? creator() : this.creator,
       parentId: parentId ?? this.parentId,
       serverId: serverId ?? this.serverId,
       attachment: attachment != null ? attachment() : this.attachment,
