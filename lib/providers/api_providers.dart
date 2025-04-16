@@ -61,7 +61,7 @@ final apiServiceProvider = Provider<BaseApiService>((ref) {
     return DummyApiService();
   }
 
-  // Handle Todoist potentially having an empty URL
+  // Handle Todoist potentially having an empty URL, but require a token
   if (activeServerConfig.serverType != ServerType.todoist &&
       activeServerConfig.serverUrl.isEmpty) {
     if (kDebugMode) {
@@ -74,7 +74,8 @@ final apiServiceProvider = Provider<BaseApiService>((ref) {
   }
 
   final serverUrl = activeServerConfig.serverUrl; // Might be empty for Todoist
-  final authToken = activeServerConfig.authToken;
+  final authToken =
+      activeServerConfig.authToken; // Use the token from the active config
   // Get the type *after* logging the object
   final serverType = activeServerConfig.serverType;
 
@@ -83,6 +84,9 @@ final apiServiceProvider = Provider<BaseApiService>((ref) {
     // Log the variable derived from the object
     print(
       '[apiServiceProvider] Variable serverType before switch: ${serverType.name}',
+    );
+    print(
+      '[apiServiceProvider] Auth Token from activeServerConfig: ${authToken.isNotEmpty ? 'Present' : 'EMPTY'}',
     );
   }
   // *** END ADDED LOGGING ***
@@ -122,23 +126,32 @@ final apiServiceProvider = Provider<BaseApiService>((ref) {
       if (kDebugMode) {
         print('[apiServiceProvider] Switch case: Matched ServerType.todoist');
       }
-      // Todoist service uses a global API key from settings, not the server config's authToken.
-      // We get the globally configured instance.
-      final todoistService = ref.watch(todoistApiServiceProvider);
-      if (!todoistService.isConfigured) {
+      // *** CHANGE HERE: Instantiate and configure TodoistApiService directly ***
+      final todoistService = TodoistApiService(); // Get the singleton instance
+      TodoistApiService.verboseLogging = config['verboseLogging'] ?? true;
+
+      // Check if the authToken (API Key for Todoist) from the active config is valid
+      if (authToken.isEmpty) {
         if (kDebugMode) {
           print(
-            '[apiServiceProvider] Warning: Todoist selected but API key not configured in settings.',
+            '[apiServiceProvider] Warning: Active Todoist config has an empty API key (authToken). Returning DummyApiService.',
           );
         }
-        // Return a dummy service to prevent errors, although UI should ideally prevent selection
-        // of Todoist server if the key isn't set.
-        service = DummyApiService(); // Or potentially a specific DummyTaskService if created
+        service =
+            DummyApiService(); // Return dummy if key is missing in the config
       } else {
-        // The TodoistApiService implements TaskApiService, which extends BaseApiService.
-        // We return it cast as BaseApiService as per the provider's type signature.
-        // Callers will need to check the type and cast to TaskApiService to use task-specific methods.
-        service = todoistService; // Direct assignment works due to interface inheritance
+        // Configure the service instance. baseUrl is ignored by TodoistApiService.
+        // Use await since configureService is async now (though not strictly needed here as we don't wait)
+        // The configureService method itself handles the async setup internally.
+        todoistService.configureService(baseUrl: '', authToken: authToken);
+        if (kDebugMode) {
+          print(
+            '[apiServiceProvider] Configured Todoist service instance using token from active ServerConfig.',
+          );
+        }
+        // Assign the configured instance
+        // TodoistApiService implements TaskApiService which extends BaseApiService
+        service = todoistService;
       }
       break;
     // No default needed if all enum cases are handled. Add if ServerType might expand.
@@ -193,43 +206,34 @@ final apiHealthCheckerProvider = Provider<void>((ref) {
 Future<void> _checkApiHealth(Ref ref) async {
   final activeConfig = ref.read(activeServerConfigProvider);
 
-  // Special handling for Todoist: It uses a global key, not server-specific URL/token
-  if (activeConfig != null && activeConfig.serverType == ServerType.todoist) {
-    // For Todoist, we rely on its specific health check triggered elsewhere (settings)
-    // We can read the status from the dedicated Todoist status provider
-    final todoistStatus = ref.read(todoistApiStatusProvider);
-    final currentApiStatus = ref.read(apiStatusProvider);
-    if (currentApiStatus != todoistStatus) {
-      ref.read(apiStatusProvider.notifier).state = todoistStatus;
-      if (kDebugMode) {
-        print(
-          '[apiHealthChecker] Setting general API status based on Todoist status: $todoistStatus',
-        );
-      }
-    }
-    return; // Don't proceed with generic check for Todoist
-  }
-
-  // Generic check for Memos/Blinko
-  if (activeConfig == null || activeConfig.serverUrl.isEmpty) {
+  // No active config? Status is unconfigured.
+  if (activeConfig == null) {
     if (ref.read(apiStatusProvider) != 'unconfigured') {
       ref.read(apiStatusProvider.notifier).state = 'unconfigured';
     }
     return;
   }
 
-  // Get the correctly configured service (Memos or Blinko) via the main provider
+  // Get the correctly configured service (Memos, Blinko, or Todoist) via the main provider
+  // This now correctly handles Todoist configuration using the active config's token.
   final apiService = ref.read(apiServiceProvider);
 
   // Check if the service is actually configured (not the DummyApiService)
-  // This check also covers the Todoist case returning DummyApiService if not configured
+  // This covers cases where URL/token is missing for Memos/Blinko,
+  // or the token is missing in the active Todoist config.
   if (!apiService.isConfigured || apiService is DummyApiService) {
     if (ref.read(apiStatusProvider) != 'unconfigured') {
       ref.read(apiStatusProvider.notifier).state = 'unconfigured';
+      if (kDebugMode) {
+        print(
+          '[apiHealthChecker] Setting status to unconfigured because apiService is Dummy or not configured.',
+        );
+      }
     }
     return;
   }
 
+  // Proceed with health check for the configured service
   final currentStatus = ref.read(apiStatusProvider);
   if (currentStatus == 'checking') return;
   ref.read(apiStatusProvider.notifier).state = 'checking';
@@ -265,34 +269,33 @@ Future<void> _checkApiHealth(Ref ref) async {
   }
 }
 
-// --- Todoist API Providers (Keep as is) ---
-/// Provider for Todoist API service
+
+// --- Todoist API Providers (Keep as is - Used for Settings/Integrations Check) ---
+/// Provider for Todoist API service (primarily for settings check)
 final todoistApiServiceProvider = Provider<TodoistApiService>((ref) {
   // Configuration from apiConfigProvider if needed
   final config = ref.watch(apiConfigProvider);
-  // Watch the persisted API key from settings_provider
+  // Watch the persisted API key from settings_provider (GLOBAL key)
   final todoistToken = ref.watch(todoistApiKeyProvider);
 
-  // Create and configure the Todoist API service
-  final todoistApiService = TodoistApiService();
+  // Create and configure the Todoist API service using the GLOBAL key
+  final todoistApiService = TodoistApiService(); // Get singleton
   TodoistApiService.verboseLogging = config['verboseLogging'] ?? true;
 
   if (todoistToken.isEmpty) {
     if (kDebugMode) {
       print(
-        '[todoistApiServiceProvider] Warning: No Todoist API token configured via provider.',
+        '[todoistApiServiceProvider] Warning: No GLOBAL Todoist API token configured via provider.',
       );
     }
-    // Return unconfigured service, which will fail if used
-    // Ensure the service is initialized even without a token
-    // Pass dummy baseUrl as required by the interface signature
+    // Return unconfigured service
     todoistApiService.configureService(baseUrl: '', authToken: '');
   } else {
-    // Pass dummy baseUrl as required by the interface signature
+    // Configure with the GLOBAL token
     todoistApiService.configureService(baseUrl: '', authToken: todoistToken);
     if (kDebugMode) {
       print(
-        '[todoistApiServiceProvider] Todoist API service configured successfully via provider.',
+        '[todoistApiServiceProvider] Todoist API service configured successfully via GLOBAL provider.',
       );
     }
   }
@@ -301,7 +304,7 @@ final todoistApiServiceProvider = Provider<TodoistApiService>((ref) {
   ref.onDispose(() {
     if (kDebugMode) {
       print(
-        '[todoistApiServiceProvider] Disposing Todoist API service provider',
+        '[todoistApiServiceProvider] Disposing Todoist API service provider (for global key)',
       );
     }
   });
@@ -309,16 +312,18 @@ final todoistApiServiceProvider = Provider<TodoistApiService>((ref) {
   return todoistApiService;
 }, name: 'todoistApiService');
 
-/// Provider for Todoist API service status (available, unavailable, etc.)
+/// Provider for Todoist API service status (based on GLOBAL key)
 final todoistApiStatusProvider = StateProvider<String>((ref) {
-  // Initial state depends on whether the token is configured via the provider
-  final token = ref.watch(todoistApiKeyProvider); // Watch the key provider
+  // Initial state depends on whether the GLOBAL token is configured
+  final token = ref.watch(
+    todoistApiKeyProvider,
+  ); // Watch the GLOBAL key provider
   return token.isEmpty ? 'unconfigured' : 'unknown';
 }, name: 'todoistApiStatus');
 
-/// Provider that checks Todoist API health periodically
+/// Provider that checks Todoist API health periodically (using GLOBAL key)
 final todoistApiHealthCheckerProvider = Provider<void>((ref) {
-  // Rerun health check when the API key changes
+  // Rerun health check when the GLOBAL API key changes
   ref.watch(todoistApiKeyProvider);
   // Initial check
   _checkTodoistApiHealth(ref);
@@ -332,14 +337,13 @@ final todoistApiHealthCheckerProvider = Provider<void>((ref) {
   return;
 }, name: 'todoistApiHealthChecker');
 
-// Helper function to check Todoist API health
+// Helper function to check Todoist API health (using GLOBAL key via todoistApiServiceProvider)
 Future<void> _checkTodoistApiHealth(Ref ref) async {
-  // Get the service instance. The provider itself handles configuration based on todoistApiKeyProvider.
+  // Get the service instance configured with the GLOBAL key.
   final todoistApiService = ref.read(todoistApiServiceProvider);
 
-  // If the service isn't configured (no token from the provider), set status and return.
+  // If the service isn't configured (no GLOBAL token), set status and return.
   if (!todoistApiService.isConfigured) {
-    // Check current state before setting to avoid unnecessary updates if already unconfigured
     if (ref.read(todoistApiStatusProvider) != 'unconfigured') {
       ref.read(todoistApiStatusProvider.notifier).state = 'unconfigured';
     }
@@ -347,29 +351,21 @@ Future<void> _checkTodoistApiHealth(Ref ref) async {
   }
 
   // Set status to checking
-  // Check current state before setting to avoid unnecessary updates
   final currentStatus = ref.read(todoistApiStatusProvider);
   if (currentStatus == 'checking') return; // Already checking
   ref.read(todoistApiStatusProvider.notifier).state = 'checking';
 
   try {
-    // Call the health check method on the service instance
+    // Call the health check method on the service instance (using GLOBAL key)
     final isHealthy = await todoistApiService.checkHealth();
 
-    // Check if the status is still 'checking' before updating
-    // This prevents race conditions if the check takes time or the key changes
     if (ref.read(todoistApiStatusProvider) == 'checking') {
-      if (isHealthy) {
-        ref.read(todoistApiStatusProvider.notifier).state = 'available';
-      } else {
-        // If checkHealth returns false, it means the API call failed (e.g., bad token)
-        ref.read(todoistApiStatusProvider.notifier).state = 'unavailable';
-      }
+      ref.read(todoistApiStatusProvider.notifier).state =
+          isHealthy ? 'available' : 'unavailable';
     }
   } catch (e) {
-    // Catch any exceptions during the health check (e.g., network error)
     if (kDebugMode) {
-      print('[todoistApiHealthChecker] Error checking health: $e');
+      print('[todoistApiHealthChecker] Error checking health (global key): $e');
     }
     if (ref.read(todoistApiStatusProvider) == 'checking') {
       ref.read(todoistApiStatusProvider.notifier).state =
@@ -377,6 +373,7 @@ Future<void> _checkTodoistApiHealth(Ref ref) async {
     }
   }
 }
+
 
 // --- OpenAI API Providers (Keep as is) ---
 
