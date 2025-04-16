@@ -1,8 +1,6 @@
 import 'package:flutter/foundation.dart';
-import 'package:flutter_memos/models/server_config.dart';
 import 'package:flutter_memos/models/task_item.dart';
 import 'package:flutter_memos/providers/api_providers.dart';
-import 'package:flutter_memos/providers/server_config_provider.dart';
 import 'package:flutter_memos/services/task_api_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -74,49 +72,40 @@ class TasksNotifier extends StateNotifier<TasksState> {
 
   TasksNotifier(this._ref) : super(TasksState.initial());
 
-  // Helper to get the TaskApiService or handle errors
+  // Helper to get the configured Todoist TaskApiService or handle errors
   TaskApiService? _getTaskApiService() {
-    final activeServerType = _ref.read(activeServerConfigProvider)?.serverType;
-    if (activeServerType != ServerType.todoist) {
-      // Only set error if the current state doesn't already reflect this
-      if (state.error != 'Active server is not Todoist') {
+    // Use the dedicated Todoist service provider
+    final todoistService = _ref.read(todoistApiServiceProvider);
+
+    if (!todoistService.isConfigured) {
+      // If Todoist API key isn't set up
+      final errorMessage = 'Todoist API Key not configured in Settings.';
+      if (state.error != errorMessage) {
         state = TasksState.initial().copyWith(
-          error: 'Active server is not Todoist',
-          tasks: [],
-        ); // Clear tasks if not Todoist
+          error: errorMessage,
+          tasks: [], // Clear tasks if not configured
+        );
       }
       return null;
     }
 
-    final apiService = _ref.read(apiServiceProvider);
-    if (apiService is TaskApiService) {
-      // Clear error if we successfully get the service and previously had an error
-      if (state.error != null) {
-        state = state.copyWith(clearError: true);
-      }
-      return apiService;
-    } else {
-       // Only set error if the current state doesn't already reflect this
-      if (state.error != 'Active service does not support tasks') {
-        state = state.copyWith(
-          isLoading: false,
-          error: 'Active service does not support tasks',
-          tasks: [],
-        ); // Clear tasks on error
-      }
-      return null;
+    // Clear error if we successfully get the service and previously had an error
+    if (state.error != null) {
+      state = state.copyWith(clearError: true);
     }
+    return todoistService; // Return the configured service instance
   }
 
-  /// Clears tasks and sets state to initial when server switches away from Todoist
-  void clearTasksForNonTodoist() {
-    if (_ref.read(activeServerConfigProvider)?.serverType !=
-        ServerType.todoist) {
-      state = TasksState.initial();
-    }
+  /// Clears tasks and resets state to initial.
+  void clearTasks() {
+    state = TasksState.initial();
   }
+
+  // Remove the old clearTasksForNonTodoist method entirely
+  // void clearTasksForNonTodoist() { ... } // REMOVE THIS METHOD
 
   Future<void> fetchTasks({String? filter}) async {
+    // Use the helper which now checks configuration, not active server
     final apiService = _getTaskApiService();
     if (apiService == null) return; // Error handled in _getTaskApiService
 
@@ -125,6 +114,7 @@ class TasksNotifier extends StateNotifier<TasksState> {
 
     state = state.copyWith(isLoading: true, clearError: true); // Clear previous errors on new fetch
     try {
+      // Use the obtained service instance directly
       final tasks = await apiService.listTasks(filter: filter);
       // Check if still mounted before updating state
       if (!mounted) return;
@@ -147,14 +137,15 @@ class TasksNotifier extends StateNotifier<TasksState> {
        if (!mounted) return;
       state = state.copyWith(
         isLoading: false,
-        error: e.toString(),
+        // Update error message to be more generic or specific to Todoist fetch failure
+        error: 'Failed to fetch tasks from Todoist: ${e.toString()}',
         tasks: [],
       ); // Clear tasks on error
     }
   }
 
   Future<bool> completeTask(String id) async {
-    final apiService = _getTaskApiService();
+    final apiService = _getTaskApiService(); // Checks config
     if (apiService == null) return false;
 
     // Optimistic update
@@ -174,7 +165,7 @@ class TasksNotifier extends StateNotifier<TasksState> {
     }
 
     try {
-      await apiService.completeTask(id);
+      await apiService.completeTask(id); // Use the service instance
       // Success, state already updated optimistically
       return true;
     } catch (e, s) {
@@ -193,7 +184,7 @@ class TasksNotifier extends StateNotifier<TasksState> {
   }
 
   Future<bool> reopenTask(String id) async {
-    final apiService = _getTaskApiService();
+    final apiService = _getTaskApiService(); // Checks config
     if (apiService == null) return false;
 
     // Optimistic update
@@ -213,7 +204,7 @@ class TasksNotifier extends StateNotifier<TasksState> {
     }
 
     try {
-      await apiService.reopenTask(id);
+      await apiService.reopenTask(id); // Use the service instance
       // Success, state already updated optimistically
       return true;
     } catch (e, s) {
@@ -232,7 +223,7 @@ class TasksNotifier extends StateNotifier<TasksState> {
   }
 
   Future<bool> deleteTask(String id) async {
-    final apiService = _getTaskApiService();
+    final apiService = _getTaskApiService(); // Checks config
     if (apiService == null) return false;
 
     // Optimistic update
@@ -244,7 +235,7 @@ class TasksNotifier extends StateNotifier<TasksState> {
     }
 
     try {
-      await apiService.deleteTask(id);
+      await apiService.deleteTask(id); // Use the service instance
       // Success, state already updated optimistically
       return true;
     } catch (e, s) {
@@ -264,13 +255,15 @@ class TasksNotifier extends StateNotifier<TasksState> {
 
   // Add methods for createTask, updateTask
   Future<TaskItem?> createTask(TaskItem task) async {
-    final apiService = _getTaskApiService();
+    final apiService = _getTaskApiService(); // Checks config
     if (apiService == null) return null;
 
     // Set loading state specifically for creation? Maybe not needed if UI handles it.
 
     try {
-      final createdTask = await apiService.createTask(task);
+      final createdTask = await apiService.createTask(
+        task,
+      ); // Use the service instance
       // Add to local state optimistically or after success?
       // Adding after success ensures we have the correct ID from the API.
       if (mounted) {
@@ -296,7 +289,7 @@ class TasksNotifier extends StateNotifier<TasksState> {
   }
 
   Future<TaskItem?> updateTask(String id, TaskItem taskUpdate) async {
-    final apiService = _getTaskApiService();
+    final apiService = _getTaskApiService(); // Checks config
     if (apiService == null) return null;
 
     // Optimistic update (optional, but improves perceived performance)
@@ -310,7 +303,18 @@ class TasksNotifier extends StateNotifier<TasksState> {
               if (task.id == id) {
                 originalTask = task; // Store original for revert
                 found = true;
-                return taskUpdate.copyWith(id: id); // Ensure ID remains correct
+                // Ensure ID remains correct and merge updates
+                // Assuming taskUpdate might not have all fields, merge with originalTask
+                // This requires TaskItem.copyWith to handle nulls correctly
+                return originalTask!.copyWith(
+                  content: taskUpdate.content,
+                  description: taskUpdate.description,
+                  priority: taskUpdate.priority,
+                  dueDate: taskUpdate.dueDate,
+                  dueString: taskUpdate.dueString,
+                  labels: taskUpdate.labels,
+                  // Add other updatable fields here
+                );
               }
               return task;
             }).toList(),
@@ -324,17 +328,29 @@ class TasksNotifier extends StateNotifier<TasksState> {
 
     try {
       // API update often returns the updated item or just confirms success
-      final updatedTask = await apiService.updateTask(id, taskUpdate);
+      final updatedTask = await apiService.updateTask(
+        id,
+        taskUpdate,
+      ); // Use the service instance
       // If API returns the updated task, replace it in the list. If not, the optimistic update stands.
       if (mounted) {
+        // Replace the item in the list with the one returned from API for consistency
+        final updatedTasks =
+            state.tasks.map((task) {
+              if (task.id == id) {
+                // Use the task returned by the API service
+                return updatedTask;
+              }
+              return task;
+            }).toList();
+
         // Re-sort after update as priority might have changed
-        final currentTasks = List<TaskItem>.from(state.tasks);
-        currentTasks.sort((a, b) {
+        updatedTasks.sort((a, b) {
           final priorityComparison = b.priority.compareTo(a.priority);
           if (priorityComparison != 0) return priorityComparison;
           return 0;
         });
-        state = state.copyWith(tasks: currentTasks, clearError: true);
+        state = state.copyWith(tasks: updatedTasks, clearError: true);
         return updatedTask; // Return the result from the API service
       }
       return null; // Not mounted
@@ -355,16 +371,14 @@ class TasksNotifier extends StateNotifier<TasksState> {
       return null; // Indicate failure
     }
   }
-
-
 }
-
+// Keep TasksState class definition unchanged
 @immutable
 class TasksState {
+  // ... existing implementation ...
   final List<TaskItem> tasks;
   final bool isLoading;
   final String? error;
-  // Add pagination fields later if needed
 
   const TasksState({
     this.tasks = const [],
@@ -372,7 +386,6 @@ class TasksState {
     this.error,
   });
 
-  // Initial state
   factory TasksState.initial() => const TasksState();
 
   TasksState copyWith({

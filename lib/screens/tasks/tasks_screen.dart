@@ -118,25 +118,26 @@ class TasksScreen extends HookConsumerWidget {
           }
         } else {
           // If Todoist is *not* configured
-          // If not Todoist configured and tasks are currently loaded, clear them
+          // If tasks are currently loaded, clear them using the new method
           if (tasksState.tasks.isNotEmpty) {
             Future.microtask(
               () =>
                   ref
                       .read(tasksNotifierProvider.notifier)
-                      .clearTasksForNonTodoist(), // Keep existing clear logic name for now
+                      .clearTasks(), // Call the new clearTasks method
             );
           }
         }
         // Return null as there's no cleanup function needed for this effect.
         return null;
       },
-      // Update dependency array
+      // Update dependency array (ensure tasksState.tasks.isNotEmpty is included if needed, or rely on tasksState object)
       [
         isTodoistConfigured,
         tasksState.isLoading,
         tasksState.error,
-        tasksState.tasks.isEmpty,
+        tasksState.tasks.isEmpty, // Keep this dependency
+        // tasksState.tasks.isNotEmpty, // Alternatively, watch the whole tasksState object
       ],
     );
 
