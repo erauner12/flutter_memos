@@ -14,6 +14,7 @@ import 'package:flutter_memos/providers/settings_provider.dart' as settings_p;
 import 'package:flutter_memos/providers/ui_providers.dart' as ui_providers;
 import 'package:flutter_memos/providers/workbench_provider.dart'; // Needed for Workbench
 import 'package:flutter_memos/utils/note_utils.dart';
+import 'package:flutter_memos/utils/thread_utils.dart'; // Import the utility
 import 'package:flutter_memos/widgets/note_card.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
@@ -152,6 +153,21 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
               Navigator.pop(popupContext);
             },
           ),
+              // --- Copy Full Thread Action ---
+              CupertinoContextMenuAction(
+                child: const Text('Copy Full Thread'),
+                onPressed: () {
+                  Navigator.pop(popupContext);
+                  // Use the context available in the build method (scaffoldContext)
+                  _copyThreadContentFromList(
+                    scaffoldContext,
+                    ref,
+                    widget.note.id,
+                    WorkbenchItemType.note,
+                  );
+                },
+              ),
+              // --- End Copy Full Thread Action ---
           if (isManuallyHidden)
             CupertinoContextMenuAction(
               child: const Text('Unhide'),
@@ -290,6 +306,84 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
     );
   }
   // --- End of helper method ---
+
+  // --- Copy Thread Content Helper ---
+  Future<void> _copyThreadContentFromList(
+    BuildContext buildContext,
+    WidgetRef ref,
+    String itemId,
+    WorkbenchItemType itemType,
+  ) async {
+    // Show loading indicator (e.g., using a dialog)
+    showCupertinoDialog(
+      context: buildContext, // Use the passed context
+      barrierDismissible: false,
+      builder:
+          (dialogContext) => const CupertinoAlertDialog(
+            content: Row(
+              children: [
+                CupertinoActivityIndicator(),
+                SizedBox(width: 15),
+                Text('Fetching thread...'),
+              ],
+            ),
+          ),
+    );
+
+    try {
+      final activeServerId = ref.read(activeServerConfigProvider)?.id;
+      if (activeServerId == null) {
+        throw Exception('No active server configured.');
+      }
+      // Assuming list items are always from the active server
+      final content = await getFormattedThreadContent(
+        ref,
+        itemId,
+        itemType,
+        activeServerId,
+      );
+      await Clipboard.setData(ClipboardData(text: content));
+
+      if (!mounted) return;
+      Navigator.pop(buildContext); // Dismiss loading
+      // Show success feedback (e.g., another dialog)
+      showCupertinoDialog(
+        context: buildContext,
+        builder:
+            (ctx) => CupertinoAlertDialog(
+              title: const Text('Success'),
+              content: const Text('Thread content copied to clipboard.'),
+              actions: [
+                CupertinoDialogAction(
+                  isDefaultAction: true,
+                  child: const Text('OK'),
+                  onPressed: () => Navigator.pop(ctx),
+                ),
+              ],
+            ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.pop(buildContext); // Dismiss loading
+      // Show error feedback
+      showCupertinoDialog(
+        context: buildContext,
+        builder:
+            (ctx) => CupertinoAlertDialog(
+              title: const Text('Error'),
+              content: Text('Failed to copy thread: $e'),
+              actions: [
+                CupertinoDialogAction(
+                  isDefaultAction: true,
+                  child: const Text('OK'),
+                  onPressed: () => Navigator.pop(ctx),
+                ),
+              ],
+            ),
+      );
+    }
+  }
+  // --- End Copy Thread Content Helper ---
 
   void _toggleHideItem(BuildContext scaffoldContext, WidgetRef ref) {
     final hiddenItemIds = ref.read(settings_p.manuallyHiddenNoteIdsProvider);

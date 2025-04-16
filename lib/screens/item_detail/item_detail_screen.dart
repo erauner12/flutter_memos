@@ -13,6 +13,7 @@ import 'package:flutter_memos/providers/ui_providers.dart';
 // Removed import for memo_detail_providers
 import 'package:flutter_memos/providers/workbench_provider.dart'; // Import workbench provider
 import 'package:flutter_memos/utils/keyboard_navigation.dart';
+import 'package:flutter_memos/utils/thread_utils.dart'; // Import the utility
 import 'package:flutter_memos/widgets/capture_utility.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart'; // Import Uuid
@@ -22,6 +23,9 @@ import 'note_content.dart'; // Updated import
 
 class ItemDetailScreen extends ConsumerStatefulWidget { // Renamed class
   final String itemId; // Renamed from memoId to itemId
+  // TODO: Determine itemType dynamically if this screen supports more than notes
+  final WorkbenchItemType itemType =
+      WorkbenchItemType.note; // Assume note for now
 
   const ItemDetailScreen({super.key, required this.itemId}); // Renamed constructor and parameter
 
@@ -202,6 +206,21 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> // Renamed 
                         )
                         : const Text('Fix Grammar (AI)'),
               ),
+              // --- Copy Full Thread Action ---
+              CupertinoActionSheetAction(
+                child: const Text('Copy Full Thread'),
+                onPressed: () {
+                  Navigator.pop(popupContext); // Close the sheet first
+                  // Assuming detail screen is always for notes for now
+                  _copyThreadContent(
+                    context,
+                    ref,
+                    widget.itemId,
+                    WorkbenchItemType.note,
+                  );
+                },
+              ),
+              // --- End Copy Full Thread Action ---
               CupertinoActionSheetAction(
                 isDestructiveAction: true,
                 child: const Text('Delete Note'), // Updated text
@@ -284,6 +303,56 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> // Renamed 
       }
     }
   }
+
+  // --- Copy Thread Content Helper ---
+  Future<void> _copyThreadContent(
+    BuildContext buildContext,
+    WidgetRef ref,
+    String itemId,
+    WorkbenchItemType itemType,
+  ) async {
+    // Show loading indicator (e.g., a simple dialog)
+    showCupertinoDialog(
+      context: buildContext,
+      barrierDismissible: false, // Prevent dismissal while loading
+      builder:
+          (dialogContext) => const CupertinoAlertDialog(
+            content: Row(
+              children: [
+                CupertinoActivityIndicator(),
+                SizedBox(width: 15),
+                Text('Fetching thread...'),
+              ],
+            ),
+          ),
+    );
+
+    try {
+      final activeServerId = ref.read(activeServerConfigProvider)?.id;
+      if (activeServerId == null) {
+        throw Exception('No active server found.');
+      }
+      // Assuming the item detail screen always shows an item from the active server
+      final content = await getFormattedThreadContent(
+        ref,
+        itemId,
+        itemType,
+        activeServerId,
+      );
+      await Clipboard.setData(ClipboardData(text: content));
+
+      if (!mounted) return;
+      Navigator.pop(buildContext); // Dismiss loading dialog
+      _showSuccessSnackbar(
+        'Thread content copied to clipboard.',
+      ); // Use existing helper
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.pop(buildContext); // Dismiss loading dialog
+      _showErrorSnackbar('Failed to copy thread: $e'); // Use existing helper
+    }
+  }
+  // --- End Copy Thread Content Helper ---
 
   // --- Snackbar Helpers ---
   void _showErrorSnackbar(String message) {

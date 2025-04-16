@@ -10,6 +10,7 @@ import 'package:flutter_memos/providers/server_config_provider.dart';
 import 'package:flutter_memos/providers/task_providers.dart';
 import 'package:flutter_memos/providers/workbench_provider.dart';
 import 'package:flutter_memos/screens/tasks/new_task_screen.dart';
+import 'package:flutter_memos/utils/thread_utils.dart'; // Import the utility
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
@@ -65,6 +66,8 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
 
   // Helper to show simple alert dialogs (remains the same)
   void _showAlertDialog(BuildContext context, String title, String message) {
+    // Ensure context is mounted before showing dialog
+    if (!mounted) return;
     showCupertinoDialog(
       context: context,
       builder: (context) => CupertinoAlertDialog(
@@ -167,6 +170,68 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
       _showAlertDialog(context, 'Info', 'No content available to copy.');
     }
   }
+
+  // --- Copy Thread Content Helper ---
+  Future<void> _copyThreadContentFromWorkbench(
+    BuildContext buildContext,
+    WidgetRef ref,
+    WorkbenchItemReference itemRef,
+  ) async {
+    final activeServer = ref.read(activeServerConfigProvider);
+    final isOnActiveServer = activeServer?.id == itemRef.serverId;
+
+    if (!isOnActiveServer) {
+      _showServerSwitchRequiredDialog(
+        buildContext,
+        ref,
+        itemRef,
+      ); // Reuse existing dialog
+      return;
+    }
+
+    // Show loading indicator
+    showCupertinoDialog(
+      context: buildContext,
+      barrierDismissible: false,
+      builder:
+          (dialogContext) => const CupertinoAlertDialog(
+            content: Row(
+              children: [
+                CupertinoActivityIndicator(),
+                SizedBox(width: 15),
+                Text('Fetching thread...'),
+              ],
+            ),
+          ),
+    );
+
+    try {
+      // Server is already confirmed to be active
+      final content = await getFormattedThreadContent(
+        ref,
+        itemRef.referencedItemId,
+        itemRef.referencedItemType,
+        itemRef.serverId,
+      );
+      await Clipboard.setData(ClipboardData(text: content));
+      if (!mounted) return;
+      Navigator.pop(buildContext); // Dismiss loading
+      _showAlertDialog(
+        buildContext,
+        'Success',
+        'Thread content copied to clipboard.',
+      ); // Reuse existing dialog helper
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.pop(buildContext); // Dismiss loading
+      _showAlertDialog(
+        buildContext,
+        'Error',
+        'Failed to copy thread: $e',
+      ); // Reuse existing dialog helper
+    }
+  }
+  // --- End Copy Thread Content Helper ---
 
   void _navigateToEdit() {
     final activeServer = ref.read(activeServerConfigProvider);
@@ -289,6 +354,19 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
                   _copyContent();
                 },
               ),
+              // --- Copy Full Thread Action ---
+              CupertinoActionSheetAction(
+                child: const Text('Copy Full Thread'),
+                onPressed: () {
+                  Navigator.pop(popupContext);
+                  _copyThreadContentFromWorkbench(
+                    context,
+                    ref,
+                    widget.itemReference,
+                  ); // Pass the whole reference
+                },
+              ),
+              // --- End Copy Full Thread Action ---
               // Remove from Workbench
               CupertinoActionSheetAction(
                 isDestructiveAction: true,
@@ -511,6 +589,8 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
                                 if (!isCommentItem) const SizedBox(height: 8),
 
                                 // Comment Previews
+                                // Always show comment previews, even if the main item is a comment itself (shows siblings/parent?)
+                                // Let's adjust this: Only show comment previews if the main item is NOT a comment.
                                 if (!isCommentItem)
                                   Padding(
                                     padding: const EdgeInsets.only(
@@ -521,6 +601,42 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
                                       context,
                                       ref,
                                       widget.itemReference,
+                                    ),
+                                  )
+                                // If the main item IS a comment, maybe show its content here instead?
+                                else
+                                  Padding(
+                                    padding: const EdgeInsets.only(
+                                      left: 4.0,
+                                      right: 4.0,
+                                      top:
+                                          4.0, // Add some top padding if it's a comment
+                                    ),
+                                    child: _buildSingleCommentPreview(
+                                      context,
+                                      ref,
+                                      widget.itemReference,
+                                      // Create a dummy comment object from the reference for display
+                                      // This assumes previewContent holds the comment text
+                                      Comment(
+                                        id:
+                                            widget
+                                                .itemReference
+                                                .referencedItemId,
+                                        content:
+                                            widget.itemReference.previewContent,
+                                        createdTs:
+                                            widget
+                                                .itemReference
+                                                .referencedItemUpdateTime ??
+                                            widget
+                                                .itemReference
+                                                .addedTimestamp, // Approximate time
+                                        parentId:
+                                            widget.itemReference.parentNoteId ??
+                                            '',
+                                        serverId: widget.itemReference.serverId,
+                                      ),
                                     ),
                                   ),
                               ],
@@ -587,11 +703,10 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
   ) {
     final comments = itemRef.previewComments;
     if (comments.isEmpty) {
-      if (itemRef.referencedItemType != WorkbenchItemType.comment) {
-        return _buildSingleCommentPreview(context, ref, itemRef, null);
-      } else {
-        return const SizedBox.shrink();
-      }
+      // Don't show "No comments yet" if the main item isn't a comment itself
+      // This section is only called when itemRef.referencedItemType != WorkbenchItemType.comment
+      return const SizedBox.shrink();
+      // return _buildSingleCommentPreview(context, ref, itemRef, null); // Old logic
     }
 
     return Column(
@@ -616,8 +731,8 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
   Widget _buildSingleCommentPreview(
     BuildContext context,
     WidgetRef ref,
-    WorkbenchItemReference itemRef,
-    Comment? comment,
+    WorkbenchItemReference itemRef, // The workbench item reference
+    Comment? comment, // The actual comment data (or null if placeholder)
   ) {
     final textStyle = TextStyle(
       fontSize: 14,
@@ -640,23 +755,29 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
 
     Widget contentWidget;
     String relativeTime = '';
+    String commentIdToShow = ''; // ID to use for navigation highlight
 
     if (comment == null) {
+      // This case should ideally not be reached if called from _buildCommentPreviews
+      // If called because the main item is a comment, 'comment' will be non-null (dummy)
       contentWidget = Text('No comments yet.', style: italicStyle);
     } else {
-      // Get timestamp using only updatedTs or createdTs
+      // Use comment data if available, otherwise fallback to workbench item data
+      final displayContent = comment.content ?? itemRef.previewContent ?? '';
+      // Use comment timestamp if available, fallback to workbench item update/add time
       DateTime commentTime =
-          comment.updatedTs ??
           comment.createdTs ??
-          DateTime.fromMillisecondsSinceEpoch(0);
+          itemRef.referencedItemUpdateTime ??
+          itemRef.addedTimestamp;
       relativeTime = _formatRelativeTime(commentTime.toLocal());
+      commentIdToShow = comment.id; // Use the actual comment ID
 
       contentWidget = Row(
          crossAxisAlignment: CrossAxisAlignment.end, // Align time to bottom
          children: [
            Expanded(
              child: Text(
-               comment.content ?? '',
+              displayContent,
                maxLines: 3, // Allow up to 3 lines
                overflow: TextOverflow.ellipsis,
                style: textStyle,
@@ -674,10 +795,13 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
        );
     }
 
-    // Make the comment preview tappable only if it's a real comment
+    // Make the comment preview tappable only if it represents a real comment
+    // (either from previewComments or if the main item is a comment)
+    final bool isTappable = comment != null;
+
     return GestureDetector(
       onTap:
-          (comment == null)
+          !isTappable
               ? null
               : () {
                 // Navigate to parent item, highlighting this specific comment
@@ -687,8 +811,9 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
                   _navigateToItem(
                     context,
                     ref,
-                    itemRef,
-                    commentIdToHighlight: comment.id,
+                    itemRef, // Pass the original workbench reference
+                    commentIdToHighlight:
+                        commentIdToShow, // Highlight the specific comment ID
                   );
                 } else {
                   _showServerSwitchRequiredDialog(context, ref, itemRef);
@@ -715,42 +840,64 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
     String? commentIdToHighlight,
   }
   ) async {
-    final String itemId = itemRef.referencedItemId;
+    final String referencedItemId = itemRef.referencedItemId;
     final bool isRootNav = Navigator.of(context).canPop() == false;
 
-    String targetItemId = itemId;
+    // Determine the actual item ID to navigate to (parent for comments)
+    String targetItemId = referencedItemId;
+    // If the workbench item *is* a comment, the target is its parent
     if (itemRef.referencedItemType == WorkbenchItemType.comment) {
-      targetItemId = itemRef.parentNoteId ?? itemId;
-       commentIdToHighlight ??= itemId;
+      // We need the parent ID. Assume it's stored in parentNoteId for now.
+      // TODO: This needs to be more robust if comments can belong to Tasks.
+      targetItemId = itemRef.parentNoteId ?? '';
+      // If navigating *from* a comment workbench item, highlight that comment ID
+      commentIdToHighlight ??= referencedItemId;
     }
 
+    if (targetItemId.isEmpty) {
+      _showErrorDialog(
+        context,
+        'Cannot navigate: Target item ID is missing or could not be determined.',
+      );
+      return;
+    }
+
+
     final Map<String, dynamic> arguments = {
-      'itemId': targetItemId,
+      'itemId': targetItemId, // Navigate to the parent item
+      // Pass the specific comment ID to highlight (could be the original item ID or from preview)
       if (commentIdToHighlight != null) 'commentIdToHighlight': commentIdToHighlight,
     };
 
-    switch (itemRef.referencedItemType) {
+    // Determine navigation target based on the *parent* item type
+    // We need to know the parent type if the workbench item is a comment.
+    // Assumption: Comments currently only come from Notes.
+    // TODO: Make this dynamic based on parent type if Tasks support comments in workbench.
+    final WorkbenchItemType effectiveNavigationType =
+        (itemRef.referencedItemType == WorkbenchItemType.comment)
+            ? WorkbenchItemType
+                .note // Assume parent is Note
+            : itemRef.referencedItemType;
+
+    switch (effectiveNavigationType) {
       case WorkbenchItemType.note:
-      case WorkbenchItemType.comment:
-        if (targetItemId.isNotEmpty) {
-           Navigator.of(context, rootNavigator: isRootNav).pushNamed(
-            '/item-detail',
-            arguments: arguments,
-          );
-        } else {
-          _showErrorDialog(
-            context,
-            'Cannot navigate: Parent item ID is missing.',
-          );
-        }
+        Navigator.of(context, rootNavigator: isRootNav).pushNamed(
+          '/item-detail', // Navigate to Note detail screen
+          arguments: arguments,
+        );
         break;
       case WorkbenchItemType.task:
         try {
-          final task = await ref.read(taskDetailProvider(itemId).future);
+          // Fetch the task details using the targetItemId (which is the task ID)
+          final task = await ref.read(taskDetailProvider(targetItemId).future);
           if (mounted) {
+            // Navigate to the task detail/edit screen
+            // TODO: Create a dedicated Task Detail Screen? For now, using NewTaskScreen.
             Navigator.of(context, rootNavigator: isRootNav).push(
               CupertinoPageRoute(
                 builder: (context) => NewTaskScreen(taskToEdit: task),
+                // Pass commentIdToHighlight if Task screen supports it
+                // settings: RouteSettings(arguments: arguments),
               ),
             );
           }
@@ -760,11 +907,19 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
           }
         }
         break;
+      case WorkbenchItemType.comment:
+        // This case should not be reached due to effectiveNavigationType logic
+        _showErrorDialog(
+          context,
+          'Internal navigation error: Unexpected item type.',
+        );
+        break;
     }
   }
 
   // Helper to show error dialog (Moved inside the State class)
   void _showErrorDialog(BuildContext context, String message) {
+    if (!mounted) return;
     showCupertinoDialog(
       context: context,
       builder:
@@ -788,13 +943,14 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
     WidgetRef ref,
     WorkbenchItemReference itemRef,
   ) {
+    if (!mounted) return;
     showCupertinoDialog(
       context: context,
       builder:
           (dialogContext) => CupertinoAlertDialog(
             title: const Text('Server Switch Required'),
             content: Text(
-              'This item is on server "${itemRef.serverName ?? itemRef.serverId}". Switch to this server to view the item?',
+              'This item is on server "${itemRef.serverName ?? itemRef.serverId}". Switch to this server to interact with the item?',
             ),
             actions: [
               CupertinoDialogAction(
@@ -803,13 +959,30 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
               ),
               CupertinoDialogAction(
                 isDefaultAction: true,
-                child: const Text('Switch & View'),
+                child: const Text('Switch Server'), // Changed text slightly
                 onPressed: () async {
-                  Navigator.pop(dialogContext);
+                  Navigator.pop(dialogContext); // Close this dialog first
+                  // Show loading indicator while switching
+                  showCupertinoDialog(
+                    context: context,
+                    barrierDismissible: false,
+                    builder:
+                        (loadingCtx) => const CupertinoAlertDialog(
+                          content: Row(
+                            children: [
+                              CupertinoActivityIndicator(),
+                              SizedBox(width: 15),
+                              Text('Switching server...'),
+                            ],
+                          ),
+                        ),
+                  );
+
                   ref
                       .read(multiServerConfigProvider.notifier)
                       .setActiveServer(itemRef.serverId);
 
+                  // Wait for the activeServerConfigProvider to reflect the change
                   final completer = Completer<void>();
                   ProviderSubscription<ServerConfig?>? sub;
 
@@ -831,34 +1004,39 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
                     }
                   }
 
-                  final tempSub = ref.listen<ServerConfig?>(
+                  // Use ref.listenManual for better control over subscription lifecycle
+                  sub = ref.listenManual<ServerConfig?>(
                     activeServerConfigProvider,
                     listener,
                     onError: errorHandler,
+                    fireImmediately: true, // Check current state immediately
                   );
-                  sub = tempSub as ProviderSubscription<ServerConfig?>?;
 
-                  final currentState = ref.read(activeServerConfigProvider);
-                  if (currentState?.id == itemRef.serverId &&
-                      !completer.isCompleted) {
-                    completer.complete();
-                    sub?.close();
-                    sub = null;
-                  }
 
                   try {
+                    // Wait for switch completion or timeout
                     await completer.future.timeout(const Duration(seconds: 5));
                     if (mounted) {
-                      _navigateToItem(context, ref, itemRef, commentIdToHighlight: null);
+                      Navigator.pop(context); // Dismiss loading dialog
+                      _showAlertDialog(
+                        context,
+                        'Success',
+                        'Switched to server "${itemRef.serverName ?? itemRef.serverId}". You can now interact with the item.',
+                      );
+                      // Optionally auto-trigger the original action (e.g., view details) here
+                      // _navigateToItem(context, ref, itemRef, commentIdToHighlight: null);
                     }
                   } catch (e) {
                     if (mounted) {
+                      Navigator.pop(context); // Dismiss loading dialog
                       _showAlertDialog(
                         context,
                         'Error',
-                        'Failed to switch server or timed out.',
+                        'Failed to switch server or timed out. Please try switching manually from Settings.',
                       );
                     }
+                  } finally {
+                    // Ensure subscription is closed if it wasn't already
                     sub?.close();
                     sub = null;
                   }
