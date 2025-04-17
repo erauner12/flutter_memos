@@ -4,9 +4,6 @@ import 'package:flutter_memos/models/chat_message.dart';
 import 'package:flutter_memos/models/chat_session.dart';
 import 'package:flutter_memos/models/mcp_server_config.dart'; // Needed for McpClientState setup
 import 'package:flutter_memos/providers/chat_providers.dart'; // Import ChatNotifier and provider
-// Import necessary symbols from settings_provider
-import 'package:flutter_memos/providers/service_providers.dart'
-    show chatAiFacadeProvider; // Import the provider
 import 'package:flutter_memos/providers/settings_provider.dart'
     show
         PersistentStringNotifier,
@@ -83,7 +80,7 @@ class TestChatAiBackend implements ChatAiBackend {
   }
 }
 
-// --- Fake McpClientNotifier --- (Keep as is with hasActiveConnections override)
+// --- Fake McpClientNotifier --- (Removed override of hasActiveConnections)
 class FakeMcpClientNotifier extends McpClientNotifier {
   final MockMcpClientNotifier mockDelegate;
   FakeMcpClientNotifier(
@@ -94,8 +91,7 @@ class FakeMcpClientNotifier extends McpClientNotifier {
     state = initialState;
   }
 
-  @override
-  bool get hasActiveConnections => true; // guarantee for the MCP test
+  // Removed override of hasActiveConnections to use base class logic
 
   @override
   Future<McpProcessResult> processQuery(
@@ -800,6 +796,9 @@ void main() {
       fakeNotifier.state = defaultStdioMcpState;
       expect(fakeNotifier.state.hasActiveConnections, isTrue);
 
+      // ── wait for ChatNotifier._loadInitialSession() to finish ──
+      await tester.pumpAndSettle();
+
       final mcpResult = McpProcessResult(
         modelCallContent: gen_ai.Content('model', [
           gen_ai.FunctionCall('create_todoist_task', {'content': 'buy milk'}),
@@ -854,41 +853,8 @@ void main() {
       fakeNotifier.state = disconnectedMcpState;
       expect(fakeNotifier.state.hasActiveConnections, isFalse);
 
-      // Mock the ChatNotifier's AI backend response instead of trying to access private _ai field
-      when(
-        mockMcpClientNotifierDelegate.processQuery(any, any),
-      ).thenAnswer((_) async => throw Exception('Should not be called'));
-      
-      // Create a TestChatAiBackend that can be substituted in through the chatAiFacadeProvider
-      final testChatAiBackend = TestChatAiBackend(
-        response: ChatAiResponse(text: 'ok'),
-      );
-      
-      // Override providers and build a fresh container with all overrides for Gemini fallback test
-      container = ProviderContainer(
-        overrides: [
-          chatAiFacadeProvider.overrideWithValue(testChatAiBackend),
-          mcpClientProvider.overrideWith(
-            (ref) => FakeMcpClientNotifier(
-              ref,
-              disconnectedMcpState,
-              mockMcpClientNotifierDelegate,
-            ),
-          ),
-          localStorageServiceProvider.overrideWithValue(
-            mockLocalStorageService,
-          ),
-          chatSessionCloudKitServiceProvider.overrideWithValue(
-            mockCloudKitService,
-          ),
-          geminiApiKeyProvider.overrideWith(
-            (_) => MockPersistentStringNotifier(
-              PreferenceKeys.geminiApiKey,
-              'fake-key',
-            ),
-          ),
-        ],
-      );
+      // ── wait for ChatNotifier initialisation ──
+      await tester.pumpAndSettle();
 
       // Act
       await container.read(chatProvider.notifier).sendMessage(userQuery);
