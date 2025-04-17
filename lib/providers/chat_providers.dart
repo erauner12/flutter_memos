@@ -169,7 +169,8 @@ class ChatNotifier extends StateNotifier<ChatState> {
       ]);
 
       final reply = await chat.sendMessage(request) as gen_ai.Content;
-      final replyText = reply.text ?? '';
+      final replyText =
+          reply.parts.whereType<gen_ai.TextPart>().map((p) => p.text).join();
 
       final modelMsg = ChatMessage(
         id: 'model_${DateTime.now().microsecondsSinceEpoch}',
