@@ -10,6 +10,8 @@ import 'package:flutter_memos/providers/server_config_provider.dart';
 import 'package:flutter_memos/providers/settings_provider.dart'; // Import settings providers
 import 'package:flutter_memos/providers/theme_provider.dart';
 import 'package:flutter_memos/providers/ui_providers.dart'; // Import for UI providers including highlightedCommentIdProvider
+// Import ChatScreen
+import 'package:flutter_memos/screens/chat_screen.dart';
 import 'package:flutter_memos/screens/edit_entity/edit_entity_screen.dart'; // Updated import
 import 'package:flutter_memos/screens/home_screen.dart';
 // Remove import for the env file
@@ -22,6 +24,14 @@ import 'package:flutter_memos/utils/provider_logger.dart';
 import 'package:flutter_memos/widgets/config_check_wrapper.dart'; // Import the new wrapper
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sentry_flutter/sentry_flutter.dart'; // Import Sentry
+
+// Define the key globally or statically
+final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
+
+// Provider to access the key
+final rootNavigatorKeyProvider = Provider<GlobalKey<NavigatorState>>((ref) {
+  return rootNavigatorKey;
+});
 
 Future<void> main() async {
   // Make main async
@@ -40,6 +50,119 @@ Future<void> main() async {
         'Warning: SENTRY_DSN environment variable not set. Sentry reporting will be disabled.',
       );
     }
+  }
+
+// Define the root route generator
+  // Rename the function to _generateRoute
+  Route<dynamic>? generateRoute(RouteSettings settings) {
+    if (kDebugMode) {
+      print(
+        '[RootNavigator] Generating route for: ${settings.name} with args: ${settings.arguments}',
+      );
+    }
+    switch (settings.name) {
+      case '/':
+        // The 'home' property handles the root route, so this case might not be hit
+        // unless explicitly pushed. Return null or handle as needed.
+        // return CupertinoPageRoute(builder: (_) => const ConfigCheckWrapper());
+        return null; // Let home handle '/'
+
+      case '/chat':
+        // Build ChatScreen when /chat is pushed on the root navigator
+        return CupertinoPageRoute(
+          builder: (_) => const ChatScreen(),
+          settings: settings, // Pass settings to access arguments in ChatScreen
+        );
+
+      case '/item-detail':
+        // Handle item detail if pushed globally (e.g., from deep link handled outside MyApp state)
+        final args = settings.arguments as Map<String, dynamic>?;
+        final itemId = args?['itemId'] as String?;
+        if (itemId != null) {
+          return CupertinoPageRoute(
+            builder: (_) => ItemDetailScreen(itemId: itemId),
+            settings: settings,
+          );
+        }
+        break; // Invalid args
+
+      case '/edit-entity':
+        // Handle edit entity if pushed globally
+        final args = settings.arguments as Map<String, dynamic>?;
+        final entityType = args?['entityType'] as String? ?? 'note';
+        final entityId = args?['entityId'] as String?;
+        if (entityId != null) {
+          return CupertinoPageRoute(
+            builder:
+                (_) => EditEntityScreen(
+                  entityId: entityId,
+                  entityType: entityType,
+                ),
+            settings: settings,
+          );
+        }
+        break; // Invalid args
+
+      case '/new-note':
+        // Handle new note if pushed globally (e.g., from keyboard shortcut)
+        return CupertinoPageRoute(
+          builder: (_) => const NewNoteScreen(),
+          settings: settings,
+        );
+
+      case '/deep-link-target':
+        // Handle deep link navigation target setup
+        final args = settings.arguments as Map<String, dynamic>? ?? {};
+        final itemId = args['itemId'] as String?;
+        final commentIdToHighlight = args['commentIdToHighlight'] as String?;
+
+        if (itemId != null) {
+          return CupertinoPageRoute(
+            builder:
+                (context) => ProviderScope(
+                  overrides: [
+                    highlightedCommentIdProvider.overrideWith(
+                      (ref) => commentIdToHighlight,
+                    ),
+                  ],
+                  child: ItemDetailScreen(itemId: itemId),
+                ),
+            settings: settings,
+          );
+        }
+        break; // Invalid args
+
+      // Add other root-level routes here if needed
+
+      default:
+        // Handle unknown routes pushed on the root navigator
+        if (kDebugMode) {
+          print('[RootNavigator] Unknown route: ${settings.name}');
+        }
+        return CupertinoPageRoute(
+          builder:
+              (context) => const CupertinoPageScaffold(
+                navigationBar: CupertinoNavigationBar(
+                  middle: Text('Not Found'),
+                ),
+                child: Center(child: Text('Route not found')),
+              ),
+          settings: settings,
+        );
+    }
+
+    // If a case breaks without returning a route (e.g., invalid args)
+    if (kDebugMode) {
+      print('[RootNavigator] Route generation failed for: ${settings.name}');
+    }
+    return CupertinoPageRoute(
+      builder:
+          (context) => const CupertinoPageScaffold(
+            navigationBar: CupertinoNavigationBar(middle: Text('Error')),
+            child: Center(child: Text('Invalid route arguments')),
+          ),
+      settings: settings,
+    );
   }
 
   await SentryFlutter.init(
@@ -89,8 +212,9 @@ class _MyAppState extends ConsumerState<MyApp> {
   late final AppLinks _appLinks;
   StreamSubscription<Uri>?
   _linkSubscription; // Subscription for app_links stream
-  final GlobalKey<NavigatorState> _navigatorKey =
-      GlobalKey<NavigatorState>(); // For navigation from deep links
+  // Remove the local navigator key
+  // final GlobalKey<NavigatorState> _navigatorKey =
+  //     GlobalKey<NavigatorState>(); // For navigation from deep links
 
   @override
   void initState() {
@@ -234,12 +358,9 @@ class _MyAppState extends ConsumerState<MyApp> {
 
     if (host == 'memo' && pathSegments.isNotEmpty) {
       final memoId = pathSegments[0];
-      if (kDebugMode) {
-        print(
-          '[DeepLink] Navigating to memo: \$memoId, highlight comment: null',
-        );
-      }
-      _navigatorKey.currentState?.pushNamed(
+
+      // Use the global rootNavigatorKey
+      rootNavigatorKey.currentState?.pushNamed(
         '/deep-link-target',
         arguments: {'memoId': memoId, 'commentIdToHighlight': null},
       );
@@ -251,7 +372,8 @@ class _MyAppState extends ConsumerState<MyApp> {
           '[DeepLink] Navigating to memo: \$memoId, highlight comment: \$commentIdToHighlight',
         );
       }
-      _navigatorKey.currentState?.pushNamed(
+      // Use the global rootNavigatorKey
+      rootNavigatorKey.currentState?.pushNamed(
         '/deep-link-target',
         arguments: {
           'memoId': memoId,
@@ -301,7 +423,8 @@ class _MyAppState extends ConsumerState<MyApp> {
               ),
           NewMemoIntent: CallbackAction<NewMemoIntent>(
             onInvoke: (intent) {
-              _navigatorKey.currentState?.pushNamed(
+              // Use the global rootNavigatorKey
+              rootNavigatorKey.currentState?.pushNamed(
                 '/new-note',
               ); // Use new route
               if (kDebugMode) {
@@ -389,7 +512,8 @@ class _MyAppState extends ConsumerState<MyApp> {
 
               return CupertinoApp(
                 theme: cupertinoTheme,
-                navigatorKey: _navigatorKey,
+                // Assign the global key here
+                navigatorKey: rootNavigatorKey,
                 title: 'Flutter Memos',
                 debugShowCheckedModeBanner: false,
                 localizationsDelegates: const [
@@ -400,104 +524,12 @@ class _MyAppState extends ConsumerState<MyApp> {
                 supportedLocales: const [
                   Locale('en', ''),
                 ],
+                // Set home instead of using initialRoute or routes['/']
                 home: const ConfigCheckWrapper(),
-                routes: {
-                  '/home': (context) => const HomeScreen(),
-                  '/items':
-                      (context) =>
-                          const ItemsScreen(), // Updated route name and screen
-                  '/new-note':
-                      (context) =>
-                          const NewNoteScreen(), // Updated route name and screen
-                  '/item-detail': (context) {
-                    final args =
-                        ModalRoute.of(context)!.settings.arguments
-                            as Map<String, dynamic>;
-                    return ItemDetailScreen(
-                      itemId: args['itemId'] as String,
-                    ); // Updated screen and argument name
-                  },
-                  '/edit-entity': (context) {
-                    final args =
-                        ModalRoute.of(context)!.settings.arguments
-                            as Map<String, dynamic>;
-                    final entityType =
-                        args['entityType'] as String? ??
-                        'note'; // Default to note if needed
-                    final entityId = args['entityId'] as String;
-                    return EditEntityScreen(
-                      entityId: entityId,
-                      entityType: entityType,
-                    ); // Use EditEntityScreen
-                  },
-                },
-                onGenerateRoute: (settings) {
-                  if (settings.name == '/item-detail') {
-                    // Updated route name
-                    final args = settings.arguments as Map<String, dynamic>;
-                    return CupertinoPageRoute(
-                      builder:
-                          (context) => ItemDetailScreen(
-                            itemId: args['itemId'] as String,
-                          ),
-                      settings: settings,
-                    );
-                  } else if (settings.name == '/edit-entity') {
-                    final args = settings.arguments as Map<String, dynamic>;
-                    final entityType =
-                        args['entityType'] as String? ??
-                        'note'; // Default to note
-                    final entityId = args['entityId'] as String;
-
-                    return CupertinoPageRoute(
-                      builder:
-                          (context) => EditEntityScreen(
-                            entityId: entityId,
-                            entityType: entityType,
-                          ),
-                      settings: settings,
-                    );
-                  } else if (settings.name == '/deep-link-target') {
-                    final args =
-                        settings.arguments as Map<String, dynamic>? ?? {};
-                    final itemId =
-                        args['itemId'] as String?; // Updated argument name
-                    final commentIdToHighlight =
-                        args['commentIdToHighlight'] as String?;
-
-                    if (itemId != null) {
-                      return CupertinoPageRoute(
-                        builder:
-                            (context) => ProviderScope(
-                              overrides: [
-                                highlightedCommentIdProvider.overrideWith(
-                                  (ref) => commentIdToHighlight,
-                                ),
-                              ],
-                              child: ItemDetailScreen(
-                                itemId: itemId,
-                              ), // Updated screen and argument name
-                            ),
-                        settings: settings,
-                      );
-                    }
-                    return null;
-                  }
-                  return CupertinoPageRoute(
-                    builder:
-                        (context) => const CupertinoPageScaffold(
-                          navigationBar: CupertinoNavigationBar(
-                            middle: Text('Not Found'),
-                          ),
-                          child: Center(
-                            child: Text(
-                              'No route defined for \${settings.name}',
-                            ),
-                          ),
-                        ),
-                    settings: settings,
-                  );
-                },
+                // Remove the routes map
+                // routes: { ... },
+                // Use onGenerateRoute for root-level navigation handling
+                onGenerateRoute: _generateRoute,
               );
             },
           ),
