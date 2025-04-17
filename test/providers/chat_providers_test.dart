@@ -68,8 +68,20 @@ class MockPersistentStringNotifier extends StateNotifier<String>
   set debugSecureStorage(dynamic storage) {}
 }
 
-// Mock for ChatAiBackend
-class MockChatAiBackend extends Mock implements ChatAiBackend {}
+// Create a concrete test implementation instead of a mock
+class TestChatAiBackend implements ChatAiBackend {
+  final ChatAiResponse response;
+
+  TestChatAiBackend({required this.response});
+
+  @override
+  Future<ChatAiResponse> send(
+    List<gen_ai.Content> history,
+    String userMessage,
+  ) async {
+    return response;
+  }
+}
 
 // --- Fake McpClientNotifier --- (Keep as is)
 class FakeMcpClientNotifier extends McpClientNotifier {
@@ -843,26 +855,15 @@ void main() {
         mockMcpClientNotifierDelegate.processQuery(any, any),
       ).thenAnswer((_) async => throw Exception('Should not be called'));
       
-      // Create a mock ChatAiBackend that can be substituted in through the chatAiFacadeProvider
-      final mockChatAiBackend = MockChatAiBackend();
+      // Create a TestChatAiBackend that can be substituted in through the chatAiFacadeProvider
+      final testChatAiBackend = TestChatAiBackend(
+        response: ChatAiResponse(text: 'ok'),
+      );
       
-      // Use typed matchers with concrete values for non-nullable parameters
-      final emptyHistory = <gen_ai.Content>[];
-      final anyMessage = 'any-message';
-      
-      when(
-        mockChatAiBackend.send(emptyHistory, anyMessage),
-      ).thenAnswer((_) async => ChatAiResponse(text: 'ok'));
-
-      // Use a more general matcher that will catch any call
-      when(
-        mockChatAiBackend.send(any, any),
-      ).thenAnswer((_) async => ChatAiResponse(text: 'ok'));
-      
-      // Override the chatProvider to use our mocked backend
+      // Override the chatProvider to use our test backend
       container = ProviderContainer(
         parent: container,
-        overrides: [chatAiFacadeProvider.overrideWithValue(mockChatAiBackend)],
+        overrides: [chatAiFacadeProvider.overrideWithValue(testChatAiBackend)],
       );
 
       // Act
