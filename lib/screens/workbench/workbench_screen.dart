@@ -1,13 +1,15 @@
 import 'package:flutter/cupertino.dart';
-// Removed Material import
+// ADD selective import for Material widgets needed
+import 'package:flutter/material.dart' show ReorderableListView;
 import 'package:flutter_memos/models/workbench_instance.dart'; // Import WorkbenchInstance
+// ADD import for WorkbenchItemReference
+import 'package:flutter_memos/models/workbench_item_reference.dart';
 import 'package:flutter_memos/providers/workbench_instances_provider.dart'; // Import instances provider
 import 'package:flutter_memos/providers/workbench_provider.dart'; // Keep for activeWorkbenchProvider etc.
 import 'package:flutter_memos/screens/item_detail/item_detail_screen.dart'; // Import ItemDetailScreen
 import 'package:flutter_memos/screens/settings_screen.dart'; // Import SettingsScreen
 import 'package:flutter_memos/screens/workbench/widgets/workbench_instance_selector.dart'; // Import the new selector
 import 'package:flutter_memos/screens/workbench/widgets/workbench_item_tile.dart';
-// Removed import for workbench_tab_controller_manager.dart
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 // Convert to ConsumerStatefulWidget
@@ -220,29 +222,21 @@ class _WorkbenchScreenState extends ConsumerState<WorkbenchScreen> {
   // --- Build Method ---
   @override
   Widget build(BuildContext context) {
-    // Removed WorkbenchTabControllerManager wrapper
-    // Removed Builder wrapper as it's no longer needed for controller timing
-
     // Watch necessary states
     final workbenchState = ref.watch(activeWorkbenchProvider);
     final instancesState = ref.watch(workbenchInstancesProvider);
-    final instances = instancesState.instances;
+    // REMOVED unused local variable: final instances = instancesState.instances;
     final activeInstanceId = instancesState.activeInstanceId;
-
-    // Removed TabController watching and null checks
 
     final items = workbenchState.items;
     final bool canRefresh =
         !workbenchState.isLoading && !workbenchState.isRefreshingDetails;
-
-    // Removed theme and color variables related to TabBar
 
     return CupertinoPageScaffold(
       backgroundColor: CupertinoColors.systemGroupedBackground.resolveFrom(
         context,
       ),
       navigationBar: CupertinoNavigationBar(
-        // Replaced TabBar with WorkbenchInstanceSelector
         middle: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 400), // Keep constraint
           child: const WorkbenchInstanceSelector(), // Use the new widget
@@ -258,12 +252,12 @@ class _WorkbenchScreenState extends ConsumerState<WorkbenchScreen> {
           children: [
             // TODO: Consider adding a button here to trigger _showInstanceActions
             // Example:
-            // if (instances.isNotEmpty)
+            // if (instancesState.instances.isNotEmpty) // Check instancesState directly
             //   CupertinoButton(
             //     padding: const EdgeInsets.only(left: 8.0),
             //     child: const Icon(CupertinoIcons.ellipsis_circle, size: 22),
             //     onPressed: () {
-            //       final activeInstance = instances.firstWhere((i) => i.id == activeInstanceId);
+            //       final activeInstance = instancesState.instances.firstWhere((i) => i.id == activeInstanceId);
             //       _showInstanceActions(activeInstance);
             //     },
             //   ),
@@ -305,7 +299,6 @@ class _WorkbenchScreenState extends ConsumerState<WorkbenchScreen> {
       ),
       child: SafeArea(
         bottom: false,
-        // Removed the inner Builder as it's not needed anymore
         child: _buildBody(
           context,
           instancesState,
@@ -322,9 +315,10 @@ class _WorkbenchScreenState extends ConsumerState<WorkbenchScreen> {
     BuildContext context,
     WorkbenchInstancesState instancesState,
     WorkbenchState workbenchState,
-    List<WorkbenchItemReference> items,
-    String activeInstanceId, // Pass activeInstanceId
+    List<WorkbenchItemReference> items, // Type is now recognized
+    String activeInstanceId,
   ) {
+    // Use instancesState.instances directly where needed
     final instances = instancesState.instances;
 
     // Loading/Error states for instances (unchanged logic)
@@ -422,12 +416,13 @@ class _WorkbenchScreenState extends ConsumerState<WorkbenchScreen> {
       );
     }
 
-    // Item List (unchanged logic, ReorderableListView doesn't need TabController)
+    // Item List (Uses ReorderableListView which is now imported)
     return Padding(
       padding: const EdgeInsets.only(
         bottom: 50.0,
       ), // Keep padding for FAB/bottom bar space
       child: ReorderableListView.builder(
+        // Type is now recognized
         buildDefaultDragHandles:
             false, // Keep custom drag handles if used via tile
         itemCount: items.length,
