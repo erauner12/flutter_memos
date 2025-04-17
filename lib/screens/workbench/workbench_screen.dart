@@ -7,7 +7,8 @@ import 'package:flutter_memos/providers/workbench_provider.dart'; // Keep for ac
 import 'package:flutter_memos/screens/item_detail/item_detail_screen.dart'; // Import ItemDetailScreen
 import 'package:flutter_memos/screens/settings_screen.dart'; // Import SettingsScreen
 import 'package:flutter_memos/screens/workbench/widgets/workbench_item_tile.dart';
-import 'package:flutter_memos/screens/workbench/workbench_tab_controller_holder.dart'; // Import the holder
+// Import the new manager widget
+import 'package:flutter_memos/screens/workbench/workbench_tab_controller_manager.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 // Convert to ConsumerStatefulWidget
@@ -18,25 +19,23 @@ class WorkbenchScreen extends ConsumerStatefulWidget {
   ConsumerState<WorkbenchScreen> createState() => _WorkbenchScreenState();
 }
 
-// Keep SingleTickerProviderStateMixin to provide vsync to the holder
-class _WorkbenchScreenState extends ConsumerState<WorkbenchScreen>
-    with SingleTickerProviderStateMixin {
+// Remove SingleTickerProviderStateMixin - vsync is now handled by the manager
+class _WorkbenchScreenState extends ConsumerState<WorkbenchScreen> {
   final TextEditingController _instanceNameController = TextEditingController();
-  // Holder manages the controller lifecycle
-  late final WorkbenchTabControllerHolder _holder;
+  // Remove the holder field
+  // late final WorkbenchTabControllerHolder _holder;
 
   @override
   void initState() {
     super.initState();
-    // Instantiate the holder, passing the WidgetRef (ref) and the TickerProvider (this)
-    // No cast needed as ConsumerState's ref is a WidgetRef.
-    _holder = WorkbenchTabControllerHolder(ref, this);
+    // Remove holder initialization
+    // _holder = WorkbenchTabControllerHolder(ref, this);
   }
 
   @override
   void dispose() {
-    // Dispose the holder, which handles controller disposal & provider cleanup
-    _holder.dispose();
+    // Remove holder disposal
+    // _holder.dispose();
     _instanceNameController.dispose();
     super.dispose();
   }
@@ -223,6 +222,13 @@ class _WorkbenchScreenState extends ConsumerState<WorkbenchScreen>
   // --- Build Method ---
   @override
   Widget build(BuildContext context) {
+    // Wrap the actual scaffold content with the manager widget.
+    // The manager itself doesn't render anything, just manages the controller.
+    return WorkbenchTabControllerManager(child: _buildScaffold(context));
+  }
+
+  // Extracted scaffold build logic into a separate method
+  Widget _buildScaffold(BuildContext context) {
     // Watch necessary states
     final workbenchState = ref.watch(activeWorkbenchProvider);
     final instancesState = ref.watch(workbenchInstancesProvider);
@@ -233,10 +239,11 @@ class _WorkbenchScreenState extends ConsumerState<WorkbenchScreen>
     final TabController? tabCtrl = ref.watch(workbenchTabControllerProvider);
 
     // --- Handle null controller state (initial frame or after dispose) ---
+    // This check is crucial as the manager might publish null during dispose/recreate.
     if (tabCtrl == null) {
       if (kDebugMode) {
         print(
-          "[WorkbenchScreen.build] TabController is null, showing loading indicator.",
+          "[WorkbenchScreen._buildScaffold] TabController is null, showing loading indicator.",
         );
       }
       // Show a loading indicator while the controller is being initialized/recreated
@@ -286,8 +293,12 @@ class _WorkbenchScreenState extends ConsumerState<WorkbenchScreen>
                             ),
                           ),
                       ],
-              // Disable taps if the list is empty
-              onTap: instances.isEmpty ? (_) {} : null,
+              // Disable taps if the list is empty (controller length is 1)
+              // The controller's listener (_onTabChanged in manager) handles the logic
+              // based on the actual instances list, so direct onTap disabling here might
+              // be redundant or could conflict if not careful. The manager handles the
+              // active instance update based on the tap.
+              // onTap: instances.isEmpty ? (_) {} : null, // Keep original logic or rely on manager
             ),
           ),
         ),
@@ -340,7 +351,7 @@ class _WorkbenchScreenState extends ConsumerState<WorkbenchScreen>
         bottom: false,
         child: Builder(
           builder: (context) {
-            // Loading/Error states (unchanged logic)
+            // Loading/Error states for instances (unchanged logic)
             if (instancesState.isLoading && instances.isEmpty) {
               // Avoid showing loading if controller is also null (already handled above)
               return const Center(child: CupertinoActivityIndicator());
@@ -382,10 +393,10 @@ class _WorkbenchScreenState extends ConsumerState<WorkbenchScreen>
               );
             }
 
-            // Active Workbench Content (unchanged logic)
+            // Loading/Error states for active workbench items (unchanged logic)
             if (workbenchState.isLoading && items.isEmpty) {
+              // Avoid showing this if instances are also loading (handled above)
               if (!instancesState.isLoading || instances.isNotEmpty) {
-                // Avoid showing loading if controller is also null
                 return const Center(child: CupertinoActivityIndicator());
               }
             }
@@ -428,6 +439,8 @@ class _WorkbenchScreenState extends ConsumerState<WorkbenchScreen>
 
             // Empty state messages (unchanged logic)
             if (instances.isEmpty && !instancesState.isLoading) {
+              // This case might be less likely now with the manager ensuring a controller
+              // of length 1, but keep the message for clarity.
               return const Center(
                 child: Text(
                   'No Workbenches found.\nTap the + button to create one.',
@@ -450,17 +463,21 @@ class _WorkbenchScreenState extends ConsumerState<WorkbenchScreen>
 
             // Item List (unchanged logic)
             return Padding(
-              padding: const EdgeInsets.only(bottom: 50.0),
+              padding: const EdgeInsets.only(
+                bottom: 50.0,
+              ), // Keep padding for FAB/bottom bar space
               child: ReorderableListView.builder(
-                buildDefaultDragHandles: false,
+                buildDefaultDragHandles:
+                    false, // Keep custom drag handles if used via tile
                 itemCount: items.length,
                 itemBuilder: (context, index) {
                   final item = items[index];
                   return WorkbenchItemTile(
-                    key: ValueKey(item.id),
+                    key: ValueKey(item.id), // Use unique item ID for key
                     itemReference: item,
-                    index: index,
+                    index: index, // Pass index for reorder handle
                     onTap: () {
+                      // Update last opened item for the *currently active* instance
                       ref
                           .read(workbenchInstancesProvider.notifier)
                           .setLastOpenedItem(activeInstanceId, item.id);
