@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart'; // Import for kDebugMode
 import 'package:flutter/material.dart'; // Import Material for TabBar, ReorderableListView
 import 'package:flutter_memos/models/workbench_instance.dart'; // Import WorkbenchInstance
 import 'package:flutter_memos/providers/workbench_instances_provider.dart'; // Import instances provider
@@ -21,32 +22,20 @@ class WorkbenchScreen extends ConsumerStatefulWidget {
 class _WorkbenchScreenState extends ConsumerState<WorkbenchScreen>
     with SingleTickerProviderStateMixin {
   final TextEditingController _instanceNameController = TextEditingController();
-  // Remove _tabController state variable
-  // late TabController _tabController;
-  // Remove _instancesSub state variable
-  // late ProviderSubscription<WorkbenchInstancesState> _instancesSub;
-
-  // Add the holder instance
+  // Holder manages the controller lifecycle
   late final WorkbenchTabControllerHolder _holder;
 
   @override
   void initState() {
     super.initState();
     // Instantiate the holder, passing the ref and the TickerProvider (this)
-    // The holder now manages the controller creation and listening internally.
-    _holder = WorkbenchTabControllerHolder(ref, this);
+    _holder = WorkbenchTabControllerHolder(ref as Ref<Object?>, this);
   }
-
-  // Remove helper methods managed by the holder
-  // int _indexFor(List<WorkbenchInstance> list, String id) { ... }
-  // void _onTabChanged() { ... }
-  // void _recreateTabController({ ... }) { ... }
 
   @override
   void dispose() {
-    // Dispose the holder, which handles controller disposal
+    // Dispose the holder, which handles controller disposal & provider cleanup
     _holder.dispose();
-    // Dispose text controller
     _instanceNameController.dispose();
     super.dispose();
   }
@@ -239,23 +228,22 @@ class _WorkbenchScreenState extends ConsumerState<WorkbenchScreen>
     final instances = instancesState.instances;
     final activeInstanceId = instancesState.activeInstanceId;
 
-    // Watch the TabController provided by the holder
-    // This will rebuild synchronously when the holder updates the override
-    final TabController tabCtrl;
-    try {
-      tabCtrl = ref.watch(workbenchTabControllerProvider);
-    } catch (e) {
-      // Handle the UnimplementedError case if the override hasn't happened yet
-      // This might occur during the very first build frame.
-      // Return a loading indicator or a minimal scaffold.
-      print(
-        "Error watching workbenchTabControllerProvider (likely initial frame): $e",
-      );
+    // Watch the TabController? from the StateProvider
+    final TabController? tabCtrl = ref.watch(workbenchTabControllerProvider);
+
+    // --- Handle null controller state (initial frame or after dispose) ---
+    if (tabCtrl == null) {
+      if (kDebugMode) {
+        print(
+          "[WorkbenchScreen.build] TabController is null, showing loading indicator.",
+        );
+      }
+      // Show a loading indicator while the controller is being initialized/recreated
       return const CupertinoPageScaffold(
         child: Center(child: CupertinoActivityIndicator()),
       );
     }
-
+    // --- End null controller handling ---
 
     final items = workbenchState.items;
     final bool canRefresh =
@@ -276,7 +264,7 @@ class _WorkbenchScreenState extends ConsumerState<WorkbenchScreen>
             color: Colors.transparent,
             child: TabBar(
               // Use the controller obtained from the provider
-              controller: tabCtrl,
+              controller: tabCtrl, // Now guaranteed non-null here
               isScrollable: true,
               indicatorColor: primaryColor,
               labelColor: primaryColor,
@@ -353,6 +341,7 @@ class _WorkbenchScreenState extends ConsumerState<WorkbenchScreen>
           builder: (context) {
             // Loading/Error states (unchanged logic)
             if (instancesState.isLoading && instances.isEmpty) {
+              // Avoid showing loading if controller is also null (already handled above)
               return const Center(child: CupertinoActivityIndicator());
             }
             if (instancesState.error != null && instances.isEmpty) {
@@ -395,6 +384,7 @@ class _WorkbenchScreenState extends ConsumerState<WorkbenchScreen>
             // Active Workbench Content (unchanged logic)
             if (workbenchState.isLoading && items.isEmpty) {
               if (!instancesState.isLoading || instances.isNotEmpty) {
+                // Avoid showing loading if controller is also null
                 return const Center(child: CupertinoActivityIndicator());
               }
             }

@@ -149,10 +149,11 @@ class WorkbenchInstancesNotifier extends StateNotifier<WorkbenchInstancesState> 
     if (!mounted) return;
     // Ensure prefs are loaded before proceeding, especially for the active ID logic
     if (!_prefsInitialized) {
-      if (kDebugMode)
+      if (kDebugMode) {
         print(
           '[WorkbenchInstancesNotifier] loadInstances called before prefs initialized. Waiting...',
         );
+      }
       state = state.copyWith(isLoading: true, error: 'Preferences not ready');
       return;
     }
@@ -398,10 +399,11 @@ class WorkbenchInstancesNotifier extends StateNotifier<WorkbenchInstancesState> 
         _cloudKitService
             .deleteAllWorkbenchItemReferences(instanceId: instanceId)
             .then((success) {
-              if (kDebugMode)
+              if (kDebugMode) {
                 print(
                   '[WorkbenchInstancesNotifier] Attempted deletion of items for instance $instanceId. Success: $success',
                 );
+              }
             }),
       );
 
@@ -434,10 +436,11 @@ class WorkbenchInstancesNotifier extends StateNotifier<WorkbenchInstancesState> 
 
     // Check if the instanceId exists in the current list
     if (!state.instances.any((i) => i.id == instanceId)) {
-      if (kDebugMode)
+      if (kDebugMode) {
         print(
           '[WorkbenchInstancesNotifier] Attempted to set active instance to non-existent ID in current list: $instanceId',
         );
+      }
       return; // Don't set an invalid ID
     }
 
@@ -501,15 +504,7 @@ final workbenchInstancesProvider =
 });
 
 // --- New Provider for TabController ---
-// This provider holds the *current* TabController instance.
-// It will be overridden by the WorkbenchTabControllerHolder.
-final workbenchTabControllerProvider = Provider.autoDispose<TabController>((
-  ref,
-) {
-  // This default implementation should ideally never be reached if the
-  // holder correctly overrides it before the UI tries to watch it.
-  // Throwing an error helps catch setup issues.
-  throw UnimplementedError(
-    'workbenchTabControllerProvider must be overridden by WorkbenchTabControllerHolder',
-  );
-});
+// Holds the current TabController instance, managed by WorkbenchTabControllerHolder.
+// Starts as null until the holder creates the first controller.
+final workbenchTabControllerProvider =
+    StateProvider.autoDispose<TabController?>((_) => null);
