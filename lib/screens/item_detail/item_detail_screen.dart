@@ -263,13 +263,13 @@ class _ItemDetailScreenState
               // Fix Grammar Action
               CupertinoActionSheetAction(
                 isDefaultAction: !isFixingGrammar,
-                // Wrap async call in non-async lambda
+                // Pass the async function directly if conditions met, otherwise null
                 onPressed:
                     (isFixingGrammar || !canInteractWithServer)
                         ? null
                         : () {
                           Navigator.pop(popupContext);
-                          _fixGrammar();
+                          _fixGrammar(); // onPressed can be async
                         },
                 child:
                     isFixingGrammar
@@ -285,7 +285,7 @@ class _ItemDetailScreenState
               ),
               // Copy Full Thread Action
               CupertinoActionSheetAction(
-                // Wrap async call in non-async lambda
+                // Pass the async function directly if canInteract, otherwise null
                 onPressed:
                     !canInteractWithServer
                         ? null
@@ -302,7 +302,7 @@ class _ItemDetailScreenState
               ),
               // --- Chat about Thread Action ---
               CupertinoActionSheetAction(
-                // Wrap async call in non-async lambda
+                // Pass the async function directly if canInteract, otherwise null
                 onPressed:
                     !canInteractWithServer
                         ? null
@@ -321,7 +321,7 @@ class _ItemDetailScreenState
               // Delete Note Action
               CupertinoActionSheetAction(
                 isDestructiveAction: true,
-                // Wrap async call in non-async lambda
+                // Pass the async function directly if canInteract, otherwise null
                 onPressed:
                     !canInteractWithServer
                         ? null
