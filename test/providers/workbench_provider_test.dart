@@ -161,8 +161,10 @@ void main() {
       final commentForItem2 = Comment(
         id: 'comment1',
         content: 'Latest comment',
-        createTime: now.millisecondsSinceEpoch, // Newest activity overall
-        updateTime: null,
+          createdTs:
+              now.millisecondsSinceEpoch, // Use createdTs instead of createTime
+          parentId: 'parent-id', // Add required parentId
+          serverId: 'server1', // Add required serverId
       );
 
         // Use specific mocks based on invocation arguments
@@ -240,21 +242,23 @@ void main() {
         // Expected order: item3 (now, added), item2 (now, comment), item1 (now - 1d 1h) -> [id3, id2, id1]
 
         expect(state.items[0].id, 'id3');
-        expect(state.items[0].latestComment, isNull);
+        // WorkbenchItemReference doesn't have latestComment property directly,
+        // but it's populated by the provider for UI purposes
+        expect(state.items[0].previewComments.isEmpty, isTrue);
         expect(
           state.items[0].overallLastUpdateTime,
           item3.addedTimestamp,
         ); // overall = added (now)
 
         expect(state.items[1].id, 'id2');
-        expect(state.items[1].latestComment?.id, commentForItem2.id);
+        expect(state.items[1].previewComments.first.id, commentForItem2.id);
         expect(
           state.items[1].overallLastUpdateTime.millisecondsSinceEpoch,
-          commentForItem2.createTime,
+          commentForItem2.createdTs,
         ); // overall = comment (now)
 
         expect(state.items[2].id, 'id1');
-      expect(state.items[2].latestComment, isNull);
+        expect(state.items[2].previewComments.isEmpty, isTrue);
         // overall = note update time (now - 1d 1h), which is newer than added (now - 2d)
         expect(state.items[2].overallLastUpdateTime, note1UpdateTime);
     });
@@ -297,7 +301,9 @@ void main() {
       final commentForItem2 = Comment(
         id: 'comment1',
         content: 'Latest comment',
-        createTime: now.millisecondsSinceEpoch,
+        createdTs: now.millisecondsSinceEpoch,
+        parentId: 'parent-id', // Add required parentId
+        serverId: 'server1', // Add required serverId
       );
       when(
         mockApiService.getNote(
@@ -407,7 +413,7 @@ void main() {
       expect(state.items.length, 4);
       expect(state.items.first.id, 'id4');
       expect(state.items.first.overallLastUpdateTime, note4UpdateTime);
-      expect(state.items.first.latestComment, isNull);
+      expect(state.items.first.previewComments.isEmpty, isTrue);
       // Verify the rest of the order based on previous test's expected outcome
       expect(state.items[1].id, 'id3'); // Corrected expected order
       expect(state.items[2].id, 'id2'); // Corrected expected order
