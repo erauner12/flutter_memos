@@ -202,190 +202,199 @@ class _ItemDetailScreenState
     // Item detail screen assumes the item is on the active server
     final bool canInteractWithServer = activeServer != null;
 
-    // Build the list of actions conditionally
-    final List<CupertinoActionSheetAction> actions = [];
-
-    // Edit Note Action
-    if (canInteractWithServer) {
-      actions.add(
-        CupertinoActionSheetAction(
-          onPressed: () {
-            Navigator.pop(popupContext);
-            Navigator.of(context, rootNavigator: true)
-                .pushNamed(
-                  '/edit-entity',
-                  arguments: {
-                    'entityType': 'note', // Specify type as 'note'
-                    'entityId': widget.itemId, // Pass itemId as entityId
-                  },
-                )
-                .then((_) {
-                  if (!mounted) return;
-                  ref.invalidate(
-                    note_providers.noteDetailProvider(widget.itemId),
-                  );
-                  ref.invalidate(
-                    note_providers.noteCommentsProvider(widget.itemId),
-                  );
-                  ref
-                      .read(settings_p.manuallyHiddenNoteIdsProvider.notifier)
-                      .remove(widget.itemId);
-                });
-          },
-          child: const Text('Edit Note'),
-        ),
-      );
-    }
-
-    // Add Note to Workbench Action
-    if (canInteractWithServer && noteAsync is AsyncData<NoteItem>) {
-      actions.add(
-        CupertinoActionSheetAction(
-          onPressed: () {
-            Navigator.pop(popupContext);
-            _addNoteToWorkbench(noteAsync.value);
-          },
-          child: const Text('Add to Workbench'),
-        ),
-      );
-    }
-
-    // Fix Grammar Action
-    if (canInteractWithServer) {
-      actions.add(
-        CupertinoActionSheetAction(
-          isDefaultAction: !isFixingGrammar,
-          onPressed:
-              isFixingGrammar
-                  ? () {}
-                  : () {
-                    // Provide empty callback when disabled
-                    Navigator.pop(popupContext);
-                    _fixGrammar();
-                  },
-          child:
-              isFixingGrammar
-                  ? const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      CupertinoActivityIndicator(radius: 10),
-                      SizedBox(width: 10),
-                      Text('Fixing Grammar...'),
-                    ],
-                  )
-                  : const Text('Fix Grammar (AI)'),
-        ),
-      );
-    }
-
-    // Copy Full Thread Action
-    if (canInteractWithServer) {
-      actions.add(
-        CupertinoActionSheetAction(
-          onPressed: () {
-            Navigator.pop(popupContext);
-            _copyThreadContent(
-              context,
-              ref,
-              widget.itemId,
-              widget.itemType, // Use widget's itemType
-            );
-          },
-          child: const Text('Copy Full Thread'),
-        ),
-      );
-    }
-
-    // Chat about Thread Action
-    if (canInteractWithServer) {
-      actions.add(
-        CupertinoActionSheetAction(
-          onPressed: () {
-            Navigator.pop(popupContext); // Close the sheet first
-            _chatWithThread(
-              context,
-              ref,
-              widget.itemId,
-              widget.itemType, // Use widget's itemType
-            );
-          },
-          child: const Text('Chat about Thread'),
-        ),
-      );
-    }
-
-    // Delete Note Action
-    if (canInteractWithServer) {
-      actions.add(
-        CupertinoActionSheetAction(
-          isDestructiveAction: true,
-          onPressed: () async {
-            final sheetContext = popupContext;
-            Navigator.pop(sheetContext);
-
-            // Use state's context directly if mounted check is done before use
-            if (!mounted) return;
-            final dialogContext = context;
-            final confirmed = await showCupertinoDialog<bool>(
-              context: dialogContext,
-              builder:
-                  (context) => CupertinoAlertDialog(
-                    title: const Text('Delete Note?'), // Updated text
-                    content: const Text(
-                      'Are you sure you want to permanently delete this note and its comments?', // Updated text
-                    ),
-                    actions: [
-                      CupertinoDialogAction(
-                        child: const Text('Cancel'),
-                        onPressed: () => Navigator.of(context).pop(false),
-                      ),
-                      CupertinoDialogAction(
-                        isDestructiveAction: true,
-                        child: const Text('Delete'),
-                        onPressed: () => Navigator.of(context).pop(true),
-                      ),
-                    ],
-                  ),
-            );
-
-            if (confirmed == true) {
-              // Check mounted *after* the await
-              if (!mounted) return;
-              try {
-                await ref.read(
-                  note_providers.deleteNoteProvider(widget.itemId),
-                )();
-                // Check mounted again before using context
-                if (!mounted) return;
-                // Check if we can pop the current screen
-                if (Navigator.of(context).canPop()) {
-                  Navigator.of(context).pop();
-                }
-              } catch (e) {
-                // Check mounted again before using context
-                if (!mounted) return;
-                _showErrorSnackbar('Failed to delete note: $e'); // Updated text
-              }
-            }
-          },
-          child: const Text('Delete Note'),
-        ),
-      );
-    }
-
     showCupertinoModalPopup<void>(
       context: context,
-      builder:
-          (BuildContext popupContext) => CupertinoActionSheet(
-            title: const Text('Note Actions'),
-            actions: actions, // Use the conditionally built list
-            cancelButton: CupertinoActionSheetAction(
-              child: const Text('Cancel'),
+      builder: (BuildContext popupContext) {
+        // popupContext is defined here
+        // Build the list of actions conditionally
+        final List<CupertinoActionSheetAction> actions = [];
+
+        // Edit Note Action
+        if (canInteractWithServer) {
+          actions.add(
+            CupertinoActionSheetAction(
               onPressed: () {
-                Navigator.pop(popupContext);
+                Navigator.pop(popupContext); // Use the builder's context
+                Navigator.of(context, rootNavigator: true)
+                    .pushNamed(
+                      '/edit-entity',
+                      arguments: {
+                        'entityType': 'note', // Specify type as 'note'
+                        'entityId': widget.itemId, // Pass itemId as entityId
+                      },
+                    )
+                    .then((_) {
+                      if (!mounted) return;
+                      ref.invalidate(
+                        note_providers.noteDetailProvider(widget.itemId),
+                      );
+                      ref.invalidate(
+                        note_providers.noteCommentsProvider(widget.itemId),
+                      );
+                      ref
+                          .read(
+                            settings_p.manuallyHiddenNoteIdsProvider.notifier,
+                          )
+                          .remove(widget.itemId);
+                    });
               },
+              child: const Text('Edit Note'),
             ),
+          );
+        }
+
+        // Add Note to Workbench Action
+        if (canInteractWithServer && noteAsync is AsyncData<NoteItem>) {
+          actions.add(
+            CupertinoActionSheetAction(
+              onPressed: () {
+                Navigator.pop(popupContext); // Use the builder's context
+                _addNoteToWorkbench(noteAsync.value);
+              },
+              child: const Text('Add to Workbench'),
+            ),
+          );
+        }
+
+        // Fix Grammar Action
+        if (canInteractWithServer) {
+          actions.add(
+            CupertinoActionSheetAction(
+              isDefaultAction: !isFixingGrammar,
+              onPressed:
+                  isFixingGrammar
+                      ? null
+                      : () {
+                        // Pass null when disabled
+                        Navigator.pop(
+                          popupContext,
+                        ); // Use the builder's context
+                        _fixGrammar();
+                      },
+              child:
+                  isFixingGrammar
+                      ? const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          CupertinoActivityIndicator(radius: 10),
+                          SizedBox(width: 10),
+                          Text('Fixing Grammar...'),
+                        ],
+                      )
+                      : const Text('Fix Grammar (AI)'),
+            ),
+          );
+        }
+
+        // Copy Full Thread Action
+        if (canInteractWithServer) {
+          actions.add(
+            CupertinoActionSheetAction(
+              onPressed: () {
+                Navigator.pop(popupContext); // Use the builder's context
+                _copyThreadContent(
+                  context, // Pass the main screen context
+                  ref,
+                  widget.itemId,
+                  widget.itemType, // Use widget's itemType
+                );
+              },
+              child: const Text('Copy Full Thread'),
+            ),
+          );
+        }
+
+        // Chat about Thread Action
+        if (canInteractWithServer) {
+          actions.add(
+            CupertinoActionSheetAction(
+              onPressed: () {
+                Navigator.pop(popupContext); // Use the builder's context
+                _chatWithThread(
+                  context, // Pass the main screen context
+                  ref,
+                  widget.itemId,
+                  widget.itemType, // Use widget's itemType
+                );
+              },
+              child: const Text('Chat about Thread'),
+            ),
+          );
+        }
+
+        // Delete Note Action
+        if (canInteractWithServer) {
+          actions.add(
+            CupertinoActionSheetAction(
+              isDestructiveAction: true,
+              onPressed: () async {
+                // Pop the action sheet first using its context
+                Navigator.pop(popupContext);
+
+                // Use the main screen context for the confirmation dialog
+                // Check mounted before showing dialog
+                if (!mounted) return;
+                final dialogContext = context;
+                final confirmed = await showCupertinoDialog<bool>(
+                  context: dialogContext,
+                  builder:
+                      (context) => CupertinoAlertDialog(
+                        title: const Text('Delete Note?'), // Updated text
+                        content: const Text(
+                          'Are you sure you want to permanently delete this note and its comments?', // Updated text
+                        ),
+                        actions: [
+                          CupertinoDialogAction(
+                            child: const Text('Cancel'),
+                            onPressed: () => Navigator.of(context).pop(false),
+                          ),
+                          CupertinoDialogAction(
+                            isDestructiveAction: true,
+                            child: const Text('Delete'),
+                            onPressed: () => Navigator.of(context).pop(true),
+                          ),
+                        ],
+                      ),
+                );
+
+                if (confirmed == true) {
+                  // Check mounted *after* the await
+                  if (!mounted) return;
+                  try {
+                    await ref.read(
+                      note_providers.deleteNoteProvider(widget.itemId),
+                    )();
+                    // Check mounted again before using context for navigation
+                    if (!mounted) return;
+                    // Check if we can pop the current screen
+                    if (Navigator.of(context).canPop()) {
+                      Navigator.of(context).pop();
+                    }
+                  } catch (e) {
+                    // Check mounted again before using context for snackbar
+                    if (!mounted) return;
+                    _showErrorSnackbar(
+                      'Failed to delete note: $e',
+                    ); // Updated text
+                  }
+                }
+              },
+              child: const Text('Delete Note'),
+            ),
+          );
+        }
+
+        return CupertinoActionSheet(
+          title: const Text('Note Actions'),
+          actions: actions, // Use the conditionally built list
+          cancelButton: CupertinoActionSheetAction(
+            child: const Text('Cancel'),
+            onPressed: () {
+              Navigator.pop(popupContext); // Use the builder's context
+            },
           ),
+        );
+      },
     );
   }
 
