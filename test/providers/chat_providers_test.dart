@@ -28,12 +28,12 @@ import 'package:mockito/mockito.dart';
 
 // Generate mocks for dependencies
 @GenerateNiceMocks([
-  MockSpec<McpClientNotifier>(), // Keep this for the delegate
+  MockSpec<McpClientNotifier>(),
   MockSpec<McpClientState>(),
   MockSpec<LocalStorageService>(),
   MockSpec<ChatSessionCloudKitService>(),
   // MockSpec<gen_ai.GenerativeModel>(), // REMOVED: Cannot mock final class
-  MockSpec<gen_ai.ChatSession>(), // Mock the AI chat session
+  // MockSpec<gen_ai.ChatSession>(), // REMOVED: Cannot mock final class
   MockSpec<gen_ai.GenerateContentResponse>(), // Mock the AI response
 ])
 import 'chat_providers_test.mocks.dart';
@@ -120,7 +120,7 @@ void main() {
   late MockLocalStorageService mockLocalStorageService;
   late MockChatSessionCloudKitService mockCloudKitService;
   // late MockGenerativeModel mockGenerativeModel; // REMOVED
-  late MockChatSession mockAiChatSession;
+  // late MockChatSession mockAiChatSession; // REMOVED
   late MockGenerateContentResponse mockAiResponse;
   late ProviderContainer container;
 
@@ -181,7 +181,7 @@ void main() {
     mockLocalStorageService = MockLocalStorageService();
     mockCloudKitService = MockChatSessionCloudKitService();
     // mockGenerativeModel = MockGenerativeModel(); // REMOVED
-    mockAiChatSession = MockChatSession();
+    // mockAiChatSession = MockChatSession(); // REMOVED
     mockAiResponse = MockGenerateContentResponse();
 
     // Default stubbing for MCP delegate
@@ -209,13 +209,8 @@ void main() {
     });
     when(mockCloudKitService.deleteChatSession()).thenAnswer((_) async => true);
 
-    // Default stubbing for AI Chat Session and Response (Model itself cannot be mocked)
-    // when(mockGenerativeModel.startChat(history: anyNamed('history')))
-    //     .thenReturn(mockAiChatSession); // REMOVED
-    when(
-      mockAiChatSession.sendMessage(any),
-    ).thenAnswer((_) async => mockAiResponse);
-    // Default response text (can be overridden in specific tests if needed, but less reliable now)
+    // Default stubbing for AI Response (Model and ChatSession cannot be mocked)
+    // when(mockAiChatSession.sendMessage(any)).thenAnswer((_) async => mockAiResponse); // REMOVED
     when(mockAiResponse.text).thenReturn('Mock AI response');
 
     // Create ProviderContainer with overrides
@@ -254,8 +249,8 @@ void main() {
 
   group('Initialization (_loadInitialSession)', () {
     test('loads initial empty state when no local or cloud data exists', () async {
-        // Arrange (mocks already return null in setUp)
-      container.dispose(); // Dispose previous container
+        // Arrange
+        container.dispose();
         when(
           mockLocalStorageService.loadActiveChatSession(),
         ).thenAnswer((_) async => null);
@@ -285,7 +280,7 @@ void main() {
         );
         // Act
       final notifier = container.read(chatProvider.notifier);
-      await Future.delayed(Duration.zero); // Allow async operations
+        await Future.delayed(Duration.zero);
 
       // Assert
       final state = container.read(chatProvider);
@@ -509,7 +504,7 @@ void main() {
       when(mockLocalStorageService.loadActiveChatSession()).thenThrow(error);
       when(
         mockCloudKitService.getChatSession(),
-      ).thenAnswer((_) async => cloudSession); // Cloud works
+      ).thenAnswer((_) async => cloudSession);
       container = ProviderContainer(
         overrides: [
           localStorageServiceProvider.overrideWithValue(
@@ -540,7 +535,7 @@ void main() {
 
       // Assert
       final state = container.read(chatProvider);
-      expect(state.session, cloudSession); // Should fall back to cloud
+      expect(state.session, cloudSession);
       expect(state.isInitializing, isFalse);
       verify(
         mockLocalStorageService.saveActiveChatSession(cloudSession),
@@ -553,7 +548,7 @@ void main() {
       final error = Exception('Cloud load failed');
       when(
         mockLocalStorageService.loadActiveChatSession(),
-      ).thenAnswer((_) async => localSession); // Local works
+      ).thenAnswer((_) async => localSession);
       when(mockCloudKitService.getChatSession()).thenThrow(error);
       container = ProviderContainer(
         overrides: [
@@ -585,7 +580,7 @@ void main() {
 
       // Assert
       final state = container.read(chatProvider);
-      expect(state.session, localSession); // Should fall back to local
+      expect(state.session, localSession);
       expect(state.isInitializing, isFalse);
       verify(mockCloudKitService.saveChatSession(localSession)).called(1);
     });
@@ -828,10 +823,8 @@ void main() {
 
       // Mock the AI response (can still mock the response object itself)
       when(mockAiResponse.text).thenReturn('Hello there!');
-      // We need to ensure the internal _model.startChat().sendMessage() call returns our mocked response
-      // Since _model is created internally, we rely on the mock setup for ChatSession and GenerateContentResponse
-      // This part is less robust as we can't mock the final GenerativeModel class.
-      // We assume the internal call chain will eventually use the mocked ChatSession and Response.
+      // Cannot mock the internal ChatSession anymore
+      // when(mockAiChatSession.sendMessage(any)).thenAnswer((_) async => mockAiResponse);
 
       // Act
       await container.read(chatProvider.notifier).sendMessage(userQuery);
@@ -839,17 +832,14 @@ void main() {
 
       // Assert
       verifyNever(mockMcpClientNotifierDelegate.processQuery(any, any));
-      // Cannot reliably verify internal model calls anymore.
+      // Cannot reliably verify internal model/chat session calls anymore.
 
       final finalState = container.read(chatProvider);
       expect(finalState.isLoading, isFalse);
       // Check if the response text matches the mock (best effort verification)
-      // This might fail if the actual API is hit or if the internal mocking doesn't work as expected.
       expect(finalState.displayMessages.length, 2);
-      expect(
-        finalState.displayMessages.last.text,
-        'Hello there!',
-      ); // Check against mocked response text
+      // This assertion might become flaky if the actual API is hit or internal logic changes
+      expect(finalState.displayMessages.last.text, 'Hello there!');
       expect(finalState.displayMessages.last.sourceServerId, isNull);
       expect(finalState.session.messages.length, 2);
     });
