@@ -150,6 +150,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
     _persistSoon();
 
     try {
+      // history for startChat
       final history =
           state.session.messages
               .where((m) => m.role != Role.system && !m.isLoading)
@@ -161,8 +162,13 @@ class ChatNotifier extends StateNotifier<ChatState> {
               .toList();
 
       final chat = _model!.startChat(history: history);
-      final reply =
-          await chat.sendMessage(gen_ai.Content.text(text)) as gen_ai.Content;
+
+      // build request content correctly
+      final gen_ai.Content request = gen_ai.Content('user', [
+        gen_ai.TextPart(text),
+      ]);
+
+      final reply = await chat.sendMessage(request) as gen_ai.Content;
       final replyText = reply.text ?? '';
 
       final modelMsg = ChatMessage(
