@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_memos/models/chat_message.dart';
 import 'package:flutter_memos/models/chat_session.dart';
+import 'package:flutter_memos/models/workbench_item_type.dart';
 import 'package:flutter_memos/providers/service_providers.dart'
     show chatAiFacadeProvider;
 import 'package:flutter_memos/services/chat_ai.dart'; // new
