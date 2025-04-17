@@ -847,8 +847,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       await geminiNotifier.clear();
 
       // Clear Data Caches
-      await workbenchNotifier
-          .clearAllItems(); // Assuming this method exists or is added
+      // FIX: Use correct method name clearItems
+      await workbenchNotifier.clearItems();
       tasksNotifier.clearTasks(); // Clear local task list
       chatNotifier.clearChat(); // Clear chat history
       // await notesNotifier.clearCache(); // If an explicit cache clear is needed
@@ -882,7 +882,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       );
       // Invalidate providers to force reload/re-check after reset
       ref.invalidate(loadServerConfigProvider);
-      ref.invalidate(loadMcpServerConfigProvider);
+      // FIX: Use correct provider name mcpServerConfigProvider
+      ref.invalidate(mcpServerConfigProvider);
       ref.invalidate(note_providers.notesNotifierProvider);
       ref.invalidate(tasksNotifierProvider);
       ref.invalidate(workbenchProvider);
