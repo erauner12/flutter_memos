@@ -103,9 +103,6 @@ class TaskListItem extends StatelessWidget {
         actions: _buildContextActions(context),
 
         // Removed previewBuilder as it's not available in the current SDK version.
-        // previewBuilder:
-        //     (context, animation, child) => _TaskContextPreview(child: child!),
-
         // The child is the regular in-list representation.
         // The context menu will use its default preview animation.
         child: _TaskRowContent(
@@ -203,12 +200,12 @@ class _TaskRowContent extends StatelessWidget {
 
     // The Container provides padding and the bottom border
     return Container(
-      // Ensure background color is set here for the regular list item appearance
-      // and for the default context menu preview background.
-      color: CupertinoColors.systemBackground.resolveFrom(context),
+      // REMOVED top-level color property
+      // color: CupertinoColors.systemBackground.resolveFrom(context),
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
       decoration: BoxDecoration(
-        // Remove color from decoration if set directly on Container
+        // ADDED color property inside BoxDecoration
+        color: CupertinoColors.systemBackground.resolveFrom(context),
         border: Border(
           bottom: BorderSide(
             color: CupertinoColors.separator.resolveFrom(context),
@@ -362,28 +359,3 @@ class _TrailingCheckbox extends StatelessWidget {
     );
   }
 }
-
-// Removed _TaskContextPreview widget as it's no longer used.
-// /// Helper widget to provide finite constraints and background for the context menu preview.
-// class _TaskContextPreview extends StatelessWidget {
-//   final Widget child;
-//   const _TaskContextPreview({required this.child});
-
-//   @override
-//   Widget build(BuildContext context) {
-//     // Constrain the width to the device width, leave height unbounded (intrinsic height).
-//     // Use Container for background and optional corner radius.
-//     return SizedBox(
-//       width: MediaQuery.of(context).size.width,
-//       child: Container(
-//         clipBehavior: Clip.hardEdge, // Use Clip enum from dart:ui
-//         decoration: BoxDecoration(
-//           // Set color inside BoxDecoration.
-//           color: CupertinoColors.systemBackground.resolveFrom(context),
-//           borderRadius: BorderRadius.circular(12),
-//         ),
-//         child: child,
-//       ),
-//     );
-//   }
-// }
