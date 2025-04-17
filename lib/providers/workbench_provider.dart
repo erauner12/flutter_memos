@@ -401,6 +401,8 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
     }
   }
 
+  /// Adds an item to the workbench, including saving to CloudKit.
+  /// Checks for duplicates based on referencedItemId and serverId within the instance.
   Future<void> addItem(WorkbenchItemReference item) async {
     if (!mounted) {
       return;
@@ -473,6 +475,36 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
     }
   }
 
+  /// Private helper to add an existing item reference to the local state
+  /// *without* saving to CloudKit and *without* duplicate checks.
+  /// Used internally by `moveItem`.
+  void _addExistingItem(WorkbenchItemReference item) {
+    if (!mounted) return;
+    // Ensure item belongs to this instance before adding
+    if (item.instanceId != instanceId) {
+      if (kDebugMode) {
+        print(
+          '[WorkbenchNotifier($instanceId)] _addExistingItem called with item ${item.id} for wrong instance ${item.instanceId}. Skipping.',
+        );
+      }
+      return;
+    }
+
+    final newItems = [...state.items, item];
+    newItems.sort(
+      (a, b) => b.overallLastUpdateTime.compareTo(a.overallLastUpdateTime),
+    );
+    state = state.copyWith(items: newItems, clearError: true);
+    if (kDebugMode) {
+      print(
+        '[WorkbenchNotifier($instanceId)] Added existing item ${item.id} locally.',
+      );
+    }
+    // Fetch details for the newly added item
+    unawaited(_fetchAndPopulateDetails([item]));
+  }
+
+
   Future<void> removeItem(String itemId) async {
     if (!mounted) {
       return;
@@ -524,6 +556,101 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
       }
     }
   }
+
+  /// Moves an item from this workbench instance to another.
+  Future<void> moveItem({
+    required String itemId,
+    required String targetInstanceId,
+  }) async {
+    if (!mounted) return;
+    if (targetInstanceId == instanceId) {
+      if (kDebugMode) {
+        print(
+          '[WorkbenchNotifier($instanceId)] Attempted to move item $itemId to the same instance. Skipping.',
+        );
+      }
+      return; // Cannot move to the same instance
+    }
+
+    // 1. Find the item in the current state
+    WorkbenchItemReference? itemToMove;
+    try {
+      itemToMove = state.items.firstWhere((i) => i.id == itemId);
+    } catch (e) {
+      // Item not found in current state
+      if (kDebugMode) {
+        print(
+          '[WorkbenchNotifier($instanceId)] Item with ID $itemId not found for move operation.',
+        );
+      }
+      state = state.copyWith(error: Exception('Item to move not found.'));
+      return;
+    }
+
+    // Store original state for potential rollback
+    final originalItems = List<WorkbenchItemReference>.from(state.items);
+
+    // 2. Optimistic UI update: Remove from current notifier's list
+    final newItems = originalItems.where((item) => item.id != itemId).toList();
+    if (mounted) {
+      state = state.copyWith(items: newItems, clearError: true);
+      if (kDebugMode) {
+        print(
+          '[WorkbenchNotifier($instanceId)] Optimistically removed item $itemId for move.',
+        );
+      }
+    }
+
+    try {
+      // 3. Call CloudKit service to update the instanceId
+      final success = await _cloudKitService.moveWorkbenchItemReference(
+        recordName: itemId,
+        newInstanceId: targetInstanceId,
+      );
+
+      if (!success) {
+        throw Exception('CloudKit move operation failed');
+      }
+
+      // 4. On success: Push a copy to the destination notifier
+      if (mounted) {
+        final movedItemCopy = itemToMove.copyWith(instanceId: targetInstanceId);
+        // Use the private helper on the target notifier
+        _ref
+            .read(workbenchProviderFamily(targetInstanceId).notifier)
+            ._addExistingItem(movedItemCopy);
+
+        if (kDebugMode) {
+          print(
+            '[WorkbenchNotifier($instanceId)] Successfully moved item $itemId to instance $targetInstanceId.',
+          );
+        }
+        // Clear last opened if it was the moved item
+        final lastOpened =
+            _ref.read(workbenchInstancesProvider).lastOpenedItemId[instanceId];
+        if (lastOpened == itemId) {
+          _ref
+              .read(workbenchInstancesProvider.notifier)
+              .setLastOpenedItem(instanceId, null);
+        }
+      }
+    } catch (e, s) {
+      // 5. On error: Revert local list and surface error
+      if (kDebugMode) {
+        print(
+          '[WorkbenchNotifier($instanceId)] Error moving item $itemId to $targetInstanceId: $e\n$s',
+        );
+      }
+      if (mounted) {
+        // Re-sort original items before reverting state
+        originalItems.sort(
+          (a, b) => b.overallLastUpdateTime.compareTo(a.overallLastUpdateTime),
+        );
+        state = state.copyWith(items: originalItems, error: e);
+      }
+    }
+  }
+
 
   void reorderItems(int oldIndex, int newIndex) {
     if (!mounted) {
@@ -648,6 +775,7 @@ final activeWorkbenchProvider = Provider<WorkbenchState>((ref) {
   final activeInstanceId = ref.watch(
     workbenchInstancesProvider.select((s) => s.activeInstanceId),
   );
+  // Ensure family provider is watched correctly
   return ref.watch(workbenchProviderFamily(activeInstanceId));
 });
 
@@ -655,5 +783,6 @@ final activeWorkbenchNotifierProvider = Provider<WorkbenchNotifier>((ref) {
   final activeInstanceId = ref.watch(
     workbenchInstancesProvider.select((s) => s.activeInstanceId),
   );
+  // Ensure family provider notifier is watched correctly
   return ref.watch(workbenchProviderFamily(activeInstanceId).notifier);
 });

@@ -7,9 +7,11 @@ import 'package:flutter/services.dart'; // Needed for Clipboard
 import 'package:flutter_memos/main.dart'; // For rootNavigatorKeyProvider
 import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/models/server_config.dart';
+import 'package:flutter_memos/models/workbench_instance.dart'; // Import WorkbenchInstance
 import 'package:flutter_memos/models/workbench_item_reference.dart';
 import 'package:flutter_memos/providers/server_config_provider.dart';
 import 'package:flutter_memos/providers/task_providers.dart';
+import 'package:flutter_memos/providers/workbench_instances_provider.dart'; // Import instances provider
 import 'package:flutter_memos/providers/workbench_provider.dart';
 import 'package:flutter_memos/screens/home_screen.dart'; // Import for NEW providers (homeTabControllerProvider)
 import 'package:flutter_memos/screens/home_tabs.dart'; // Import HomeTab enum and SafeTabNav
@@ -146,7 +148,7 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
           (dialogContext) => CupertinoAlertDialog(
             title: const Text('Remove from Workbench?'),
             content: Text(
-              'Remove "${preview.substring(0, min(30, preview.length))}${preview.length > 30 ? '...' : ''}" from your Workbench?',
+              'Remove "${preview.substring(0, min(30, preview.length))}${preview.length > 30 ? '...' : ''}" from this Workbench?',
             ),
             actions: [
               CupertinoDialogAction(
@@ -440,6 +442,56 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
 
   // --- End Refactored Action Handlers ---
 
+  // --- Move Item Sheet ---
+  void _showMoveSheet(BuildContext context) {
+    // Get all instances EXCEPT the current one
+    final instances = ref.read(workbenchInstancesProvider).instances
+        .where((i) => i.id != widget.itemReference.instanceId)
+        .toList();
+
+    // Don't show the sheet if there are no other workbenches to move to
+    if (instances.isEmpty) {
+      _showAlertDialog(
+        context,
+        'Move Item',
+        'There are no other Workbenches to move this item to.',
+      );
+      return;
+    }
+
+    showCupertinoModalPopup<void>(
+      context: context, // Use the context passed to this method
+      builder: (BuildContext sheetContext) => CupertinoActionSheet(
+        title: const Text('Move to Workbench'),
+        actions: [
+          // Create an action for each available target workbench
+          for (final wb in instances)
+            CupertinoActionSheetAction(
+              child: Text(wb.name),
+              onPressed: () {
+                Navigator.pop(sheetContext); // Close the action sheet
+                // Call the moveItem method on the *source* notifier
+                ref
+                  .read(activeWorkbenchNotifierProvider)
+                  .moveItem(
+                    itemId: widget.itemReference.id,
+                    targetInstanceId: wb.id,
+                  );
+              },
+            ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          child: const Text('Cancel'),
+          onPressed: () {
+            Navigator.pop(sheetContext); // Close the action sheet
+          },
+        ),
+      ),
+    );
+  }
+  // --- End Move Item Sheet ---
+
+
   // --- Context Menu ---
   void _showContextMenu(BuildContext context) {
     final itemRef = widget.itemReference;
@@ -532,6 +584,17 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
                 },
               ),
               // --- End Chat about Thread Action ---
+
+              // --- Move to Workbench Action ---
+              CupertinoActionSheetAction(
+                child: const Text('Move to Workbench…'),
+                onPressed: () {
+                  Navigator.pop(popupContext); // Close this menu first
+                  _showMoveSheet(context); // Show the move target selection sheet
+                },
+              ),
+              // --- End Move to Workbench Action ---
+
               // Remove from Workbench
               CupertinoActionSheetAction(
                 isDestructiveAction: true,

@@ -457,6 +457,66 @@ class CloudKitService {
     }
   }
 
+  /// Updates only the instanceId field of an existing WorkbenchItemReference record.
+  /// Fetches the existing record, updates the instanceId, and saves it back.
+  /// Returns true if successful, false otherwise.
+  Future<bool> moveWorkbenchItemReference({
+    required String recordName,
+    required String newInstanceId,
+  }) async {
+    if (kDebugMode) {
+      print(
+        '[CloudKitService] moveWorkbenchItemReference called for $recordName to instance $newInstanceId',
+      );
+    }
+    try {
+      // 1. Fetch the existing record
+      final record = await _cloudKit.getRecord(
+        scope: _scope,
+        recordName: recordName,
+      );
+
+      if (record.recordType != workbenchItemRecordType) {
+        if (kDebugMode) {
+          print(
+            '[CloudKitService] Error moving item $recordName: Record found but has incorrect type ${record.recordType}',
+          );
+        }
+        return false;
+      }
+
+      // 2. Create a mutable map and update the instanceId
+      final values = Map<String, dynamic>.from(record.values);
+      values['instanceId'] = newInstanceId;
+
+      // 3. Serialize the updated map
+      final updatedRecordData = _serializeMap(values);
+
+      // 4. Save the record back (effectively overwriting with the change)
+      await _cloudKit.saveRecord(
+        scope: _scope,
+        recordType: workbenchItemRecordType,
+        recordName: recordName, // Use the original recordName
+        record: updatedRecordData,
+      );
+
+      if (kDebugMode) {
+        print(
+          '[CloudKitService] Successfully moved WorkbenchItemReference $recordName to instance $newInstanceId',
+        );
+      }
+      return true;
+    } catch (e, s) {
+      if (kDebugMode) {
+        print(
+          '[CloudKitService] Error moving WorkbenchItemReference $recordName: $e\n$s',
+        );
+      }
+      return false;
+    }
+  }
+
+
   /// Retrieves all workbench item references from CloudKit, optionally filtered by instanceId.
   /// Handles migration by assigning a default instanceId if missing and persists the change.
   Future<List<WorkbenchItemReference>> getAllWorkbenchItemReferences({

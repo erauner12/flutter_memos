@@ -178,9 +178,7 @@ class _WorkbenchScreenState extends ConsumerState<WorkbenchScreen> {
     );
   }
 
-  // TODO: Decide how to trigger this. Maybe a trailing button?
-  // For now, it's unused as long-press on segment is not possible.
-  // ignore: unused_element
+  // Action sheet for Rename/Delete instance actions
   void _showInstanceActions(WorkbenchInstance instance) {
     final instancesState = ref.read(workbenchInstancesProvider);
     final bool canDelete =
@@ -250,17 +248,23 @@ class _WorkbenchScreenState extends ConsumerState<WorkbenchScreen> {
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // TODO: Consider adding a button here to trigger _showInstanceActions
-            // Example:
-            // if (instancesState.instances.isNotEmpty) // Check instancesState directly
-            //   CupertinoButton(
-            //     padding: const EdgeInsets.only(left: 8.0),
-            //     child: const Icon(CupertinoIcons.ellipsis_circle, size: 22),
-            //     onPressed: () {
-            //       final activeInstance = instancesState.instances.firstWhere((i) => i.id == activeInstanceId);
-            //       _showInstanceActions(activeInstance);
-            //     },
-            //   ),
+            // Ellipsis button for instance actions (Rename/Delete)
+            if (instancesState
+                .instances
+                .isNotEmpty) // Check instancesState directly
+              CupertinoButton(
+                padding: const EdgeInsets.only(left: 8.0),
+                child: const Icon(CupertinoIcons.ellipsis_circle, size: 22),
+                onPressed: () {
+                  // Find the currently active instance object
+                  final activeInstance = instancesState.instances.firstWhere(
+                    (i) => i.id == activeInstanceId,
+                    // Provide a fallback or handle error if not found (shouldn't happen in normal flow)
+                    orElse: () => instancesState.instances.first,
+                  );
+                  _showInstanceActions(activeInstance);
+                },
+              ),
             CupertinoButton(
               padding: const EdgeInsets.only(left: 8.0),
               onPressed: _showAddInstanceDialog,
