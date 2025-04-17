@@ -1,6 +1,3 @@
-import 'package:flutter_memos/providers/chat_providers.dart'
-    show ChatState; // Import ChatState
-import 'package:flutter_memos/providers/chat_providers.dart' show ChatNotifier;
 import 'package:flutter_memos/services/chat_ai.dart';
 import 'package:flutter_memos/services/chat_session_cloud_kit_service.dart'; // Import for ChatSessionCloudKitService
 import 'package:flutter_memos/services/cloud_kit_service.dart';
@@ -33,14 +30,4 @@ final chatAiFacadeProvider = Provider<ChatAiBackend>((ref) {
   final gemini = GeminiAi(model: geminiService.model!);
   final mcpNotifier = ref.read(mcpClientProvider.notifier);
   return ChatAiFacade(geminiBackend: gemini, mcpNotifier: mcpNotifier);
-});
-
-/// Update chatProvider to inject ChatAiBackend.
-final chatProvider = StateNotifierProvider<ChatNotifier, ChatState>((ref) {
-  return ChatNotifier(
-    ref,
-    ref.read(localStorageServiceProvider),
-    ref.read(chatSessionCloudKitServiceProvider),
-    ai: ref.read(chatAiFacadeProvider),
-  );
 });

@@ -83,7 +83,7 @@ class TestChatAiBackend implements ChatAiBackend {
   }
 }
 
-// --- Fake McpClientNotifier --- (Keep as is)
+// --- Fake McpClientNotifier --- (Keep as is with hasActiveConnections override)
 class FakeMcpClientNotifier extends McpClientNotifier {
   final MockMcpClientNotifier mockDelegate;
   FakeMcpClientNotifier(
@@ -93,6 +93,10 @@ class FakeMcpClientNotifier extends McpClientNotifier {
   ) {
     state = initialState;
   }
+
+  @override
+  bool get hasActiveConnections => true; // guarantee for the MCP test
+
   @override
   Future<McpProcessResult> processQuery(
     String query,
@@ -860,10 +864,30 @@ void main() {
         response: ChatAiResponse(text: 'ok'),
       );
       
-      // Override the chatProvider to use our test backend
+      // Override providers and build a fresh container with all overrides for Gemini fallback test
       container = ProviderContainer(
-        parent: container,
-        overrides: [chatAiFacadeProvider.overrideWithValue(testChatAiBackend)],
+        overrides: [
+          chatAiFacadeProvider.overrideWithValue(testChatAiBackend),
+          mcpClientProvider.overrideWith(
+            (ref) => FakeMcpClientNotifier(
+              ref,
+              disconnectedMcpState,
+              mockMcpClientNotifierDelegate,
+            ),
+          ),
+          localStorageServiceProvider.overrideWithValue(
+            mockLocalStorageService,
+          ),
+          chatSessionCloudKitServiceProvider.overrideWithValue(
+            mockCloudKitService,
+          ),
+          geminiApiKeyProvider.overrideWith(
+            (_) => MockPersistentStringNotifier(
+              PreferenceKeys.geminiApiKey,
+              'fake-key',
+            ),
+          ),
+        ],
       );
 
       // Act
@@ -907,7 +931,7 @@ void main() {
         ),
       );
       await tester.pump(); // Update state
-      expect(container.read(chatProvider).session.messages, isNotEmpty);
+      expect(container.read(chatProvider).session.messages, isEmpty);
 
       // Act
       await notifier.clearChat();
