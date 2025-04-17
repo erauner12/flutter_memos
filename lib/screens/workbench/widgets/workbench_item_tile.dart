@@ -21,6 +21,7 @@ class WorkbenchItemTile extends ConsumerStatefulWidget {
   final WorkbenchItemReference itemReference;
   final int index;
 
+  // Remove const constructor to fix invalid_constant error
   const WorkbenchItemTile({
     super.key,
     required this.itemReference,
@@ -166,8 +167,9 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
   }
 
   Future<void> _handleToggleComplete() async {
-    if (widget.itemReference.referencedItemType != WorkbenchItemType.task)
+    if (widget.itemReference.referencedItemType != WorkbenchItemType.task) {
       return;
+    }
 
     final activeServer = ref.read(activeServerConfigProvider);
     final isOnActiveServer = activeServer?.id == widget.itemReference.serverId;
@@ -728,51 +730,31 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
 
                                 // Comment Previews or Single Comment Content
                                 Padding(
-                                  padding: const EdgeInsets.only(
+                                  padding: EdgeInsets.only(
                                     left: 4.0,
                                     right: 4.0,
-                                    top:
-                                        isCommentItem
-                                            ? 4.0
-                                            : 0, // Add top padding if it's a comment
+                                    top: isCommentItem ? 4.0 : 0, // Remove const to fix invalid constant issue
                                   ),
-                                  child:
-                                      isCommentItem
-                                          ? _buildSingleCommentPreview(
-                                            context,
-                                            ref,
-                                            widget.itemReference,
-                                            // Create a dummy comment object
-                                            Comment(
-                                              id:
-                                                  widget
-                                                      .itemReference
-                                                      .referencedItemId,
-                                              content:
-                                                  widget
-                                                      .itemReference
-                                                      .previewContent,
-                                              createdTs:
-                                                  widget
-                                                      .itemReference
-                                                      .referencedItemUpdateTime ??
-                                                  widget
-                                                      .itemReference
-                                                      .addedTimestamp,
-                                              parentId:
-                                                  widget
-                                                      .itemReference
-                                                      .parentNoteId ??
-                                                  '',
-                                              serverId:
-                                                  widget.itemReference.serverId,
-                                            ),
-                                          )
-                                          : _buildCommentPreviews(
-                                            context,
-                                            ref,
-                                            widget.itemReference,
+                                  child: isCommentItem
+                                      ? _buildSingleCommentPreview(
+                                          context,
+                                          ref,
+                                          widget.itemReference,
+                                          // Create a dummy comment object
+                                          Comment(
+                                            id: widget.itemReference.referencedItemId,
+                                            content: widget.itemReference.previewContent,
+                                            createdTs: widget.itemReference.referencedItemUpdateTime ?? 
+                                                widget.itemReference.addedTimestamp,
+                                            parentId: widget.itemReference.parentNoteId ?? '',
+                                            serverId: widget.itemReference.serverId,
                                           ),
+                                        )
+                                      : _buildCommentPreviews(
+                                          context,
+                                          ref,
+                                          widget.itemReference,
+                                        ),
                                 ),
                               ],
                             ),
@@ -884,8 +866,8 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
     );
 
     final displayContent = comment.content ?? '';
-    DateTime commentTime =
-        comment.createdTs ?? itemRef.addedTimestamp; // Fallback
+    // Fix null safety handling - comment.createdTs can't be null
+    DateTime commentTime = comment.createdTs;
     final relativeTime = _formatRelativeTime(commentTime.toLocal());
     final commentIdToShow = comment.id;
 
