@@ -13,12 +13,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 /// active instance ID changes. It updates the `workbenchTabControllerProvider`
 /// state whenever the controller is recreated or disposed.
 class WorkbenchTabControllerHolder {
-  // Use Ref directly, no need for WidgetRef specifically here
-  final Ref ref;
+  // Use WidgetRef, provided by ConsumerStatefulWidget's State
+  final WidgetRef ref;
   final TickerProvider vsync; // Provided by the hosting State widget
   TabController? _controller; // Internal controller instance
   ProviderSubscription<WorkbenchInstancesState>? _instancesSub;
 
+  // Constructor now expects WidgetRef
   WorkbenchTabControllerHolder(this.ref, this.vsync) {
     // Get initial state to create the first controller
     final initialState = ref.read(workbenchInstancesProvider);
@@ -27,8 +28,9 @@ class WorkbenchTabControllerHolder {
       initialIndex: _indexFor(initialState.instances, initialState.activeInstanceId),
     );
 
-    // Listen for subsequent changes in instances state
-    _instancesSub = ref.listenManual<WorkbenchInstancesState>(
+    // Listen for subsequent changes using the standard listen API
+    _instancesSub = ref.listen<WorkbenchInstancesState>(
+      // Use listen instead of listenManual
       workbenchInstancesProvider,
       _maybeRecreateOrAnimate,
       fireImmediately: false, // Already handled by initial _recreate
@@ -49,15 +51,11 @@ class WorkbenchTabControllerHolder {
   }
 
   /// Called when the workbenchInstancesProvider state changes.
-  void _maybeRecreateOrAnimate(WorkbenchInstancesState? prev, WorkbenchInstancesState next) {
-    // Read the current controller state from the provider *if needed*,
-    // but _controller internal field should be the source of truth here.
-    // final currentControllerFromProvider = ref.read(workbenchTabControllerProvider);
-    // assert(currentControllerFromProvider == _controller); // Should match
-
+  void _maybeRecreateOrAnimate(
+    WorkbenchInstancesState? prev,
+    WorkbenchInstancesState next,
+  ) {
     if (_controller == null) {
-      // This might happen if dispose was called just before a state update.
-      // Recreate if necessary based on the 'next' state.
       if (kDebugMode) {
         print(
           "[WorkbenchTabControllerHolder] Controller was null during update. Recreating.",
@@ -84,7 +82,6 @@ class WorkbenchTabControllerHolder {
         _controller!.index != desiredIndex &&
         desiredIndex >= 0 &&
         desiredIndex < _controller!.length) {
-      // Animate the existing controller
       _controller!.animateTo(desiredIndex);
     }
   }
@@ -96,16 +93,11 @@ class WorkbenchTabControllerHolder {
     try {
       _controller?.dispose();
     } catch (e, s) {
-      // Use kDebugMode for printing
       if (kDebugMode) {
         print("Error disposing previous TabController: $e\n$s");
       }
     }
-    // Set internal field to null temporarily
     _controller = null;
-    // Also update provider state to null briefly, might help avoid race conditions
-    // although the synchronous update below should be sufficient.
-    // ref.read(workbenchTabControllerProvider.notifier).state = null;
 
     // 2. Create the new controller
     _controller = TabController(
@@ -115,7 +107,6 @@ class WorkbenchTabControllerHolder {
     )..addListener(_onTabChanged);
 
     // 3. Publish the new controller by updating the StateProvider's state
-    // Use read() for synchronous update within the same microtask.
     ref.read(workbenchTabControllerProvider.notifier).state = _controller;
     if (kDebugMode) {
       print(
@@ -126,14 +117,11 @@ class WorkbenchTabControllerHolder {
 
   /// Listener attached to the TabController (Controller -> Provider).
   void _onTabChanged() {
-    // Avoid updating provider during programmatic animation or rebuilds
     if (_controller == null || _controller!.indexIsChanging) return;
 
     final instances = ref.read(workbenchInstancesProvider).instances;
-    // Check bounds, especially for the zero-instance case
     if (instances.isNotEmpty && _controller!.index < instances.length) {
       final tappedId = instances[_controller!.index].id;
-      // Only update if the ID actually changed
       if (ref.read(workbenchInstancesProvider).activeInstanceId != tappedId) {
         ref
             .read(workbenchInstancesProvider.notifier)
@@ -155,15 +143,11 @@ class WorkbenchTabControllerHolder {
     _controller = null;
 
     // Set the provider state to null upon disposal
-    // Use read() as we are outside a build context. Check if ref is still valid.
+    // It's safe to call read in dispose. No need for context/mounted checks here.
     try {
-      // Check if the element associated with ref is still mounted before reading.
-      // This avoids errors if dispose is called after the widget is removed.
-      if ((ref as ProviderRef).context.mounted) {
-        ref.read(workbenchTabControllerProvider.notifier).state = null;
-      }
+      ref.read(workbenchTabControllerProvider.notifier).state = null;
     } catch (e, s) {
-      // Catch potential errors if the ref/context is already invalid during dispose.
+      // Catch potential errors if the provider/notifier itself is already disposed (unlikely but possible)
       if (kDebugMode) {
         print(
           "[WorkbenchTabControllerHolder] Error setting provider state to null during dispose: $e\n$s",

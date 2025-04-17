@@ -28,8 +28,9 @@ class _WorkbenchScreenState extends ConsumerState<WorkbenchScreen>
   @override
   void initState() {
     super.initState();
-    // Instantiate the holder, passing the ref and the TickerProvider (this)
-    _holder = WorkbenchTabControllerHolder(ref as Ref<Object?>, this);
+    // Instantiate the holder, passing the WidgetRef (ref) and the TickerProvider (this)
+    // No cast needed as ConsumerState's ref is a WidgetRef.
+    _holder = WorkbenchTabControllerHolder(ref, this);
   }
 
   @override
