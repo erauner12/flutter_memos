@@ -5,6 +5,7 @@ version: 1.0.0+1
 
 environment:
   sdk: ^3.7.2 # Keep this constraint
+  flutter: ">=3.16.0" # Added minimum Flutter SDK version
 
 dependencies:
   flutter:
@@ -51,41 +52,34 @@ dependencies:
   google_generative_ai: ^0.4.6 # Keep specific version from plan
   openai_dart: ^0.4.5 # Keep override version
   synchronized: ^3.1.0+1 # Keep override version
+  flutter_slidable: ^4.0.0
+  sqflite: ^2.3.0
+  provider: ^6.0.5 # Keep if still used alongside Riverpod
+  file_picker: ^10.0.0
 
   # CloudKit Integration
   flutter_cloud_kit: ^0.0.3 # Keep override version
 
   # MCP Integration
-  # Ensure any git or hosted version is commented out
-  # mcp_dart: ^0.3.x
-  # mcp_dart:
-  #   git: ...
-  # Use the local path override
   mcp_dart: ^0.3.6 # Keep specific version from plan
-  # mcp_dart:
-  #   path: ../mcp_dart # Verify this path is correct relative to pubspec.yaml
-
-  # Other existing dependencies
-  flutter_slidable: ^4.0.0
-  sqflite: ^2.3.0
-  provider: ^6.0.5 # Keep if still used alongside Riverpod
-  file_picker: ^10.0.0
-  markdown: # Keep git override
-    git:
-      url: https://github.com/dart-lang/tools.git
-      path: pkgs/markdown
-      ref: main
 
   # Crash Reporting
   sentry_flutter: ^8.14.1
 
-dependency_overrides:
-  markdown: # Keep git override
+  # Markdown dependencies
+  markdown:
     git:
       url: https://github.com/dart-lang/tools.git
       path: pkgs/markdown
       ref: main
-  flutter_markdown: # Keep git override
+
+dependency_overrides:
+  markdown:
+    git:
+      url: https://github.com/dart-lang/tools.git
+      path: pkgs/markdown
+      ref: main
+  flutter_markdown:
     git:
       url: https://github.com/flutter/packages
       path: packages/flutter_markdown
@@ -94,20 +88,14 @@ dependency_overrides:
   flutter_cloud_kit: ^0.0.3 # Keep override
   openai_dart: ^0.4.5 # Keep override
   synchronized: ^3.1.0+1 # Keep override
-  # Ensure any git or hosted version is commented out
-  # mcp_dart:
-  #   git: ...
-  # Use the local path override
   mcp_dart: ^0.3.6 # Keep specific version from plan
-  # mcp_dart:
-    # path: ../mcp_dart # Verify this path is correct relative to pubspec.yaml
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   integration_test:
     sdk: flutter
-  flutter_lints: ^5.0.0 # Use a specific version or range if needed
+  flutter_lints: ^5.0.0
   test: ^1.24.9
 
   build_runner: ^2.4.6
