@@ -2,13 +2,11 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart' show LinearProgressIndicator; // For loading bar
 import 'package:flutter_markdown/flutter_markdown.dart'; // For rendering markdown
 import 'package:flutter_memos/models/chat_message.dart'; // Import ChatMessage which now defines Role
+import 'package:flutter_memos/models/workbench_item_reference.dart'; // For WorkbenchItemType enum
 import 'package:flutter_memos/providers/chat_providers.dart';
 import 'package:flutter_memos/providers/settings_provider.dart'; // To check API key
-// Add import for McpClientService where mcpClientProvider is defined
-import 'package:flutter_memos/services/mcp_client_service.dart';
+import 'package:flutter_memos/services/mcp_client_service.dart'; // For mcpClientProvider
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-// Remove google_generative_ai import if only used for Role
-// import 'package:google_generative_ai/google_generative_ai.dart';
 
 class ChatScreen extends ConsumerStatefulWidget {
   const ChatScreen({super.key});
@@ -21,6 +19,65 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   final _textController = TextEditingController();
   final _scrollController = ScrollController();
   final FocusNode _focusNode = FocusNode();
+  bool _contextProcessed =
+      false; // Flag to ensure context is processed only once
+
+  @override
+  void initState() {
+    super.initState();
+    // Don't process context here, wait for didChangeDependencies
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Process context arguments only once when the screen is loaded with them
+    if (!_contextProcessed) {
+      final args =
+          ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+      if (args != null) {
+        final contextString = args['contextString'] as String?;
+        final parentItemId = args['parentItemId'] as String?;
+        final parentItemType = args['parentItemType'] as WorkbenchItemType?;
+        final parentServerId = args['parentServerId'] as String?;
+
+        if (contextString != null &&
+            parentItemId != null &&
+            parentItemType != null &&
+            parentServerId != null) {
+          // Use addPostFrameCallback to ensure notifier call happens after build
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              ref
+                  .read(chatProvider.notifier)
+                  .startChatWithContext(
+                    contextString: contextString,
+                    parentItemId: parentItemId,
+                    parentItemType: parentItemType,
+                    parentServerId: parentServerId,
+                  );
+              // Set flag after processing
+              // No need for setState here as it's called from postFrameCallback
+              // and the provider update will trigger a rebuild anyway.
+              _contextProcessed = true;
+              debugPrint("ChatScreen: Context processed from arguments.");
+            }
+          });
+        } else {
+          // If args exist but are invalid, mark as processed to avoid retrying
+          _contextProcessed = true;
+          debugPrint(
+            "ChatScreen: Received arguments but context data was incomplete.",
+          );
+        }
+      } else {
+        // No arguments received, normal chat session
+        _contextProcessed = true; // Mark as processed so we don't check again
+        debugPrint("ChatScreen: No context arguments received.");
+      }
+    }
+  }
+
 
   @override
   void dispose() {
@@ -30,10 +87,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     super.dispose();
   }
 
-  // didChangeDependencies override is removed
-
   void _scrollToBottom() {
-    // Use WidgetsBinding to schedule scroll after the frame build
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
@@ -50,8 +104,22 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     if (text.isNotEmpty) {
       ref.read(chatProvider.notifier).sendMessage(text);
       _textController.clear();
-      _focusNode.requestFocus(); // Keep focus after sending
-       _scrollToBottom(); // Ensure scroll after sending
+      _focusNode.requestFocus();
+      _scrollToBottom();
+    }
+  }
+
+  // Helper to get a display name for WorkbenchItemType
+  String _getItemTypeName(WorkbenchItemType? type) {
+    switch (type) {
+      case WorkbenchItemType.note:
+        return 'Note';
+      case WorkbenchItemType.task:
+        return 'Task';
+      case WorkbenchItemType.comment:
+        return 'Comment'; // Should ideally show parent type
+      case null:
+        return 'Item';
     }
   }
 
@@ -61,8 +129,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final mcpState = ref.watch(mcpClientProvider);
     final isApiKeySet = ref.watch(geminiApiKeyProvider).isNotEmpty;
 
-    // --- Move Listeners Here ---
-    // Listen for changes and trigger scroll *after* the build phase
+    // Listeners for scrolling
     ref.listen(chatProvider.select((state) => state.displayMessages.length), (
       _,
       __,
@@ -70,26 +137,22 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       _scrollToBottom();
     });
     ref.listen(chatProvider.select((state) => state.isLoading), (_, isLoading) {
-      // Scroll when loading starts or stops
       _scrollToBottom();
-      // Optionally refocus after loading completes
-      // if (!isLoading) {
-      //   Future.microtask(() => _focusNode.requestFocus());
-      // }
     });
-    // --- End Listeners ---
-
 
     return CupertinoPageScaffold(
       navigationBar: CupertinoNavigationBar(
         middle: Text('Chat (${mcpState.connectedServerCount} MCP)'),
-        // Example: Add a clear button
         trailing: CupertinoButton(
           padding: EdgeInsets.zero,
           child: const Icon(CupertinoIcons.trash, size: 22),
           onPressed: () {
-             // Add confirmation dialog if desired
+            // Confirmation could be added here
              ref.read(chatProvider.notifier).clearChat();
+            // Reset context processed flag if chat is cleared manually
+            setState(() {
+              _contextProcessed = false;
+            });
           },
         ),
       ),
@@ -97,13 +160,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         child: Column(
           children: [
             if (chatState.isLoading)
-              const LinearProgressIndicator(minHeight: 2), // Simple loading bar
-            // Display general error message if any
+              const LinearProgressIndicator(minHeight: 2),
+            // Display general error message
             if (chatState.errorMessage != null)
               Container(
-                // Use resolveFrom(context).withAlpha() for opacity
-                color: CupertinoColors.systemRed
-                    .withAlpha(25), // ~10% opacity
+                color: CupertinoColors.systemRed.withAlpha(25),
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 child: Row(
                   children: [
@@ -113,25 +174,65 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                      CupertinoButton(
                        padding: EdgeInsets.zero,
                        minSize: 0,
-                       child: const Icon(CupertinoIcons.xmark, size: 16, color: CupertinoColors.systemRed),
-                       // Call the dedicated method in the notifier
+                      child: const Icon(
+                        CupertinoIcons.xmark,
+                        size: 16,
+                        color: CupertinoColors.systemRed,
+                      ),
                        onPressed: () => ref.read(chatProvider.notifier).clearErrorMessage(),
                      )
                   ],
                 ),
               ),
-            // Display API key warning if not set
+            // Display API key warning
             if (!isApiKeySet)
               Container(
-                // Use resolveFrom(context).withAlpha() for opacity
-                color: CupertinoColors.systemYellow
-                    .withAlpha(38), // ~15% opacity
+                color: CupertinoColors.systemYellow.withAlpha(38),
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 child: const Row(
                   children: [
                     Icon(CupertinoIcons.exclamationmark_shield, color: CupertinoColors.systemYellow, size: 18),
                     SizedBox(width: 8),
                     Expanded(child: Text("Gemini API Key not set. Please configure it in Settings.", style: TextStyle(color: CupertinoColors.systemYellow))),
+                  ],
+                ),
+              ),
+            // Display Context Indicator (Optional)
+            if (chatState.currentContextItemId != null)
+              Container(
+                color: CupertinoColors.systemBlue.withAlpha(20),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 6,
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      CupertinoIcons.info_circle,
+                      color: CupertinoColors.systemBlue,
+                      size: 16,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        "Context: ${_getItemTypeName(chatState.currentContextItemType)} ${chatState.currentContextItemId}",
+                        style: const TextStyle(
+                          color: CupertinoColors.systemBlue,
+                          fontSize: 13,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    // Optional: Add a button to clear context without clearing chat?
+                    // CupertinoButton(
+                    //   padding: EdgeInsets.zero,
+                    //   minSize: 0,
+                    //   child: const Icon(CupertinoIcons.xmark, size: 14, color: CupertinoColors.systemBlue),
+                    //   onPressed: () {
+                    //      // Need a dedicated method in notifier to clear only context
+                    //      // ref.read(chatProvider.notifier).clearContext();
+                    //   },
+                    // )
                   ],
                 ),
               ),
@@ -143,6 +244,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 itemCount: chatState.displayMessages.length,
                 itemBuilder: (context, index) {
                   final message = chatState.displayMessages[index];
+                  // Don't display system messages if we add them later
+                  // if (message.role == Role.system) return const SizedBox.shrink();
                   return _buildMessageBubble(message);
                 },
               ),
@@ -156,7 +259,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   }
 
   Widget _buildMessageBubble(ChatMessage message) {
-    final isUser = message.role == Role.user; // Use local Role enum
+    final isUser = message.role == Role.user;
     final alignment = isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start;
     final color = isUser
         ? CupertinoColors.activeBlue
@@ -176,11 +279,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             ),
             padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
             decoration: BoxDecoration(
-              // Use resolveFrom(context).withAlpha() for opacity
               color:
                   message.isError
-                      ? CupertinoColors.systemRed
-                          .withAlpha(204) // ~80% opacity for error
+                      ? CupertinoColors.systemRed.withAlpha(204)
                       : color,
               borderRadius: BorderRadius.circular(15.0),
             ),
@@ -190,29 +291,30 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     data: message.text,
                     selectable: true,
                     styleSheet: MarkdownStyleSheet(
-                      p: TextStyle(color: message.isError ? CupertinoColors.white : textColor, fontSize: 16),
-                      // Add other styles as needed (code blocks, lists, etc.)
+                        p: TextStyle(
+                          color:
+                              message.isError
+                                  ? CupertinoColors.white
+                                  : textColor,
+                          fontSize: 16,
+                        ),
                        code: TextStyle(
-                          // Use resolveFrom(context).withAlpha() for opacity
-                          backgroundColor: CupertinoColors.black
-                              .withAlpha(25), // ~10% opacity
+                          backgroundColor: CupertinoColors.black.withAlpha(25),
                          fontFamily: 'monospace',
                          color: message.isError ? CupertinoColors.white : textColor,
                        ),
                        codeblockDecoration: BoxDecoration(
-                          // Use withAlpha() for opacity
-                          color: CupertinoColors.black
-                              .withAlpha(25), // ~10% opacity
+                          color: CupertinoColors.black.withAlpha(25),
                          borderRadius: BorderRadius.circular(4),
                        ),
                     ),
                   ),
           ),
-           // Optional: Display timestamp or tool info
+          // Optional: Timestamp
            // Padding(
            //   padding: const EdgeInsets.only(top: 2.0, left: 5.0, right: 5.0),
            //   child: Text(
-           //     intl.DateFormat.Hm().format(message.timestamp), // Example timestamp
+          //     DateFormat.Hm().format(message.timestamp.toLocal()),
            //     style: TextStyle(fontSize: 10, color: CupertinoColors.secondaryLabel.resolveFrom(context)),
            //   ),
            // )
@@ -242,7 +344,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               placeholder: 'Enter message...',
               maxLines: 5,
               minLines: 1,
-              textInputAction: TextInputAction.send, // Or newline depending on preference
+              textInputAction: TextInputAction.send,
               onSubmitted: disabled ? null : (_) => _sendMessage(),
               padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 10.0),
                decoration: BoxDecoration(

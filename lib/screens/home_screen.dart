@@ -8,25 +8,83 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'chat_screen.dart';
 import 'workbench/workbench_screen.dart';
 
-class HomeScreen extends ConsumerWidget {
+// Provider to expose the TabController from the GlobalKey
+// Note: This requires careful state management if HomeScreen can be rebuilt.
+// A more robust solution might involve a dedicated state management approach for the controller.
+final tabControllerProvider = StateProvider<CupertinoTabController?>(
+  (ref) => null,
+);
+
+// GlobalKey to access CupertinoTabScaffold state
+final GlobalKey<CupertinoTabScaffoldState> tabScaffoldKey =
+    GlobalKey<CupertinoTabScaffoldState>();
+// GlobalKeys for each tab's navigator
+final GlobalKey<NavigatorState> memosTabNavKey = GlobalKey<NavigatorState>();
+final GlobalKey<NavigatorState> tasksTabNavKey = GlobalKey<NavigatorState>();
+final GlobalKey<NavigatorState> workbenchTabNavKey =
+    GlobalKey<NavigatorState>();
+final GlobalKey<NavigatorState> chatTabNavKey = GlobalKey<NavigatorState>();
+final GlobalKey<NavigatorState> settingsTabNavKey = GlobalKey<NavigatorState>();
+
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends ConsumerState<HomeScreen> {
+  CupertinoTabController? _tabController;
+
+  @override
+  void initState() {
+    super.initState();
+    // Initialize the controller and update the provider after the first frame
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && tabScaffoldKey.currentState != null) {
+        _tabController = tabScaffoldKey.currentState!.controller;
+        // Update the provider if the controller is not null
+        if (_tabController != null) {
+          ref.read(tabControllerProvider.notifier).state = _tabController;
+        }
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    // Optionally clear the provider state on dispose
+    // WidgetsBinding.instance.addPostFrameCallback((_) {
+    //    if (!mounted) { // Check if it's actually disposed
+    //       ref.read(tabControllerProvider.notifier).state = null;
+    //    }
+    // });
+    // Don't dispose the controller here, it's managed by CupertinoTabScaffold
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Listen to the provider to potentially update the local controller if needed elsewhere
+    // final externalController = ref.watch(tabControllerProvider);
+    // if (_tabController != externalController) {
+    //    // Handle potential external changes if necessary
+    // }
+
     return CupertinoTabScaffold(
+      key: tabScaffoldKey, // Assign the key
       tabBar: CupertinoTabBar(
         items: const <BottomNavigationBarItem>[
           BottomNavigationBarItem(
             icon: Icon(CupertinoIcons.home),
             label: 'Memos',
           ),
-          // Add the Tasks tab item
           BottomNavigationBarItem(
             icon: Icon(CupertinoIcons.check_mark_circled),
             label: 'Tasks',
           ),
           BottomNavigationBarItem(
-            icon: Icon(CupertinoIcons.briefcase), // Or another suitable icon
+            icon: Icon(CupertinoIcons.briefcase),
             label: 'Workbench',
           ),
           BottomNavigationBarItem(
@@ -38,22 +96,35 @@ class HomeScreen extends ConsumerWidget {
             label: 'Settings',
           ),
         ],
+        // If using the provider, ensure the controller is updated on change
+        onTap: (index) {
+          // Update provider state if controller exists
+          final currentController = tabScaffoldKey.currentState?.controller;
+          if (currentController != null &&
+              ref.read(tabControllerProvider) != currentController) {
+            ref.read(tabControllerProvider.notifier).state = currentController;
+          }
+        },
       ),
       tabBuilder: (BuildContext context, int index) {
         switch (index) {
           case 0: // Memos
             return CupertinoTabView(
+              navigatorKey: memosTabNavKey, // Assign key
               builder: (context) {
                 return const CupertinoPageScaffold(child: ItemsScreen());
               },
+              // Define routes within this tab's navigator
               routes: {
                 '/':
                     (context) =>
                         const CupertinoPageScaffold(child: ItemsScreen()),
+                // Add other memo-related routes here if needed
               },
             );
-          case 1: // Tasks (New)
+          case 1: // Tasks
             return CupertinoTabView(
+              navigatorKey: tasksTabNavKey, // Assign key
               builder: (context) {
                 return const CupertinoPageScaffold(child: TasksScreen());
               },
@@ -61,15 +132,14 @@ class HomeScreen extends ConsumerWidget {
                 '/':
                     (context) =>
                         const CupertinoPageScaffold(child: TasksScreen()),
-                // Add routes for task detail/edit if needed within this tab's navigator
                 '/tasks/new':
                     (context) =>
                         const CupertinoPageScaffold(child: NewTaskScreen()),
-                // '/tasks/edit': (context) => CupertinoPageScaffold(child: EditTaskScreen(...)), // Placeholder
               },
             );
           case 2: // Workbench
             return CupertinoTabView(
+              navigatorKey: workbenchTabNavKey, // Assign key
               builder: (context) {
                 return const CupertinoPageScaffold(child: WorkbenchScreen());
               },
@@ -81,17 +151,26 @@ class HomeScreen extends ConsumerWidget {
             );
           case 3: // Chat
             return CupertinoTabView(
+              navigatorKey: chatTabNavKey, // Assign key
               builder: (context) {
+                // Default builder shows the ChatScreen
                 return const CupertinoPageScaffold(child: ChatScreen());
               },
+              // Define the '/chat' route specifically for this tab's navigator
               routes: {
                 '/':
-                    (context) =>
-                        const CupertinoPageScaffold(child: ChatScreen()),
+                    (context) => const CupertinoPageScaffold(
+                      child: ChatScreen(),
+                    ), // Root of tab
+                '/chat':
+                    (context) => const CupertinoPageScaffold(
+                      child: ChatScreen(),
+                    ), // Route used for navigation
               },
             );
           case 4: // Settings
             return CupertinoTabView(
+              navigatorKey: settingsTabNavKey, // Assign key
               builder: (context) {
                 return const CupertinoPageScaffold(
                   child: SettingsScreen(isInitialSetup: false),
@@ -105,6 +184,7 @@ class HomeScreen extends ConsumerWidget {
               },
             );
           default:
+            // Return an empty view for safety, though this shouldn't be reached
             return const SizedBox.shrink();
         }
       },

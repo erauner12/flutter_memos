@@ -1,3 +1,4 @@
+import 'dart:async'; // For Completer
 import 'dart:math'; // For min
 
 import 'package:flutter/cupertino.dart';
@@ -13,6 +14,7 @@ import 'package:flutter_memos/providers/server_config_provider.dart'; // Needed 
 import 'package:flutter_memos/providers/settings_provider.dart' as settings_p;
 import 'package:flutter_memos/providers/ui_providers.dart' as ui_providers;
 import 'package:flutter_memos/providers/workbench_provider.dart'; // Needed for Workbench
+import 'package:flutter_memos/screens/home_screen.dart'; // Import for tabControllerProvider and navigator keys
 import 'package:flutter_memos/utils/note_utils.dart';
 import 'package:flutter_memos/utils/thread_utils.dart'; // Import the utility
 import 'package:flutter_memos/widgets/note_card.dart';
@@ -46,17 +48,67 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
 
   @override
   void dispose() {
-    // Ensure dialog context is cleared if widget is disposed unexpectedly
+    _dismissLoadingDialog(); // Ensure dialog is dismissed
+    super.dispose();
+  }
+
+  // Helper to dismiss loading dialog safely
+  void _dismissLoadingDialog() {
     if (_loadingDialogContext != null) {
       try {
-        Navigator.of(_loadingDialogContext!).pop();
+        if (Navigator.of(_loadingDialogContext!).canPop()) {
+          Navigator.of(_loadingDialogContext!).pop();
+        }
       } catch (_) {
-        // Ignore errors if context is already invalid
+        // Ignore errors if context is already invalid or cannot pop
       }
       _loadingDialogContext = null;
     }
-    super.dispose();
   }
+
+  // Helper to show loading dialog safely
+  void _showLoadingDialog(BuildContext buildContext, String message) {
+    // Dismiss any existing dialog first
+    _dismissLoadingDialog();
+    if (!mounted) return;
+    showCupertinoDialog(
+      context: buildContext, // Use the passed context
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        _loadingDialogContext = dialogContext; // Store the dialog's context
+        return CupertinoAlertDialog(
+          content: Row(
+            children: [
+              const CupertinoActivityIndicator(),
+              const SizedBox(width: 15),
+              Text(message),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  // Helper to show simple alert dialogs
+  void _showAlertDialog(BuildContext context, String title, String message) {
+    if (!mounted) return;
+    showCupertinoDialog(
+      context: context,
+      builder:
+          (context) => CupertinoAlertDialog(
+            title: Text(title),
+            content: Text(message),
+            actions: [
+              CupertinoDialogAction(
+                isDefaultAction: true,
+                child: const Text('OK'),
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+            ],
+          ),
+    );
+  }
+
 
   // --- Moved Helper Methods ---
   // Helper widget to display start/end dates
@@ -113,108 +165,152 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
   }
 
   // Custom context menu including date actions
-  // Modify the signature to accept the scaffoldContext only and pass BuildContext to _addNoteToWorkbenchFromList
-  void _showCustomContextMenu(
-    BuildContext scaffoldContext, // Keep BuildContext
-  ) {
+  void _showCustomContextMenu(BuildContext scaffoldContext) {
     final isManuallyHidden = ref.read(settings_p.manuallyHiddenNoteIdsProvider).contains(widget.note.id);
     final now = DateTime.now();
     final isFutureDated = widget.note.startDate?.isAfter(now) ?? false;
+    // List items are assumed to be on the active server
+    final bool canInteractWithServer =
+        ref.read(activeServerConfigProvider) != null;
 
     showCupertinoModalPopup<void>(
-      context: scaffoldContext, // Use the passed context for the popup itself
+      context: scaffoldContext,
       builder: (BuildContext popupContext) => CupertinoActionSheet(
         actions: <Widget>[
           CupertinoContextMenuAction(
-            child: const Text('Edit'),
-            onPressed: () {
+                onPressed:
+                    !canInteractWithServer
+                        ? null
+                        : () {
               Navigator.pop(popupContext);
               onEdit(scaffoldContext);
             },
+                child: const Text('Edit'),
           ),
           if (widget.onMoveToServer != null)
             CupertinoContextMenuAction(
               child: const Text('Move to Server...'),
-              onPressed: () {
+                  onPressed: () {
+                    // Moving might not require active server check here
                     Navigator.pop(popupContext);
                     widget.onMoveToServer!();
               },
             ),
           CupertinoContextMenuAction(
-            child: Text(widget.note.pinned ? 'Unpin' : 'Pin'),
-            onPressed: () {
+                onPressed:
+                    !canInteractWithServer
+                        ? null
+                        : () {
               Navigator.pop(popupContext);
               onTogglePin(scaffoldContext);
             },
+                child: Text(widget.note.pinned ? 'Unpin' : 'Pin'),
           ),
           CupertinoContextMenuAction(
-            child: const Text('Archive'),
-            onPressed: () {
+                onPressed:
+                    !canInteractWithServer
+                        ? null
+                        : () {
               Navigator.pop(popupContext);
               onArchive(scaffoldContext);
             },
+                child: const Text('Archive'),
           ),
           CupertinoContextMenuAction(
             isDestructiveAction: true,
-            child: const Text('Delete'),
-            onPressed: () {
+                onPressed:
+                    !canInteractWithServer
+                        ? null
+                        : () {
               Navigator.pop(popupContext);
               onDelete(scaffoldContext);
             },
+                child: const Text('Delete'),
           ),
           CupertinoContextMenuAction(
             child: const Text('Copy Content'),
-            onPressed: () {
+                onPressed: () {
+                  // Copying content doesn't require server interaction
               Clipboard.setData(ClipboardData(text: widget.note.content));
               Navigator.pop(popupContext);
             },
           ),
-              // --- Copy Full Thread Action ---
+              // Copy Full Thread Action
               CupertinoContextMenuAction(
+                onPressed:
+                    !canInteractWithServer
+                        ? null
+                        : () {
+                          Navigator.pop(popupContext);
+                          _copyThreadContentFromList(
+                            scaffoldContext,
+                            ref,
+                            widget.note.id,
+                            WorkbenchItemType
+                                .note, // Assuming list item is always a note
+                          );
+                        },
                 child: const Text('Copy Full Thread'),
-                onPressed: () {
-                  Navigator.pop(popupContext);
-                  // Use the context available in the build method (scaffoldContext)
-                  _copyThreadContentFromList(
-                    scaffoldContext, // Pass the main build context
-                    ref,
-                    widget.note.id,
-                    WorkbenchItemType.note,
-                  );
-                },
               ),
-              // --- End Copy Full Thread Action ---
+              // --- Chat about Thread Action ---
+              CupertinoContextMenuAction(
+                onPressed:
+                    !canInteractWithServer
+                        ? null
+                        : () {
+                          Navigator.pop(popupContext);
+                          _chatWithThreadFromList(
+                            scaffoldContext, // Pass the build context
+                            ref,
+                            widget.note.id,
+                            WorkbenchItemType
+                                .note, // Assuming list item is always a note
+                          );
+                        },
+                child: const Text('Chat about Thread'),
+              ),
+              // --- End Chat about Thread Action ---
           if (isManuallyHidden)
             CupertinoContextMenuAction(
-              child: const Text('Unhide'),
-              onPressed: () {
+                  onPressed:
+                      !canInteractWithServer
+                          ? null
+                          : () {
                 ref.read(note_providers.unhideNoteProvider(widget.note.id))();
                 Navigator.pop(popupContext);
               },
+                  child: const Text('Unhide'),
             )
           else if (!isFutureDated)
             CupertinoContextMenuAction(
-              child: const Text('Hide'),
-              onPressed: () {
+                  onPressed:
+                      !canInteractWithServer
+                          ? null
+                          : () {
                 _toggleHideItem(scaffoldContext, ref);
                 Navigator.pop(popupContext);
               },
+                  child: const Text('Hide'),
                 ),
           CupertinoContextMenuAction(
-            child: const Text('Add to Workbench'),
-            onPressed: () {
-                  Navigator.pop(popupContext);
-                  // Pass scaffoldContext instead of scaffoldMessenger
+                onPressed:
+                    !canInteractWithServer
+                        ? null
+                        : () {
+                          Navigator.pop(popupContext);
                   _addNoteToWorkbenchFromList(
-                    scaffoldContext, // Pass the BuildContext
+                            scaffoldContext,
                     ref,
                     widget.note,
                   );
             },
+                child: const Text('Add to Workbench'),
               ),
           CupertinoContextMenuAction(
-            child: const Text('Kick Start +1 Day'),
-            onPressed: () {
+                onPressed:
+                    !canInteractWithServer
+                        ? null
+                        : () {
               final currentStart = widget.note.startDate ?? DateTime.now();
               final newStartDate = currentStart.add(const Duration(days: 1));
               ref
@@ -222,10 +318,13 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
                   .updateNoteStartDate(widget.note.id, newStartDate);
               Navigator.pop(popupContext);
             },
+                child: const Text('Kick Start +1 Day'),
           ),
           CupertinoContextMenuAction(
-            child: const Text('Kick Start +1 Week'),
-            onPressed: () {
+                onPressed:
+                    !canInteractWithServer
+                        ? null
+                        : () {
               final currentStart = widget.note.startDate ?? DateTime.now();
               final newStartDate = currentStart.add(const Duration(days: 7));
               ref
@@ -233,11 +332,15 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
                   .updateNoteStartDate(widget.note.id, newStartDate);
               Navigator.pop(popupContext);
             },
+                child: const Text('Kick Start +1 Week'),
           ),
           if (widget.note.startDate != null)
             CupertinoContextMenuAction(
               isDestructiveAction: true,
-              onPressed: () {
+                  onPressed:
+                      !canInteractWithServer
+                          ? null
+                          : () {
                 ref
                     .read(note_providers.notesNotifierProvider.notifier)
                     .updateNoteStartDate(widget.note.id, null);
@@ -257,7 +360,6 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
   }
 
   // Helper method to add note to workbench
-  // Modify signature to accept BuildContext instead of ScaffoldMessengerState and show CupertinoAlertDialog
   void _addNoteToWorkbenchFromList(
     BuildContext context, // Use BuildContext
     WidgetRef ref,
@@ -265,21 +367,10 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
   ) {
     final activeServer = ref.read(activeServerConfigProvider);
     if (activeServer == null) {
-      // Use the passed context to show a dialog
-      showCupertinoDialog(
-        context: context,
-        builder:
-            (dialogContext) => CupertinoAlertDialog(
-              title: const Text('Error'),
-              content: const Text("Cannot add to workbench: No active server."),
-              actions: [
-                CupertinoDialogAction(
-                  isDefaultAction: true,
-                  child: const Text('OK'),
-                  onPressed: () => Navigator.pop(dialogContext),
-                ),
-              ],
-        ),
+      _showAlertDialog(
+        context,
+        'Error',
+        "Cannot add to workbench: No active server.",
       );
       return;
     }
@@ -300,61 +391,34 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
 
     ref.read(workbenchProvider.notifier).addItem(reference);
 
-    // Use the passed context to show a CupertinoAlertDialog
     final previewText = reference.previewContent ?? 'Item';
     final dialogContent =
         'Added "${previewText.substring(0, min(30, previewText.length))}${previewText.length > 30 ? '...' : ''}" to Workbench';
 
-    showCupertinoDialog(
-      context: context, // Use the passed context
-      builder:
-          (dialogContext) => CupertinoAlertDialog(
-            title: const Text('Success'),
-            content: Text(dialogContent),
-            actions: [
-              CupertinoDialogAction(
-                isDefaultAction: true,
-                child: const Text('OK'),
-                onPressed: () => Navigator.pop(dialogContext),
-              ),
-            ],
-      ),
-    );
+    _showAlertDialog(context, 'Success', dialogContent);
   }
   // --- End of helper method ---
 
   // --- Copy Thread Content Helper ---
   Future<void> _copyThreadContentFromList(
-    BuildContext buildContext, // Use the main build context from the list item
+    BuildContext buildContext,
     WidgetRef ref,
     String itemId,
     WorkbenchItemType itemType,
   ) async {
-    // Show loading indicator and store its context
-    _loadingDialogContext = null; // Reset before showing
-    showCupertinoDialog(
-      context: buildContext, // Use the passed context
-      barrierDismissible: false,
-      builder: (dialogContext) {
-        // Store the dialog's context
-        _loadingDialogContext = dialogContext;
-        return const CupertinoAlertDialog(
-          content: Row(
-            children: [
-              CupertinoActivityIndicator(),
-              SizedBox(width: 15),
-              Text('Fetching thread...'),
-            ],
-          ),
-        );
-      },
-    );
+    final activeServerId = ref.read(activeServerConfigProvider)?.id;
+    if (activeServerId == null) {
+      _showAlertDialog(
+        buildContext,
+        'Error',
+        'Cannot copy thread: No active server.',
+      );
+      return;
+    }
+
+    _showLoadingDialog(buildContext, 'Fetching thread...');
 
     try {
-      final activeServerId = ref.read(activeServerConfigProvider)?.id;
-      if (activeServerId == null) {
-        throw Exception('No active server configured.');
-      }
       // Assuming list items are always from the active server
       final content = await getFormattedThreadContent(
         ref,
@@ -364,72 +428,127 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
       );
       await Clipboard.setData(ClipboardData(text: content));
 
-      // Dismiss loading dialog using its stored context
-      if (mounted && _loadingDialogContext != null) {
-        Navigator.of(_loadingDialogContext!).pop();
-        _loadingDialogContext = null; // Clear stored context
-        // Show success feedback (e.g., another dialog using the original buildContext)
-        showCupertinoDialog(
-          context: buildContext,
-          builder:
-              (ctx) => CupertinoAlertDialog(
-                title: const Text('Success'),
-                content: const Text('Thread content copied to clipboard.'),
-                actions: [
-                  CupertinoDialogAction(
-                    isDefaultAction: true,
-                    child: const Text('OK'),
-                    onPressed: () => Navigator.pop(ctx),
-                  ),
-                ],
-              ),
+      _dismissLoadingDialog();
+      if (mounted) {
+        _showAlertDialog(
+          buildContext,
+          'Success',
+          'Thread content copied to clipboard.',
         );
       }
     } catch (e) {
-      // Dismiss loading dialog using its stored context
-      if (mounted && _loadingDialogContext != null) {
-        Navigator.of(_loadingDialogContext!).pop();
-        _loadingDialogContext = null; // Clear stored context
-        // Show error feedback using the original buildContext
-        showCupertinoDialog(
-          context: buildContext,
-          builder:
-              (ctx) => CupertinoAlertDialog(
-                title: const Text('Error'),
-                content: Text('Failed to copy thread: $e'),
-                actions: [
-                  CupertinoDialogAction(
-                    isDefaultAction: true,
-                    child: const Text('OK'),
-                    onPressed: () => Navigator.pop(ctx),
-                  ),
-                ],
-              ),
-        );
-      } else if (mounted) {
-        // If dialog context was somehow lost, show error anyway
-        showCupertinoDialog(
-          context: buildContext,
-          builder:
-              (ctx) => CupertinoAlertDialog(
-                title: const Text('Error'),
-                content: Text('Failed to copy thread: $e'),
-                actions: [
-                  CupertinoDialogAction(
-                    isDefaultAction: true,
-                    child: const Text('OK'),
-                    onPressed: () => Navigator.pop(ctx),
-                  )
-                ],
-              ),
-        );
+      _dismissLoadingDialog();
+      if (mounted) {
+        _showAlertDialog(buildContext, 'Error', 'Failed to copy thread: $e');
       }
-    } finally {
-      // Ensure context is cleared
-      _loadingDialogContext = null;
     }
   }
   // --- End Copy Thread Content Helper ---
+
+  // --- Chat With Thread Helper (List Item) ---
+  Future<void> _chatWithThreadFromList(
+    BuildContext buildContext,
+    WidgetRef ref,
+    String itemId,
+    WorkbenchItemType itemType,
+  ) async {
+    final activeServer = ref.read(activeServerConfigProvider);
+    if (activeServer == null) {
+      _showAlertDialog(
+        buildContext,
+        'Error',
+        'Cannot start chat: No active server.',
+      );
+      return;
+    }
+    final activeServerId = activeServer.id;
+
+    _showLoadingDialog(buildContext, 'Fetching thread for chat...');
+
+    try {
+      // Fetch the thread content
+      final content = await getFormattedThreadContent(
+        ref,
+        itemId,
+        itemType,
+        activeServerId,
+      );
+
+      _dismissLoadingDialog(); // Dismiss before navigation
+
+      if (!mounted) return;
+
+      // 1. Switch Tab
+      final tabController = ref.read(tabControllerProvider);
+      if (tabController == null || tabController.index == 3) {
+        // Already on chat tab or controller not found, proceed directly
+        _navigateToChatScreen(
+          buildContext,
+          content,
+          itemId,
+          itemType,
+          activeServerId,
+        );
+      } else {
+        tabController.index = 3; // Switch to Chat tab (index 3)
+        // Add a short delay to allow tab switch animation before navigating
+        await Future.delayed(const Duration(milliseconds: 100));
+        if (mounted) {
+          _navigateToChatScreen(
+            buildContext,
+            content,
+            itemId,
+            itemType,
+            activeServerId,
+          );
+        }
+      }
+
+    } catch (e) {
+      _dismissLoadingDialog();
+      if (mounted) {
+        _showAlertDialog(buildContext, 'Error', 'Failed to start chat: $e');
+      }
+    }
+  }
+
+  // Helper to perform the actual navigation to chat screen (copied from ItemDetailScreen)
+  void _navigateToChatScreen(
+    BuildContext buildContext,
+    String fetchedContent,
+    String itemId,
+    WorkbenchItemType itemType,
+    String activeServerId,
+  ) {
+    // Use the specific navigator key for the Chat tab
+    final chatNavigator = chatTabNavKey.currentState;
+    if (chatNavigator != null) {
+      // Pop to root of chat tab first to avoid stacking chat screens
+      chatNavigator.popUntil((route) => route.isFirst);
+      // Push the chat screen with arguments
+      chatNavigator.pushNamed(
+        '/chat', // Route defined in HomeScreen for the chat tab
+        arguments: {
+          'contextString': fetchedContent,
+          'parentItemId': itemId,
+          'parentItemType': itemType,
+          'parentServerId': activeServerId,
+        },
+        );
+    } else {
+      // Fallback or error handling if navigator key is null
+      _showAlertDialog(
+        buildContext,
+        'Error',
+        'Could not navigate to chat tab.',
+      );
+      if (kDebugMode) {
+        print("Error: chatTabNavKey.currentState is null");
+      }
+    }
+  }
+  // --- End Chat With Thread Helper (List Item) ---
+
 
   void _toggleHideItem(BuildContext scaffoldContext, WidgetRef ref) {
     final hiddenItemIds = ref.read(settings_p.manuallyHiddenNoteIdsProvider);
@@ -477,7 +596,7 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
     ref.read(ui_providers.selectedItemIdProvider.notifier).state = widget.note.id;
     Navigator.of(
       scaffoldContext,
-      rootNavigator: true,
+      rootNavigator: true, // Use root navigator to push detail screen over tabs
     ).pushNamed('/item-detail', arguments: {'itemId': widget.note.id});
   }
 
@@ -534,30 +653,23 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
 
     if (confirm == true && mounted) {
       try {
+        // Hide first to remove from list immediately
         ref
             .read(settings_p.manuallyHiddenNoteIdsProvider.notifier)
             .add(widget.note.id);
 
         await ref.read(note_providers.deleteNoteProvider(widget.note.id))();
+        // No need to unhide on success
       } catch (e) {
+        // Unhide if delete failed
         if (mounted) {
           ref
               .read(settings_p.manuallyHiddenNoteIdsProvider.notifier)
               .remove(widget.note.id);
-
-          showCupertinoDialog(
-            context: scaffoldContext,
-            builder: (ctx) => CupertinoAlertDialog(
-              title: const Text('Error'),
-              content: Text('Failed to delete note: ${e.toString()}'),
-              actions: [
-                CupertinoDialogAction(
-                  isDefaultAction: true,
-                  child: const Text('OK'),
-                  onPressed: () => Navigator.of(ctx).pop(),
-                ),
-              ],
-            ),
+          _showAlertDialog(
+            scaffoldContext,
+            'Error',
+            'Failed to delete note: ${e.toString()}',
           );
         }
       }
@@ -565,23 +677,47 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
   }
 
   void onArchive(BuildContext scaffoldContext) {
-    ref.read(note_providers.archiveNoteProvider(widget.note.id))();
+    // Hide first to remove from list immediately
+    ref
+        .read(settings_p.manuallyHiddenNoteIdsProvider.notifier)
+        .add(widget.note.id);
+    // Attempt archive
+    ref.read(note_providers.archiveNoteProvider(widget.note.id))().catchError((
+      e,
+    ) {
+      // Unhide if archive failed
+      if (mounted) {
+        ref
+            .read(settings_p.manuallyHiddenNoteIdsProvider.notifier)
+            .remove(widget.note.id);
+        _showAlertDialog(
+          scaffoldContext,
+          'Error',
+          'Failed to archive note: ${e.toString()}',
+        );
+      }
+    });
   }
 
   void onTogglePin(BuildContext scaffoldContext) {
-    ref.read(note_providers.togglePinNoteProvider(widget.note.id))();
+    ref.read(note_providers.togglePinNoteProvider(widget.note.id))().catchError(
+      (e) {
+        if (mounted) {
+          _showAlertDialog(
+            scaffoldContext,
+            'Error',
+            'Failed to toggle pin: ${e.toString()}',
+          );
+        }
+      },
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    // Capture the build context here - THIS is the reliable context
     final BuildContext scaffoldContext = context;
-    // REMOVE the ScaffoldMessengerState retrieval
-    // final ScaffoldMessengerState scaffoldMessenger = ScaffoldMessenger.of(scaffoldContext);
-
     final selectedItemId = ref.watch(ui_providers.selectedItemIdProvider);
     final isSelected = selectedItemId == widget.note.id;
-
     final isMultiSelectMode = ref.watch(ui_providers.itemMultiSelectModeProvider);
     final selectedIds = ref.watch(ui_providers.selectedItemIdsForMultiSelectProvider);
     final isMultiSelected = selectedIds.contains(widget.note.id);
@@ -610,21 +746,10 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
           await ref.read(note_providers.bumpNoteProvider(widget.note.id))();
         } catch (e) {
           if (mounted) {
-            showCupertinoDialog(
-              context: scaffoldContext,
-              builder: (ctx) => CupertinoAlertDialog(
-                title: const Text('Error'),
-                content: Text(
-                  'Failed to bump note: ${e.toString().length > 100 ? "${e.toString().substring(0, 100)}..." : e.toString()}',
-                ),
-                actions: [
-                  CupertinoDialogAction(
-                    isDefaultAction: true,
-                    child: const Text('OK'),
-                    onPressed: () => Navigator.of(ctx).pop(),
-                  ),
-                ],
-              ),
+            _showAlertDialog(
+              scaffoldContext,
+              'Error',
+              'Failed to bump note: ${e.toString()}',
             );
           }
         }
@@ -641,19 +766,23 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
     );
 
     if (isMultiSelectMode) {
-      if (isMultiSelected) {
-        cardWithDateInfo = Container(
-          decoration: BoxDecoration(
-            border: Border.all(
-              color: CupertinoTheme.of(scaffoldContext).primaryColor,
-              width: 2,
-            ),
-            borderRadius: BorderRadius.circular(10),
+      cardWithDateInfo = Container(
+        decoration: BoxDecoration(
+          border: Border.all(
+            color:
+                isMultiSelected
+                    ? CupertinoTheme.of(scaffoldContext).primaryColor
+                    : CupertinoColors.separator.resolveFrom(
+                      scaffoldContext,
+                    ), // Subtle border if not selected
+            width: isMultiSelected ? 2 : 0.5,
           ),
-          clipBehavior: Clip.antiAlias,
-          child: cardWithDateInfo,
-        );
-      }
+          borderRadius: BorderRadius.circular(10),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: cardWithDateInfo,
+      );
+
 
       return Padding(
         padding: const EdgeInsets.only(bottom: 12.0),
@@ -677,6 +806,7 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
       key: ValueKey('slidable-${widget.note.id}'),
       startActionPane: ActionPane(
         motion: const DrawerMotion(),
+        extentRatio: 0.6, // Adjust width if needed
         children: [
           SlidableAction(
             onPressed: (_) => onEdit(scaffoldContext),
@@ -732,6 +862,7 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
       ),
       endActionPane: ActionPane(
         motion: const DrawerMotion(),
+        extentRatio: 0.4, // Adjust width if needed
         children: [
           SlidableAction(
             onPressed: (_) => onDelete(scaffoldContext),
@@ -751,13 +882,10 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
           ),
         ],
       ),
-      // Wrap the GestureDetector in a Builder to ensure it gets a fresh context
       child: Builder(
         builder: (builderContext) {
-          // Use builderContext for any operations if needed
           return GestureDetector(
             onLongPress: () {
-              // Pass the reliably captured scaffoldContext directly
               _showCustomContextMenu(scaffoldContext);
             },
             onTap:
@@ -767,22 +895,22 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
             child: Stack(
               children: [
                 cardWithDateInfo,
-                Positioned(
-                  top: 4,
-                  right: 4,
-                  child: CupertinoButton(
-                    padding: const EdgeInsets.all(6),
-                    minSize: 0,
-                    onPressed: () => onArchive(scaffoldContext),
-                    child: Icon(
-                      CupertinoIcons.archivebox,
-                      size: 18,
-                      color: CupertinoColors.secondaryLabel.resolveFrom(
-                        scaffoldContext,
-                      ),
-                    ),
-                  ),
-                ),
+                // Positioned( // Removed archive button from here, use slide action or context menu
+                //   top: 4,
+                //   right: 4,
+                //   child: CupertinoButton(
+                //     padding: const EdgeInsets.all(6),
+                //     minSize: 0,
+                //     onPressed: () => onArchive(scaffoldContext),
+                //     child: Icon(
+                //       CupertinoIcons.archivebox,
+                //       size: 18,
+                //       color: CupertinoColors.secondaryLabel.resolveFrom(
+                //         scaffoldContext,
+                //       ),
+                //     ),
+                //   ),
+                // ),
               ],
             ),
           );

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_memos/models/chat_message.dart'; // Import ChatMessage which now defines Role
 import 'package:flutter_memos/models/chat_state.dart';
+import 'package:flutter_memos/models/workbench_item_reference.dart'; // For WorkbenchItemType
 import 'package:flutter_memos/providers/settings_provider.dart'; // For API key check
 import 'package:flutter_memos/services/gemini_service.dart'; // For Gemini interaction
 import 'package:flutter_memos/services/mcp_client_service.dart'; // Import MCP service
@@ -11,15 +12,6 @@ import 'package:google_generative_ai/google_generative_ai.dart'; // Keep for Con
 import 'package:uuid/uuid.dart';
 
 const _uuid = Uuid();
-
-// Provider for the MCP client service
-// REMOVE THE FOLLOWING PROVIDER DEFINITION:
-/*
-final mcpClientProvider =
-    StateNotifierProvider<McpClientNotifier, McpClientState>((ref) {
-      return McpClientNotifier(ref);
-    });
-*/
 
 class ChatNotifier extends StateNotifier<ChatState> {
   final Ref _ref;
@@ -53,6 +45,45 @@ class ChatNotifier extends StateNotifier<ChatState> {
     }
   }
 
+  /// Starts a new chat session with context from a specific item thread.
+  /// Clears any existing chat history and context.
+  void startChatWithContext({
+    required String contextString,
+    required String parentItemId,
+    required WorkbenchItemType parentItemType,
+    required String parentServerId,
+  }) {
+    debugPrint(
+      "ChatNotifier: Starting chat with context for ${parentItemType.name} $parentItemId",
+    );
+    // Cancel any ongoing stream
+    _geminiStreamSubscription?.cancel();
+    _geminiStreamSubscription = null;
+
+    // Clear previous state and set new context
+    state = state.copyWith(
+      displayMessages: [],
+      chatHistory: [],
+      isLoading: false,
+      clearErrorMessage: true,
+      clearContext:
+          false, // Explicitly don't clear context here, we are setting it
+      currentContextItemId: parentItemId,
+      currentContextItemType: parentItemType,
+      currentContextServerId: parentServerId,
+      currentContextString: contextString,
+    );
+
+    // Optionally add an initial system message to display?
+    // final initialSystemMessage = ChatMessage(
+    //   id: _uuid.v4(),
+    //   role: Role.system, // Assuming Role.system exists or use Role.model
+    //   text: "Chatting about ${parentItemType.name} $parentItemId...",
+    //   timestamp: DateTime.now(),
+    // );
+    // state = state.copyWith(displayMessages: [initialSystemMessage]);
+  }
+
   Future<void> sendMessage(String text) async {
     if (text.trim().isEmpty || state.isLoading) {
       return;
@@ -64,12 +95,10 @@ class ChatNotifier extends StateNotifier<ChatState> {
     ); // Get notifier
     final mcpState = _ref.read(mcpClientProvider); // Get current state
 
-    // *** ADD LOGGING HERE ***
     debugPrint(
       "ChatNotifier: Checking MCP state. hasActiveConnections: ${mcpState.hasActiveConnections}",
     );
     if (mcpState.hasActiveConnections && kDebugMode) {
-      // Log details about active connections if debugging
       final activeStatuses =
           mcpState.serverStatuses.entries
               .where((e) => e.value == McpConnectionStatus.connected)
@@ -78,10 +107,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
       debugPrint("ChatNotifier: Active MCP server IDs: $activeStatuses");
     }
 
-    // Check if Gemini API key is set (required for fallback)
-    // We assume MCP servers might function independently or use other models later
     if (geminiService == null || !geminiService.isInitialized) {
-      // Allow proceeding if MCP is active, otherwise show Gemini error
       if (!mcpState.hasActiveConnections) {
         state = state.copyWith(
           errorMessage:
@@ -91,11 +117,33 @@ class ChatNotifier extends StateNotifier<ChatState> {
         );
         return;
       }
-      // If MCP is active, we might not need Gemini immediately, log a warning
       debugPrint(
         "ChatNotifier: Gemini service not ready, but MCP is active. Proceeding with MCP.",
       );
     }
+
+    // --- Context Injection Logic ---
+    String messageToSend = text; // Start with the user's raw input
+    bool isFirstMessageInContext = false;
+
+    // Check if this is the first message in a contextual chat
+    if (state.currentContextItemId != null &&
+        state.currentContextString != null &&
+        state.chatHistory.isEmpty) {
+      // History is empty before adding this user message
+      isFirstMessageInContext = true;
+      final contextHeader =
+          "Context for ${state.currentContextItemType?.name} ${state.currentContextItemId}:\n---\n";
+      final contextFooter = "\n---\nUser Query: ";
+      // Prepend the stored context string to the user's message for the AI
+      messageToSend =
+          "$contextHeader${state.currentContextString}$contextFooter$text";
+      debugPrint(
+        "ChatNotifier: Prepending context for the first message in this session.",
+      );
+    }
+    // --- End Context Injection Logic ---
+
 
     // *** ADD TODOIST CONTEXT ***
     const String todoistContext = """
@@ -118,14 +166,15 @@ class ChatNotifier extends StateNotifier<ChatState> {
   - `at 5pm`, `for 2h` (duration)
   """;
 
-    final String messageWithContext = "$todoistContext\\n\\nUser query: $text";
+    // Combine Todoist context with the potentially context-prepended message
+    final String messageWithAllContext = "$todoistContext\n\n$messageToSend";
     // *** END TODOIST CONTEXT ***
 
     final userMessageId = _uuid.v4();
     final userMessage = ChatMessage(
       id: userMessageId,
       role: Role.user, // Use local Role enum
-      // Use the original text for display
+      // Display the original user text, NOT the context-prepended version
       text: text,
       timestamp: DateTime.now(),
     );
@@ -135,10 +184,8 @@ class ChatNotifier extends StateNotifier<ChatState> {
     final currentDisplayMessages = List<ChatMessage>.from(state.displayMessages);
 
     currentDisplayMessages.add(userMessage);
-    // Convert user message text to Content for history
-    // Use 'user' string role for Content API
-    // Use the message *with context* for the history sent to the AI
-    currentHistory.add(Content('user', [TextPart(messageWithContext)]));
+    // Add the message *with all context* (Todoist + potentially item thread) to the history sent to the AI
+    currentHistory.add(Content('user', [TextPart(messageWithAllContext)]));
 
     // Add placeholder for model response
     final modelMessageId = _uuid.v4();
@@ -164,111 +211,85 @@ class ChatNotifier extends StateNotifier<ChatState> {
       if (mcpState.hasActiveConnections) {
         // --- Use MCP Client ---
         debugPrint("ChatNotifier: Processing query via MCP Client(s)...");
-        // Pass the history *before* the current user message (with context)
+        // Pass the history *before* the current user message (with all context)
         final historyForMcp = List<Content>.from(state.chatHistory);
-        // Remove the last user message added in this function call
         if (historyForMcp.isNotEmpty && historyForMcp.last.role == 'user') {
           historyForMcp.removeLast();
         }
 
-        // Pass the message *with context* to processQuery
+        // Pass the message *with all context* to processQuery
         final McpProcessResult mcpResult = await mcpClientNotifier.processQuery(
-          messageWithContext,
+          messageWithAllContext,
           historyForMcp,
         );
 
-        // Process the result from MCP (which contains the echo)
+        // Process the result from MCP
         final String finalText = getTextFromContent(
           mcpResult.finalModelContent,
-        ); // Use helper
+        );
 
         // Find the loading message and update it
         final messages = List<ChatMessage>.from(state.displayMessages);
         final index = messages.indexWhere((m) => m.id == modelMessageId);
         if (index != -1) {
-          final bool isResultError = finalText.startsWith(
-            "Error:",
-          ); // Simple check
+          final bool isResultError = finalText.startsWith("Error:");
           messages[index] = messages[index].copyWith(
             text: finalText.isEmpty ? "(No text content from MCP)" : finalText,
             isLoading: false,
             isError: isResultError,
-            // Add tool info if needed for display
             toolName: mcpResult.toolName,
             sourceServerId: mcpResult.sourceServerId,
-            // toolArgs: jsonEncode(mcpResult.toolArgs), // Example if needed
-            // toolResult: mcpResult.toolResult, // Example if needed
           );
 
-          // Update chat history including intermediate steps for context
+          // Update chat history including intermediate steps
           final List<Content> finalHistory = [
             ...historyForMcp, // History before user message
             Content('user', [
-              TextPart(messageWithContext),
-            ]), // User message (with context)
+              TextPart(messageWithAllContext),
+            ]), // User message (with all context)
           ];
-          // Add model's function call request if it exists
           if (mcpResult.modelCallContent != null) {
-            // Ensure role is 'model' for function calls in history
+            // Ensure role is 'model'
+            final role =
+                mcpResult.modelCallContent!.role == 'model' ? 'model' : 'model';
             if (mcpResult.modelCallContent!.role != 'model') {
               debugPrint(
-                "ChatNotifier Warning: modelCallContent from MCP had unexpected role: ${mcpResult.modelCallContent!.role}. Forcing 'model'.",
+                "ChatNotifier Warning: MCP modelCallContent role was ${mcpResult.modelCallContent!.role}, forcing 'model'.",
               );
-              finalHistory.add(
-                Content('model', mcpResult.modelCallContent!.parts),
-              );
-            } else {
-              finalHistory.add(mcpResult.modelCallContent!);
             }
+            finalHistory.add(Content(role, mcpResult.modelCallContent!.parts));
           }
-          // Add the tool's response if it exists
           if (mcpResult.toolResponseContent != null) {
-            // Ensure role is 'function' (or 'tool' if API changes) for tool responses in history
+            // Ensure role is 'function' (or 'tool')
+            final role =
+                mcpResult.toolResponseContent!.role == 'function'
+                    ? 'function'
+                    : 'function';
             if (mcpResult.toolResponseContent!.role != 'function') {
               debugPrint(
-                "ChatNotifier Warning: toolResponseContent from MCP had unexpected role: ${mcpResult.toolResponseContent!.role}. Forcing 'function'.",
+                "ChatNotifier Warning: MCP toolResponseContent role was ${mcpResult.toolResponseContent!.role}, forcing 'function'.",
               );
-              finalHistory.add(
-                Content('function', mcpResult.toolResponseContent!.parts),
-              );
-            } else {
-              finalHistory.add(mcpResult.toolResponseContent!);
             }
+            finalHistory.add(
+              Content(role, mcpResult.toolResponseContent!.parts),
+            );
           }
-          // Add the final model summary (already in finalModelContent)
-          // Ensure it has the 'model' role
-          // Check if finalModelContent is actually present and has parts
           if (mcpResult.finalModelContent.parts.isNotEmpty) {
+            // Ensure role is 'model'
+            final role =
+                mcpResult.finalModelContent.role == 'model' ? 'model' : 'model';
             if (mcpResult.finalModelContent.role != 'model') {
-              // This case shouldn't happen based on McpClientService logic, but safety check
               debugPrint(
-                "ChatNotifier Warning: finalModelContent from MCP had unexpected role: ${mcpResult.finalModelContent.role}. Forcing 'model'.",
+                "ChatNotifier Warning: MCP finalModelContent role was ${mcpResult.finalModelContent.role}, forcing 'model'.",
               );
-              final textParts =
-                  mcpResult.finalModelContent.parts
-                      .whereType<TextPart>()
-                      .toList();
-              // Only add if there's actual text content
-              if (textParts.isNotEmpty ||
-                  mcpResult.finalModelContent.parts.any(
-                    (p) => p is! TextPart,
-                  )) {
-                finalHistory.add(
-                  Content('model', mcpResult.finalModelContent.parts),
-                );
-              } else {
-                debugPrint(
-                  "ChatNotifier Info: finalModelContent from MCP had no text parts and role was not 'model'. Not adding to history.",
-                );
-              }
-            } else {
-              finalHistory.add(mcpResult.finalModelContent);
             }
+            finalHistory.add(Content(role, mcpResult.finalModelContent.parts));
           } else {
             debugPrint(
               "ChatNotifier Info: finalModelContent from MCP was empty. Not adding to history.",
             );
           }
+
 
           state = state.copyWith(
             displayMessages: messages,
@@ -287,7 +308,6 @@ class ChatNotifier extends StateNotifier<ChatState> {
           "ChatNotifier: No active MCP server. Processing query via Direct Gemini Stream...",
         );
 
-        // Ensure Gemini service is ready before proceeding with direct call
         if (geminiService == null || !geminiService.isInitialized) {
           throw Exception(
             geminiService?.initializationError ??
@@ -295,11 +315,10 @@ class ChatNotifier extends StateNotifier<ChatState> {
           );
         }
 
-        _geminiStreamSubscription?.cancel(); // Cancel previous stream if any
+        _geminiStreamSubscription?.cancel();
 
-        // Pass the history *before* the current user message (with context)
+        // Pass the history *before* the current user message (with all context)
         final historyForGemini = List<Content>.from(state.chatHistory);
-        // Remove the last added user message before sending to API
         if (historyForGemini.isNotEmpty &&
             historyForGemini.last.role == 'user') {
           historyForGemini.removeLast();
@@ -309,34 +328,29 @@ class ChatNotifier extends StateNotifier<ChatState> {
           );
         }
 
-        // Pass the message *with context* to sendMessageStream
+        // Pass the message *with all context* to sendMessageStream
         final stream = geminiService.sendMessageStream(
-          messageWithContext,
+          messageWithAllContext,
           historyForGemini,
         );
 
         _geminiStreamSubscription = stream.listen(
           (response) {
-            // Aggregate text from the stream response
-            // Use helper to handle potential null parts or non-text parts
             final chunkText = response.text ?? '';
             if (chunkText.isNotEmpty) {
-              // Find the loading message and update its text
               final messages = List<ChatMessage>.from(state.displayMessages);
               final index = messages.indexWhere((m) => m.id == modelMessageId);
               if (index != -1) {
                 messages[index] = messages[index].copyWith(
-                  text: messages[index].text + chunkText, // Append text
-                  isLoading: true, // Still loading until stream ends
+                  text: messages[index].text + chunkText,
+                  isLoading: true,
                 );
                 state = state.copyWith(displayMessages: messages);
               }
             }
-            // TODO: Handle potential function calls in response if needed
           },
           onDone: () {
             debugPrint("Gemini stream finished.");
-            // Finalize the model message and update history
             final messages = List<ChatMessage>.from(state.displayMessages);
             final index = messages.indexWhere((m) => m.id == modelMessageId);
             if (index != -1) {
@@ -344,20 +358,20 @@ class ChatNotifier extends StateNotifier<ChatState> {
               messages[index] = finalMessage;
 
               // Add the complete model response to the chat history
-              // History already contains the user message with context
+              // History already contains the user message with all context
               final updatedHistory = List<Content>.from(state.chatHistory);
-              // Ensure the role is 'model' for the history entry
-              // Use 'model' string role for Content API
-              // Use helper to get text, handle empty case
               final modelText = getTextFromContent(
                 Content('model', [TextPart(finalMessage.text)]),
               );
-              updatedHistory.add(
-                Content(
-                  'model',
-                  modelText.isNotEmpty ? [TextPart(modelText)] : [],
-                ),
-              );
+              // Only add if there's actual text content
+              if (modelText.isNotEmpty) {
+                updatedHistory.add(Content('model', [TextPart(modelText)]));
+              } else {
+                debugPrint(
+                  "ChatNotifier Info: Gemini final message was empty. Not adding to history.",
+                );
+              }
+
 
               state = state.copyWith(
                 displayMessages: messages,
@@ -365,7 +379,6 @@ class ChatNotifier extends StateNotifier<ChatState> {
                 isLoading: false,
               );
             } else {
-              // Should not happen if placeholder was added correctly
               debugPrint(
                 "ChatNotifier Error: Could not find loading message placeholder (ID: $modelMessageId) on Gemini stream done.",
               );
@@ -375,7 +388,6 @@ class ChatNotifier extends StateNotifier<ChatState> {
           },
           onError: (error) {
             debugPrint("Error receiving Gemini stream: $error");
-            // Update the placeholder message to show the error
             final messages = List<ChatMessage>.from(state.displayMessages);
             final index = messages.indexWhere((m) => m.id == modelMessageId);
             if (index != -1) {
@@ -401,9 +413,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
         );
       } // End of else block for direct Gemini call
     } catch (e, s) {
-      // Add stack trace
-      debugPrint("Error sending message: $e\\n$s"); // Log stack trace
-      // Update placeholder to error state if something went wrong before streaming/MCP call
+      debugPrint("Error sending message: $e\n$s");
       final messages = List<ChatMessage>.from(state.displayMessages);
       final index = messages.indexWhere((m) => m.id == modelMessageId);
       if (index != -1) {
@@ -418,7 +428,6 @@ class ChatNotifier extends StateNotifier<ChatState> {
           errorMessage: "Failed to process message.",
         );
       } else {
-        // If placeholder wasn't even added, set general error
         state = state.copyWith(
           isLoading: false,
           errorMessage: "An error occurred: ${e.toString()}",
@@ -429,6 +438,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
     }
   }
 
+  /// Clears the chat history, display messages, error message, and any active context.
   void clearChat() {
     _geminiStreamSubscription?.cancel();
     _geminiStreamSubscription = null;
@@ -437,6 +447,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
       chatHistory: [],
       isLoading: false,
       clearErrorMessage: true,
+      clearContext: true, // Ensure context fields are cleared
     );
     debugPrint("Chat cleared.");
   }
