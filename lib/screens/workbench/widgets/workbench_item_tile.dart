@@ -31,6 +31,22 @@ class WorkbenchItemTile extends ConsumerStatefulWidget {
 
 class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
   bool _isHovering = false;
+  BuildContext?
+  _loadingDialogContext; // To store the context of the loading dialog
+
+  @override
+  void dispose() {
+    // Ensure dialog context is cleared if widget is disposed unexpectedly
+    if (_loadingDialogContext != null) {
+      try {
+        Navigator.of(_loadingDialogContext!).pop();
+      } catch (_) {
+        // Ignore errors if context is already invalid
+      }
+      _loadingDialogContext = null;
+    }
+    super.dispose();
+  }
 
   // Helper to get icon based on server type (remains the same)
   IconData _getServerTypeIcon(ServerType type) {
@@ -173,7 +189,7 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
 
   // --- Copy Thread Content Helper ---
   Future<void> _copyThreadContentFromWorkbench(
-    BuildContext buildContext,
+    BuildContext buildContext, // Use the main tile's context
     WidgetRef ref,
     WorkbenchItemReference itemRef,
   ) async {
@@ -189,20 +205,24 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
       return;
     }
 
-    // Show loading indicator
+    // Show loading indicator and store its context
+    _loadingDialogContext = null; // Reset before showing
     showCupertinoDialog(
       context: buildContext,
       barrierDismissible: false,
-      builder:
-          (dialogContext) => const CupertinoAlertDialog(
-            content: Row(
-              children: [
-                CupertinoActivityIndicator(),
-                SizedBox(width: 15),
-                Text('Fetching thread...'),
-              ],
-            ),
+      builder: (dialogContext) {
+        // Store the dialog's context
+        _loadingDialogContext = dialogContext;
+        return const CupertinoAlertDialog(
+          content: Row(
+            children: [
+              CupertinoActivityIndicator(),
+              SizedBox(width: 15),
+              Text('Fetching thread...'),
+            ],
           ),
+        );
+      },
     );
 
     try {
@@ -214,21 +234,35 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
         itemRef.serverId,
       );
       await Clipboard.setData(ClipboardData(text: content));
-      if (!mounted) return;
-      Navigator.pop(buildContext); // Dismiss loading
-      _showAlertDialog(
-        buildContext,
-        'Success',
-        'Thread content copied to clipboard.',
-      ); // Reuse existing dialog helper
+
+      // Dismiss loading dialog using its stored context
+      if (mounted && _loadingDialogContext != null) {
+        Navigator.of(_loadingDialogContext!).pop();
+        _loadingDialogContext = null; // Clear stored context
+        _showAlertDialog(
+          buildContext, // Show feedback using the original context
+          'Success',
+          'Thread content copied to clipboard.',
+        ); // Reuse existing dialog helper
+      }
     } catch (e) {
-      if (!mounted) return;
-      Navigator.pop(buildContext); // Dismiss loading
-      _showAlertDialog(
-        buildContext,
-        'Error',
-        'Failed to copy thread: $e',
-      ); // Reuse existing dialog helper
+      // Dismiss loading dialog using its stored context
+      if (mounted && _loadingDialogContext != null) {
+        Navigator.of(_loadingDialogContext!).pop();
+        _loadingDialogContext = null; // Clear stored context
+        _showAlertDialog(
+          buildContext, // Show feedback using the original context
+          'Error',
+          'Failed to copy thread: $e',
+        ); // Reuse existing dialog helper
+      } else if (mounted) {
+        // If dialog context was somehow lost, show error anyway
+        _showAlertDialog(buildContext, 'Error', 'Failed to copy thread: $e',
+         );
+      }
+    } finally {
+      // Ensure context is cleared
+      _loadingDialogContext = null;
     }
   }
   // --- End Copy Thread Content Helper ---
@@ -360,7 +394,7 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
                 onPressed: () {
                   Navigator.pop(popupContext);
                   _copyThreadContentFromWorkbench(
-                    context,
+                    context, // Pass the main tile's context
                     ref,
                     widget.itemReference,
                   ); // Pass the whole reference

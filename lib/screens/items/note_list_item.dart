@@ -41,6 +41,22 @@ class NoteListItem extends ConsumerStatefulWidget {
 
 class NoteListItemState extends ConsumerState<NoteListItem> {
   final GlobalKey<NoteCardState> _noteCardKey = GlobalKey<NoteCardState>();
+  BuildContext?
+  _loadingDialogContext; // To store the context of the loading dialog
+
+  @override
+  void dispose() {
+    // Ensure dialog context is cleared if widget is disposed unexpectedly
+    if (_loadingDialogContext != null) {
+      try {
+        Navigator.of(_loadingDialogContext!).pop();
+      } catch (_) {
+        // Ignore errors if context is already invalid
+      }
+      _loadingDialogContext = null;
+    }
+    super.dispose();
+  }
 
   // --- Moved Helper Methods ---
   // Helper widget to display start/end dates
@@ -160,7 +176,7 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
                   Navigator.pop(popupContext);
                   // Use the context available in the build method (scaffoldContext)
                   _copyThreadContentFromList(
-                    scaffoldContext,
+                    scaffoldContext, // Pass the main build context
                     ref,
                     widget.note.id,
                     WorkbenchItemType.note,
@@ -309,25 +325,29 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
 
   // --- Copy Thread Content Helper ---
   Future<void> _copyThreadContentFromList(
-    BuildContext buildContext,
+    BuildContext buildContext, // Use the main build context from the list item
     WidgetRef ref,
     String itemId,
     WorkbenchItemType itemType,
   ) async {
-    // Show loading indicator (e.g., using a dialog)
+    // Show loading indicator and store its context
+    _loadingDialogContext = null; // Reset before showing
     showCupertinoDialog(
       context: buildContext, // Use the passed context
       barrierDismissible: false,
-      builder:
-          (dialogContext) => const CupertinoAlertDialog(
-            content: Row(
-              children: [
-                CupertinoActivityIndicator(),
-                SizedBox(width: 15),
-                Text('Fetching thread...'),
-              ],
-            ),
+      builder: (dialogContext) {
+        // Store the dialog's context
+        _loadingDialogContext = dialogContext;
+        return const CupertinoAlertDialog(
+          content: Row(
+            children: [
+              CupertinoActivityIndicator(),
+              SizedBox(width: 15),
+              Text('Fetching thread...'),
+            ],
           ),
+        );
+      },
     );
 
     try {
@@ -344,43 +364,69 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
       );
       await Clipboard.setData(ClipboardData(text: content));
 
-      if (!mounted) return;
-      Navigator.pop(buildContext); // Dismiss loading
-      // Show success feedback (e.g., another dialog)
-      showCupertinoDialog(
-        context: buildContext,
-        builder:
-            (ctx) => CupertinoAlertDialog(
-              title: const Text('Success'),
-              content: const Text('Thread content copied to clipboard.'),
-              actions: [
-                CupertinoDialogAction(
-                  isDefaultAction: true,
-                  child: const Text('OK'),
-                  onPressed: () => Navigator.pop(ctx),
-                ),
-              ],
-            ),
-      );
+      // Dismiss loading dialog using its stored context
+      if (mounted && _loadingDialogContext != null) {
+        Navigator.of(_loadingDialogContext!).pop();
+        _loadingDialogContext = null; // Clear stored context
+        // Show success feedback (e.g., another dialog using the original buildContext)
+        showCupertinoDialog(
+          context: buildContext,
+          builder:
+              (ctx) => CupertinoAlertDialog(
+                title: const Text('Success'),
+                content: const Text('Thread content copied to clipboard.'),
+                actions: [
+                  CupertinoDialogAction(
+                    isDefaultAction: true,
+                    child: const Text('OK'),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ],
+              ),
+        );
+      }
     } catch (e) {
-      if (!mounted) return;
-      Navigator.pop(buildContext); // Dismiss loading
-      // Show error feedback
-      showCupertinoDialog(
-        context: buildContext,
-        builder:
-            (ctx) => CupertinoAlertDialog(
-              title: const Text('Error'),
-              content: Text('Failed to copy thread: $e'),
-              actions: [
-                CupertinoDialogAction(
-                  isDefaultAction: true,
-                  child: const Text('OK'),
-                  onPressed: () => Navigator.pop(ctx),
-                ),
-              ],
-            ),
-      );
+      // Dismiss loading dialog using its stored context
+      if (mounted && _loadingDialogContext != null) {
+        Navigator.of(_loadingDialogContext!).pop();
+        _loadingDialogContext = null; // Clear stored context
+        // Show error feedback using the original buildContext
+        showCupertinoDialog(
+          context: buildContext,
+          builder:
+              (ctx) => CupertinoAlertDialog(
+                title: const Text('Error'),
+                content: Text('Failed to copy thread: $e'),
+                actions: [
+                  CupertinoDialogAction(
+                    isDefaultAction: true,
+                    child: const Text('OK'),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ],
+              ),
+        );
+      } else if (mounted) {
+        // If dialog context was somehow lost, show error anyway
+        showCupertinoDialog(
+          context: buildContext,
+          builder:
+              (ctx) => CupertinoAlertDialog(
+                title: const Text('Error'),
+                content: Text('Failed to copy thread: $e'),
+                actions: [
+                  CupertinoDialogAction(
+                    isDefaultAction: true,
+                    child: const Text('OK'),
+                    onPressed: () => Navigator.pop(ctx),
+                  )
+                ],
+              ),
+        );
+      }
+    } finally {
+      // Ensure context is cleared
+      _loadingDialogContext = null;
     }
   }
   // --- End Copy Thread Content Helper ---

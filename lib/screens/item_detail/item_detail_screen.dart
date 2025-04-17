@@ -39,6 +39,8 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> // Renamed 
     debugLabel: 'ItemDetailScreenFocus', // Renamed debug label
   );
   late ScrollController _scrollController;
+  BuildContext?
+  _loadingDialogContext; // To store the context of the loading dialog
 
   @override
   void initState() {
@@ -55,6 +57,15 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> // Renamed 
   void dispose() {
     _screenFocusNode.dispose();
     _scrollController.dispose();
+    // Ensure dialog context is cleared if screen is disposed unexpectedly
+    if (_loadingDialogContext != null) {
+      try {
+        Navigator.of(_loadingDialogContext!).pop();
+      } catch (_) {
+        // Ignore errors if context is already invalid
+      }
+      _loadingDialogContext = null;
+    }
     super.dispose();
   }
 
@@ -213,7 +224,7 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> // Renamed 
                   Navigator.pop(popupContext); // Close the sheet first
                   // Assuming detail screen is always for notes for now
                   _copyThreadContent(
-                    context,
+                    context, // Pass the main build context
                     ref,
                     widget.itemId,
                     WorkbenchItemType.note,
@@ -306,25 +317,29 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> // Renamed 
 
   // --- Copy Thread Content Helper ---
   Future<void> _copyThreadContent(
-    BuildContext buildContext,
+    BuildContext buildContext, // Use the main screen's context
     WidgetRef ref,
     String itemId,
     WorkbenchItemType itemType,
   ) async {
-    // Show loading indicator (e.g., a simple dialog)
+    // Show loading indicator and store its context
+    _loadingDialogContext = null; // Reset before showing
     showCupertinoDialog(
       context: buildContext,
       barrierDismissible: false, // Prevent dismissal while loading
-      builder:
-          (dialogContext) => const CupertinoAlertDialog(
-            content: Row(
-              children: [
-                CupertinoActivityIndicator(),
-                SizedBox(width: 15),
-                Text('Fetching thread...'),
-              ],
-            ),
+      builder: (dialogContext) {
+        // Store the dialog's context
+        _loadingDialogContext = dialogContext;
+        return const CupertinoAlertDialog(
+          content: Row(
+            children: [
+              CupertinoActivityIndicator(),
+              SizedBox(width: 15),
+              Text('Fetching thread...'),
+            ],
           ),
+        );
+      },
     );
 
     try {
@@ -341,15 +356,27 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> // Renamed 
       );
       await Clipboard.setData(ClipboardData(text: content));
 
-      if (!mounted) return;
-      Navigator.pop(buildContext); // Dismiss loading dialog
-      _showSuccessSnackbar(
-        'Thread content copied to clipboard.',
-      ); // Use existing helper
+      // Dismiss loading dialog using its stored context
+      if (mounted && _loadingDialogContext != null) {
+        Navigator.of(_loadingDialogContext!).pop();
+        _loadingDialogContext = null; // Clear stored context
+        _showSuccessSnackbar(
+          'Thread content copied to clipboard.',
+        ); // Use existing helper
+      }
     } catch (e) {
-      if (!mounted) return;
-      Navigator.pop(buildContext); // Dismiss loading dialog
-      _showErrorSnackbar('Failed to copy thread: $e'); // Use existing helper
+      // Dismiss loading dialog using its stored context
+      if (mounted && _loadingDialogContext != null) {
+        Navigator.of(_loadingDialogContext!).pop();
+        _loadingDialogContext = null; // Clear stored context
+        _showErrorSnackbar('Failed to copy thread: $e'); // Use existing helper
+      } else if (mounted) {
+        // If dialog context was somehow lost, show error anyway
+        _showErrorSnackbar('Failed to copy thread: $e');
+      }
+    } finally {
+      // Ensure context is cleared even if something unexpected happens
+      _loadingDialogContext = null;
     }
   }
   // --- End Copy Thread Content Helper ---
