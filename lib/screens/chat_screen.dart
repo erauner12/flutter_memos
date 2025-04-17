@@ -139,43 +139,77 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       _scrollToBottom();
     });
     ref.listen(chatProvider.select((state) => state.isLoading), (_, isLoading) {
-      _scrollToBottom();
+      if (isLoading) {
+        // Scroll down when AI starts loading
+        _scrollToBottom();
+      }
     });
+
+    // Show loading indicator during initial session load
+    if (chatState.isInitializing) {
+      return const CupertinoPageScaffold(
+        navigationBar: CupertinoNavigationBar(middle: Text('Chat')),
+        child: Center(child: CupertinoActivityIndicator()),
+      );
+    }
 
     return CupertinoPageScaffold(
       navigationBar: CupertinoNavigationBar(
         middle: Text('Chat (${mcpState.connectedServerCount} MCP)'),
         trailing: Row(
-          // Wrap existing and new button in a Row
           mainAxisSize: MainAxisSize.min,
           children: [
+            // New Sync Button
+            CupertinoButton(
+              padding: EdgeInsets.zero,
+              onPressed:
+                  chatState.isSyncing || chatState.isInitializing
+                      ? null // Disable while syncing or initializing
+                      : () {
+                        ref.read(chatProvider.notifier).forceFetchFromCloud();
+                      },
+              // Show activity indicator while syncing
+              child:
+                  chatState.isSyncing
+                      ? const CupertinoActivityIndicator(radius: 11)
+                      : const Icon(CupertinoIcons.cloud_download, size: 24),
+            ),
+            const SizedBox(width: 12), // Add spacing
+
             // Existing Trash Button
             CupertinoButton(
               padding: EdgeInsets.zero,
+              onPressed:
+                  chatState.isSyncing || chatState.isInitializing
+                      ? null // Disable while syncing or initializing
+                      : () {
+                        // Confirmation could be added here
+                        ref.read(chatProvider.notifier).clearChat();
+                        // Reset context processed flag if chat is cleared manually
+                        setState(() {
+                          _contextProcessed = false;
+                        });
+                      },
               child: const Icon(CupertinoIcons.trash, size: 22),
-              onPressed: () {
-                // Confirmation could be added here
-                ref.read(chatProvider.notifier).clearChat();
-                // Reset context processed flag if chat is cleared manually
-                setState(() {
-                  _contextProcessed = false;
-                });
-              },
             ),
             const SizedBox(width: 8), // Add spacing
-            // New Settings Button
+
+            // Existing Settings Button
             CupertinoButton(
-              padding: EdgeInsets.zero,
-              child: const Icon(CupertinoIcons.settings, size: 22), // Gear icon
-              onPressed: () {
-                Navigator.of(context).push(
-                  CupertinoPageRoute(
-                    builder:
-                        (context) =>
-                            const SettingsScreen(isInitialSetup: false),
-                  ),
-                );
-              },
+              padding: EdgeInsets.zero, // Gear icon
+              onPressed:
+                  chatState.isSyncing || chatState.isInitializing
+                      ? null // Disable while syncing or initializing
+                      : () {
+                        Navigator.of(context).push(
+                          CupertinoPageRoute(
+                            builder:
+                                (context) =>
+                                    const SettingsScreen(isInitialSetup: false),
+                          ),
+                        );
+                      },
+              child: const Icon(CupertinoIcons.settings, size: 22),
             ),
           ],
         ),
@@ -183,28 +217,47 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       child: SafeArea(
         child: Column(
           children: [
+            // Display AI loading indicator
             if (chatState.isLoading)
               const LinearProgressIndicator(minHeight: 2),
             // Display general error message
             if (chatState.errorMessage != null)
               Container(
                 color: CupertinoColors.systemRed.withAlpha(25),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
                 child: Row(
                   children: [
-                    const Icon(CupertinoIcons.exclamationmark_triangle, color: CupertinoColors.systemRed, size: 18),
+                    const Icon(
+                      CupertinoIcons.exclamationmark_triangle,
+                      color: CupertinoColors.systemRed,
+                      size: 18,
+                    ),
                     const SizedBox(width: 8),
-                    Expanded(child: Text(chatState.errorMessage!, style: const TextStyle(color: CupertinoColors.systemRed))),
-                     CupertinoButton(
-                       padding: EdgeInsets.zero,
-                       minSize: 0,
+                    Expanded(
+                      child: Text(
+                        chatState.errorMessage!,
+                        style: const TextStyle(
+                          color: CupertinoColors.systemRed,
+                        ),
+                      ),
+                    ),
+                    CupertinoButton(
+                      padding: EdgeInsets.zero,
+                      minSize: 0,
                       child: const Icon(
                         CupertinoIcons.xmark,
                         size: 16,
                         color: CupertinoColors.systemRed,
                       ),
-                       onPressed: () => ref.read(chatProvider.notifier).clearErrorMessage(),
-                     )
+                      onPressed:
+                          () =>
+                              ref
+                                  .read(chatProvider.notifier)
+                                  .clearErrorMessage(),
+                    )
                   ],
                 ),
               ),
@@ -212,12 +265,24 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             if (!isApiKeySet)
               Container(
                 color: CupertinoColors.systemYellow.withAlpha(38),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
                 child: const Row(
                   children: [
-                    Icon(CupertinoIcons.exclamationmark_shield, color: CupertinoColors.systemYellow, size: 18),
+                    Icon(
+                      CupertinoIcons.exclamationmark_shield,
+                      color: CupertinoColors.systemYellow,
+                      size: 18,
+                    ),
                     SizedBox(width: 8),
-                    Expanded(child: Text("Gemini API Key not set. Please configure it in Settings.", style: TextStyle(color: CupertinoColors.systemYellow))),
+                    Expanded(
+                      child: Text(
+                        "Gemini API Key not set. Please configure it in Settings.",
+                        style: TextStyle(color: CupertinoColors.systemYellow),
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -295,14 +360,20 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 itemCount: chatState.displayMessages.length,
                 itemBuilder: (context, index) {
                   final message = chatState.displayMessages[index];
-                  // Don't display system messages if we add them later
-                  // if (message.role == Role.system) return const SizedBox.shrink();
+                  // Don't display system messages
+                  if (message.role == Role.system)
+                    return const SizedBox.shrink();
                   return _buildMessageBubble(message);
                 },
               ),
             ),
             // Input Area
-            _buildInputArea(context, chatState.isLoading || !isApiKeySet),
+            _buildInputArea(
+              context,
+              chatState.isLoading ||
+                  chatState.isSyncing || // Disable input while syncing
+                  !isApiKeySet,
+            ),
           ],
         ),
       ),
