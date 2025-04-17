@@ -1,12 +1,12 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_memos/models/workbench_instance.dart';
 import 'package:flutter_memos/providers/workbench_instances_provider.dart';
-import 'package:flutter_memos/screens/workbench/workbench_screen.dart'; // Import for _showInstanceActions
+import 'package:flutter_memos/screens/workbench/workbench_screen.dart'; // Import for WorkbenchScreenState
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 // Helper function to show instance actions from the selector widget
 // Needs access to context, ref, and the specific instance.
-// It finds the WorkbenchScreenState to call its _showInstanceActions method.
+// It finds the WorkbenchScreenState to call its showInstanceActions method.
 void _showInstanceActionsViaRef(
   BuildContext context,
   WidgetRef ref,
@@ -14,14 +14,16 @@ void _showInstanceActionsViaRef(
 ) {
   // Find the state object of the WorkbenchScreen ancestor
   final workbenchScreenState =
-      context.findAncestorStateOfType<_WorkbenchScreenState>();
+      context
+          .findAncestorStateOfType<WorkbenchScreenState>(); // Use public type
   if (workbenchScreenState != null) {
     // Call the method on the found state object
-    workbenchScreenState._showInstanceActions(instance);
+    workbenchScreenState.showInstanceActions(instance); // Use public method
   } else {
     // Fallback or error handling if the state cannot be found
-    print(
-      "Error: Could not find WorkbenchScreenState to show instance actions.",
+    // Replace print with debugPrint
+    debugPrint(
+      "[WorkbenchInstanceSelector] Could not find WorkbenchScreenState to show instance actions.",
     );
     // Optionally show a generic error message
   }

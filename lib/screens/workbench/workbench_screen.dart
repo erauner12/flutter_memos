@@ -21,7 +21,7 @@ class WorkbenchScreen extends ConsumerStatefulWidget {
 }
 
 // Removed SingleTickerProviderStateMixin
-class _WorkbenchScreenState extends ConsumerState<WorkbenchScreen> {
+class WorkbenchScreenState extends ConsumerState<WorkbenchScreen> {
   final TextEditingController _instanceNameController = TextEditingController();
 
   @override
@@ -179,7 +179,7 @@ class _WorkbenchScreenState extends ConsumerState<WorkbenchScreen> {
   }
 
   // Action sheet for Rename/Delete instance actions
-  void _showInstanceActions(WorkbenchInstance instance) {
+  void showInstanceActions(WorkbenchInstance instance) {
     final instancesState = ref.read(workbenchInstancesProvider);
     final bool canDelete =
         instancesState.instances.length > 1 && !instance.isSystemDefault;
@@ -262,7 +262,7 @@ class _WorkbenchScreenState extends ConsumerState<WorkbenchScreen> {
                     // Provide a fallback or handle error if not found (shouldn't happen in normal flow)
                     orElse: () => instancesState.instances.first,
                   );
-                  _showInstanceActions(activeInstance);
+                  showInstanceActions(activeInstance); // Updated call
                 },
               ),
             CupertinoButton(
