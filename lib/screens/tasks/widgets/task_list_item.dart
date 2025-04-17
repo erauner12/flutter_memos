@@ -102,17 +102,13 @@ class TaskListItem extends StatelessWidget {
       child: CupertinoContextMenu(
         actions: _buildContextActions(context),
 
-        // 1. Provide a previewBuilder that gives the preview finite constraints
-        //    using the _TaskContextPreview helper.
-        previewBuilder:
-            (context, animation, child) => _TaskContextPreview(child: child!),
-
-        // 2. The regular child for the in-list representation.
-        //    No ConstrainedBox needed here anymore.
-        child: _TaskRowContent(
-          task: task,
-          onTap: onTap, // Pass onTap for the main content area
-          onToggleComplete: onToggleComplete, // Pass toggle for the checkbox
+        // Wrap the child in the _TaskContextPreview widget directly
+        child: _TaskContextPreview(
+          child: _TaskRowContent(
+            task: task,
+            onTap: onTap, // Pass onTap for the main content area
+            onToggleComplete: onToggleComplete, // Pass toggle for the checkbox
+          ),
         ),
       ),
     );
