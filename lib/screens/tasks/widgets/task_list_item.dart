@@ -102,18 +102,11 @@ class TaskListItem extends StatelessWidget {
       child: CupertinoContextMenu(
         actions: _buildContextActions(context),
 
-        // Add previewBuilder to constrain the width during preview animation.
-        previewBuilder: (context, animation, child) {
-          // constrain width to the device; keeps height intrinsic
-          return SizedBox(
-            // Use MediaQuery to get screen width
-            width: MediaQuery.of(context).size.width,
-            // Apply the original child within the constrained width
-            child: child,
-          );
-        },
+        // Removed previewBuilder again as it's not compatible with the older SDK.
+        // previewBuilder: (context, animation, child) { ... },
 
         // The child is the regular in-list representation.
+        // _TaskRowContent now handles its own width constraint.
         child: _TaskRowContent(
           task: task,
           onTap: onTap, // Pass onTap for the main content area
@@ -207,121 +200,134 @@ class _TaskRowContent extends StatelessWidget {
         ? CupertinoColors.systemRed.resolveFrom(context)
         : CupertinoColors.secondaryLabel.resolveFrom(context);
 
-    // The Container provides padding and the bottom border
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
-      decoration: BoxDecoration(
-        // Set color inside BoxDecoration
-        color: CupertinoColors.systemBackground.resolveFrom(context),
-        border: Border(
-          bottom: BorderSide(
-            color: CupertinoColors.separator.resolveFrom(context),
-            width: 0.5,
-          ),
-        ),
+    // Wrap the Container in a ConstrainedBox to provide finite width constraints.
+    return ConstrainedBox(
+      constraints: BoxConstraints(
+        // ensures finite width in the preview overlay; no effect in list
+        maxWidth: MediaQuery.of(context).size.width,
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          // GestureDetector now wraps only the tappable content area,
-          // allowing the outer CupertinoContextMenu to handle long-press.
-          Expanded(
-            child: GestureDetector(
-              onTap: onTap, // Use the passed onTap callback
-              behavior:
-                  HitTestBehavior
-                      .opaque, // Ensure it captures taps within bounds
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    task.content,
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 16.5,
-                      decoration:
-                          task.isCompleted
-                              ? TextDecoration.lineThrough
-                              : TextDecoration.none,
-                      color:
-                          task.isCompleted
-                              ? CupertinoColors.secondaryLabel.resolveFrom(
-                                context,
-                              )
-                              : CupertinoColors.label.resolveFrom(context),
-                    ),
-                  ),
-                  if (task.description != null && task.description!.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 4.0),
-                      child: Text(
-                        task.description!,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: CupertinoColors.tertiaryLabel.resolveFrom(
-                            context,
-                          ),
-                          decoration:
-                              task.isCompleted
-                                  ? TextDecoration.lineThrough
-                                  : TextDecoration.none,
-                        ),
-                      ),
-                    ),
-                  if (formattedDueDate.isNotEmpty || task.labels.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 6.0),
-                      child: Row(
-                        children: [
-                          if (formattedDueDate.isNotEmpty)
-                            Icon(
-                              CupertinoIcons.calendar,
-                              size: 14,
-                              color: dateColor,
-                            ),
-                          if (formattedDueDate.isNotEmpty)
-                            const SizedBox(width: 4),
-                          if (formattedDueDate.isNotEmpty)
-                            Text(
-                              formattedDueDate,
-                              style: TextStyle(fontSize: 13, color: dateColor),
-                            ),
-                          if (formattedDueDate.isNotEmpty &&
-                              task.labels.isNotEmpty)
-                            const Text('  •  ', style: TextStyle(fontSize: 13)),
-                          if (task.labels.isNotEmpty)
-                            Expanded(
-                              child: Text(
-                                task.labels.map((l) => '@$l').join(' '),
-                                overflow: TextOverflow.ellipsis,
-                                maxLines: 1,
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  color: CupertinoColors.secondaryLabel
-                                      .resolveFrom(context),
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                ],
-              ),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+        decoration: BoxDecoration(
+          // Set color inside BoxDecoration
+          color: CupertinoColors.systemBackground.resolveFrom(context),
+          border: Border(
+            bottom: BorderSide(
+              color: CupertinoColors.separator.resolveFrom(context),
+              width: 0.5,
             ),
           ),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            // GestureDetector now wraps only the tappable content area,
+            // allowing the outer CupertinoContextMenu to handle long-press.
+            Expanded(
+              child: GestureDetector(
+                onTap: onTap, // Use the passed onTap callback
+                behavior:
+                    HitTestBehavior
+                        .opaque, // Ensure it captures taps within bounds
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      task.content,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 16.5,
+                        decoration:
+                            task.isCompleted
+                                ? TextDecoration.lineThrough
+                                : TextDecoration.none,
+                        color:
+                            task.isCompleted
+                                ? CupertinoColors.secondaryLabel.resolveFrom(
+                                  context,
+                                )
+                                : CupertinoColors.label.resolveFrom(context),
+                      ),
+                    ),
+                    if (task.description != null &&
+                        task.description!.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4.0),
+                        child: Text(
+                          task.description!,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: CupertinoColors.tertiaryLabel.resolveFrom(
+                              context,
+                            ),
+                            decoration:
+                                task.isCompleted
+                                    ? TextDecoration.lineThrough
+                                    : TextDecoration.none,
+                          ),
+                        ),
+                      ),
+                    if (formattedDueDate.isNotEmpty || task.labels.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 6.0),
+                        child: Row(
+                          children: [
+                            if (formattedDueDate.isNotEmpty)
+                              Icon(
+                                CupertinoIcons.calendar,
+                                size: 14,
+                                color: dateColor,
+                              ),
+                            if (formattedDueDate.isNotEmpty)
+                              const SizedBox(width: 4),
+                            if (formattedDueDate.isNotEmpty)
+                              Text(
+                                formattedDueDate,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: dateColor,
+                                ),
+                              ),
+                            if (formattedDueDate.isNotEmpty &&
+                                task.labels.isNotEmpty)
+                              const Text(
+                                '  •  ',
+                                style: TextStyle(fontSize: 13),
+                              ),
+                            if (task.labels.isNotEmpty)
+                              Expanded(
+                                child: Text(
+                                  task.labels.map((l) => '@$l').join(' '),
+                                  overflow: TextOverflow.ellipsis,
+                                  maxLines: 1,
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: CupertinoColors.secondaryLabel
+                                        .resolveFrom(context),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
 
-          const SizedBox(width: 12.0),
+            const SizedBox(width: 12.0),
 
-          // Trailing checkbox remains outside the main content GestureDetector
-          _TrailingCheckbox(
-            task: task,
-            priorityColor: priorityColor,
-            onToggle: onToggleComplete, // Use the passed callback
-          ),
-        ],
+            // Trailing checkbox remains outside the main content GestureDetector
+            _TrailingCheckbox(
+              task: task,
+              priorityColor: priorityColor,
+              onToggle: onToggleComplete, // Use the passed callback
+            ),
+          ],
+        ),
       ),
     );
   }
