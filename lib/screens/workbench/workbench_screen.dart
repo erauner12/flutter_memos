@@ -232,17 +232,23 @@ class _WorkbenchScreenState extends ConsumerState<WorkbenchScreen> {
     final instances = instancesState.instances;
     final activeInstanceId = instancesState.activeInstanceId;
 
-    // Watch the TabController from the StateProvider.
-    // Use the non-null assertion operator (!) because the manager now guarantees
-    // it's non-null after the first frame, except during final disposal (which
-    // means this widget wouldn't be building anyway).
-    // If the provider *is* null here, it indicates a logic error in the manager
-    // or the widget lifecycle, and the assertion should fail loudly in debug mode.
-    final TabController tabCtrl = ref.watch(workbenchTabControllerProvider)!;
+    // Watch the TabController? from the StateProvider.
+    // It might be null on the very first frame or during final teardown.
+    final TabController? tabCtrl = ref.watch(workbenchTabControllerProvider);
 
-    // --- Removed null controller check ---
-    // The loading indicator branch is no longer needed.
+    // --- Handle null controller state gracefully ---
+    // Show a loading indicator if the controller isn't available yet.
+    // This covers the initial frame before the manager publishes the controller,
+    // or the frame during final disposal.
+    if (tabCtrl == null) {
+      // Removed the debug print that was here previously.
+      return const CupertinoPageScaffold(
+        child: Center(child: CupertinoActivityIndicator()),
+      );
+    }
+    // --- End null controller handling ---
 
+    // If we reach here, tabCtrl is guaranteed non-null for the rest of the build.
     final items = workbenchState.items;
     final bool canRefresh =
         !workbenchState.isLoading && !workbenchState.isRefreshingDetails;

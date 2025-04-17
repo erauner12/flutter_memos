@@ -504,10 +504,17 @@ final workbenchInstancesProvider =
 });
 
 // --- Provider for TabController ---
-// Holds the current TabController instance, managed by WorkbenchTabControllerHolder.
-// Starts as null until the holder creates the first controller.
-// Removed autoDispose to prevent premature disposal.
+/// Holds the current [TabController] instance for the Workbench tabs.
+///
+/// This provider is managed by [WorkbenchTabControllerManager].
+/// It starts as `null` but should be non-null shortly after the
+/// `WorkbenchScreen` mounts and the manager initializes.
+///
+/// It will only become `null` again when the `WorkbenchScreen` (and thus
+/// the manager) is completely disposed. Consumers should handle the initial
+/// `null` state gracefully (e.g., show a loading indicator).
 final workbenchTabControllerProvider =
     StateProvider<TabController?>(
   (_) => null,
+  name: 'workbenchTabControllerProvider', // Add name for debugging
 );
