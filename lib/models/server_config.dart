@@ -1,8 +1,8 @@
 import 'package:flutter/foundation.dart';
-import 'package:uuid/uuid.dart'; // Add uuid import
+import 'package:flutter_memos/utils/enum_utils.dart'; // Import the new helper
+import 'package:uuid/uuid.dart';
 
-// Keep ServerType.todoist defined for WorkbenchItemReference use,
-// but ServerConfig instances should never have this type.
+// Ensure all required types are present.
 enum ServerType { memos, blinko, todoist }
 
 /// Server configuration model for device-level storage
@@ -68,62 +68,49 @@ class ServerConfig {
       'name': name, // Add name
       'serverUrl': serverUrl,
       'authToken': authToken,
-      'serverType': serverType.name, // Store enum name as string
+      // Use describeEnum for consistent serialization (matches helper)
+      'serverType': describeEnum(serverType),
     };
   }
 
   /// Create from a map (from storage)
   factory ServerConfig.fromJson(Map<String, dynamic> json) {
-    // Determine serverType, default to memos for backward compatibility
-    // Explicitly handle legacy 'todoist' string by defaulting to memos.
-    ServerType type = ServerType.memos; // Default
-    final rawServerType = json['serverType']; // Get raw value
+    final rawServerType = json['serverType'] as String?;
     if (kDebugMode) {
       print(
         '[ServerConfig.fromJson] Parsing server ID: ${json['id']}. Raw serverType from JSON: "$rawServerType" (Type: ${rawServerType?.runtimeType})',
       );
     }
-    if (rawServerType is String) {
-      if (rawServerType == ServerType.todoist.name) {
-        // Found a legacy Todoist config - log and default to memos.
-        // It should be filtered out by the notifier later.
-        if (kDebugMode) {
-          print(
-            '[ServerConfig.fromJson] Warning: Encountered legacy serverType "todoist" for ID ${json['id']}. Defaulting to "memos" for this ServerConfig instance. It should be filtered by the notifier.',
-          );
-        }
-        type = ServerType.memos; // Default to memos
-      } else {
-        // Try parsing other known types (memos, blinko)
-        type = ServerType.values.firstWhere(
-          (e) =>
-              e.name == rawServerType &&
-              e != ServerType.todoist, // Ensure we don't match todoist here
-          orElse: () {
-            if (kDebugMode) {
-              print(
-                '[ServerConfig.fromJson] Warning: serverType string "$rawServerType" did not match known enum values (memos, blinko). Defaulting to memos.',
-              );
-            }
-            return ServerType
-                .memos; // Fallback if string doesn't match memos or blinko
-          },
-        );
-      }
-    } else if (rawServerType != null) {
+
+    // Use the case-insensitive helper
+    ServerType? parsedType = enumFromString(ServerType.values, rawServerType);
+
+    // Handle legacy 'todoist' or unknown types specifically for ServerConfig
+    ServerType finalType;
+    if (parsedType == ServerType.todoist) {
       if (kDebugMode) {
         print(
-          '[ServerConfig.fromJson] Warning: serverType field was present but not a String. Defaulting to memos.',
+          '[ServerConfig.fromJson] Warning: Encountered serverType "todoist" for ID ${json['id']}. Defaulting to "memos" for this ServerConfig instance. It should be filtered by the notifier.',
         );
       }
-      // type remains ServerType.memos (default)
+      finalType = ServerType.memos; // Default to memos for ServerConfig
+    } else if (parsedType == null && rawServerType != null) {
+      if (kDebugMode) {
+        print(
+          '[ServerConfig.fromJson] Warning: Unknown serverType string "$rawServerType". Defaulting to memos.',
+        );
+      }
+      finalType = ServerType.memos; // Default to memos if unknown
+    } else {
+      // Use the parsed type (memos/blinko) or default to memos if rawServerType was null
+      finalType = parsedType ?? ServerType.memos;
     }
-    // No else needed, default is already memos
+
 
     if (kDebugMode) {
       // Log the final determined type for the ServerConfig instance
       print(
-        '[ServerConfig.fromJson] Determined serverType for ServerConfig instance: ${type.name} for server ID: ${json['id']}',
+        '[ServerConfig.fromJson] Determined serverType for ServerConfig instance: ${describeEnum(finalType)} for server ID: ${json['id']}',
       );
     }
 
@@ -134,7 +121,8 @@ class ServerConfig {
       name: json['name'] as String?, // Handle optional name
       serverUrl: json['serverUrl'] as String? ?? '',
       authToken: json['authToken'] as String? ?? '',
-      serverType: type, // Assign determined (and validated non-Todoist) type
+      serverType:
+          finalType, // Assign determined (and validated non-Todoist) type
     );
   }
 
@@ -167,6 +155,7 @@ class ServerConfig {
       serverType != ServerType.todoist,
       'toString should not be called on a ServerConfig with ServerType.todoist',
     );
-    return 'ServerConfig(id: $id, name: $name, type: ${serverType.name}, serverUrl: $serverUrl, authToken: ${authToken.isNotEmpty ? "****" : "empty"})'; // Include id, name, and type
+    // Use describeEnum for consistency
+    return 'ServerConfig(id: $id, name: $name, type: ${describeEnum(serverType)}, serverUrl: $serverUrl, authToken: ${authToken.isNotEmpty ? "****" : "empty"})'; // Include id, name, and type
   }
 }

@@ -36,9 +36,13 @@ class CloudKitService {
   Map<String, String> _serializeMap(Map<String, dynamic> data) {
     return data.map((key, value) {
       if (value == null) {
-        return MapEntry(key, '');
+        return MapEntry(key, ''); // Represent null as empty string
       } else if (value is DateTime) {
         return MapEntry(key, value.toIso8601String());
+      } else if (value is bool) {
+        return MapEntry(key, value.toString()); // 'true' or 'false'
+      } else if (value is Enum) {
+        return MapEntry(key, describeEnum(value)); // Use standard enum name
       } else {
         return MapEntry(key, value.toString());
       }
@@ -99,7 +103,10 @@ class CloudKitService {
         recordName: id,
       );
       if (record.recordType == serverConfigRecordType) {
-        final config = ServerConfig.fromJson(record.values);
+        // Inject recordName as 'id' if not present in values (should be)
+        final valuesWithId = Map<String, dynamic>.from(record.values);
+        valuesWithId.putIfAbsent('id', () => record.recordName);
+        final config = ServerConfig.fromJson(valuesWithId);
         if (kDebugMode) {
           print('[CloudKitService] Successfully fetched ServerConfig $id');
         }
@@ -132,7 +139,8 @@ class CloudKitService {
               .map((record) {
                 try {
                   final valuesWithId = Map<String, dynamic>.from(record.values);
-                  valuesWithId['id'] = record.recordName;
+                  // Ensure 'id' is present, using recordName as fallback
+                  valuesWithId.putIfAbsent('id', () => record.recordName);
                   return ServerConfig.fromJson(valuesWithId);
                 } catch (e) {
                   if (kDebugMode) {
@@ -144,9 +152,13 @@ class CloudKitService {
                 }
               })
               .whereType<ServerConfig>()
+              // Filter out any configs that ended up as 'todoist' type (shouldn't happen with new fromJson)
+              .where((config) => config.serverType != ServerType.todoist)
               .toList();
       if (kDebugMode) {
-        print('[CloudKitService] Fetched ${configs.length} ServerConfigs');
+        print(
+          '[CloudKitService] Fetched ${configs.length} valid ServerConfigs',
+        );
       }
       return configs;
     } catch (e, s) {
@@ -302,7 +314,7 @@ class CloudKitService {
   }
 
   /// Retrieves all workbench instances from CloudKit.
-  /// Returns a list of WorkbenchInstance objects.
+  /// Returns a list of WorkbenchInstance objects. Creates default if none exist.
   Future<List<WorkbenchInstance>> getAllWorkbenchInstances() async {
     if (kDebugMode) {
       print('[CloudKitService] getAllWorkbenchInstances called');
@@ -316,6 +328,7 @@ class CloudKitService {
           records
               .map((record) {
                 try {
+                  // Pass recordName explicitly to fromJson
                   return WorkbenchInstance.fromJson(
                     record.values,
                     record.recordName,
@@ -332,6 +345,7 @@ class CloudKitService {
               .whereType<WorkbenchInstance>()
               .toList();
 
+      // Ensure default instance exists if no instances are found
       if (instances.isEmpty) {
         if (kDebugMode) {
           print(
@@ -341,6 +355,7 @@ class CloudKitService {
         final defaultInstance = WorkbenchInstance.defaultInstance();
         final success = await saveWorkbenchInstance(defaultInstance);
         if (success) {
+          // Add the newly created default instance to the list to be returned
           instances.add(defaultInstance);
           if (kDebugMode) {
             print(
@@ -351,6 +366,7 @@ class CloudKitService {
           if (kDebugMode) {
             print('[CloudKitService] Failed to save default instance.');
           }
+          // Consider throwing an error or returning empty list if default creation fails
         }
       }
 
@@ -364,12 +380,19 @@ class CloudKitService {
       if (kDebugMode) {
         print('[CloudKitService] Error fetching WorkbenchInstances: $e\n$s');
       }
-      return [];
+      // Attempt to return at least the default instance in case of error fetching others
+      try {
+        final defaultInstance = WorkbenchInstance.defaultInstance();
+        await saveWorkbenchInstance(defaultInstance); // Ensure it exists
+        return [defaultInstance];
+      } catch (_) {
+        return []; // Return empty if even default fails
+      }
     }
   }
 
   /// Deletes a workbench instance from CloudKit by its ID.
-  /// Returns true if successful, false otherwise.
+  /// Returns true if successful, false otherwise. Cannot delete default instance.
   Future<bool> deleteWorkbenchInstance(String instanceId) async {
     if (kDebugMode) {
       print('[CloudKitService] deleteWorkbenchInstance called for $instanceId');
@@ -380,7 +403,7 @@ class CloudKitService {
           '[CloudKitService] Attempted to delete the default workbench instance. Operation aborted.',
         );
       }
-      return false;
+      return false; // Prevent deletion of the default instance
     }
     try {
       await _cloudKit.deleteRecord(scope: _scope, recordName: instanceId);
@@ -415,7 +438,7 @@ class CloudKitService {
       await _cloudKit.saveRecord(
         scope: _scope,
         recordType: workbenchItemRecordType,
-        recordName: item.id,
+        recordName: item.id, // Use item.id as the recordName
         record: recordData,
       );
       if (kDebugMode) {
@@ -454,46 +477,74 @@ class CloudKitService {
       final List<Future<void>> migrationFutures = [];
 
       for (final record in records) {
+        WorkbenchItemReference? item; // Use nullable type
+        bool needsMigrationSave = false;
         try {
-          // Inject recordName as 'id' into the values map
-          final valuesWithId = Map<String, dynamic>.from(record.values);
-          valuesWithId['id'] = record.recordName;
-          // Pass recordName to fromJson factory
-          final item = WorkbenchItemReference.fromJson(
-            valuesWithId,
-            record.recordName,
+          // Get raw values and check original instanceId before parsing
+          final values = Map<String, dynamic>.from(record.values);
+          final originalInstanceId = values['instanceId'];
+
+          // Parse the item using fromJson, which now handles default assignment
+          item = WorkbenchItemReference.fromJson(
+            values,
+            record.recordName, // Pass recordName as the ID source
           );
 
-          final originalInstanceId = valuesWithId['instanceId'];
+          // Check if migration occurred (original was null/empty AND current is default)
           if ((originalInstanceId == null ||
                   (originalInstanceId is String &&
                       originalInstanceId.isEmpty)) &&
               item.instanceId == WorkbenchInstance.defaultInstanceId) {
             if (kDebugMode) {
               print(
-                '[CloudKitService] Migrating item ${item.id} to default instance ${item.instanceId}. Persisting change.',
+                '[CloudKitService] Item ${item.id} requires instanceId migration. Queuing save.',
               );
             }
-            migrationFutures.add(saveWorkbenchItemReference(item));
+            needsMigrationSave = true;
           }
 
+          // Add to list if it matches the filter (or if no filter)
           if (instanceId == null || item.instanceId == instanceId) {
             items.add(item);
           }
+
+          // If migration is needed, queue the save operation
+          if (needsMigrationSave) {
+            // Pass the *parsed and potentially updated* item to save
+            migrationFutures.add(saveWorkbenchItemReference(item));
+          }
+
         } catch (e) {
           if (kDebugMode) {
             print(
-              '[CloudKitService] Error parsing WorkbenchItemReference ${record.recordName}: $e',
+              '[CloudKitService] Error parsing WorkbenchItemReference ${record.recordName}: $e. Skipping item.',
             );
           }
+          // Continue to the next record if parsing fails
         }
       }
 
+      // Wait for all pending migration saves to complete (fire-and-forget essentially)
       if (migrationFutures.isNotEmpty) {
-        await Future.wait(migrationFutures);
+        // Don't await here to avoid blocking return, but log initiation
+        Future.wait(migrationFutures)
+            .then((_) {
+              if (kDebugMode) {
+                print(
+                  '[CloudKitService] Completed ${migrationFutures.length} item migration persistence tasks.',
+                );
+              }
+            })
+            .catchError((e, s) {
+              if (kDebugMode) {
+                print(
+                  '[CloudKitService] Error during background migration persistence: $e\n$s',
+                );
+              }
+            });
         if (kDebugMode) {
           print(
-            '[CloudKitService] Completed ${migrationFutures.length} item migration persistence tasks.',
+            '[CloudKitService] Initiated ${migrationFutures.length} background item migration saves.',
           );
         }
       }
@@ -513,6 +564,7 @@ class CloudKitService {
       return [];
     }
   }
+
 
   /// Deletes a workbench item reference from CloudKit by its ID.
   Future<bool> deleteWorkbenchItemReference(String referenceId) async {
@@ -547,8 +599,9 @@ class CloudKitService {
       );
     }
     try {
+      // Fetch only the items that need to be deleted
       final itemsToDelete = await getAllWorkbenchItemReferences(
-        instanceId: instanceId,
+        instanceId: instanceId, // Apply filter here
       );
 
       if (itemsToDelete.isEmpty) {
@@ -557,7 +610,7 @@ class CloudKitService {
             '[CloudKitService] No WorkbenchItemReferences found${instanceId != null ? ' for instance $instanceId' : ''} to delete.',
           );
         }
-        return true;
+        return true; // Nothing to delete, operation successful
       }
 
       if (kDebugMode) {
@@ -566,34 +619,47 @@ class CloudKitService {
         );
       }
 
+      // Prepare list of record names to delete
+      final recordNamesToDelete = itemsToDelete.map((item) => item.id).toList();
+
+      // Use batch delete if available and efficient, otherwise loop
+      // Assuming flutter_cloud_kit might not have batch delete, loop for now:
       bool allSucceeded = true;
-      for (final item in itemsToDelete) {
+      for (final recordName in recordNamesToDelete) {
         try {
-          await _cloudKit.deleteRecord(scope: _scope, recordName: item.id);
+          await _cloudKit.deleteRecord(scope: _scope, recordName: recordName);
           if (kDebugMode) {
             print(
-              '[CloudKitService] Deleted WorkbenchItemReference ${item.id}',
+              '[CloudKitService] Deleted WorkbenchItemReference $recordName',
             );
           }
         } catch (e) {
           if (kDebugMode) {
             print(
-              '[CloudKitService] Error deleting WorkbenchItemReference ${item.id}: $e',
+              '[CloudKitService] Error deleting WorkbenchItemReference $recordName: $e',
             );
           }
-          allSucceeded = false;
+          allSucceeded = false; // Mark failure but continue deleting others
         }
+      }
+
+      if (kDebugMode) {
+        print(
+          '[CloudKitService] Finished deleting ${itemsToDelete.length} items. Success: $allSucceeded',
+        );
       }
       return allSucceeded;
     } catch (e, s) {
+      // Catch errors during the fetch phase
       if (kDebugMode) {
         print(
-          '[CloudKitService] Error during deleteAllWorkbenchItemReferences: $e\n$s',
+          '[CloudKitService] Error during deleteAllWorkbenchItemReferences (fetch phase): $e\n$s',
         );
       }
       return false;
     }
   }
+
 
   // --- Settings Methods ---
 
@@ -617,60 +683,84 @@ class CloudKitService {
         if (kDebugMode) {
           print('[CloudKitService] Successfully fetched setting $keyName');
         }
-        return value.toString();
+        return value.toString(); // CloudKit often returns values as strings
       } else {
         if (kDebugMode) {
           print('[CloudKitService] Setting $keyName not found.');
         }
         return null;
       }
-    } catch (e, s) {
-      if (kDebugMode) {
-        print('[CloudKitService] Error fetching setting $keyName: $e\n$s');
+    } catch (e) {
+      // Specifically check for "Record not found"
+      if (e is PlatformException &&
+          e.message != null &&
+          e.message!.contains('Record not found')) {
+        if (kDebugMode) {
+          print(
+            '[CloudKitService] UserSettings record not found when getting setting $keyName.',
+          );
+        }
+      } else if (kDebugMode) {
+        print('[CloudKitService] Error fetching setting $keyName: $e');
       }
-      return null;
+      return null; // Return null if record doesn't exist or other error
     }
   }
+
 
   Future<bool> saveSetting(String keyName, String value) async {
     if (kDebugMode) print('[CloudKitService] saveSetting called for $keyName');
     try {
       Map<String, dynamic> currentSettings = {};
       try {
+        // Attempt to fetch the existing record
         final existingRecord = await _cloudKit.getRecord(
           scope: _scope,
           recordName: _userSettingsRecordName,
         );
+        // Check if it's the correct type before using its values
         if (existingRecord.recordType == userSettingsRecordType) {
           currentSettings = Map<String, dynamic>.from(existingRecord.values);
           if (kDebugMode) {
             print('[CloudKitService] Found existing UserSettings record.');
           }
         } else {
+          // If record exists but is wrong type, log warning and overwrite
           if (kDebugMode) {
             print(
-              '[CloudKitService] Wrong type for $_userSettingsRecordName: ${existingRecord.recordType}. Overwriting.',
+              '[CloudKitService] Existing record $_userSettingsRecordName has wrong type: ${existingRecord.recordType}. Overwriting.',
             );
           }
+          // currentSettings remains empty, effectively starting fresh
         }
       } catch (e) {
-        if (kDebugMode) {
-          if (e is PlatformException &&
-              e.message != null &&
-              e.message!.contains('Record not found')) {
+        // If fetching fails (e.g., "Record not found"), proceed with empty currentSettings
+        if (e is PlatformException &&
+            e.message != null &&
+            e.message!.contains('Record not found')) {
+          if (kDebugMode) {
             print(
               '[CloudKitService] UserSettings record not found, will create new one.',
             );
-          } else {
-            print('[CloudKitService] Error fetching UserSettings: $e');
+          }
+        } else {
+          // Log other fetch errors but still attempt to save
+          if (kDebugMode) {
+            print(
+              '[CloudKitService] Error fetching existing UserSettings, proceeding with save attempt: $e',
+            );
           }
         }
       }
+
+      // Update the specific setting
       currentSettings[keyName] = value;
+
+      // Serialize and save the entire settings map
       final recordData = _serializeMap(currentSettings);
       await _cloudKit.saveRecord(
         scope: _scope,
-        recordType: userSettingsRecordType,
+        recordType: userSettingsRecordType, // Ensure correct type is saved
         recordName: _userSettingsRecordName,
         record: recordData,
       );
@@ -679,16 +769,19 @@ class CloudKitService {
       }
       return true;
     } catch (e, s) {
+      // Handle potential race condition where record was created between fetch and save
       if (e is PlatformException &&
           e.message != null &&
           e.message!.contains('record to insert already exists')) {
         if (kDebugMode) {
           print(
-            '[CloudKitService] Handled "record already exists" for $_userSettingsRecordName.',
+            '[CloudKitService] Handled "record already exists" conflict for $_userSettingsRecordName. Save likely succeeded or will be retried.',
           );
         }
-        return true;
+        // Consider retrying the fetch-update-save cycle or just return true/false based on policy
+        return true; // Assume success or let higher level handle retry
       }
+      // Log other save errors
       if (kDebugMode) {
         print('[CloudKitService] Error saving setting $keyName: $e\n$s');
       }
@@ -696,25 +789,35 @@ class CloudKitService {
     }
   }
 
+
   // --- Utility Methods ---
 
   /// Deletes all CloudKit records of a specific type. Use with caution!
   /// For WorkbenchItemReference, prefer using deleteAllWorkbenchItemReferences which supports filtering.
   Future<bool> deleteAllRecordsOfType(String recordType) async {
+    // Add specific warnings
     if (recordType == workbenchItemRecordType) {
       if (kDebugMode) {
         print(
-          '[CloudKitService] Warning: deleteAllRecordsOfType called for $workbenchItemRecordType. Consider using deleteAllWorkbenchItemReferences for filtering.',
+          '[CloudKitService] Warning: deleteAllRecordsOfType called for $workbenchItemRecordType. This deletes ALL items across ALL instances. Use deleteAllWorkbenchItemReferences for targeted deletion.',
         );
       }
     }
     if (recordType == workbenchInstanceRecordType) {
       if (kDebugMode) {
         print(
-          '[CloudKitService] Warning: deleteAllRecordsOfType called for $workbenchInstanceRecordType. This will delete ALL instances, including default.',
+          '[CloudKitService] Warning: deleteAllRecordsOfType called for $workbenchInstanceRecordType. This will delete ALL instances, *except* the default instance (${WorkbenchInstance.defaultInstanceId}).',
         );
       }
     }
+    if (recordType == userSettingsRecordType) {
+      if (kDebugMode) {
+        print(
+          '[CloudKitService] Warning: deleteAllRecordsOfType called for $userSettingsRecordType. This will delete the user settings record.',
+        );
+      }
+    }
+
     if (kDebugMode) {
       print('[CloudKitService] deleteAllRecordsOfType called for $recordType');
     }
@@ -729,41 +832,57 @@ class CloudKitService {
             '[CloudKitService] No records found for type $recordType to delete.',
           );
         }
+        return true; // Nothing to delete
+      }
+
+      final recordNamesToDelete =
+          records
+              .map((r) => r.recordName)
+              // Explicitly prevent deletion of the default workbench instance
+              .where(
+                (name) =>
+                    !(recordType == workbenchInstanceRecordType &&
+                        name == WorkbenchInstance.defaultInstanceId),
+              )
+              .toList();
+
+      if (recordNamesToDelete.isEmpty &&
+          recordType == workbenchInstanceRecordType &&
+          records.isNotEmpty) {
+        if (kDebugMode) {
+          print(
+            '[CloudKitService] Only the default instance exists for type $recordType. No records will be deleted.',
+          );
+        }
         return true;
       }
+
       if (kDebugMode) {
         print(
-          '[CloudKitService] Found ${records.length} records of type $recordType to delete.',
+          '[CloudKitService] Found ${recordNamesToDelete.length} records of type $recordType to delete (excluding default instance if applicable).',
         );
       }
+
       bool allSucceeded = true;
-      for (final record in records) {
-        if (recordType == workbenchInstanceRecordType &&
-            record.recordName == WorkbenchInstance.defaultInstanceId) {
-          if (kDebugMode) {
-            print(
-              '[CloudKitService] Skipping default WorkbenchInstance ${record.recordName}.',
-            );
-          }
-          continue;
-        }
+      // Use batch delete if available, otherwise loop
+      for (final recordName in recordNamesToDelete) {
         try {
           await _cloudKit.deleteRecord(
             scope: _scope,
-            recordName: record.recordName,
+            recordName: recordName,
           );
           if (kDebugMode) {
             print(
-              '[CloudKitService] Deleted record ${record.recordName} of type $recordType',
+              '[CloudKitService] Deleted record $recordName of type $recordType',
             );
           }
         } catch (e) {
           if (kDebugMode) {
             print(
-              '[CloudKitService] Error deleting record ${record.recordName}: $e',
+              '[CloudKitService] Error deleting record $recordName: $e',
             );
           }
-          allSucceeded = false;
+          allSucceeded = false; // Mark failure but continue
         }
       }
       return allSucceeded;
@@ -789,6 +908,17 @@ class CloudKitService {
       }
       return true;
     } catch (e, s) {
+      // Handle "Record not found" gracefully
+      if (e is PlatformException &&
+          e.message != null &&
+          e.message!.contains('Record not found')) {
+        if (kDebugMode) {
+          print(
+            '[CloudKitService] UserSettings record already deleted or never existed.',
+          );
+        }
+        return true; // Consider it success if it's already gone
+      }
       if (kDebugMode) {
         print('[CloudKitService] Error deleting UserSettings record: $e\n$s');
       }

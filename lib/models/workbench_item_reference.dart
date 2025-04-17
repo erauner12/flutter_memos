@@ -1,7 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_memos/models/comment.dart'; // Import Comment model
 import 'package:flutter_memos/models/server_config.dart'; // For ServerType enum (including todoist)
-import 'package:uuid/uuid.dart';
+import 'package:flutter_memos/models/workbench_instance.dart'; // Import WorkbenchInstance for default ID
+import 'package:flutter_memos/utils/enum_utils.dart'; // Import the new helper
 
 // Ensure this includes task
 enum WorkbenchItemType { note, comment, task }
@@ -22,7 +23,7 @@ class WorkbenchItemReference {
   final DateTime addedTimestamp; // When the item was added
   final String?
   parentNoteId; // Optional: ID of the parent note (useful for comments)
-  final String instanceId; // <-- ADD THIS FIELD DECLARATION
+  final String instanceId; // <-- Field is present
 
   // Transient fields (populated by WorkbenchNotifier, not persisted)
   final List<Comment> previewComments; // Store latest 1 or 2 comments
@@ -116,12 +117,6 @@ class WorkbenchItemReference {
           latestCommentTime.isAfter(calculatedUpdateTime)) {
         calculatedUpdateTime = latestCommentTime;
       }
-
-      // If the original overall time was later than any component, keep it
-      // (This case might be less relevant now if overallLastUpdateTime is always recalculated)
-      // if (this.overallLastUpdateTime.isAfter(calculatedUpdateTime)) {
-      //   calculatedUpdateTime = this.overallLastUpdateTime;
-      // }
     }
 
     return WorkbenchItemReference(
@@ -146,12 +141,13 @@ class WorkbenchItemReference {
 
   Map<String, dynamic> toJson() {
     return {
+      // 'id' is often the recordName in CloudKit, but include for completeness/other stores
       'id': id,
       'referencedItemId': referencedItemId,
-      'referencedItemType':
-          referencedItemType.name, // Supports 'note', 'comment', 'task'
+      // Use describeEnum for consistent serialization
+      'referencedItemType': describeEnum(referencedItemType),
       'serverId': serverId,
-      'serverType': serverType.name, // Supports 'memos', 'blinko', 'todoist'
+      'serverType': describeEnum(serverType),
       'serverName': serverName,
       'previewContent': previewContent,
       'addedTimestamp': addedTimestamp.toIso8601String(),
@@ -163,59 +159,42 @@ class WorkbenchItemReference {
 
   factory WorkbenchItemReference.fromJson(
     Map<String, dynamic> json,
-    String recordName,
+    String recordName, // CloudKit record name, often used as primary ID
   ) {
-    // Helper to parse enums safely
-    T? tryParseEnum<T>(List<T> enumValues, String? name) {
-      if (name == null) return null;
-      try {
-        // Ensure this comparison works for enums where T is the enum type itself
-        return enumValues.firstWhere((e) => (e as dynamic).name == name);
-      } catch (_) {
-        if (kDebugMode) {
-          print(
-            '[WorkbenchItemReference.fromJson] Warning: Enum value "$name" not found in ${T.toString()}.',
-          );
-        }
-        return null; // Return null if name doesn't match any enum value
-      }
-    }
-
-    // Parse ServerType - crucial that it handles 'todoist' correctly
-    final parsedServerType = tryParseEnum(
+    // Use the new case-insensitive helper for enums
+    // It returns the first enum value as default if parsing fails
+    final parsedReferencedItemType = enumFromString(
+      WorkbenchItemType.values,
+      json['referencedItemType'] as String?,
+    );
+    final parsedServerType = enumFromString(
       ServerType.values,
       json['serverType'] as String?,
     );
-    // Read instanceId from JSON, provide a default or throw if missing and required
-    final String instanceId =
-        json['instanceId'] as String? ??
-        ''; // Default to empty string if missing
-    if (instanceId.isEmpty && kDebugMode) {
-      print(
-        '[WorkbenchItemReference.fromJson] Warning: Missing or empty instanceId in record $recordName. This might cause issues.',
-      );
-      // Consider throwing an error if instanceId is strictly required:
-      // throw FormatException('Missing required field "instanceId" in WorkbenchItemReference JSON for record $recordName');
+
+    // Read instanceId from JSON, provide default for migration if missing/empty
+    String instanceId = json['instanceId'] as String? ?? '';
+    if (instanceId.isEmpty) {
+      if (kDebugMode) {
+        print(
+          '[WorkbenchItemReference.fromJson] Warning: Missing or empty instanceId in record $recordName. Assigning default: ${WorkbenchInstance.defaultInstanceId}.',
+        );
+      }
+      instanceId = WorkbenchInstance.defaultInstanceId; // Assign default
     }
 
-
     return WorkbenchItemReference(
-      id: json['id'] as String? ?? const Uuid().v4(),
+      // Use recordName as the primary ID if 'id' field is missing/different
+      id: json['id'] as String? ?? recordName,
       referencedItemId: json['referencedItemId'] as String? ?? '',
-      referencedItemType:
-          tryParseEnum(
-            WorkbenchItemType.values,
-            json['referencedItemType'] as String?,
-          ) ??
-          WorkbenchItemType.note, // Default to note
+      referencedItemType: parsedReferencedItemType, // Use result from helper
       serverId: json['serverId'] as String? ?? '',
-      // Use parsed ServerType, default to memos if parsing failed or was null
-      serverType: parsedServerType ?? ServerType.memos,
+      serverType: parsedServerType, // Use result from helper
       serverName: json['serverName'] as String?,
       previewContent: json['previewContent'] as String?,
       addedTimestamp: DateTime.tryParse(json['addedTimestamp'] as String? ?? '') ?? DateTime.now(), // Default to now
       parentNoteId: json['parentNoteId'] as String?,
-      instanceId: instanceId, // <-- ASSIGN instanceId from JSON
+      instanceId: instanceId, // <-- ASSIGN instanceId (potentially defaulted)
       // DO NOT parse transient fields from JSON. They default to empty/null/addedTimestamp in constructor.
     );
   }
@@ -267,7 +246,8 @@ class WorkbenchItemReference {
     // Include transient fields for debugging
     final commentIds = previewComments.map((c) => c.id).join(', ');
     // <-- INCLUDE instanceId in toString
-    return 'WorkbenchItemReference(id: $id, instanceId: $instanceId, refId: $referencedItemId, type: ${referencedItemType.name}, serverId: $serverId, serverType: ${serverType.name}, parentId: $parentNoteId, added: $addedTimestamp, lastActivity: $overallLastUpdateTime, comments: [$commentIds], refUpdate: $referencedItemUpdateTime)';
+    // Use describeEnum for enums
+    return 'WorkbenchItemReference(id: $id, instanceId: $instanceId, refId: $referencedItemId, type: ${describeEnum(referencedItemType)}, serverId: $serverId, serverType: ${describeEnum(serverType)}, parentId: $parentNoteId, added: $addedTimestamp, lastActivity: $overallLastUpdateTime, comments: [$commentIds], refUpdate: $referencedItemUpdateTime)';
   }
 
   static void empty() {}

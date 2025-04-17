@@ -77,28 +77,42 @@ class WorkbenchInstancesNotifier extends StateNotifier<WorkbenchInstancesState> 
   final Ref _ref;
   late final CloudKitService _cloudKitService;
   late final SharedPrefsService _prefsService;
-  // TODO: Add UserSettings persistence later if needed for lastOpenedItemId map
+  bool _prefsInitialized = false; // Track if prefs are loaded
 
   WorkbenchInstancesNotifier(this._ref)
     : super(WorkbenchInstancesState.initial()) {
     _cloudKitService = _ref.read(cloudKitServiceProvider);
-    // Read SharedPrefsService asynchronously using the correct provider
-    _ref.read(sharedPrefsServiceProvider.future).then((prefs) {
-      _prefsService = prefs;
-      _initialize(); // Call initialization after prefs are ready
-    }).catchError((e, s) {
-       if (kDebugMode) {
-        print('[WorkbenchInstancesNotifier] Error getting SharedPrefsService: $e\n$s');
-      }
-      // Handle error - perhaps set state to error state?
-      if (mounted) {
-        state = state.copyWith(isLoading: false, error: 'Failed to load preferences');
-      }
-    });
+    // Read SharedPrefsService asynchronously
+    _initializePrefsAndLoad();
   }
 
+  Future<void> _initializePrefsAndLoad() async {
+    try {
+      _prefsService = await _ref.read(sharedPrefsServiceProvider.future);
+      _prefsInitialized = true;
+      if (kDebugMode) {
+        print('[WorkbenchInstancesNotifier] SharedPrefsService initialized.');
+      }
+      // Now that prefs are ready, proceed with initialization
+      await _initialize();
+    } catch (e, s) {
+       if (kDebugMode) {
+        print(
+          '[WorkbenchInstancesNotifier] Error getting SharedPrefsService: $e\n$s',
+        );
+      }
+      if (mounted) {
+        state = state.copyWith(
+          isLoading: false,
+          error: 'Failed to load preferences',
+        );
+      }
+    }
+  }
+
+
   Future<void> _initialize() async {
-    if (!mounted) return;
+    if (!mounted || !_prefsInitialized) return;
 
     // 1. Load cached active instance ID and last opened map
     final cachedActiveId = _prefsService.getActiveInstanceId();
@@ -114,18 +128,42 @@ class WorkbenchInstancesNotifier extends StateNotifier<WorkbenchInstancesState> 
         isLoading: true, // Still loading from CloudKit
         clearError: true,
       );
+      if (kDebugMode) {
+        print(
+          '[WorkbenchInstancesNotifier] Initializing with cached activeId: $initialActiveId',
+        );
+      }
     }
 
     // 2. Load instances from CloudKit
-    await loadInstances(setActiveIdFromCache: initialActiveId);
+    // Pass the initialActiveId to potentially use it if CloudKit load is slow/fails initially
+    await loadInstances(setActiveIdFromPrefs: initialActiveId);
 
     // 3. Load last opened map from CloudKit (if implemented)
     // await _loadLastOpenedMapFromCloudKit(); // Placeholder
   }
 
 
-  Future<void> loadInstances({String? setActiveIdFromCache}) async {
+  Future<void> loadInstances({String? setActiveIdFromPrefs}) async {
     if (!mounted) return;
+    // Ensure prefs are loaded before proceeding, especially for the active ID logic
+    if (!_prefsInitialized) {
+      if (kDebugMode)
+        print(
+          '[WorkbenchInstancesNotifier] loadInstances called before prefs initialized. Waiting...',
+        );
+      // This scenario should be less likely with the new initialization flow, but handle defensively.
+      // Option 1: Wait (might block UI if called directly)
+      // await _ref.read(sharedPrefsServiceProvider.future);
+      // Option 2: Defer or return early (might lead to inconsistent state)
+      // return;
+      // Option 3: Set loading and retry later (complex)
+      // For now, assume _initializePrefsAndLoad handles the sequence correctly.
+      // If called independently, it might need a check/wait.
+      state = state.copyWith(isLoading: true, error: 'Preferences not ready');
+      return;
+    }
+
     // Don't set isLoading if already loading (e.g., during initial _initialize)
     if (!state.isLoading) {
        state = state.copyWith(isLoading: true, clearError: true);
@@ -135,36 +173,61 @@ class WorkbenchInstancesNotifier extends StateNotifier<WorkbenchInstancesState> 
       final instances = await _cloudKitService.getAllWorkbenchInstances();
       if (!mounted) return;
 
-      String finalActiveId = state.activeInstanceId; // Keep current/cached ID initially
+      // Determine the active ID to use:
+      // Start with the current state's active ID (which might be from prefs or previous state).
+      String currentActiveIdInState = state.activeInstanceId;
+      String finalActiveId = currentActiveIdInState;
 
       if (instances.isNotEmpty) {
-        // If the cached/current active ID is no longer valid, reset to the first available instance
-        if (!instances.any((i) => i.id == finalActiveId)) {
+        // Check if the current active ID (from state) is valid within the newly loaded list.
+        bool isActiveIdValid = instances.any((i) => i.id == finalActiveId);
+
+        if (!isActiveIdValid) {
+          // The current active ID is NOT valid.
+          // This means the ID stored in prefs (and thus in current state) refers to an instance
+          // that no longer exists (or never existed).
+          // Action: Reset to the first available instance AND persist this correction.
           finalActiveId = instances.first.id;
-           if (kDebugMode) {
-            print('[WorkbenchInstancesNotifier] Active instance ID $state.activeInstanceId not found, resetting to ${instances.first.id}');
+          if (kDebugMode) {
+            print(
+              '[WorkbenchInstancesNotifier] Active instance ID $currentActiveIdInState not found in loaded list. Resetting to first available: ${instances.first.id} and persisting.',
+            );
           }
-          // Persist the newly selected active ID
-          unawaited(_prefsService.saveActiveInstanceId(finalActiveId));
+          // --- Persist the correction ---
+          // This prevents flip-flopping if the invalid ID reappears later (e.g., due to sync delays)
+          await _prefsService.saveActiveInstanceId(finalActiveId);
+          // --- End Persist ---
         }
+        // If the active ID *was* valid, we keep it. No change needed, no persistence needed.
+        else if (kDebugMode) {
+          print(
+            '[WorkbenchInstancesNotifier] Current active instance ID $currentActiveIdInState is valid in loaded list.',
+          );
+        }
+
       } else {
-        // This case should ideally not happen due to default instance creation in CloudKitService,
-        // but handle defensively.
+        // No instances loaded (even default failed?). This is an error/edge case.
+        // Fallback to the default ID and ensure it's saved.
         finalActiveId = WorkbenchInstance.defaultInstanceId;
          if (kDebugMode) {
-          print('[WorkbenchInstancesNotifier] No instances loaded, ensuring active ID is default.');
+          print(
+            '[WorkbenchInstancesNotifier] No instances loaded (error?). Ensuring active ID is default and persisting.',
+          );
         }
+        await _prefsService.saveActiveInstanceId(finalActiveId);
       }
 
 
       if (mounted) {
         state = state.copyWith(
           instances: instances,
-          activeInstanceId: finalActiveId,
+          activeInstanceId: finalActiveId, // Use the validated/corrected ID
           isLoading: false,
         );
          if (kDebugMode) {
-          print('[WorkbenchInstancesNotifier] Loaded ${instances.length} instances. Active: $finalActiveId');
+          print(
+            '[WorkbenchInstancesNotifier] Loaded ${instances.length} instances. Final Active: $finalActiveId',
+          );
         }
       }
     } catch (e, s) {
@@ -177,8 +240,9 @@ class WorkbenchInstancesNotifier extends StateNotifier<WorkbenchInstancesState> 
     }
   }
 
+
   Future<bool> saveInstance(String name) async {
-    if (!mounted) return false;
+    if (!mounted || !_prefsInitialized) return false;
     if (name.trim().isEmpty) {
        if (kDebugMode) print('[WorkbenchInstancesNotifier] Instance name cannot be empty.');
        state = state.copyWith(error: 'Instance name cannot be empty');
@@ -198,21 +262,18 @@ class WorkbenchInstancesNotifier extends StateNotifier<WorkbenchInstancesState> 
       createdAt: DateTime.now(),
     );
 
-    // --- Step 2a: Optimistic update with consistent state ---
-    final originalState = state; // Keep original state for potential revert
+    final originalState = state;
+    // Optimistic update: Add new instance and make it active
     if (mounted) {
-      // Update instances AND activeInstanceId in the same atomic operation
       state = state.copyWith(
         instances: [...originalState.instances, newInstance],
-        activeInstanceId:
-            newInstance.id, // Set the new instance as active immediately
-        isLoading: false, // Not loading, but performing action
+        activeInstanceId: newInstance.id, // Set new instance as active
+        isLoading: false,
         clearError: true,
       );
       // Persist the new active ID optimistically
       unawaited(_prefsService.saveActiveInstanceId(newInstance.id));
     }
-    // --- End Step 2a ---
 
     try {
       final success = await _cloudKitService.saveWorkbenchInstance(newInstance);
@@ -222,13 +283,8 @@ class WorkbenchInstancesNotifier extends StateNotifier<WorkbenchInstancesState> 
       if (kDebugMode) {
         print('[WorkbenchInstancesNotifier] Saved new instance ${newInstance.id}');
       }
-      // --- Step 2a: Reload after successful save ---
-      // Reload to ensure consistency, especially if server could modify the record (e.g., assign ID)
-      // or if other clients might have made changes.
-      // If the ID is guaranteed to be the client-generated one, we could potentially
-      // just update the state without a full reload, but reloading is safer.
-      await loadInstances();
-      // --- End Step 2a ---
+      // Optional: Reload after save for consistency, though optimistic update is usually sufficient here.
+      // await loadInstances();
       return true;
     } catch (e, s) {
       if (kDebugMode) {
@@ -236,10 +292,8 @@ class WorkbenchInstancesNotifier extends StateNotifier<WorkbenchInstancesState> 
       }
       // Revert optimistic update
       if (mounted) {
-        state = originalState.copyWith(
-          error: e,
-        ); // Revert to original state + error
-        // Revert cached active ID if it was changed optimistically
+        state = originalState.copyWith(error: e); // Revert state
+        // Revert cached active ID
         unawaited(
           _prefsService.saveActiveInstanceId(originalState.activeInstanceId),
         );
@@ -249,20 +303,24 @@ class WorkbenchInstancesNotifier extends StateNotifier<WorkbenchInstancesState> 
   }
 
   Future<bool> renameInstance(String instanceId, String newName) async {
-     if (!mounted) return false;
+    if (!mounted || !_prefsInitialized) return false;
      if (newName.trim().isEmpty) {
        if (kDebugMode) print('[WorkbenchInstancesNotifier] Instance name cannot be empty.');
        state = state.copyWith(error: 'Instance name cannot be empty');
        return false;
     }
-    // Check for duplicate names (case-insensitive), excluding the current instance being renamed
+    // Check for duplicate names (case-insensitive), excluding the current instance
     if (state.instances.any((i) => i.id != instanceId && i.name.toLowerCase() == newName.trim().toLowerCase())) {
       if (kDebugMode) print('[WorkbenchInstancesNotifier] Instance name "$newName" already exists.');
       state = state.copyWith(error: 'An instance with this name already exists.');
       return false;
     }
 
-    final instanceToRename = state.instances.firstWhere((i) => i.id == instanceId, orElse: () => throw Exception('Instance not found'));
+    final instanceToRename = state.instances.firstWhere(
+      (i) => i.id == instanceId,
+      orElse:
+          () => throw Exception('Instance not found for rename: $instanceId'),
+    );
     final updatedInstance = instanceToRename.copyWith(name: newName.trim());
 
     // Optimistic update
@@ -280,7 +338,6 @@ class WorkbenchInstancesNotifier extends StateNotifier<WorkbenchInstancesState> 
       if (kDebugMode) {
         print('[WorkbenchInstancesNotifier] Renamed instance $instanceId to "$newName"');
       }
-      // Consider calling loadInstances() here too for consistency, though less critical than after creation.
       return true;
     } catch (e, s) {
       if (kDebugMode) {
@@ -296,7 +353,7 @@ class WorkbenchInstancesNotifier extends StateNotifier<WorkbenchInstancesState> 
 
 
   Future<bool> deleteInstance(String instanceId) async {
-    if (!mounted) return false;
+    if (!mounted || !_prefsInitialized) return false;
     // Prevent deleting the last instance or the default instance
     if (state.instances.length <= 1) {
        if (kDebugMode) print('[WorkbenchInstancesNotifier] Cannot delete the last instance.');
@@ -309,16 +366,16 @@ class WorkbenchInstancesNotifier extends StateNotifier<WorkbenchInstancesState> 
        return false;
     }
 
-    final originalState = state; // Keep original state for revert
+    final originalState = state;
     final originalInstances = List<WorkbenchInstance>.from(state.instances);
     final newInstances = originalInstances.where((i) => i.id != instanceId).toList();
     String newActiveId = state.activeInstanceId;
-    String originalActiveId =
-        state.activeInstanceId; // Store original active ID
+    String originalActiveId = state.activeInstanceId;
 
-    // If deleting the active instance, switch to the first remaining one (or default)
+    // If deleting the active instance, switch to the first remaining one
     if (instanceId == state.activeInstanceId) {
-      newActiveId = newInstances.isNotEmpty ? newInstances.first.id : WorkbenchInstance.defaultInstanceId;
+      // newInstances cannot be empty here due to the check above
+      newActiveId = newInstances.first.id;
        if (kDebugMode) print('[WorkbenchInstancesNotifier] Deleting active instance, switching active to $newActiveId');
     }
 
@@ -336,27 +393,51 @@ class WorkbenchInstancesNotifier extends StateNotifier<WorkbenchInstancesState> 
     }
 
     try {
-      final success = await _cloudKitService.deleteWorkbenchInstance(instanceId);
-      if (!success) {
-        throw Exception('CloudKit delete failed');
+      // Delete the instance record itself
+      final deleteInstanceSuccess = await _cloudKitService
+          .deleteWorkbenchInstance(instanceId);
+      if (!deleteInstanceSuccess) {
+        // Don't throw immediately, try deleting items anyway but log the instance delete failure
+        if (kDebugMode) {
+          print(
+            '[WorkbenchInstancesNotifier] CloudKit delete failed for instance $instanceId, but proceeding to delete items.',
+          );
+        }
+      } else if (kDebugMode) {
+        print(
+          '[WorkbenchInstancesNotifier] Deleted instance $instanceId from CloudKit.',
+        );
       }
-      if (kDebugMode) {
-        print('[WorkbenchInstancesNotifier] Deleted instance $instanceId');
-      }
-      // Also delete associated workbench items (fire-and-forget for now)
-      unawaited(_cloudKitService.deleteAllWorkbenchItemReferences(instanceId: instanceId));
-      // Remove from last opened map
+
+      // Also delete associated workbench items (fire-and-forget)
+      // This is crucial to prevent orphaned items
+      unawaited(
+        _cloudKitService
+            .deleteAllWorkbenchItemReferences(instanceId: instanceId)
+            .then((success) {
+              if (kDebugMode)
+                print(
+                  '[WorkbenchInstancesNotifier] Attempted deletion of items for instance $instanceId. Success: $success',
+                );
+            }),
+      );
+
+      // Remove from last opened map locally and persist
       _removeInstanceFromLastOpenedMap(instanceId);
-      // Consider calling loadInstances() here too for absolute consistency,
-      // though the optimistic update should be correct.
-      return true;
+
+      // If instance deletion failed, we might want to revert the optimistic UI update,
+      // but since items are being deleted, keeping the UI state might be less confusing.
+      // For now, assume success unless CloudKit throws an exception caught below.
+      return true; // Return true even if instance delete failed but item delete was attempted
+
     } catch (e, s) {
       if (kDebugMode) {
-        print('[WorkbenchInstancesNotifier] Error deleting instance $instanceId: $e\n$s');
+        print(
+          '[WorkbenchInstancesNotifier] Error during delete instance process for $instanceId: $e\n$s',
+        );
       }
-      // Revert optimistic update
+      // Revert optimistic UI update fully on error
       if (mounted) {
-        // Revert state completely
         state = originalState.copyWith(error: e);
          // Revert cached active ID if it was changed optimistically
         if (newActiveId != originalActiveId) {
@@ -368,14 +449,18 @@ class WorkbenchInstancesNotifier extends StateNotifier<WorkbenchInstancesState> 
   }
 
   Future<void> setActiveInstance(String instanceId) async {
-    if (!mounted) return;
+    if (!mounted || !_prefsInitialized) return;
     if (state.activeInstanceId == instanceId) return; // No change needed
 
-    // Check if the instanceId exists
+    // Check if the instanceId exists in the current list
     if (!state.instances.any((i) => i.id == instanceId)) {
-       if (kDebugMode) print('[WorkbenchInstancesNotifier] Attempted to set active instance to non-existent ID: $instanceId');
-       // Optionally set an error state or just ignore
-       return;
+      if (kDebugMode)
+        print(
+          '[WorkbenchInstancesNotifier] Attempted to set active instance to non-existent ID in current list: $instanceId',
+        );
+      // Optionally: Trigger a reload to ensure list is up-to-date
+      // unawaited(loadInstances());
+      return; // Don't set an invalid ID
     }
 
     if (mounted) {
@@ -383,15 +468,15 @@ class WorkbenchInstancesNotifier extends StateNotifier<WorkbenchInstancesState> 
        if (kDebugMode) print('[WorkbenchInstancesNotifier] Set active instance to: $instanceId');
       // Persist to cache
       await _prefsService.saveActiveInstanceId(instanceId);
-      // Persist to CloudKit UserSettings (if needed, e.g., for cross-device sync)
-      // await _cloudKitService.saveSetting('activeInstanceId', instanceId); // Placeholder
+      // Persist to CloudKit UserSettings (if needed)
+      // await _cloudKitService.saveSetting('activeInstanceId', instanceId);
     }
   }
 
   // --- Last Opened Item Logic ---
 
   void setLastOpenedItem(String instanceId, String? referenceId) {
-    if (!mounted) return;
+    if (!mounted || !_prefsInitialized) return;
 
     final currentMap = Map<String, String?>.from(state.lastOpenedItemId);
     if (currentMap[instanceId] == referenceId) return; // No change
@@ -404,12 +489,12 @@ class WorkbenchInstancesNotifier extends StateNotifier<WorkbenchInstancesState> 
       // Persist lazily to cache
       unawaited(_prefsService.saveLastOpenedItemMap(currentMap));
       // Persist lazily to CloudKit UserSettings (if implemented)
-      // unawaited(_saveLastOpenedMapToCloudKit(currentMap)); // Placeholder
+      // unawaited(_saveLastOpenedMapToCloudKit(currentMap));
     }
   }
 
   void _removeInstanceFromLastOpenedMap(String instanceId) {
-     if (!mounted) return;
+    if (!mounted || !_prefsInitialized) return;
      final currentMap = Map<String, String?>.from(state.lastOpenedItemId);
      if (currentMap.containsKey(instanceId)) {
        currentMap.remove(instanceId);
@@ -418,7 +503,7 @@ class WorkbenchInstancesNotifier extends StateNotifier<WorkbenchInstancesState> 
           if (kDebugMode) print('[WorkbenchInstancesNotifier] Removed instance $instanceId from last opened map.');
          // Persist change
          unawaited(_prefsService.saveLastOpenedItemMap(currentMap));
-         // unawaited(_saveLastOpenedMapToCloudKit(currentMap)); // Placeholder
+        // unawaited(_saveLastOpenedMapToCloudKit(currentMap));
        }
      }
   }
@@ -432,6 +517,6 @@ class WorkbenchInstancesNotifier extends StateNotifier<WorkbenchInstancesState> 
 // Provider definition
 final workbenchInstancesProvider =
     StateNotifierProvider<WorkbenchInstancesNotifier, WorkbenchInstancesState>((ref) {
+  // Initialization logic (including async _initializePrefsAndLoad) is handled within the notifier's constructor/methods
   return WorkbenchInstancesNotifier(ref);
-  // Initialization logic (including async _initialize) is handled within the notifier's constructor
 });
