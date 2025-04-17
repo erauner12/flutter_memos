@@ -28,9 +28,14 @@ void main() {
       const McpClientState(serverStatuses: {'id': McpConnectionStatus.connected}),
     );
     when(mcpNotifier.state.hasActiveConnections).thenReturn(true);
-    when(gemini.send(any, any)).thenThrow(Exception('should not call'));
-    when(mcpNotifier.processQuery(any, any)).thenAnswer(
-      (_) async => McpProcessResult(finalModelContent: gen_ai.Content.text('mcp')),
+    when(
+      gemini.send(any<List<gen_ai.Content>>(), any<String>()),
+    ).thenThrow(Exception('should not call'));
+    when(
+      mcpNotifier.processQuery(any<String>(), any<List<gen_ai.Content>>()),
+    ).thenAnswer(
+      (_) async =>
+          McpProcessResult(finalModelContent: gen_ai.Content.text('mcp')),
     );
 
     final resp = await facade.send(history, userMsg);
@@ -42,7 +47,9 @@ void main() {
       const McpClientState(serverStatuses: {'id': McpConnectionStatus.disconnected}),
     );
     when(mcpNotifier.state.hasActiveConnections).thenReturn(false);
-    when(gemini.send(history, userMsg))
+    when(
+      gemini.send(any<List<gen_ai.Content>>(), any<String>()),
+    )
         .thenAnswer((_) async => ChatAiResponse(text: 'gemini'));
 
     final resp = await facade.send(history, userMsg);

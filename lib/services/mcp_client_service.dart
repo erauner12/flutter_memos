@@ -1,18 +1,10 @@
 import 'dart:async';
-import 'dart:convert'; // For jsonEncode/Decode if needed for tool results
 import 'dart:io' as io; // Use 'io' prefix for dart:io types
 
-import 'package:collection/collection.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_memos/models/mcp_server_config.dart';
 // MODIFY: Import the correct provider
 import 'package:flutter_memos/providers/mcp_server_config_provider.dart';
-import 'package:flutter_memos/providers/settings_provider.dart'; // To get Gemini key & Todoist key
-// Import Stdio types explicitly (less likely to conflict)
-// Note: These should be available via the main lib export now
-
-// ADD: Import Todoist API key provider
-import 'package:flutter_memos/services/gemini_service.dart'; // Import GeminiService
 import 'package:flutter_memos/services/mcp_sse_client_transport.dart'; // Import the new SSE transport
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_generative_ai/google_generative_ai.dart'; // Import for Gemini types (Content, Tool, etc.)
@@ -503,6 +495,10 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
   McpClientNotifier(this.ref) : super(const McpClientState()) {
     initialize();
   }
+
+  /// External callers may check the connection status without accessing the
+  /// protected `state` field (which is forbidden outside a `StateNotifier`).
+  bool get hasActiveConnections => state.hasActiveConnections;
 
   void initialize() {
     // MODIFY: Read from the new provider

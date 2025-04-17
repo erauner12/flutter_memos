@@ -22,13 +22,15 @@ class ChatAiFacade implements ChatAiBackend {
     required this.geminiBackend,
     required this.mcpNotifier,
   });
-  final GeminiAi geminiBackend;
+
+  /// may be a real [GeminiAi] or a test double
+  final ChatAiBackend geminiBackend;
   final McpClientNotifier mcpNotifier;
 
   @override
   Future<ChatAiResponse> send(
       List<gen_ai.Content> history, String userMessage) async {
-    if (mcpNotifier.state.hasActiveConnections) {
+    if (mcpNotifier.hasActiveConnections) {
       return McpAiProxy(mcpNotifier).send(history, userMessage);
     }
     return geminiBackend.send(history, userMessage);

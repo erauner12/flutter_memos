@@ -3,13 +3,13 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_memos/models/chat_message.dart';
 import 'package:flutter_memos/models/chat_session.dart';
-import 'package:flutter_memos/models/workbench_item_reference.dart';
-import 'package:flutter_memos/providers/settings_provider.dart';
+import 'package:flutter_memos/providers/service_providers.dart'
+    show chatAiFacadeProvider;
+import 'package:flutter_memos/services/chat_ai.dart'; // new
 import 'package:flutter_memos/services/chat_session_cloud_kit_service.dart';
 import 'package:flutter_memos/services/local_storage_service.dart';
-import 'package:flutter_memos/services/chat_ai.dart'; // new
-import 'package:google_generative_ai/google_generative_ai.dart' as gen_ai;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_generative_ai/google_generative_ai.dart' as gen_ai;
 
 abstract class ChatPersister {
   Future<void> save(ChatSession session);
@@ -97,7 +97,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
 
   bool _skipNextPersist = false;
   Timer? _debounce;
-  final Duration _debounceDuration_OLD = const Duration(milliseconds: 500);
+  final Duration _debounceDuration = const Duration(milliseconds: 500);
 
   ChatNotifier(
     this._ref,
@@ -106,24 +106,13 @@ class ChatNotifier extends StateNotifier<ChatState> {
     ChatPersister? persister,
     required ChatAiBackend ai,
     bool autoInit = true,
-    Duration debounceDuration = const Duration(milliseconds: 500),
   }) : _local = local,
        _cloud = cloud,
        _persister = persister ?? DefaultChatPersister(local),
        _ai = ai,
        super(ChatState.initial()) {
-    _initGemini();
     if (autoInit) {
       _loadInitialSession();
-    }
-  }
-
-  void _initGemini() {
-    if (_ai is GemBackend) {
-      final key = _ref.read(geminiApiKeyProvider);
-      if (key.isNotEmpty) {
-        (_ai as GemBackend).initGemini(key);
-      }
     }
   }
 
@@ -328,7 +317,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
 
   void _persistSoon() {
     _debounce?.cancel();
-    _debounce = Timer(_debounceDuration_OLD, () async {
+    _debounce = Timer(_debounceDuration, () async {
       if (_skipNextPersist) {
         _skipNextPersist = false;
         return;
@@ -376,7 +365,6 @@ final chatProviderTesting = StateNotifierProvider.family<
     persister: cfg.persister,
     ai: cfg.ai!,
     autoInit: false,
-    debounceDuration: Duration.zero,
   );
 });
 
@@ -395,6 +383,6 @@ final chatProvider = StateNotifierProvider<ChatNotifier, ChatState>(
     ref,
     ref.read(localStorageServiceProvider),
     ref.read(chatSessionCloudKitServiceProvider),
-    ai: ref.read(chatAiBackendProvider),
+    ai: ref.read(chatAiFacadeProvider),
   ),
 );
