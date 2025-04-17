@@ -102,13 +102,17 @@ class TaskListItem extends StatelessWidget {
       child: CupertinoContextMenu(
         actions: _buildContextActions(context),
 
-        // Wrap the child in the _TaskContextPreview widget directly
-        child: _TaskContextPreview(
-          child: _TaskRowContent(
-            task: task,
-            onTap: onTap, // Pass onTap for the main content area
-            onToggleComplete: onToggleComplete, // Pass toggle for the checkbox
-          ),
+        // 1. Provide a previewBuilder that gives the preview finite constraints
+        //    using the _TaskContextPreview helper.
+        previewBuilder:
+            (context, animation, child) => _TaskContextPreview(child: child!),
+
+        // 2. The regular child for the in-list representation.
+        //    No ConstrainedBox needed here anymore.
+        child: _TaskRowContent(
+          task: task,
+          onTap: onTap, // Pass onTap for the main content area
+          onToggleComplete: onToggleComplete, // Pass toggle for the checkbox
         ),
       ),
     );
@@ -371,11 +375,14 @@ class _TaskContextPreview extends StatelessWidget {
     return SizedBox(
       width: MediaQuery.of(context).size.width,
       child: Container(
-        // Same colour the system uses for sheets / menus
-        color: CupertinoColors.systemBackground.resolveFrom(context),
-        // ⇣ Optional subtle corner radius like native context menu
+        // Do not set color directly when using decoration.
+        // color: CupertinoColors.systemBackground.resolveFrom(context), // REMOVED
         clipBehavior: Clip.hardEdge, // Use Clip enum from dart:ui
-        decoration: BoxDecoration(borderRadius: BorderRadius.circular(12)),
+        decoration: BoxDecoration(
+          // Set color inside BoxDecoration.
+          color: CupertinoColors.systemBackground.resolveFrom(context),
+          borderRadius: BorderRadius.circular(12),
+        ),
         child: child,
       ),
     );
