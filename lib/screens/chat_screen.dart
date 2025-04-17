@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart' show LinearProgressIndicator; // For loading bar
 import 'package:flutter_markdown/flutter_markdown.dart'; // For rendering markdown
+import 'package:flutter_memos/main.dart'; // Import for rootNavigatorKeyProvider
 import 'package:flutter_memos/models/chat_message.dart'; // Import ChatMessage which now defines Role
 import 'package:flutter_memos/models/workbench_item_reference.dart'; // For WorkbenchItemType enum
 import 'package:flutter_memos/providers/chat_providers.dart';
@@ -220,43 +221,70 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   ],
                 ),
               ),
-            // Display Context Indicator (Optional)
+            // Display Context Indicator
             if (chatState.currentContextItemId != null)
-              Container(
-                color: CupertinoColors.systemBlue.withAlpha(20),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 6,
-                ),
-                child: Row(
-                  children: [
-                    const Icon(
-                      CupertinoIcons.info_circle,
-                      color: CupertinoColors.systemBlue,
-                      size: 16,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        "Context: ${_getItemTypeName(chatState.currentContextItemType)} ${chatState.currentContextItemId}",
-                        style: const TextStyle(
-                          color: CupertinoColors.systemBlue,
-                          fontSize: 13,
-                        ),
-                        overflow: TextOverflow.ellipsis,
+              GestureDetector(
+                // Wrap with GestureDetector
+                onTap: () {
+                  // Navigate back to the source item if it's a note
+                  if (chatState.currentContextItemType ==
+                          WorkbenchItemType.note &&
+                      chatState.currentContextItemId != null) {
+                    final rootNavigator = ref.read(rootNavigatorKeyProvider);
+                    rootNavigator.currentState?.pushNamed(
+                      '/item-detail',
+                      arguments: {'itemId': chatState.currentContextItemId},
+                    );
+                  }
+                  // Add handling for other types if needed later
+                },
+                child: Container(
+                  color: CupertinoColors.systemBlue.withAlpha(20),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 6,
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        CupertinoIcons.info_circle,
+                        color:
+                            chatState.currentContextItemType ==
+                                    WorkbenchItemType.note
+                                ? CupertinoColors
+                                    .systemBlue // Keep blue for tappable notes
+                                : CupertinoColors.secondaryLabel.resolveFrom(
+                                  context,
+                                ), // Dim if not tappable
+                        size: 16,
                       ),
-                    ),
-                    // Optional: Add a button to clear context without clearing chat?
-                    // CupertinoButton(
-                    //   padding: EdgeInsets.zero,
-                    //   minSize: 0,
-                    //   child: const Icon(CupertinoIcons.xmark, size: 14, color: CupertinoColors.systemBlue),
-                    //   onPressed: () {
-                    //      // Need a dedicated method in notifier to clear only context
-                    //      // ref.read(chatProvider.notifier).clearContext();
-                    //   },
-                    // )
-                  ],
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          "Context: ${_getItemTypeName(chatState.currentContextItemType)} ${chatState.currentContextItemId}",
+                          style: TextStyle(
+                            color:
+                                chatState.currentContextItemType ==
+                                        WorkbenchItemType.note
+                                    ? CupertinoColors
+                                        .systemBlue // Keep blue for tappable notes
+                                    : CupertinoColors.secondaryLabel
+                                        .resolveFrom(
+                                          context,
+                                        ), // Dim if not tappable
+                            fontSize: 13,
+                            // Add underline if it's a tappable note
+                            decoration:
+                                chatState.currentContextItemType ==
+                                        WorkbenchItemType.note
+                                    ? TextDecoration.underline
+                                    : TextDecoration.none,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             // Message List
