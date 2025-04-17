@@ -66,7 +66,8 @@ class ChatState {
 
   List<ChatMessage> get displayMessages => session.messages;
   String? get currentContextItemId => session.contextItemId;
-  WorkbenchItemType? get currentContextItemType => session.contextItemType;
+  WorkbenchItemType? get currentContextItemType =>
+      session.contextItemType as WorkbenchItemType?;
   String? get currentContextServerId => session.contextServerId;
 
   @override
@@ -90,6 +91,7 @@ class ChatState {
 }
 
 class ChatNotifier extends StateNotifier<ChatState> {
+  // ignore: unused_field
   final Ref _ref;
   final LocalStorageService _local;
   final ChatSessionCloudKitService _cloud;
@@ -136,23 +138,27 @@ class ChatNotifier extends StateNotifier<ChatState> {
     if (cloud != null && local != null) {
       if (cloud.lastUpdated.isAfter(local.lastUpdated)) {
         chosen = cloud;
-        if (kDebugMode)
+        if (kDebugMode) {
           print("[ChatNotifier] Init: Using newer Cloud session.");
+        }
         await _local.saveActiveChatSession(chosen);
       } else {
         chosen = local;
-        if (kDebugMode)
+        if (kDebugMode) {
           print("[ChatNotifier] Init: Using newer/same Local session.");
+        }
       }
     } else if (cloud != null) {
       chosen = cloud;
-      if (kDebugMode)
+      if (kDebugMode) {
         print("[ChatNotifier] Init: Using Cloud session (local missing).");
+      }
       await _local.saveActiveChatSession(chosen);
     } else if (local != null) {
       chosen = local;
-      if (kDebugMode)
+      if (kDebugMode) {
         print("[ChatNotifier] Init: Using Local session (cloud missing).");
+      }
       await _cloud.saveChatSession(chosen);
     } else {
       if (kDebugMode) print("[ChatNotifier] Init: No existing session found.");
@@ -179,7 +185,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
     final s = ChatSession(
       id: ChatSession.activeSessionId,
       contextItemId: parentItemId,
-      contextItemType: parentItemType,
+      contextItemType: parentItemType as WorkbenchItemType?,
       contextServerId: parentServerId,
       messages: [system],
       lastUpdated: DateTime.now().toUtc(),
@@ -277,7 +283,9 @@ class ChatNotifier extends StateNotifier<ChatState> {
           : state = state.copyWith(clearError: true);
 
   Future<void> forceFetchFromCloud() async {
-    if (state.isSyncing || state.isInitializing) return;
+    if (state.isSyncing || state.isInitializing) {
+      return;
+    }
 
     if (kDebugMode)
       print("[ChatNotifier] Starting manual fetch from CloudKit...");
@@ -323,7 +331,9 @@ class ChatNotifier extends StateNotifier<ChatState> {
         _skipNextPersist = false;
         return;
       }
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
       final latest = state.session.copyWith(
         lastUpdated: DateTime.now().toUtc(),
       );
