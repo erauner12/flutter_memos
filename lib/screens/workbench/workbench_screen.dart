@@ -1,5 +1,4 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/foundation.dart'; // Import for kDebugMode
 import 'package:flutter/material.dart'; // Import Material for TabBar, ReorderableListView
 import 'package:flutter_memos/models/workbench_instance.dart'; // Import WorkbenchInstance
 import 'package:flutter_memos/providers/workbench_instances_provider.dart'; // Import instances provider
@@ -22,20 +21,14 @@ class WorkbenchScreen extends ConsumerStatefulWidget {
 // Remove SingleTickerProviderStateMixin - vsync is now handled by the manager
 class _WorkbenchScreenState extends ConsumerState<WorkbenchScreen> {
   final TextEditingController _instanceNameController = TextEditingController();
-  // Remove the holder field
-  // late final WorkbenchTabControllerHolder _holder;
 
   @override
   void initState() {
     super.initState();
-    // Remove holder initialization
-    // _holder = WorkbenchTabControllerHolder(ref, this);
   }
 
   @override
   void dispose() {
-    // Remove holder disposal
-    // _holder.dispose();
     _instanceNameController.dispose();
     super.dispose();
   }
@@ -239,23 +232,16 @@ class _WorkbenchScreenState extends ConsumerState<WorkbenchScreen> {
     final instances = instancesState.instances;
     final activeInstanceId = instancesState.activeInstanceId;
 
-    // Watch the TabController? from the StateProvider
-    final TabController? tabCtrl = ref.watch(workbenchTabControllerProvider);
+    // Watch the TabController from the StateProvider.
+    // Use the non-null assertion operator (!) because the manager now guarantees
+    // it's non-null after the first frame, except during final disposal (which
+    // means this widget wouldn't be building anyway).
+    // If the provider *is* null here, it indicates a logic error in the manager
+    // or the widget lifecycle, and the assertion should fail loudly in debug mode.
+    final TabController tabCtrl = ref.watch(workbenchTabControllerProvider)!;
 
-    // --- Handle null controller state (initial frame or after dispose) ---
-    // This check is crucial as the manager might publish null during dispose/recreate.
-    if (tabCtrl == null) {
-      if (kDebugMode) {
-        print(
-          "[WorkbenchScreen._buildScaffold] TabController is null, showing loading indicator.",
-        );
-      }
-      // Show a loading indicator while the controller is being initialized/recreated
-      return const CupertinoPageScaffold(
-        child: Center(child: CupertinoActivityIndicator()),
-      );
-    }
-    // --- End null controller handling ---
+    // --- Removed null controller check ---
+    // The loading indicator branch is no longer needed.
 
     final items = workbenchState.items;
     final bool canRefresh =
@@ -275,8 +261,7 @@ class _WorkbenchScreenState extends ConsumerState<WorkbenchScreen> {
           child: Material(
             color: Colors.transparent,
             child: TabBar(
-              // Use the controller obtained from the provider
-              controller: tabCtrl, // Now guaranteed non-null here
+              controller: tabCtrl, // Use the non-null controller
               isScrollable: true,
               indicatorColor: primaryColor,
               labelColor: primaryColor,
@@ -297,12 +282,6 @@ class _WorkbenchScreenState extends ConsumerState<WorkbenchScreen> {
                             ),
                           ),
                       ],
-              // Disable taps if the list is empty (controller length is 1)
-              // The controller's listener (_onTabChanged in manager) handles the logic
-              // based on the actual instances list, so direct onTap disabling here might
-              // be redundant or could conflict if not careful. The manager handles the
-              // active instance update based on the tap.
-              // onTap: instances.isEmpty ? (_) {} : null, // Keep original logic or rely on manager
             ),
           ),
         ),
@@ -354,11 +333,10 @@ class _WorkbenchScreenState extends ConsumerState<WorkbenchScreen> {
       child: SafeArea(
         bottom: false,
         child: Builder(
-          // Using Builder here is fine, context is already correct
           builder: (context) {
             // Loading/Error states for instances (unchanged logic)
+            // Show loading only if instances are truly empty AND loading
             if (instancesState.isLoading && instances.isEmpty) {
-              // Avoid showing loading if controller is also null (already handled above)
               return const Center(child: CupertinoActivityIndicator());
             }
             if (instancesState.error != null && instances.isEmpty) {
@@ -399,11 +377,9 @@ class _WorkbenchScreenState extends ConsumerState<WorkbenchScreen> {
             }
 
             // Loading/Error states for active workbench items (unchanged logic)
+            // Show loading only if items are truly empty AND loading
             if (workbenchState.isLoading && items.isEmpty) {
-              // Avoid showing this if instances are also loading (handled above)
-              if (!instancesState.isLoading || instances.isNotEmpty) {
-                return const Center(child: CupertinoActivityIndicator());
-              }
+              return const Center(child: CupertinoActivityIndicator());
             }
             if (workbenchState.error != null && items.isEmpty) {
               return Center(
@@ -444,8 +420,6 @@ class _WorkbenchScreenState extends ConsumerState<WorkbenchScreen> {
 
             // Empty state messages (unchanged logic)
             if (instances.isEmpty && !instancesState.isLoading) {
-              // This case might be less likely now with the manager ensuring a controller
-              // of length 1, but keep the message for clarity.
               return const Center(
                 child: Text(
                   'No Workbenches found.\nTap the + button to create one.',

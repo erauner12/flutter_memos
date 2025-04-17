@@ -31,7 +31,10 @@ class _WorkbenchTabControllerManagerState
   @override
   void initState() {
     super.initState();
-    _createControllerFrom(ref.read(workbenchInstancesProvider));
+    // 1. Create the initial controller
+    _createController(ref.read(workbenchInstancesProvider));
+    // 2. Schedule the first publish after the frame
+    _safePublishController();
 
     // Manual subscription is required here because initState
     // runs outside the build phase.
@@ -44,35 +47,48 @@ class _WorkbenchTabControllerManagerState
   @override
   void dispose() {
     _sub?.close();
-    _disposeController();
+    // When the manager itself is disposed, publish null
+    _disposeController(publishNull: true);
     super.dispose();
   }
 
   // ---------- controller helpers ----------
-  void _disposeController() {
+
+  /// Disposes the current controller.
+  /// If [publishNull] is true, also sets the provider state to null.
+  void _disposeController({bool publishNull = false}) {
     _controller?.removeListener(_onTabChanged);
-    // Check if mounted before accessing ref in dispose, although read should be safe.
-    // It's generally safer to avoid async gaps or complex logic in dispose.
-    // Setting provider state might be better handled slightly differently if complex cleanup is needed,
-    // but for nulling it out, this is usually acceptable.
-    if (mounted) {
+
+    // Only publish null when the manager is permanently disposed
+    if (publishNull && mounted) {
       try {
-        // Ensure the provider hasn't been disposed itself if using autoDispose (though it's not here)
         ref.read(workbenchTabControllerProvider.notifier).state = null;
+        if (kDebugMode) {
+          print(
+            "[WorkbenchTabControllerManager] Published null to provider during dispose.",
+          );
+        }
       } catch (e) {
-        // Handle potential errors if the provider/notifier is somehow inaccessible
         if (kDebugMode) {
           print("Error setting workbenchTabControllerProvider to null in dispose: $e");
         }
       }
     }
-    // Dispose the controller *after* potentially notifying consumers it's gone.
-    _controller?.dispose();
+
+    // Dispose the actual controller
+    try {
+      _controller?.dispose();
+    } catch (e) {
+      if (kDebugMode) {
+        print("Error disposing TabController: $e");
+      }
+    }
     _controller = null;
   }
 
-
-  void _createControllerFrom(WorkbenchInstancesState state) {
+  /// Creates a new TabController instance based on the state.
+  /// Does NOT publish the controller.
+  void _createController(WorkbenchInstancesState state) {
     final len = max(1, state.instances.length);
     final idx = _indexFor(state.instances, state.activeInstanceId);
 
@@ -81,15 +97,50 @@ class _WorkbenchTabControllerManagerState
       length: len,
       initialIndex: idx,
     )..addListener(_onTabChanged);
-
-    _safePublishController();
+    if (kDebugMode) {
+      print(
+        "[WorkbenchTabControllerManager] Created new controller (len: $len, idx: $idx)",
+      );
+    }
   }
+
+  /// Replaces the existing controller with a new one atomically.
+  /// Creates the new controller, publishes it, then disposes the old one.
+  void _replaceController(WorkbenchInstancesState state) {
+    final oldController =
+        _controller; // 1. Keep reference to the old controller
+
+    // 2. Create the new controller (updates `_controller` field)
+    _createController(state);
+
+    // 3. Publish the *new* controller (schedules for post-frame)
+    _safePublishController();
+
+    // 4. Dispose the old controller *after* creating and scheduling the publish
+    //    Use a post-frame callback to ensure disposal happens after the new
+    //    controller is potentially used in the next frame's build.
+    if (oldController != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        try {
+          oldController.dispose();
+          if (kDebugMode) {
+            print(
+              "[WorkbenchTabControllerManager] Disposed old controller (len: ${oldController.length}) after replacement.",
+            );
+          }
+        } catch (e) {
+          if (kDebugMode) {
+            print("Error disposing old TabController during replacement: $e");
+          }
+        }
+      });
+    }
+  }
+
 
   int _indexFor(List<WorkbenchInstance> list, String id) {
     if (list.isEmpty) return 0;
     final i = list.indexWhere((w) => w.id == id);
-    // Clamp the index to be within the valid range [0, length-1]
-    // max(0, list.length - 1) handles the empty list case correctly returning 0.
     return (i < 0 ? 0 : i).clamp(0, max(0, list.length - 1));
   }
 
@@ -98,88 +149,84 @@ class _WorkbenchTabControllerManagerState
     WorkbenchInstancesState? prev,
     WorkbenchInstancesState next,
   ) {
-    // Ensure widget is still mounted before proceeding
     if (!mounted) return;
 
     final requiredLen = max(1, next.instances.length);
 
-    // Recreate if controller doesn't exist OR if the length requirement changed
+    // If controller doesn't exist or length changed, replace it atomically
     if (_controller == null || _controller!.length != requiredLen) {
-      _disposeController(); // Dispose old one first
-      _createControllerFrom(next); // Create and schedule publish new one
+      if (kDebugMode) {
+        print(
+          "[WorkbenchTabControllerManager] Length changed or controller null. Replacing controller.",
+        );
+      }
+      _replaceController(next); // Use the atomic replacement method
       return;
     }
 
     // If length is the same, check if the active tab index needs animation
     final desired = _indexFor(next.instances, next.activeInstanceId);
 
-    // Animate only if:
-    // 1. The controller is not already changing index (mid-swipe/animation)
-    // 2. The desired index is different from the current index
-    // 3. The desired index is valid within the controller's bounds
     if (!_controller!.indexIsChanging &&
         desired != _controller!.index &&
-        desired >= 0 && // Redundant due to clamp in _indexFor, but safe
+        desired >= 0 &&
         desired < _controller!.length) {
+      if (kDebugMode) {
+        print("[WorkbenchTabControllerManager] Animating to index: $desired");
+      }
       _controller!.animateTo(desired);
     }
   }
 
 
   void _onTabChanged() {
-    // Ensure widget is mounted and controller exists
-    if (!mounted || _controller == null) return;
-
-    // Only react when the tab change is finalized (not during animation/swipe)
-    if (_controller!.indexIsChanging) return;
+    if (!mounted || _controller == null || _controller!.indexIsChanging) return;
 
     final instancesState = ref.read(workbenchInstancesProvider);
     final instances = instancesState.instances;
 
-    // Check if instances list is valid for the current index
     if (instances.isEmpty || _controller!.index >= instances.length) {
-      // This might happen briefly if instances change while tab is changing.
-      // Or if the list is empty (length 1 controller, index 0).
-      // In the empty case, there's no ID to set.
       return;
     }
 
     final tappedId = instances[_controller!.index].id;
 
-    // Update the active instance ID in the provider only if it's different
     if (instancesState.activeInstanceId != tappedId) {
       ref.read(workbenchInstancesProvider.notifier).setActiveInstance(tappedId);
     }
   }
 
 
-  // Publish the controller state after the current frame.
+  // Publish the controller state after the current frame. Never publishes null.
   void _safePublishController() {
-    // Ensure widget is mounted before scheduling the callback
     if (!mounted) return;
 
+    // Capture the controller *now* for the closure.
+    final controllerToPublish = _controller;
+
     void publish() {
-      // Double-check mounted status inside the callback
+      // Check mounted status again inside the callback
       if (mounted) {
-        // Optional instrumentation
-        assert(
-          _controller != null,
-          'Controller should not be null when publishing',
-        );
-        if (kDebugMode) {
+        // Only publish if the controller we captured is still the current one
+        // and it's not null. This prevents publishing a stale controller if
+        // multiple replacements happen rapidly.
+        if (_controller == controllerToPublish && controllerToPublish != null) {
+          if (kDebugMode) {
+            print(
+              '[WorkbenchTabControllerManager] Publishing controller '
+              'len=${controllerToPublish.length}, index=${controllerToPublish.index}',
+            );
+          }
+          ref.read(workbenchTabControllerProvider.notifier).state =
+              controllerToPublish;
+        } else if (kDebugMode) {
           print(
-            '[WorkbenchTabControllerManager] Publishing controller '
-            'len=${_controller!.length}, index=${_controller!.index}',
+            '[WorkbenchTabControllerManager] Skipped publishing stale or null controller.',
           );
         }
-        // Actual publication
-        ref.read(workbenchTabControllerProvider.notifier).state = _controller;
       }
     }
 
-    // Always wait until *after* the current frame has completed so that
-    //   1. the provider has been lazily instantiated by the first `ref.watch`
-    //   2. any widgets that rely on the value are already mounted
     WidgetsBinding.instance.addPostFrameCallback((_) => publish());
   }
 
@@ -187,8 +234,6 @@ class _WorkbenchTabControllerManagerState
   // ---------- build ----------
   @override
   Widget build(BuildContext context) {
-    // This widget is purely for management and doesn't render anything itself,
-    // it just passes through its child.
     return widget.child;
   }
 }
