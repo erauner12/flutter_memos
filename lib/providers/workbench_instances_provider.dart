@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart'; // Import Material for TabController
 import 'package:flutter_memos/models/workbench_instance.dart';
 import 'package:flutter_memos/providers/service_providers.dart'; // Import service providers
 import 'package:flutter_memos/providers/shared_prefs_provider.dart';
@@ -152,14 +153,6 @@ class WorkbenchInstancesNotifier extends StateNotifier<WorkbenchInstancesState> 
         print(
           '[WorkbenchInstancesNotifier] loadInstances called before prefs initialized. Waiting...',
         );
-      // This scenario should be less likely with the new initialization flow, but handle defensively.
-      // Option 1: Wait (might block UI if called directly)
-      // await _ref.read(sharedPrefsServiceProvider.future);
-      // Option 2: Defer or return early (might lead to inconsistent state)
-      // return;
-      // Option 3: Set loading and retry later (complex)
-      // For now, assume _initializePrefsAndLoad handles the sequence correctly.
-      // If called independently, it might need a check/wait.
       state = state.copyWith(isLoading: true, error: 'Preferences not ready');
       return;
     }
@@ -184,8 +177,6 @@ class WorkbenchInstancesNotifier extends StateNotifier<WorkbenchInstancesState> 
 
         if (!isActiveIdValid) {
           // The current active ID is NOT valid.
-          // This means the ID stored in prefs (and thus in current state) refers to an instance
-          // that no longer exists (or never existed).
           // Action: Reset to the first available instance AND persist this correction.
           finalActiveId = instances.first.id;
           if (kDebugMode) {
@@ -193,12 +184,8 @@ class WorkbenchInstancesNotifier extends StateNotifier<WorkbenchInstancesState> 
               '[WorkbenchInstancesNotifier] Active instance ID $currentActiveIdInState not found in loaded list. Resetting to first available: ${instances.first.id} and persisting.',
             );
           }
-          // --- Persist the correction ---
-          // This prevents flip-flopping if the invalid ID reappears later (e.g., due to sync delays)
           await _prefsService.saveActiveInstanceId(finalActiveId);
-          // --- End Persist ---
         }
-        // If the active ID *was* valid, we keep it. No change needed, no persistence needed.
         else if (kDebugMode) {
           print(
             '[WorkbenchInstancesNotifier] Current active instance ID $currentActiveIdInState is valid in loaded list.',
@@ -283,8 +270,6 @@ class WorkbenchInstancesNotifier extends StateNotifier<WorkbenchInstancesState> 
       if (kDebugMode) {
         print('[WorkbenchInstancesNotifier] Saved new instance ${newInstance.id}');
       }
-      // Optional: Reload after save for consistency, though optimistic update is usually sufficient here.
-      // await loadInstances();
       return true;
     } catch (e, s) {
       if (kDebugMode) {
@@ -397,7 +382,6 @@ class WorkbenchInstancesNotifier extends StateNotifier<WorkbenchInstancesState> 
       final deleteInstanceSuccess = await _cloudKitService
           .deleteWorkbenchInstance(instanceId);
       if (!deleteInstanceSuccess) {
-        // Don't throw immediately, try deleting items anyway but log the instance delete failure
         if (kDebugMode) {
           print(
             '[WorkbenchInstancesNotifier] CloudKit delete failed for instance $instanceId, but proceeding to delete items.',
@@ -410,7 +394,6 @@ class WorkbenchInstancesNotifier extends StateNotifier<WorkbenchInstancesState> 
       }
 
       // Also delete associated workbench items (fire-and-forget)
-      // This is crucial to prevent orphaned items
       unawaited(
         _cloudKitService
             .deleteAllWorkbenchItemReferences(instanceId: instanceId)
@@ -425,9 +408,6 @@ class WorkbenchInstancesNotifier extends StateNotifier<WorkbenchInstancesState> 
       // Remove from last opened map locally and persist
       _removeInstanceFromLastOpenedMap(instanceId);
 
-      // If instance deletion failed, we might want to revert the optimistic UI update,
-      // but since items are being deleted, keeping the UI state might be less confusing.
-      // For now, assume success unless CloudKit throws an exception caught below.
       return true; // Return true even if instance delete failed but item delete was attempted
 
     } catch (e, s) {
@@ -458,8 +438,6 @@ class WorkbenchInstancesNotifier extends StateNotifier<WorkbenchInstancesState> 
         print(
           '[WorkbenchInstancesNotifier] Attempted to set active instance to non-existent ID in current list: $instanceId',
         );
-      // Optionally: Trigger a reload to ensure list is up-to-date
-      // unawaited(loadInstances());
       return; // Don't set an invalid ID
     }
 
@@ -514,9 +492,24 @@ class WorkbenchInstancesNotifier extends StateNotifier<WorkbenchInstancesState> 
 
 }
 
-// Provider definition
+// Provider definition for instance state
 final workbenchInstancesProvider =
-    StateNotifierProvider<WorkbenchInstancesNotifier, WorkbenchInstancesState>((ref) {
-  // Initialization logic (including async _initializePrefsAndLoad) is handled within the notifier's constructor/methods
+    StateNotifierProvider<WorkbenchInstancesNotifier, WorkbenchInstancesState>((
+      ref,
+    ) {
   return WorkbenchInstancesNotifier(ref);
+});
+
+// --- New Provider for TabController ---
+// This provider holds the *current* TabController instance.
+// It will be overridden by the WorkbenchTabControllerHolder.
+final workbenchTabControllerProvider = Provider.autoDispose<TabController>((
+  ref,
+) {
+  // This default implementation should ideally never be reached if the
+  // holder correctly overrides it before the UI tries to watch it.
+  // Throwing an error helps catch setup issues.
+  throw UnimplementedError(
+    'workbenchTabControllerProvider must be overridden by WorkbenchTabControllerHolder',
+  );
 });
