@@ -1,4 +1,5 @@
-import 'dart:math';
+import 'dart:async'; // For Future.microtask
+import 'dart:math'; // Keep for max() usage
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -33,9 +34,15 @@ class _WorkbenchTabControllerManagerState
     super.initState();
     // 1. Create the initial controller
     _createController(ref.read(workbenchInstancesProvider));
-    // 2. Publish immediately (synchronously)
-    _publishControllerNow();
-    // 3. Also schedule a post-frame publish as a safety net
+
+    // 2. Schedule the initial publish for *after* the first frame.
+    //    This prevents modifying the provider during the build phase.
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _publishControllerNow(),
+    );
+
+    // 3. Keep the extra post-frame publish as a safety net for scenarios
+    //    like hot reload injecting the widget mid-frame.
     _safePublishController();
 
     // Manual subscription is required here because initState
@@ -49,7 +56,7 @@ class _WorkbenchTabControllerManagerState
   @override
   void dispose() {
     _sub?.close();
-    // When the manager itself is disposed, publish null
+    // When the manager itself is disposed, publish null safely.
     _disposeController(publishNull: true);
     super.dispose();
   }
@@ -57,33 +64,40 @@ class _WorkbenchTabControllerManagerState
   // ---------- controller helpers ----------
 
   /// Disposes the current controller.
-  /// If [publishNull] is true, also sets the provider state to null.
+  /// If [publishNull] is true, safely schedules setting the provider state to null.
   void _disposeController({bool publishNull = false}) {
     _controller?.removeListener(_onTabChanged);
 
-    // Only publish null when the manager is permanently disposed
-    if (publishNull && mounted) {
-      try {
-        // Check if the provider is still active before writing
-        // This avoids errors during hot restart or complex teardown scenarios.
-        final notifier = ref.read(workbenchTabControllerProvider.notifier);
-        if (notifier.state != null) {
-          notifier.state = null;
-          if (kDebugMode) {
-            print(
-              "[WorkbenchTabControllerManager] Published null to provider during final dispose.",
-            );
+    // Only publish null when the manager is permanently disposed,
+    // and do it safely outside the dispose call stack.
+    if (publishNull) {
+      Future.microtask(() {
+        // Check mounted again inside the microtask, as the widget might
+        // have been fully disposed by the time this runs.
+        if (mounted) {
+          try {
+            final notifier = ref.read(workbenchTabControllerProvider.notifier);
+            if (notifier.state != null) {
+              notifier.state = null;
+              if (kDebugMode) {
+                print(
+                  "[WorkbenchTabControllerManager] Published null to provider via microtask during final dispose.",
+                );
+              }
+            }
+          } catch (e) {
+            // Provider might already be disposed.
+            if (kDebugMode) {
+              print(
+                "Error setting workbenchTabControllerProvider to null in dispose microtask: $e",
+              );
+            }
           }
         }
-      } catch (e) {
-        // Provider might already be disposed.
-        if (kDebugMode) {
-          print("Error setting workbenchTabControllerProvider to null in dispose: $e");
-        }
-      }
+      });
     }
 
-    // Dispose the actual controller
+    // Dispose the actual controller immediately
     try {
       _controller?.dispose();
     } catch (e) {
@@ -113,7 +127,7 @@ class _WorkbenchTabControllerManagerState
   }
 
   /// Replaces the existing controller with a new one atomically.
-  /// Creates the new controller, publishes it immediately and post-frame,
+  /// Creates the new controller, publishes it immediately,
   /// then schedules disposal of the old one.
   void _replaceController(WorkbenchInstancesState state) {
     final oldController =
@@ -122,17 +136,15 @@ class _WorkbenchTabControllerManagerState
     // 2. Create the new controller (updates `_controller` field)
     _createController(state);
 
-    // 3. Publish the *new* controller immediately
+    // 3. Publish the *new* controller immediately (safe because this method
+    //    is called from the listener callback, outside the build phase).
     _publishControllerNow();
-    // 4. Also schedule post-frame publish as safety net
-    _safePublishController();
+    // 4. Remove the redundant post-frame publish (`_safePublishController`) call.
 
     // 5. Dispose the old controller *after* creating and publishing the new one.
     //    Use a post-frame callback to ensure disposal happens safely after build.
     if (oldController != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        // Check if the old controller hasn't already been disposed elsewhere
-        // (though unlikely with this logic)
         try {
           oldController.dispose();
           if (kDebugMode) {
@@ -209,7 +221,7 @@ class _WorkbenchTabControllerManagerState
   }
 
   /// Publishes the current controller state immediately (synchronously).
-  /// Use with caution, prefer _safePublishController if possible.
+  /// Should only be called when it's safe (i.e., outside build phases).
   void _publishControllerNow() {
     if (!mounted) return;
     final controllerToPublish = _controller; // Capture current controller
@@ -223,8 +235,6 @@ class _WorkbenchTabControllerManagerState
     }
 
     try {
-      // Check if the provider's current state is already this controller
-      // to avoid redundant notifications.
       final currentNotifierState =
           ref.read(workbenchTabControllerProvider.notifier).state;
       if (currentNotifierState != controllerToPublish) {
@@ -238,7 +248,6 @@ class _WorkbenchTabControllerManagerState
         }
       }
     } catch (e) {
-      // Handle cases where provider might be disposed during rapid changes
       if (kDebugMode) {
         print("Error publishing controller synchronously: $e");
       }
@@ -247,25 +256,20 @@ class _WorkbenchTabControllerManagerState
 
 
   /// Schedules publishing the controller state after the current frame.
+  /// Acts as a safety net, especially for hot reload scenarios.
   void _safePublishController() {
     if (!mounted) return;
 
-    // Capture the controller *now* for the closure.
     final controllerToPublish = _controller;
-
-    // If controller is null, don't schedule a publish.
     if (controllerToPublish == null) return;
 
     void publish() {
-      // Check mounted status again inside the callback
       if (mounted) {
-        // Only publish if the controller we captured is still the current one.
         if (_controller == controllerToPublish) {
-          // Avoid redundant publishes if the state is already correct
           if (ref.read(workbenchTabControllerProvider) != controllerToPublish) {
             if (kDebugMode) {
               print(
-                '[WorkbenchTabControllerManager] Publishing controller post-frame '
+                '[WorkbenchTabControllerManager] Publishing controller post-frame (safety net) '
                 'len=${controllerToPublish.length}, index=${controllerToPublish.index}',
               );
             }
@@ -274,7 +278,7 @@ class _WorkbenchTabControllerManagerState
           }
         } else if (kDebugMode) {
           print(
-            '[WorkbenchTabControllerManager] Skipped post-frame publish of stale controller.',
+            '[WorkbenchTabControllerManager] Skipped post-frame publish of stale controller (safety net).',
           );
         }
       }
