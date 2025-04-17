@@ -10,6 +10,21 @@ import 'package:flutter_memos/services/local_storage_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_generative_ai/google_generative_ai.dart' as gen_ai;
 
+abstract class ChatPersister {
+  Future<void> save(ChatSession session);
+}
+
+class DefaultChatPersister implements ChatPersister {
+  final LocalStorageService _local;
+
+  DefaultChatPersister(this._local);
+
+  @override
+  Future<void> save(ChatSession session) async {
+    await _local.saveActiveChatSession(session);
+  }
+}
+
 @immutable
 class ChatState {
   final ChatSession session;
@@ -78,17 +93,28 @@ class ChatState {
 
 
 class ChatNotifier extends StateNotifier<ChatState> {
-  ChatNotifier(this._ref, this._local, this._cloud)
-    : super(ChatState.initial()) {
+  final LocalStorageService _local;
+  final ChatSessionCloudKitService _cloud;
+  final ChatPersister _persister;
+  bool _skipNextPersist = false;
+
+  ChatNotifier(
+    this._ref,
+    LocalStorageService local,
+    ChatSessionCloudKitService cloud, {
+    ChatPersister? persister,
+  }) : _local = local,
+       _cloud = cloud,
+       _persister = persister ?? DefaultChatPersister(local),
+       super(ChatState.initial()) {
     _initGemini();
     _loadInitialSession();
   }
 
   final Ref _ref;
-  final LocalStorageService _local;
-  final ChatSessionCloudKitService _cloud;
   gen_ai.GenerativeModel? _model;
   Timer? _debounce;
+  final Duration _debounceDuration = const Duration(milliseconds: 500);
 
   /* ---------- initialisation ---------- */
 
@@ -348,7 +374,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
 
     try {
       final cloudSession = await _cloud.getChatSession();
-
+      _skipNextPersist = true;
       if (cloudSession != null) {
         if (kDebugMode) {
           print(
@@ -358,7 +384,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
         // Overwrite local state with the fetched cloud session
         state = state.copyWith(session: cloudSession, isSyncing: false);
         // Also update local storage to match the fetched cloud version
-        await _local.saveActiveChatSession(cloudSession);
+        await _persister.save(cloudSession);
         if (kDebugMode)
           print(
             "[ChatNotifier] Updated local state and storage with fetched CloudKit session.",
@@ -388,13 +414,16 @@ class ChatNotifier extends StateNotifier<ChatState> {
 
   void _persistSoon() {
     _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 500), () async {
-      if (!mounted) return; // Check if notifier is still mounted
+    _debounce = Timer(_debounceDuration, () async {
+      if (_skipNextPersist) {
+        _skipNextPersist = false;
+        return;
+      }
+      if (!mounted) return;
       final latest = state.session.copyWith(
         lastUpdated: DateTime.now().toUtc(),
       );
-      // Save the potentially updated session state
-      await _local.saveActiveChatSession(latest);
+      await _persister.save(latest);
       await _cloud.saveChatSession(latest);
       if (kDebugMode) print("[ChatNotifier] Debounced save complete.");
     });
