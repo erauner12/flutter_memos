@@ -2,6 +2,9 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_memos/models/task_item.dart';
 import 'package:intl/intl.dart'; // For date formatting
 
+// Animation duration constant
+const Duration kShortAnimation = Duration(milliseconds: 220);
+
 class TaskListItem extends StatelessWidget {
   final TaskItem task;
   final Function(bool isCompleted) onToggleComplete;
@@ -128,25 +131,10 @@ class TaskListItem extends StatelessWidget {
             ),
           ),
           child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment:
+                CrossAxisAlignment.center, // Center items vertically
             children: [
-              // Checkbox / Priority indicator
-              Padding(
-                padding: const EdgeInsets.only(top: 1.0, right: 12.0),
-                child: GestureDetector(
-                  onTap: () => onToggleComplete(!task.isCompleted),
-                  child: Icon(
-                    task.isCompleted
-                        ? CupertinoIcons.check_mark_circled_solid
-                        : CupertinoIcons.circle,
-                    color: task.isCompleted
-                        ? CupertinoColors.systemGreen.resolveFrom(context)
-                        : priorityColor,
-                    size: 24.0,
-                  ),
-                ),
-              ),
-              // Task Content, Due Date, Labels
+              // Task Content, Due Date, Labels (now on the left)
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -225,7 +213,59 @@ class TaskListItem extends StatelessWidget {
                   ],
                 ),
               ),
+              
+              // Spacing between content and checkbox
+              const SizedBox(width: 12.0),
+
+              // Trailing checkbox (now on the right)
+              _TrailingCheckbox(
+                task: task,
+                priorityColor: priorityColor,
+                onToggle: onToggleComplete,
+              ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Animated checkbox widget that appears on the trailing edge of task items
+class _TrailingCheckbox extends StatelessWidget {
+  final TaskItem task;
+  final Color priorityColor;
+  final Function(bool) onToggle;
+
+  const _TrailingCheckbox({
+    required this.task,
+    required this.priorityColor,
+    required this.onToggle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 44.0, // Ensure minimum touch target size
+      height: 44.0,
+      child: Center(
+        child: GestureDetector(
+          onTap: () => onToggle(!task.isCompleted),
+          child: AnimatedSwitcher(
+            duration: kShortAnimation,
+            child: Icon(
+              task.isCompleted
+                  ? CupertinoIcons.check_mark_circled_solid
+                  : CupertinoIcons.circle,
+              key: ValueKey<bool>(
+                task.isCompleted,
+              ), // Needed for AnimatedSwitcher
+              color:
+                  task.isCompleted
+                      ? CupertinoColors.systemGreen.resolveFrom(context)
+                      : priorityColor,
+              size: 24.0,
+            ),
           ),
         ),
       ),

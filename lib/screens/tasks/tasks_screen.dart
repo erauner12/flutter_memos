@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:flutter_memos/models/server_config.dart'; // Still needed for ServerType enum in WorkbenchItemReference
 import 'package:flutter_memos/models/task_item.dart';
@@ -8,7 +9,7 @@ import 'package:flutter_memos/models/workbench_item_reference.dart';
 // Removed server_config_provider import (MultiServerConfigNotifier)
 import 'package:flutter_memos/providers/settings_provider.dart'; // Import for todoistApiKeyProvider
 import 'package:flutter_memos/providers/task_providers.dart';
-import 'package:flutter_memos/providers/workbench_instances_provider.dart'; // <-- ADD THIS
+import 'package:flutter_memos/providers/workbench_instances_provider.dart'; // &lt;-- ADD THIS
 import 'package:flutter_memos/providers/workbench_provider.dart';
 import 'package:flutter_memos/screens/settings_screen.dart'; // Import SettingsScreen
 import 'package:flutter_memos/screens/tasks/new_task_screen.dart';
@@ -23,6 +24,9 @@ const String _todoistWorkbenchServerName = 'Todoist';
 // Change from ConsumerStatefulWidget to HookConsumerWidget
 class TasksScreen extends HookConsumerWidget {
   const TasksScreen({super.key});
+  
+  // Track current undo toast entry
+  static OverlayEntry? _currentUndoToast;
 
   // Helper to show simple alert dialogs (needs context)
   void _showAlertDialog(BuildContext context, String title, String message) {
@@ -70,7 +74,7 @@ class TasksScreen extends HookConsumerWidget {
       serverName: _todoistWorkbenchServerName, // Use constant Name
       previewContent: task.content,
       addedTimestamp: DateTime.now(),
-      instanceId: instanceId, // <-- PASS instanceId
+      instanceId: instanceId, // &lt;-- PASS instanceId
     );
 
     // FIX: Use activeWorkbenchNotifierProvider
@@ -80,6 +84,107 @@ class TasksScreen extends HookConsumerWidget {
       'Success',
       'Task "${task.content}" added to Workbench.',
     );
+  }
+
+  // Show an "Undo" toast when completing or reopening a task
+  void _showUndoToast(
+    BuildContext context,
+    WidgetRef ref,
+    TaskItem task,
+    bool newCompletedState,
+  ) {
+    // Remove any existing toast first
+    _currentUndoToast?.remove();
+
+    // Create a new overlay entry
+    final overlayState = Overlay.of(context);
+    final toast = OverlayEntry(
+      builder:
+          (context) => Positioned(
+            left: 16.0,
+            bottom: 32.0,
+            child: SafeArea(
+              child: Material(
+                color: Colors.transparent,
+                child: CupertinoPopupSurface(
+                  isSurfacePainted: true,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16.0,
+                      vertical: 12.0,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          newCompletedState
+                              ? CupertinoIcons.check_mark_circled_solid
+                              : CupertinoIcons
+                                  .arrow_counterclockwise_circle_fill,
+                          color:
+                              newCompletedState
+                                  ? CupertinoColors.systemGreen.resolveFrom(
+                                    context,
+                                  )
+                                  : CupertinoColors.systemBlue.resolveFrom(
+                                    context,
+                                  ),
+                          size: 20,
+                        ),
+                        const SizedBox(width: 8),
+                        SizedBox(
+                          width: 180,
+                          child: Text(
+                            task.content,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        CupertinoButton(
+                          padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                          minSize: 28,
+                          child: const Text(
+                            'Undo',
+                            style: TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                          onPressed: () {
+                            // Remove the toast first
+                            _currentUndoToast?.remove();
+                            _currentUndoToast = null;
+
+                            // Call appropriate method based on current state
+                            if (newCompletedState) {
+                              ref
+                                  .read(tasksNotifierProvider.notifier)
+                                  .reopenTask(task.id);
+                            } else {
+                              ref
+                                  .read(tasksNotifierProvider.notifier)
+                                  .completeTask(task.id);
+                            }
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+    );
+
+    // Show the toast
+    _currentUndoToast = toast;
+    overlayState.insert(toast);
+
+    // Set timer to remove after 5 seconds
+    Timer(const Duration(seconds: 5), () {
+      if (_currentUndoToast == toast) {
+        toast.remove();
+        _currentUndoToast = null;
+      }
+    });
   }
 
   @override
@@ -228,7 +333,7 @@ class TasksScreen extends HookConsumerWidget {
                 child: Padding(
                   padding: const EdgeInsets.all(16.0),
                   child: Text(
-                    'No tasks found.\nPull down to refresh or add a new task.',
+                    'No tasks found.\\nPull down to refresh or add a new task.',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: CupertinoColors.secondaryLabel.resolveFrom(
@@ -264,7 +369,10 @@ class TasksScreen extends HookConsumerWidget {
                               .reopenTask(task.id);
                         }
 
-                        if (!success && context.mounted) {
+                        if (success) {
+                          // Show undo toast upon successful operation
+                          _showUndoToast(context, ref, task, isCompleted);
+                        } else if (context.mounted) {
                           _showAlertDialog(
                             context,
                             'Error',
@@ -275,38 +383,37 @@ class TasksScreen extends HookConsumerWidget {
                       },
                         onDelete: () async {
                         final confirmed =
-                            await showCupertinoDialog<bool>(
-                              context: context,
-                              builder:
-                                  (dialogContext) => CupertinoAlertDialog(
-                                    title: const Text('Delete Task?'),
-                                    content: Text(
-                                      'Are you sure you want to delete "${task.content}"? This cannot be undone.',
-                                    ),
-                                    actions: [
-                                      CupertinoDialogAction(
-                                        child: const Text('Cancel'),
-                                        onPressed:
-                                            () => Navigator.pop(
-                                              dialogContext,
-                                              false,
-                                            ),
+                            showCupertinoDialog<bool>(
+                                  context: context,
+                                  builder:
+                                      (dialogContext) => CupertinoAlertDialog(
+                                        title: const Text('Delete Task?'),
+                                        content: Text(
+                                          'Are you sure you want to delete "${task.content}"? This cannot be undone.',
+                                        ),
+                                        actions: [
+                                          CupertinoDialogAction(
+                                            child: const Text('Cancel'),
+                                            onPressed:
+                                                () => Navigator.pop(
+                                                  dialogContext,
+                                                  false,
+                                                ),
+                                          ),
+                                          CupertinoDialogAction(
+                                            isDestructiveAction: true,
+                                            child: const Text('Delete'),
+                                            onPressed:
+                                                () => Navigator.pop(
+                                                  dialogContext,
+                                                  true,
+                                                ),
+                                          ),
+                                        ],
                                       ),
-                                      CupertinoDialogAction(
-                                        isDestructiveAction: true,
-                                        child: const Text('Delete'),
-                                        onPressed:
-                                            () => Navigator.pop(
-                                              dialogContext,
-                                              true,
-                                            ),
-                                      ),
-                                    ],
-                                  ),
-                            ) ??
-                            false;
+                        );
 
-                        if (confirmed) {
+                        if (confirmed == true) {
                           final success = await ref
                               .read(tasksNotifierProvider.notifier)
                               .deleteTask(task.id);
@@ -326,12 +433,12 @@ class TasksScreen extends HookConsumerWidget {
                         },
                       onTap: () {
                         Navigator.of(context).push(
-                            CupertinoPageRoute(
+                          CupertinoPageRoute(
                             builder:
                                 (context) => NewTaskScreen(taskToEdit: task),
-                            ),
-                          );
-                        },
+                          ),
+                        );
+                      },
                       );
                     },
                     childCount: tasks.length,
