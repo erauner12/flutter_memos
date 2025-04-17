@@ -638,7 +638,6 @@ class _NewNoteFormState extends ConsumerState<NewNoteForm> // Renamed class
                       ),
                       maxLines: 10,
                       minLines: 5,
-                      autofocus: true,
                       keyboardType: TextInputType.multiline,
                     ),
               ],

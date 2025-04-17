@@ -517,7 +517,6 @@ class _EditEntityFormState extends ConsumerState<EditEntityForm> // Renamed clas
                   ),
                   maxLines: 10,
                   minLines: 5,
-                  autofocus: true,
                   keyboardType: TextInputType.multiline,
                 ),
             const SizedBox(height: 20),

@@ -104,51 +104,73 @@ mixin KeyboardNavigationMixin<T extends ConsumerStatefulWidget>
   }) {
     // Only handle key down events to avoid duplicate handling
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
-    
+
     if (kDebugMode) {
       print(
         '[KeyboardNavigation] Received key event: ${event.logicalKey.keyLabel}',
       );
     }
-    
-    // Always handle Command+Enter for submission regardless of focus
+
+    // Check if text input is focused *first*
+    final bool isTextFocused = _isTextInputFocused();
+
+    // Handle specific shortcuts that might apply regardless of text focus
+    // Escape: Always trigger onEscape if provided, otherwise unfocus if text focused
+    if (event.logicalKey == LogicalKeyboardKey.escape) {
+      if (onEscape != null) {
+        if (kDebugMode) {
+          print(
+            '[KeyboardNavigation] Processing ESCAPE command (custom handler)',
+          );
+        }
+        onEscape();
+        return KeyEventResult.handled;
+      } else if (isTextFocused) {
+        if (kDebugMode) {
+          print(
+            '[KeyboardNavigation] Processing ESCAPE command (default unfocus)',
+          );
+        }
+        FocusManager.instance.primaryFocus?.unfocus();
+        return KeyEventResult.handled;
+      }
+      // If onEscape is null and text is not focused, let it bubble up or ignore
+    }
+
+    // Cmd+Enter: Always trigger onSubmit if provided
     if (event.logicalKey == LogicalKeyboardKey.enter &&
-        HardwareKeyboard.instance.isLogicalKeyPressed(LogicalKeyboardKey.meta)) {
+        (HardwareKeyboard.instance.isLogicalKeyPressed(
+              LogicalKeyboardKey.meta,
+            ) ||
+            HardwareKeyboard.instance.isLogicalKeyPressed(
+              LogicalKeyboardKey.metaLeft,
+            ) ||
+            HardwareKeyboard.instance.isLogicalKeyPressed(
+              LogicalKeyboardKey.metaRight,
+            ))) {
       if (onSubmit != null) {
         if (kDebugMode) {
-          print('[KeyboardNavigation] Processing SUBMIT command');
+          print('[KeyboardNavigation] Processing SUBMIT command (Cmd+Enter)');
         }
         onSubmit();
         return KeyEventResult.handled;
       }
     }
-    
-    // Always handle Escape key to exit text input focus
-    if (event.logicalKey == LogicalKeyboardKey.escape) {
-      if (onEscape != null) {
-        if (kDebugMode) {
-          print('[KeyboardNavigation] Processing ESCAPE command');
-        }
-        onEscape();
-        return KeyEventResult.handled;
-      }
-      
-      // Default behavior: unfocus current focus node
-      if (_isTextInputFocused()) {
-        FocusManager.instance.primaryFocus?.unfocus();
-        return KeyEventResult.handled;
-      }
-    }
-    
-    // If any text input is focused, ignore other navigation keys
-    if (_isTextInputFocused()) {
+
+    // *** Critical Change: If text is focused, ignore all other keys ***
+    if (isTextFocused) {
+      // Allow the TextField's default handlers for character input, arrows, etc.
       if (kDebugMode) {
-        print('[KeyboardNavigation] Ignoring navigation keys in text input');
+        print(
+          '[KeyboardNavigation] Text input focused, ignoring event: ${event.logicalKey.keyLabel}',
+        );
       }
       return KeyEventResult.ignored;
     }
-    
-    // Navigate up (previous item) with BOTH Shift+Up OR plain Up arrow
+
+    // *** If text is NOT focused, handle navigation and other actions ***
+
+    // Navigate up (previous item) with Up arrow
     if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
       if (onUp != null) {
         if (kDebugMode) {
@@ -158,8 +180,7 @@ mixin KeyboardNavigationMixin<T extends ConsumerStatefulWidget>
         return KeyEventResult.handled;
       }
     }
-    
-    // Navigate down (next item) with BOTH Shift+Down OR plain Down arrow
+    // Navigate down (next item) with Down arrow
     else if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
       if (onDown != null) {
         if (kDebugMode) {
@@ -169,7 +190,6 @@ mixin KeyboardNavigationMixin<T extends ConsumerStatefulWidget>
         return KeyEventResult.handled;
       }
     }
-    
     // Navigate back - Command+Left (macOS) or Alt+Left (Windows/Linux)
     else if (event.logicalKey == LogicalKeyboardKey.arrowLeft &&
         (HardwareKeyboard.instance.isLogicalKeyPressed(
@@ -179,11 +199,13 @@ mixin KeyboardNavigationMixin<T extends ConsumerStatefulWidget>
               LogicalKeyboardKey.alt,
             ))) {
       if (onBack != null) {
+        if (kDebugMode) {
+          print('[KeyboardNavigation] Processing BACK navigation');
+        }
         onBack();
         return KeyEventResult.handled;
       }
     }
-    
     // Navigate forward - Command+Right (macOS) or Alt+Right (Windows/Linux)
     else if (event.logicalKey == LogicalKeyboardKey.arrowRight &&
         (HardwareKeyboard.instance.isLogicalKeyPressed(
@@ -193,11 +215,28 @@ mixin KeyboardNavigationMixin<T extends ConsumerStatefulWidget>
               LogicalKeyboardKey.alt,
             ))) {
       if (onForward != null) {
+        if (kDebugMode) {
+          print('[KeyboardNavigation] Processing FORWARD navigation');
+        }
         onForward();
         return KeyEventResult.handled;
       }
     }
-    
+    // Handle plain Enter (without Cmd) for submission when *not* in text field
+    else if (event.logicalKey == LogicalKeyboardKey.enter && onSubmit != null) {
+      if (kDebugMode) {
+        print('[KeyboardNavigation] Processing SUBMIT command (Plain Enter)');
+      }
+      onSubmit();
+      return KeyEventResult.handled;
+    }
+
+    // If no specific handling matched, ignore the event
+    if (kDebugMode) {
+      print(
+        '[KeyboardNavigation] Ignoring unhandled event: ${event.logicalKey.keyLabel}',
+      );
+    }
     return KeyEventResult.ignored;
   }
   
