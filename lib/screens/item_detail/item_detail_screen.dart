@@ -89,6 +89,7 @@ class _ItemDetailScreenState
     }
   }
 
+
   // Helper to show loading dialog safely
   void _showLoadingDialog(String message) {
     // Dismiss any existing dialog first
@@ -113,6 +114,7 @@ class _ItemDetailScreenState
       },
     );
   }
+
 
   Future<void> _onRefresh() async {
     if (kDebugMode) {
@@ -191,6 +193,7 @@ class _ItemDetailScreenState
   }
   // --- End Add to Workbench Action ---
 
+
   // --- Action Sheet Logic ---
   void _showActions() {
     if (!mounted) return;
@@ -261,16 +264,13 @@ class _ItemDetailScreenState
           actions.add(
             CupertinoActionSheetAction(
               isDefaultAction: !isFixingGrammar,
-              onPressed:
-                  isFixingGrammar
-                      ? null
-                      : () {
-                        // Pass null when disabled
-                        Navigator.pop(
-                          popupContext,
-                        ); // Use the builder's context
-                        _fixGrammar();
-                      },
+              onPressed: () {
+                if (!isFixingGrammar) {
+                  Navigator.pop(popupContext); // Use the builder's context
+                  _fixGrammar();
+                }
+              },
+              // CupertinoActionSheetAction has no 'enabled' parameter
               child:
                   isFixingGrammar
                       ? const Row(
@@ -414,6 +414,7 @@ class _ItemDetailScreenState
       if (!mounted) return;
       _dismissLoadingDialog(); // Dismiss loading
       _showSuccessSnackbar('Grammar corrected successfully!');
+
     } catch (e) {
       // Check mounted *after* potential await inside catch (if any)
       if (!mounted) return;
@@ -559,6 +560,7 @@ class _ItemDetailScreenState
     }
   }
 
+
   // Helper to perform the actual navigation to chat screen
   void _navigateToChatScreen(
     BuildContext buildContext,
@@ -592,6 +594,7 @@ class _ItemDetailScreenState
     }
   }
   // --- End Chat With Thread Helper ---
+
 
   // --- Snackbar Helpers ---
   void _showErrorSnackbar(String message) {
@@ -817,6 +820,5 @@ class _ItemDetailScreenState
       },
     );
   }
-
-  // --- End Build Body Helper ---
+// --- End Build Body Helper ---
 }
