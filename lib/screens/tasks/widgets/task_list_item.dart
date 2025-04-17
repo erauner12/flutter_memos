@@ -1,5 +1,6 @@
+import 'dart:ui'; // Explicitly import dart:ui for Color, VoidCallback, etc.
+
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart'; // Needed for Material in preview
 import 'package:flutter_memos/models/task_item.dart';
 import 'package:flutter_slidable/flutter_slidable.dart'; // Import Slidable
 import 'package:intl/intl.dart'; // For date formatting
@@ -193,7 +194,8 @@ class _TaskRowContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final Color priorityColor = _getPriorityColor(task.priority, context);
-    final String formattedDueDate = _formatDueDate(task.dueDate);
+    // Allow type inference to make this non-nullable String, fixing the lint.
+    final formattedDueDate = _formatDueDate(task.dueDate);
     final bool isOverdue = task.dueDate != null &&
         !task.isCompleted &&
         task.dueDate!.isBefore(DateTime.now());
@@ -371,12 +373,15 @@ class _TaskContextPreview extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Constrain the width to the device width, leave height unbounded (intrinsic height).
-    // Wrap in Material for correct background color and elevation effect during animation.
+    // Use Container for background and optional corner radius.
     return SizedBox(
       width: MediaQuery.of(context).size.width,
-      child: Material(
+      child: Container(
+        // Same colour the system uses for sheets / menus
         color: CupertinoColors.systemBackground.resolveFrom(context),
-        elevation: 0, // Match default context menu preview appearance
+        // ⇣ Optional subtle corner radius like native context menu
+        clipBehavior: Clip.hardEdge, // Use Clip enum from dart:ui
+        decoration: BoxDecoration(borderRadius: BorderRadius.circular(12)),
         child: child,
       ),
     );
