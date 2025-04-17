@@ -42,7 +42,8 @@ class WorkbenchItemReference {
     // Transient fields
     this.previewComments = const [], // Default to empty list
     this.referencedItemUpdateTime,
-    DateTime? overallLastUpdateTime, // Allow passing calculated time
+    DateTime? overallLastUpdateTime,
+    required String instanceId, // Allow passing calculated time
   }) : overallLastUpdateTime =
            overallLastUpdateTime ??
            addedTimestamp; // Use passed value or default to added
@@ -137,6 +138,7 @@ class WorkbenchItemReference {
       referencedItemUpdateTime: newReferencedItemUpdateTime,
       // Assign the final calculated or provided overallLastUpdateTime
       overallLastUpdateTime: calculatedUpdateTime,
+      instanceId: '',
     );
   }
 
@@ -156,7 +158,10 @@ class WorkbenchItemReference {
     };
   }
 
-  factory WorkbenchItemReference.fromJson(Map<String, dynamic> json) {
+  factory WorkbenchItemReference.fromJson(
+    Map<String, dynamic> json,
+    String recordName,
+  ) {
     // Helper to parse enums safely
     T? tryParseEnum<T>(List<T> enumValues, String? name) {
       if (name == null) return null;
@@ -195,6 +200,7 @@ class WorkbenchItemReference {
       previewContent: json['previewContent'] as String?,
       addedTimestamp: DateTime.tryParse(json['addedTimestamp'] as String? ?? '') ?? DateTime.now(), // Default to now
       parentNoteId: json['parentNoteId'] as String?,
+      instanceId: '',
       // DO NOT parse transient fields from JSON. They default to empty/null/addedTimestamp in constructor.
     );
   }
@@ -239,10 +245,12 @@ class WorkbenchItemReference {
     );
   }
 
+  get instanceId => null;
+
   @override
   String toString() {
     // Include transient fields for debugging
-    final commentIds = previewComments.map((c) => c.id ?? 'null_id').join(', ');
+    final commentIds = previewComments.map((c) => c.id).join(', ');
     return 'WorkbenchItemReference(id: $id, refId: $referencedItemId, type: ${referencedItemType.name}, serverId: $serverId, serverType: ${serverType.name}, parentId: $parentNoteId, added: $addedTimestamp, lastActivity: $overallLastUpdateTime, comments: [$commentIds], refUpdate: $referencedItemUpdateTime)';
   }
 }

@@ -4,7 +4,7 @@
 
 // ignore_for_file: no_leading_underscores_for_library_prefixes
 import 'dart:async' as _i6;
-import 'dart:typed_data' as _i13;
+import 'dart:typed_data' as _i14;
 
 import 'package:flutter_cloud_kit/types/cloud_kit_account_status.dart' as _i7;
 import 'package:flutter_memos/models/comment.dart' as _i4;
@@ -12,11 +12,13 @@ import 'package:flutter_memos/models/list_notes_response.dart' as _i2;
 import 'package:flutter_memos/models/mcp_server_config.dart' as _i9;
 import 'package:flutter_memos/models/note_item.dart' as _i3;
 import 'package:flutter_memos/models/server_config.dart' as _i8;
-import 'package:flutter_memos/models/workbench_item_reference.dart' as _i10;
+import 'package:flutter_memos/models/workbench_instance.dart' as _i10;
+import 'package:flutter_memos/models/workbench_item_reference.dart' as _i11;
 import 'package:flutter_memos/services/cloud_kit_service.dart' as _i5;
-import 'package:flutter_memos/services/note_api_service.dart' as _i11;
+import 'package:flutter_memos/services/note_api_service.dart' as _i12;
+import 'package:flutter_memos/utils/shared_prefs.dart' as _i15;
 import 'package:mockito/mockito.dart' as _i1;
-import 'package:mockito/src/dummies.dart' as _i12;
+import 'package:mockito/src/dummies.dart' as _i13;
 
 // ignore_for_file: type=lint
 // ignore_for_file: avoid_redundant_argument_values
@@ -159,8 +161,44 @@ class MockCloudKitService extends _i1.Mock implements _i5.CloudKitService {
       ) as _i6.Future<bool>);
 
   @override
+  _i6.Future<bool> saveWorkbenchInstance(_i10.WorkbenchInstance? instance) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #saveWorkbenchInstance,
+          [instance],
+        ),
+        returnValue: _i6.Future<bool>.value(false),
+        returnValueForMissingStub: _i6.Future<bool>.value(false),
+      ) as _i6.Future<bool>);
+
+  @override
+  _i6.Future<List<_i10.WorkbenchInstance>> getAllWorkbenchInstances() =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #getAllWorkbenchInstances,
+          [],
+        ),
+        returnValue: _i6.Future<List<_i10.WorkbenchInstance>>.value(
+            <_i10.WorkbenchInstance>[]),
+        returnValueForMissingStub:
+            _i6.Future<List<_i10.WorkbenchInstance>>.value(
+                <_i10.WorkbenchInstance>[]),
+      ) as _i6.Future<List<_i10.WorkbenchInstance>>);
+
+  @override
+  _i6.Future<bool> deleteWorkbenchInstance(String? instanceId) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #deleteWorkbenchInstance,
+          [instanceId],
+        ),
+        returnValue: _i6.Future<bool>.value(false),
+        returnValueForMissingStub: _i6.Future<bool>.value(false),
+      ) as _i6.Future<bool>);
+
+  @override
   _i6.Future<bool> saveWorkbenchItemReference(
-          _i10.WorkbenchItemReference? item) =>
+          _i11.WorkbenchItemReference? item) =>
       (super.noSuchMethod(
         Invocation.method(
           #saveWorkbenchItemReference,
@@ -171,18 +209,20 @@ class MockCloudKitService extends _i1.Mock implements _i5.CloudKitService {
       ) as _i6.Future<bool>);
 
   @override
-  _i6.Future<List<_i10.WorkbenchItemReference>>
-      getAllWorkbenchItemReferences() => (super.noSuchMethod(
-            Invocation.method(
-              #getAllWorkbenchItemReferences,
-              [],
-            ),
-            returnValue: _i6.Future<List<_i10.WorkbenchItemReference>>.value(
-                <_i10.WorkbenchItemReference>[]),
-            returnValueForMissingStub:
-                _i6.Future<List<_i10.WorkbenchItemReference>>.value(
-                    <_i10.WorkbenchItemReference>[]),
-          ) as _i6.Future<List<_i10.WorkbenchItemReference>>);
+  _i6.Future<List<_i11.WorkbenchItemReference>> getAllWorkbenchItemReferences(
+          {String? instanceId}) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #getAllWorkbenchItemReferences,
+          [],
+          {#instanceId: instanceId},
+        ),
+        returnValue: _i6.Future<List<_i11.WorkbenchItemReference>>.value(
+            <_i11.WorkbenchItemReference>[]),
+        returnValueForMissingStub:
+            _i6.Future<List<_i11.WorkbenchItemReference>>.value(
+                <_i11.WorkbenchItemReference>[]),
+      ) as _i6.Future<List<_i11.WorkbenchItemReference>>);
 
   @override
   _i6.Future<bool> deleteWorkbenchItemReference(String? referenceId) =>
@@ -190,6 +230,18 @@ class MockCloudKitService extends _i1.Mock implements _i5.CloudKitService {
         Invocation.method(
           #deleteWorkbenchItemReference,
           [referenceId],
+        ),
+        returnValue: _i6.Future<bool>.value(false),
+        returnValueForMissingStub: _i6.Future<bool>.value(false),
+      ) as _i6.Future<bool>);
+
+  @override
+  _i6.Future<bool> deleteAllWorkbenchItemReferences({String? instanceId}) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #deleteAllWorkbenchItemReferences,
+          [],
+          {#instanceId: instanceId},
         ),
         returnValue: _i6.Future<bool>.value(false),
         returnValueForMissingStub: _i6.Future<bool>.value(false),
@@ -247,15 +299,15 @@ class MockCloudKitService extends _i1.Mock implements _i5.CloudKitService {
 /// A class which mocks [NoteApiService].
 ///
 /// See the documentation for Mockito's code generation for more information.
-class MockNoteApiService extends _i1.Mock implements _i11.NoteApiService {
+class MockNoteApiService extends _i1.Mock implements _i12.NoteApiService {
   @override
   String get apiBaseUrl => (super.noSuchMethod(
         Invocation.getter(#apiBaseUrl),
-        returnValue: _i12.dummyValue<String>(
+        returnValue: _i13.dummyValue<String>(
           this,
           Invocation.getter(#apiBaseUrl),
         ),
-        returnValueForMissingStub: _i12.dummyValue<String>(
+        returnValueForMissingStub: _i13.dummyValue<String>(
           this,
           Invocation.getter(#apiBaseUrl),
         ),
@@ -704,7 +756,7 @@ class MockNoteApiService extends _i1.Mock implements _i11.NoteApiService {
 
   @override
   _i6.Future<Map<String, dynamic>> uploadResource(
-    _i13.Uint8List? fileBytes,
+    _i14.Uint8List? fileBytes,
     String? filename,
     String? contentType, {
     _i8.ServerConfig? targetServerOverride,
@@ -726,7 +778,7 @@ class MockNoteApiService extends _i1.Mock implements _i11.NoteApiService {
       ) as _i6.Future<Map<String, dynamic>>);
 
   @override
-  _i6.Future<_i13.Uint8List> getResourceData(
+  _i6.Future<_i14.Uint8List> getResourceData(
     String? resourceIdentifier, {
     _i8.ServerConfig? targetServerOverride,
   }) =>
@@ -736,8 +788,56 @@ class MockNoteApiService extends _i1.Mock implements _i11.NoteApiService {
           [resourceIdentifier],
           {#targetServerOverride: targetServerOverride},
         ),
-        returnValue: _i6.Future<_i13.Uint8List>.value(_i13.Uint8List(0)),
+        returnValue: _i6.Future<_i14.Uint8List>.value(_i14.Uint8List(0)),
         returnValueForMissingStub:
-            _i6.Future<_i13.Uint8List>.value(_i13.Uint8List(0)),
-      ) as _i6.Future<_i13.Uint8List>);
+            _i6.Future<_i14.Uint8List>.value(_i14.Uint8List(0)),
+      ) as _i6.Future<_i14.Uint8List>);
+}
+
+/// A class which mocks [SharedPrefsService].
+///
+/// See the documentation for Mockito's code generation for more information.
+class MockSharedPrefsService extends _i1.Mock
+    implements _i15.SharedPrefsService {
+  @override
+  _i6.Future<bool> saveActiveInstanceId(String? instanceId) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #saveActiveInstanceId,
+          [instanceId],
+        ),
+        returnValue: _i6.Future<bool>.value(false),
+        returnValueForMissingStub: _i6.Future<bool>.value(false),
+      ) as _i6.Future<bool>);
+
+  @override
+  _i6.Future<bool> saveLastOpenedItemMap(Map<String, String?>? map) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #saveLastOpenedItemMap,
+          [map],
+        ),
+        returnValue: _i6.Future<bool>.value(false),
+        returnValueForMissingStub: _i6.Future<bool>.value(false),
+      ) as _i6.Future<bool>);
+
+  @override
+  Map<String, String?> getLastOpenedItemMap() => (super.noSuchMethod(
+        Invocation.method(
+          #getLastOpenedItemMap,
+          [],
+        ),
+        returnValue: <String, String?>{},
+        returnValueForMissingStub: <String, String?>{},
+      ) as Map<String, String?>);
+
+  @override
+  _i6.Future<bool> clearAll() => (super.noSuchMethod(
+        Invocation.method(
+          #clearAll,
+          [],
+        ),
+        returnValue: _i6.Future<bool>.value(false),
+        returnValueForMissingStub: _i6.Future<bool>.value(false),
+      ) as _i6.Future<bool>);
 }

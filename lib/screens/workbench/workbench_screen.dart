@@ -1,11 +1,15 @@
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart'; // For kDebugMode
 import 'package:flutter/material.dart'; // Import Material for ReorderableListView
-import 'package:flutter_memos/providers/workbench_provider.dart';
+import 'package:flutter_memos/models/workbench_instance.dart'; // Import WorkbenchInstance
+import 'package:flutter_memos/providers/workbench_instances_provider.dart'; // Import instances provider
+import 'package:flutter_memos/providers/workbench_provider.dart'; // Keep for activeWorkbenchProvider etc.
+import 'package:flutter_memos/screens/item_detail/item_detail_screen.dart'; // Import ItemDetailScreen
 import 'package:flutter_memos/screens/settings_screen.dart'; // Import SettingsScreen
 import 'package:flutter_memos/screens/workbench/widgets/workbench_item_tile.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-// Convert to ConsumerStatefulWidget to call loadItems in initState
+// Convert to ConsumerStatefulWidget
 class WorkbenchScreen extends ConsumerStatefulWidget {
   const WorkbenchScreen({super.key});
 
@@ -14,24 +18,280 @@ class WorkbenchScreen extends ConsumerStatefulWidget {
 }
 
 class _WorkbenchScreenState extends ConsumerState<WorkbenchScreen> {
+  final TextEditingController _instanceNameController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    // Trigger initial load when the screen is initialized
+    // Trigger initial load of instances when the screen is initialized
     // Use addPostFrameCallback to ensure provider is ready
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) { // Check if mounted before accessing ref
-        ref.read(workbenchProvider.notifier).loadItems();
+      if (mounted) {
+        // No need to explicitly load instances here anymore,
+        // WorkbenchInstancesNotifier handles its own initialization.
+
+        // Check for last opened item AFTER instances are loaded
+        _checkAndNavigateToLastOpenedItem();
+      }
+    });
+  }
+
+  void _checkAndNavigateToLastOpenedItem() {
+    if (!mounted) return;
+    // Listen to the state once, typically after the initial load completes.
+    // Using listen ensures we react *after* the state is potentially updated by initialization.
+    ref.listen<WorkbenchInstancesState>(workbenchInstancesProvider, (
+      previous,
+      next,
+    ) {
+      // Only proceed if loading is finished and we haven't already navigated.
+      // Add a flag or check previous state to prevent multiple navigations if state updates frequently.
+      if (previous?.isLoading == true && next.isLoading == false && mounted) {
+        final lastOpenedMap = next.lastOpenedItemId;
+        final activeInstanceId = next.activeInstanceId;
+        final lastOpenedId = lastOpenedMap[activeInstanceId];
+
+        if (lastOpenedId != null) {
+          // Find the corresponding item reference in the active workbench list
+          // Need to read the active workbench state *after* it has loaded its items.
+          // This might require another listener or careful timing.
+          // For simplicity now, assume activeWorkbenchProvider state is ready enough.
+          // A more robust solution might involve waiting for both providers to be ready.
+          final activeWorkbenchState = ref.read(activeWorkbenchProvider);
+          final itemRefList =
+              activeWorkbenchState.items
+                  .where(
+            (item) => item.id == lastOpenedId,
+          )
+                  .toList();
+          
+          if (itemRefList.isNotEmpty && mounted) {
+            final itemRef = itemRefList.first;
+            if (kDebugMode) {
+              print(
+                '[WorkbenchScreen] Navigating to last opened item $lastOpenedId for instance $activeInstanceId',
+              );
+            }
+            // TODO: Determine item type correctly if needed for navigation
+            // Currently ItemDetailScreen assumes Note type.
+            Navigator.of(context)
+                .push(
+                  CupertinoPageRoute(
+                    builder:
+                        (context) =>
+                            ItemDetailScreen(itemId: itemRef.referencedItemId),
+                  ),
+                )
+                .then((_) {
+                  // Optional: Clear the last opened item for this instance after returning
+                  // ref.read(workbenchInstancesProvider.notifier).setLastOpenedItem(activeInstanceId, null);
+                });
+          } else if (mounted) {
+            if (kDebugMode) {
+              print(
+                '[WorkbenchScreen] Last opened item $lastOpenedId not found in active list for instance $activeInstanceId.',
+              );
+            }
+            // Clear the invalid ID if the item is not found
+            ref
+                .read(workbenchInstancesProvider.notifier)
+                .setLastOpenedItem(activeInstanceId, null);
+          }
+        }
       }
     });
   }
 
   @override
+  void dispose() {
+    _instanceNameController.dispose();
+    super.dispose();
+  }
+
+  // --- Instance Management Dialogs ---
+
+  void _showAddInstanceDialog() {
+    _instanceNameController.clear();
+    showCupertinoDialog(
+      context: context,
+      builder:
+          (context) => CupertinoAlertDialog(
+            title: const Text('New Workbench'),
+            content: Padding(
+              padding: const EdgeInsets.only(top: 8.0),
+              child: CupertinoTextField(
+                controller: _instanceNameController,
+                placeholder: 'Instance Name (e.g., Work, Project X)',
+                autofocus: true,
+                onSubmitted: (_) => _createInstance(),
+              ),
+            ),
+            actions: [
+              CupertinoDialogAction(
+                child: const Text('Cancel'),
+                onPressed: () => Navigator.pop(context),
+              ),
+              CupertinoDialogAction(
+                isDefaultAction: true,
+                child: const Text('Create'),
+                onPressed: () => _createInstance(),
+              ),
+            ],
+          ),
+    );
+  }
+
+  void _createInstance() {
+    final name = _instanceNameController.text.trim();
+    Navigator.pop(context); // Close the dialog first
+    if (name.isNotEmpty) {
+      ref.read(workbenchInstancesProvider.notifier).saveInstance(name);
+    }
+  }
+
+  void _showRenameInstanceDialog(WorkbenchInstance instance) {
+    _instanceNameController.text = instance.name;
+    showCupertinoDialog(
+      context: context,
+      builder:
+          (context) => CupertinoAlertDialog(
+            title: const Text('Rename Workbench'),
+            content: Padding(
+              padding: const EdgeInsets.only(top: 8.0),
+              child: CupertinoTextField(
+                controller: _instanceNameController,
+                placeholder: 'New Instance Name',
+                autofocus: true,
+                onSubmitted: (_) => _renameInstance(instance.id),
+              ),
+            ),
+            actions: [
+              CupertinoDialogAction(
+                child: const Text('Cancel'),
+                onPressed: () => Navigator.pop(context),
+              ),
+              CupertinoDialogAction(
+                isDefaultAction: true,
+                child: const Text('Rename'),
+                onPressed: () => _renameInstance(instance.id),
+              ),
+            ],
+          ),
+    );
+  }
+
+  void _renameInstance(String instanceId) {
+    final newName = _instanceNameController.text.trim();
+    Navigator.pop(context); // Close the dialog first
+    if (newName.isNotEmpty) {
+      ref
+          .read(workbenchInstancesProvider.notifier)
+          .renameInstance(instanceId, newName);
+    }
+  }
+
+  void _showDeleteConfirmationDialog(WorkbenchInstance instance) {
+    // Double-check conditions preventing deletion
+    final instancesState = ref.read(workbenchInstancesProvider);
+    if (instancesState.instances.length <= 1 || instance.isSystemDefault) {
+      showCupertinoDialog(
+        context: context,
+        builder:
+            (context) => CupertinoAlertDialog(
+              title: const Text('Cannot Delete'),
+              content: Text(
+                instance.isSystemDefault
+                    ? 'The default "${instance.name}" instance cannot be deleted.'
+                    : 'Cannot delete the last remaining instance.',
+              ),
+              actions: [
+                CupertinoDialogAction(
+                  isDefaultAction: true,
+                  child: const Text('OK'),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ],
+            ),
+      );
+      return;
+    }
+
+    showCupertinoDialog(
+      context: context,
+      builder:
+          (context) => CupertinoAlertDialog(
+            title: Text('Delete "${instance.name}"?'),
+            content: const Text(
+              'Are you sure? All items within this workbench will also be permanently deleted.',
+            ),
+            actions: [
+              CupertinoDialogAction(
+                child: const Text('Cancel'),
+                onPressed: () => Navigator.pop(context),
+              ),
+              CupertinoDialogAction(
+                isDestructiveAction: true,
+                child: const Text('Delete'),
+                onPressed: () {
+                  Navigator.pop(context); // Close confirmation
+                  ref
+                      .read(workbenchInstancesProvider.notifier)
+                      .deleteInstance(instance.id);
+                },
+              ),
+            ],
+          ),
+    );
+  }
+
+  void _showInstanceActions(WorkbenchInstance instance) {
+    final instancesState = ref.read(workbenchInstancesProvider);
+    final bool canDelete =
+        instancesState.instances.length > 1 && !instance.isSystemDefault;
+
+    showCupertinoModalPopup(
+      context: context,
+      builder:
+          (context) => CupertinoActionSheet(
+            title: Text('Actions for "${instance.name}"'),
+            actions: [
+              CupertinoActionSheetAction(
+                child: const Text('Rename'),
+                onPressed: () {
+                  Navigator.pop(context); // Close action sheet
+                  _showRenameInstanceDialog(instance);
+                },
+              ),
+              if (canDelete)
+                CupertinoActionSheetAction(
+                  isDestructiveAction: true,
+                  child: const Text('Delete'),
+                  onPressed: () {
+                    Navigator.pop(context); // Close action sheet
+                    _showDeleteConfirmationDialog(instance);
+                  },
+                ),
+            ],
+            cancelButton: CupertinoActionSheetAction(
+              child: const Text('Cancel'),
+              onPressed: () => Navigator.pop(context),
+            ),
+          ),
+    );
+  }
+
+  // --- Build Method ---
+  @override
   Widget build(BuildContext context) {
-    final workbenchState = ref.watch(workbenchProvider);
+    // Watch the active workbench state using the new provider
+    final workbenchState = ref.watch(activeWorkbenchProvider);
+    // Watch the instances state for the segmented control
+    final instancesState = ref.watch(workbenchInstancesProvider);
+    final instances = instancesState.instances;
+    final activeInstanceId = instancesState.activeInstanceId;
+
     final items = workbenchState.items;
-    // Determine if refresh can be triggered
+    // Determine if refresh can be triggered for the *active* workbench
     final bool canRefresh =
         !workbenchState.isLoading && !workbenchState.isRefreshingDetails;
 
@@ -40,24 +300,73 @@ class _WorkbenchScreenState extends ConsumerState<WorkbenchScreen> {
         context,
       ),
       navigationBar: CupertinoNavigationBar(
-        middle: const Text('Workbench'),
+        // Use Segmented Control for instance selection if more than one instance
+        middle:
+            instances.length <= 1
+                ? const Text('Workbench')
+                : SizedBox(
+                  width: double.infinity,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 0),
+                    child: CupertinoSlidingSegmentedControl<String>(
+                      groupValue: activeInstanceId,
+                      thumbColor: CupertinoTheme.of(context).primaryColor,
+                      children: {
+                        for (var instance in instances)
+                          instance.id: GestureDetector(
+                            onLongPress: () => _showInstanceActions(instance),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10.0,
+                              ),
+                              child: Text(
+                                instance.name,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color:
+                                      activeInstanceId == instance.id
+                                          ? CupertinoColors.white
+                                          : CupertinoTheme.of(
+                                            context,
+                                          ).primaryColor,
+                                ),
+                              ),
+                            ),
+                          ),
+                      },
+                      onValueChanged: (String? newInstanceId) {
+                        if (newInstanceId != null) {
+                          ref
+                              .read(workbenchInstancesProvider.notifier)
+                              .setActiveInstance(newInstanceId);
+                        }
+                      },
+                    ),
+                  ),
+                ),
         leading: CupertinoButton(
           padding: EdgeInsets.zero,
           child: const Icon(CupertinoIcons.arrow_up_arrow_down),
-          onPressed: () => ref.read(workbenchProvider.notifier).resetOrder(),
+          onPressed:
+              () => ref.read(activeWorkbenchNotifierProvider).resetOrder(),
         ),
         trailing: Row(
-          // Wrap existing and new button in a Row
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Existing Refresh Button
+            // Add Instance Button
+            CupertinoButton(
+              padding: const EdgeInsets.only(left: 8.0),
+              onPressed: _showAddInstanceDialog,
+              child: const Icon(CupertinoIcons.add),
+            ),
+            // Existing Refresh Button - uses active notifier
             CupertinoButton(
               padding: EdgeInsets.zero,
               onPressed:
                   canRefresh
                       ? () =>
                           ref
-                              .read(workbenchProvider.notifier)
+                              .read(activeWorkbenchNotifierProvider)
                               .refreshItemDetails()
                   : null,
               child:
@@ -65,11 +374,11 @@ class _WorkbenchScreenState extends ConsumerState<WorkbenchScreen> {
                   ? const Icon(CupertinoIcons.refresh)
                   : const CupertinoActivityIndicator(radius: 10),
             ),
-            const SizedBox(width: 8), // Add spacing
-            // New Settings Button
+            const SizedBox(width: 8),
+            // Existing Settings Button
             CupertinoButton(
               padding: EdgeInsets.zero,
-              child: const Icon(CupertinoIcons.settings, size: 22), // Gear icon
+              child: const Icon(CupertinoIcons.settings, size: 22),
               onPressed: () {
                 Navigator.of(context).push(
                   CupertinoPageRoute(
@@ -86,29 +395,85 @@ class _WorkbenchScreenState extends ConsumerState<WorkbenchScreen> {
       child: SafeArea(
         child: Builder(
           builder: (context) {
+            // Show loading indicator based on instance provider if instances are loading
+            if (instancesState.isLoading && instances.isEmpty) {
+              return const Center(child: CupertinoActivityIndicator());
+            }
+            // Show error from instance provider if instances failed to load
+            if (instancesState.error != null && instances.isEmpty) {
+              return Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(
+                      CupertinoIcons.exclamationmark_triangle,
+                      size: 40,
+                      color: CupertinoColors.systemRed,
+                    ),
+                    const SizedBox(height: 10),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                      child: Text(
+                        'Error loading Workbenches: ${instancesState.error}',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: CupertinoColors.secondaryLabel.resolveFrom(
+                            context,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    CupertinoButton(
+                      child: const Text('Retry'),
+                      onPressed:
+                          () =>
+                              ref
+                                  .read(workbenchInstancesProvider.notifier)
+                                  .loadInstances(),
+                    ),
+                  ],
+                ),
+              );
+            }
+
+            // Show loading indicator based on the *active* workbench state
             if (workbenchState.isLoading && items.isEmpty) {
               return const Center(child: CupertinoActivityIndicator());
             }
 
+            // Show error from the *active* workbench state
             if (workbenchState.error != null && items.isEmpty) {
               return Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(CupertinoIcons.exclamationmark_triangle, size: 40, color: CupertinoColors.systemRed),
+                    const Icon(
+                      CupertinoIcons.exclamationmark_triangle,
+                      size: 40,
+                      color: CupertinoColors.systemRed,
+                    ),
                     const SizedBox(height: 10),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16.0),
                       child: Text(
-                        'Error loading Workbench: ${workbenchState.error}',
+                        'Error loading items: ${workbenchState.error}',
                         textAlign: TextAlign.center,
-                        style: TextStyle(color: CupertinoColors.secondaryLabel.resolveFrom(context)),
+                        style: TextStyle(
+                          color: CupertinoColors.secondaryLabel.resolveFrom(
+                            context,
+                          ),
                         ),
+                      ),
                     ),
                     const SizedBox(height: 10),
                     CupertinoButton(
                       child: const Text('Retry'),
-                      onPressed: () => ref.read(workbenchProvider.notifier).loadItems(),
+                      onPressed:
+                          () =>
+                              ref
+                                  .read(activeWorkbenchNotifierProvider)
+                                  .loadItems(),
                     ),
                   ],
                 ),
@@ -118,7 +483,7 @@ class _WorkbenchScreenState extends ConsumerState<WorkbenchScreen> {
             if (items.isEmpty && !workbenchState.isLoading) {
               return const Center(
                 child: Text(
-                  'Your Workbench is empty.\nAdd items via long-press or actions.',
+                  'This Workbench is empty.\nAdd items via long-press or actions.',
                   textAlign: TextAlign.center,
                   style: TextStyle(color: CupertinoColors.secondaryLabel),
                 ),
@@ -127,28 +492,28 @@ class _WorkbenchScreenState extends ConsumerState<WorkbenchScreen> {
 
             // Use ReorderableListView with custom drag handles
             return ReorderableListView.builder(
-              // Ensure this is false to use the handles inside WorkbenchItemTile
               buildDefaultDragHandles: false,
               itemCount: items.length,
               itemBuilder: (context, index) {
                 final item = items[index];
-                // Return the tile directly, passing the index and using item.id for the main key.
-                // The ReorderableDragStartListener is now *inside* WorkbenchItemTile.
                 return WorkbenchItemTile(
-                  key: ValueKey(item.id), // Key for the tile widget itself
+                  key: ValueKey(item.id),
                   itemReference: item,
-                  index: index, // Pass the index down
+                  index: index,
+                  onTap: () {
+                    ref
+                        .read(workbenchInstancesProvider.notifier)
+                        .setLastOpenedItem(activeInstanceId, item.id);
+                  },
                 );
               },
               onReorder: (oldIndex, newIndex) {
                 ref
-                    .read(workbenchProvider.notifier)
+                    .read(activeWorkbenchNotifierProvider)
                     .reorderItems(oldIndex, newIndex);
               },
-              // Optional: Add padding to the list view itself if needed
-              // padding: EdgeInsets.symmetric(vertical: 8),
             );
-          }
+          },
         ),
       ),
     );

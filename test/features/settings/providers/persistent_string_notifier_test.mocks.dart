@@ -5,11 +5,12 @@
 // ignore_for_file: no_leading_underscores_for_library_prefixes
 import 'dart:async' as _i4;
 
-import 'package:flutter/foundation.dart' as _i9;
+import 'package:flutter/foundation.dart' as _i10;
 import 'package:flutter_cloud_kit/types/cloud_kit_account_status.dart' as _i5;
 import 'package:flutter_memos/models/mcp_server_config.dart' as _i7;
 import 'package:flutter_memos/models/server_config.dart' as _i6;
-import 'package:flutter_memos/models/workbench_item_reference.dart' as _i8;
+import 'package:flutter_memos/models/workbench_instance.dart' as _i8;
+import 'package:flutter_memos/models/workbench_item_reference.dart' as _i9;
 import 'package:flutter_memos/services/cloud_kit_service.dart' as _i3;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart' as _i2;
 import 'package:mockito/mockito.dart' as _i1;
@@ -179,8 +180,39 @@ class MockCloudKitService extends _i1.Mock implements _i3.CloudKitService {
       ) as _i4.Future<bool>);
 
   @override
+  _i4.Future<bool> saveWorkbenchInstance(_i8.WorkbenchInstance? instance) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #saveWorkbenchInstance,
+          [instance],
+        ),
+        returnValue: _i4.Future<bool>.value(false),
+      ) as _i4.Future<bool>);
+
+  @override
+  _i4.Future<List<_i8.WorkbenchInstance>> getAllWorkbenchInstances() =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #getAllWorkbenchInstances,
+          [],
+        ),
+        returnValue: _i4.Future<List<_i8.WorkbenchInstance>>.value(
+            <_i8.WorkbenchInstance>[]),
+      ) as _i4.Future<List<_i8.WorkbenchInstance>>);
+
+  @override
+  _i4.Future<bool> deleteWorkbenchInstance(String? instanceId) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #deleteWorkbenchInstance,
+          [instanceId],
+        ),
+        returnValue: _i4.Future<bool>.value(false),
+      ) as _i4.Future<bool>);
+
+  @override
   _i4.Future<bool> saveWorkbenchItemReference(
-          _i8.WorkbenchItemReference? item) =>
+          _i9.WorkbenchItemReference? item) =>
       (super.noSuchMethod(
         Invocation.method(
           #saveWorkbenchItemReference,
@@ -190,15 +222,17 @@ class MockCloudKitService extends _i1.Mock implements _i3.CloudKitService {
       ) as _i4.Future<bool>);
 
   @override
-  _i4.Future<List<_i8.WorkbenchItemReference>>
-      getAllWorkbenchItemReferences() => (super.noSuchMethod(
-            Invocation.method(
-              #getAllWorkbenchItemReferences,
-              [],
-            ),
-            returnValue: _i4.Future<List<_i8.WorkbenchItemReference>>.value(
-                <_i8.WorkbenchItemReference>[]),
-          ) as _i4.Future<List<_i8.WorkbenchItemReference>>);
+  _i4.Future<List<_i9.WorkbenchItemReference>> getAllWorkbenchItemReferences(
+          {String? instanceId}) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #getAllWorkbenchItemReferences,
+          [],
+          {#instanceId: instanceId},
+        ),
+        returnValue: _i4.Future<List<_i9.WorkbenchItemReference>>.value(
+            <_i9.WorkbenchItemReference>[]),
+      ) as _i4.Future<List<_i9.WorkbenchItemReference>>);
 
   @override
   _i4.Future<bool> deleteWorkbenchItemReference(String? referenceId) =>
@@ -206,6 +240,17 @@ class MockCloudKitService extends _i1.Mock implements _i3.CloudKitService {
         Invocation.method(
           #deleteWorkbenchItemReference,
           [referenceId],
+        ),
+        returnValue: _i4.Future<bool>.value(false),
+      ) as _i4.Future<bool>);
+
+  @override
+  _i4.Future<bool> deleteAllWorkbenchItemReferences({String? instanceId}) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #deleteAllWorkbenchItemReferences,
+          [],
+          {#instanceId: instanceId},
         ),
         returnValue: _i4.Future<bool>.value(false),
       ) as _i4.Future<bool>);
@@ -321,7 +366,7 @@ class MockFlutterSecureStorage extends _i1.Mock
   @override
   void registerListener({
     required String? key,
-    required _i9.ValueChanged<String?>? listener,
+    required _i10.ValueChanged<String?>? listener,
   }) =>
       super.noSuchMethod(
         Invocation.method(
@@ -338,7 +383,7 @@ class MockFlutterSecureStorage extends _i1.Mock
   @override
   void unregisterListener({
     required String? key,
-    required _i9.ValueChanged<String?>? listener,
+    required _i10.ValueChanged<String?>? listener,
   }) =>
       super.noSuchMethod(
         Invocation.method(

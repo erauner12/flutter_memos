@@ -15,7 +15,8 @@ import 'package:flutter_memos/providers/server_config_provider.dart'; // Import 
 import 'package:flutter_memos/providers/settings_provider.dart' as settings_p;
 import 'package:flutter_memos/providers/ui_providers.dart';
 // Removed import for memo_detail_providers
-import 'package:flutter_memos/providers/workbench_provider.dart'; // Import workbench provider
+import 'package:flutter_memos/providers/workbench_instances_provider.dart'; // Import instances provider
+import 'package:flutter_memos/providers/workbench_provider.dart'; // Import workbench provider family etc.
 import 'package:flutter_memos/screens/home_screen.dart'; // Import for tabControllerProvider and navigator keys
 import 'package:flutter_memos/utils/keyboard_navigation.dart';
 import 'package:flutter_memos/utils/thread_utils.dart'; // Import the utility
@@ -27,31 +28,22 @@ import 'note_comments.dart'; // Updated import
 import 'note_content.dart'; // Updated import
 
 class ItemDetailScreen extends ConsumerStatefulWidget {
-  // Renamed class
-  final String itemId; // Renamed from memoId to itemId
-  // Assume note for now, could be passed if screen becomes generic
+  final String itemId;
   final WorkbenchItemType itemType = WorkbenchItemType.note;
 
-  const ItemDetailScreen({
-    super.key,
-    required this.itemId,
-  }); // Renamed constructor and parameter
+  const ItemDetailScreen({super.key, required this.itemId});
 
   @override
-  ConsumerState<ItemDetailScreen> createState() => _ItemDetailScreenState(); // Renamed class
+  ConsumerState<ItemDetailScreen> createState() => _ItemDetailScreenState();
 }
 
-class _ItemDetailScreenState
-    extends
-        ConsumerState<ItemDetailScreen> // Renamed class
+class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
     with KeyboardNavigationMixin<ItemDetailScreen> {
-  // Renamed class
   final FocusNode _screenFocusNode = FocusNode(
-    debugLabel: 'ItemDetailScreenFocus', // Renamed debug label
+    debugLabel: 'ItemDetailScreenFocus',
   );
   late ScrollController _scrollController;
-  BuildContext?
-  _loadingDialogContext; // To store the context of the loading dialog
+  BuildContext? _loadingDialogContext;
 
   @override
   void initState() {
@@ -68,15 +60,13 @@ class _ItemDetailScreenState
   void dispose() {
     _screenFocusNode.dispose();
     _scrollController.dispose();
-    _dismissLoadingDialog(); // Ensure dialog is dismissed
+    _dismissLoadingDialog();
     super.dispose();
   }
 
-  // Helper to dismiss loading dialog safely
   void _dismissLoadingDialog() {
     if (_loadingDialogContext != null) {
       try {
-        // Check if the context is still valid and the dialog can be popped
         final navigator = Navigator.of(_loadingDialogContext!);
         if (navigator.canPop()) {
           navigator.pop();
@@ -85,24 +75,18 @@ class _ItemDetailScreenState
         if (kDebugMode) {
           print("Error dismissing loading dialog: $e");
         }
-        // Ignore errors if context is already invalid or cannot pop
       }
       _loadingDialogContext = null;
     }
   }
 
-
-  // Helper to show loading dialog safely
   void _showLoadingDialog(String message) {
-    // Dismiss any existing dialog first
     _dismissLoadingDialog();
     if (!mounted) return;
-    // Use the screen's context (this.context) which is available in State
     showCupertinoDialog(
       context: context,
       barrierDismissible: false,
       builder: (dialogContext) {
-        // Store the dialog's specific context to dismiss it later
         _loadingDialogContext = dialogContext;
         return CupertinoAlertDialog(
           content: Row(
@@ -117,16 +101,12 @@ class _ItemDetailScreenState
     );
   }
 
-
   Future<void> _onRefresh() async {
     if (kDebugMode) {
-      print(
-        '[ItemDetailScreen] Pull-to-refresh triggered.',
-      ); // Updated log identifier
+      print('[ItemDetailScreen] Pull-to-refresh triggered.');
     }
     HapticFeedback.mediumImpact();
     if (!mounted) return;
-    // Use providers from note_providers
     ref.invalidate(note_providers.noteDetailProvider(widget.itemId));
     ref.invalidate(note_providers.noteCommentsProvider(widget.itemId));
   }
@@ -165,18 +145,61 @@ class _ItemDetailScreenState
   }
 
   // --- Add to Workbench Action ---
-  void _addNoteToWorkbench(NoteItem note) {
+  Future<void> _addNoteToWorkbench(NoteItem note) async {
     final activeServer = ref.read(activeServerConfigProvider);
     if (activeServer == null) {
       _showErrorSnackbar("Cannot add to workbench: No active server.");
       return;
     }
 
-    final preview =
-        note.content.split('\n').first; // Simple preview (first line)
+    final instancesState = ref.read(workbenchInstancesProvider);
+    final instances = instancesState.instances;
+    final activeInstanceId = instancesState.activeInstanceId;
+
+    String targetInstanceId = activeInstanceId;
+
+    if (instances.length > 1) {
+      final String? chosenId = await showCupertinoModalPopup<String>(
+        context: context,
+        builder: (BuildContext popupContext) {
+          return CupertinoActionSheet(
+            title: const Text('Add Note to Workbench'),
+            actions:
+                instances.map((instance) {
+                  return CupertinoActionSheetAction(
+                    isDefaultAction: instance.id == activeInstanceId,
+                    onPressed: () {
+                      Navigator.pop(popupContext, instance.id);
+                    },
+                    child: Text(instance.name),
+                  );
+                }).toList(),
+            cancelButton: CupertinoActionSheetAction(
+              child: const Text('Cancel'),
+              onPressed: () {
+                Navigator.pop(popupContext);
+              },
+            ),
+          );
+        },
+      );
+
+      if (chosenId == null) {
+        return;
+      }
+      targetInstanceId = chosenId;
+    } else if (instances.isEmpty) {
+      _showErrorSnackbar(
+        "Cannot add to workbench: No workbench instances found.",
+      );
+      return;
+    }
+
+    final preview = note.content.split('\n').first;
 
     final reference = WorkbenchItemReference(
       id: const Uuid().v4(), // Generate unique ID for the reference
+      instanceId: targetInstanceId, // Use the chosen or default instance ID
       referencedItemId: note.id,
       referencedItemType: WorkbenchItemType.note,
       serverId: activeServer.id,
@@ -188,15 +211,24 @@ class _ItemDetailScreenState
               : preview, // Limit preview length
       addedTimestamp: DateTime.now(),
       // parentNoteId is null for notes
+      // previewComments, referencedItemUpdateTime, overallLastUpdateTime are populated later
     );
 
-    ref.read(workbenchProvider.notifier).addItem(reference);
-    _showSuccessSnackbar('Added note to Workbench');
+    // Read the specific notifier for the target instance and add the item
+    ref
+        .read(workbenchProviderFamily(targetInstanceId).notifier)
+        .addItem(reference);
+
+    // Use tryWhere pattern that safely handles no matches
+    final targetInstance =
+        instances
+            .where((i) => i.id == targetInstanceId).firstOrNull;
+    final targetInstanceName = targetInstance?.name ?? 'Workbench';
+
+    _showSuccessSnackbar('Added note to "$targetInstanceName"');
   }
   // --- End Add to Workbench Action ---
 
-
-  // --- Action Sheet Logic ---
   void _showActions() {
     if (!mounted) return;
     final isFixingGrammar = ref.read(note_providers.isFixingGrammarProvider);
@@ -204,28 +236,24 @@ class _ItemDetailScreenState
       note_providers.noteDetailProvider(widget.itemId),
     );
     final activeServer = ref.read(activeServerConfigProvider);
-    // Item detail screen assumes the item is on the active server
     final bool canInteractWithServer = activeServer != null;
 
     showCupertinoModalPopup<void>(
       context: context,
       builder: (BuildContext popupContext) {
-        // popupContext is defined here
-        // Build the list of actions conditionally
         final List<CupertinoActionSheetAction> actions = [];
 
-        // Edit Note Action
         if (canInteractWithServer) {
           actions.add(
             CupertinoActionSheetAction(
               onPressed: () {
-                Navigator.pop(popupContext); // Use the builder's context
+                Navigator.pop(popupContext);
                 Navigator.of(context, rootNavigator: true)
                     .pushNamed(
                       '/edit-entity',
                       arguments: {
-                        'entityType': 'note', // Specify type as 'note'
-                        'entityId': widget.itemId, // Pass itemId as entityId
+                        'entityType': 'note',
+                        'entityId': widget.itemId,
                       },
                     )
                     .then((_) {
@@ -253,7 +281,7 @@ class _ItemDetailScreenState
           actions.add(
             CupertinoActionSheetAction(
               onPressed: () {
-                Navigator.pop(popupContext); // Use the builder's context
+                Navigator.pop(popupContext);
                 _addNoteToWorkbench(noteAsync.value);
               },
               child: const Text('Add to Workbench'),
@@ -261,18 +289,16 @@ class _ItemDetailScreenState
           );
         }
 
-        // Fix Grammar Action
         if (canInteractWithServer) {
           actions.add(
             CupertinoActionSheetAction(
               isDefaultAction: !isFixingGrammar,
               onPressed: () {
                 if (!isFixingGrammar) {
-                  Navigator.pop(popupContext); // Use the builder's context
+                  Navigator.pop(popupContext);
                   _fixGrammar();
                 }
               },
-              // CupertinoActionSheetAction has no 'enabled' parameter
               child:
                   isFixingGrammar
                       ? const Row(
@@ -288,17 +314,16 @@ class _ItemDetailScreenState
           );
         }
 
-        // Copy Full Thread Action
         if (canInteractWithServer) {
           actions.add(
             CupertinoActionSheetAction(
               onPressed: () {
-                Navigator.pop(popupContext); // Use the builder's context
+                Navigator.pop(popupContext);
                 _copyThreadContent(
-                  context, // Pass the main screen context
+                  context,
                   ref,
                   widget.itemId,
-                  widget.itemType, // Use widget's itemType
+                  widget.itemType,
                 );
               },
               child: const Text('Copy Full Thread'),
@@ -306,44 +331,33 @@ class _ItemDetailScreenState
           );
         }
 
-        // Chat about Thread Action
         if (canInteractWithServer) {
           actions.add(
             CupertinoActionSheetAction(
               onPressed: () {
-                Navigator.pop(popupContext); // Use the builder's context
-                _chatWithThread(
-                  context, // Pass the main screen context
-                  ref,
-                  widget.itemId,
-                  widget.itemType, // Use widget's itemType
-                );
+                Navigator.pop(popupContext);
+                _chatWithThread(context, ref, widget.itemId, widget.itemType);
               },
               child: const Text('Chat about Thread'),
             ),
           );
         }
 
-        // Delete Note Action
         if (canInteractWithServer) {
           actions.add(
             CupertinoActionSheetAction(
               isDestructiveAction: true,
               onPressed: () async {
-                // Pop the action sheet first using its context
                 Navigator.pop(popupContext);
-
-                // Use the main screen context for the confirmation dialog
-                // Check mounted before showing dialog
                 if (!mounted) return;
                 final dialogContext = context;
                 final confirmed = await showCupertinoDialog<bool>(
                   context: dialogContext,
                   builder:
                       (context) => CupertinoAlertDialog(
-                        title: const Text('Delete Note?'), // Updated text
+                        title: const Text('Delete Note?'),
                         content: const Text(
-                          'Are you sure you want to permanently delete this note and its comments?', // Updated text
+                          'Are you sure you want to permanently delete this note and its comments?',
                         ),
                         actions: [
                           CupertinoDialogAction(
@@ -360,24 +374,18 @@ class _ItemDetailScreenState
                 );
 
                 if (confirmed == true) {
-                  // Check mounted *after* the await
                   if (!mounted) return;
                   try {
                     await ref.read(
                       note_providers.deleteNoteProvider(widget.itemId),
                     )();
-                    // Check mounted again before using context for navigation
                     if (!mounted) return;
-                    // Check if we can pop the current screen
                     if (Navigator.of(context).canPop()) {
                       Navigator.of(context).pop();
                     }
                   } catch (e) {
-                    // Check mounted again before using context for snackbar
                     if (!mounted) return;
-                    _showErrorSnackbar(
-                      'Failed to delete note: $e',
-                    ); // Updated text
+                    _showErrorSnackbar('Failed to delete note: $e');
                   }
                 }
               },
@@ -388,11 +396,11 @@ class _ItemDetailScreenState
 
         return CupertinoActionSheet(
           title: const Text('Note Actions'),
-          actions: actions, // Use the conditionally built list
+          actions: actions,
           cancelButton: CupertinoActionSheetAction(
             child: const Text('Cancel'),
             onPressed: () {
-              Navigator.pop(popupContext); // Use the builder's context
+              Navigator.pop(popupContext);
             },
           ),
         );
@@ -400,59 +408,48 @@ class _ItemDetailScreenState
     );
   }
 
-  // --- Fix Grammar Handler ---
   Future<void> _fixGrammar() async {
     if (!mounted) return;
     ref.read(note_providers.isFixingGrammarProvider.notifier).state = true;
     HapticFeedback.mediumImpact();
-    _showLoadingDialog('Fixing grammar...'); // Show loading
+    _showLoadingDialog('Fixing grammar...');
 
     try {
-      // No need for mounted check right before await
       await ref.read(
         note_providers.fixNoteGrammarProvider(widget.itemId).future,
       );
-      // Check mounted *after* await
       if (!mounted) return;
-      _dismissLoadingDialog(); // Dismiss loading
+      _dismissLoadingDialog();
       _showSuccessSnackbar('Grammar corrected successfully!');
-
     } catch (e) {
-      // Check mounted *after* potential await inside catch (if any)
       if (!mounted) return;
-      _dismissLoadingDialog(); // Dismiss loading on error
+      _dismissLoadingDialog();
       _showErrorSnackbar('Failed to fix grammar: $e');
       if (kDebugMode) print('[ItemDetailScreen] Fix Grammar Error: $e');
     } finally {
-      // Check mounted in finally block as well
       if (mounted) {
         ref.read(note_providers.isFixingGrammarProvider.notifier).state = false;
       }
     }
   }
 
-  // --- Copy Thread Content Helper ---
   Future<void> _copyThreadContent(
-    BuildContext buildContext, // Use the main screen's context
+    BuildContext buildContext,
     WidgetRef ref,
     String itemId,
     WorkbenchItemType itemType,
   ) async {
     final activeServerId = ref.read(activeServerConfigProvider)?.id;
     if (activeServerId == null) {
-      // No await here, safe to use context
       _showErrorSnackbar('Cannot copy thread: No active server.');
       return;
     }
-
-    // No await before this, safe to use context
     _showLoadingDialog('Fetching thread...');
 
     String? fetchedContent;
     Object? fetchError;
 
     try {
-      // Assuming the item detail screen always shows an item from the active server
       fetchedContent = await getFormattedThreadContent(
         ref,
         itemId,
@@ -464,10 +461,8 @@ class _ItemDetailScreenState
       fetchError = e;
     }
 
-    // Check mounted *after* all awaits and *before* using context
     if (!mounted) return;
-
-    _dismissLoadingDialog(); // Dismiss loading dialog regardless of outcome
+    _dismissLoadingDialog();
 
     if (fetchError != null) {
       _showErrorSnackbar('Failed to copy thread: $fetchError');
@@ -475,9 +470,7 @@ class _ItemDetailScreenState
       _showSuccessSnackbar('Thread content copied to clipboard.');
     }
   }
-  // --- End Copy Thread Content Helper ---
 
-  // --- Chat With Thread Helper ---
   Future<void> _chatWithThread(
     BuildContext buildContext,
     WidgetRef ref,
@@ -486,20 +479,16 @@ class _ItemDetailScreenState
   ) async {
     final activeServer = ref.read(activeServerConfigProvider);
     if (activeServer == null) {
-      // No await here, safe to use context
       _showErrorSnackbar('Cannot start chat: No active server.');
       return;
     }
     final activeServerId = activeServer.id;
 
-    // No await before this, safe to use context
     _showLoadingDialog('Fetching thread for chat...');
-
     String? fetchedContent;
     Object? fetchError;
 
     try {
-      // Fetch the thread content
       fetchedContent = await getFormattedThreadContent(
         ref,
         itemId,
@@ -510,15 +499,13 @@ class _ItemDetailScreenState
       fetchError = e;
     }
 
-    // Check mounted *after* await and *before* using context
     if (!mounted) return;
-    _dismissLoadingDialog(); // Dismiss loading dialog regardless of outcome
+    _dismissLoadingDialog();
 
     if (fetchError != null) {
       _showErrorSnackbar('Failed to start chat: $fetchError');
       return;
     }
-
     if (fetchedContent == null) {
       _showErrorSnackbar(
         'Failed to start chat: Could not fetch thread content.',
@@ -526,27 +513,21 @@ class _ItemDetailScreenState
       return;
     }
 
-    // Content fetched successfully, proceed with navigation
     try {
-      // 1. Switch Tab
       final tabController = ref.read(tabControllerProvider);
-      // *** IMPORTANT: Ensure Chat tab index is correct (it's 0 in home_screen.dart) ***
       const int chatTabIndex = 0;
 
       if (tabController == null || tabController.index == chatTabIndex) {
-        // Already on chat tab or controller not found, proceed directly
         _navigateToChatScreen(
           buildContext,
-          fetchedContent, // Use fetchedContent after null check
+          fetchedContent,
           itemId,
           itemType,
-          activeServerId, // Use activeServerId after null check
+          activeServerId,
         );
       } else {
-        tabController.index = chatTabIndex; // Switch to Chat tab (index 0)
-        // Add a short delay to allow tab switch animation before navigating
+        tabController.index = chatTabIndex;
         await Future.delayed(const Duration(milliseconds: 100));
-        // Check mounted again after delay
         if (!mounted) return;
         _navigateToChatScreen(
           buildContext,
@@ -557,16 +538,12 @@ class _ItemDetailScreenState
         );
       }
     } catch (e) {
-      // Catch errors during tab switching or navigation
-      // Check mounted before showing snackbar
       if (mounted) {
         _showErrorSnackbar('Failed to navigate to chat: $e');
       }
     }
   }
 
-
-  // Helper to perform the actual navigation to chat screen
   void _navigateToChatScreen(
     BuildContext buildContext,
     String fetchedContent,
@@ -574,14 +551,11 @@ class _ItemDetailScreenState
     WorkbenchItemType itemType,
     String activeServerId,
   ) {
-    // Read the root navigator key using the provider
     final rootNavigatorKey = ref.read(rootNavigatorKeyProvider);
 
     if (rootNavigatorKey.currentState != null) {
-      // Push the chat screen onto the ROOT navigator
       rootNavigatorKey.currentState!.pushNamed(
-        // Use root key
-        '/chat', // Route defined at root level in main.dart
+        '/chat',
         arguments: {
           'contextString': fetchedContent,
           'parentItemId': itemId,
@@ -590,19 +564,14 @@ class _ItemDetailScreenState
         },
       );
     } else {
-      // Fallback or error handling
       _showErrorSnackbar('Could not access root navigator.');
       if (kDebugMode) {
         print("Error: rootNavigatorKey.currentState is null");
       }
     }
   }
-  // --- End Chat With Thread Helper ---
 
-
-  // --- Snackbar Helpers ---
   void _showErrorSnackbar(String message) {
-    // Check mounted before accessing ScaffoldMessenger
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -614,7 +583,6 @@ class _ItemDetailScreenState
   }
 
   void _showSuccessSnackbar(String message) {
-    // Check mounted before accessing ScaffoldMessenger
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -624,9 +592,7 @@ class _ItemDetailScreenState
       ),
     );
   }
-  // --- End Snackbar Helpers ---
 
-  // --- Keyboard Navigation Helpers ---
   void _selectNextComment() {
     if (!mounted) return;
     final commentsAsync = ref.read(
@@ -660,29 +626,14 @@ class _ItemDetailScreenState
       }
     });
   }
-  // --- End Keyboard Navigation Helpers ---
 
-  // --- Build Method ---
   @override
   Widget build(BuildContext context) {
-    // Check if the item still exists or if the server is active
     final noteAsync = ref.watch(
       note_providers.noteDetailProvider(widget.itemId),
     );
     final activeServer = ref.watch(activeServerConfigProvider);
-    // Assuming the detail screen implies the item is on the active server.
-    // If the server changes while viewing, this might become invalid.
     final bool isActiveServerItem = activeServer != null;
-
-    // Handle cases where the note is deleted or server becomes inactive while viewing
-    if (noteAsync is AsyncError && isActiveServerItem) {
-      // If error is specifically 'not found' or similar after a delete action
-      // Maybe pop automatically? Or show a specific message.
-      // For now, show generic error.
-    } else if (!isActiveServerItem) {
-      // If server switched away, show an overlay or disable actions?
-      // For now, actions are disabled in _showActions based on canInteractWithServer
-    }
 
     return Focus(
       focusNode: _screenFocusNode,
@@ -709,7 +660,7 @@ class _ItemDetailScreenState
         behavior: HitTestBehavior.translucent,
         child: CupertinoPageScaffold(
           navigationBar: CupertinoNavigationBar(
-            middle: const Text('Note Detail'), // Updated text
+            middle: const Text('Note Detail'),
             transitionBetweenRoutes: false,
             trailing: CupertinoButton(
               padding: EdgeInsets.zero,
@@ -720,11 +671,10 @@ class _ItemDetailScreenState
           child: Column(
             children: [
               Expanded(child: _buildBody()),
-              // Only show comment input if on active server
               if (isActiveServerItem)
                 CaptureUtility(
                   mode: CaptureMode.addComment,
-                  memoId: widget.itemId, // Pass itemId as memoId
+                  memoId: widget.itemId,
                   hintText: 'Add a comment...',
                   buttonText: 'Add Comment',
                 ),
@@ -734,17 +684,14 @@ class _ItemDetailScreenState
       ),
     );
   }
-  // --- End Build Method ---
 
-  // --- Build Body Helper ---
   Widget _buildBody() {
     if (!mounted) return const Center(child: CupertinoActivityIndicator());
     final noteAsync = ref.watch(
       note_providers.noteDetailProvider(widget.itemId),
     );
     final activeServer = ref.watch(activeServerConfigProvider);
-    final bool isActiveServerItem =
-        activeServer != null; // Simplified check for body
+    final bool isActiveServerItem = activeServer != null;
 
     if (!isActiveServerItem) {
       return const Center(
@@ -775,11 +722,7 @@ class _ItemDetailScreenState
                 builder: _buildRefreshIndicator,
               ),
               SliverToBoxAdapter(
-                child: NoteContent(
-                  // Use renamed widget
-                  note: note,
-                  noteId: widget.itemId, // Pass itemId as noteId
-                ),
+                child: NoteContent(note: note, noteId: widget.itemId),
               ),
               SliverToBoxAdapter(
                 child: Container(
@@ -791,9 +734,7 @@ class _ItemDetailScreenState
                   ),
                 ),
               ),
-              SliverToBoxAdapter(
-                child: NoteComments(noteId: widget.itemId),
-              ), // Use renamed widget and pass noteId
+              SliverToBoxAdapter(child: NoteComments(noteId: widget.itemId)),
               const SliverPadding(padding: EdgeInsets.only(bottom: 20)),
             ],
           ),
@@ -801,12 +742,7 @@ class _ItemDetailScreenState
       },
       loading: () => const Center(child: CupertinoActivityIndicator()),
       error: (error, _) {
-        // Check if error indicates item not found (e.g., after deletion)
-        // This depends on the specific error thrown by the API service
-        bool isNotFoundError = error.toString().contains(
-          'not found',
-        ); // Example check
-
+        final bool isNotFoundError = error.toString().contains('not found');
         return Center(
           child: Padding(
             padding: const EdgeInsets.all(16.0),
@@ -824,5 +760,4 @@ class _ItemDetailScreenState
       },
     );
   }
-// --- End Build Body Helper ---
 }

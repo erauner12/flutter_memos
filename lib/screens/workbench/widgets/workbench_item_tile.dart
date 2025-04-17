@@ -26,6 +26,7 @@ class WorkbenchItemTile extends ConsumerStatefulWidget {
     super.key,
     required this.itemReference,
     required this.index,
+    required Null Function() onTap,
   });
 
   @override
@@ -160,7 +161,7 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
     if (confirm == true && mounted) {
       unawaited(
         ref
-            .read(workbenchProvider.notifier)
+            .read(activeWorkbenchNotifierProvider) // Use active notifier
             .removeItem(widget.itemReference.id),
       );
     }
@@ -200,7 +201,11 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
       _dismissLoadingDialog(); // Dismiss loading
       if (success && mounted) {
         _showAlertDialog(context, 'Success', 'Task $actionVerb.');
-        unawaited(ref.read(workbenchProvider.notifier).refreshItemDetails());
+        unawaited(
+          ref
+              .read(activeWorkbenchNotifierProvider)
+              .refreshItemDetails(), // Use active notifier
+        );
         unawaited(ref.read(tasksNotifierProvider.notifier).fetchTasks());
       } else if (!success && mounted) {
         _showAlertDialog(context, 'Error', 'Failed to toggle task status.');
