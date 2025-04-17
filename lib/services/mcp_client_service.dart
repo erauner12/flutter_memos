@@ -1,16 +1,18 @@
 import 'dart:async';
-import 'dart:io' as io; // Use 'io' prefix for dart:io types
+import 'dart:convert';
+import 'dart:io' as io;
 
+import 'package:collection/collection.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_memos/models/mcp_server_config.dart';
-// MODIFY: Import the correct provider
 import 'package:flutter_memos/providers/mcp_server_config_provider.dart';
-import 'package:flutter_memos/services/mcp_sse_client_transport.dart'; // Import the new SSE transport
+import 'package:flutter_memos/providers/settings_provider.dart'; // Import settings for authentication keys
+import 'package:flutter_memos/services/gemini_service.dart'; // Import for geminiServiceProvider
+import 'package:flutter_memos/services/mcp_sse_client_transport.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_generative_ai/google_generative_ai.dart'; // Import for Gemini types (Content, Tool, etc.)
-// MODIFY: Change import prefix to avoid conflict
+import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:mcp_dart/mcp_dart.dart' as mcp_lib;
-import 'package:mcp_dart/src/shared/transport.dart' as transport_lib; // For Transport type
+import 'package:mcp_dart/src/shared/transport.dart' as transport_lib;
 
 // --- Helper Extension (Schema parsing - adapted from example) ---
 // Uses google_generative_ai.Schema
@@ -1429,16 +1431,11 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
           Content('model', [
             TextPart("Sorry, I couldn't generate a response."),
           ]);
-      final directResponseText = directContent.parts
-          .whereType<TextPart>()
-          .map((p) => p.text)
-          .join('');
+      
       debugPrint(
         "MCP ProcessQuery: Raw directContent from Gemini (1st call): \${jsonEncode(directContent.toJson())}",
       );
-      debugPrint(
-        "MCP ProcessQuery: Extracted direct text for UI: \"\$directResponseText\"",
-      );
+      
       return McpProcessResult(finalModelContent: directContent);
     }
   }
