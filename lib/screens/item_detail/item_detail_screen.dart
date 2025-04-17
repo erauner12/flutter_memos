@@ -4,6 +4,8 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart'; // Keep for ScaffoldMessenger, SnackBar
 import 'package:flutter/services.dart';
+// Add import for the provider
+import 'package:flutter_memos/main.dart'; // Adjust path if main.dart is elsewhere
 import 'package:flutter_memos/models/note_item.dart'; // Import NoteItem
 import 'package:flutter_memos/models/workbench_item_reference.dart'; // Import workbench model
 // Import note_providers instead of memo_providers
@@ -528,17 +530,20 @@ class _ItemDetailScreenState
     try {
       // 1. Switch Tab
       final tabController = ref.read(tabControllerProvider);
-      if (tabController == null || tabController.index == 3) {
+      // *** IMPORTANT: Ensure Chat tab index is correct (it's 0 in home_screen.dart) ***
+      const int chatTabIndex = 0;
+
+      if (tabController == null || tabController.index == chatTabIndex) {
         // Already on chat tab or controller not found, proceed directly
         _navigateToChatScreen(
           buildContext,
-          fetchedContent,
+          fetchedContent, // Use fetchedContent after null check
           itemId,
           itemType,
-          activeServerId,
+          activeServerId, // Use activeServerId after null check
         );
       } else {
-        tabController.index = 3; // Switch to Chat tab (index 3)
+        tabController.index = chatTabIndex; // Switch to Chat tab (index 0)
         // Add a short delay to allow tab switch animation before navigating
         await Future.delayed(const Duration(milliseconds: 100));
         // Check mounted again after delay
@@ -569,14 +574,14 @@ class _ItemDetailScreenState
     WorkbenchItemType itemType,
     String activeServerId,
   ) {
-    // Use the specific navigator key for the Chat tab
-    final chatNavigator = chatTabNavKey.currentState;
-    if (chatNavigator != null) {
-      // Pop to root of chat tab first to avoid stacking chat screens
-      chatNavigator.popUntil((route) => route.isFirst);
-      // Push the chat screen with arguments
-      chatNavigator.pushNamed(
-        '/chat', // Route defined in HomeScreen for the chat tab
+    // Read the root navigator key using the provider
+    final rootNavigatorKey = ref.read(rootNavigatorKeyProvider);
+
+    if (rootNavigatorKey.currentState != null) {
+      // Push the chat screen onto the ROOT navigator
+      rootNavigatorKey.currentState!.pushNamed(
+        // Use root key
+        '/chat', // Route defined at root level in main.dart
         arguments: {
           'contextString': fetchedContent,
           'parentItemId': itemId,
@@ -585,11 +590,10 @@ class _ItemDetailScreenState
         },
       );
     } else {
-      // Fallback or error handling if navigator key is null
-      // No await here, safe to use context
-      _showErrorSnackbar('Could not navigate to chat tab.');
+      // Fallback or error handling
+      _showErrorSnackbar('Could not access root navigator.');
       if (kDebugMode) {
-        print("Error: chatTabNavKey.currentState is null");
+        print("Error: rootNavigatorKey.currentState is null");
       }
     }
   }

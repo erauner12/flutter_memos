@@ -104,10 +104,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     (context) => const CupertinoPageScaffold(
                       child: ChatScreen(),
                     ), // Root of tab
-                '/chat':
-                    (context) => const CupertinoPageScaffold(
-                      child: ChatScreen(),
-                    ), // Route used for navigation
               },
             );
           case 1: // Workbench
