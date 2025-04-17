@@ -102,9 +102,18 @@ class TaskListItem extends StatelessWidget {
       child: CupertinoContextMenu(
         actions: _buildContextActions(context),
 
-        // Removed previewBuilder as it's not available in the current SDK version.
+        // Add previewBuilder to constrain the width during preview animation.
+        previewBuilder: (context, animation, child) {
+          // constrain width to the device; keeps height intrinsic
+          return SizedBox(
+            // Use MediaQuery to get screen width
+            width: MediaQuery.of(context).size.width,
+            // Apply the original child within the constrained width
+            child: child,
+          );
+        },
+
         // The child is the regular in-list representation.
-        // The context menu will use its default preview animation.
         child: _TaskRowContent(
           task: task,
           onTap: onTap, // Pass onTap for the main content area
@@ -200,11 +209,9 @@ class _TaskRowContent extends StatelessWidget {
 
     // The Container provides padding and the bottom border
     return Container(
-      // REMOVED top-level color property
-      // color: CupertinoColors.systemBackground.resolveFrom(context),
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
       decoration: BoxDecoration(
-        // ADDED color property inside BoxDecoration
+        // Set color inside BoxDecoration
         color: CupertinoColors.systemBackground.resolveFrom(context),
         border: Border(
           bottom: BorderSide(
