@@ -5,15 +5,13 @@ import 'package:flutter/services.dart';
 import 'package:flutter_memos/models/note_item.dart'; // Import NoteItem
 import 'package:flutter_memos/models/server_config.dart';
 import 'package:flutter_memos/providers/filter_providers.dart';
-import 'package:flutter_memos/providers/mcp_server_config_provider.dart';
 // Import note_providers instead of memo_providers
 import 'package:flutter_memos/providers/note_providers.dart' as note_providers;
 import 'package:flutter_memos/providers/server_config_provider.dart';
-import 'package:flutter_memos/providers/service_providers.dart';
-import 'package:flutter_memos/providers/settings_provider.dart';
 import 'package:flutter_memos/providers/ui_providers.dart' as ui_providers;
 // Import notes_list_body instead of memos_body
 import 'package:flutter_memos/screens/items/notes_list_body.dart';
+import 'package:flutter_memos/screens/settings_screen.dart'; // Import SettingsScreen
 import 'package:flutter_memos/utils/keyboard_navigation.dart';
 import 'package:flutter_memos/widgets/advanced_filter_panel.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -232,7 +230,7 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
     final visibleNotes = ref.watch(note_providers.filteredNotesProvider);
     final selectedPresetKey = ref.watch(quickFilterPresetProvider);
     final currentPresetLabel =
-        quickFilterPresets[selectedPresetKey]?.label ?? 'Notes';
+        quickFilterPresets[selectedPresetKey]?.label ?? 'Home'; // Changed label
     // Use renamed providers from ui_providers
     final isMultiSelectMode = ref.watch(ui_providers.itemMultiSelectModeProvider);
     final selectedIds = ref.watch(ui_providers.selectedItemIdsForMultiSelectProvider);
@@ -265,6 +263,7 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                    // Existing buttons (Multi-select, Hidden toggle, Filter, Add)
                   CupertinoButton(
                     padding: const EdgeInsets.symmetric(horizontal: 8.0),
                       minSize: 0,
@@ -276,8 +275,7 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
                     child: const Icon(
                       CupertinoIcons.checkmark_seal,
                     ),
-                  ),
-                    // Add Show/Hide Hidden Toggle Button
+                    ),
                     if (hiddenCount > 0)
                       CupertinoButton(
                         padding: const EdgeInsets.symmetric(horizontal: 8.0),
@@ -307,7 +305,6 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
                     CupertinoButton(
                       padding: const EdgeInsets.symmetric(horizontal: 8.0),
                       minSize: 0,
-                      // FIX: Wrap the call in a lambda to match VoidCallback type
                       onPressed: () => _showAdvancedFilterPanel(context),
                     child: const Icon(CupertinoIcons.tuningfork),
                   ),
@@ -322,17 +319,27 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
                     },
                     child: const Icon(CupertinoIcons.add),
                   ),
+                    // REMOVED Reset Button
+                    // const SizedBox(width: 8), // Keep spacing if needed
+                    // New Settings Button
                   CupertinoButton(
-                    padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8.0,
+                      ), // Adjust padding as needed
                     minSize: 0,
-                    onPressed: _showResetConfirmationDialog,
-                    child: const Tooltip(
-                      message: 'Reset All Cloud & Local Data',
-                      child: Icon(
-                        CupertinoIcons.exclamationmark_octagon,
-                        color: CupertinoColors.systemRed,
-                      ),
-                    ),
+                      child: const Icon(
+                        CupertinoIcons.settings,
+                        size: 22,
+                      ), // Gear icon
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          CupertinoPageRoute(
+                            builder:
+                                (context) =>
+                                    const SettingsScreen(isInitialSetup: false),
+                          ),
+                        );
+                      },
                   ),
                 ],
               ),
@@ -821,182 +828,8 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
   }
   // --- End Unhide All Confirmation ---
 
-  // --- Reset Logic ---
-  void _showResetConfirmationDialog() {
-    if (!mounted) return;
-    showCupertinoDialog(
-      context: context,
-      builder: (BuildContext dialogContext) => CupertinoAlertDialog(
-        title: const Text('Reset All Cloud & Local Data?'),
-        content: const Text(
-          'WARNING: This will permanently delete ALL Memos server configurations, MCP server configurations, and saved API keys (Todoist, OpenAI, Gemini) from this device AND from your iCloud account.\n\nThis action cannot be undone and is intended for recovery purposes only.',
-        ),
-        actions: [
-          CupertinoDialogAction(
-            child: const Text('Cancel'),
-            onPressed: () => Navigator.pop(dialogContext),
-          ),
-          CupertinoDialogAction(
-            isDestructiveAction: true,
-            child: const Text('Reset Data'),
-            onPressed: () {
-              Navigator.pop(dialogContext);
-              _performFullReset();
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _performFullReset() async {
-    if (kDebugMode) {
-      print('[ItemsScreen] Starting full data reset...');
-    }
-    if (!mounted) {
-      if (kDebugMode) {
-        print('[ItemsScreen] Reset aborted: Widget unmounted before starting.');
-      }
-      return;
-    }
-    final cloudKitService = ref.read(cloudKitServiceProvider);
-
-    bool cloudSuccess = true;
-    String cloudErrorMessage = '';
-
-    try {
-      if (kDebugMode) {
-        print('[ItemsScreen] Deleting CloudKit ServerConfig records...');
-      }
-      bool deleteServersSuccess = await cloudKitService.deleteAllRecordsOfType('ServerConfig');
-      if (!deleteServersSuccess) {
-        cloudSuccess = false;
-        cloudErrorMessage += 'Failed to delete ServerConfig records. ';
-        if (kDebugMode) {
-          print('[ItemsScreen] Failed CloudKit ServerConfig deletion.');
-        }
-      }
-
-      if (kDebugMode) {
-        print('[ItemsScreen] Deleting CloudKit McpServerConfig records...');
-      }
-      bool deleteMcpSuccess = await cloudKitService.deleteAllRecordsOfType('McpServerConfig');
-      if (!deleteMcpSuccess) {
-        cloudSuccess = false;
-        cloudErrorMessage += 'Failed to delete McpServerConfig records. ';
-        if (kDebugMode) {
-          print('[ItemsScreen] Failed CloudKit McpServerConfig deletion.');
-        }
-      }
-
-      if (kDebugMode) {
-        print('[ItemsScreen] Deleting CloudKit UserSettings record...');
-      }
-      bool deleteSettingsSuccess = await cloudKitService.deleteUserSettingsRecord();
-      if (!deleteSettingsSuccess) {
-        cloudSuccess = false;
-        cloudErrorMessage += 'Failed to delete UserSettings record. ';
-        if (kDebugMode) {
-          print('[ItemsScreen] Failed CloudKit UserSettings deletion.');
-        }
-      }
-
-      if (!cloudSuccess) {
-        if (kDebugMode) {
-          print(
-            '[ItemsScreen] CloudKit deletion finished with errors: $cloudErrorMessage',
-          );
-        }
-      } else {
-        if (kDebugMode) {
-          print('[ItemsScreen] CloudKit deletion finished successfully.');
-        }
-      }
-    } catch (e, s) {
-      if (kDebugMode) {
-        print(
-          '[ItemsScreen] Critical error during CloudKit deletion phase: $e\n$s',
-        );
-      }
-      cloudSuccess = false;
-      cloudErrorMessage =
-          'A critical error occurred during CloudKit deletion: $e';
-    }
-
-    final multiServerNotifier = ref.read(multiServerConfigProvider.notifier);
-    final mcpServerNotifier = ref.read(mcpServerConfigProvider.notifier);
-    final todoistNotifier = ref.read(todoistApiKeyProvider.notifier);
-    final openAiKeyNotifier = ref.read(openAiApiKeyProvider.notifier);
-    final openAiModelNotifier = ref.read(openAiModelIdProvider.notifier);
-    final geminiNotifier = ref.read(geminiApiKeyProvider.notifier);
-
-    try {
-      if (kDebugMode) {
-        print('[ItemsScreen] Resetting local notifiers and cache...');
-      }
-      await multiServerNotifier.resetStateAndCache();
-      await mcpServerNotifier.resetStateAndCache();
-      await todoistNotifier.clear();
-      await openAiKeyNotifier.clear();
-      await openAiModelNotifier.clear();
-      await geminiNotifier.clear();
-      if (kDebugMode) {
-        print('[ItemsScreen] Local reset finished.');
-      }
-    } catch (e, s) {
-      if (kDebugMode) {
-        print('[ItemsScreen] Error during local notifier reset phase: $e\n$s');
-      }
-      if (cloudErrorMessage.isNotEmpty) {
-        cloudErrorMessage += '\nAn error also occurred during local data reset.';
-      } else {
-        cloudErrorMessage = 'An error occurred during local data reset.';
-        cloudSuccess = false;
-      }
-    }
-
-    if (mounted) {
-      showCupertinoDialog(
-        context: context,
-        builder: (BuildContext finalDialogContext) => CupertinoAlertDialog(
-          title: Text(cloudSuccess ? 'Reset Complete' : 'Reset Failed'),
-          content: Text(
-            cloudSuccess
-                ? 'All cloud and local configurations have been reset. Please restart the app or navigate to Settings to reconfigure.'
-                : 'The reset process encountered errors:\n$cloudErrorMessage\nPlease check your iCloud data manually via Settings > Apple ID > iCloud > Manage Account Storage, then restart the app.'
-          ),
-          actions: [
-            CupertinoDialogAction(
-              isDefaultAction: true,
-              child: const Text('OK'),
-              onPressed: () {
-                Navigator.pop(finalDialogContext);
-                if (mounted) {
-                  ref.invalidate(loadServerConfigProvider);
-                  if (kDebugMode) {
-                        print(
-                          '[ItemsScreen] Reset complete. Invalidated loadServerConfigProvider.',
-                        );
-                  }
-                } else {
-                  if (kDebugMode) {
-                        print(
-                          '[ItemsScreen] Widget unmounted before invalidating loadServerConfigProvider.',
-                        );
-                  }
-                }
-              },
-            ),
-          ],
-        ),
-      );
-    } else {
-      if (kDebugMode) {
-        print(
-          '[ItemsScreen] Widget unmounted before final reset dialog could be shown.',
-        );
-      }
-    }
-  }
-  // --- End Reset Logic ---
+  // --- REMOVED Reset Logic ---
+  // void _showResetConfirmationDialog() { ... }
+  // Future<void> _performFullReset() async { ... }
+  // --- End REMOVED Reset Logic ---
 }

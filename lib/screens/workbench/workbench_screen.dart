@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart'; // Import Material for ReorderableListView
 import 'package:flutter_memos/providers/workbench_provider.dart';
+import 'package:flutter_memos/screens/settings_screen.dart'; // Import SettingsScreen
 import 'package:flutter_memos/screens/workbench/widgets/workbench_item_tile.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -45,17 +46,41 @@ class _WorkbenchScreenState extends ConsumerState<WorkbenchScreen> {
           child: const Icon(CupertinoIcons.arrow_up_arrow_down),
           onPressed: () => ref.read(workbenchProvider.notifier).resetOrder(),
         ),
-        trailing: CupertinoButton(
-          padding: EdgeInsets.zero,
-          onPressed:
-              canRefresh
-                  ? () =>
-                      ref.read(workbenchProvider.notifier).refreshItemDetails()
+        trailing: Row(
+          // Wrap existing and new button in a Row
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Existing Refresh Button
+            CupertinoButton(
+              padding: EdgeInsets.zero,
+              onPressed:
+                  canRefresh
+                      ? () =>
+                          ref
+                              .read(workbenchProvider.notifier)
+                              .refreshItemDetails()
                   : null,
-          child:
-              canRefresh
+              child:
+                  canRefresh
                   ? const Icon(CupertinoIcons.refresh)
                   : const CupertinoActivityIndicator(radius: 10),
+            ),
+            const SizedBox(width: 8), // Add spacing
+            // New Settings Button
+            CupertinoButton(
+              padding: EdgeInsets.zero,
+              child: const Icon(CupertinoIcons.settings, size: 22), // Gear icon
+              onPressed: () {
+                Navigator.of(context).push(
+                  CupertinoPageRoute(
+                    builder:
+                        (context) =>
+                            const SettingsScreen(isInitialSetup: false),
+                  ),
+                );
+              },
+            ),
+          ],
         ),
       ),
       child: SafeArea(

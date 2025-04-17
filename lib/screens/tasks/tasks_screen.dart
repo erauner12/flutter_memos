@@ -9,6 +9,7 @@ import 'package:flutter_memos/models/workbench_item_reference.dart';
 import 'package:flutter_memos/providers/settings_provider.dart'; // Import for todoistApiKeyProvider
 import 'package:flutter_memos/providers/task_providers.dart';
 import 'package:flutter_memos/providers/workbench_provider.dart';
+import 'package:flutter_memos/screens/settings_screen.dart'; // Import SettingsScreen
 import 'package:flutter_memos/screens/tasks/new_task_screen.dart';
 import 'package:flutter_memos/screens/tasks/widgets/task_list_item.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart'; // Import hooks_riverpod
@@ -137,20 +138,42 @@ class TasksScreen extends HookConsumerWidget {
                   : handleRefresh,
           child: const Icon(CupertinoIcons.refresh),
         ),
-        trailing: CupertinoButton(
-          padding: EdgeInsets.zero,
-          // Enable add only if configured
-          onPressed:
-              !isTodoistConfigured
+        trailing: Row(
+          // Wrap existing and new button in a Row
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Existing Add Button
+            CupertinoButton(
+              padding: EdgeInsets.zero,
+              // Enable add only if configured
+              onPressed:
+                  !isTodoistConfigured
                   ? null
                   : () {
-                    Navigator.of(context).push(
-                      CupertinoPageRoute(
-                        builder: (context) => const NewTaskScreen(),
-                      ),
-                    );
-                  },
-          child: const Icon(CupertinoIcons.add),
+                        Navigator.of(context).push(
+                          CupertinoPageRoute(
+                            builder: (context) => const NewTaskScreen(),
+                          ),
+                        );
+                      },
+              child: const Icon(CupertinoIcons.add),
+            ),
+            const SizedBox(width: 8), // Add spacing
+            // New Settings Button
+            CupertinoButton(
+              padding: EdgeInsets.zero,
+              child: const Icon(CupertinoIcons.settings, size: 22), // Gear icon
+              onPressed: () {
+                Navigator.of(context).push(
+                  CupertinoPageRoute(
+                    builder:
+                        (context) =>
+                            const SettingsScreen(isInitialSetup: false),
+                  ),
+                );
+              },
+            ),
+          ],
         ),
       ),
       child: SafeArea(

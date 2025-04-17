@@ -4,10 +4,17 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_memos/models/mcp_server_config.dart';
 import 'package:flutter_memos/models/server_config.dart';
 import 'package:flutter_memos/providers/api_providers.dart';
+import 'package:flutter_memos/providers/chat_providers.dart';
 // ADD: Import the new MCP config provider
 import 'package:flutter_memos/providers/mcp_server_config_provider.dart';
+import 'package:flutter_memos/providers/note_providers.dart'
+    as note_providers; // For cache clearing?
 import 'package:flutter_memos/providers/server_config_provider.dart';
+// Import providers needed for reset
+import 'package:flutter_memos/providers/service_providers.dart'; // For cloudKitServiceProvider
 import 'package:flutter_memos/providers/settings_provider.dart'; // Import settings provider
+import 'package:flutter_memos/providers/task_providers.dart';
+import 'package:flutter_memos/providers/workbench_provider.dart';
 import 'package:flutter_memos/screens/add_edit_mcp_server_screen.dart'; // Will be created next
 import 'package:flutter_memos/screens/add_edit_server_screen.dart';
 import 'package:flutter_memos/services/base_api_service.dart'; // Import BaseApiService
@@ -731,6 +738,166 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
   }
 
+  // --- START: Added Reset Logic ---
+  Future<void> _performFullReset() async {
+    if (kDebugMode) {
+      print('[SettingsScreen] Starting full data reset...');
+    }
+    if (!mounted) {
+      if (kDebugMode) {
+        print(
+          '[SettingsScreen] Reset aborted: Widget unmounted before starting.',
+        );
+      }
+      return;
+    }
+    final cloudKitService = ref.read(cloudKitServiceProvider);
+
+    bool cloudSuccess = true;
+    String cloudErrorMessage = '';
+
+    // 1. Clear CloudKit Data
+    try {
+      if (kDebugMode) {
+        print('[SettingsScreen] Deleting CloudKit ServerConfig records...');
+      }
+      bool deleteServersSuccess = await cloudKitService.deleteAllRecordsOfType(
+        'ServerConfig',
+      );
+      if (!deleteServersSuccess) {
+        cloudSuccess = false;
+        cloudErrorMessage += 'Failed to delete ServerConfig records. ';
+        if (kDebugMode) {
+          print('[SettingsScreen] Failed CloudKit ServerConfig deletion.');
+        }
+      }
+
+      if (kDebugMode) {
+        print('[SettingsScreen] Deleting CloudKit McpServerConfig records...');
+      }
+      bool deleteMcpSuccess = await cloudKitService.deleteAllRecordsOfType(
+        'McpServerConfig',
+      );
+      if (!deleteMcpSuccess) {
+        cloudSuccess = false;
+        cloudErrorMessage += 'Failed to delete McpServerConfig records. ';
+        if (kDebugMode) {
+          print('[SettingsScreen] Failed CloudKit McpServerConfig deletion.');
+        }
+      }
+
+      if (kDebugMode) {
+        print('[SettingsScreen] Deleting CloudKit UserSettings record...');
+      }
+      bool deleteSettingsSuccess =
+          await cloudKitService.deleteUserSettingsRecord();
+      if (!deleteSettingsSuccess) {
+        cloudSuccess = false;
+        cloudErrorMessage += 'Failed to delete UserSettings record. ';
+        if (kDebugMode) {
+          print('[SettingsScreen] Failed CloudKit UserSettings deletion.');
+        }
+      }
+
+      if (!cloudSuccess) {
+        if (kDebugMode) {
+          print(
+            '[SettingsScreen] CloudKit deletion finished with errors: $cloudErrorMessage',
+          );
+        }
+      } else {
+        if (kDebugMode) {
+          print('[SettingsScreen] CloudKit deletion finished successfully.');
+        }
+      }
+    } catch (e, s) {
+      if (kDebugMode) {
+        print(
+          '[SettingsScreen] Critical error during CloudKit deletion phase: $e\n$s',
+        );
+      }
+      cloudSuccess = false;
+      cloudErrorMessage =
+          'A critical error occurred during CloudKit deletion: $e';
+    }
+
+    // 2. Clear Local Notifiers and Cache
+    final multiServerNotifier = ref.read(multiServerConfigProvider.notifier);
+    final mcpServerNotifier = ref.read(mcpServerConfigProvider.notifier);
+    final todoistNotifier = ref.read(todoistApiKeyProvider.notifier);
+    final openAiKeyNotifier = ref.read(openAiApiKeyProvider.notifier);
+    final openAiModelNotifier = ref.read(openAiModelIdProvider.notifier);
+    final geminiNotifier = ref.read(geminiApiKeyProvider.notifier);
+    final workbenchNotifier = ref.read(workbenchProvider.notifier);
+    final tasksNotifier = ref.read(tasksNotifierProvider.notifier);
+    final chatNotifier = ref.read(chatProvider.notifier);
+    // Consider if notes cache needs explicit clearing or if config reset handles it
+    // final notesNotifier = ref.read(note_providers.notesNotifierProvider.notifier);
+
+    try {
+      if (kDebugMode) {
+        print('[SettingsScreen] Resetting local notifiers and cache...');
+      }
+      // Reset Configs & Keys
+      await multiServerNotifier.resetStateAndCache();
+      await mcpServerNotifier.resetStateAndCache();
+      await todoistNotifier.clear();
+      await openAiKeyNotifier.clear();
+      await openAiModelNotifier.clear();
+      await geminiNotifier.clear();
+
+      // Clear Data Caches
+      await workbenchNotifier
+          .clearAllItems(); // Assuming this method exists or is added
+      tasksNotifier.clearTasks(); // Clear local task list
+      chatNotifier.clearChat(); // Clear chat history
+      // await notesNotifier.clearCache(); // If an explicit cache clear is needed
+
+      if (kDebugMode) {
+        print('[SettingsScreen] Local reset finished.');
+      }
+    } catch (e, s) {
+      if (kDebugMode) {
+        print(
+          '[SettingsScreen] Error during local notifier reset phase: $e\n$s',
+        );
+      }
+      if (cloudErrorMessage.isNotEmpty) {
+        cloudErrorMessage +=
+            '\nAn error also occurred during local data reset.';
+      } else {
+        cloudErrorMessage = 'An error occurred during local data reset.';
+        cloudSuccess = false; // Mark as failed if local reset fails
+      }
+    }
+
+    // 3. Show Final Result Dialog
+    if (mounted) {
+      _showResultDialog(
+        cloudSuccess ? 'Reset Complete' : 'Reset Partially Failed',
+        cloudSuccess
+            ? 'All cloud configurations, local settings, API keys, and cached data have been cleared. Please restart the app or reconfigure servers.'
+            : 'The reset process encountered errors:\n$cloudErrorMessage\nSome data might remain. Please check iCloud data manually (Settings > Apple ID > iCloud > Manage Account Storage) and restart the app.',
+        isError: !cloudSuccess,
+      );
+      // Invalidate providers to force reload/re-check after reset
+      ref.invalidate(loadServerConfigProvider);
+      ref.invalidate(loadMcpServerConfigProvider);
+      ref.invalidate(note_providers.notesNotifierProvider);
+      ref.invalidate(tasksNotifierProvider);
+      ref.invalidate(workbenchProvider);
+      ref.invalidate(chatProvider);
+      // Potentially navigate away or prompt for restart
+    } else {
+      if (kDebugMode) {
+        print(
+          '[SettingsScreen] Widget unmounted before final reset dialog could be shown.',
+        );
+      }
+    }
+  }
+  // --- END: Added Reset Logic ---
+
   @override
   Widget build(BuildContext context) {
     final multiServerState = ref.watch(multiServerConfigProvider);
@@ -1372,7 +1539,55 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ),
                 ),
               ),
-              const SizedBox(height: 32),
+              // --- DANGER ZONE Section ---
+              CupertinoListSection.insetGrouped(
+                header: const Text('DANGER ZONE'),
+                children: [
+                  CupertinoListTile(
+                    title: Text(
+                      'Reset All Cloud & Local Data',
+                      style: TextStyle(
+                        color: CupertinoColors.systemRed.resolveFrom(context),
+                      ),
+                    ),
+                    leading: Icon(
+                      CupertinoIcons.exclamationmark_octagon_fill,
+                      color: CupertinoColors.systemRed.resolveFrom(context),
+                    ),
+                    onTap: () async {
+                      final confirmed = await showCupertinoDialog<bool>(
+                        context: context,
+                        builder:
+                            (dialogContext) => CupertinoAlertDialog(
+                              title: const Text('Confirm Reset'),
+                              content: const Text(
+                                'This will permanently delete ALL server configurations (Memos, Blinko, Todoist, MCP), API keys (Todoist, OpenAI, Gemini), cached data (notes, tasks, workbench items, chat history), and local settings from this device AND from your iCloud account.\n\nThis action cannot be undone. Are you absolutely sure?',
+                              ),
+                              actions: [
+                                CupertinoDialogAction(
+                                  child: const Text('Cancel'),
+                                  onPressed:
+                                      () => Navigator.pop(dialogContext, false),
+                                ),
+                                CupertinoDialogAction(
+                                  isDestructiveAction: true,
+                                  child: const Text('Reset Everything'),
+                                  onPressed:
+                                      () => Navigator.pop(dialogContext, true),
+                                ),
+                              ],
+                            ),
+                      );
+
+                      if (confirmed == true && mounted) {
+                        // --- Execute Reset Logic ---
+                        await _performFullReset();
+                      }
+                    },
+                  ),
+                ],
+              ),
+              const SizedBox(height: 32), // Add space at the bottom
             ],
           ),
         ),

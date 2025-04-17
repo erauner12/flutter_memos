@@ -5,6 +5,7 @@ import 'package:flutter_memos/models/chat_message.dart'; // Import ChatMessage w
 import 'package:flutter_memos/models/workbench_item_reference.dart'; // For WorkbenchItemType enum
 import 'package:flutter_memos/providers/chat_providers.dart';
 import 'package:flutter_memos/providers/settings_provider.dart'; // To check API key
+import 'package:flutter_memos/screens/settings_screen.dart'; // Import SettingsScreen
 import 'package:flutter_memos/services/mcp_client_service.dart'; // For mcpClientProvider
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -143,17 +144,39 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     return CupertinoPageScaffold(
       navigationBar: CupertinoNavigationBar(
         middle: Text('Chat (${mcpState.connectedServerCount} MCP)'),
-        trailing: CupertinoButton(
-          padding: EdgeInsets.zero,
-          child: const Icon(CupertinoIcons.trash, size: 22),
-          onPressed: () {
-            // Confirmation could be added here
-             ref.read(chatProvider.notifier).clearChat();
-            // Reset context processed flag if chat is cleared manually
-            setState(() {
-              _contextProcessed = false;
-            });
-          },
+        trailing: Row(
+          // Wrap existing and new button in a Row
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Existing Trash Button
+            CupertinoButton(
+              padding: EdgeInsets.zero,
+              child: const Icon(CupertinoIcons.trash, size: 22),
+              onPressed: () {
+                // Confirmation could be added here
+                ref.read(chatProvider.notifier).clearChat();
+                // Reset context processed flag if chat is cleared manually
+                setState(() {
+                  _contextProcessed = false;
+                });
+              },
+            ),
+            const SizedBox(width: 8), // Add spacing
+            // New Settings Button
+            CupertinoButton(
+              padding: EdgeInsets.zero,
+              child: const Icon(CupertinoIcons.settings, size: 22), // Gear icon
+              onPressed: () {
+                Navigator.of(context).push(
+                  CupertinoPageRoute(
+                    builder:
+                        (context) =>
+                            const SettingsScreen(isInitialSetup: false),
+                  ),
+                );
+              },
+            ),
+          ],
         ),
       ),
       child: SafeArea(

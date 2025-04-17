@@ -1,6 +1,5 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_memos/screens/items/items_screen.dart';
-import 'package:flutter_memos/screens/settings_screen.dart';
 import 'package:flutter_memos/screens/tasks/new_task_screen.dart';
 import 'package:flutter_memos/screens/tasks/tasks_screen.dart'; // Import TasksScreen
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -22,7 +21,7 @@ final GlobalKey<NavigatorState> tasksTabNavKey = GlobalKey<NavigatorState>();
 final GlobalKey<NavigatorState> workbenchTabNavKey =
     GlobalKey<NavigatorState>();
 final GlobalKey<NavigatorState> chatTabNavKey = GlobalKey<NavigatorState>();
-final GlobalKey<NavigatorState> settingsTabNavKey = GlobalKey<NavigatorState>();
+// REMOVED: final GlobalKey<NavigatorState> settingsTabNavKey = GlobalKey<NavigatorState>();
 
 
 class HomeScreen extends ConsumerStatefulWidget {
@@ -63,37 +62,88 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       controller: _tabController, // Pass the managed controller
       tabBar: CupertinoTabBar(
         items: const <BottomNavigationBarItem>[
-          BottomNavigationBarItem(
-            icon: Icon(CupertinoIcons.home),
-            label: 'Memos',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(CupertinoIcons.check_mark_circled),
-            label: 'Tasks',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(CupertinoIcons.briefcase),
-            label: 'Workbench',
-          ),
+          // Index 0: Chat
           BottomNavigationBarItem(
             icon: Icon(CupertinoIcons.chat_bubble),
             label: 'Chat',
           ),
+          // Index 1: Workbench
           BottomNavigationBarItem(
-            icon: Icon(CupertinoIcons.settings),
-            label: 'Settings',
+            icon: Icon(CupertinoIcons.briefcase),
+            label: 'Workbench',
           ),
+          // Index 2: Tasks
+          BottomNavigationBarItem(
+            icon: Icon(CupertinoIcons.check_mark_circled),
+            label: 'Tasks',
+          ),
+          // Index 3: Memos (Home)
+          BottomNavigationBarItem(
+            icon: Icon(
+              CupertinoIcons.home,
+            ), // Or appropriate icon for Memos/Items
+            label: 'Home', // Change label to 'Home' as requested
+          ),
+          // REMOVED Settings Item
         ],
         // onTap is handled by the controller passed to CupertinoTabScaffold
         // No need for manual provider update here
       ),
       tabBuilder: (BuildContext context, int index) {
         switch (index) {
-          case 0: // Memos
+          case 0: // Chat
             return CupertinoTabView(
-              navigatorKey: memosTabNavKey, // Assign key
+              navigatorKey: chatTabNavKey, // Keep key with content
               builder: (context) {
-                return const CupertinoPageScaffold(child: ItemsScreen());
+                // Default builder shows the ChatScreen
+                return const CupertinoPageScaffold(child: ChatScreen());
+              },
+              // Define the '/chat' route specifically for this tab's navigator
+              routes: {
+                '/':
+                    (context) => const CupertinoPageScaffold(
+                      child: ChatScreen(),
+                    ), // Root of tab
+                '/chat':
+                    (context) => const CupertinoPageScaffold(
+                      child: ChatScreen(),
+                    ), // Route used for navigation
+              },
+            );
+          case 1: // Workbench
+            return CupertinoTabView(
+              navigatorKey: workbenchTabNavKey, // Keep key with content
+              builder: (context) {
+                return const CupertinoPageScaffold(child: WorkbenchScreen());
+              },
+              routes: {
+                '/':
+                    (context) =>
+                        const CupertinoPageScaffold(child: WorkbenchScreen()),
+              },
+            );
+          case 2: // Tasks
+            return CupertinoTabView(
+              navigatorKey: tasksTabNavKey, // Keep key with content
+              builder: (context) {
+                return const CupertinoPageScaffold(child: TasksScreen());
+              },
+              routes: {
+                '/':
+                    (context) =>
+                        const CupertinoPageScaffold(child: TasksScreen()),
+                '/tasks/new':
+                    (context) =>
+                        const CupertinoPageScaffold(child: NewTaskScreen()),
+              },
+            );
+          case 3: // Memos (Home)
+            return CupertinoTabView(
+              navigatorKey: memosTabNavKey, // Keep key with content
+              builder: (context) {
+                return const CupertinoPageScaffold(
+                  child: ItemsScreen(),
+                ); // Assuming ItemsScreen is 'Home'
               },
               // Define routes within this tab's navigator
               routes: {
@@ -119,67 +169,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 }
               },
             );
-          case 1: // Tasks
-            return CupertinoTabView(
-              navigatorKey: tasksTabNavKey, // Assign key
-              builder: (context) {
-                return const CupertinoPageScaffold(child: TasksScreen());
-              },
-              routes: {
-                '/':
-                    (context) =>
-                        const CupertinoPageScaffold(child: TasksScreen()),
-                '/tasks/new':
-                    (context) =>
-                        const CupertinoPageScaffold(child: NewTaskScreen()),
-              },
-            );
-          case 2: // Workbench
-            return CupertinoTabView(
-              navigatorKey: workbenchTabNavKey, // Assign key
-              builder: (context) {
-                return const CupertinoPageScaffold(child: WorkbenchScreen());
-              },
-              routes: {
-                '/':
-                    (context) =>
-                        const CupertinoPageScaffold(child: WorkbenchScreen()),
-              },
-            );
-          case 3: // Chat
-            return CupertinoTabView(
-              navigatorKey: chatTabNavKey, // Assign key
-              builder: (context) {
-                // Default builder shows the ChatScreen
-                return const CupertinoPageScaffold(child: ChatScreen());
-              },
-              // Define the '/chat' route specifically for this tab's navigator
-              routes: {
-                '/':
-                    (context) => const CupertinoPageScaffold(
-                      child: ChatScreen(),
-                    ), // Root of tab
-                '/chat':
-                    (context) => const CupertinoPageScaffold(
-                      child: ChatScreen(),
-                    ), // Route used for navigation
-              },
-            );
-          case 4: // Settings
-            return CupertinoTabView(
-              navigatorKey: settingsTabNavKey, // Assign key
-              builder: (context) {
-                return const CupertinoPageScaffold(
-                  child: SettingsScreen(isInitialSetup: false),
-                );
-              },
-              routes: {
-                '/':
-                    (context) => const CupertinoPageScaffold(
-                      child: SettingsScreen(isInitialSetup: false),
-                    ),
-              },
-            );
+          // REMOVED case 4 (Settings)
           default:
             // Return an empty view for safety, though this shouldn't be reached
             return const SizedBox.shrink();
