@@ -6,15 +6,18 @@ import 'package:flutter_memos/screens/tasks/tasks_screen.dart'; // Import TasksS
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'chat_screen.dart';
+// Import ItemDetailScreen - adjust path if necessary
+import 'item_detail/item_detail_screen.dart';
 import 'workbench/workbench_screen.dart';
 
-// Provider to expose the TabController from the GlobalKey
+// Provider to expose the TabController
 final tabControllerProvider = StateProvider<CupertinoTabController?>(
   (ref) => null,
 );
 
-// GlobalKey to access CupertinoTabScaffold state (no explicit type needed)
-final GlobalKey tabScaffoldKey = GlobalKey();
+// GlobalKey to access CupertinoTabScaffold state (optional, if needed for other state access)
+// final GlobalKey tabScaffoldKey = GlobalKey(); // Keep if needed for scaffold state, not controller
+
 // GlobalKeys for each tab's navigator
 final GlobalKey<NavigatorState> memosTabNavKey = GlobalKey<NavigatorState>();
 final GlobalKey<NavigatorState> tasksTabNavKey = GlobalKey<NavigatorState>();
@@ -32,49 +35,40 @@ class HomeScreen extends ConsumerStatefulWidget {
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
-  CupertinoTabController? _tabController;
+  late CupertinoTabController _tabController; // Declare controller
 
   @override
   void initState() {
     super.initState();
-    // Initialize the controller and update the provider after the first frame
+    _tabController = CupertinoTabController(); // Initialize controller
+    // Update the provider after the first frame
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      // Access controller via the key's currentState
-      final scaffoldState = tabScaffoldKey.currentState;
-      if (mounted && scaffoldState is CupertinoTabScaffoldState) {
-        _tabController = scaffoldState.controller;
-        // Update the provider if the controller is not null
-        if (_tabController != null &&
-            ref.read(tabControllerProvider) != _tabController) {
+      if (mounted && ref.read(tabControllerProvider) != _tabController) {
           ref.read(tabControllerProvider.notifier).state = _tabController;
-        }
       }
     });
   }
 
   @override
   void dispose() {
+    _tabController.dispose(); // Dispose the controller
     // Optionally clear the provider state on dispose
     // WidgetsBinding.instance.addPostFrameCallback((_) {
-    //    if (!mounted) { // Check if it's actually disposed
-    //       ref.read(tabControllerProvider.notifier).state = null;
-    //    }
+    //    // Check if the widget associated with this state is still mounted
+    //    // This check might be tricky in dispose. Consider if clearing is necessary.
+    //    // if (!mounted) {
+    //    //    ref.read(tabControllerProvider.notifier).state = null;
+    //    // }
     // });
-    // Don't dispose the controller here, it's managed by CupertinoTabScaffold
     super.dispose();
   }
 
 
   @override
   Widget build(BuildContext context) {
-    // Listen to the provider to potentially update the local controller if needed elsewhere
-    // final externalController = ref.watch(tabControllerProvider);
-    // if (_tabController != externalController) {
-    //    // Handle potential external changes if necessary
-    // }
-
     return CupertinoTabScaffold(
-      key: tabScaffoldKey, // Assign the key
+      // key: tabScaffoldKey, // Assign key only if needed for scaffold state access
+      controller: _tabController, // Pass the managed controller
       tabBar: CupertinoTabBar(
         items: const <BottomNavigationBarItem>[
           BottomNavigationBarItem(
@@ -98,19 +92,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             label: 'Settings',
           ),
         ],
-        // If using the provider, ensure the controller is updated on change
-        onTap: (index) {
-          // Update provider state if controller exists
-          final scaffoldState = tabScaffoldKey.currentState;
-          if (scaffoldState is CupertinoTabScaffoldState) {
-            final currentController = scaffoldState.controller;
-            if (currentController != null &&
-                ref.read(tabControllerProvider) != currentController) {
-              ref.read(tabControllerProvider.notifier).state =
-                  currentController;
-            }
-          }
-        },
+        // onTap is handled by the controller passed to CupertinoTabScaffold
       ),
       tabBuilder: (BuildContext context, int index) {
         switch (index) {
@@ -125,23 +107,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 '/':
                     (context) =>
                         const CupertinoPageScaffold(child: ItemsScreen()),
-                // Add other memo-related routes here if needed
                 '/item-detail': (context) {
                   final args =
                       ModalRoute.of(context)?.settings.arguments
                           as Map<String, dynamic>?;
                   final itemId = args?['itemId'] as String?;
-                  // Import ItemDetailScreen if not already done
-                  // return CupertinoPageScaffold(child: ItemDetailScreen(itemId: itemId ?? ''));
-                  // Placeholder until ItemDetailScreen is imported/available
+                  // Ensure ItemDetailScreen is imported
                   return CupertinoPageScaffold(
-                    child: Center(
-                      child: Text('Item Detail: ${itemId ?? 'Error'}'),
-                    ),
+                    child: ItemDetailScreen(itemId: itemId ?? ''),
                   );
                 },
                 '/edit-entity': (context) {
                   // Placeholder for edit screen route
+                  // TODO: Implement Edit Entity Screen
                   return const CupertinoPageScaffold(
                     child: Center(child: Text('Edit Entity Screen')),
                   );

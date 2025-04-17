@@ -201,13 +201,12 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> // Renamed 
             title: const Text('Note Actions'), // Updated text
             actions: <CupertinoActionSheetAction>[
               CupertinoActionSheetAction(
-                // Pass the function directly if canInteract, otherwise null
+                // Pass the function directly if canInteract, otherwise an empty function
                 onPressed:
-                    !canInteractWithServer
-                        ? null
-                        : () {
-                  Navigator.pop(popupContext);
-                  Navigator.of(context, rootNavigator: true)
+                    canInteractWithServer
+                        ? () {
+                          Navigator.pop(popupContext);
+                          Navigator.of(context, rootNavigator: true)
                       .pushNamed(
                         '/edit-entity',
                         arguments: {
@@ -231,16 +230,17 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> // Renamed 
                                     )
                                     .remove(widget.itemId);
                       });
-                },
+                        }
+                        : () {}, // Provide an empty function when canInteractWithServer is false
                 child: const Text('Edit Note'),
               ),
               // Add Note to Workbench Action
               if (noteAsync is AsyncData<NoteItem>)
                 CupertinoActionSheetAction(
-                  // Pass the function directly if canInteract, otherwise null
+                  // Pass the function directly if canInteract, otherwise an empty function
                   onPressed:
                       !canInteractWithServer
-                          ? null
+                          ? () {}
                           : () {
                             Navigator.pop(popupContext);
                             _addNoteToWorkbench(noteAsync.value);
@@ -250,13 +250,13 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> // Renamed 
               // Fix Grammar Action
               CupertinoActionSheetAction(
                 isDefaultAction: !isFixingGrammar,
-                // Pass the function directly if conditions met, otherwise null
+                // Wrap async call in non-async lambda
                 onPressed:
                     (isFixingGrammar || !canInteractWithServer)
-                        ? null
+                        ? () {} // Empty function instead of null
                         : () {
                           Navigator.pop(popupContext);
-                          _fixGrammar(); // _fixGrammar is async, but onPressed can be
+                          _fixGrammar();
                         },
                 child: isFixingGrammar
                         ? const Row(
@@ -271,14 +271,13 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> // Renamed 
               ),
               // Copy Full Thread Action
               CupertinoActionSheetAction(
-                // Pass the function directly if canInteract, otherwise null
+                // Wrap async call in non-async lambda
                 onPressed:
                     !canInteractWithServer
-                        ? null
+                        ? () {} // Empty function instead of null
                         : () {
                           Navigator.pop(popupContext);
                           _copyThreadContent(
-                            // _copyThreadContent is async
                             context,
                             ref,
                             widget.itemId,
@@ -289,14 +288,13 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> // Renamed 
               ),
               // --- Chat about Thread Action ---
               CupertinoActionSheetAction(
-                // Pass the function directly if canInteract, otherwise null
+                // Wrap async call in non-async lambda
                 onPressed:
                     !canInteractWithServer
-                        ? null
+                        ? () {} // Empty function instead of null
                         : () {
                   Navigator.pop(popupContext); // Close the sheet first
                           _chatWithThread(
-                            // _chatWithThread is async
                             context,
                     ref,
                     widget.itemId,
@@ -309,10 +307,10 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> // Renamed 
               // Delete Note Action
               CupertinoActionSheetAction(
                 isDestructiveAction: true,
-                // Pass the function directly if canInteract, otherwise null
+                // Wrap async call in non-async lambda
                 onPressed:
                     !canInteractWithServer
-                        ? null
+                        ? () {} // Empty function instead of null
                         : () async {
                   final sheetContext = popupContext;
                   Navigator.pop(sheetContext);
@@ -423,25 +421,31 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> // Renamed 
     // No await before this, safe to use context
     _showLoadingDialog('Fetching thread...');
 
+    String? fetchedContent;
+    Object? fetchError;
+
     try {
       // Assuming the item detail screen always shows an item from the active server
-      final content = await getFormattedThreadContent(
+      fetchedContent = await getFormattedThreadContent(
         ref,
         itemId,
         itemType,
         activeServerId,
       );
-      await Clipboard.setData(ClipboardData(text: content));
-      // Check mounted *after* await and *before* using context
-      if (!mounted) return;
-      _dismissLoadingDialog();
-      _showSuccessSnackbar('Thread content copied to clipboard.');
-
+      await Clipboard.setData(ClipboardData(text: fetchedContent));
     } catch (e) {
-      // Check mounted *after* potential await inside catch (if any) and *before* using context
-      if (!mounted) return;
-      _dismissLoadingDialog();
-      _showErrorSnackbar('Failed to copy thread: $e');
+      fetchError = e;
+    }
+
+    // Check mounted *after* all awaits and *before* using context
+    if (!mounted) return;
+
+    _dismissLoadingDialog(); // Dismiss loading dialog regardless of outcome
+
+    if (fetchError != null) {
+      _showErrorSnackbar('Failed to copy thread: $fetchError');
+    } else {
+      _showSuccessSnackbar('Thread content copied to clipboard.');
     }
   }
   // --- End Copy Thread Content Helper ---
@@ -464,26 +468,46 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> // Renamed 
     // No await before this, safe to use context
     _showLoadingDialog('Fetching thread for chat...');
 
+    String? fetchedContent;
+    Object? fetchError;
+
     try {
       // Fetch the thread content
-      final content = await getFormattedThreadContent(
+      fetchedContent = await getFormattedThreadContent(
         ref,
         itemId,
         itemType,
         activeServerId,
       );
+    } catch (e) {
+      fetchError = e;
+    }
 
-      // Check mounted *after* await and *before* using context
-      if (!mounted) return;
-      _dismissLoadingDialog(); // Dismiss before navigation
+    // Check mounted *after* await and *before* using context
+    if (!mounted) return;
+    _dismissLoadingDialog(); // Dismiss loading dialog regardless of outcome
 
+    if (fetchError != null) {
+      _showErrorSnackbar('Failed to start chat: $fetchError');
+      return;
+    }
+
+    if (fetchedContent == null) {
+      _showErrorSnackbar(
+        'Failed to start chat: Could not fetch thread content.',
+      );
+      return;
+    }
+
+    // Content fetched successfully, proceed with navigation
+    try {
       // 1. Switch Tab
       final tabController = ref.read(tabControllerProvider);
       if (tabController == null || tabController.index == 3) {
         // Already on chat tab or controller not found, proceed directly
         _navigateToChatScreen(
           buildContext,
-          content,
+          fetchedContent,
           itemId,
           itemType,
           activeServerId,
@@ -496,19 +520,20 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> // Renamed 
         if (!mounted) return;
         _navigateToChatScreen(
           buildContext,
-          content,
+          fetchedContent,
           itemId,
           itemType,
           activeServerId,
         );
       }
     } catch (e) {
-      // Check mounted *after* potential await inside catch (if any) and *before* using context
-      if (!mounted) return;
-      _dismissLoadingDialog();
-      _showErrorSnackbar('Failed to start chat: $e');
+      // Catch errors during tab switching or navigation
+      if (mounted) {
+        _showErrorSnackbar('Failed to navigate to chat: $e');
+      }
     }
   }
+
 
   // Helper to perform the actual navigation to chat screen
   void _navigateToChatScreen(
