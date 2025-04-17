@@ -311,7 +311,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
 
   Future<void> sendMessage(String text) async {
     // Keep existing sendMessage logic...
-    if (_model == null || state.isLoading || text.trim().isEmpty) return;
+    if (state.isLoading || text.trim().isEmpty) return;
 
     final user = ChatMessage(
       id: 'user_${DateTime.now().millisecondsSinceEpoch}', // Use milliseconds
