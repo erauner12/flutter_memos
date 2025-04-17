@@ -57,6 +57,10 @@ class WorkbenchItemReference {
     // Add Todoist logic if needed, e.g. latestComment.postedAt
   }
 
+  /// First (most-recent) preview comment, or `null` if none.
+  Comment? get latestComment =>
+      previewComments.isNotEmpty ? previewComments.first : null;
+
   WorkbenchItemReference copyWith({
     String? id,
     String? referencedItemId,
