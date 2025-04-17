@@ -288,8 +288,9 @@ class ChatNotifier extends StateNotifier<ChatState> {
       return;
     }
 
-    if (kDebugMode)
+    if (kDebugMode) {
       print("[ChatNotifier] Starting manual fetch from CloudKit...");
+    }
     state = state.copyWith(isSyncing: true, clearError: true);
 
     try {
@@ -303,21 +304,24 @@ class ChatNotifier extends StateNotifier<ChatState> {
         }
         state = state.copyWith(session: cloudSession, isSyncing: false);
         await _persister.save(cloudSession);
-        if (kDebugMode)
+        if (kDebugMode) {
           print(
             "[ChatNotifier] Updated local state and storage with fetched CloudKit session.",
           );
+        }
       } else {
-        if (kDebugMode)
+        if (kDebugMode) {
           print("[ChatNotifier] No chat session found in CloudKit.");
+        }
         state = state.copyWith(
           isSyncing: false,
           errorMessage: "No chat session found in iCloud.",
         );
       }
     } catch (e) {
-      if (kDebugMode)
+      if (kDebugMode) {
         print("[ChatNotifier] Error during forceFetchFromCloud: $e");
+      }
       state = state.copyWith(
         isSyncing: false,
         errorMessage: "Failed to fetch from iCloud: ${e.toString()}",

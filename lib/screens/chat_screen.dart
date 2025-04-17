@@ -361,8 +361,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 itemBuilder: (context, index) {
                   final message = chatState.displayMessages[index];
                   // Don't display system messages
-                  if (message.role == Role.system)
+                  if (message.role == Role.system) {
                     return const SizedBox.shrink();
+                  }
                   return _buildMessageBubble(message);
                 },
               ),
