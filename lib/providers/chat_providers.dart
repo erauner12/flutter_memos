@@ -185,7 +185,9 @@ class ChatNotifier extends StateNotifier<ChatState> {
     final s = ChatSession(
       id: ChatSession.activeSessionId,
       contextItemId: parentItemId,
-      contextItemType: WorkbenchItemType.values.byName(parentItemType.name),
+      // ChatSession expects a nullable enum, so pass the enum directly
+      contextItemType:
+          parentItemType, // or parentItemType as WorkbenchItemType?,
       contextServerId: parentServerId,
       messages: [system],
       lastUpdated: DateTime.now().toUtc(),
