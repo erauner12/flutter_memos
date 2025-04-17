@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart'; // Needed for Material in preview
 import 'package:flutter_memos/models/task_item.dart';
 import 'package:flutter_slidable/flutter_slidable.dart'; // Import Slidable
 import 'package:intl/intl.dart'; // For date formatting
@@ -91,7 +92,7 @@ class TaskListItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // The Slidable widget wraps the context menu and the row content.
+    // Slidable (swipe actions) stays outside.
     return Slidable(
       key: ValueKey(task.id), // Essential for list animations
       endActionPane: _buildActionPane(
@@ -101,16 +102,18 @@ class TaskListItem extends StatelessWidget {
 
       child: CupertinoContextMenu(
         actions: _buildContextActions(context),
-        // Apply the ConstrainedBox fix here to ensure the child has finite width
-        // for the context menu's preview screenshot mechanism.
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(minWidth: double.infinity),
-          // Pass parameters down to the content widget
-          child: _TaskRowContent(
-            task: task,
-            onTap: onTap, // Pass onTap for the main content area
-            onToggleComplete: onToggleComplete, // Pass toggle for the checkbox
-          ),
+
+        // 1. Provide a previewBuilder that gives the preview finite constraints
+        //    using the _TaskContextPreview helper.
+        previewBuilder:
+            (context, animation, child) => _TaskContextPreview(child: child!),
+
+        // 2. The regular child for the in-list representation.
+        //    No ConstrainedBox needed here anymore.
+        child: _TaskRowContent(
+          task: task,
+          onTap: onTap, // Pass onTap for the main content area
+          onToggleComplete: onToggleComplete, // Pass toggle for the checkbox
         ),
       ),
     );
@@ -205,7 +208,7 @@ class _TaskRowContent extends StatelessWidget {
       decoration: BoxDecoration(
         color: CupertinoColors.systemBackground.resolveFrom(
           context,
-        ), // Ensure background for context menu preview
+        ), // Ensure background for context menu preview AND regular display
         border: Border(
           bottom: BorderSide(
             color: CupertinoColors.separator.resolveFrom(context),
@@ -355,6 +358,26 @@ class _TrailingCheckbox extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Helper widget to provide finite constraints and background for the context menu preview.
+class _TaskContextPreview extends StatelessWidget {
+  final Widget child;
+  const _TaskContextPreview({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    // Constrain the width to the device width, leave height unbounded (intrinsic height).
+    // Wrap in Material for correct background color and elevation effect during animation.
+    return SizedBox(
+      width: MediaQuery.of(context).size.width,
+      child: Material(
+        color: CupertinoColors.systemBackground.resolveFrom(context),
+        elevation: 0, // Match default context menu preview appearance
+        child: child,
       ),
     );
   }
