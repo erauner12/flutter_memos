@@ -7,8 +7,9 @@ import 'package:flutter_memos/models/workbench_item_reference.dart';
 import 'package:flutter_memos/providers/settings_provider.dart';
 import 'package:flutter_memos/services/chat_session_cloud_kit_service.dart';
 import 'package:flutter_memos/services/local_storage_service.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_memos/services/chat_ai.dart'; // new
 import 'package:google_generative_ai/google_generative_ai.dart' as gen_ai;
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 abstract class ChatPersister {
   Future<void> save(ChatSession session);
@@ -28,48 +29,45 @@ class DefaultChatPersister implements ChatPersister {
 @immutable
 class ChatState {
   final ChatSession session;
-  final bool isLoading; // For AI response loading
-  final bool isInitializing; // For initial session load
-  final bool isSyncing; // For manual cloud fetch loading
+  final bool isLoading;
+  final bool isInitializing;
+  final bool isSyncing;
   final String? errorMessage;
 
   const ChatState({
     required this.session,
     this.isLoading = false,
     this.isInitializing = true,
-    this.isSyncing = false, // Default to false
+    this.isSyncing = false,
     this.errorMessage,
   });
 
   factory ChatState.initial() => ChatState(
     session: ChatSession.initial(),
     isInitializing: true,
-    isSyncing: false, // Initialize
+    isSyncing: false,
   );
 
   ChatState copyWith({
     ChatSession? session,
     bool? isLoading,
     bool? isInitializing,
-    bool? isSyncing, // Add isSyncing
+    bool? isSyncing,
     String? errorMessage,
     bool clearError = false,
   }) => ChatState(
     session: session ?? this.session,
     isLoading: isLoading ?? this.isLoading,
     isInitializing: isInitializing ?? this.isInitializing,
-    isSyncing: isSyncing ?? this.isSyncing, // Update copyWith
+    isSyncing: isSyncing ?? this.isSyncing,
     errorMessage: clearError ? null : errorMessage ?? this.errorMessage,
   );
-
-  /* convenience getters used by UI */
 
   List<ChatMessage> get displayMessages => session.messages;
   String? get currentContextItemId => session.contextItemId;
   WorkbenchItemType? get currentContextItemType => session.contextItemType;
   String? get currentContextServerId => session.contextServerId;
 
-  // Add equality check for isSyncing
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -78,106 +76,16 @@ class ChatState {
           session == other.session &&
           isLoading == other.isLoading &&
           isInitializing == other.isInitializing &&
-          isSyncing == other.isSyncing && // Add isSyncing
+          isSyncing == other.isSyncing &&
           errorMessage == other.errorMessage;
 
-  // Add hashing for isSyncing
   @override
   int get hashCode =>
       session.hashCode ^
       isLoading.hashCode ^
       isInitializing.hashCode ^
-      isSyncing.hashCode ^ // Add isSyncing
+      isSyncing.hashCode ^
       errorMessage.hashCode;
-}
-
-abstract class ChatAi {
-  Future<gen_ai.GenerateContentResponse> sendMessage(
-    List<gen_ai.Content> history,
-    String text,
-  );
-}
-
-class GeminiAi implements ChatAi {
-  final Ref? ref;
-  gen_ai.GenerativeModel? _model;
-
-  GeminiAi({required this.ref});
-
-  void initGemini(String apiKey) {
-    if (apiKey.isEmpty) return;
-    _model = gen_ai.GenerativeModel(
-      model: 'gemini-1.5-flash-latest',
-      apiKey: apiKey,
-      // Add safety settings if needed
-      safetySettings: [
-        gen_ai.SafetySetting(
-          gen_ai.HarmCategory.dangerousContent,
-          gen_ai.HarmBlockThreshold.none,
-        ),
-        gen_ai.SafetySetting(
-          gen_ai.HarmCategory.sexuallyExplicit,
-          gen_ai.HarmBlockThreshold.none,
-        ),
-        gen_ai.SafetySetting(
-          gen_ai.HarmCategory.hateSpeech,
-          gen_ai.HarmBlockThreshold.none,
-        ),
-        gen_ai.SafetySetting(
-          gen_ai.HarmCategory.harassment,
-          gen_ai.HarmBlockThreshold.none,
-        ),
-      ],
-    );
-    ref?.listen(geminiApiKeyProvider, (_, next) {
-      _model =
-          next.isEmpty
-              ? null
-              : gen_ai.GenerativeModel(
-                model: 'gemini-1.5-flash-latest',
-                apiKey: next,
-                // Repeat safety settings here too
-                safetySettings: [
-                  gen_ai.SafetySetting(
-                    gen_ai.HarmCategory.dangerousContent,
-                    gen_ai.HarmBlockThreshold.none,
-                  ),
-                  gen_ai.SafetySetting(
-                    gen_ai.HarmCategory.sexuallyExplicit,
-                    gen_ai.HarmBlockThreshold.none,
-                  ),
-                  gen_ai.SafetySetting(
-                    gen_ai.HarmCategory.hateSpeech,
-                    gen_ai.HarmBlockThreshold.none,
-                  ),
-                  gen_ai.SafetySetting(
-                    gen_ai.HarmCategory.harassment,
-                    gen_ai.HarmBlockThreshold.none,
-                  ),
-                ],
-              );
-    });
-  }
-
-  @override
-  Future<gen_ai.GenerateContentResponse> sendMessage(
-    List<gen_ai.Content> history,
-    String text,
-  ) async {
-    if (_model == null) {
-      throw Exception("Gemini AI model is not initialized.");
-    }
-
-    final chat = _model!.startChat(history: history);
-
-    // build request content correctly
-    final gen_ai.Content request = gen_ai.Content('user', [
-      gen_ai.TextPart(text),
-    ]);
-
-    // Use generateContent for single response
-    return await chat.sendMessage(request);
-  }
 }
 
 class ChatNotifier extends StateNotifier<ChatState> {
@@ -185,11 +93,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
   final LocalStorageService _local;
   final ChatSessionCloudKitService _cloud;
   final ChatPersister _persister;
-
-  // NEW fields for test overrides
-  final bool _autoInit;
-  final Duration _debounceDuration;
-  final ChatAi _ai;
+  final ChatAiBackend _ai;
 
   bool _skipNextPersist = false;
   Timer? _debounce;
@@ -200,34 +104,30 @@ class ChatNotifier extends StateNotifier<ChatState> {
     LocalStorageService local,
     ChatSessionCloudKitService cloud, {
     ChatPersister? persister,
-    ChatAi? ai,
+    required ChatAiBackend ai,
     bool autoInit = true,
     Duration debounceDuration = const Duration(milliseconds: 500),
   }) : _local = local,
        _cloud = cloud,
        _persister = persister ?? DefaultChatPersister(local),
-       _ai = ai ?? GeminiAi(ref: persister == null ? null : null),
-       _autoInit = autoInit,
-       _debounceDuration = debounceDuration,
+       _ai = ai,
        super(ChatState.initial()) {
-    // initialize AI backend
     _initGemini();
-    // only auto‑load in production
-    if (_autoInit) {
+    if (autoInit) {
       _loadInitialSession();
     }
   }
 
-  /* ---------- initialisation ---------- */
-
   void _initGemini() {
-    final key = _ref.read(geminiApiKeyProvider);
-    if (key.isEmpty) return;
-    (_ai as GeminiAi).initGemini(key);
+    if (_ai is GemBackend) {
+      final key = _ref.read(geminiApiKeyProvider);
+      if (key.isNotEmpty) {
+        (_ai as GemBackend).initGemini(key);
+      }
+    }
   }
 
   Future<void> _loadInitialSession() async {
-    // Keep existing initial load logic...
     ChatSession? cloud;
     ChatSession? local;
     try {
@@ -241,46 +141,37 @@ class ChatNotifier extends StateNotifier<ChatState> {
       if (kDebugMode) print("[ChatNotifier] Local load error on init: $e");
     }
 
-    ChatSession chosen = ChatSession.initial(); // Default to empty
+    ChatSession chosen = ChatSession.initial();
 
     if (cloud != null && local != null) {
       if (cloud.lastUpdated.isAfter(local.lastUpdated)) {
         chosen = cloud;
         if (kDebugMode)
           print("[ChatNotifier] Init: Using newer Cloud session.");
-        // Update local with newer cloud version
         await _local.saveActiveChatSession(chosen);
       } else {
         chosen = local;
         if (kDebugMode)
           print("[ChatNotifier] Init: Using newer/same Local session.");
-        // Update cloud with newer local version (optional, can cause loops if not careful)
-        // await _cloud.saveChatSession(chosen); // Avoid potential loops for now
       }
     } else if (cloud != null) {
       chosen = cloud;
       if (kDebugMode)
         print("[ChatNotifier] Init: Using Cloud session (local missing).");
-      // Save to local if it didn't exist
       await _local.saveActiveChatSession(chosen);
     } else if (local != null) {
       chosen = local;
       if (kDebugMode)
         print("[ChatNotifier] Init: Using Local session (cloud missing).");
-      // Save to cloud if it didn't exist
       await _cloud.saveChatSession(chosen);
     } else {
       if (kDebugMode) print("[ChatNotifier] Init: No existing session found.");
-      // No need to save initial empty session yet
     }
 
-    // Ensure state is updated only if mounted
     if (mounted) {
       state = state.copyWith(session: chosen, isInitializing: false);
     }
   }
-
-  /* ---------- public API ---------- */
 
   Future<void> startChatWithContext({
     required String contextString,
@@ -288,7 +179,6 @@ class ChatNotifier extends StateNotifier<ChatState> {
     required WorkbenchItemType parentItemType,
     required String parentServerId,
   }) async {
-    // Keep existing startChatWithContext logic...
     final system = ChatMessage(
       id: 'system_${DateTime.now().millisecondsSinceEpoch}',
       role: Role.system,
@@ -310,11 +200,10 @@ class ChatNotifier extends StateNotifier<ChatState> {
   }
 
   Future<void> sendMessage(String text) async {
-    // Keep existing sendMessage logic...
     if (state.isLoading || text.trim().isEmpty) return;
 
     final user = ChatMessage(
-      id: 'user_${DateTime.now().millisecondsSinceEpoch}', // Use milliseconds
+      id: 'user_${DateTime.now().millisecondsSinceEpoch}',
       role: Role.user,
       text: text,
       timestamp: DateTime.now().toUtc(),
@@ -327,15 +216,12 @@ class ChatNotifier extends StateNotifier<ChatState> {
       isLoading: true,
       clearError: true,
     );
-    _persistSoon(); // Save intermediate state with user message + loading
+    _persistSoon();
 
     try {
-      // history for startChat
       final history =
           state.session.messages
-              .where(
-                (m) => m.role != Role.system && !m.isLoading,
-              ) // Exclude system/loading
+              .where((m) => m.role != Role.system && !m.isLoading)
               .map(
                 (m) => gen_ai.Content(m.role == Role.user ? 'user' : 'model', [
                   gen_ai.TextPart(m.text),
@@ -343,24 +229,17 @@ class ChatNotifier extends StateNotifier<ChatState> {
               )
               .toList();
 
-      // build request content correctly
-      final response = await _ai.sendMessage(history, text);
-
-      // Access text directly from response (assuming it's GenerateContentResponse)
-      final replyText = response.text;
-
-      if (replyText == null) {
-        throw Exception("Received null response from API.");
-      }
+      final resp = await _ai.send(history, text);
+      final replyText = resp.text;
 
       final modelMsg = ChatMessage(
-        id: 'model_${DateTime.now().millisecondsSinceEpoch}', // Use milliseconds
+        id: 'model_${DateTime.now().millisecondsSinceEpoch}',
         role: Role.model,
         text: replyText,
         timestamp: DateTime.now().toUtc(),
       );
 
-      // Replace loading indicator with model response
+      // Replace loading indicator with AI response
       final replaced =
           state.session.messages
               .map((m) => m.isLoading ? modelMsg : m)
@@ -369,36 +248,34 @@ class ChatNotifier extends StateNotifier<ChatState> {
       state = state.copyWith(
         session: state.session.copyWith(
           messages: replaced,
-          lastUpdated: DateTime.now().toUtc(), // Update timestamp
+          lastUpdated: DateTime.now().toUtc(),
         ),
         isLoading: false,
       );
     } catch (e) {
       if (kDebugMode) print("[ChatNotifier] SendMessage Error: $e");
       final err = ChatMessage.error('Error: $e');
-      // Replace loading indicator with error message
       final replaced =
           state.session.messages.map((m) => m.isLoading ? err : m).toList();
       state = state.copyWith(
         session: state.session.copyWith(
           messages: replaced,
-          lastUpdated: DateTime.now().toUtc(), // Update timestamp even on error
+          lastUpdated: DateTime.now().toUtc(),
         ),
         isLoading: false,
         errorMessage: "Failed to get response from AI. ${e.toString()}",
       );
     } finally {
-      _persistSoon(); // Save final state
+      _persistSoon();
     }
   }
 
   Future<void> clearChat() async {
-    // Keep existing clearChat logic...
     state = state.copyWith(
       session: ChatSession.initial(),
       clearError: true,
       isLoading: false,
-      isSyncing: false, // Ensure syncing is false if chat is cleared
+      isSyncing: false,
     );
     await _local.deleteActiveChatSession();
     await _cloud.deleteChatSession();
@@ -409,10 +286,8 @@ class ChatNotifier extends StateNotifier<ChatState> {
           ? null
           : state = state.copyWith(clearError: true);
 
-  // --- NEW: Manual Fetch from Cloud ---
   Future<void> forceFetchFromCloud() async {
-    if (state.isSyncing || state.isInitializing)
-      return; // Prevent concurrent fetches
+    if (state.isSyncing || state.isInitializing) return;
 
     if (kDebugMode)
       print("[ChatNotifier] Starting manual fetch from CloudKit...");
@@ -427,20 +302,15 @@ class ChatNotifier extends StateNotifier<ChatState> {
             "[ChatNotifier] Fetched session from CloudKit (LastUpdated: ${cloudSession.lastUpdated}). Current local LastUpdated: ${state.session.lastUpdated}",
           );
         }
-        // Overwrite local state with the fetched cloud session
         state = state.copyWith(session: cloudSession, isSyncing: false);
-        // Also update local storage to match the fetched cloud version
         await _persister.save(cloudSession);
         if (kDebugMode)
           print(
             "[ChatNotifier] Updated local state and storage with fetched CloudKit session.",
           );
       } else {
-        // No session found in CloudKit
         if (kDebugMode)
           print("[ChatNotifier] No chat session found in CloudKit.");
-        // Optionally clear local state or show a message
-        // For now, just stop syncing and keep local state
         state = state.copyWith(
           isSyncing: false,
           errorMessage: "No chat session found in iCloud.",
@@ -456,11 +326,9 @@ class ChatNotifier extends StateNotifier<ChatState> {
     }
   }
 
-  /* ---------- internal ---------- */
-
   void _persistSoon() {
     _debounce?.cancel();
-    _debounce = Timer(_debounceDuration, () async {
+    _debounce = Timer(_debounceDuration_OLD, () async {
       if (_skipNextPersist) {
         _skipNextPersist = false;
         return;
@@ -482,12 +350,12 @@ class ChatNotifier extends StateNotifier<ChatState> {
   }
 }
 
-/// Configuration payload for testing ChatNotifier
 class ChatNotifierTestConfig {
   final LocalStorageService local;
   final ChatSessionCloudKitService cloud;
   final ChatPersister? persister;
-  final ChatAi? ai;
+  final ChatAiBackend? ai;
+
   ChatNotifierTestConfig({
     required this.local,
     required this.cloud,
@@ -496,7 +364,6 @@ class ChatNotifierTestConfig {
   });
 }
 
-/// Use in widget tests to override initialization timing and debounce
 final chatProviderTesting = StateNotifierProvider.family<
   ChatNotifier,
   ChatState,
@@ -507,13 +374,11 @@ final chatProviderTesting = StateNotifierProvider.family<
     cfg.local,
     cfg.cloud,
     persister: cfg.persister,
-    ai: cfg.ai,
+    ai: cfg.ai!,
     autoInit: false,
     debounceDuration: Duration.zero,
   );
 });
-
-/* ---------- providers ---------- */
 
 final localStorageServiceProvider = Provider<LocalStorageService>((_) {
   return LocalStorageService();
@@ -522,7 +387,7 @@ final localStorageServiceProvider = Provider<LocalStorageService>((_) {
 final chatSessionCloudKitServiceProvider = Provider<ChatSessionCloudKitService>(
   (_) {
     return ChatSessionCloudKitService();
-  },
+},
 );
 
 final chatProvider = StateNotifierProvider<ChatNotifier, ChatState>(
@@ -530,5 +395,6 @@ final chatProvider = StateNotifierProvider<ChatNotifier, ChatState>(
     ref,
     ref.read(localStorageServiceProvider),
     ref.read(chatSessionCloudKitServiceProvider),
+    ai: ref.read(chatAiBackendProvider),
   ),
 );
