@@ -17,7 +17,7 @@ class WorkbenchScreen extends ConsumerStatefulWidget {
   const WorkbenchScreen({super.key});
 
   @override
-  ConsumerState<WorkbenchScreen> createState() => _WorkbenchScreenState();
+  ConsumerState<WorkbenchScreen> createState() => WorkbenchScreenState();
 }
 
 // Removed SingleTickerProviderStateMixin
