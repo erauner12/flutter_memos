@@ -24,10 +24,11 @@ void main() {
   });
 
   test('uses MCP when activeConnections is true', () async {
+    // Stub direct property, not nested state, to route to MCP
+    when(mcpNotifier.hasActiveConnections).thenReturn(true);
     when(mcpNotifier.state).thenReturn(
       const McpClientState(serverStatuses: {'id': McpConnectionStatus.connected}),
     );
-    when(mcpNotifier.state.hasActiveConnections).thenReturn(true);
     when(
       gemini.send(any<List<gen_ai.Content>>(), any<String>()),
     ).thenThrow(Exception('should not call'));

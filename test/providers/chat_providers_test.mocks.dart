@@ -110,6 +110,13 @@ class MockMcpClientNotifier extends _i1.Mock implements _i3.McpClientNotifier {
       );
 
   @override
+  bool get hasActiveConnections => (super.noSuchMethod(
+        Invocation.getter(#hasActiveConnections),
+        returnValue: false,
+        returnValueForMissingStub: false,
+      ) as bool);
+
+  @override
   set onError(_i2.ErrorListener? _onError) => super.noSuchMethod(
         Invocation.setter(
           #onError,

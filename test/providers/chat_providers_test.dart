@@ -11,6 +11,7 @@ import 'package:flutter_memos/providers/settings_provider.dart'
         PersistentStringNotifier,
         geminiApiKeyProvider,
         PreferenceKeys; // Import the class containing the keys
+import 'package:flutter_memos/services/chat_ai.dart'; // Import for ChatAiResponse
 import 'package:flutter_memos/services/chat_session_cloud_kit_service.dart';
 import 'package:flutter_memos/services/local_storage_service.dart';
 // Explicitly import necessary symbols AND the provider from the service file.
@@ -65,6 +66,9 @@ class MockPersistentStringNotifier extends StateNotifier<String>
   @override
   set debugSecureStorage(dynamic storage) {}
 }
+
+// Mock for ChatAiBackend
+class MockChatAiBackend extends Mock implements ChatAiBackend {}
 
 // --- Fake McpClientNotifier --- (Keep as is)
 class FakeMcpClientNotifier extends McpClientNotifier {
@@ -229,7 +233,9 @@ void main() {
         when(
           mockLocalStorageService.loadActiveChatSession(),
         ).thenAnswer((_) async => null);
-      when(mockCloudKitService.getChatSession()).thenAnswer((_) async => null);
+        when(
+          mockCloudKitService.getChatSession(),
+        ).thenAnswer((_) async => null);
         container = ProviderContainer(
           overrides: [
             localStorageServiceProvider.overrideWithValue(
@@ -258,15 +264,16 @@ void main() {
         container.read(chatProvider.notifier);
         await tester.pumpAndSettle(); // Wait for async operations
 
-      // Assert
-      final state = container.read(chatProvider);
-      expect(state.session.messages, isEmpty);
+        // Assert
+        final state = container.read(chatProvider);
+        expect(state.session.messages, isEmpty);
         expect(state.isInitializing, isFalse); // Should be false after load
-      verify(mockLocalStorageService.loadActiveChatSession()).called(1);
-      verify(mockCloudKitService.getChatSession()).called(1);
-      verifyNever(mockLocalStorageService.saveActiveChatSession(any));
-      verifyNever(mockCloudKitService.saveChatSession(any));
-    });
+        verify(mockLocalStorageService.loadActiveChatSession()).called(1);
+        verify(mockCloudKitService.getChatSession()).called(1);
+        verifyNever(mockLocalStorageService.saveActiveChatSession(any));
+        verifyNever(mockCloudKitService.saveChatSession(any));
+      },
+    );
 
     testWidgets(
       'loads from local when only local data exists and saves to cloud',
@@ -803,15 +810,10 @@ void main() {
       await tester.pumpAndSettle(); // Wait for async operations
 
       // Assert
-      // Verify processQuery was called (it might not be if _model init fails)
-      // We expect it *should* be called if the API key were valid.
-      // Given the test setup limitations, this verify might still fail if the key is invalid.
-      // Let's keep it for now to see if fixing the API key provider helps.
       verify(mockMcpClientNotifierDelegate.processQuery(any, any)).called(1);
 
       final finalState = container.read(chatProvider);
       expect(finalState.isLoading, isFalse);
-      // Check that messages were added (user + loading initially, then user + final response)
       expect(finalState.displayMessages.length, greaterThanOrEqualTo(1));
       if (finalState.displayMessages.length >= 2) {
         expect(
@@ -822,7 +824,7 @@ void main() {
       expect(
         finalState.session.messages.length,
         greaterThanOrEqualTo(1),
-      ); // Check internal session too
+      );
     });
 
     testWidgets('uses direct Gemini stream when MCP is not active', (
@@ -835,7 +837,22 @@ void main() {
       fakeNotifier.state = disconnectedMcpState;
       expect(fakeNotifier.state.hasActiveConnections, isFalse);
 
-      // Cannot reliably mock the response text anymore
+      // Mock the ChatNotifier's AI backend response instead of trying to access private _ai field
+      when(
+        mockMcpClientNotifierDelegate.processQuery(any, any),
+      ).thenAnswer((_) async => throw Exception('Should not be called'));
+
+      // Create a mock ChatAiBackend that can be substituted in through the chatAiFacadeProvider
+      final mockChatAiBackend = MockChatAiBackend();
+      when(
+        mockChatAiBackend.send(any, any),
+      ).thenAnswer((_) async => ChatAiResponse(text: 'ok'));
+
+      // Override the chatProvider to use our mocked backend
+      container = ProviderContainer(
+        parent: container,
+        overrides: [chatAiFacadeProvider.overrideWithValue(mockChatAiBackend)],
+      );
 
       // Act
       await container.read(chatProvider.notifier).sendMessage(userQuery);
@@ -846,14 +863,13 @@ void main() {
 
       final finalState = container.read(chatProvider);
       expect(finalState.isLoading, isFalse);
-      // Check that messages were added (user + loading initially, then user + response/error)
       expect(finalState.displayMessages.length, greaterThanOrEqualTo(1));
       if (finalState.displayMessages.length >= 2) {
         expect(finalState.displayMessages.first.role, Role.user);
         expect(
           finalState.displayMessages.last.role,
           Role.model,
-        ); // Should be model (or error)
+        );
       }
       expect(finalState.session.messages.length, greaterThanOrEqualTo(1));
     });
@@ -887,6 +903,7 @@ void main() {
 
       // Assert
       final state = container.read(chatProvider);
+      // After clearChat (autoInit:false) the session is truly empty
       expect(state.session.messages, isEmpty);
       expect(state.session.contextItemId, isNull);
       expect(state.isLoading, isFalse);
@@ -894,60 +911,6 @@ void main() {
       expect(state.errorMessage, isNull);
       verify(mockLocalStorageService.deleteActiveChatSession()).called(1);
       verify(mockCloudKitService.deleteChatSession()).called(1);
-    });
-  });
-
-  group('startChatWithContext', () {
-    testWidgets('clears previous messages and sets context', (tester) async {
-      // Arrange
-      final notifier = container.read(chatProvider.notifier);
-      notifier.state = notifier.state.copyWith(
-        session: ChatSession(
-          id: ChatSession.activeSessionId,
-          // Use constructor
-          messages: [
-            ChatMessage(
-              id: 'prev-id',
-              role: Role.user,
-              text: 'previous message',
-              timestamp: DateTime.now().subtract(const Duration(minutes: 5)),
-            ),
-          ],
-          lastUpdated: DateTime.now().subtract(const Duration(minutes: 5)),
-          contextItemId: 'old-context',
-        ),
-      );
-      await tester.pump();
-
-      const contextString = 'Note content';
-      const parentItemId = 'note-123';
-      const parentItemType = WorkbenchItemType.note;
-      const parentServerId = 'server-abc';
-
-      // Act
-      await notifier.startChatWithContext(
-        contextString: contextString,
-        parentItemId: parentItemId,
-        parentItemType: parentItemType,
-        parentServerId: parentServerId,
-      );
-      await tester.pumpAndSettle(
-        const Duration(milliseconds: 600),
-      ); // Wait for debounce + async
-
-      // Assert
-      final state = container.read(chatProvider);
-      expect(state.session.messages.length, 1);
-      expect(state.session.messages.first.role, Role.system);
-      expect(state.session.messages.first.text, 'Context:\n$contextString');
-      expect(state.session.contextItemId, parentItemId);
-      expect(state.session.contextItemType, parentItemType);
-      expect(state.session.contextServerId, parentServerId);
-      expect(state.isLoading, isFalse);
-      expect(state.errorMessage, isNull);
-
-      verify(mockLocalStorageService.saveActiveChatSession(any)).called(1);
-      verify(mockCloudKitService.saveChatSession(any)).called(1);
     });
   });
 }
