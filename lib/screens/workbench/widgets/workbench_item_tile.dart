@@ -11,7 +11,7 @@ import 'package:flutter_memos/models/workbench_item_reference.dart';
 import 'package:flutter_memos/providers/server_config_provider.dart';
 import 'package:flutter_memos/providers/task_providers.dart';
 import 'package:flutter_memos/providers/workbench_provider.dart';
-import 'package:flutter_memos/screens/home_screen.dart'; // Import for NEW providers
+import 'package:flutter_memos/screens/home_screen.dart'; // Import for NEW providers (homeTabControllerProvider)
 import 'package:flutter_memos/screens/home_tabs.dart'; // Import HomeTab enum and SafeTabNav
 import 'package:flutter_memos/screens/tasks/new_task_screen.dart';
 import 'package:flutter_memos/utils/thread_utils.dart'; // Import the utility
@@ -313,10 +313,10 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
       };
 
       // 1. Try to switch tab using the safe method
+      // Read the homeTabControllerProvider (defined in home_screen.dart)
       final tabController = ref.read(homeTabControllerProvider);
       final tabIndexMap = ref.read(homeTabIndexMapProvider);
       // Get the total number of tabs (needed for safeSetIndex)
-      // We can get this from the map's length or pass HomeTab.values.length
       final int maxTabs = tabIndexMap.length;
 
       // Use the safeSetIndex extension method

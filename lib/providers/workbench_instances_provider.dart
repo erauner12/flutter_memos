@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart'; // Import Material for TabController
+// Removed Material import
 import 'package:flutter_memos/models/workbench_instance.dart';
 import 'package:flutter_memos/providers/service_providers.dart'; // Import service providers
 import 'package:flutter_memos/providers/shared_prefs_provider.dart';
@@ -503,18 +503,5 @@ final workbenchInstancesProvider =
   return WorkbenchInstancesNotifier(ref);
 });
 
-// --- Provider for TabController ---
-/// Holds the current [TabController] instance for the Workbench tabs.
-///
-/// This provider is managed by [WorkbenchTabControllerManager].
-/// It starts as `null` but should be non-null shortly after the
-/// `WorkbenchScreen` mounts and the manager initializes.
-///
-/// It will only become `null` again when the `WorkbenchScreen` (and thus
-/// the manager) is completely disposed. Consumers should handle the initial
-/// `null` state gracefully (e.g., show a loading indicator).
-final workbenchTabControllerProvider =
-    StateProvider<TabController?>(
-  (_) => null,
-  name: 'workbenchTabControllerProvider', // Add name for debugging
-);
+// --- Removed Provider for TabController ---
+// final workbenchTabControllerProvider = ... (deleted)

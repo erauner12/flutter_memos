@@ -1,13 +1,13 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart'; // Import Material for TabBar, ReorderableListView
+// Removed Material import
 import 'package:flutter_memos/models/workbench_instance.dart'; // Import WorkbenchInstance
 import 'package:flutter_memos/providers/workbench_instances_provider.dart'; // Import instances provider
 import 'package:flutter_memos/providers/workbench_provider.dart'; // Keep for activeWorkbenchProvider etc.
 import 'package:flutter_memos/screens/item_detail/item_detail_screen.dart'; // Import ItemDetailScreen
 import 'package:flutter_memos/screens/settings_screen.dart'; // Import SettingsScreen
+import 'package:flutter_memos/screens/workbench/widgets/workbench_instance_selector.dart'; // Import the new selector
 import 'package:flutter_memos/screens/workbench/widgets/workbench_item_tile.dart';
-// Import the new manager widget
-import 'package:flutter_memos/screens/workbench/workbench_tab_controller_manager.dart';
+// Removed import for workbench_tab_controller_manager.dart
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 // Convert to ConsumerStatefulWidget
@@ -18,19 +18,21 @@ class WorkbenchScreen extends ConsumerStatefulWidget {
   ConsumerState<WorkbenchScreen> createState() => _WorkbenchScreenState();
 }
 
-// Remove SingleTickerProviderStateMixin - vsync is now handled by the manager
+// Removed SingleTickerProviderStateMixin
 class _WorkbenchScreenState extends ConsumerState<WorkbenchScreen> {
   final TextEditingController _instanceNameController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
+    // No TabController initialization needed
   }
 
   @override
   void dispose() {
     _instanceNameController.dispose();
     super.dispose();
+    // No TabController disposal needed
   }
 
   // --- Instance Management Dialogs (Unchanged logic) ---
@@ -174,6 +176,9 @@ class _WorkbenchScreenState extends ConsumerState<WorkbenchScreen> {
     );
   }
 
+  // TODO: Decide how to trigger this. Maybe a trailing button?
+  // For now, it's unused as long-press on segment is not possible.
+  // ignore: unused_element
   void _showInstanceActions(WorkbenchInstance instance) {
     final instancesState = ref.read(workbenchInstancesProvider);
     final bool canDelete =
@@ -215,81 +220,32 @@ class _WorkbenchScreenState extends ConsumerState<WorkbenchScreen> {
   // --- Build Method ---
   @override
   Widget build(BuildContext context) {
-    // Wrap the actual scaffold content with the manager widget.
-    // Use a Builder to ensure _buildScaffold runs *after* the manager
-    // is mounted and its initState has potentially scheduled the first publish.
-    return WorkbenchTabControllerManager(
-      child: Builder(builder: _buildScaffold),
-    );
-  }
+    // Removed WorkbenchTabControllerManager wrapper
+    // Removed Builder wrapper as it's no longer needed for controller timing
 
-  // Extracted scaffold build logic into a separate method
-  // Note: This method now receives the context from the Builder.
-  Widget _buildScaffold(BuildContext context) {
     // Watch necessary states
     final workbenchState = ref.watch(activeWorkbenchProvider);
     final instancesState = ref.watch(workbenchInstancesProvider);
     final instances = instancesState.instances;
     final activeInstanceId = instancesState.activeInstanceId;
 
-    // Watch the TabController? from the StateProvider.
-    // It might be null on the very first frame or during final teardown.
-    final TabController? tabCtrl = ref.watch(workbenchTabControllerProvider);
+    // Removed TabController watching and null checks
 
-    // --- Handle null controller state gracefully ---
-    // Show a loading indicator if the controller isn't available yet.
-    // This covers the initial frame before the manager publishes the controller,
-    // or the frame during final disposal.
-    if (tabCtrl == null) {
-      // Removed the debug print that was here previously.
-      return const CupertinoPageScaffold(
-        child: Center(child: CupertinoActivityIndicator()),
-      );
-    }
-    // --- End null controller handling ---
-
-    // If we reach here, tabCtrl is guaranteed non-null for the rest of the build.
     final items = workbenchState.items;
     final bool canRefresh =
         !workbenchState.isLoading && !workbenchState.isRefreshingDetails;
 
-    final theme = CupertinoTheme.of(context);
-    final primaryColor = theme.primaryColor;
-    final inactiveColor = CupertinoColors.inactiveGray.resolveFrom(context);
+    // Removed theme and color variables related to TabBar
 
     return CupertinoPageScaffold(
       backgroundColor: CupertinoColors.systemGroupedBackground.resolveFrom(
         context,
       ),
       navigationBar: CupertinoNavigationBar(
-        middle: SizedBox(
-          height: 32,
-          child: Material(
-            color: Colors.transparent,
-            child: TabBar(
-              controller: tabCtrl, // Use the non-null controller
-              isScrollable: true,
-              indicatorColor: primaryColor,
-              labelColor: primaryColor,
-              unselectedLabelColor: inactiveColor,
-              tabs:
-                  instances.isEmpty
-                      ? [const Tab(text: 'Workbench')] // Placeholder tab
-                      : [
-                        for (final instance in instances)
-                          GestureDetector(
-                            behavior: HitTestBehavior.opaque,
-                            onLongPress: () => _showInstanceActions(instance),
-                            child: Tab(
-                              child: Text(
-                                instance.name,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ),
-                      ],
-            ),
-          ),
+        // Replaced TabBar with WorkbenchInstanceSelector
+        middle: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 400), // Keep constraint
+          child: const WorkbenchInstanceSelector(), // Use the new widget
         ),
         leading: CupertinoButton(
           padding: EdgeInsets.zero,
@@ -300,6 +256,17 @@ class _WorkbenchScreenState extends ConsumerState<WorkbenchScreen> {
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
+            // TODO: Consider adding a button here to trigger _showInstanceActions
+            // Example:
+            // if (instances.isNotEmpty)
+            //   CupertinoButton(
+            //     padding: const EdgeInsets.only(left: 8.0),
+            //     child: const Icon(CupertinoIcons.ellipsis_circle, size: 22),
+            //     onPressed: () {
+            //       final activeInstance = instances.firstWhere((i) => i.id == activeInstanceId);
+            //       _showInstanceActions(activeInstance);
+            //     },
+            //   ),
             CupertinoButton(
               padding: const EdgeInsets.only(left: 8.0),
               onPressed: _showAddInstanceDialog,
@@ -338,154 +305,157 @@ class _WorkbenchScreenState extends ConsumerState<WorkbenchScreen> {
       ),
       child: SafeArea(
         bottom: false,
-        child: Builder(
-          builder: (context) {
-            // Loading/Error states for instances (unchanged logic)
-            // Show loading only if instances are truly empty AND loading
-            if (instancesState.isLoading && instances.isEmpty) {
-              return const Center(child: CupertinoActivityIndicator());
-            }
-            if (instancesState.error != null && instances.isEmpty) {
-              return Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(
-                      CupertinoIcons.exclamationmark_triangle,
-                      size: 40,
-                      color: CupertinoColors.systemRed,
-                    ),
-                    const SizedBox(height: 10),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                      child: Text(
-                        'Error loading Workbenches: ${instancesState.error}',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: CupertinoColors.secondaryLabel.resolveFrom(
-                            context,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    CupertinoButton(
-                      child: const Text('Retry'),
-                      onPressed:
-                          () =>
-                              ref
-                                  .read(workbenchInstancesProvider.notifier)
-                                  .loadInstances(),
-                    ),
-                  ],
-                ),
-              );
-            }
+        // Removed the inner Builder as it's not needed anymore
+        child: _buildBody(
+          context,
+          instancesState,
+          workbenchState,
+          items,
+          activeInstanceId,
+        ),
+      ),
+    );
+  }
 
-            // Loading/Error states for active workbench items (unchanged logic)
-            // Show loading only if items are truly empty AND loading
-            if (workbenchState.isLoading && items.isEmpty) {
-              return const Center(child: CupertinoActivityIndicator());
-            }
-            if (workbenchState.error != null && items.isEmpty) {
-              return Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(
-                      CupertinoIcons.exclamationmark_triangle,
-                      size: 40,
-                      color: CupertinoColors.systemRed,
-                    ),
-                    const SizedBox(height: 10),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                      child: Text(
-                        'Error loading items: ${workbenchState.error}',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: CupertinoColors.secondaryLabel.resolveFrom(
-                            context,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    CupertinoButton(
-                      child: const Text('Retry'),
-                      onPressed:
-                          () =>
-                              ref
-                                  .read(activeWorkbenchNotifierProvider)
-                                  .loadItems(),
-                    ),
-                  ],
-                ),
-              );
-            }
+  // Extracted body build logic into a separate method for clarity
+  Widget _buildBody(
+    BuildContext context,
+    WorkbenchInstancesState instancesState,
+    WorkbenchState workbenchState,
+    List<WorkbenchItemReference> items,
+    String activeInstanceId, // Pass activeInstanceId
+  ) {
+    final instances = instancesState.instances;
 
-            // Empty state messages (unchanged logic)
-            if (instances.isEmpty && !instancesState.isLoading) {
-              return const Center(
-                child: Text(
-                  'No Workbenches found.\nTap the + button to create one.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: CupertinoColors.secondaryLabel),
+    // Loading/Error states for instances (unchanged logic)
+    if (instancesState.isLoading && instances.isEmpty) {
+      return const Center(child: CupertinoActivityIndicator());
+    }
+    if (instancesState.error != null && instances.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(
+              CupertinoIcons.exclamationmark_triangle,
+              size: 40,
+              color: CupertinoColors.systemRed,
+            ),
+            const SizedBox(height: 10),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: Text(
+                'Error loading Workbenches: ${instancesState.error}',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: CupertinoColors.secondaryLabel.resolveFrom(context),
                 ),
-              );
-            }
-            if (items.isEmpty &&
-                !workbenchState.isLoading &&
-                instances.isNotEmpty) {
-              return const Center(
-                child: Text(
-                  'This Workbench is empty.\nAdd items via long-press or actions.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: CupertinoColors.secondaryLabel),
-                ),
-              );
-            }
-
-            // Item List (unchanged logic)
-            return Padding(
-              padding: const EdgeInsets.only(
-                bottom: 50.0,
-              ), // Keep padding for FAB/bottom bar space
-              child: ReorderableListView.builder(
-                buildDefaultDragHandles:
-                    false, // Keep custom drag handles if used via tile
-                itemCount: items.length,
-                itemBuilder: (context, index) {
-                  final item = items[index];
-                  return WorkbenchItemTile(
-                    key: ValueKey(item.id), // Use unique item ID for key
-                    itemReference: item,
-                    index: index, // Pass index for reorder handle
-                    onTap: () {
-                      // Update last opened item for the *currently active* instance
+              ),
+            ),
+            const SizedBox(height: 10),
+            CupertinoButton(
+              child: const Text('Retry'),
+              onPressed:
+                  () =>
                       ref
                           .read(workbenchInstancesProvider.notifier)
-                          .setLastOpenedItem(activeInstanceId, item.id);
-                      Navigator.of(context).push(
-                        CupertinoPageRoute(
-                          builder:
-                              (_) => ItemDetailScreen(
-                                itemId: item.referencedItemId,
-                              ),
-                        ),
-                      );
-                    },
-                  );
-                },
-                onReorder: (oldIndex, newIndex) {
-                  ref
-                      .read(activeWorkbenchNotifierProvider)
-                      .reorderItems(oldIndex, newIndex);
-                },
-              ),
-            );
-          },
+                          .loadInstances(),
+            ),
+          ],
         ),
+      );
+    }
+
+    // Loading/Error states for active workbench items (unchanged logic)
+    if (workbenchState.isLoading && items.isEmpty) {
+      return const Center(child: CupertinoActivityIndicator());
+    }
+    if (workbenchState.error != null && items.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(
+              CupertinoIcons.exclamationmark_triangle,
+              size: 40,
+              color: CupertinoColors.systemRed,
+            ),
+            const SizedBox(height: 10),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: Text(
+                'Error loading items: ${workbenchState.error}',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: CupertinoColors.secondaryLabel.resolveFrom(context),
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            CupertinoButton(
+              child: const Text('Retry'),
+              onPressed:
+                  () => ref.read(activeWorkbenchNotifierProvider).loadItems(),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Empty state messages (unchanged logic)
+    if (instances.isEmpty && !instancesState.isLoading) {
+      return const Center(
+        child: Text(
+          'No Workbenches found.\nTap the + button to create one.',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: CupertinoColors.secondaryLabel),
+        ),
+      );
+    }
+    if (items.isEmpty && !workbenchState.isLoading && instances.isNotEmpty) {
+      return const Center(
+        child: Text(
+          'This Workbench is empty.\nAdd items via long-press or actions.',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: CupertinoColors.secondaryLabel),
+        ),
+      );
+    }
+
+    // Item List (unchanged logic, ReorderableListView doesn't need TabController)
+    return Padding(
+      padding: const EdgeInsets.only(
+        bottom: 50.0,
+      ), // Keep padding for FAB/bottom bar space
+      child: ReorderableListView.builder(
+        buildDefaultDragHandles:
+            false, // Keep custom drag handles if used via tile
+        itemCount: items.length,
+        itemBuilder: (context, index) {
+          final item = items[index];
+          return WorkbenchItemTile(
+            key: ValueKey(item.id), // Use unique item ID for key
+            itemReference: item,
+            index: index, // Pass index for reorder handle
+            onTap: () {
+              // Update last opened item for the *currently active* instance
+              ref
+                  .read(workbenchInstancesProvider.notifier)
+                  .setLastOpenedItem(activeInstanceId, item.id);
+              Navigator.of(context).push(
+                CupertinoPageRoute(
+                  builder:
+                      (_) => ItemDetailScreen(itemId: item.referencedItemId),
+                ),
+              );
+            },
+          );
+        },
+        onReorder: (oldIndex, newIndex) {
+          ref
+              .read(activeWorkbenchNotifierProvider)
+              .reorderItems(oldIndex, newIndex);
+        },
       ),
     );
   }
