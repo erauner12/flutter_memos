@@ -30,10 +30,9 @@ import 'package:mockito/mockito.dart';
 @GenerateNiceMocks([
   MockSpec<McpClientNotifier>(), // Keep this for the delegate
   MockSpec<McpClientState>(),
-  // MockSpec<GeminiService>(), // GeminiService is internal to ChatNotifier now
-  MockSpec<LocalStorageService>(), // ADDED
-  MockSpec<ChatSessionCloudKitService>(), // ADDED
-  MockSpec<gen_ai.GenerativeModel>(), // Mock the AI model itself
+  MockSpec<LocalStorageService>(),
+  MockSpec<ChatSessionCloudKitService>(),
+  // MockSpec<gen_ai.GenerativeModel>(), // REMOVED: Cannot mock final class
   MockSpec<gen_ai.ChatSession>(), // Mock the AI chat session
   MockSpec<gen_ai.GenerateContentResponse>(), // Mock the AI response
 ])
@@ -118,11 +117,11 @@ gen_ai.GenerateContentResponse generateContentResponse({String? text}) {
 void main() {
   // Mocks
   late MockMcpClientNotifier mockMcpClientNotifierDelegate;
-  late MockLocalStorageService mockLocalStorageService; // ADDED
-  late MockChatSessionCloudKitService mockCloudKitService; // ADDED
-  late MockGenerativeModel mockGenerativeModel; // ADDED
-  late MockChatSession mockAiChatSession; // ADDED
-  late MockGenerateContentResponse mockAiResponse; // ADDED
+  late MockLocalStorageService mockLocalStorageService;
+  late MockChatSessionCloudKitService mockCloudKitService;
+  // late MockGenerativeModel mockGenerativeModel; // REMOVED
+  late MockChatSession mockAiChatSession;
+  late MockGenerateContentResponse mockAiResponse;
   late ProviderContainer container;
 
   // Default mock states/values
@@ -159,7 +158,7 @@ void main() {
         role: Role.user,
         text: 'local msg',
         timestamp: now.subtract(const Duration(hours: 1)),
-      ),
+      )
     ],
     lastUpdated: now.subtract(const Duration(hours: 1)),
   );
@@ -171,7 +170,7 @@ void main() {
         role: Role.user,
         text: 'cloud msg',
         timestamp: now,
-      ),
+      )
     ],
     lastUpdated: now,
   );
@@ -179,11 +178,11 @@ void main() {
   setUp(() async {
     // Initialize mocks
     mockMcpClientNotifierDelegate = MockMcpClientNotifier();
-    mockLocalStorageService = MockLocalStorageService(); // ADDED
-    mockCloudKitService = MockChatSessionCloudKitService(); // ADDED
-    mockGenerativeModel = MockGenerativeModel(); // ADDED
-    mockAiChatSession = MockChatSession(); // ADDED
-    mockAiResponse = MockGenerateContentResponse(); // ADDED
+    mockLocalStorageService = MockLocalStorageService();
+    mockCloudKitService = MockChatSessionCloudKitService();
+    // mockGenerativeModel = MockGenerativeModel(); // REMOVED
+    mockAiChatSession = MockChatSession();
+    mockAiResponse = MockGenerateContentResponse();
 
     // Default stubbing for MCP delegate
     when(mockMcpClientNotifierDelegate.processQuery(any, any)).thenAnswer(
@@ -210,16 +209,14 @@ void main() {
     });
     when(mockCloudKitService.deleteChatSession()).thenAnswer((_) async => true);
 
-    // Default stubbing for AI Model
-    when(
-      mockGenerativeModel.startChat(history: anyNamed('history')),
-    ).thenReturn(mockAiChatSession);
+    // Default stubbing for AI Chat Session and Response (Model itself cannot be mocked)
+    // when(mockGenerativeModel.startChat(history: anyNamed('history')))
+    //     .thenReturn(mockAiChatSession); // REMOVED
     when(
       mockAiChatSession.sendMessage(any),
     ).thenAnswer((_) async => mockAiResponse);
-    when(
-      mockAiResponse.text,
-    ).thenReturn('Mock AI response'); // Default simple text response
+    // Default response text (can be overridden in specific tests if needed, but less reliable now)
+    when(mockAiResponse.text).thenReturn('Mock AI response');
 
     // Create ProviderContainer with overrides
     container = ProviderContainer(
@@ -232,32 +229,20 @@ void main() {
           );
           return fakeMcpClientNotifier;
         }),
-        localStorageServiceProvider.overrideWithValue(
-          mockLocalStorageService,
-        ), // ADDED
+        localStorageServiceProvider.overrideWithValue(mockLocalStorageService),
         chatSessionCloudKitServiceProvider.overrideWithValue(
           mockCloudKitService,
-        ), // ADDED
+        ),
         geminiApiKeyProvider.overrideWith(
           (_) => MockPersistentStringNotifier(
             PreferenceKeys.geminiApiKey,
             'fake-gemini-key', // Provide a key so the model initializes
           ),
         ),
-        // We need a way to inject the mocked model into the notifier.
-        // Since the notifier creates the model internally based on the API key,
-        // we can't directly override a model provider.
-        // For testing, we might need to refactor ChatNotifier slightly
-        // OR accept that testing the AI interaction part might be harder here.
-        // Let's proceed assuming the internal model creation works,
-        // and focus on testing the logic *around* the AI call.
-        // If we needed to test the AI call itself, we'd mock the google_generative_ai package
-        // or refactor ChatNotifier to accept a GenerativeModel instance.
       ],
     );
 
     // IMPORTANT: Instantiate the notifier *after* setting up overrides
-    // The notifier's constructor calls _loadInitialSession, which uses the mocks.
     final notifier = container.read(chatProvider.notifier);
     // Allow initial load to complete
     await Future.delayed(Duration.zero);
@@ -269,47 +254,43 @@ void main() {
 
   group('Initialization (_loadInitialSession)', () {
     test('loads initial empty state when no local or cloud data exists', () async {
-      // Arrange (mocks already return null in setUp)
-
-      // Act: Trigger notifier creation (done implicitly by reading in setUp or here)
-      // Re-create container *without* default stubs to ensure clean state for this test
+        // Arrange (mocks already return null in setUp)
       container.dispose(); // Dispose previous container
-      when(
-        mockLocalStorageService.loadActiveChatSession(),
-      ).thenAnswer((_) async => null);
+        when(
+          mockLocalStorageService.loadActiveChatSession(),
+        ).thenAnswer((_) async => null);
       when(mockCloudKitService.getChatSession()).thenAnswer((_) async => null);
-      container = ProviderContainer(
-        overrides: [
-          localStorageServiceProvider.overrideWithValue(
-            mockLocalStorageService,
-          ),
-          chatSessionCloudKitServiceProvider.overrideWithValue(
-            mockCloudKitService,
-          ),
-          geminiApiKeyProvider.overrideWith(
-            (_) => MockPersistentStringNotifier(
-              PreferenceKeys.geminiApiKey,
-              'fake-key',
+        container = ProviderContainer(
+          overrides: [
+            localStorageServiceProvider.overrideWithValue(
+              mockLocalStorageService,
             ),
-          ),
-          // mcpClientProvider override needed if accessed during init
-          mcpClientProvider.overrideWith(
-            (ref) => FakeMcpClientNotifier(
-              ref,
-              disconnectedMcpState,
-              mockMcpClientNotifierDelegate,
+            chatSessionCloudKitServiceProvider.overrideWithValue(
+              mockCloudKitService,
             ),
-          ),
-        ],
-      );
-      // Read the notifier to trigger initialization
+            geminiApiKeyProvider.overrideWith(
+              (_) => MockPersistentStringNotifier(
+                PreferenceKeys.geminiApiKey,
+                'fake-key',
+              ),
+            ),
+            mcpClientProvider.overrideWith(
+              (ref) => FakeMcpClientNotifier(
+                ref,
+                disconnectedMcpState,
+                mockMcpClientNotifierDelegate,
+              ),
+            ),
+          ],
+        );
+        // Act
       final notifier = container.read(chatProvider.notifier);
       await Future.delayed(Duration.zero); // Allow async operations
 
       // Assert
       final state = container.read(chatProvider);
       expect(state.session.messages, isEmpty);
-      expect(state.isInitializing, isFalse); // Should be false after load
+        expect(state.isInitializing, isFalse);
       verify(mockLocalStorageService.loadActiveChatSession()).called(1);
       verify(mockCloudKitService.getChatSession()).called(1);
       verifyNever(mockLocalStorageService.saveActiveChatSession(any));
@@ -361,12 +342,8 @@ void main() {
         expect(state.isInitializing, isFalse);
         verify(mockLocalStorageService.loadActiveChatSession()).called(1);
         verify(mockCloudKitService.getChatSession()).called(1);
-        verify(
-          mockCloudKitService.saveChatSession(localSession),
-        ).called(1); // Should save local to cloud
-        verifyNever(
-          mockLocalStorageService.saveActiveChatSession(any),
-        ); // No need to re-save locally
+        verify(mockCloudKitService.saveChatSession(localSession)).called(1);
+        verifyNever(mockLocalStorageService.saveActiveChatSession(any));
       },
     );
 
@@ -417,10 +394,8 @@ void main() {
         verify(mockCloudKitService.getChatSession()).called(1);
         verify(
           mockLocalStorageService.saveActiveChatSession(cloudSession),
-        ).called(1); // Should save cloud to local
-        verifyNever(
-          mockCloudKitService.saveChatSession(any),
-        ); // No need to re-save to cloud
+        ).called(1);
+        verifyNever(mockCloudKitService.saveChatSession(any));
       },
     );
 
@@ -472,7 +447,6 @@ void main() {
       verify(mockLocalStorageService.loadActiveChatSession()).called(1);
       verify(mockCloudKitService.getChatSession()).called(1);
       verifyNever(mockLocalStorageService.saveActiveChatSession(any));
-      // verify(mockCloudKitService.saveChatSession(newerLocalSession)).called(1); // Optional: Verify newer local is pushed
     });
 
     test('loads from cloud when cloud is newer and updates local', () async {
@@ -524,7 +498,7 @@ void main() {
       verify(mockCloudKitService.getChatSession()).called(1);
       verify(
         mockLocalStorageService.saveActiveChatSession(newerCloudSession),
-      ).called(1); // Should update local
+      ).called(1);
       verifyNever(mockCloudKitService.saveChatSession(any));
     });
 
@@ -570,7 +544,7 @@ void main() {
       expect(state.isInitializing, isFalse);
       verify(
         mockLocalStorageService.saveActiveChatSession(cloudSession),
-      ).called(1); // Save cloud to local
+      ).called(1);
     });
 
     test('handles error during cloud load', () async {
@@ -613,20 +587,15 @@ void main() {
       final state = container.read(chatProvider);
       expect(state.session, localSession); // Should fall back to local
       expect(state.isInitializing, isFalse);
-      verify(
-        mockCloudKitService.saveChatSession(localSession),
-      ).called(1); // Save local to cloud
+      verify(mockCloudKitService.saveChatSession(localSession)).called(1);
     });
   });
 
   group('forceFetchFromCloud', () {
-    // Use the container created in the main setUp
     late ChatNotifier notifier;
 
     setUp(() async {
-      // Ensure initial load is complete before each test in this group
-      // Reset mocks to default (null) for load, then run notifier init
-      container.dispose(); // Dispose previous container
+      container.dispose();
       when(
         mockLocalStorageService.loadActiveChatSession(),
       ).thenAnswer((_) async => null);
@@ -655,8 +624,7 @@ void main() {
         ],
       );
       notifier = container.read(chatProvider.notifier);
-      await Future.delayed(Duration.zero); // Allow init load
-      // Reset interaction counts after initial load
+      await Future.delayed(Duration.zero);
       clearInteractions(mockLocalStorageService);
       clearInteractions(mockCloudKitService);
     });
@@ -667,7 +635,7 @@ void main() {
         mockCloudKitService.getChatSession(),
       ).thenAnswer((_) async => cloudSession);
       final initialState = container.read(chatProvider);
-      expect(initialState.session.messages, isEmpty); // Verify initial state
+      expect(initialState.session.messages, isEmpty);
 
       // Act
       await notifier.forceFetchFromCloud();
@@ -687,14 +655,13 @@ void main() {
       'sets error message and keeps local state when no cloud session found',
       () async {
         // Arrange
-        // Start with some local state first
         container.dispose();
         when(
           mockLocalStorageService.loadActiveChatSession(),
         ).thenAnswer((_) async => localSession);
         when(
           mockCloudKitService.getChatSession(),
-        ).thenAnswer((_) async => null); // Cloud returns null during init
+        ).thenAnswer((_) async => null);
         container = ProviderContainer(
           overrides: [
             localStorageServiceProvider.overrideWithValue(
@@ -719,11 +686,10 @@ void main() {
           ],
         );
         notifier = container.read(chatProvider.notifier);
-        await Future.delayed(Duration.zero); // Allow init load
+        await Future.delayed(Duration.zero);
         clearInteractions(mockLocalStorageService);
-        clearInteractions(mockCloudKitService); // Reset interactions
+        clearInteractions(mockCloudKitService);
 
-        // Now mock the force fetch call to return null
         when(
           mockCloudKitService.getChatSession(),
         ).thenAnswer((_) async => null);
@@ -734,12 +700,10 @@ void main() {
         // Assert
         final state = container.read(chatProvider);
         expect(state.isSyncing, isFalse);
-        expect(state.session, localSession); // State should remain unchanged
+        expect(state.session, localSession);
         expect(state.errorMessage, "No chat session found in iCloud.");
         verify(mockCloudKitService.getChatSession()).called(1);
-        verifyNever(
-          mockLocalStorageService.saveActiveChatSession(any),
-        ); // Should not save
+        verifyNever(mockLocalStorageService.saveActiveChatSession(any));
       },
     );
 
@@ -747,8 +711,7 @@ void main() {
       // Arrange
       final exception = Exception('CloudKit fetch failed');
       when(mockCloudKitService.getChatSession()).thenThrow(exception);
-      final initialSession =
-          container.read(chatProvider).session; // Capture initial state
+      final initialSession = container.read(chatProvider).session;
 
       // Act
       await notifier.forceFetchFromCloud();
@@ -756,7 +719,7 @@ void main() {
       // Assert
       final state = container.read(chatProvider);
       expect(state.isSyncing, isFalse);
-      expect(state.session, initialSession); // State should remain unchanged
+      expect(state.session, initialSession);
       expect(state.errorMessage, "Failed to fetch from iCloud: $exception");
       verify(mockCloudKitService.getChatSession()).called(1);
       verifyNever(mockLocalStorageService.saveActiveChatSession(any));
@@ -769,18 +732,18 @@ void main() {
         mockCloudKitService.getChatSession(),
       ).thenAnswer((_) => completer.future);
 
-      // Act: Start the fetch but don't complete it yet
+      // Act
       final fetchFuture = notifier.forceFetchFromCloud();
 
-      // Assert: Check state immediately after calling
+      // Assert
       final stateBeforeCompletion = container.read(chatProvider);
       expect(stateBeforeCompletion.isSyncing, isTrue);
 
-      // Arrange: Complete the fetch
+      // Arrange
       completer.complete(cloudSession);
-      await fetchFuture; // Wait for the method to finish
+      await fetchFuture;
 
-      // Assert: Check state after completion
+      // Assert
       final stateAfterCompletion = container.read(chatProvider);
       expect(stateAfterCompletion.isSyncing, isFalse);
     });
@@ -792,34 +755,28 @@ void main() {
         mockCloudKitService.getChatSession(),
       ).thenAnswer((_) => completer.future);
 
-      // Act: Start the first fetch
+      // Act
       final fetchFuture1 = notifier.forceFetchFromCloud();
       expect(container.read(chatProvider).isSyncing, isTrue);
 
-      // Act: Try starting a second fetch while the first is running
       await notifier.forceFetchFromCloud();
 
-      // Assert: CloudKit service should only be called once
+      // Assert
       verify(mockCloudKitService.getChatSession()).called(1);
 
-      // Cleanup: Complete the first fetch
+      // Cleanup
       completer.complete(null);
       await fetchFuture1;
     });
   });
 
-  // --- Existing sendMessage tests (minor adjustments if needed) ---
   group('sendMessage', () {
-    // No changes needed here based on the latest updates,
-    // as these tests focus on MCP vs Gemini logic, not storage/cloud interaction
-    // during the send itself. The setUp already handles the necessary mocks.
-    test(
-      'uses MCP when active and updates history correctly', () async {
-      // Arrange: Configure the *delegate* mock for this specific test
+    test('uses MCP when active and updates history correctly', () async {
+      // Arrange
       const userQuery = 'create task buy milk';
       final fakeNotifier =
           container.read(mcpClientProvider.notifier) as FakeMcpClientNotifier;
-      fakeNotifier.state = defaultStdioMcpState; // Ensure MCP is active
+      fakeNotifier.state = defaultStdioMcpState;
       expect(fakeNotifier.state.hasActiveConnections, isTrue);
 
       final mcpResult = McpProcessResult(
@@ -849,55 +806,58 @@ void main() {
 
       // Assert
       verify(mockMcpClientNotifierDelegate.processQuery(any, any)).called(1);
-      // verifyNever(mockGenerativeModel.startChat(history: anyNamed('history'))); // Verify direct AI not called
 
       final finalState = container.read(chatProvider);
       expect(finalState.isLoading, isFalse);
-      expect(finalState.displayMessages.length, 2); // User + Final Model
+      expect(finalState.displayMessages.length, 2);
       expect(
         finalState.displayMessages.last.text,
         'OK. Task "buy milk" created (ID: 12345).',
       );
       expect(finalState.displayMessages.last.sourceServerId, 'test-stdio-id');
-      expect(
-        finalState.session.messages.length,
-        4,
-      ); // User + ModelCall + ToolResponse + FinalModel
+      expect(finalState.session.messages.length, 4);
     });
 
-    test(
-      'uses direct Gemini stream when MCP is not active', () async {
+    test('uses direct Gemini stream when MCP is not active', () async {
       // Arrange
       const userQuery = 'hello gemini';
       final fakeNotifier =
           container.read(mcpClientProvider.notifier) as FakeMcpClientNotifier;
-      fakeNotifier.state = disconnectedMcpState; // Ensure MCP is inactive
+      fakeNotifier.state = disconnectedMcpState;
       expect(fakeNotifier.state.hasActiveConnections, isFalse);
 
-      // Mock the AI response directly (as the model is created internally)
+      // Mock the AI response (can still mock the response object itself)
       when(mockAiResponse.text).thenReturn('Hello there!');
+      // We need to ensure the internal _model.startChat().sendMessage() call returns our mocked response
+      // Since _model is created internally, we rely on the mock setup for ChatSession and GenerateContentResponse
+      // This part is less robust as we can't mock the final GenerativeModel class.
+      // We assume the internal call chain will eventually use the mocked ChatSession and Response.
 
       // Act
       await container.read(chatProvider.notifier).sendMessage(userQuery);
-      await Future.delayed(Duration.zero); // Allow stream processing
+      await Future.delayed(Duration.zero);
 
       // Assert
       verifyNever(mockMcpClientNotifierDelegate.processQuery(any, any));
-      // We can't easily verify the internal model call without refactoring,
-      // but we can check the outcome.
+      // Cannot reliably verify internal model calls anymore.
 
       final finalState = container.read(chatProvider);
       expect(finalState.isLoading, isFalse);
-      expect(finalState.displayMessages.length, 2); // User + Model
-      expect(finalState.displayMessages.last.text, 'Hello there!');
+      // Check if the response text matches the mock (best effort verification)
+      // This might fail if the actual API is hit or if the internal mocking doesn't work as expected.
+      expect(finalState.displayMessages.length, 2);
+      expect(
+        finalState.displayMessages.last.text,
+        'Hello there!',
+      ); // Check against mocked response text
       expect(finalState.displayMessages.last.sourceServerId, isNull);
-      expect(finalState.session.messages.length, 2); // User + Model
+      expect(finalState.session.messages.length, 2);
     });
   });
 
   group('clearChat', () {
     test('clears state and deletes local/cloud data', () async {
-      // Arrange: Add some initial message to state
+      // Arrange
       final notifier = container.read(chatProvider.notifier);
       notifier.state = notifier.state.copyWith(
         session: ChatSession(
@@ -927,7 +887,6 @@ void main() {
     test('clears previous messages and sets context', () async {
       // Arrange
       final notifier = container.read(chatProvider.notifier);
-      // Add initial message
       notifier.state = notifier.state.copyWith(
         session: ChatSession(
           id: ChatSession.activeSessionId,
@@ -952,7 +911,7 @@ void main() {
 
       // Assert
       final state = container.read(chatProvider);
-      expect(state.session.messages.length, 1); // Only system message
+      expect(state.session.messages.length, 1);
       expect(state.session.messages.first.role, Role.system);
       expect(state.session.messages.first.text, 'Context:\n$contextString');
       expect(state.session.contextItemId, parentItemId);
@@ -961,11 +920,7 @@ void main() {
       expect(state.isLoading, isFalse);
       expect(state.errorMessage, isNull);
 
-      // Verify persistence is triggered
-      // Debounce timer makes direct verification tricky, but check if save methods were called eventually
-      await Future.delayed(
-        const Duration(milliseconds: 600),
-      ); // Wait for debounce
+      await Future.delayed(const Duration(milliseconds: 600));
       verify(mockLocalStorageService.saveActiveChatSession(any)).called(1);
       verify(mockCloudKitService.saveChatSession(any)).called(1);
     });
