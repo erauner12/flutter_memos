@@ -280,6 +280,16 @@ class _WorkbenchScreenState extends ConsumerState<WorkbenchScreen> {
     final bool canRefresh =
         !workbenchState.isLoading && !workbenchState.isRefreshingDetails;
 
+    // --- Step 1: Guard-rail for Segmented Control ---
+    // Ensure the activeInstanceId is actually present in the list before passing to the control.
+    // If not (e.g., during a brief moment after creation before the list updates),
+    // fall back to the first instance ID or null if the list is empty.
+    final safeActiveId =
+        instances.any((i) => i.id == activeInstanceId)
+            ? activeInstanceId
+            : (instances.isNotEmpty ? instances.first.id : null);
+    // --- End Step 1 ---
+
     return CupertinoPageScaffold(
       backgroundColor: CupertinoColors.systemGroupedBackground.resolveFrom(
         context,
@@ -294,7 +304,8 @@ class _WorkbenchScreenState extends ConsumerState<WorkbenchScreen> {
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 0),
                     child: CupertinoSlidingSegmentedControl<String>(
-                      groupValue: activeInstanceId,
+                      // Use the safeActiveId here
+                      groupValue: safeActiveId,
                       thumbColor: CupertinoTheme.of(context).primaryColor,
                       children: {
                         for (var instance in instances)
@@ -309,7 +320,8 @@ class _WorkbenchScreenState extends ConsumerState<WorkbenchScreen> {
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
                                   color:
-                                      activeInstanceId == instance.id
+                                      // Compare with safeActiveId for styling too
+                                      safeActiveId == instance.id
                                           ? CupertinoColors.white
                                           : CupertinoTheme.of(
                                             context,
