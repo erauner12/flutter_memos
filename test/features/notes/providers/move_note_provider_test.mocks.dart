@@ -513,6 +513,22 @@ class MockMemosApiService extends _i1.Mock implements _i5.MemosApiService {
       ) as _i7.Future<Map<String, dynamic>>);
 
   @override
+  _i7.Future<_i9.Uint8List> getResourceData(
+    String? resourceIdentifier, {
+    _i8.ServerConfig? targetServerOverride,
+  }) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #getResourceData,
+          [resourceIdentifier],
+          {#targetServerOverride: targetServerOverride},
+        ),
+        returnValue: _i7.Future<_i9.Uint8List>.value(_i9.Uint8List(0)),
+        returnValueForMissingStub:
+            _i7.Future<_i9.Uint8List>.value(_i9.Uint8List(0)),
+      ) as _i7.Future<_i9.Uint8List>);
+
+  @override
   _i7.Future<void> setNoteRelations(
     String? noteId,
     List<Map<String, dynamic>>? relations, {
@@ -540,22 +556,6 @@ class MockMemosApiService extends _i1.Mock implements _i5.MemosApiService {
         returnValue: _i7.Future<bool>.value(false),
         returnValueForMissingStub: _i7.Future<bool>.value(false),
       ) as _i7.Future<bool>);
-
-  @override
-  _i7.Future<_i9.Uint8List> getResourceData(
-    String? resourceIdentifier, {
-    _i8.ServerConfig? targetServerOverride,
-  }) =>
-      (super.noSuchMethod(
-        Invocation.method(
-          #getResourceData,
-          [resourceIdentifier],
-          {#targetServerOverride: targetServerOverride},
-        ),
-        returnValue: _i7.Future<_i9.Uint8List>.value(_i9.Uint8List(0)),
-        returnValueForMissingStub:
-            _i7.Future<_i9.Uint8List>.value(_i9.Uint8List(0)),
-      ) as _i7.Future<_i9.Uint8List>);
 }
 
 /// A class which mocks [BlinkoApiService].
