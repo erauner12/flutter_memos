@@ -269,4 +269,6 @@ class WorkbenchItemReference {
     // <-- INCLUDE instanceId in toString
     return 'WorkbenchItemReference(id: $id, instanceId: $instanceId, refId: $referencedItemId, type: ${referencedItemType.name}, serverId: $serverId, serverType: ${serverType.name}, parentId: $parentNoteId, added: $addedTimestamp, lastActivity: $overallLastUpdateTime, comments: [$commentIds], refUpdate: $referencedItemUpdateTime)';
   }
+
+  static void empty() {}
 }

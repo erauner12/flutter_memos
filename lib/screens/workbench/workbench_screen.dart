@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart'; // For kDebugMode
 import 'package:flutter/material.dart'; // Import Material for ReorderableListView
 import 'package:flutter_memos/models/workbench_instance.dart'; // Import WorkbenchInstance
+import 'package:flutter_memos/models/workbench_item_reference.dart';
 import 'package:flutter_memos/providers/workbench_instances_provider.dart'; // Import instances provider
 import 'package:flutter_memos/providers/workbench_provider.dart'; // Keep for activeWorkbenchProvider etc.
 import 'package:flutter_memos/screens/item_detail/item_detail_screen.dart'; // Import ItemDetailScreen
@@ -19,92 +20,67 @@ class WorkbenchScreen extends ConsumerStatefulWidget {
 
 class _WorkbenchScreenState extends ConsumerState<WorkbenchScreen> {
   final TextEditingController _instanceNameController = TextEditingController();
+  // Add ProviderSubscription for manual listener management
+  late ProviderSubscription<WorkbenchInstancesState> _instancesSub;
 
   @override
   void initState() {
     super.initState();
-    // Trigger initial load of instances when the screen is initialized
-    // Use addPostFrameCallback to ensure provider is ready
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        // No need to explicitly load instances here anymore,
-        // WorkbenchInstancesNotifier handles its own initialization.
-
-        // Check for last opened item AFTER instances are loaded
-        _checkAndNavigateToLastOpenedItem();
-      }
-    });
+    // Initialize the manual listener in initState
+    _instancesSub = ref.listenManual<WorkbenchInstancesState>(
+      workbenchInstancesProvider,
+      _maybeNavigateToLastOpenedItem,
+      fireImmediately: true, // Fire immediately to check initial state
+    );
   }
 
-  void _checkAndNavigateToLastOpenedItem() {
-    if (!mounted) return;
-    // Listen to the state once, typically after the initial load completes.
-    // Using listen ensures we react *after* the state is potentially updated by initialization.
-    ref.listen<WorkbenchInstancesState>(workbenchInstancesProvider, (
-      previous,
-      next,
-    ) {
-      // Only proceed if loading is finished and we haven't already navigated.
-      // Add a flag or check previous state to prevent multiple navigations if state updates frequently.
-      if (previous?.isLoading == true && next.isLoading == false && mounted) {
-        final lastOpenedMap = next.lastOpenedItemId;
-        final activeInstanceId = next.activeInstanceId;
-        final lastOpenedId = lastOpenedMap[activeInstanceId];
+  // Renamed and rewritten function to be the callback for listenManual
+  void _maybeNavigateToLastOpenedItem(
+    WorkbenchInstancesState? prev, // Previous state (can be null on first call)
+    WorkbenchInstancesState next, // Current state
+  ) {
+    // Guard against navigating while loading or if widget is disposed
+    if (!mounted || next.isLoading) return;
 
-        if (lastOpenedId != null) {
-          // Find the corresponding item reference in the active workbench list
-          // Need to read the active workbench state *after* it has loaded its items.
-          // This might require another listener or careful timing.
-          // For simplicity now, assume activeWorkbenchProvider state is ready enough.
-          // A more robust solution might involve waiting for both providers to be ready.
-          final activeWorkbenchState = ref.read(activeWorkbenchProvider);
-          final itemRefList =
-              activeWorkbenchState.items
-                  .where(
-            (item) => item.id == lastOpenedId,
-          )
-                  .toList();
-          
-          if (itemRefList.isNotEmpty && mounted) {
-            final itemRef = itemRefList.first;
-            if (kDebugMode) {
-              print(
-                '[WorkbenchScreen] Navigating to last opened item $lastOpenedId for instance $activeInstanceId',
-              );
-            }
-            // TODO: Determine item type correctly if needed for navigation
-            // Currently ItemDetailScreen assumes Note type.
-            Navigator.of(context)
-                .push(
-                  CupertinoPageRoute(
-                    builder:
-                        (context) =>
-                            ItemDetailScreen(itemId: itemRef.referencedItemId),
-                  ),
-                )
-                .then((_) {
-                  // Optional: Clear the last opened item for this instance after returning
-                  // ref.read(workbenchInstancesProvider.notifier).setLastOpenedItem(activeInstanceId, null);
-                });
-          } else if (mounted) {
-            if (kDebugMode) {
-              print(
-                '[WorkbenchScreen] Last opened item $lastOpenedId not found in active list for instance $activeInstanceId.',
-              );
-            }
-            // Clear the invalid ID if the item is not found
-            ref
-                .read(workbenchInstancesProvider.notifier)
-                .setLastOpenedItem(activeInstanceId, null);
-          }
-        }
-      }
-    });
+    final activeId = next.activeInstanceId;
+    final lastId = next.lastOpenedItemId[activeId];
+    if (lastId == null) return; // No last opened item for this instance
+
+    // Read the *current* state of the active workbench items
+    final wbState = ref.read(activeWorkbenchProvider);
+    WorkbenchItemReference? item;
+    try {
+      item = wbState.items.firstWhere((i) => i.id == lastId);
+    } catch (_) {
+      // Item not found, do not navigate
+      return;
+    }
+
+    // Perform navigation
+    if (kDebugMode) {
+      print(
+        '[WorkbenchScreen] Navigating to last opened item $lastId (ref: ${item.referencedItemId}) for instance $activeId',
+      );
+    }
+    // TODO: Determine item type correctly if needed for navigation
+    // Currently ItemDetailScreen assumes Note type.
+    Navigator.of(context)
+        .push(
+          CupertinoPageRoute(
+            builder: (_) => ItemDetailScreen(itemId: item!.referencedItemId),
+          ),
+        )
+        .then((_) {
+          // Optional: Clear the last opened item for this instance after returning
+          // ref.read(workbenchInstancesProvider.notifier).setLastOpenedItem(activeId, null);
+        });
   }
 
   @override
   void dispose() {
     _instanceNameController.dispose();
+    // Close the manual subscription when the widget is disposed
+    _instancesSub.close();
     super.dispose();
   }
 
@@ -143,7 +119,10 @@ class _WorkbenchScreenState extends ConsumerState<WorkbenchScreen> {
 
   void _createInstance() {
     final name = _instanceNameController.text.trim();
-    Navigator.pop(context); // Close the dialog first
+    // Check if the dialog can be popped before popping
+    if (Navigator.of(context).canPop()) {
+      Navigator.pop(context); // only close the dialog if it’s still there
+    }
     if (name.isNotEmpty) {
       ref.read(workbenchInstancesProvider.notifier).saveInstance(name);
     }
@@ -182,7 +161,10 @@ class _WorkbenchScreenState extends ConsumerState<WorkbenchScreen> {
 
   void _renameInstance(String instanceId) {
     final newName = _instanceNameController.text.trim();
-    Navigator.pop(context); // Close the dialog first
+    // Check if the dialog can be popped before popping (optional but good practice)
+    if (Navigator.of(context).canPop()) {
+      Navigator.pop(context);
+    }
     if (newName.isNotEmpty) {
       ref
           .read(workbenchInstancesProvider.notifier)
@@ -233,7 +215,10 @@ class _WorkbenchScreenState extends ConsumerState<WorkbenchScreen> {
                 isDestructiveAction: true,
                 child: const Text('Delete'),
                 onPressed: () {
-                  Navigator.pop(context); // Close confirmation
+                  // Check if the dialog can be popped before popping
+                  if (Navigator.of(context).canPop()) {
+                    Navigator.pop(context); // Close confirmation
+                  }
                   ref
                       .read(workbenchInstancesProvider.notifier)
                       .deleteInstance(instance.id);
@@ -501,9 +486,11 @@ class _WorkbenchScreenState extends ConsumerState<WorkbenchScreen> {
                   itemReference: item,
                   index: index,
                   onTap: () {
+                    // Set last opened item when tapped
                     ref
                         .read(workbenchInstancesProvider.notifier)
                         .setLastOpenedItem(activeInstanceId, item.id);
+                    // Actual navigation is handled by the tile itself now
                   },
                 );
               },
