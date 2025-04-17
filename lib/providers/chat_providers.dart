@@ -185,7 +185,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
     final s = ChatSession(
       id: ChatSession.activeSessionId,
       contextItemId: parentItemId,
-      contextItemType: parentItemType as WorkbenchItemType?,
+      contextItemType: WorkbenchItemType.values.byName(parentItemType.name),
       contextServerId: parentServerId,
       messages: [system],
       lastUpdated: DateTime.now().toUtc(),
