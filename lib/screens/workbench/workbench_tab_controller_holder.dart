@@ -1,7 +1,9 @@
+import 'dart:async'; // Import for Future.microtask
 import 'dart:math';
 
 import 'package:flutter/foundation.dart'; // Import for kDebugMode
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart'; // Import for SchedulerBinding
 import 'package:flutter_memos/models/workbench_instance.dart';
 import 'package:flutter_memos/providers/workbench_instances_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -13,45 +15,33 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 /// active instance ID changes. It updates the `workbenchTabControllerProvider`
 /// state whenever the controller is recreated or disposed.
 class WorkbenchTabControllerHolder {
-  // Use WidgetRef, provided by ConsumerStatefulWidget's State
   final WidgetRef ref;
-  final TickerProvider vsync; // Provided by the hosting State widget
-  TabController? _controller; // Internal controller instance
-  // Remove _instancesSub - ref.listen in initState handles disposal
-  // ProviderSubscription<WorkbenchInstancesState>? _instancesSub;
+  final TickerProvider vsync;
+  TabController? _controller;
 
-  // Constructor now expects WidgetRef
   WorkbenchTabControllerHolder(this.ref, this.vsync) {
-    // Get initial state to create the first controller
     final initialState = ref.read(workbenchInstancesProvider);
     _recreate(
       length: _calculateLength(initialState.instances),
       initialIndex: _indexFor(initialState.instances, initialState.activeInstanceId),
     );
 
-    // Listen for subsequent changes using the standard listen API.
-    // No need to store the subscription when called in initState.
     ref.listen<WorkbenchInstancesState>(
       workbenchInstancesProvider,
       _maybeRecreateOrAnimate,
-      // fireImmediately is not a parameter for ref.listen
     );
   }
 
-  // Helper to calculate the required length (min 1 for placeholder)
   int _calculateLength(List<WorkbenchInstance> instances) {
     return instances.isEmpty ? 1 : instances.length;
   }
 
-  // Helper to find the correct index for an instance ID
   int _indexFor(List<WorkbenchInstance> list, String id) {
     if (list.isEmpty) return 0;
     final i = list.indexWhere((w) => w.id == id);
-    // Clamp to valid range [0, list.length - 1]
     return (i < 0) ? 0 : i.clamp(0, max(0, list.length - 1));
   }
 
-  /// Called when the workbenchInstancesProvider state changes.
   void _maybeRecreateOrAnimate(
     WorkbenchInstancesState? prev,
     WorkbenchInstancesState next,
@@ -72,13 +62,11 @@ class WorkbenchTabControllerHolder {
     final requiredLen = _calculateLength(next.instances);
     final desiredIndex = _indexFor(next.instances, next.activeInstanceId);
 
-    // --- Case 1: Length Changed ---
     if (_controller!.length != requiredLen) {
       _recreate(length: requiredLen, initialIndex: desiredIndex);
-      return; // Index handled by _recreate's initialIndex
+      return;
     }
 
-    // --- Case 2: Length Same, Index Might Have Changed ---
     if (!_controller!.indexIsChanging &&
         _controller!.index != desiredIndex &&
         desiredIndex >= 0 &&
@@ -87,9 +75,27 @@ class WorkbenchTabControllerHolder {
     }
   }
 
-  /// Disposes the old controller (if any) and creates/publishes a new one via the StateProvider.
+  /// Helper to safely publish the controller state.
+  void _safePublishController() {
+    // Check if controller is still valid before publishing
+    if (_controller != null) {
+      ref.read(workbenchTabControllerProvider.notifier).state = _controller;
+      if (kDebugMode) {
+        print(
+          "[WorkbenchTabControllerHolder] Safely published new TabController (length: ${_controller!.length}, index: ${_controller!.initialIndex})",
+        );
+      }
+    } else if (kDebugMode) {
+      print(
+        "[WorkbenchTabControllerHolder] Attempted to publish null controller. Skipping.",
+      );
+    }
+  }
+
+  /// Disposes the old controller (if any) and creates/publishes a new one via the StateProvider,
+  /// deferring the publication if called during a build phase.
   void _recreate({required int length, required int initialIndex}) {
-    // 1. Dispose previous controller *synchronously*
+    // 1. Dispose previous controller
     _controller?.removeListener(_onTabChanged);
     try {
       _controller?.dispose();
@@ -98,7 +104,7 @@ class WorkbenchTabControllerHolder {
         print("Error disposing previous TabController: $e\n$s");
       }
     }
-    _controller = null;
+    _controller = null; // Set internal field to null
 
     // 2. Create the new controller
     _controller = TabController(
@@ -107,16 +113,26 @@ class WorkbenchTabControllerHolder {
       initialIndex: initialIndex.clamp(0, max(0, length - 1)),
     )..addListener(_onTabChanged);
 
-    // 3. Publish the new controller by updating the StateProvider's state
-    ref.read(workbenchTabControllerProvider.notifier).state = _controller;
-    if (kDebugMode) {
-      print(
-        "[WorkbenchTabControllerHolder] Recreated and published new TabController (length: $length, index: $initialIndex)",
-      );
+    // 3. Publish the new controller state, deferring if necessary
+    final currentPhase = SchedulerBinding.instance.schedulerPhase;
+    if (currentPhase == SchedulerPhase.idle ||
+        currentPhase == SchedulerPhase.postFrameCallbacks) {
+      // Safe to publish immediately (e.g., called from listener callback)
+      _safePublishController();
+    } else {
+      // Unsafe to publish during build/layout/paint phases. Defer.
+      if (kDebugMode) {
+        print(
+          "[WorkbenchTabControllerHolder] Deferring controller publication (current phase: $currentPhase)",
+        );
+      }
+      // Use microtask to schedule the update just after the current event loop task.
+      Future.microtask(_safePublishController);
+      // Alternatively, use addPostFrameCallback to schedule after the frame:
+      // SchedulerBinding.instance.addPostFrameCallback((_) => _safePublishController());
     }
   }
 
-  /// Listener attached to the TabController (Controller -> Provider).
   void _onTabChanged() {
     if (_controller == null || _controller!.indexIsChanging) return;
 
@@ -131,22 +147,25 @@ class WorkbenchTabControllerHolder {
     }
   }
 
-  /// Dispose the controller and clean up the listener subscription.
-  /// Also sets the provider state back to null.
   void dispose() {
     if (kDebugMode) {
       print("[WorkbenchTabControllerHolder] Disposing...");
     }
-    // No need to close _instancesSub manually when using ref.listen in initState
-    // _instancesSub?.close();
-    // _instancesSub = null;
+    // Listener is managed by ref.listen, no need to close manually
     _controller?.removeListener(_onTabChanged);
     _controller?.dispose();
     _controller = null;
 
-    // Set the provider state to null upon disposal
+    // Set the provider state back to null
     try {
-      ref.read(workbenchTabControllerProvider.notifier).state = null;
+      // Check if the provider is still active before trying to modify its state
+      // This avoids errors if the provider was already disposed (e.g., due to autoDispose removal)
+      // Note: Since we removed autoDispose, this check might be less critical, but still good practice.
+      final notifier = ref.read(workbenchTabControllerProvider.notifier);
+      // Check if the notifier's state itself is already null before setting it again
+      if (notifier.state != null) {
+        notifier.state = null;
+      }
     } catch (e, s) {
       if (kDebugMode) {
         print(

@@ -503,8 +503,11 @@ final workbenchInstancesProvider =
   return WorkbenchInstancesNotifier(ref);
 });
 
-// --- New Provider for TabController ---
+// --- Provider for TabController ---
 // Holds the current TabController instance, managed by WorkbenchTabControllerHolder.
 // Starts as null until the holder creates the first controller.
+// Removed autoDispose to prevent premature disposal.
 final workbenchTabControllerProvider =
-    StateProvider.autoDispose<TabController?>((_) => null);
+    StateProvider<TabController?>(
+  (_) => null,
+);
