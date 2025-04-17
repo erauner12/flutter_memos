@@ -17,7 +17,8 @@ class WorkbenchTabControllerHolder {
   final WidgetRef ref;
   final TickerProvider vsync; // Provided by the hosting State widget
   TabController? _controller; // Internal controller instance
-  ProviderSubscription<WorkbenchInstancesState>? _instancesSub;
+  // Remove _instancesSub - ref.listen in initState handles disposal
+  // ProviderSubscription<WorkbenchInstancesState>? _instancesSub;
 
   // Constructor now expects WidgetRef
   WorkbenchTabControllerHolder(this.ref, this.vsync) {
@@ -28,12 +29,12 @@ class WorkbenchTabControllerHolder {
       initialIndex: _indexFor(initialState.instances, initialState.activeInstanceId),
     );
 
-    // Listen for subsequent changes using the standard listen API
-    _instancesSub = ref.listen<WorkbenchInstancesState>(
-      // Use listen instead of listenManual
+    // Listen for subsequent changes using the standard listen API.
+    // No need to store the subscription when called in initState.
+    ref.listen<WorkbenchInstancesState>(
       workbenchInstancesProvider,
       _maybeRecreateOrAnimate,
-      fireImmediately: false, // Already handled by initial _recreate
+      // fireImmediately is not a parameter for ref.listen
     );
   }
 
@@ -136,18 +137,17 @@ class WorkbenchTabControllerHolder {
     if (kDebugMode) {
       print("[WorkbenchTabControllerHolder] Disposing...");
     }
-    _instancesSub?.close();
-    _instancesSub = null;
+    // No need to close _instancesSub manually when using ref.listen in initState
+    // _instancesSub?.close();
+    // _instancesSub = null;
     _controller?.removeListener(_onTabChanged);
     _controller?.dispose();
     _controller = null;
 
     // Set the provider state to null upon disposal
-    // It's safe to call read in dispose. No need for context/mounted checks here.
     try {
       ref.read(workbenchTabControllerProvider.notifier).state = null;
     } catch (e, s) {
-      // Catch potential errors if the provider/notifier itself is already disposed (unlikely but possible)
       if (kDebugMode) {
         print(
           "[WorkbenchTabControllerHolder] Error setting provider state to null during dispose: $e\n$s",
