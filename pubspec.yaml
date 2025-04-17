@@ -31,7 +31,7 @@ dependencies:
   http: ^1.2.1
   http_parser: ^4.1.2 # Added missing http_parser dependency
   protobuf: ^3.1.0 # Keep if needed by dependencies
-  grpc: ^3.2.4 # Keep if needed by dependencies
+  grpc: ^4.0.4 # Keep if needed by dependencies
   retrofit: ^4.0.3 # Keep if using retrofit
   built_value: ^8.6.1 # Keep if using built_value
 
