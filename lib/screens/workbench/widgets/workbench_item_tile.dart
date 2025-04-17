@@ -4,13 +4,15 @@ import 'dart:math'; // For min
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart'; // For kDebugMode
 import 'package:flutter/services.dart'; // Needed for Clipboard
+import 'package:flutter_memos/main.dart'; // For rootNavigatorKeyProvider
 import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/models/server_config.dart';
 import 'package:flutter_memos/models/workbench_item_reference.dart';
 import 'package:flutter_memos/providers/server_config_provider.dart';
 import 'package:flutter_memos/providers/task_providers.dart';
 import 'package:flutter_memos/providers/workbench_provider.dart';
-import 'package:flutter_memos/screens/home_screen.dart'; // Import for tabControllerProvider and navigator keys
+import 'package:flutter_memos/screens/home_screen.dart'; // Import for NEW providers
+import 'package:flutter_memos/screens/home_tabs.dart'; // Import HomeTab enum
 import 'package:flutter_memos/screens/tasks/new_task_screen.dart';
 import 'package:flutter_memos/utils/thread_utils.dart'; // Import the utility
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -21,12 +23,14 @@ class WorkbenchItemTile extends ConsumerStatefulWidget {
   final WorkbenchItemReference itemReference;
   final int index;
 
-  // Remove const constructor to fix invalid_constant error
+  // onTap is required by ReorderableListView.builder's itemBuilder
+  final VoidCallback onTap;
+
   const WorkbenchItemTile({
     super.key,
     required this.itemReference,
     required this.index,
-    required Null Function() onTap,
+    required this.onTap, // Make onTap required
   });
 
   @override
@@ -300,28 +304,45 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
 
       if (!mounted) return;
 
-      // 1. Switch Tab
-      final tabController = ref.read(tabControllerProvider);
-      if (tabController == null || tabController.index == 3) {
-        // Already on chat tab or controller not found, proceed directly
-        _navigateToChatScreen(
-          buildContext,
-          content,
-          itemRef.referencedItemId,
-          itemRef.referencedItemType,
-          itemRef.serverId,
-        );
-      } else {
-        tabController.index = 3; // Switch to Chat tab (index 3)
-        // Add a short delay to allow tab switch animation before navigating
-        await Future.delayed(const Duration(milliseconds: 100));
+      // Prepare arguments for navigation
+      final chatArgs = {
+        'contextString': content,
+        'parentItemId': itemRef.referencedItemId,
+        'parentItemType': itemRef.referencedItemType,
+        'parentServerId': itemRef.serverId,
+      };
+
+      // 1. Try to switch tab using the safe method
+      final tabController = ref.read(homeTabControllerProvider);
+      final tabIndexMap = ref.read(homeTabIndexMapProvider);
+      final chatTabIndex = tabIndexMap[HomeTab.chat];
+
+      if (chatTabIndex != null && chatTabIndex < tabController.length) {
+        // Chat tab exists and index is valid
+        if (tabController.index != chatTabIndex) {
+          tabController.animateTo(chatTabIndex); // Use safe animation
+          // Add a short delay to allow tab switch animation before navigating within the tab
+          await Future.delayed(const Duration(milliseconds: 150));
+        }
+        // Navigate within the Chat tab's navigator
         if (mounted) {
-          _navigateToChatScreen(
+          _navigateToChatScreenWithinTab(buildContext, chatArgs);
+        }
+      } else {
+        // Fallback: Chat tab doesn't exist or index is invalid, use root navigator
+        if (kDebugMode) {
+          print(
+            '[WorkbenchItemTile] Chat tab not found or index invalid. Navigating via root.',
+          );
+        }
+        final rootNavigator = ref.read(rootNavigatorKeyProvider).currentState;
+        if (rootNavigator != null && mounted) {
+          rootNavigator.pushNamed('/chat', arguments: chatArgs);
+        } else {
+          _showAlertDialog(
             buildContext,
-            content,
-            itemRef.referencedItemId,
-            itemRef.referencedItemType,
-            itemRef.serverId,
+            'Error',
+            'Could not navigate to chat.',
           );
         }
       }
@@ -333,35 +354,23 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
     }
   }
 
-  // Helper to perform the actual navigation to chat screen (copied from ItemDetailScreen)
-  void _navigateToChatScreen(
+  // Helper to navigate within the Chat tab specifically
+  void _navigateToChatScreenWithinTab(
     BuildContext buildContext,
-    String fetchedContent,
-    String itemId,
-    WorkbenchItemType itemType,
-    String activeServerId,
+    Map<String, dynamic> chatArgs,
   ) {
-    // Use the specific navigator key for the Chat tab
     final chatNavigator = chatTabNavKey.currentState;
     if (chatNavigator != null) {
       // Pop to root of chat tab first to avoid stacking chat screens
       chatNavigator.popUntil((route) => route.isFirst);
-      // Push the chat screen with arguments
-      chatNavigator.pushNamed(
-        '/chat', // Route defined in HomeScreen for the chat tab
-        arguments: {
-          'contextString': fetchedContent,
-          'parentItemId': itemId,
-          'parentItemType': itemType,
-          'parentServerId': activeServerId,
-        },
-      );
+      // Push the chat screen with arguments using the tab's navigator
+      chatNavigator.pushNamed('/chat', arguments: chatArgs);
     } else {
       // Fallback or error handling if navigator key is null
       _showAlertDialog(
         buildContext,
         'Error',
-        'Could not navigate to chat tab.',
+        'Could not navigate within chat tab.',
       );
       if (kDebugMode) {
         print("Error: chatTabNavKey.currentState is null");
@@ -647,22 +656,8 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
                     onExit: (_) => setState(() => _isHovering = false),
                     child: GestureDetector(
                       behavior: HitTestBehavior.opaque,
-                      onTap: () {
-                        if (isOnActiveServer) {
-                          _navigateToItem(
-                            context,
-                            ref,
-                            widget.itemReference,
-                            commentIdToHighlight: null,
-                          );
-                        } else {
-                          _showServerSwitchRequiredDialog(
-                            context,
-                            ref,
-                            widget.itemReference,
-                          );
-                        }
-                      },
+                      // Use the onTap passed from the parent (WorkbenchScreen)
+                      onTap: widget.onTap,
                       child: Stack(
                         children: [
                           // Main Content Column
@@ -738,7 +733,7 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
                                   padding: EdgeInsets.only(
                                     left: 4.0,
                                     right: 4.0,
-                                    top: isCommentItem ? 4.0 : 0, // Remove const to fix invalid constant issue
+                                    top: isCommentItem ? 4.0 : 0,
                                   ),
                                   child: isCommentItem
                                       ? _buildSingleCommentPreview(
