@@ -16,8 +16,7 @@ final tabControllerProvider = StateProvider<CupertinoTabController?>(
 );
 
 // GlobalKey to access CupertinoTabScaffold state
-final GlobalKey<CupertinoTabScaffoldState> tabScaffoldKey =
-    GlobalKey<CupertinoTabScaffoldState>();
+final GlobalKey tabScaffoldKey = GlobalKey(); // Remove explicit type argument
 // GlobalKeys for each tab's navigator
 final GlobalKey<NavigatorState> memosTabNavKey = GlobalKey<NavigatorState>();
 final GlobalKey<NavigatorState> tasksTabNavKey = GlobalKey<NavigatorState>();

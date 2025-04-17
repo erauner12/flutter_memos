@@ -193,6 +193,7 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> // Renamed 
             title: const Text('Note Actions'), // Updated text
             actions: <CupertinoActionSheetAction>[
               CupertinoActionSheetAction(
+                // Pass the function directly if canInteract, otherwise null
                 onPressed:
                     !canInteractWithServer
                         ? null
