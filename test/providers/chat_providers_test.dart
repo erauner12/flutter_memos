@@ -842,18 +842,23 @@ void main() {
       when(
         mockMcpClientNotifierDelegate.processQuery(any, any),
       ).thenAnswer((_) async => throw Exception('Should not be called'));
-
+      
       // Create a mock ChatAiBackend that can be substituted in through the chatAiFacadeProvider
       final mockChatAiBackend = MockChatAiBackend();
-
-      // Use typed matchers for non-nullable parameters
+      
+      // Use typed matchers with concrete values for non-nullable parameters
+      final emptyHistory = <gen_ai.Content>[];
+      final anyMessage = 'any-message';
+      
       when(
-        mockChatAiBackend.send(
-          argThat(isA<List<gen_ai.Content>>()),
-          argThat(isA<String>()),
-        ),
+        mockChatAiBackend.send(emptyHistory, anyMessage),
       ).thenAnswer((_) async => ChatAiResponse(text: 'ok'));
 
+      // Use a more general matcher that will catch any call
+      when(
+        mockChatAiBackend.send(any, any),
+      ).thenAnswer((_) async => ChatAiResponse(text: 'ok'));
+      
       // Override the chatProvider to use our mocked backend
       container = ProviderContainer(
         parent: container,
