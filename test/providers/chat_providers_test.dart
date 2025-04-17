@@ -1,15 +1,16 @@
-import 'dart:async';
-
 import 'package:flutter_memos/models/chat_message.dart';
 import 'package:flutter_memos/models/chat_session.dart';
 import 'package:flutter_memos/models/mcp_server_config.dart'; // Needed for McpClientState setup
-import 'package:flutter_memos/providers/chat_providers.dart'; // Import ChatNotifier, chatAiFacadeProvider and provider
+import 'package:flutter_memos/providers/chat_providers.dart'
+    show chatProvider; // Import specific providers only
 import 'package:flutter_memos/providers/service_providers.dart';
 import 'package:flutter_memos/providers/settings_provider.dart'
     show
         PersistentStringNotifier,
         geminiApiKeyProvider,
         PreferenceKeys; // Import the class containing the keys
+import 'package:flutter_memos/services/chat_ai.dart'
+    show ChatAiBackend, ChatAiResponse, ChatAiFacade;
 import 'package:flutter_memos/services/chat_ai.dart'; // Import for ChatAiBackend, ChatAiResponse, ChatAiFacade
 import 'package:flutter_memos/services/chat_session_cloud_kit_service.dart';
 import 'package:flutter_memos/services/local_storage_service.dart';
