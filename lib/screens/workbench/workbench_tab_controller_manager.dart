@@ -1,9 +1,7 @@
-import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/workbench_instance.dart';
@@ -108,7 +106,7 @@ class _WorkbenchTabControllerManagerState
     // Recreate if controller doesn't exist OR if the length requirement changed
     if (_controller == null || _controller!.length != requiredLen) {
       _disposeController(); // Dispose old one first
-      _createControllerFrom(next); // Create and publish new one
+      _createControllerFrom(next); // Create and schedule publish new one
       return;
     }
 
@@ -155,29 +153,36 @@ class _WorkbenchTabControllerManagerState
   }
 
 
-  // Publish immediately if we are outside the build phases, otherwise defer
+  // Publish the controller state after the current frame.
   void _safePublishController() {
-    // Ensure widget is mounted before accessing ref or modifying state
+    // Ensure widget is mounted before scheduling the callback
     if (!mounted) return;
 
     void publish() {
-      // Double-check mounted status inside the closure/microtask
+      // Double-check mounted status inside the callback
       if (mounted) {
+        // Optional instrumentation
+        assert(
+          _controller != null,
+          'Controller should not be null when publishing',
+        );
+        if (kDebugMode) {
+          print(
+            '[WorkbenchTabControllerManager] Publishing controller '
+            'len=${_controller!.length}, index=${_controller!.index}',
+          );
+        }
+        // Actual publication
         ref.read(workbenchTabControllerProvider.notifier).state = _controller;
       }
     }
 
-    final phase = SchedulerBinding.instance.schedulerPhase;
-    // Safe to publish directly during idle or post-frame phases.
-    if (phase == SchedulerPhase.idle ||
-        phase == SchedulerPhase.postFrameCallbacks) {
-      publish();
-    } else {
-      // Defer publication if called during build, layout, or paint.
-      // Using a microtask ensures it runs right after the current event loop task.
-      Future.microtask(publish);
-    }
+    // Always wait until *after* the current frame has completed so that
+    //   1. the provider has been lazily instantiated by the first `ref.watch`
+    //   2. any widgets that rely on the value are already mounted
+    WidgetsBinding.instance.addPostFrameCallback((_) => publish());
   }
+
 
   // ---------- build ----------
   @override

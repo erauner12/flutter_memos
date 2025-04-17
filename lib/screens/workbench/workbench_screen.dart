@@ -223,11 +223,15 @@ class _WorkbenchScreenState extends ConsumerState<WorkbenchScreen> {
   @override
   Widget build(BuildContext context) {
     // Wrap the actual scaffold content with the manager widget.
-    // The manager itself doesn't render anything, just manages the controller.
-    return WorkbenchTabControllerManager(child: _buildScaffold(context));
+    // Use a Builder to ensure _buildScaffold runs *after* the manager
+    // is mounted and its initState has potentially scheduled the first publish.
+    return WorkbenchTabControllerManager(
+      child: Builder(builder: _buildScaffold),
+    );
   }
 
   // Extracted scaffold build logic into a separate method
+  // Note: This method now receives the context from the Builder.
   Widget _buildScaffold(BuildContext context) {
     // Watch necessary states
     final workbenchState = ref.watch(activeWorkbenchProvider);
@@ -350,6 +354,7 @@ class _WorkbenchScreenState extends ConsumerState<WorkbenchScreen> {
       child: SafeArea(
         bottom: false,
         child: Builder(
+          // Using Builder here is fine, context is already correct
           builder: (context) {
             // Loading/Error states for instances (unchanged logic)
             if (instancesState.isLoading && instances.isEmpty) {
