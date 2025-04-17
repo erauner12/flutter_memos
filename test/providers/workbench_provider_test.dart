@@ -7,7 +7,6 @@ import 'package:flutter_memos/providers/api_providers.dart'; // Add API provider
 import 'package:flutter_memos/providers/server_config_provider.dart'; // Add Server Config provider import
 import 'package:flutter_memos/providers/service_providers.dart';
 import 'package:flutter_memos/providers/workbench_provider.dart';
-import 'package:flutter_memos/services/base_api_service.dart'; // Add BaseApiService import
 import 'package:flutter_memos/services/cloud_kit_service.dart';
 import 'package:flutter_memos/services/note_api_service.dart'; // Add NoteApiService import
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -140,8 +139,8 @@ void main() {
       when(mockCloudKitService.getAllWorkbenchItemReferences())
           .thenAnswer((_) async => [item1, item3, item2]);
         final note1UpdateTime = now.subtract(const Duration(days: 1, hours: 1));
-        final note2UpdateTime = now.subtract(const (Duration(hours: 12),));
-        final note3UpdateTime = now.subtract(const (Duration(hours: 1),));
+        final note2UpdateTime = now.subtract(const Duration(hours: 12));
+        final note3UpdateTime = now.subtract(const Duration(hours: 1));
       final commentForItem2 = Comment(
         id: 'comment1',
         content: 'Latest comment',
@@ -196,7 +195,7 @@ void main() {
           .thenAnswer((_) async => []);
 
         await notifier.loadItems();
-        await Future.delayed(const (Duration(milliseconds: 100),));
+        await Future.delayed(const Duration(milliseconds: 100));
       final state = container.read(workbenchProvider);
 
       expect(state.isLoading, false);
@@ -250,14 +249,12 @@ void main() {
       );
       final item2 = createMockItem(
         'id2',
-        now.subtract(const (Duration(days: 1),)),
+        now.subtract(const Duration(days: 1)),
       );
       final item3 = createMockItem('id3', now);
-      final note1UpdateTime = now.subtract(const (
-        Duration(days: 1, hours: 1),
-      ));
-      final note2UpdateTime = now.subtract(const (Duration(hours: 12),));
-      final note3UpdateTime = now.subtract(const (Duration(hours: 1),));
+      final note1UpdateTime = now.subtract(const Duration(days: 1, hours: 1));
+      final note2UpdateTime = now.subtract(const Duration(hours: 12));
+      final note3UpdateTime = now.subtract(const Duration(hours: 1));
       final commentForItem2 = Comment(
         id: 'comment1',
         content: 'Latest comment',
@@ -336,15 +333,15 @@ void main() {
       ).thenAnswer((_) async => []);
 
       await notifier.loadItems();
-      await Future.delayed(const (Duration(milliseconds: 100),));
+      await Future.delayed(const Duration(milliseconds: 100));
     });
 
     test('addItem success - adds item, fetches details, and sorts list', () async {
         final newItem = createMockItem(
           'id4',
-          now.add(const (Duration(days: 1),)),
+          now.add(const Duration(days: 1)),
         );
-        final note4UpdateTime = now.add(const (Duration(days: 1, hours: 1),));
+        final note4UpdateTime = now.add(const Duration(days: 1, hours: 1));
         when(
           mockCloudKitService.saveWorkbenchItemReference(newItem),
         ).thenAnswer((_) async => true);
@@ -365,7 +362,7 @@ void main() {
           .thenAnswer((_) async => []);
 
       await notifier.addItem(newItem);
-        await Future.delayed(const (Duration(milliseconds: 100),));
+        await Future.delayed(const Duration(milliseconds: 100));
       final state = container.read(workbenchProvider);
 
       expect(state.items.length, 4);
@@ -386,7 +383,7 @@ void main() {
     test('addItem failure - reverts optimistic add and sorts', () async {
       final newItem = createMockItem(
         'id4',
-        now.add(const (Duration(days: 1),)),
+        now.add(const Duration(days: 1)),
       );
       final exception = Exception('Save failed');
       when(
@@ -408,13 +405,13 @@ void main() {
     test('addItem duplicate - does not add item or call CloudKit', () async {
       final duplicateItem = createMockItem(
         'newIdSameRef',
-        now.add(const (Duration(days: 1),)),
+        now.add(const Duration(days: 1)),
       )
           .copyWith(
         referencedItemId:
             createMockItem(
               'id2',
-              now.subtract(const (Duration(days: 1),)),
+              now.subtract(const Duration(days: 1)),
             ).referencedItemId,
         serverId: serverConfig1.id,
       );
@@ -435,18 +432,16 @@ void main() {
     setUp(() async {
       final item1 = createMockItem(
         'id1',
-        now.subtract(const (Duration(days: 2),)),
+        now.subtract(const Duration(days: 2)),
       );
       final item2 = createMockItem(
         'id2',
-        now.subtract(const (Duration(days: 1),)),
+        now.subtract(const Duration(days: 1)),
       );
       final item3 = createMockItem('id3', now);
-      final note1UpdateTime = now.subtract(const (
-        Duration(days: 1, hours: 1),
-      ));
-      final note2UpdateTime = now.subtract(const (Duration(hours: 12),));
-      final note3UpdateTime = now.subtract(const (Duration(hours: 1),));
+      final note1UpdateTime = now.subtract(const Duration(days: 1, hours: 1));
+      final note2UpdateTime = now.subtract(const Duration(hours: 12));
+      final note3UpdateTime = now.subtract(const Duration(hours: 1));
       final commentForItem2 = Comment(
         id: 'comment1',
         content: 'Latest comment',
@@ -525,7 +520,7 @@ void main() {
       ).thenAnswer((_) async => []);
 
       await notifier.loadItems();
-      await Future.delayed(const (Duration(milliseconds: 100),));
+      await Future.delayed(const Duration(milliseconds: 100));
     });
 
     test('removeItem success - removes item', () async {
@@ -582,18 +577,16 @@ void main() {
     setUp(() async {
       final item1 = createMockItem(
         'id1',
-        now.subtract(const (Duration(days: 2),)),
+        now.subtract(const Duration(days: 2)),
       );
       final item2 = createMockItem(
         'id2',
-        now.subtract(const (Duration(days: 1),)),
+        now.subtract(const Duration(days: 1)),
       );
       final item3 = createMockItem('id3', now);
-      final note1UpdateTime = now.subtract(const (
-        Duration(days: 1, hours: 1),
-      ));
-      final note2UpdateTime = now.subtract(const (Duration(hours: 12),));
-      final note3UpdateTime = now.subtract(const (Duration(hours: 1),));
+      final note1UpdateTime = now.subtract(const Duration(days: 1, hours: 1));
+      final note2UpdateTime = now.subtract(const Duration(hours: 12));
+      final note3UpdateTime = now.subtract(const Duration(hours: 1));
       final commentForItem2 = Comment(
         id: 'comment1',
         content: 'Latest comment',
@@ -672,7 +665,7 @@ void main() {
       ).thenAnswer((_) async => []);
 
       await notifier.loadItems();
-      await Future.delayed(const (Duration(milliseconds: 100),));
+      await Future.delayed(const Duration(milliseconds: 100));
     });
 
     test('moves item downwards correctly', () {
@@ -711,16 +704,14 @@ void main() {
       when(mockCloudKitService.getAllWorkbenchItemReferences())
           .thenAnswer(
         (_) async => [
-          createMockItem('id1', now.subtract(const (Duration(days: 2),))),
+          createMockItem('id1', now.subtract(const Duration(days: 2))),
           createMockItem('id3', now),
-          createMockItem('id2', now.subtract(const (Duration(days: 1),))),
+          createMockItem('id2', now.subtract(const Duration(days: 1))),
         ],
       );
-      final note1UpdateTime = now.subtract(const (
-        Duration(days: 1, hours: 1),
-      ));
-      final note2UpdateTime = now.subtract(const (Duration(hours: 12),));
-      final note3UpdateTime = now.subtract(const (Duration(hours: 1),));
+      final note1UpdateTime = now.subtract(const Duration(days: 1, hours: 1));
+      final note2UpdateTime = now.subtract(const Duration(hours: 12));
+      final note3UpdateTime = now.subtract(const Duration(hours: 1));
       final commentForItem2 = Comment(
         id: 'comment1',
         content: 'Latest comment',
@@ -735,7 +726,7 @@ void main() {
         if (id ==
             createMockItem(
               'id1',
-              now.subtract(const (Duration(days: 2),)),
+              now.subtract(const Duration(days: 2)),
             ).referencedItemId) {
           return NoteItem(
             id: id,
@@ -750,7 +741,7 @@ void main() {
         } else if (id ==
             createMockItem(
               'id2',
-              now.subtract(const (Duration(days: 1),)),
+              now.subtract(const Duration(days: 1)),
             ).referencedItemId) {
           return NoteItem(
             id: id,
@@ -785,7 +776,7 @@ void main() {
         if (id ==
             createMockItem(
               'id2',
-              now.subtract(const (Duration(days: 1),)),
+              now.subtract(const Duration(days: 1)),
             ).referencedItemId) {
           return [commentForItem2];
         }
@@ -793,7 +784,7 @@ void main() {
       });
 
       await notifier.loadItems();
-      await Future.delayed(const (Duration(milliseconds: 100),));
+      await Future.delayed(const Duration(milliseconds: 100));
     });
 
     test('resets manually reordered list to default sort (overallLastUpdateTime desc)', () {
@@ -828,16 +819,14 @@ void main() {
     setUp(() async {
       when(mockCloudKitService.getAllWorkbenchItemReferences()).thenAnswer(
         (_) async => [
-          createMockItem('id1', now.subtract(const (Duration(days: 2),))),
+          createMockItem('id1', now.subtract(const Duration(days: 2))),
           createMockItem('id3', now),
-          createMockItem('id2', now.subtract(const (Duration(days: 1),))),
+          createMockItem('id2', now.subtract(const Duration(days: 1))),
         ],
       );
-      final note1UpdateTime = now.subtract(const (
-        Duration(days: 1, hours: 1),
-      ));
-      final note2UpdateTime = now.subtract(const (Duration(hours: 12),));
-      final note3UpdateTime = now.subtract(const (Duration(hours: 1),));
+      final note1UpdateTime = now.subtract(const Duration(days: 1, hours: 1));
+      final note2UpdateTime = now.subtract(const Duration(hours: 12));
+      final note3UpdateTime = now.subtract(const Duration(hours: 1));
       final commentForItem2 = Comment(
         id: 'comment1',
         content: 'Latest comment',
@@ -852,7 +841,7 @@ void main() {
         if (id ==
             createMockItem(
               'id1',
-              now.subtract(const (Duration(days: 2),)),
+              now.subtract(const Duration(days: 2)),
             ).referencedItemId) {
           return NoteItem(
             id: id,
@@ -867,7 +856,7 @@ void main() {
         } else if (id ==
             createMockItem(
               'id2',
-              now.subtract(const (Duration(days: 1),)),
+              now.subtract(const Duration(days: 1)),
             ).referencedItemId) {
           return NoteItem(
             id: id,
@@ -902,7 +891,7 @@ void main() {
         if (id ==
             createMockItem(
               'id2',
-              now.subtract(const (Duration(days: 1),)),
+              now.subtract(const Duration(days: 1)),
             ).referencedItemId) {
           return [commentForItem2];
         }
@@ -910,7 +899,7 @@ void main() {
       });
 
       await notifier.loadItems();
-      await Future.delayed(const (Duration(milliseconds: 100),));
+      await Future.delayed(const Duration(milliseconds: 100));
     });
 
     test(
@@ -918,17 +907,17 @@ void main() {
       () async {
         final item1 = createMockItem(
           'id1',
-          now.subtract(const (Duration(days: 2),)),
+          now.subtract(const Duration(days: 2)),
         );
         final item2 = createMockItem(
           'id2',
-          now.subtract(const (Duration(days: 1),)),
+          now.subtract(const Duration(days: 1)),
         );
         final item3 = createMockItem('id3', now);
 
-        final refreshedNote1UpdateTime = now.subtract(const (
-          Duration(minutes: 5),
-        ));
+        final refreshedNote1UpdateTime = now.subtract(
+          const Duration(minutes: 5),
+        );
         final originalCommentForItem2 = Comment(
           id: 'comment1',
           content: 'Latest comment',
@@ -939,9 +928,9 @@ void main() {
         final refreshedCommentForItem3 = Comment(
           id: 'comment2',
           content: 'Refreshed comment',
-          createdTs: now.add(const (
-            Duration(minutes: 1),
-          )), // Use createdTs with DateTime
+          createdTs: now.add(
+            const Duration(minutes: 1),
+          ), // Use createdTs with DateTime
           parentId: 'parent-id', // Add required parentId
           serverId: serverConfig1.id, // Add required serverId
         );
@@ -968,9 +957,9 @@ void main() {
               pinned: false,
               state: NoteState.normal,
               visibility: NoteVisibility.public,
-              createTime: now.subtract(const (Duration(hours: 12),)),
-              updateTime: now.subtract(const (Duration(hours: 12),)),
-              displayTime: now.subtract(const (Duration(hours: 12),)),
+              createTime: now.subtract(const Duration(hours: 12)),
+              updateTime: now.subtract(const Duration(hours: 12)),
+              displayTime: now.subtract(const Duration(hours: 12)),
             );
           } else {
             return NoteItem(
@@ -979,9 +968,9 @@ void main() {
               pinned: false,
               state: NoteState.normal,
               visibility: NoteVisibility.public,
-              createTime: now.subtract(const (Duration(hours: 1),)),
-              updateTime: now.subtract(const (Duration(hours: 1),)),
-              displayTime: now.subtract(const (Duration(hours: 1),)),
+              createTime: now.subtract(const Duration(hours: 1)),
+              updateTime: now.subtract(const Duration(hours: 1)),
+              displayTime: now.subtract(const Duration(hours: 1)),
             );
           }
         });
@@ -1005,7 +994,7 @@ void main() {
         clearInteractions(mockApiService);
 
         await notifier.refreshItemDetails();
-        await Future.delayed(const (Duration(milliseconds: 100),));
+        await Future.delayed(const Duration(milliseconds: 100));
         final state = container.read(workbenchProvider);
 
         expect(state.isLoading, false);
@@ -1086,19 +1075,14 @@ void main() {
       () async {
         final item1 = createMockItem(
           'id1',
-          now.subtract(const (Duration(days: 2),)),
+          now.subtract(const Duration(days: 2)),
         );
         final item2 = createMockItem(
           'id2',
-          now.subtract(const (Duration(days: 1),)),
+          now.subtract(const Duration(days: 1)),
         );
-        final item3 = createMockItem('id3', now);
         final exception = Exception('API failed for item1');
 
-        final initialLoadedState = container.read(workbenchProvider);
-        final initialItem1 = initialLoadedState.items.firstWhere(
-          (i) => i.id == 'id1',
-        );
         final expectedItem1OverallTime = item1.addedTimestamp;
 
         when(
@@ -1115,9 +1099,9 @@ void main() {
               pinned: false,
               state: NoteState.normal,
               visibility: NoteVisibility.public,
-              createTime: now.subtract(const (Duration(hours: 12),)),
-              updateTime: now.subtract(const (Duration(hours: 12),)),
-              displayTime: now.subtract(const (Duration(hours: 12),)),
+              createTime: now.subtract(const Duration(hours: 12)),
+              updateTime: now.subtract(const Duration(hours: 12)),
+              displayTime: now.subtract(const Duration(hours: 12)),
             );
           }
           return NoteItem(
@@ -1126,16 +1110,16 @@ void main() {
             pinned: false,
             state: NoteState.normal,
             visibility: NoteVisibility.public,
-            createTime: now.subtract(const (Duration(hours: 1),)),
-            updateTime: now.subtract(const (Duration(hours: 1),)),
-            displayTime: now.subtract(const (Duration(hours: 1),)),
+            createTime: now.subtract(const Duration(hours: 1)),
+            updateTime: now.subtract(const Duration(hours: 1)),
+            displayTime: now.subtract(const Duration(hours: 1)),
           );
         });
 
         clearInteractions(mockApiService);
 
         await notifier.refreshItemDetails();
-        await Future.delayed(const (Duration(milliseconds: 100),));
+        await Future.delayed(const Duration(milliseconds: 100));
         final state = container.read(workbenchProvider);
 
         expect(state.isRefreshingDetails, false);
@@ -1187,16 +1171,14 @@ void main() {
     setUp(() async {
       when(mockCloudKitService.getAllWorkbenchItemReferences()).thenAnswer(
         (_) async => [
-          createMockItem('id1', now.subtract(const (Duration(days: 2),))),
+          createMockItem('id1', now.subtract(const Duration(days: 2))),
           createMockItem('id3', now),
-          createMockItem('id2', now.subtract(const (Duration(days: 1),))),
+          createMockItem('id2', now.subtract(const Duration(days: 1))),
         ],
       );
-      final note1UpdateTime = now.subtract(const (
-        Duration(days: 1, hours: 1),
-      ));
-      final note2UpdateTime = now.subtract(const (Duration(hours: 12),));
-      final note3UpdateTime = now.subtract(const (Duration(hours: 1),));
+      final note1UpdateTime = now.subtract(const Duration(days: 1, hours: 1));
+      final note2UpdateTime = now.subtract(const Duration(hours: 12));
+      final note3UpdateTime = now.subtract(const Duration(hours: 1));
       final commentForItem2 = Comment(
         id: 'comment1',
         content: 'Latest comment',
@@ -1211,7 +1193,7 @@ void main() {
         if (id ==
             createMockItem(
               'id1',
-              now.subtract(const (Duration(days: 2),)),
+              now.subtract(const Duration(days: 2)),
             ).referencedItemId) {
           return NoteItem(
             id: id,
@@ -1226,7 +1208,7 @@ void main() {
         } else if (id ==
             createMockItem(
               'id2',
-              now.subtract(const (Duration(days: 1),)),
+              now.subtract(const Duration(days: 1)),
             ).referencedItemId) {
           return NoteItem(
             id: id,
@@ -1261,7 +1243,7 @@ void main() {
         if (id ==
             createMockItem(
               'id2',
-              now.subtract(const (Duration(days: 1),)),
+              now.subtract(const Duration(days: 1)),
             ).referencedItemId) {
           return [commentForItem2];
         }
@@ -1269,7 +1251,7 @@ void main() {
       });
 
       await notifier.loadItems();
-      await Future.delayed(const (Duration(milliseconds: 100),));
+      await Future.delayed(const Duration(milliseconds: 100));
       expect(container.read(workbenchProvider).items.length, 3);
     });
 
