@@ -91,39 +91,24 @@ class ChatState {
       errorMessage.hashCode;
 }
 
+abstract class ChatAi {
+  Future<gen_ai.GenerateContentResponse> sendMessage(
+    List<gen_ai.Content> history,
+    String text,
+  );
+}
 
-class ChatNotifier extends StateNotifier<ChatState> {
-  final LocalStorageService _local;
-  final ChatSessionCloudKitService _cloud;
-  final ChatPersister _persister;
-  bool _skipNextPersist = false;
-
-  ChatNotifier(
-    this._ref,
-    LocalStorageService local,
-    ChatSessionCloudKitService cloud, {
-    ChatPersister? persister,
-  }) : _local = local,
-       _cloud = cloud,
-       _persister = persister ?? DefaultChatPersister(local),
-       super(ChatState.initial()) {
-    _initGemini();
-    _loadInitialSession();
-  }
-
-  final Ref _ref;
+class GeminiAi implements ChatAi {
+  final Ref? ref;
   gen_ai.GenerativeModel? _model;
-  Timer? _debounce;
-  final Duration _debounceDuration = const Duration(milliseconds: 500);
 
-  /* ---------- initialisation ---------- */
+  GeminiAi({required this.ref});
 
-  void _initGemini() {
-    final key = _ref.read(geminiApiKeyProvider);
-    if (key.isEmpty) return;
+  void initGemini(String apiKey) {
+    if (apiKey.isEmpty) return;
     _model = gen_ai.GenerativeModel(
       model: 'gemini-1.5-flash-latest',
-      apiKey: key,
+      apiKey: apiKey,
       // Add safety settings if needed
       safetySettings: [
         gen_ai.SafetySetting(
@@ -144,7 +129,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
         ),
       ],
     );
-    _ref.listen(geminiApiKeyProvider, (_, next) {
+    ref?.listen(geminiApiKeyProvider, (_, next) {
       _model =
           next.isEmpty
               ? null
@@ -172,6 +157,73 @@ class ChatNotifier extends StateNotifier<ChatState> {
                 ],
               );
     });
+  }
+
+  @override
+  Future<gen_ai.GenerateContentResponse> sendMessage(
+    List<gen_ai.Content> history,
+    String text,
+  ) async {
+    if (_model == null) {
+      throw Exception("Gemini AI model is not initialized.");
+    }
+
+    final chat = _model!.startChat(history: history);
+
+    // build request content correctly
+    final gen_ai.Content request = gen_ai.Content('user', [
+      gen_ai.TextPart(text),
+    ]);
+
+    // Use generateContent for single response
+    return await chat.sendMessage(request);
+  }
+}
+
+class ChatNotifier extends StateNotifier<ChatState> {
+  final Ref _ref;
+  final LocalStorageService _local;
+  final ChatSessionCloudKitService _cloud;
+  final ChatPersister _persister;
+
+  // NEW fields for test overrides
+  final bool _autoInit;
+  final Duration _debounceDuration;
+  final ChatAi _ai;
+
+  bool _skipNextPersist = false;
+  Timer? _debounce;
+  final Duration _debounceDuration_OLD = const Duration(milliseconds: 500);
+
+  ChatNotifier(
+    this._ref,
+    LocalStorageService local,
+    ChatSessionCloudKitService cloud, {
+    ChatPersister? persister,
+    ChatAi? ai,
+    bool autoInit = true,
+    Duration debounceDuration = const Duration(milliseconds: 500),
+  }) : _local = local,
+       _cloud = cloud,
+       _persister = persister ?? DefaultChatPersister(local),
+       _ai = ai ?? GeminiAi(ref: persister == null ? null : null),
+       _autoInit = autoInit,
+       _debounceDuration = debounceDuration,
+       super(ChatState.initial()) {
+    // initialize AI backend
+    _initGemini();
+    // only auto‑load in production
+    if (_autoInit) {
+      _loadInitialSession();
+    }
+  }
+
+  /* ---------- initialisation ---------- */
+
+  void _initGemini() {
+    final key = _ref.read(geminiApiKeyProvider);
+    if (key.isEmpty) return;
+    (_ai as GeminiAi).initGemini(key);
   }
 
   Future<void> _loadInitialSession() async {
@@ -291,15 +343,9 @@ class ChatNotifier extends StateNotifier<ChatState> {
               )
               .toList();
 
-      final chat = _model!.startChat(history: history);
-
       // build request content correctly
-      final gen_ai.Content request = gen_ai.Content('user', [
-        gen_ai.TextPart(text),
-      ]);
+      final response = await _ai.sendMessage(history, text);
 
-      // Use generateContent for single response
-      final response = await chat.sendMessage(request);
       // Access text directly from response (assuming it's GenerateContentResponse)
       final replyText = response.text;
 
@@ -435,6 +481,37 @@ class ChatNotifier extends StateNotifier<ChatState> {
     super.dispose();
   }
 }
+
+/// Configuration payload for testing ChatNotifier
+class ChatNotifierTestConfig {
+  final LocalStorageService local;
+  final ChatSessionCloudKitService cloud;
+  final ChatPersister? persister;
+  final ChatAi? ai;
+  ChatNotifierTestConfig({
+    required this.local,
+    required this.cloud,
+    this.persister,
+    this.ai,
+  });
+}
+
+/// Use in widget tests to override initialization timing and debounce
+final chatProviderTesting = StateNotifierProvider.family<
+  ChatNotifier,
+  ChatState,
+  ChatNotifierTestConfig
+>((ref, cfg) {
+  return ChatNotifier(
+    ref,
+    cfg.local,
+    cfg.cloud,
+    persister: cfg.persister,
+    ai: cfg.ai,
+    autoInit: false,
+    debounceDuration: Duration.zero,
+  );
+});
 
 /* ---------- providers ---------- */
 
