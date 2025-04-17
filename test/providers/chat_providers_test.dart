@@ -3,9 +3,10 @@ import 'dart:async';
 import 'package:flutter_memos/models/chat_message.dart';
 import 'package:flutter_memos/models/chat_session.dart';
 import 'package:flutter_memos/models/mcp_server_config.dart'; // Needed for McpClientState setup
-import 'package:flutter_memos/models/workbench_item_reference.dart';
 import 'package:flutter_memos/providers/chat_providers.dart'; // Import ChatNotifier and provider
 // Import necessary symbols from settings_provider
+import 'package:flutter_memos/providers/service_providers.dart'
+    show chatAiFacadeProvider; // Import the provider
 import 'package:flutter_memos/providers/settings_provider.dart'
     show
         PersistentStringNotifier,
@@ -844,8 +845,13 @@ void main() {
 
       // Create a mock ChatAiBackend that can be substituted in through the chatAiFacadeProvider
       final mockChatAiBackend = MockChatAiBackend();
+
+      // Use typed matchers for non-nullable parameters
       when(
-        mockChatAiBackend.send(any, any),
+        mockChatAiBackend.send(
+          argThat(isA<List<gen_ai.Content>>()),
+          argThat(isA<String>()),
+        ),
       ).thenAnswer((_) async => ChatAiResponse(text: 'ok'));
 
       // Override the chatProvider to use our mocked backend
