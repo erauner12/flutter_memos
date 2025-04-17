@@ -1,8 +1,6 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/foundation.dart'; // For kDebugMode
-import 'package:flutter/material.dart'; // Import Material for ReorderableListView
+import 'package:flutter/material.dart'; // Import Material for TabBar, ReorderableListView
 import 'package:flutter_memos/models/workbench_instance.dart'; // Import WorkbenchInstance
-import 'package:flutter_memos/models/workbench_item_reference.dart';
 import 'package:flutter_memos/providers/workbench_instances_provider.dart'; // Import instances provider
 import 'package:flutter_memos/providers/workbench_provider.dart'; // Keep for activeWorkbenchProvider etc.
 import 'package:flutter_memos/screens/item_detail/item_detail_screen.dart'; // Import ItemDetailScreen
@@ -18,73 +16,131 @@ class WorkbenchScreen extends ConsumerStatefulWidget {
   ConsumerState<WorkbenchScreen> createState() => _WorkbenchScreenState();
 }
 
-class _WorkbenchScreenState extends ConsumerState<WorkbenchScreen> {
+// Add SingleTickerProviderStateMixin for TabController
+class _WorkbenchScreenState extends ConsumerState<WorkbenchScreen>
+    with SingleTickerProviderStateMixin {
   final TextEditingController _instanceNameController = TextEditingController();
-  // Add ProviderSubscription for manual listener management
+  late TabController _tabController;
   late ProviderSubscription<WorkbenchInstancesState> _instancesSub;
 
   @override
   void initState() {
     super.initState();
-    // Initialize the manual listener in initState
+
+    final initState = ref.read(workbenchInstancesProvider);
+    _tabController = _buildController(initState);
+
+    // A) controller ➜ provider
+    _tabController.addListener(_onTabChanged);
+
+    // B) provider ➜ controller (replaces the old _maybeNavigateToLastOpenedItem listener)
     _instancesSub = ref.listenManual<WorkbenchInstancesState>(
       workbenchInstancesProvider,
-      _maybeNavigateToLastOpenedItem,
-      fireImmediately: true, // Fire immediately to check initial state
+      _syncControllerFromProvider,
+      fireImmediately: true, // Fire immediately to set initial state/controller
+    );
+
+    // Note: The _maybeNavigateToLastOpenedItem logic is no longer triggered by this listener
+    // based on the provided plan. If that navigation is still needed, it would require
+    // a different trigger mechanism or integration into the new sync logic.
+  }
+
+  // Helper to find the index for a given instance ID
+  int _indexFor(List<WorkbenchInstance> list, String id) {
+    if (list.isEmpty) return 0; // Should match the dummy controller index
+    final i = list.indexWhere((w) => w.id == id);
+    return (i < 0) ? 0 : i; // Default to first tab if ID not found
+  }
+
+  // Helper to build or rebuild the TabController
+  TabController _buildController(WorkbenchInstancesState s) {
+    // Handle zero instances case
+    final length = s.instances.isEmpty ? 1 : s.instances.length;
+    final initialIndex = _indexFor(s.instances, s.activeInstanceId);
+
+    return TabController(
+      length: length,
+      vsync: this,
+      // Ensure initialIndex is valid for the calculated length
+      initialIndex: (initialIndex >= length) ? 0 : initialIndex,
     );
   }
 
-  // Renamed and rewritten function to be the callback for listenManual
-  void _maybeNavigateToLastOpenedItem(
-    WorkbenchInstancesState? prev, // Previous state (can be null on first call)
-    WorkbenchInstancesState next, // Current state
-  ) {
-    // Guard against navigating while loading or if widget is disposed
-    if (!mounted || next.isLoading) return;
+  // Listener: TabController changes ➜ Update Provider
+  void _onTabChanged() {
+    // Avoid updating provider during programmatic animation or rebuilds
+    if (_tabController.indexIsChanging || !mounted) return;
 
-    final activeId = next.activeInstanceId;
-    final lastId = next.lastOpenedItemId[activeId];
-    if (lastId == null) return; // No last opened item for this instance
-
-    // Read the *current* state of the active workbench items
-    final wbState = ref.read(activeWorkbenchProvider);
-    WorkbenchItemReference? item;
-    try {
-      item = wbState.items.firstWhere((i) => i.id == lastId);
-    } catch (_) {
-      // Item not found, do not navigate
-      return;
+    final instances = ref.read(workbenchInstancesProvider).instances;
+    // Check bounds, especially for the zero-instance case
+    if (instances.isNotEmpty && _tabController.index < instances.length) {
+      final tappedId = instances[_tabController.index].id;
+      // Only update if the ID actually changed
+      if (ref.read(workbenchInstancesProvider).activeInstanceId != tappedId) {
+        ref
+            .read(workbenchInstancesProvider.notifier)
+            .setActiveInstance(tappedId);
+      }
     }
-
-    // Perform navigation
-    if (kDebugMode) {
-      print(
-        '[WorkbenchScreen] Navigating to last opened item $lastId (ref: ${item.referencedItemId}) for instance $activeId',
-      );
-    }
-    // TODO: Determine item type correctly if needed for navigation
-    // Currently ItemDetailScreen assumes Note type.
-    Navigator.of(context)
-        .push(
-          CupertinoPageRoute(
-            builder: (_) => ItemDetailScreen(itemId: item!.referencedItemId),
-          ),
-        )
-        .then((_) {
-          // Optional: Clear the last opened item for this instance after returning
-          // ref.read(workbenchInstancesProvider.notifier).setLastOpenedItem(activeId, null);
-        });
+    // If instances is empty, do nothing as there's no valid ID to set
   }
+
+  // Listener: Provider changes ➜ Update TabController
+  void _syncControllerFromProvider(
+    WorkbenchInstancesState? previous,
+    WorkbenchInstancesState next,
+  ) {
+    if (!mounted) return;
+
+    final previousLength =
+        previous?.instances.length ?? (next.instances.isEmpty ? 1 : 0);
+    final nextLength = next.instances.isEmpty ? 1 : next.instances.length;
+
+    // Re-create controller when the *count* changes (or goes to/from zero)
+    if (previous == null || previousLength != nextLength) {
+      final oldController = _tabController;
+      // Ensure the listener isn't called during dispose/rebuild
+      oldController.removeListener(_onTabChanged);
+
+      _tabController = _buildController(next);
+      _tabController.addListener(_onTabChanged);
+
+      // Dispose the old controller *after* the new one is ready and state is set
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          // Check again as this is async
+          oldController.dispose();
+        }
+      });
+
+      // Rebuild the widget tree to use the new controller
+      setState(() {});
+      return; // Exit early as controller was rebuilt
+    }
+
+    // If count is the same, just sync the active index
+    final desiredIndex = _indexFor(next.instances, next.activeInstanceId);
+    if (_tabController.index != desiredIndex &&
+        desiredIndex < _tabController.length) {
+      // Check if the controller is currently animating from user input
+      if (!_tabController.indexIsChanging) {
+        _tabController.animateTo(desiredIndex);
+      }
+    }
+  }
+
 
   @override
   void dispose() {
     _instanceNameController.dispose();
-    // Close the manual subscription when the widget is disposed
-    _instancesSub.close();
+    _instancesSub.close(); // Close the manual listener
+    // Remove listener before disposing to prevent errors during dispose
+    _tabController.removeListener(_onTabChanged);
+    _tabController.dispose();
     super.dispose();
   }
 
-  // --- Instance Management Dialogs ---
+  // --- Instance Management Dialogs (Unchanged from original) ---
 
   void _showAddInstanceDialog() {
     _instanceNameController.clear();
@@ -231,6 +287,7 @@ class _WorkbenchScreenState extends ConsumerState<WorkbenchScreen> {
 
   void _showInstanceActions(WorkbenchInstance instance) {
     final instancesState = ref.read(workbenchInstancesProvider);
+    // Check if deletion is allowed (not last instance and not system default)
     final bool canDelete =
         instancesState.instances.length > 1 && !instance.isSystemDefault;
 
@@ -270,77 +327,70 @@ class _WorkbenchScreenState extends ConsumerState<WorkbenchScreen> {
   Widget build(BuildContext context) {
     // Watch the active workbench state using the new provider
     final workbenchState = ref.watch(activeWorkbenchProvider);
-    // Watch the instances state for the segmented control
+    // Watch the instances state for the TabBar
     final instancesState = ref.watch(workbenchInstancesProvider);
     final instances = instancesState.instances;
-    final activeInstanceId = instancesState.activeInstanceId;
+    final activeInstanceId =
+        instancesState.activeInstanceId; // Still needed for item tap logic
 
     final items = workbenchState.items;
     // Determine if refresh can be triggered for the *active* workbench
     final bool canRefresh =
         !workbenchState.isLoading && !workbenchState.isRefreshingDetails;
 
-    // --- Step 1: Guard-rail for Segmented Control ---
-    // Ensure the activeInstanceId is actually present in the list before passing to the control.
-    // If not (e.g., during a brief moment after creation before the list updates),
-    // fall back to the first instance ID or null if the list is empty.
-    final safeActiveId =
-        instances.any((i) => i.id == activeInstanceId)
-            ? activeInstanceId
-            : (instances.isNotEmpty ? instances.first.id : null);
-    // --- End Step 1 ---
+    // Get theme colors for TabBar styling
+    final theme = CupertinoTheme.of(context);
+    final primaryColor = theme.primaryColor;
+    final inactiveColor = CupertinoColors.inactiveGray.resolveFrom(context);
 
     return CupertinoPageScaffold(
       backgroundColor: CupertinoColors.systemGroupedBackground.resolveFrom(
         context,
       ),
       navigationBar: CupertinoNavigationBar(
-        // Use Segmented Control for instance selection if more than one instance
-        middle:
-            instances.length <= 1
-                ? const Text('Workbench')
-                : SizedBox(
-                  width: double.infinity,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 0),
-                    child: CupertinoSlidingSegmentedControl<String>(
-                      // Use the safeActiveId here
-                      groupValue: safeActiveId,
-                      thumbColor: CupertinoTheme.of(context).primaryColor,
-                      children: {
-                        for (var instance in instances)
-                          instance.id: GestureDetector(
+        // --- Replace middle with TabBar ---
+        middle: SizedBox(
+          height:
+              32, // Keeps nav-bar height stable, similar to segmented control
+          child: Material(
+            // Required for TabBar ink effects and theme dependencies
+            color:
+                Colors
+                    .transparent, // Blend with CupertinoNavigationBar background
+            child: TabBar(
+              controller: _tabController,
+              isScrollable: true,
+              indicatorColor: primaryColor,
+              labelColor: primaryColor,
+              unselectedLabelColor: inactiveColor,
+              // Use default indicator size and weight for Material look
+              // indicatorSize: TabBarIndicatorSize.label, // Optional: make indicator smaller
+              // indicatorWeight: 2.0,
+              tabs:
+                  instances.isEmpty
+                      // Handle zero-instance case as per plan
+                      ? [const Tab(text: 'Workbench')]
+                      : [
+                        for (final instance in instances)
+                          // Wrap Tab with GestureDetector for long-press
+                          GestureDetector(
+                            // Use a Behavior to ensure hit testing works correctly within TabBar
+                            behavior: HitTestBehavior.opaque,
                             onLongPress: () => _showInstanceActions(instance),
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10.0,
-                              ),
+                            child: Tab(
+                              // Apply ellipsis for long names automatically
                               child: Text(
                                 instance.name,
                                 overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  color:
-                                      // Compare with safeActiveId for styling too
-                                      safeActiveId == instance.id
-                                          ? CupertinoColors.white
-                                          : CupertinoTheme.of(
-                                            context,
-                                          ).primaryColor,
-                                ),
                               ),
                             ),
                           ),
-                      },
-                      onValueChanged: (String? newInstanceId) {
-                        if (newInstanceId != null) {
-                          ref
-                              .read(workbenchInstancesProvider.notifier)
-                              .setActiveInstance(newInstanceId);
-                        }
-                      },
-                    ),
-                  ),
-                ),
+                      ],
+            ),
+          ),
+        ),
+        // --- End TabBar replacement ---
+
         leading: CupertinoButton(
           padding: EdgeInsets.zero,
           child: const Icon(CupertinoIcons.arrow_up_arrow_down),
@@ -390,13 +440,16 @@ class _WorkbenchScreenState extends ConsumerState<WorkbenchScreen> {
         ),
       ),
       child: SafeArea(
+        // Keep bottom SafeArea
+        bottom: false, // Allow list to scroll behind potential home indicator
         child: Builder(
           builder: (context) {
             // Show loading indicator based on instance provider if instances are loading
+            // AND the list is actually empty (or showing the dummy tab)
             if (instancesState.isLoading && instances.isEmpty) {
               return const Center(child: CupertinoActivityIndicator());
             }
-            // Show error from instance provider if instances failed to load
+            // Show error from instance provider if instances failed to load AND list is empty
             if (instancesState.error != null && instances.isEmpty) {
               return Center(
                 child: Column(
@@ -434,9 +487,14 @@ class _WorkbenchScreenState extends ConsumerState<WorkbenchScreen> {
               );
             }
 
+            // --- Active Workbench Content (largely unchanged) ---
+
             // Show loading indicator based on the *active* workbench state
             if (workbenchState.isLoading && items.isEmpty) {
-              return const Center(child: CupertinoActivityIndicator());
+              // Avoid showing loading indicator if instances are also loading initially
+              if (!instancesState.isLoading || instances.isNotEmpty) {
+                return const Center(child: CupertinoActivityIndicator());
+              }
             }
 
             // Show error from the *active* workbench state
@@ -477,7 +535,10 @@ class _WorkbenchScreenState extends ConsumerState<WorkbenchScreen> {
               );
             }
 
-            if (items.isEmpty && !workbenchState.isLoading) {
+            // Handle the case where there are instances, but the active one is empty
+            if (items.isEmpty &&
+                !workbenchState.isLoading &&
+                instances.isNotEmpty) {
               return const Center(
                 child: Text(
                   'This Workbench is empty.\nAdd items via long-press or actions.',
@@ -487,30 +548,60 @@ class _WorkbenchScreenState extends ConsumerState<WorkbenchScreen> {
               );
             }
 
+            // Handle the placeholder case when there are *zero* instances overall
+            if (instances.isEmpty && !instancesState.isLoading) {
+              return const Center(
+                child: Text(
+                  'No Workbenches found.\nTap the + button to create one.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: CupertinoColors.secondaryLabel),
+                ),
+              );
+            }
+
+
             // Use ReorderableListView with custom drag handles
-            return ReorderableListView.builder(
-              buildDefaultDragHandles: false,
-              itemCount: items.length,
-              itemBuilder: (context, index) {
-                final item = items[index];
-                return WorkbenchItemTile(
-                  key: ValueKey(item.id),
-                  itemReference: item,
-                  index: index,
-                  onTap: () {
-                    // Set last opened item when tapped
-                    ref
-                        .read(workbenchInstancesProvider.notifier)
-                        .setLastOpenedItem(activeInstanceId, item.id);
-                    // Actual navigation is handled by the tile itself now
-                  },
-                );
-              },
-              onReorder: (oldIndex, newIndex) {
-                ref
-                    .read(activeWorkbenchNotifierProvider)
-                    .reorderItems(oldIndex, newIndex);
-              },
+            // Add padding to the bottom to avoid the home indicator/nav bar
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 50.0), // Adjust as needed
+              child: ReorderableListView.builder(
+                buildDefaultDragHandles: false,
+                itemCount: items.length,
+                itemBuilder: (context, index) {
+                  final item = items[index];
+                  return WorkbenchItemTile(
+                    key: ValueKey(item.id), // Use unique item ID for key
+                    itemReference: item,
+                    index: index,
+                    onTap: () {
+                      // Set last opened item when tapped
+                      ref
+                          .read(workbenchInstancesProvider.notifier)
+                          .setLastOpenedItem(activeInstanceId, item.id);
+
+                      // Navigate to detail screen
+                      Navigator.of(context).push(
+                        CupertinoPageRoute(
+                          builder:
+                              (_) => ItemDetailScreen(
+                                itemId: item.referencedItemId,
+                              ),
+                        ),
+                      );
+                      // Note: The original _maybeNavigateToLastOpenedItem logic
+                      // is not being called automatically on provider changes anymore.
+                      // Navigation now happens explicitly on tap here and potentially
+                      // needs re-evaluation if automatic navigation on instance switch
+                      // is desired.
+                    },
+                  );
+                },
+                onReorder: (oldIndex, newIndex) {
+                  ref
+                      .read(activeWorkbenchNotifierProvider)
+                      .reorderItems(oldIndex, newIndex);
+                },
+              ),
             );
           },
         ),
