@@ -67,26 +67,34 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> // Renamed 
   void _dismissLoadingDialog() {
     if (_loadingDialogContext != null) {
       try {
-        if (Navigator.of(_loadingDialogContext!).canPop()) {
-          Navigator.of(_loadingDialogContext!).pop();
+        // Check if the context is still valid and the dialog can be popped
+        final navigator = Navigator.of(_loadingDialogContext!);
+        if (navigator.canPop()) {
+          navigator.pop();
         }
-      } catch (_) {
+      } catch (e) {
+        if (kDebugMode) {
+          print("Error dismissing loading dialog: $e");
+        }
         // Ignore errors if context is already invalid or cannot pop
       }
       _loadingDialogContext = null;
     }
   }
 
+
   // Helper to show loading dialog safely
   void _showLoadingDialog(String message) {
     // Dismiss any existing dialog first
     _dismissLoadingDialog();
     if (!mounted) return;
+    // Use the screen's context (this.context) which is available in State
     showCupertinoDialog(
-      context: context, // Use the screen's main context
+      context: context,
       barrierDismissible: false,
       builder: (dialogContext) {
-        _loadingDialogContext = dialogContext; // Store the dialog's context
+        // Store the dialog's specific context to dismiss it later
+        _loadingDialogContext = dialogContext;
         return CupertinoAlertDialog(
           content: Row(
             children: [
@@ -229,6 +237,7 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> // Renamed 
               // Add Note to Workbench Action
               if (noteAsync is AsyncData<NoteItem>)
                 CupertinoActionSheetAction(
+                  // Pass the function directly if canInteract, otherwise null
                   onPressed:
                       !canInteractWithServer
                           ? null
@@ -241,12 +250,13 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> // Renamed 
               // Fix Grammar Action
               CupertinoActionSheetAction(
                 isDefaultAction: !isFixingGrammar,
+                // Pass the function directly if conditions met, otherwise null
                 onPressed:
                     (isFixingGrammar || !canInteractWithServer)
                         ? null
                         : () {
                           Navigator.pop(popupContext);
-                          _fixGrammar();
+                          _fixGrammar(); // _fixGrammar is async, but onPressed can be
                         },
                 child: isFixingGrammar
                         ? const Row(
@@ -261,12 +271,14 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> // Renamed 
               ),
               // Copy Full Thread Action
               CupertinoActionSheetAction(
+                // Pass the function directly if canInteract, otherwise null
                 onPressed:
                     !canInteractWithServer
                         ? null
                         : () {
                           Navigator.pop(popupContext);
                           _copyThreadContent(
+                            // _copyThreadContent is async
                             context,
                             ref,
                             widget.itemId,
@@ -277,12 +289,14 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> // Renamed 
               ),
               // --- Chat about Thread Action ---
               CupertinoActionSheetAction(
+                // Pass the function directly if canInteract, otherwise null
                 onPressed:
                     !canInteractWithServer
                         ? null
                         : () {
                   Navigator.pop(popupContext); // Close the sheet first
                           _chatWithThread(
+                            // _chatWithThread is async
                             context,
                     ref,
                     widget.itemId,
@@ -294,7 +308,8 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> // Renamed 
               // --- End Chat about Thread Action ---
               // Delete Note Action
               CupertinoActionSheetAction(
-                isDestructiveAction: true, // Updated text
+                isDestructiveAction: true,
+                // Pass the function directly if canInteract, otherwise null
                 onPressed:
                     !canInteractWithServer
                         ? null
@@ -302,6 +317,8 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> // Renamed 
                   final sheetContext = popupContext;
                   Navigator.pop(sheetContext);
 
+                          // Use state's context directly if mounted check is done before use
+                          if (!mounted) return;
                   final dialogContext = context;
                   final confirmed = await showCupertinoDialog<bool>(
                     context: dialogContext,
@@ -326,17 +343,20 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> // Renamed 
                   );
 
                   if (confirmed == true) {
+                            // Check mounted *after* the await
                     if (!mounted) return;
                             try {
                       await ref.read(
                         note_providers.deleteNoteProvider(widget.itemId),
                       )();
+                              // Check mounted again before using context
                       if (!mounted) return;
                               // Check if we can pop the current screen
                               if (Navigator.of(context).canPop()) {
                                 Navigator.of(context).pop();
                               }
                     } catch (e) {
+                              // Check mounted again before using context
                       if (!mounted) return;
                       _showErrorSnackbar('Failed to delete note: $e'); // Updated text
                     }
@@ -363,18 +383,23 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> // Renamed 
     _showLoadingDialog('Fixing grammar...'); // Show loading
 
     try {
-      if (!mounted) return;
+      // No need for mounted check right before await
       await ref.read(
         note_providers.fixNoteGrammarProvider(widget.itemId).future,
       );
+      // Check mounted *after* await
+      if (!mounted) return;
       _dismissLoadingDialog(); // Dismiss loading
-      if (mounted) _showSuccessSnackbar('Grammar corrected successfully!');
+      _showSuccessSnackbar('Grammar corrected successfully!');
 
     } catch (e) {
+      // Check mounted *after* potential await inside catch (if any)
+      if (!mounted) return;
       _dismissLoadingDialog(); // Dismiss loading on error
-      if (mounted) _showErrorSnackbar('Failed to fix grammar: $e');
+      _showErrorSnackbar('Failed to fix grammar: $e');
       if (kDebugMode) print('[ItemDetailScreen] Fix Grammar Error: $e');
     } finally {
+      // Check mounted in finally block as well
       if (mounted) {
         ref.read(note_providers.isFixingGrammarProvider.notifier).state = false;
       }
@@ -390,10 +415,12 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> // Renamed 
   ) async {
     final activeServerId = ref.read(activeServerConfigProvider)?.id;
     if (activeServerId == null) {
+      // No await here, safe to use context
       _showErrorSnackbar('Cannot copy thread: No active server.');
       return;
     }
 
+    // No await before this, safe to use context
     _showLoadingDialog('Fetching thread...');
 
     try {
@@ -405,16 +432,16 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> // Renamed 
         activeServerId,
       );
       await Clipboard.setData(ClipboardData(text: content));
+      // Check mounted *after* await and *before* using context
+      if (!mounted) return;
+      _dismissLoadingDialog();
+      _showSuccessSnackbar('Thread content copied to clipboard.');
 
-      _dismissLoadingDialog();
-      if (mounted) {
-        _showSuccessSnackbar('Thread content copied to clipboard.');
-      }
     } catch (e) {
+      // Check mounted *after* potential await inside catch (if any) and *before* using context
+      if (!mounted) return;
       _dismissLoadingDialog();
-      if (mounted) {
-        _showErrorSnackbar('Failed to copy thread: $e');
-      }
+      _showErrorSnackbar('Failed to copy thread: $e');
     }
   }
   // --- End Copy Thread Content Helper ---
@@ -428,11 +455,13 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> // Renamed 
   ) async {
     final activeServer = ref.read(activeServerConfigProvider);
     if (activeServer == null) {
+      // No await here, safe to use context
       _showErrorSnackbar('Cannot start chat: No active server.');
       return;
     }
     final activeServerId = activeServer.id;
 
+    // No await before this, safe to use context
     _showLoadingDialog('Fetching thread for chat...');
 
     try {
@@ -444,9 +473,9 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> // Renamed 
         activeServerId,
       );
 
-      _dismissLoadingDialog(); // Dismiss before navigation
-
+      // Check mounted *after* await and *before* using context
       if (!mounted) return;
+      _dismissLoadingDialog(); // Dismiss before navigation
 
       // 1. Switch Tab
       final tabController = ref.read(tabControllerProvider);
@@ -463,21 +492,21 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> // Renamed 
         tabController.index = 3; // Switch to Chat tab (index 3)
         // Add a short delay to allow tab switch animation before navigating
         await Future.delayed(const Duration(milliseconds: 100));
-        if (mounted) {
-          _navigateToChatScreen(
-            buildContext,
-            content,
-            itemId,
-            itemType,
-            activeServerId,
-          );
-        }
+        // Check mounted again after delay
+        if (!mounted) return;
+        _navigateToChatScreen(
+          buildContext,
+          content,
+          itemId,
+          itemType,
+          activeServerId,
+        );
       }
     } catch (e) {
+      // Check mounted *after* potential await inside catch (if any) and *before* using context
+      if (!mounted) return;
       _dismissLoadingDialog();
-      if (mounted) {
-        _showErrorSnackbar('Failed to start chat: $e');
-      }
+      _showErrorSnackbar('Failed to start chat: $e');
     }
   }
 
@@ -506,6 +535,7 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> // Renamed 
       );
     } else {
       // Fallback or error handling if navigator key is null
+      // No await here, safe to use context
       _showErrorSnackbar('Could not navigate to chat tab.');
       if (kDebugMode) {
         print("Error: chatTabNavKey.currentState is null");
@@ -517,6 +547,7 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> // Renamed 
 
   // --- Snackbar Helpers ---
   void _showErrorSnackbar(String message) {
+    // Check mounted before accessing ScaffoldMessenger
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -528,6 +559,7 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> // Renamed 
   }
 
   void _showSuccessSnackbar(String message) {
+    // Check mounted before accessing ScaffoldMessenger
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(

@@ -9,14 +9,12 @@ import 'chat_screen.dart';
 import 'workbench/workbench_screen.dart';
 
 // Provider to expose the TabController from the GlobalKey
-// Note: This requires careful state management if HomeScreen can be rebuilt.
-// A more robust solution might involve a dedicated state management approach for the controller.
 final tabControllerProvider = StateProvider<CupertinoTabController?>(
   (ref) => null,
 );
 
-// GlobalKey to access CupertinoTabScaffold state
-final GlobalKey tabScaffoldKey = GlobalKey(); // Remove explicit type argument
+// GlobalKey to access CupertinoTabScaffold state (no explicit type needed)
+final GlobalKey tabScaffoldKey = GlobalKey();
 // GlobalKeys for each tab's navigator
 final GlobalKey<NavigatorState> memosTabNavKey = GlobalKey<NavigatorState>();
 final GlobalKey<NavigatorState> tasksTabNavKey = GlobalKey<NavigatorState>();
@@ -24,6 +22,7 @@ final GlobalKey<NavigatorState> workbenchTabNavKey =
     GlobalKey<NavigatorState>();
 final GlobalKey<NavigatorState> chatTabNavKey = GlobalKey<NavigatorState>();
 final GlobalKey<NavigatorState> settingsTabNavKey = GlobalKey<NavigatorState>();
+
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -40,10 +39,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     super.initState();
     // Initialize the controller and update the provider after the first frame
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && tabScaffoldKey.currentState != null) {
-        _tabController = tabScaffoldKey.currentState!.controller;
+      // Access controller via the key's currentState
+      final scaffoldState = tabScaffoldKey.currentState;
+      if (mounted && scaffoldState is CupertinoTabScaffoldState) {
+        _tabController = scaffoldState.controller;
         // Update the provider if the controller is not null
-        if (_tabController != null) {
+        if (_tabController != null &&
+            ref.read(tabControllerProvider) != _tabController) {
           ref.read(tabControllerProvider.notifier).state = _tabController;
         }
       }
@@ -61,6 +63,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     // Don't dispose the controller here, it's managed by CupertinoTabScaffold
     super.dispose();
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -98,10 +101,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         // If using the provider, ensure the controller is updated on change
         onTap: (index) {
           // Update provider state if controller exists
-          final currentController = tabScaffoldKey.currentState?.controller;
-          if (currentController != null &&
-              ref.read(tabControllerProvider) != currentController) {
-            ref.read(tabControllerProvider.notifier).state = currentController;
+          final scaffoldState = tabScaffoldKey.currentState;
+          if (scaffoldState is CupertinoTabScaffoldState) {
+            final currentController = scaffoldState.controller;
+            if (currentController != null &&
+                ref.read(tabControllerProvider) != currentController) {
+              ref.read(tabControllerProvider.notifier).state =
+                  currentController;
+            }
           }
         },
       ),
@@ -119,6 +126,26 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     (context) =>
                         const CupertinoPageScaffold(child: ItemsScreen()),
                 // Add other memo-related routes here if needed
+                '/item-detail': (context) {
+                  final args =
+                      ModalRoute.of(context)?.settings.arguments
+                          as Map<String, dynamic>?;
+                  final itemId = args?['itemId'] as String?;
+                  // Import ItemDetailScreen if not already done
+                  // return CupertinoPageScaffold(child: ItemDetailScreen(itemId: itemId ?? ''));
+                  // Placeholder until ItemDetailScreen is imported/available
+                  return CupertinoPageScaffold(
+                    child: Center(
+                      child: Text('Item Detail: ${itemId ?? 'Error'}'),
+                    ),
+                  );
+                },
+                '/edit-entity': (context) {
+                  // Placeholder for edit screen route
+                  return const CupertinoPageScaffold(
+                    child: Center(child: Text('Edit Entity Screen')),
+                  );
+                }
               },
             );
           case 1: // Tasks
