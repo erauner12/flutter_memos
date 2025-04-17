@@ -22,6 +22,7 @@ class WorkbenchItemReference {
   final DateTime addedTimestamp; // When the item was added
   final String?
   parentNoteId; // Optional: ID of the parent note (useful for comments)
+  final String instanceId; // <-- ADD THIS FIELD DECLARATION
 
   // Transient fields (populated by WorkbenchNotifier, not persisted)
   final List<Comment> previewComments; // Store latest 1 or 2 comments
@@ -43,7 +44,7 @@ class WorkbenchItemReference {
     this.previewComments = const [], // Default to empty list
     this.referencedItemUpdateTime,
     DateTime? overallLastUpdateTime,
-    required String instanceId, // Allow passing calculated time
+    required this.instanceId, // Ensure this is required and assigned
   }) : overallLastUpdateTime =
            overallLastUpdateTime ??
            addedTimestamp; // Use passed value or default to added
@@ -78,6 +79,7 @@ class WorkbenchItemReference {
     ValueGetter<DateTime?>? referencedItemUpdateTime,
     // Allow explicitly passing the new calculated time, otherwise use existing
     DateTime? overallLastUpdateTime,
+    String? instanceId, // <-- ADD instanceId parameter
   }) {
     // Determine the values for transient fields
     final List<Comment> newPreviewComments =
@@ -138,7 +140,7 @@ class WorkbenchItemReference {
       referencedItemUpdateTime: newReferencedItemUpdateTime,
       // Assign the final calculated or provided overallLastUpdateTime
       overallLastUpdateTime: calculatedUpdateTime,
-      instanceId: '',
+      instanceId: instanceId ?? this.instanceId, // <-- ASSIGN instanceId
     );
   }
 
@@ -155,6 +157,7 @@ class WorkbenchItemReference {
       'addedTimestamp': addedTimestamp.toIso8601String(),
       'parentNoteId': parentNoteId,
       // DO NOT include transient fields (previewComments, referencedItemUpdateTime)
+      'instanceId': instanceId, // <-- ADD instanceId to JSON
     };
   }
 
@@ -183,6 +186,18 @@ class WorkbenchItemReference {
       ServerType.values,
       json['serverType'] as String?,
     );
+    // Read instanceId from JSON, provide a default or throw if missing and required
+    final String instanceId =
+        json['instanceId'] as String? ??
+        ''; // Default to empty string if missing
+    if (instanceId.isEmpty && kDebugMode) {
+      print(
+        '[WorkbenchItemReference.fromJson] Warning: Missing or empty instanceId in record $recordName. This might cause issues.',
+      );
+      // Consider throwing an error if instanceId is strictly required:
+      // throw FormatException('Missing required field "instanceId" in WorkbenchItemReference JSON for record $recordName');
+    }
+
 
     return WorkbenchItemReference(
       id: json['id'] as String? ?? const Uuid().v4(),
@@ -200,7 +215,7 @@ class WorkbenchItemReference {
       previewContent: json['previewContent'] as String?,
       addedTimestamp: DateTime.tryParse(json['addedTimestamp'] as String? ?? '') ?? DateTime.now(), // Default to now
       parentNoteId: json['parentNoteId'] as String?,
-      instanceId: '',
+      instanceId: instanceId, // <-- ASSIGN instanceId from JSON
       // DO NOT parse transient fields from JSON. They default to empty/null/addedTimestamp in constructor.
     );
   }
@@ -222,7 +237,8 @@ class WorkbenchItemReference {
         // Compare calculated time, but not the comment list or referencedItemUpdateTime itself
         other.overallLastUpdateTime == overallLastUpdateTime &&
         // Compare preview comments list (important for UI updates)
-        listEquals(other.previewComments, previewComments);
+        listEquals(other.previewComments, previewComments) &&
+        other.instanceId == instanceId; // <-- COMPARE instanceId
   }
 
   @override
@@ -242,15 +258,15 @@ class WorkbenchItemReference {
       // Hash the preview comments list
       Object.hashAll(previewComments),
       // DO NOT hash referencedItemUpdateTime
+      instanceId, // <-- HASH instanceId
     );
   }
-
-  get instanceId => null;
 
   @override
   String toString() {
     // Include transient fields for debugging
     final commentIds = previewComments.map((c) => c.id).join(', ');
-    return 'WorkbenchItemReference(id: $id, refId: $referencedItemId, type: ${referencedItemType.name}, serverId: $serverId, serverType: ${serverType.name}, parentId: $parentNoteId, added: $addedTimestamp, lastActivity: $overallLastUpdateTime, comments: [$commentIds], refUpdate: $referencedItemUpdateTime)';
+    // <-- INCLUDE instanceId in toString
+    return 'WorkbenchItemReference(id: $id, instanceId: $instanceId, refId: $referencedItemId, type: ${referencedItemType.name}, serverId: $serverId, serverType: ${serverType.name}, parentId: $parentNoteId, added: $addedTimestamp, lastActivity: $overallLastUpdateTime, comments: [$commentIds], refUpdate: $referencedItemUpdateTime)';
   }
 }

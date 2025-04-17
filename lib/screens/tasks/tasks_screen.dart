@@ -8,6 +8,7 @@ import 'package:flutter_memos/models/workbench_item_reference.dart';
 // Removed server_config_provider import (MultiServerConfigNotifier)
 import 'package:flutter_memos/providers/settings_provider.dart'; // Import for todoistApiKeyProvider
 import 'package:flutter_memos/providers/task_providers.dart';
+import 'package:flutter_memos/providers/workbench_instances_provider.dart'; // <-- ADD THIS
 import 'package:flutter_memos/providers/workbench_provider.dart';
 import 'package:flutter_memos/screens/settings_screen.dart'; // Import SettingsScreen
 import 'package:flutter_memos/screens/tasks/new_task_screen.dart';
@@ -55,6 +56,11 @@ class TasksScreen extends HookConsumerWidget {
       return;
     }
 
+    // Fetch the active instance ID
+    final instanceId = ref.read(
+      workbenchInstancesProvider.select((s) => s.activeInstanceId),
+    );
+
     final reference = WorkbenchItemReference(
       id: const Uuid().v4(),
       referencedItemId: task.id,
@@ -64,9 +70,11 @@ class TasksScreen extends HookConsumerWidget {
       serverName: _todoistWorkbenchServerName, // Use constant Name
       previewContent: task.content,
       addedTimestamp: DateTime.now(),
+      instanceId: instanceId, // <-- PASS instanceId
     );
 
-    unawaited(ref.read(workbenchProvider.notifier).addItem(reference));
+    // FIX: Use activeWorkbenchNotifierProvider
+    unawaited(ref.read(activeWorkbenchNotifierProvider).addItem(reference));
     _showAlertDialog(
       context, // Pass context
       'Success',

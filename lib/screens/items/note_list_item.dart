@@ -15,6 +15,7 @@ import 'package:flutter_memos/providers/server_config_provider.dart'; // Needed 
 // Import settings_provider for manuallyHiddenNoteIdsProvider
 import 'package:flutter_memos/providers/settings_provider.dart' as settings_p;
 import 'package:flutter_memos/providers/ui_providers.dart' as ui_providers;
+import 'package:flutter_memos/providers/workbench_instances_provider.dart'; // <-- ADD THIS
 import 'package:flutter_memos/providers/workbench_provider.dart'; // Needed for Workbench
 import 'package:flutter_memos/screens/home_screen.dart'; // Import for tabControllerProvider and navigator keys
 import 'package:flutter_memos/utils/note_utils.dart';
@@ -111,7 +112,6 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
     );
   }
 
-
   // --- Moved Helper Methods ---
   // Helper widget to display start/end dates
   Widget? _buildDateInfo(BuildContext context, NoteItem note) {
@@ -139,10 +139,12 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
                 'Start: ${dateFormat.format(note.startDate!)}',
                 style: TextStyle(
                   fontSize: 12,
-                  color: isFutureStart
-                      ? CupertinoColors.systemOrange.resolveFrom(context)
-                      : CupertinoColors.secondaryLabel.resolveFrom(context),
-                  fontWeight: isFutureStart ? FontWeight.w600 : FontWeight.normal,
+                  color:
+                      isFutureStart
+                          ? CupertinoColors.systemOrange.resolveFrom(context)
+                          : CupertinoColors.secondaryLabel.resolveFrom(context),
+                  fontWeight:
+                      isFutureStart ? FontWeight.w600 : FontWeight.normal,
                 ),
                 overflow: TextOverflow.ellipsis,
               ),
@@ -168,7 +170,9 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
 
   // Custom context menu including date actions
   void _showCustomContextMenu(BuildContext scaffoldContext) {
-    final isManuallyHidden = ref.read(settings_p.manuallyHiddenNoteIdsProvider).contains(widget.note.id);
+    final isManuallyHidden = ref
+        .read(settings_p.manuallyHiddenNoteIdsProvider)
+        .contains(widget.note.id);
     final now = DateTime.now();
     final isFutureDated = widget.note.startDate?.isAfter(now) ?? false;
     // List items are assumed to be on the active server
@@ -177,66 +181,67 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
 
     showCupertinoModalPopup<void>(
       context: scaffoldContext,
-      builder: (BuildContext popupContext) => CupertinoActionSheet(
-        actions: <Widget>[
-          CupertinoContextMenuAction(
+      builder:
+          (BuildContext popupContext) => CupertinoActionSheet(
+            actions: <Widget>[
+              CupertinoContextMenuAction(
                 onPressed:
                     !canInteractWithServer
                         ? null
                         : () {
-              Navigator.pop(popupContext);
-              onEdit(scaffoldContext);
-            },
+                          Navigator.pop(popupContext);
+                          onEdit(scaffoldContext);
+                        },
                 child: const Text('Edit'),
-          ),
-          if (widget.onMoveToServer != null)
-            CupertinoContextMenuAction(
-              child: const Text('Move to Server...'),
+              ),
+              if (widget.onMoveToServer != null)
+                CupertinoContextMenuAction(
+                  child: const Text('Move to Server...'),
                   onPressed: () {
                     // Moving might not require active server check here
                     Navigator.pop(popupContext);
                     widget.onMoveToServer!();
-              },
-            ),
-          CupertinoContextMenuAction(
+                  },
+                ),
+              CupertinoContextMenuAction(
                 onPressed:
                     !canInteractWithServer
                         ? null
                         : () {
-              Navigator.pop(popupContext);
-              onTogglePin(scaffoldContext);
-            },
+                          Navigator.pop(popupContext);
+                          onTogglePin(scaffoldContext);
+                        },
                 child: Text(widget.note.pinned ? 'Unpin' : 'Pin'),
-          ),
-          CupertinoContextMenuAction(
+              ),
+              CupertinoContextMenuAction(
                 onPressed:
                     !canInteractWithServer
                         ? null
                         : () {
-              Navigator.pop(popupContext);
-              onArchive(scaffoldContext);
-            },
+                          Navigator.pop(popupContext);
+                          onArchive(scaffoldContext);
+                        },
                 child: const Text('Archive'),
-          ),
-          CupertinoContextMenuAction(
-            isDestructiveAction: true,
+              ),
+              CupertinoContextMenuAction(
+                isDestructiveAction: true,
                 onPressed:
                     !canInteractWithServer
                         ? null
                         : () {
-              Navigator.pop(popupContext);
-              onDelete(scaffoldContext);
-            },
+                          Navigator.pop(popupContext);
+                          onDelete(scaffoldContext);
+                        },
                 child: const Text('Delete'),
-          ),
-          CupertinoContextMenuAction(
-            child: const Text('Copy Content'),
+              ),
+              CupertinoContextMenuAction(
+                child: const Text('Copy Content'),
                 onPressed: () {
                   // Copying content doesn't require server interaction
-              Clipboard.setData(ClipboardData(text: widget.note.content));
-              Navigator.pop(popupContext);
-            },
-          ),
+                  Clipboard.setData(ClipboardData(text: widget.note.content));
+                  Navigator.pop(popupContext);
+                },
+              ),
               // Copy Full Thread Action
               CupertinoContextMenuAction(
                 onPressed:
@@ -254,7 +259,7 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
                         },
                 child: const Text('Copy Full Thread'),
               ),
-              // --- Chat about Thread Action ---
+              // Chat about Thread Action
               CupertinoContextMenuAction(
                 onPressed:
                     !canInteractWithServer
@@ -271,93 +276,113 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
                         },
                 child: const Text('Chat about Thread'),
               ),
-              // --- End Chat about Thread Action ---
-          if (isManuallyHidden)
-            CupertinoContextMenuAction(
+              // End Chat about Thread Action
+              if (isManuallyHidden)
+                CupertinoContextMenuAction(
                   onPressed:
                       !canInteractWithServer
                           ? null
                           : () {
-                ref.read(note_providers.unhideNoteProvider(widget.note.id))();
-                Navigator.pop(popupContext);
-              },
+                            ref.read(
+                              note_providers.unhideNoteProvider(widget.note.id),
+                            )();
+                            Navigator.pop(popupContext);
+                          },
                   child: const Text('Unhide'),
-            )
-          else if (!isFutureDated)
-            CupertinoContextMenuAction(
+                )
+              else if (!isFutureDated)
+                CupertinoContextMenuAction(
                   onPressed:
                       !canInteractWithServer
                           ? null
                           : () {
-                _toggleHideItem(scaffoldContext, ref);
-                Navigator.pop(popupContext);
-              },
+                            _toggleHideItem(scaffoldContext, ref);
+                            Navigator.pop(popupContext);
+                          },
                   child: const Text('Hide'),
                 ),
-          CupertinoContextMenuAction(
+              CupertinoContextMenuAction(
                 onPressed:
                     !canInteractWithServer
                         ? null
                         : () {
                           Navigator.pop(popupContext);
-                  _addNoteToWorkbenchFromList(
+                          _addNoteToWorkbenchFromList(
                             scaffoldContext,
-                    ref,
-                    widget.note,
-                  );
-            },
+                            ref,
+                            widget.note,
+                          );
+                        },
                 child: const Text('Add to Workbench'),
               ),
-          CupertinoContextMenuAction(
+              CupertinoContextMenuAction(
                 onPressed:
                     !canInteractWithServer
                         ? null
                         : () {
-              final currentStart = widget.note.startDate ?? DateTime.now();
-              final newStartDate = currentStart.add(const Duration(days: 1));
-              ref
-                  .read(note_providers.notesNotifierProvider.notifier)
-                  .updateNoteStartDate(widget.note.id, newStartDate);
-              Navigator.pop(popupContext);
-            },
+                          final currentStart =
+                              widget.note.startDate ?? DateTime.now();
+                          final newStartDate = currentStart.add(
+                            const Duration(days: 1),
+                          );
+                          ref
+                              .read(
+                                note_providers.notesNotifierProvider.notifier,
+                              )
+                              .updateNoteStartDate(
+                                widget.note.id,
+                                newStartDate,
+                              );
+                          Navigator.pop(popupContext);
+                        },
                 child: const Text('Kick Start +1 Day'),
-          ),
-          CupertinoContextMenuAction(
+              ),
+              CupertinoContextMenuAction(
                 onPressed:
                     !canInteractWithServer
                         ? null
                         : () {
-              final currentStart = widget.note.startDate ?? DateTime.now();
-              final newStartDate = currentStart.add(const Duration(days: 7));
-              ref
-                  .read(note_providers.notesNotifierProvider.notifier)
-                  .updateNoteStartDate(widget.note.id, newStartDate);
-              Navigator.pop(popupContext);
-            },
+                          final currentStart =
+                              widget.note.startDate ?? DateTime.now();
+                          final newStartDate = currentStart.add(
+                            const Duration(days: 7),
+                          );
+                          ref
+                              .read(
+                                note_providers.notesNotifierProvider.notifier,
+                              )
+                              .updateNoteStartDate(
+                                widget.note.id,
+                                newStartDate,
+                              );
+                          Navigator.pop(popupContext);
+                        },
                 child: const Text('Kick Start +1 Week'),
-          ),
-          if (widget.note.startDate != null)
-            CupertinoContextMenuAction(
-              isDestructiveAction: true,
+              ),
+              if (widget.note.startDate != null)
+                CupertinoContextMenuAction(
+                  isDestructiveAction: true,
                   onPressed:
                       !canInteractWithServer
                           ? null
                           : () {
-                ref
-                    .read(note_providers.notesNotifierProvider.notifier)
-                    .updateNoteStartDate(widget.note.id, null);
+                            ref
+                                .read(
+                                  note_providers.notesNotifierProvider.notifier,
+                                )
+                                .updateNoteStartDate(widget.note.id, null);
+                            Navigator.pop(popupContext);
+                          },
+                  child: const Text('Clear Start Date'),
+                ),
+            ],
+            cancelButton: CupertinoActionSheetAction(
+              child: const Text('Cancel'),
+              onPressed: () {
                 Navigator.pop(popupContext);
               },
-              child: const Text('Clear Start Date'),
             ),
-        ],
-        cancelButton: CupertinoActionSheetAction(
-          child: const Text('Cancel'),
-          onPressed: () {
-            Navigator.pop(popupContext);
-          },
-        ),
-      ),
+          ),
     );
   }
 
@@ -377,6 +402,11 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
       return;
     }
 
+    // Fetch the active instance ID
+    final instanceId = ref.read(
+      workbenchInstancesProvider.select((s) => s.activeInstanceId),
+    );
+
     final preview = note.content.split('\n').first;
 
     final reference = WorkbenchItemReference(
@@ -386,12 +416,15 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
       serverId: activeServer.id,
       serverType: activeServer.serverType,
       serverName: activeServer.name,
-      previewContent: preview.length > 100 ? '${preview.substring(0, 97)}...' : preview,
+      previewContent:
+          preview.length > 100 ? '${preview.substring(0, 97)}...' : preview,
       addedTimestamp: DateTime.now(),
       parentNoteId: null,
+      instanceId: instanceId, // <-- PASS instanceId
     );
 
-    ref.read(workbenchProvider.notifier).addItem(reference);
+    // FIX: Use activeWorkbenchNotifierProvider
+    ref.read(activeWorkbenchNotifierProvider).addItem(reference);
 
     final previewText = reference.previewContent ?? 'Item';
     final dialogContent =
@@ -508,7 +541,6 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
           );
         }
       }
-
     } catch (e) {
       _dismissLoadingDialog();
       if (mounted) {
@@ -554,7 +586,6 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
   }
   // --- End Chat With Thread Helper (List Item) ---
 
-
   void _toggleHideItem(BuildContext scaffoldContext, WidgetRef ref) {
     final hiddenItemIds = ref.read(settings_p.manuallyHiddenNoteIdsProvider);
     final itemIdToToggle = widget.note.id;
@@ -592,13 +623,15 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
           .add(itemIdToToggle);
 
       if (nextSelectedId != currentSelectedId) {
-        ref.read(ui_providers.selectedItemIdProvider.notifier).state = nextSelectedId;
+        ref.read(ui_providers.selectedItemIdProvider.notifier).state =
+            nextSelectedId;
       }
     }
   }
 
   void _navigateToItemDetail(BuildContext scaffoldContext, WidgetRef ref) {
-    ref.read(ui_providers.selectedItemIdProvider.notifier).state = widget.note.id;
+    ref.read(ui_providers.selectedItemIdProvider.notifier).state =
+        widget.note.id;
     Navigator.of(
       scaffoldContext,
       rootNavigator: true, // Use root navigator to push detail screen over tabs
@@ -723,8 +756,12 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
     final BuildContext scaffoldContext = context;
     final selectedItemId = ref.watch(ui_providers.selectedItemIdProvider);
     final isSelected = selectedItemId == widget.note.id;
-    final isMultiSelectMode = ref.watch(ui_providers.itemMultiSelectModeProvider);
-    final selectedIds = ref.watch(ui_providers.selectedItemIdsForMultiSelectProvider);
+    final isMultiSelectMode = ref.watch(
+      ui_providers.itemMultiSelectModeProvider,
+    );
+    final selectedIds = ref.watch(
+      ui_providers.selectedItemIdsForMultiSelectProvider,
+    );
     final isMultiSelected = selectedIds.contains(widget.note.id);
 
     Widget noteCardWidget = NoteCard(
@@ -739,9 +776,10 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
         widget.note.updateTime.toIso8601String(),
       ),
       timestampType: 'Updated',
-      onTap: isMultiSelectMode
-          ? () => _toggleMultiSelection(widget.note.id)
-          : () => _navigateToItemDetail(scaffoldContext, ref),
+      onTap:
+          isMultiSelectMode
+              ? () => _toggleMultiSelection(widget.note.id)
+              : () => _navigateToItemDetail(scaffoldContext, ref),
       onArchive: () => onArchive(scaffoldContext),
       onDelete: () => onDelete(scaffoldContext),
       onHide: () => _toggleHideItem(scaffoldContext, ref),
@@ -787,7 +825,6 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
         clipBehavior: Clip.antiAlias,
         child: cardWithDateInfo,
       );
-
 
       return Padding(
         padding: const EdgeInsets.only(bottom: 12.0),
@@ -895,29 +932,9 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
             },
             onTap:
                 isMultiSelectMode
-                ? () => _toggleMultiSelection(widget.note.id)
-                : () => _navigateToItemDetail(scaffoldContext, ref),
-            child: Stack(
-              children: [
-                cardWithDateInfo,
-                // Positioned( // Removed archive button from here, use slide action or context menu
-                //   top: 4,
-                //   right: 4,
-                //   child: CupertinoButton(
-                //     padding: const EdgeInsets.all(6),
-                //     minSize: 0,
-                //     onPressed: () => onArchive(scaffoldContext),
-                //     child: Icon(
-                //       CupertinoIcons.archivebox,
-                //       size: 18,
-                //       color: CupertinoColors.secondaryLabel.resolveFrom(
-                //         scaffoldContext,
-                //       ),
-                //     ),
-                //   ),
-                // ),
-              ],
-            ),
+                    ? () => _toggleMultiSelection(widget.note.id)
+                    : () => _navigateToItemDetail(scaffoldContext, ref),
+            child: Stack(children: [cardWithDateInfo]),
           );
         },
       ),

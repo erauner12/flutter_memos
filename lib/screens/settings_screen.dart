@@ -828,7 +828,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final openAiKeyNotifier = ref.read(openAiApiKeyProvider.notifier);
     final openAiModelNotifier = ref.read(openAiModelIdProvider.notifier);
     final geminiNotifier = ref.read(geminiApiKeyProvider.notifier);
-    final workbenchNotifier = ref.read(workbenchProvider.notifier);
+    // FIX: Use correct provider name activeWorkbenchNotifierProvider
+    final workbenchNotifier = ref.read(activeWorkbenchNotifierProvider);
     final tasksNotifier = ref.read(tasksNotifierProvider.notifier);
     final chatNotifier = ref.read(chatProvider.notifier);
     // Consider if notes cache needs explicit clearing or if config reset handles it
@@ -886,7 +887,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       ref.invalidate(mcpServerConfigProvider);
       ref.invalidate(note_providers.notesNotifierProvider);
       ref.invalidate(tasksNotifierProvider);
-      ref.invalidate(workbenchProvider);
+      // FIX: Use correct provider name activeWorkbenchProvider
+      ref.invalidate(activeWorkbenchProvider);
       ref.invalidate(chatProvider);
       // Potentially navigate away or prompt for restart
     } else {
