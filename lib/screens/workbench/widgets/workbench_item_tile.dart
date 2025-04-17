@@ -12,7 +12,7 @@ import 'package:flutter_memos/providers/server_config_provider.dart';
 import 'package:flutter_memos/providers/task_providers.dart';
 import 'package:flutter_memos/providers/workbench_provider.dart';
 import 'package:flutter_memos/screens/home_screen.dart'; // Import for NEW providers
-import 'package:flutter_memos/screens/home_tabs.dart'; // Import HomeTab enum
+import 'package:flutter_memos/screens/home_tabs.dart'; // Import HomeTab enum and SafeTabNav
 import 'package:flutter_memos/screens/tasks/new_task_screen.dart';
 import 'package:flutter_memos/utils/thread_utils.dart'; // Import the utility
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -315,16 +315,18 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
       // 1. Try to switch tab using the safe method
       final tabController = ref.read(homeTabControllerProvider);
       final tabIndexMap = ref.read(homeTabIndexMapProvider);
-      final chatTabIndex = tabIndexMap[HomeTab.chat];
+      // Get the total number of tabs (needed for safeSetIndex)
+      // We can get this from the map's length or pass HomeTab.values.length
+      final int maxTabs = tabIndexMap.length;
 
-      if (chatTabIndex != null && chatTabIndex < tabController.length) {
-        // Chat tab exists and index is valid
-        if (tabController.index != chatTabIndex) {
-          tabController.animateTo(chatTabIndex); // Use safe animation
-          // Add a short delay to allow tab switch animation before navigating within the tab
-          await Future.delayed(const Duration(milliseconds: 150));
-        }
-        // Navigate within the Chat tab's navigator
+      // Use the safeSetIndex extension method
+      tabController.safeSetIndex(HomeTab.chat, tabIndexMap, maxTabs);
+
+      // Check if the index actually changed to the chat tab index
+      final chatTabIndex = tabIndexMap[HomeTab.chat];
+      if (chatTabIndex != null && tabController.index == chatTabIndex) {
+        // Index successfully set (or was already correct)
+        // Navigate within the Chat tab's navigator immediately (no animation delay needed)
         if (mounted) {
           _navigateToChatScreenWithinTab(buildContext, chatArgs);
         }
@@ -332,7 +334,7 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
         // Fallback: Chat tab doesn't exist or index is invalid, use root navigator
         if (kDebugMode) {
           print(
-            '[WorkbenchItemTile] Chat tab not found or index invalid. Navigating via root.',
+            '[WorkbenchItemTile] Chat tab not found or index invalid after attempting set. Navigating via root.',
           );
         }
         final rootNavigator = ref.read(rootNavigatorKeyProvider).currentState;

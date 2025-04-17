@@ -1,4 +1,4 @@
-import 'package:flutter/cupertino.dart'; // For IconData
+import 'package:flutter/cupertino.dart'; // For IconData and CupertinoTabController
 
 /// Enum representing the primary tabs in the HomeScreen.
 /// The order defined here determines the visual order in the TabBar.
@@ -31,14 +31,20 @@ extension HomeTabX on HomeTab {
       };
 }
 
-/// Optional: Extension for safe tab navigation on TabController.
-extension SafeTabNav on TabController {
-  /// Animates to the given [tab] if it exists in the [map] and is within bounds.
-  void safeAnimateTo(HomeTab tab, Map<HomeTab, int> map) {
+/// Extension for safe tab navigation on CupertinoTabController.
+extension SafeTabNav on CupertinoTabController {
+  /// Sets the [index] safely if in range.
+  ///
+  /// Requires the [map] of tabs to indices and the total number of tabs [maxTabs]
+  /// because CupertinoTabController doesn't store its length.
+  void safeSetIndex(HomeTab tab, Map<HomeTab, int> map, int maxTabs) {
     final i = map[tab];
     // Check if index exists and is valid for the controller's length
-    if (i != null && i >= 0 && i < length) {
-      animateTo(i);
+    if (i != null && i >= 0 && i < maxTabs) {
+      // Only change index if it's different to avoid unnecessary listener triggers
+      if (index != i) {
+        index = i;
+      }
     }
   }
 }

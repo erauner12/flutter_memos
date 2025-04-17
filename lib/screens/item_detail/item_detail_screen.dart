@@ -17,7 +17,9 @@ import 'package:flutter_memos/providers/ui_providers.dart';
 // Removed import for memo_detail_providers
 import 'package:flutter_memos/providers/workbench_instances_provider.dart'; // Import instances provider
 import 'package:flutter_memos/providers/workbench_provider.dart'; // Import workbench provider family etc.
-import 'package:flutter_memos/screens/home_screen.dart'; // Import for tabControllerProvider and navigator keys
+import 'package:flutter_memos/screens/home_screen.dart'; // Import for navigator keys and NEW providers
+import 'package:flutter_memos/screens/home_tabs.dart'
+    show HomeTab, SafeTabNav; // NEW IMPORT
 import 'package:flutter_memos/utils/keyboard_navigation.dart';
 import 'package:flutter_memos/utils/thread_utils.dart'; // Import the utility
 import 'package:flutter_memos/widgets/capture_utility.dart';
@@ -514,29 +516,22 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
     }
 
     try {
-      final tabController = ref.read(tabControllerProvider);
-      const int chatTabIndex = 0;
+      // Use the new providers and safeSetIndex
+      final controller = ref.read(homeTabControllerProvider);
+      final indexMap = ref.read(homeTabIndexMapProvider);
+      controller.safeSetIndex(HomeTab.chat, indexMap, indexMap.length);
 
-      if (tabController == null || tabController.index == chatTabIndex) {
-        _navigateToChatScreen(
-          buildContext,
-          fetchedContent,
-          itemId,
-          itemType,
-          activeServerId,
-        );
-      } else {
-        tabController.index = chatTabIndex;
-        await Future.delayed(const Duration(milliseconds: 100));
-        if (!mounted) return;
-        _navigateToChatScreen(
-          buildContext,
-          fetchedContent,
-          itemId,
-          itemType,
-          activeServerId,
-        );
-      }
+      // No need for null checks or index checks, safeSetIndex handles it.
+      // Proceed directly to navigation.
+      if (!mounted) return;
+      _navigateToChatScreen(
+        buildContext,
+        fetchedContent,
+        itemId,
+        itemType,
+        activeServerId,
+      );
+
     } catch (e) {
       if (mounted) {
         _showErrorSnackbar('Failed to navigate to chat: $e');
@@ -551,22 +546,30 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
     WorkbenchItemType itemType,
     String activeServerId,
   ) {
-    final rootNavigatorKey = ref.read(rootNavigatorKeyProvider);
+    // Navigate within the Chat tab's navigator if possible
+    final chatNavigator = chatTabNavKey.currentState;
+    final chatArgs = {
+      'contextString': fetchedContent,
+      'parentItemId': itemId,
+      'parentItemType': itemType,
+      'parentServerId': activeServerId,
+    };
 
-    if (rootNavigatorKey.currentState != null) {
-      rootNavigatorKey.currentState!.pushNamed(
-        '/chat',
-        arguments: {
-          'contextString': fetchedContent,
-          'parentItemId': itemId,
-          'parentItemType': itemType,
-          'parentServerId': activeServerId,
-        },
-      );
+    if (chatNavigator != null) {
+      // Pop to root of chat tab first to avoid stacking chat screens
+      chatNavigator.popUntil((route) => route.isFirst);
+      // Push the chat screen with arguments using the tab's navigator
+      chatNavigator.pushNamed('/chat', arguments: chatArgs);
     } else {
-      _showErrorSnackbar('Could not access root navigator.');
-      if (kDebugMode) {
-        print("Error: rootNavigatorKey.currentState is null");
+      // Fallback: Use root navigator if chat tab navigator isn't available
+      final rootNavigatorKey = ref.read(rootNavigatorKeyProvider);
+      if (rootNavigatorKey.currentState != null) {
+        rootNavigatorKey.currentState!.pushNamed('/chat', arguments: chatArgs);
+      } else {
+        _showErrorSnackbar('Could not access root navigator.');
+        if (kDebugMode) {
+          print("Error: rootNavigatorKey.currentState is null");
+        }
       }
     }
   }

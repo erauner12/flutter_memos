@@ -1,6 +1,23 @@
-import 'package:flutter/cupertino.dart';
+import 'package:flutter/cupertino.dart'
+    show
+        BottomNavigationBarItem,
+        BuildContext,
+        ConsumerState,
+        ConsumerStatefulWidget,
+        CupertinoAlertDialog,
+        CupertinoPageRoute,
+        CupertinoPageScaffold,
+        CupertinoTabBar,
+        CupertinoTabController, // Added
+        CupertinoTabScaffold, // Added
+        CupertinoTabView, // Added
+        GlobalKey,
+        Icon,
+        NavigatorState,
+        State,
+        StatefulWidget,
+        Widget;
 import 'package:flutter/foundation.dart'; // For kDebugMode
-import 'package:flutter_memos/main.dart'; // For rootNavigatorKeyProvider
 import 'package:flutter_memos/screens/home_tabs.dart'; // Import the new enum
 import 'package:flutter_memos/screens/items/items_screen.dart';
 import 'package:flutter_memos/screens/tasks/new_task_screen.dart';
@@ -13,9 +30,10 @@ import 'workbench/workbench_screen.dart';
 
 // --- New Providers ---
 
-/// Provider exposing the primary TabController for the HomeScreen.
+/// Provider exposing the primary CupertinoTabController for the HomeScreen.
 /// Managed within _HomeScreenState.
-final homeTabControllerProvider = Provider<TabController>(
+final homeTabControllerProvider = Provider<CupertinoTabController>(
+  // Changed type
   (ref) =>
       throw UnimplementedError(
         'homeTabControllerProvider must be overridden in _HomeScreenState',
@@ -49,10 +67,9 @@ class HomeScreen extends ConsumerStatefulWidget {
   ConsumerState<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends ConsumerState<HomeScreen>
-    with SingleTickerProviderStateMixin {
-  // Need TickerProvider for TabController
-  late TabController _tabController;
+// Removed SingleTickerProviderStateMixin
+class _HomeScreenState extends ConsumerState<HomeScreen> {
+  late CupertinoTabController _tabController; // Changed type
   late Map<HomeTab, int> _tabIndexes;
 
   // Define the tabs dynamically based on the enum order
@@ -65,16 +82,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     // Create the index map based on the current order of _tabs
     _tabIndexes = {for (int i = 0; i < _tabs.length; i++) _tabs[i]: i};
 
-    // Initialize the TabController
-    _tabController = TabController(
-      length: _tabs.length, // Length based on the enum/list
-      vsync: this,
+    // Initialize the CupertinoTabController
+    _tabController = CupertinoTabController(
+      // Changed instantiation
       initialIndex: _tabIndexes[HomeTab.notes] ?? 0, // Default to Notes tab
     );
 
     // Optional: Add listener for debugging or state changes if needed
     _tabController.addListener(() {
-      if (kDebugMode && !_tabController.indexIsChanging) {
+      if (kDebugMode) {
         // print('[HomeScreen] Tab changed to: ${_tabs[_tabController.index].name}');
       }
       // If you need to update other providers based on tab index, do it here.
@@ -83,7 +99,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
   @override
   void dispose() {
-    _tabController.dispose(); // Dispose the controller
+    // _tabController.dispose(); // CupertinoTabController does not have dispose()
     super.dispose();
   }
 
@@ -92,11 +108,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     // Override the providers with the actual controller and map for this instance
     return ProviderScope(
       overrides: [
-        homeTabControllerProvider.overrideWithValue(_tabController),
+        homeTabControllerProvider.overrideWithValue(
+          _tabController,
+        ), // Type matches now
         homeTabIndexMapProvider.overrideWithValue(_tabIndexes),
       ],
       child: CupertinoTabScaffold(
-        controller: _tabController, // Use the standard TabController
+        controller: _tabController, // Use the CupertinoTabController
         tabBar: CupertinoTabBar(
           items: [
             // Generate BottomNavigationBarItems from the _tabs list
@@ -183,14 +201,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                   );
                 },
               );
-            // case HomeTab.settings: // Settings tab removed
-            //   return CupertinoTabView(
-            //     navigatorKey: settingsTabNavKey,
-            //     onGenerateRoute: (settings) => CupertinoPageRoute(
-            //       builder: (_) => const CupertinoPageScaffold(child: SettingsScreen(isInitialSetup: false)),
-            //       settings: settings,
-            //     ),
-            //   );
           }
         },
       ),
