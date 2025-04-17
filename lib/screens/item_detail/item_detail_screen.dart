@@ -24,19 +24,26 @@ import 'package:uuid/uuid.dart'; // Import Uuid
 import 'note_comments.dart'; // Updated import
 import 'note_content.dart'; // Updated import
 
-class ItemDetailScreen extends ConsumerStatefulWidget { // Renamed class
+class ItemDetailScreen extends ConsumerStatefulWidget {
+  // Renamed class
   final String itemId; // Renamed from memoId to itemId
   // Assume note for now, could be passed if screen becomes generic
   final WorkbenchItemType itemType = WorkbenchItemType.note;
 
-  const ItemDetailScreen({super.key, required this.itemId}); // Renamed constructor and parameter
+  const ItemDetailScreen({
+    super.key,
+    required this.itemId,
+  }); // Renamed constructor and parameter
 
   @override
   ConsumerState<ItemDetailScreen> createState() => _ItemDetailScreenState(); // Renamed class
 }
 
-class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> // Renamed class
-    with KeyboardNavigationMixin<ItemDetailScreen> { // Renamed class
+class _ItemDetailScreenState
+    extends
+        ConsumerState<ItemDetailScreen> // Renamed class
+    with KeyboardNavigationMixin<ItemDetailScreen> {
+  // Renamed class
   final FocusNode _screenFocusNode = FocusNode(
     debugLabel: 'ItemDetailScreenFocus', // Renamed debug label
   );
@@ -82,7 +89,6 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> // Renamed 
     }
   }
 
-
   // Helper to show loading dialog safely
   void _showLoadingDialog(String message) {
     // Dismiss any existing dialog first
@@ -108,9 +114,11 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> // Renamed 
     );
   }
 
-
   Future<void> _onRefresh() async {
-    if (kDebugMode) print('[ItemDetailScreen] Pull-to-refresh triggered.'); // Updated log identifier
+    if (kDebugMode)
+      print(
+        '[ItemDetailScreen] Pull-to-refresh triggered.',
+      ); // Updated log identifier
     HapticFeedback.mediumImpact();
     if (!mounted) return;
     // Use providers from note_providers
@@ -182,7 +190,6 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> // Renamed 
   }
   // --- End Add to Workbench Action ---
 
-
   // --- Action Sheet Logic ---
   void _showActions() {
     if (!mounted) return;
@@ -201,46 +208,52 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> // Renamed 
             title: const Text('Note Actions'), // Updated text
             actions: <CupertinoActionSheetAction>[
               CupertinoActionSheetAction(
-                // Pass the function directly if canInteract, otherwise an empty function
+                // Pass the function directly if canInteract, otherwise null
                 onPressed:
-                    canInteractWithServer
-                        ? () {
+                    !canInteractWithServer
+                        ? null
+                        : () {
                           Navigator.pop(popupContext);
                           Navigator.of(context, rootNavigator: true)
-                      .pushNamed(
-                        '/edit-entity',
-                        arguments: {
-                          'entityType': 'note', // Specify type as 'note'
-                          'entityId': widget.itemId, // Pass itemId as entityId
-                        },
-                      )
-                      .then((_) {
+                              .pushNamed(
+                                '/edit-entity',
+                                arguments: {
+                                  'entityType':
+                                      'note', // Specify type as 'note'
+                                  'entityId':
+                                      widget.itemId, // Pass itemId as entityId
+                                },
+                              )
+                              .then((_) {
                                 if (!mounted) return;
-                        ref.invalidate(note_providers.noteDetailProvider(widget.itemId));
+                                ref.invalidate(
+                                  note_providers.noteDetailProvider(
+                                    widget.itemId,
+                                  ),
+                                );
                                 ref.invalidate(
                                   note_providers.noteCommentsProvider(
                                     widget.itemId,
                                   ),
                                 );
-                        ref
+                                ref
                                     .read(
                                       settings_p
                                           .manuallyHiddenNoteIdsProvider
                                           .notifier,
                                     )
                                     .remove(widget.itemId);
-                      });
-                        }
-                        : () {}, // Provide an empty function when canInteractWithServer is false
+                              });
+                        },
                 child: const Text('Edit Note'),
               ),
               // Add Note to Workbench Action
               if (noteAsync is AsyncData<NoteItem>)
                 CupertinoActionSheetAction(
-                  // Pass the function directly if canInteract, otherwise an empty function
+                  // Pass the function directly if canInteract, otherwise null
                   onPressed:
                       !canInteractWithServer
-                          ? () {}
+                          ? null
                           : () {
                             Navigator.pop(popupContext);
                             _addNoteToWorkbench(noteAsync.value);
@@ -253,12 +266,13 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> // Renamed 
                 // Wrap async call in non-async lambda
                 onPressed:
                     (isFixingGrammar || !canInteractWithServer)
-                        ? () {} // Empty function instead of null
+                        ? null
                         : () {
                           Navigator.pop(popupContext);
                           _fixGrammar();
                         },
-                child: isFixingGrammar
+                child:
+                    isFixingGrammar
                         ? const Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
@@ -274,7 +288,7 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> // Renamed 
                 // Wrap async call in non-async lambda
                 onPressed:
                     !canInteractWithServer
-                        ? () {} // Empty function instead of null
+                        ? null
                         : () {
                           Navigator.pop(popupContext);
                           _copyThreadContent(
@@ -291,16 +305,16 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> // Renamed 
                 // Wrap async call in non-async lambda
                 onPressed:
                     !canInteractWithServer
-                        ? () {} // Empty function instead of null
+                        ? null
                         : () {
-                  Navigator.pop(popupContext); // Close the sheet first
+                          Navigator.pop(popupContext); // Close the sheet first
                           _chatWithThread(
                             context,
-                    ref,
-                    widget.itemId,
+                            ref,
+                            widget.itemId,
                             widget.itemType, // Use widget's itemType
-                  );
-                },
+                          );
+                        },
                 child: const Text('Chat about Thread'),
               ),
               // --- End Chat about Thread Action ---
@@ -310,56 +324,65 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> // Renamed 
                 // Wrap async call in non-async lambda
                 onPressed:
                     !canInteractWithServer
-                        ? () {} // Empty function instead of null
+                        ? null
                         : () async {
-                  final sheetContext = popupContext;
-                  Navigator.pop(sheetContext);
+                          final sheetContext = popupContext;
+                          Navigator.pop(sheetContext);
 
                           // Use state's context directly if mounted check is done before use
                           if (!mounted) return;
-                  final dialogContext = context;
-                  final confirmed = await showCupertinoDialog<bool>(
-                    context: dialogContext,
-                    builder:
-                        (context) => CupertinoAlertDialog(
-                          title: const Text('Delete Note?'), // Updated text
-                          content: const Text(
-                            'Are you sure you want to permanently delete this note and its comments?', // Updated text
-                          ),
-                          actions: [
-                            CupertinoDialogAction(
-                              child: const Text('Cancel'),
-                              onPressed: () => Navigator.of(context).pop(false),
-                            ),
-                            CupertinoDialogAction(
-                              isDestructiveAction: true,
-                              child: const Text('Delete'),
-                              onPressed: () => Navigator.of(context).pop(true),
-                            ),
-                          ],
-                        ),
-                  );
+                          final dialogContext = context;
+                          final confirmed = await showCupertinoDialog<bool>(
+                            context: dialogContext,
+                            builder:
+                                (context) => CupertinoAlertDialog(
+                                  title: const Text(
+                                    'Delete Note?',
+                                  ), // Updated text
+                                  content: const Text(
+                                    'Are you sure you want to permanently delete this note and its comments?', // Updated text
+                                  ),
+                                  actions: [
+                                    CupertinoDialogAction(
+                                      child: const Text('Cancel'),
+                                      onPressed:
+                                          () =>
+                                              Navigator.of(context).pop(false),
+                                    ),
+                                    CupertinoDialogAction(
+                                      isDestructiveAction: true,
+                                      child: const Text('Delete'),
+                                      onPressed:
+                                          () => Navigator.of(context).pop(true),
+                                    ),
+                                  ],
+                                ),
+                          );
 
-                  if (confirmed == true) {
+                          if (confirmed == true) {
                             // Check mounted *after* the await
-                    if (!mounted) return;
+                            if (!mounted) return;
                             try {
-                      await ref.read(
-                        note_providers.deleteNoteProvider(widget.itemId),
-                      )();
+                              await ref.read(
+                                note_providers.deleteNoteProvider(
+                                  widget.itemId,
+                                ),
+                              )();
                               // Check mounted again before using context
-                      if (!mounted) return;
+                              if (!mounted) return;
                               // Check if we can pop the current screen
                               if (Navigator.of(context).canPop()) {
                                 Navigator.of(context).pop();
                               }
-                    } catch (e) {
+                            } catch (e) {
                               // Check mounted again before using context
-                      if (!mounted) return;
-                      _showErrorSnackbar('Failed to delete note: $e'); // Updated text
-                    }
-                  }
-                },
+                              if (!mounted) return;
+                              _showErrorSnackbar(
+                                'Failed to delete note: $e',
+                              ); // Updated text
+                            }
+                          }
+                        },
                 child: const Text('Delete Note'),
               ),
             ],
@@ -369,7 +392,7 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> // Renamed 
                 Navigator.pop(popupContext);
               },
             ),
-      ),
+          ),
     );
   }
 
@@ -389,7 +412,6 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> // Renamed 
       if (!mounted) return;
       _dismissLoadingDialog(); // Dismiss loading
       _showSuccessSnackbar('Grammar corrected successfully!');
-
     } catch (e) {
       // Check mounted *after* potential await inside catch (if any)
       if (!mounted) return;
@@ -528,12 +550,12 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> // Renamed 
       }
     } catch (e) {
       // Catch errors during tab switching or navigation
+      // Check mounted before showing snackbar
       if (mounted) {
         _showErrorSnackbar('Failed to navigate to chat: $e');
       }
     }
   }
-
 
   // Helper to perform the actual navigation to chat screen
   void _navigateToChatScreen(
@@ -569,7 +591,6 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> // Renamed 
   }
   // --- End Chat With Thread Helper ---
 
-
   // --- Snackbar Helpers ---
   void _showErrorSnackbar(String message) {
     // Check mounted before accessing ScaffoldMessenger
@@ -599,7 +620,9 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> // Renamed 
   // --- Keyboard Navigation Helpers ---
   void _selectNextComment() {
     if (!mounted) return;
-    final commentsAsync = ref.read(note_providers.noteCommentsProvider(widget.itemId));
+    final commentsAsync = ref.read(
+      note_providers.noteCommentsProvider(widget.itemId),
+    );
     commentsAsync.whenData((comments) {
       if (comments.isEmpty) return;
       if (!mounted) return;
@@ -614,7 +637,9 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> // Renamed 
 
   void _selectPreviousComment() {
     if (!mounted) return;
-    final commentsAsync = ref.read(note_providers.noteCommentsProvider(widget.itemId));
+    final commentsAsync = ref.read(
+      note_providers.noteCommentsProvider(widget.itemId),
+    );
     commentsAsync.whenData((comments) {
       if (comments.isEmpty) return;
       if (!mounted) return;
@@ -649,7 +674,6 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> // Renamed 
       // If server switched away, show an overlay or disable actions?
       // For now, actions are disabled in _showActions based on canInteractWithServer
     }
-
 
     return Focus(
       focusNode: _screenFocusNode,
@@ -706,7 +730,9 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> // Renamed 
   // --- Build Body Helper ---
   Widget _buildBody() {
     if (!mounted) return const Center(child: CupertinoActivityIndicator());
-    final noteAsync = ref.watch(note_providers.noteDetailProvider(widget.itemId));
+    final noteAsync = ref.watch(
+      note_providers.noteDetailProvider(widget.itemId),
+    );
     final activeServer = ref.watch(activeServerConfigProvider);
     final bool isActiveServerItem =
         activeServer != null; // Simplified check for body
@@ -740,7 +766,8 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> // Renamed 
                 builder: _buildRefreshIndicator,
               ),
               SliverToBoxAdapter(
-                child: NoteContent( // Use renamed widget
+                child: NoteContent(
+                  // Use renamed widget
                   note: note,
                   noteId: widget.itemId, // Pass itemId as noteId
                 ),
@@ -755,7 +782,9 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> // Renamed 
                   ),
                 ),
               ),
-              SliverToBoxAdapter(child: NoteComments(noteId: widget.itemId)), // Use renamed widget and pass noteId
+              SliverToBoxAdapter(
+                child: NoteComments(noteId: widget.itemId),
+              ), // Use renamed widget and pass noteId
               const SliverPadding(padding: EdgeInsets.only(bottom: 20)),
             ],
           ),
@@ -783,8 +812,9 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen> // Renamed 
             ),
           ),
         );
-      }
+      },
     );
   }
+
   // --- End Build Body Helper ---
 }

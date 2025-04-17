@@ -15,10 +15,8 @@ final tabControllerProvider = StateProvider<CupertinoTabController?>(
   (ref) => null,
 );
 
-// GlobalKey to access CupertinoTabScaffold state (optional, if needed for other state access)
-// final GlobalKey tabScaffoldKey = GlobalKey(); // Keep if needed for scaffold state, not controller
-
-// GlobalKeys for each tab's navigator
+// GlobalKeys for each tab's navigator state
+// These are crucial for navigating within specific tabs from other parts of the app
 final GlobalKey<NavigatorState> memosTabNavKey = GlobalKey<NavigatorState>();
 final GlobalKey<NavigatorState> tasksTabNavKey = GlobalKey<NavigatorState>();
 final GlobalKey<NavigatorState> workbenchTabNavKey =
@@ -52,14 +50,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
   void dispose() {
     _tabController.dispose(); // Dispose the controller
-    // Optionally clear the provider state on dispose
-    // WidgetsBinding.instance.addPostFrameCallback((_) {
-    //    // Check if the widget associated with this state is still mounted
-    //    // This check might be tricky in dispose. Consider if clearing is necessary.
-    //    // if (!mounted) {
-    //    //    ref.read(tabControllerProvider.notifier).state = null;
-    //    // }
-    // });
+    // Optionally clear the provider state on dispose if necessary
+    // Consider if this is needed based on app lifecycle
+    // ref.read(tabControllerProvider.notifier).state = null;
     super.dispose();
   }
 
@@ -67,7 +60,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return CupertinoTabScaffold(
-      // key: tabScaffoldKey, // Assign key only if needed for scaffold state access
       controller: _tabController, // Pass the managed controller
       tabBar: CupertinoTabBar(
         items: const <BottomNavigationBarItem>[
@@ -93,6 +85,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ),
         ],
         // onTap is handled by the controller passed to CupertinoTabScaffold
+        // No need for manual provider update here
       ),
       tabBuilder: (BuildContext context, int index) {
         switch (index) {
