@@ -1001,7 +1001,8 @@ class TodoistApiService implements TaskApiService {
 
   /// Fetches activity events using the Sync API.
   ///
-  /// This performs a sync specifically requesting the 'activity' resource type.
+  /// This performs a sync requesting ['all'] resource types to ensure a standard
+  /// response structure, then extracts the activity events.
   /// Note: This uses the current `_lastSyncToken`. For a full history,
   /// you might need to manage the sync token differently or use REST API if available.
   /// Pagination is not directly handled here; the Sync API returns events since the last sync.
@@ -1014,13 +1015,12 @@ class TodoistApiService implements TaskApiService {
     }
     if (verboseLogging) {
       stderr.writeln(
-        '[TodoistApiService] Fetching activity events via sync...',
+        '[TodoistApiService] Fetching activity events via sync (requesting "all")...',
       );
     }
     try {
-      // Perform a sync requesting only 'activity'
-      // This will use the current _lastSyncToken
-      final syncResponse = await performSync(resourceTypes: ['activity']);
+      // Perform a sync requesting 'all' resource types for robustness
+      final syncResponse = await performSync(resourceTypes: ['all']);
 
       // Extract the activity events from the response
       final events = syncResponse?.activity ?? [];
