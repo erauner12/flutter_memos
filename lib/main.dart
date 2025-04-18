@@ -14,26 +14,22 @@ import 'package:flutter_memos/providers/settings_provider.dart'; // Import setti
 import 'package:flutter_memos/providers/theme_provider.dart';
 import 'package:flutter_memos/providers/ui_providers.dart'; // Import for UI providers including highlightedCommentIdProvider
 import 'package:flutter_memos/screens/chat/chat_overlay.dart'; // Import the new overlay widget
-// Import ChatScreen - Keep for potential direct navigation if needed, though primary access is overlay
-import 'package:flutter_memos/screens/chat_screen.dart';
-import 'package:flutter_memos/screens/edit_entity/edit_entity_screen.dart'; // Updated import
-import 'package:flutter_memos/screens/item_detail/item_detail_screen.dart'; // Updated import
-import 'package:flutter_memos/screens/new_note/new_note_screen.dart'; // Updated import
-import 'package:flutter_memos/utils/keyboard_shortcuts.dart'; // Import keyboard shortcuts (including ToggleChatOverlayIntent)
+import 'package:flutter_memos/screens/chat_screen.dart'; // Keep for potential direct navigation
+import 'package:flutter_memos/screens/edit_entity/edit_entity_screen.dart';
+import 'package:flutter_memos/screens/item_detail/item_detail_screen.dart';
+import 'package:flutter_memos/screens/new_note/new_note_screen.dart';
+import 'package:flutter_memos/utils/keyboard_shortcuts.dart'; // ToggleChatOverlayIntent, etc.
 import 'package:flutter_memos/utils/provider_logger.dart';
-import 'package:flutter_memos/widgets/config_check_wrapper.dart'; // Import the new wrapper
+import 'package:flutter_memos/widgets/config_check_wrapper.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:sentry_flutter/sentry_flutter.dart'; // Import Sentry
+import 'package:sentry_flutter/sentry_flutter.dart';
 
-// Define the key globally or statically
 final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
 
-// Provider to access the key
 final rootNavigatorKeyProvider = Provider<GlobalKey<NavigatorState>>((ref) {
   return rootNavigatorKey;
 });
 
-// Define the root route generator - moved outside main() to make it globally accessible
 Route<dynamic>? generateRoute(RouteSettings settings) {
   if (kDebugMode) {
     print(
@@ -42,7 +38,7 @@ Route<dynamic>? generateRoute(RouteSettings settings) {
   }
   switch (settings.name) {
     case '/':
-      return null; // Let home handle '/'
+      return null;
     case '/chat':
       return CupertinoPageRoute(
         builder: (_) => const ChatScreen(),
@@ -167,11 +163,15 @@ class AppWithChatOverlay extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final themeMode = ref.watch(themeModeProvider);
 
-    return Stack(
-      children: [
-        Positioned.fill(child: MyAppCore(themeMode: themeMode)),
-        const ChatOverlay(),
-      ],
+    // Wrap the Stack in a Directionality or CupertinoApp to fix missing directionality.
+    return Directionality(
+      textDirection: TextDirection.ltr,
+      child: Stack(
+        children: [
+          Positioned.fill(child: MyAppCore(themeMode: themeMode)),
+          const ChatOverlay(),
+        ],
+      ),
     );
   }
 }
