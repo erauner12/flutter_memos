@@ -168,6 +168,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     }
   }
 
+  // Helper to get a shortened ID for display
+  String _getShortId(String? id) {
+    if (id == null) return '';
+    if (id.length <= 8) return id;
+    return '${id.substring(0, 8)}...';
+  }
+
   @override
   Widget build(BuildContext context) {
     final chatState = ref.watch(chatProvider);
@@ -394,7 +401,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          "Context: ${_getItemTypeName(chatState.currentContextItemType)} ${chatState.currentContextItemId?.substring(0, 8)}...",
+                          // Use helper function for shortened ID
+                          "Context: ${_getItemTypeName(chatState.currentContextItemType)} ${_getShortId(chatState.currentContextItemId)}",
                           style: TextStyle(
                             inherit: false,
                             color:
