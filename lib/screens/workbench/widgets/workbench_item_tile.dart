@@ -9,12 +9,11 @@ import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/models/server_config.dart';
 import 'package:flutter_memos/models/workbench_item_reference.dart';
 import 'package:flutter_memos/models/workbench_item_type.dart'; // Import the unified enum
+import 'package:flutter_memos/providers/chat_overlay_providers.dart';
 import 'package:flutter_memos/providers/server_config_provider.dart';
 import 'package:flutter_memos/providers/task_providers.dart';
 import 'package:flutter_memos/providers/workbench_instances_provider.dart'; // Import instances provider
 import 'package:flutter_memos/providers/workbench_provider.dart';
-import 'package:flutter_memos/screens/home_screen.dart'; // Import for NEW providers (homeTabControllerProvider)
-import 'package:flutter_memos/screens/home_tabs.dart'; // Import HomeTab enum and SafeTabNav
 import 'package:flutter_memos/screens/tasks/new_task_screen.dart';
 import 'package:flutter_memos/utils/thread_utils.dart'; // Import the utility
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -66,14 +65,13 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
 
   // Helper to show loading dialog safely
   void _showLoadingDialog(BuildContext buildContext, String message) {
-    // Dismiss any existing dialog first
     _dismissLoadingDialog();
     if (!mounted) return;
     showCupertinoDialog(
-      context: buildContext, // Use the passed context
+      context: buildContext,
       barrierDismissible: false,
       builder: (dialogContext) {
-        _loadingDialogContext = dialogContext; // Store the dialog's context
+        _loadingDialogContext = dialogContext;
         return CupertinoAlertDialog(
           content: Row(
             children: [
@@ -95,7 +93,7 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
       case ServerType.blinko:
         return CupertinoIcons.sparkles;
       case ServerType.todoist:
-        return CupertinoIcons.cloud; // Using cloud for Todoist server
+        return CupertinoIcons.cloud;
     }
   }
 
@@ -107,15 +105,15 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
     if (difference.inSeconds < 60) {
       return 'just now';
     } else if (difference.inMinutes < 60) {
-      return '${difference.inMinutes}m'; // Shorter format
+      return '${difference.inMinutes}m';
     } else if (difference.inHours < 24) {
-      return '${difference.inHours}h'; // Shorter format
+      return '${difference.inHours}h';
     } else if (difference.inDays == 1) {
       return 'yesterday';
     } else if (difference.inDays < 7) {
-      return '${difference.inDays}d'; // Shorter format
+      return '${difference.inDays}d';
     } else {
-      return DateFormat.yMd().format(dateTime.toLocal()); // Keep full date for older items
+      return DateFormat.yMd().format(dateTime.toLocal());
     }
   }
 
@@ -138,7 +136,6 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
     );
   }
 
-  // --- Refactored Action Handlers ---
 
   Future<void> _handleRemoveItem() async {
     final preview = widget.itemReference.previewContent ?? 'Item';
@@ -252,11 +249,10 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
     _showLoadingDialog(buildContext, 'Fetching thread...');
 
     try {
-      // Server is already confirmed to be active
       final content = await getFormattedThreadContent(
         ref,
         itemRef.referencedItemId,
-        itemRef.referencedItemType, // Pass imported enum
+        itemRef.referencedItemType,
         itemRef.serverId,
       );
       await Clipboard.setData(ClipboardData(text: content));
@@ -276,9 +272,8 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
       }
     }
   }
-  // --- End Copy Thread Content Helper ---
 
-  // --- Chat With Thread Helper (Workbench) ---
+  // Chat With Thread Helper (Workbench)
   Future<void> _chatWithThreadFromWorkbench(
     BuildContext buildContext,
     WidgetRef ref,
@@ -295,61 +290,30 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
     _showLoadingDialog(buildContext, 'Fetching thread for chat...');
 
     try {
-      // Fetch the thread content
       final content = await getFormattedThreadContent(
         ref,
         itemRef.referencedItemId,
-        itemRef.referencedItemType, // Pass imported enum
+        itemRef.referencedItemType,
         itemRef.serverId,
       );
 
-      _dismissLoadingDialog(); // Dismiss before navigation
-
+      _dismissLoadingDialog();
       if (!mounted) return;
 
-      // Prepare arguments for navigation
       final chatArgs = {
         'contextString': content,
         'parentItemId': itemRef.referencedItemId,
-        'parentItemType': itemRef.referencedItemType, // Pass imported enum
+        'parentItemType': itemRef.referencedItemType,
         'parentServerId': itemRef.serverId,
       };
 
-      // 1. Try to switch tab using the safe method
-      // Read the homeTabControllerProvider (defined in home_screen.dart)
-      final tabController = ref.read(homeTabControllerProvider);
-      final tabIndexMap = ref.read(homeTabIndexMapProvider);
-      // Get the total number of tabs (needed for safeSetIndex)
-      final int maxTabs = tabIndexMap.length;
-
-      // Use the safeSetIndex extension method
-      tabController.safeSetIndex(HomeTab.chat, tabIndexMap, maxTabs);
-
-      // Check if the index actually changed to the chat tab index
-      final chatTabIndex = tabIndexMap[HomeTab.chat];
-      if (chatTabIndex != null && tabController.index == chatTabIndex) {
-        // Index successfully set (or was already correct)
-        // Navigate within the Chat tab's navigator immediately (no animation delay needed)
-        if (mounted) {
-          _navigateToChatScreenWithinTab(buildContext, chatArgs);
-        }
+      // Use chat overlay state
+      ref.read(chatOverlayVisibleProvider.notifier).state = true;
+      final rootNavigator = ref.read(rootNavigatorKeyProvider).currentState;
+      if (rootNavigator != null && mounted) {
+        rootNavigator.pushNamed('/chat', arguments: chatArgs);
       } else {
-        // Fallback: Chat tab doesn't exist or index is invalid, use root navigator
-        if (kDebugMode) {
-          print(
-            '[WorkbenchItemTile] Chat tab not found or index invalid after attempting set. Navigating via root.',
-          );
-        }
-        final rootNavigator = ref.read(rootNavigatorKeyProvider).currentState;
-        if (rootNavigator != null && mounted) {
-          rootNavigator.pushNamed('/chat', arguments: chatArgs);
-        } else {
-          _showAlertDialog(
-            buildContext,
-            'Error',
-            'Could not navigate to chat.',
-          );
-        }
+        _showAlertDialog(buildContext, 'Error', 'Could not navigate to chat.');
       }
     } catch (e) {
       _dismissLoadingDialog();
@@ -363,6 +327,7 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
   void _navigateToChatScreenWithinTab(
     BuildContext buildContext,
     Map<String, dynamic> chatArgs,
+    dynamic chatTabNavKey,
   ) {
     final chatNavigator = chatTabNavKey.currentState;
     if (chatNavigator != null) {

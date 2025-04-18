@@ -9,6 +9,7 @@ import 'package:flutter_memos/main.dart'; // Adjust path if main.dart is elsewhe
 import 'package:flutter_memos/models/note_item.dart'; // Import NoteItem
 import 'package:flutter_memos/models/workbench_item_reference.dart'; // Import workbench model
 import 'package:flutter_memos/models/workbench_item_type.dart'; // Import the unified enum
+import 'package:flutter_memos/providers/chat_overlay_providers.dart';
 // Import note_providers instead of memo_providers
 import 'package:flutter_memos/providers/note_providers.dart' as note_providers;
 import 'package:flutter_memos/providers/server_config_provider.dart'; // Import server config provider
@@ -18,9 +19,6 @@ import 'package:flutter_memos/providers/ui_providers.dart';
 // Removed import for memo_detail_providers
 import 'package:flutter_memos/providers/workbench_instances_provider.dart'; // Import instances provider
 import 'package:flutter_memos/providers/workbench_provider.dart'; // Import workbench provider family etc.
-import 'package:flutter_memos/screens/home_screen.dart'; // Import for navigator keys and NEW providers
-import 'package:flutter_memos/screens/home_tabs.dart'
-    show HomeTab, SafeTabNav; // NEW IMPORT
 import 'package:flutter_memos/utils/keyboard_navigation.dart';
 import 'package:flutter_memos/utils/thread_utils.dart'; // Import the utility
 import 'package:flutter_memos/widgets/capture_utility.dart';
@@ -214,19 +212,14 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
               ? '${preview.substring(0, 97)}...'
               : preview, // Limit preview length
       addedTimestamp: DateTime.now(),
-      // parentNoteId is null for notes
-      // previewComments, referencedItemUpdateTime, overallLastUpdateTime are populated later
     );
 
-    // Read the specific notifier for the target instance and add the item
     ref
         .read(workbenchProviderFamily(targetInstanceId).notifier)
         .addItem(reference);
 
-    // Use tryWhere pattern that safely handles no matches
     final targetInstance =
-        instances
-            .where((i) => i.id == targetInstanceId).firstOrNull;
+        instances.where((i) => i.id == targetInstanceId).firstOrNull;
     final targetInstanceName = targetInstance?.name ?? 'Workbench';
 
     _showSuccessSnackbar('Added note to "$targetInstanceName"');
@@ -523,13 +516,8 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
     }
 
     try {
-      // Use the new providers and safeSetIndex
-      final controller = ref.read(homeTabControllerProvider);
-      final indexMap = ref.read(homeTabIndexMapProvider);
-      controller.safeSetIndex(HomeTab.chat, indexMap, indexMap.length);
-
-      // No need for null checks or index checks, safeSetIndex handles it.
-      // Proceed directly to navigation.
+      // Show chat overlay instead of switching tabs
+      ref.read(chatOverlayVisibleProvider.notifier).state = true;
       if (!mounted) return;
       _navigateToChatScreen(
         buildContext,
@@ -538,7 +526,6 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
         itemType, // Pass imported enum
         activeServerId,
       );
-
     } catch (e) {
       if (mounted) {
         _showErrorSnackbar('Failed to navigate to chat: $e');
@@ -553,8 +540,6 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
     WorkbenchItemType itemType, // USES IMPORTED ENUM
     String activeServerId,
   ) {
-    // Navigate within the Chat tab's navigator if possible
-    final chatNavigator = chatTabNavKey.currentState;
     final chatArgs = {
       'contextString': fetchedContent,
       'parentItemId': itemId,
@@ -562,21 +547,13 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
       'parentServerId': activeServerId,
     };
 
-    if (chatNavigator != null) {
-      // Pop to root of chat tab first to avoid stacking chat screens
-      chatNavigator.popUntil((route) => route.isFirst);
-      // Push the chat screen with arguments using the tab's navigator
-      chatNavigator.pushNamed('/chat', arguments: chatArgs);
+    final rootNavigatorKey = ref.read(rootNavigatorKeyProvider);
+    if (rootNavigatorKey.currentState != null) {
+      rootNavigatorKey.currentState!.pushNamed('/chat', arguments: chatArgs);
     } else {
-      // Fallback: Use root navigator if chat tab navigator isn't available
-      final rootNavigatorKey = ref.read(rootNavigatorKeyProvider);
-      if (rootNavigatorKey.currentState != null) {
-        rootNavigatorKey.currentState!.pushNamed('/chat', arguments: chatArgs);
-      } else {
-        _showErrorSnackbar('Could not access root navigator.');
-        if (kDebugMode) {
-          print("Error: rootNavigatorKey.currentState is null");
-        }
+      _showErrorSnackbar('Could not access root navigator.');
+      if (kDebugMode) {
+        print("Error: rootNavigatorKey.currentState is null");
       }
     }
   }

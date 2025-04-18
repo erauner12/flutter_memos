@@ -11,6 +11,7 @@ import 'package:flutter_memos/main.dart'; // Adjust path if main.dart is elsewhe
 import 'package:flutter_memos/models/note_item.dart';
 import 'package:flutter_memos/models/workbench_item_reference.dart'; // Needed for Workbench
 import 'package:flutter_memos/models/workbench_item_type.dart'; // Import the unified enum
+import 'package:flutter_memos/providers/chat_overlay_providers.dart';
 import 'package:flutter_memos/providers/note_providers.dart' as note_providers;
 import 'package:flutter_memos/providers/server_config_provider.dart'; // Needed for activeServerConfigProvider
 // Import settings_provider for manuallyHiddenNoteIdsProvider
@@ -18,9 +19,6 @@ import 'package:flutter_memos/providers/settings_provider.dart' as settings_p;
 import 'package:flutter_memos/providers/ui_providers.dart' as ui_providers;
 import 'package:flutter_memos/providers/workbench_instances_provider.dart'; // <-- ADD THIS
 import 'package:flutter_memos/providers/workbench_provider.dart'; // Needed for Workbench
-import 'package:flutter_memos/screens/home_screen.dart'; // Import for navigator keys and NEW providers
-import 'package:flutter_memos/screens/home_tabs.dart'
-    show HomeTab, SafeTabNav; // NEW IMPORT
 import 'package:flutter_memos/utils/note_utils.dart';
 import 'package:flutter_memos/utils/thread_utils.dart'; // Import the utility
 import 'package:flutter_memos/widgets/note_card.dart';
@@ -387,7 +385,7 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
     );
   }
 
-  // Helper method to add note to workbench
+  // --- Helper to add note to workbench ---
   void _addNoteToWorkbenchFromList(
     BuildContext context, // Use BuildContext
     WidgetRef ref,
@@ -510,17 +508,10 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
         activeServerId,
       );
 
-      _dismissLoadingDialog(); // Dismiss before navigation
+      _dismissLoadingDialog(); // Dismiss before overlay
 
-      if (!mounted) return;
-
-      // 1. Switch Tab using new providers
-      final controller = ref.read(homeTabControllerProvider);
-      final indexMap = ref.read(homeTabIndexMapProvider);
-      controller.safeSetIndex(HomeTab.chat, indexMap, indexMap.length);
-
-      // No need for null checks or index checks, safeSetIndex handles it.
-      // Proceed directly to navigation.
+      // Show chat overlay instead of tab switch
+      ref.read(chatOverlayVisibleProvider.notifier).state = true;
       if (!mounted) return;
       _navigateToChatScreen(
         buildContext,
@@ -546,8 +537,6 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
     WorkbenchItemType itemType, // USES IMPORTED ENUM
     String activeServerId,
   ) {
-    // Navigate within the Chat tab's navigator if possible
-    final chatNavigator = chatTabNavKey.currentState;
     final chatArgs = {
       'contextString': fetchedContent,
       'parentItemId': itemId,
@@ -555,26 +544,18 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
       'parentServerId': activeServerId,
     };
 
-    if (chatNavigator != null) {
-      // Pop to root of chat tab first to avoid stacking chat screens
-      chatNavigator.popUntil((route) => route.isFirst);
-      // Push the chat screen with arguments using the tab's navigator
-      chatNavigator.pushNamed('/chat', arguments: chatArgs);
+    // Push via root navigator only
+    final rootNavigatorKey = ref.read(rootNavigatorKeyProvider);
+    if (rootNavigatorKey.currentState != null) {
+      rootNavigatorKey.currentState!.pushNamed('/chat', arguments: chatArgs);
     } else {
-      // Fallback: Use root navigator if chat tab navigator isn't available
-      final rootNavigatorKey = ref.read(rootNavigatorKeyProvider);
-      if (rootNavigatorKey.currentState != null) {
-        rootNavigatorKey.currentState!.pushNamed('/chat', arguments: chatArgs);
-      } else {
-        // Fallback or error handling if navigator key is null
-        _showAlertDialog(
-          buildContext,
-          'Error',
-          'Could not access root navigator.',
-        );
-        if (kDebugMode) {
-          print("Error: rootNavigatorKey.currentState is null");
-        }
+      _showAlertDialog(
+        buildContext,
+        'Error',
+        'Could not access root navigator.',
+      );
+      if (kDebugMode) {
+        print("Error: rootNavigatorKey.currentState is null");
       }
     }
   }
