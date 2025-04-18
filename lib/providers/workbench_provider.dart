@@ -592,9 +592,10 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
 
       // 6. Insert new item into target instance's local state
       if (mounted) {
-        _ref
-            .read(workbenchProviderFamily(targetInstanceId).notifier)
-            ._addExistingItem(newItemForTarget);
+        final targetNotifier = _ref.read(
+          workbenchProviderFamily(targetInstanceId).notifier,
+        );
+        targetNotifier._addExistingItem(newItemForTarget);
 
         if (kDebugMode) {
           print(
@@ -618,10 +619,14 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
       }
       // Revert local state change on failure
       if (mounted) {
-        originalItems.sort(
+        final itemsToRestore = List<WorkbenchItemReference>.from(originalItems);
+        if (!itemsToRestore.any((i) => i.id == itemId)) {
+          itemsToRestore.add(itemToMove);
+        }
+        itemsToRestore.sort(
           (a, b) => b.overallLastUpdateTime.compareTo(a.overallLastUpdateTime),
         );
-        state = state.copyWith(items: originalItems, error: e);
+        state = state.copyWith(items: itemsToRestore, error: e);
       }
     }
   }
