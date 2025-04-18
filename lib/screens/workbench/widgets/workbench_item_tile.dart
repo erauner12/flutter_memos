@@ -2,8 +2,10 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/models/workbench_instance.dart';
 import 'package:flutter_memos/models/workbench_item_reference.dart';
+import 'package:flutter_memos/models/workbench_item_type.dart'; // Import the enum and extension
 import 'package:flutter_memos/providers/workbench_instances_provider.dart';
 import 'package:flutter_memos/providers/workbench_provider.dart';
+// import 'package:flutter_memos/utils/time_utils.dart'; // For relative time formatting // TODO: Implement this utility
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 String formatRelativeTime(DateTime dateTime) {
@@ -149,11 +151,13 @@ class WorkbenchItemTile extends ConsumerWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Icon based on type
+            // Icon based on type - Use the extension getter .icon
             Padding(
               padding: const EdgeInsets.only(top: 2.0), // Align icon slightly
               child: Icon(
-                itemReference.referencedItemType.icon,
+                itemReference
+                    .referencedItemType
+                    .icon, // Use the extension getter
                 color: CupertinoColors.secondaryLabel.resolveFrom(context),
                 size: 20,
               ),
