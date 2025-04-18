@@ -4,46 +4,28 @@ import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_memos/models/note_item.dart'; // Import NoteItem model
 import 'package:flutter_memos/models/server_config.dart';
-import 'package:flutter_memos/providers/api_providers.dart' as api_providers;
-// Import note_providers instead of memo_providers
+// Import note_providers and use families
 import 'package:flutter_memos/providers/note_providers.dart' as note_providers;
 import 'package:flutter_memos/providers/server_config_provider.dart';
-import 'package:flutter_memos/services/note_api_service.dart';
 import 'package:flutter_memos/utils/keyboard_navigation.dart';
 import 'package:flutter_memos/utils/url_helper.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-// Define the provider locally within the form file
-// Keep name createNoteProvider, uses NoteItem
-final createNoteProvider = Provider<
-  Future<NoteItem> Function(NoteItem note, {ServerConfig? targetServerOverride})
->((ref) {
-  final baseApiService = ref.watch(api_providers.apiServiceProvider);
-  return (note, {targetServerOverride}) async {
-    if (baseApiService is! NoteApiService) {
-      throw Exception('Active service does not support note operations.');
-    }
-    final NoteApiService apiService = baseApiService; // Cast
-    return apiService.createNote(
-      note,
-      targetServerOverride: targetServerOverride,
-    );
-  };
-});
+// Remove local createNoteProvider definition
 
-class NewNoteForm extends ConsumerStatefulWidget { // Renamed class
-  const NewNoteForm({super.key}); // Renamed constructor
+class NewNoteForm extends ConsumerStatefulWidget {
+  const NewNoteForm({super.key});
 
   @override
-  ConsumerState<NewNoteForm> createState() => _NewNoteFormState(); // Renamed class
+  ConsumerState<NewNoteForm> createState() => _NewNoteFormState();
 }
 
-class _NewNoteFormState extends ConsumerState<NewNoteForm> // Renamed class
-    with KeyboardNavigationMixin<NewNoteForm> { // Renamed class
+class _NewNoteFormState extends ConsumerState<NewNoteForm>
+    with KeyboardNavigationMixin<NewNoteForm> {
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   final TextEditingController _contentController = TextEditingController();
   final FocusNode _contentFocusNode = FocusNode();
-  final FocusNode _formFocusNode = FocusNode(debugLabel: 'NewNoteFormFocus'); // Renamed debug label
+  final FocusNode _formFocusNode = FocusNode(debugLabel: 'NewNoteFormFocus');
 
   bool _loading = false;
   String? _error;
@@ -54,8 +36,35 @@ class _NewNoteFormState extends ConsumerState<NewNoteForm> // Renamed class
   @override
   void initState() {
     super.initState();
-    _selectedServerConfig = ref.read(activeServerConfigProvider);
+    // Get serverId from route arguments if available, else use active
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      final args =
+          ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+      final routeServerId = args?['serverId'] as String?;
+      final activeServer = ref.read(activeServerConfigProvider);
+      final targetServerId = routeServerId ?? activeServer?.id;
+
+      if (targetServerId != null) {
+        final server = ref
+            .read(multiServerConfigProvider)
+            .servers
+            .firstWhereOrNull((s) => s.id == targetServerId);
+        if (mounted) {
+          setState(() {
+            _selectedServerConfig = server;
+          });
+        }
+      } else {
+        // If no serverId from route or active, default to first available? Or show error?
+        final firstServer =
+            ref.read(multiServerConfigProvider).servers.firstOrNull;
+        if (mounted) {
+          setState(() {
+            _selectedServerConfig = firstServer;
+          });
+        }
+      }
+
       if (mounted) {
         FocusScope.of(context).requestFocus(_contentFocusNode);
       }
@@ -151,7 +160,7 @@ class _NewNoteFormState extends ConsumerState<NewNoteForm> // Renamed class
     );
   }
 
-  Future<void> _handleCreateNote() async { // Renamed method
+  Future<void> _handleCreateNote() async {
     final content = _contentController.text.trim();
 
     if (_selectedServerConfig == null) {
@@ -162,7 +171,7 @@ class _NewNoteFormState extends ConsumerState<NewNoteForm> // Renamed class
               (context) => CupertinoAlertDialog(
                 title: const Text('No Server Selected'),
                 content: const Text(
-                  'Please select a target server for this note.', // Updated text
+                  'Please select a target server for this note.',
                 ),
                 actions: [
                   CupertinoDialogAction(
@@ -176,6 +185,7 @@ class _NewNoteFormState extends ConsumerState<NewNoteForm> // Renamed class
       }
       return;
     }
+    final targetServerId = _selectedServerConfig!.id; // Use non-null serverId
 
     if (content.isEmpty) {
       if (mounted) {
@@ -183,8 +193,8 @@ class _NewNoteFormState extends ConsumerState<NewNoteForm> // Renamed class
           context: context,
           builder:
               (context) => CupertinoAlertDialog(
-                title: const Text('Empty Note'), // Updated text
-                content: const Text('Please enter some content for your note.'), // Updated text
+                title: const Text('Empty Note'),
+                content: const Text('Please enter some content for your note.'),
                 actions: [
                   CupertinoDialogAction(
                     isDefaultAction: true,
@@ -199,24 +209,24 @@ class _NewNoteFormState extends ConsumerState<NewNoteForm> // Renamed class
     }
 
     if (kDebugMode) {
-      print('[NewNoteForm] Creating new note via _handleCreateNote'); // Updated log identifier
+      print('[NewNoteForm] Creating new note via _handleCreateNote');
       print(
-        '[NewNoteForm] Target Server: ${_selectedServerConfig?.name ?? _selectedServerConfig?.id}', // Updated log identifier
+        '[NewNoteForm] Target Server: ${_selectedServerConfig?.name ?? targetServerId}',
       );
-      print('[NewNoteForm] Content length: ${content.length} characters'); // Updated log identifier
+      print('[NewNoteForm] Content length: ${content.length} characters');
       if (content.length < 200) {
-        print('[NewNoteForm] Content: "$content"'); // Updated log identifier
+        print('[NewNoteForm] Content: "$content"');
       } else {
         print(
-          '[NewNoteForm] Content preview: "${content.substring(0, 197)}..."', // Updated log identifier
+          '[NewNoteForm] Content preview: "${content.substring(0, 197)}..."',
         );
       }
       final urlRegex = RegExp(r'(https?://[^\s]+)|([\w-]+://[^\s]+)');
       final matches = urlRegex.allMatches(content);
       if (matches.isNotEmpty) {
-        print('[NewNoteForm] URLs in content:'); // Updated log identifier
+        print('[NewNoteForm] URLs in content:');
         for (final match in matches) {
-          print('[NewNoteForm]   - ${match.group(0)}'); // Updated log identifier
+          print('[NewNoteForm]   - ${match.group(0)}');
         }
       }
     }
@@ -240,34 +250,30 @@ class _NewNoteFormState extends ConsumerState<NewNoteForm> // Renamed class
         displayTime: DateTime.now(),
       );
 
-      // Use the locally defined createNoteProvider
-      final createdNote = await ref.read(createNoteProvider)(
+      // Use createNoteProviderFamily with the target server ID
+      await ref.read(note_providers.createNoteProviderFamily(targetServerId))(
         newNote,
-        targetServerOverride: _selectedServerConfig,
       );
 
       if (kDebugMode) {
         print(
-          '[NewNoteForm] Note created successfully on server ${_selectedServerConfig?.id} with ID: ${createdNote.id}', // Updated log identifier
+          '[NewNoteForm] Note created successfully on server $targetServerId',
         );
       }
 
-      final activeServerId = ref.read(activeServerConfigProvider)?.id;
-      if (_selectedServerConfig?.id == activeServerId) {
-        // Use provider from note_providers
-        ref.invalidate(note_providers.notesNotifierProvider);
-      }
+      // Invalidate the notes list for the target server
+      ref.invalidate(
+        note_providers.notesNotifierProviderFamily(targetServerId),
+      );
 
       if (mounted) {
-        Navigator.pushReplacementNamed(
-          context,
-          '/item-detail', // Use new route
-          arguments: {'itemId': createdNote.id}, // Pass itemId
-        );
+        // Pop back instead of replacing, assuming user wants to return to previous screen (Hub or Items)
+        Navigator.of(context).pop();
+        // Optionally show a success message
       }
     } catch (e) {
       if (kDebugMode) {
-        print('[NewNoteForm] Error creating note: $e'); // Updated log identifier
+        print('[NewNoteForm] Error creating note: $e');
       }
       if (mounted) {
         setState(() {
@@ -306,48 +312,28 @@ class _NewNoteFormState extends ConsumerState<NewNoteForm> // Renamed class
       focusNode: _formFocusNode,
       onKeyEvent: (node, event) {
         if (kDebugMode) {
-          print(
-            '[NewNoteForm] Received key event: ${event.logicalKey.keyLabel}', // Updated log identifier
-          );
-          if (event.logicalKey == LogicalKeyboardKey.enter) {
-            final metaPressed =
-                HardwareKeyboard.instance.isLogicalKeyPressed(
-                  LogicalKeyboardKey.meta,
-                ) ||
-                HardwareKeyboard.instance.isLogicalKeyPressed(
-                  LogicalKeyboardKey.metaLeft,
-                ) ||
-                HardwareKeyboard.instance.isLogicalKeyPressed(
-                  LogicalKeyboardKey.metaRight,
-                );
-            print(
-              '[NewNoteForm] Enter key pressed. Meta key pressed: $metaPressed', // Updated log identifier
-            );
-          }
+          // print('[NewNoteForm] Received key event: ${event.logicalKey.keyLabel}');
+          // if (event.logicalKey == LogicalKeyboardKey.enter) {
+          //   final metaPressed = HardwareKeyboard.instance.isMetaPressed;
+          //   print('[NewNoteForm] Enter key pressed. Meta key pressed: $metaPressed');
+          // }
         }
 
         if (event is KeyDownEvent &&
             event.logicalKey == LogicalKeyboardKey.enter &&
-            (HardwareKeyboard.instance.isLogicalKeyPressed(
-                  LogicalKeyboardKey.meta,
-                ) ||
-                HardwareKeyboard.instance.isLogicalKeyPressed(
-                  LogicalKeyboardKey.metaLeft,
-                ) ||
-                HardwareKeyboard.instance.isLogicalKeyPressed(
-                  LogicalKeyboardKey.metaRight,
-                ))) {
+            (HardwareKeyboard.instance.isMetaPressed ||
+                HardwareKeyboard.instance.isControlPressed)) {
           if (!_loading) {
             if (kDebugMode) {
               print(
-                '[NewNoteForm] Command+Enter detected, calling _handleCreateNote', // Updated log identifier
+                '[NewNoteForm] Command/Ctrl+Enter detected, calling _handleCreateNote',
               );
             }
-            _handleCreateNote(); // Use renamed method
+            _handleCreateNote();
           } else {
             if (kDebugMode) {
               print(
-                '[NewNoteForm] Command+Enter detected, but already loading', // Updated log identifier
+                '[NewNoteForm] Command/Ctrl+Enter detected, but already loading',
               );
             }
           }
@@ -516,21 +502,21 @@ class _NewNoteFormState extends ConsumerState<NewNoteForm> // Renamed class
                           _previewMode = !_previewMode;
                           if (kDebugMode) {
                             print(
-                              '[NewNoteForm] Switched to ${_previewMode ? "preview" : "edit"} mode', // Updated log identifier
+                              '[NewNoteForm] Switched to ${_previewMode ? "preview" : "edit"} mode',
                             );
                             if (_previewMode) {
                               final content = _contentController.text;
                               print(
-                                '[NewNoteForm] Previewing content with ${content.length} chars', // Updated log identifier
+                                '[NewNoteForm] Previewing content with ${content.length} chars',
                               );
                               final urlRegex = RegExp(
                                 r'(https?://[^\s]+)|([\w-]+://[^\s]+)',
                               );
                               final matches = urlRegex.allMatches(content);
                               if (matches.isNotEmpty) {
-                                print('[NewNoteForm] URLs in preview content:'); // Updated log identifier
+                                print('[NewNoteForm] URLs in preview content:');
                                 for (final match in matches) {
-                                  print('[NewNoteForm]   - ${match.group(0)}'); // Updated log identifier
+                                  print('[NewNoteForm]   - ${match.group(0)}');
                                 }
                               }
                             }
@@ -604,7 +590,7 @@ class _NewNoteFormState extends ConsumerState<NewNoteForm> // Renamed class
                           onTapLink: (text, href, title) async {
                             if (kDebugMode) {
                               print(
-                                '[NewNoteForm] Link tapped in preview: text="$text", href="$href"', // Updated log identifier
+                                '[NewNoteForm] Link tapped in preview: text="$text", href="$href"',
                               );
                             }
                             if (href != null) {
@@ -615,7 +601,7 @@ class _NewNoteFormState extends ConsumerState<NewNoteForm> // Renamed class
                               );
                               if (kDebugMode) {
                                 print(
-                                  '[NewNoteForm] URL launch result: $success', // Updated log identifier
+                                  '[NewNoteForm] URL launch result: $success',
                                 );
                               }
                             }
@@ -626,7 +612,7 @@ class _NewNoteFormState extends ConsumerState<NewNoteForm> // Renamed class
                     : CupertinoTextField(
                       controller: _contentController,
                       focusNode: _contentFocusNode,
-                      placeholder: 'Enter your note content...', // Updated placeholder
+                      placeholder: 'Enter your note content...',
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
                         color: CupertinoColors.systemFill.resolveFrom(context),
@@ -660,14 +646,14 @@ class _NewNoteFormState extends ConsumerState<NewNoteForm> // Renamed class
                 onPressed:
                     _loading || _selectedServerConfig == null
                         ? null
-                        : _handleCreateNote, // Use renamed method
+                        : _handleCreateNote,
                 child:
                     _loading
                         ? const CupertinoActivityIndicator(
                           color: CupertinoColors.white,
                           radius: 10,
                         )
-                        : const Text('Create Note'), // Updated text
+                        : const Text('Create Note'),
               ),
             ),
           ],

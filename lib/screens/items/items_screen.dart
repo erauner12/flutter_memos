@@ -5,22 +5,26 @@ import 'package:flutter/services.dart';
 import 'package:flutter_memos/models/note_item.dart'; // Import NoteItem
 import 'package:flutter_memos/models/server_config.dart';
 import 'package:flutter_memos/providers/filter_providers.dart';
-// Import note_providers instead of memo_providers
+// Import note_providers and use families
 import 'package:flutter_memos/providers/note_providers.dart' as note_providers;
 import 'package:flutter_memos/providers/server_config_provider.dart';
 import 'package:flutter_memos/providers/ui_providers.dart' as ui_providers;
-// Import notes_list_body instead of memos_body
 import 'package:flutter_memos/screens/items/notes_list_body.dart';
 import 'package:flutter_memos/screens/settings_screen.dart'; // Import SettingsScreen
 import 'package:flutter_memos/utils/keyboard_navigation.dart';
 import 'package:flutter_memos/widgets/advanced_filter_panel.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class ItemsScreen extends ConsumerStatefulWidget { // Renamed class
-  const ItemsScreen({super.key}); // Renamed constructor
+class ItemsScreen extends ConsumerStatefulWidget {
+  final String serverId; // Add serverId parameter
+
+  const ItemsScreen({
+    super.key,
+    required this.serverId, // Make serverId required
+  });
 
   @override
-  ConsumerState<ItemsScreen> createState() => _ItemsScreenState(); // Renamed class
+  ConsumerState<ItemsScreen> createState() => _ItemsScreenState();
 }
 
 class _ItemsScreenState extends ConsumerState<ItemsScreen>
@@ -32,7 +36,9 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      // Load filter preferences (this seems independent of server)
       ref.read(loadFilterPreferencesProvider);
+      // Initial fetch is handled by the provider family upon first watch
       if (mounted) {
         FocusScope.of(context).requestFocus(_focusNode);
       }
@@ -53,7 +59,9 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
         padding: EdgeInsets.zero,
         onPressed: () {
           if (kDebugMode) {
-            print('[ItemsScreen] Exit multi-select via Cancel button');
+            print(
+              '[ItemsScreen(${widget.serverId})] Exit multi-select via Cancel button',
+            );
           }
           ref.read(ui_providers.toggleItemMultiSelectModeProvider)();
         },
@@ -68,10 +76,10 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
             minSize: 0,
             onPressed: selectedCount > 0
                 ? () {
-                      // Removed unimplemented multi-delete logic
+                      // TODO: Implement multi-delete using deleteNoteProviderFamily
                       if (kDebugMode) {
                         print(
-                          '[ItemsScreen] Multi-delete action placeholder triggered for $selectedCount items.',
+                          '[ItemsScreen(${widget.serverId})] Multi-delete action placeholder triggered for $selectedCount items.',
                         );
                       }
                   }
@@ -88,10 +96,10 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
             minSize: 0,
             onPressed: selectedCount > 0
                 ? () {
-                      // Removed unimplemented multi-archive logic
+                      // TODO: Implement multi-archive using archiveNoteProviderFamily
                     if (kDebugMode) {
                         print(
-                          '[ItemsScreen] Multi-archive action placeholder triggered for $selectedCount items.',
+                          '[ItemsScreen(${widget.serverId})] Multi-archive action placeholder triggered for $selectedCount items.',
                         );
                     }
                   }
@@ -108,12 +116,23 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
     );
   }
 
+  // Helper to get the current server config based on widget.serverId
+  ServerConfig? _getCurrentServerConfig() {
+    final servers = ref.read(multiServerConfigProvider).servers;
+    try {
+      return servers.firstWhere((s) => s.id == widget.serverId);
+    } catch (e) {
+      return null; // Server not found
+    }
+  }
+
   void _selectNextNote() {
-    final notes = ref.read(note_providers.filteredNotesProvider);
+    // Use the provider family with the current serverId
+    final notes = ref.read(
+      note_providers.filteredNotesProviderFamily(widget.serverId),
+    );
     if (kDebugMode) {
-      print(
-        '[ItemsScreen _selectNextNote] Called. Filtered notes count: ${notes.length}',
-      );
+      // print('[ItemsScreen(${widget.serverId}) _selectNextNote] Called. Filtered notes count: ${notes.length}');
     }
 
     if (notes.isEmpty) return;
@@ -130,19 +149,18 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
       final nextNoteId = notes[nextIndex].id;
       ref.read(ui_providers.selectedItemIdProvider.notifier).state = nextNoteId;
       if (kDebugMode) {
-        print(
-          '[ItemsScreen _selectNextNote] Updated selectedItemIdProvider to: $nextNoteId',
-        );
+        // print('[ItemsScreen(${widget.serverId}) _selectNextNote] Updated selectedItemIdProvider to: $nextNoteId');
       }
     }
   }
 
   void _selectPreviousNote() {
-    final notes = ref.read(note_providers.filteredNotesProvider);
+    // Use the provider family with the current serverId
+    final notes = ref.read(
+      note_providers.filteredNotesProviderFamily(widget.serverId),
+    );
     if (kDebugMode) {
-      print(
-        '[ItemsScreen _selectPreviousNote] Called. Filtered notes count: ${notes.length}',
-      );
+      // print('[ItemsScreen(${widget.serverId}) _selectPreviousNote] Called. Filtered notes count: ${notes.length}');
     }
 
     if (notes.isEmpty) return;
@@ -159,9 +177,7 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
       final prevNoteId = notes[prevIndex].id;
       ref.read(ui_providers.selectedItemIdProvider.notifier).state = prevNoteId;
       if (kDebugMode) {
-        print(
-          '[ItemsScreen _selectPreviousNote] Updated selectedItemIdProvider to: $prevNoteId',
-        );
+        // print('[ItemsScreen(${widget.serverId}) _selectPreviousNote] Updated selectedItemIdProvider to: $prevNoteId');
       }
     }
   }
@@ -170,13 +186,22 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
     final selectedId = ref.read(ui_providers.selectedItemIdProvider);
     if (selectedId != null) {
       if (kDebugMode) {
-        print('[ItemsScreen] Viewing selected item: ID $selectedId');
+        print(
+          '[ItemsScreen(${widget.serverId})] Viewing selected item: ID $selectedId',
+        );
       }
       if (mounted) {
+        // Pass serverId to detail screen
         Navigator.of(
           context,
           rootNavigator: true,
-        ).pushNamed('/item-detail', arguments: {'itemId': selectedId});
+        ).pushNamed(
+          '/item-detail',
+          arguments: {
+            'itemId': selectedId,
+            'serverId': widget.serverId, // Pass serverId
+          },
+        );
       }
     }
   }
@@ -185,7 +210,9 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
     final selectedId = ref.read(ui_providers.selectedItemIdProvider);
     if (selectedId != null) {
       if (kDebugMode) {
-        print('[ItemsScreen] Clearing selection via Escape');
+        print(
+          '[ItemsScreen(${widget.serverId})] Clearing selection via Escape',
+        );
       }
       ref.read(ui_providers.selectedItemIdProvider.notifier).state = null;
     } else {
@@ -196,14 +223,10 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
   KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
 
-    if (kDebugMode) {
-      print(
-        '[ItemsScreen _handleKeyEvent] Received key: ${event.logicalKey.keyLabel}',
-      );
-      print(
-        '[ItemsScreen _handleKeyEvent] FocusNode has focus: ${node.hasFocus}',
-      );
-    }
+    // if (kDebugMode) {
+    //   print('[ItemsScreen(${widget.serverId}) _handleKeyEvent] Received key: ${event.logicalKey.keyLabel}');
+    //   print('[ItemsScreen(${widget.serverId}) _handleKeyEvent] FocusNode has focus: ${node.hasFocus}');
+    // }
 
     final result = handleKeyEvent(
       event,
@@ -214,37 +237,54 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
       onEscape: _clearSelectionOrUnfocus,
     );
 
-    if (kDebugMode) {
-      print(
-        '[ItemsScreen _handleKeyEvent] Mixin handleKeyEvent result: $result',
-      );
-    }
+    // if (kDebugMode) {
+    //   print('[ItemsScreen(${widget.serverId}) _handleKeyEvent] Mixin handleKeyEvent result: $result');
+    // }
     return result;
   }
 
   @override
   Widget build(BuildContext context) {
-    // Use providers from note_providers and renamed ui_providers
-    final notesState = ref.watch(note_providers.notesNotifierProvider);
-    // Use filteredNotesProvider directly now
-    final visibleNotes = ref.watch(note_providers.filteredNotesProvider);
+    // Use provider families with widget.serverId
+    final notesState = ref.watch(
+      note_providers.notesNotifierProviderFamily(widget.serverId),
+    );
+    final visibleNotes = ref.watch(
+      note_providers.filteredNotesProviderFamily(widget.serverId),
+    );
     final selectedPresetKey = ref.watch(quickFilterPresetProvider);
     final currentPresetLabel =
-        quickFilterPresets[selectedPresetKey]?.label ?? 'Home'; // Changed label
-    // Use renamed providers from ui_providers
+        quickFilterPresets[selectedPresetKey]?.label ??
+        'Notes'; // Changed default label
     final isMultiSelectMode = ref.watch(ui_providers.itemMultiSelectModeProvider);
     final selectedIds = ref.watch(ui_providers.selectedItemIdsForMultiSelectProvider);
-    // Watch new providers for hidden notes
-    final hiddenCount = ref.watch(note_providers.totalHiddenNoteCountProvider);
+    final hiddenCount = ref.watch(
+      note_providers.totalHiddenNoteCountProviderFamily(widget.serverId),
+    );
     final showHidden = ref.watch(showHiddenNotesProvider);
     final theme = CupertinoTheme.of(context);
+    final currentServer =
+        _getCurrentServerConfig(); // Get current server info for title
+
+    // Handle case where server config might be missing (e.g., deleted while screen is open)
+    if (currentServer == null) {
+      return const CupertinoPageScaffold(
+        navigationBar: CupertinoNavigationBar(
+          middle: Text('Error'),
+          previousPageTitle: 'Servers', // Allow navigating back
+        ),
+        child: Center(child: Text('Server configuration not found.')),
+      );
+    }
+
 
     return CupertinoPageScaffold(
       navigationBar: isMultiSelectMode
           ? _buildMultiSelectNavBar(selectedIds.length)
           : CupertinoNavigationBar(
-              transitionBetweenRoutes: false,
-              leading: _buildServerSwitcherButton(),
+                // REMOVED leading: _buildServerSwitcherButton(),
+                // Use previousPageTitle for automatic back button text (points back to Hub)
+                previousPageTitle: 'Servers',
               middle: GestureDetector(
                 onTap: () {
                   if (_scrollController.hasClients) {
@@ -257,7 +297,12 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
                 },
                 child: Container(
                   color: CupertinoColors.transparent,
-                  child: Text(currentPresetLabel),
+                    // Show server name in title, fallback to preset label
+                    child: Text(
+                      currentServer.name ?? // Use non-null currentServer
+                          currentServer.serverUrl,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                 ),
               ),
               trailing: Row(
@@ -312,16 +357,19 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
                     padding: const EdgeInsets.symmetric(horizontal: 8.0),
                     minSize: 0,
                     onPressed: () {
+                        // Pass serverId to new note screen
                       Navigator.of(
                         context,
                         rootNavigator: true,
-                        ).pushNamed('/new-note');
+                        ).pushNamed(
+                          '/new-note',
+                          arguments: {'serverId': widget.serverId},
+                        );
                     },
                     child: const Icon(CupertinoIcons.add),
                   ),
                     // REMOVED Reset Button
-                    // const SizedBox(width: 8), // Keep spacing if needed
-                    // New Settings Button
+                    // New Settings Button (might be redundant if Hub has it)
                   CupertinoButton(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 8.0,
@@ -332,7 +380,8 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
                         size: 22,
                       ), // Gear icon
                       onPressed: () {
-                        Navigator.of(context).push(
+                        Navigator.of(context, rootNavigator: true).push(
+                          // Use root navigator
                           CupertinoPageRoute(
                             builder:
                                 (context) =>
@@ -401,7 +450,7 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
                           ),
                           const SizedBox(width: 4),
                           Text(
-                            'Unhide All Manually Hidden (${ref.watch(note_providers.manuallyHiddenNoteCountProvider)})',
+                            'Unhide All Manually Hidden (${ref.watch(note_providers.manuallyHiddenNoteCountProviderFamily(widget.serverId))})', // Use family
                             style: TextStyle(
                               fontSize: 14,
                               color: theme.primaryColor,
@@ -465,7 +514,9 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
         onValueChanged: (String? newPresetKey) {
           if (newPresetKey != null) {
             if (kDebugMode) {
-              print('[ItemsScreen] Quick filter selected: $newPresetKey');
+              print(
+                '[ItemsScreen(${widget.serverId})] Quick filter selected: $newPresetKey',
+              );
             }
             ref.read(quickFilterPresetProvider.notifier).state = newPresetKey;
             // Clear raw filter if a preset is selected
@@ -474,6 +525,7 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
             }
             // Save the selected preset preference
             ref.read(filterPreferencesProvider)(newPresetKey);
+            // Refresh is handled by the provider listening to quickFilterPresetProvider
           }
         },
       ),
@@ -485,112 +537,28 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
       context: context,
       barrierDismissible: true,
       builder: (BuildContext context) {
-        return DraggableScrollableSheet(
-          initialChildSize: 0.8,
-          minChildSize: 0.4,
-          maxChildSize: 0.9,
-          expand: false,
-          builder: (_, scrollController) {
-            return AdvancedFilterPanel(onClose: () => Navigator.pop(context));
-          },
+        // Pass serverId to the panel if it needs it for filtering options
+        return ProviderScope(
+          overrides: [
+            // Example: Override a provider within the panel if needed
+            // currentServerIdProvider.overrideWithValue(widget.serverId),
+          ],
+          child: DraggableScrollableSheet(
+            initialChildSize: 0.8,
+            minChildSize: 0.4,
+            maxChildSize: 0.9,
+            expand: false,
+            builder: (_, scrollController) {
+              return AdvancedFilterPanel(onClose: () => Navigator.pop(context));
+            },
+          ),
         );
       },
     );
   }
 
-  Widget _buildServerSwitcherButton() {
-    final activeServer = ref.watch(activeServerConfigProvider);
-    final serverName =
-        activeServer?.name ?? activeServer?.serverUrl ?? 'No Server';
-    final truncatedName =
-        serverName.length > 15
-            ? '${serverName.substring(0, 12)}...'
-            : serverName;
-
-    return CupertinoButton(
-      padding: const EdgeInsets.only(left: 8.0),
-      onPressed: () => _showServerSelectionSheet(context, ref),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(CupertinoIcons.square_stack_3d_down_right, size: 20),
-          const SizedBox(width: 4),
-          Text(
-            truncatedName,
-            style: const TextStyle(fontSize: 14),
-            overflow: TextOverflow.ellipsis,
-          ),
-          const Icon(CupertinoIcons.chevron_down, size: 14),
-        ],
-      ),
-    );
-  }
-
-  void _showServerSelectionSheet(BuildContext context, WidgetRef ref) {
-    final multiServerState = ref.read(multiServerConfigProvider);
-    final servers = multiServerState.servers;
-    final activeServerId = multiServerState.activeServerId;
-    final notifier = ref.read(multiServerConfigProvider.notifier);
-
-    if (servers.isEmpty) {
-      showCupertinoDialog(
-        context: context,
-        builder: (context) => CupertinoAlertDialog(
-          title: const Text('No Servers'),
-              content: const Text(
-                'Please add a server configuration in Settings.',
-              ),
-          actions: [
-            CupertinoDialogAction(
-              child: const Text('Settings'),
-              onPressed: () {
-                Navigator.pop(context);
-                Navigator.of(
-                  context,
-                  rootNavigator: true,
-                ).pushNamed('/settings');
-              },
-            ),
-            CupertinoDialogAction(
-              isDefaultAction: true,
-              child: const Text('OK'),
-              onPressed: () => Navigator.pop(context),
-            ),
-          ],
-        ),
-      );
-      return;
-    }
-
-    showCupertinoModalPopup<void>(
-      context: context,
-      builder: (BuildContext context) => CupertinoActionSheet(
-        title: const Text('Switch Active Server'),
-        actions: servers.map((server) {
-          final bool isActive = server.id == activeServerId;
-          return CupertinoActionSheetAction(
-            isDefaultAction: isActive,
-            onPressed: () {
-              if (!isActive) {
-                if (kDebugMode) {
-                          print(
-                            '[ItemsScreen] Setting active server to: ${server.name ?? server.id}',
-                          );
-                }
-                notifier.setActiveServer(server.id);
-              }
-              Navigator.pop(context);
-            },
-            child: Text(server.name ?? server.serverUrl),
-          );
-        }).toList(),
-        cancelButton: CupertinoActionSheetAction(
-          child: const Text('Cancel'),
-          onPressed: () => Navigator.pop(context),
-        ),
-      ),
-    );
-  }
+  // REMOVED _buildServerSwitcherButton()
+  // REMOVED _showServerSelectionSheet()
 
   Widget _buildSearchBar() {
     final searchQuery = ref.watch(searchQueryProvider);
@@ -611,16 +579,10 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
       ),
       onChanged: (value) {
         ref.read(searchQueryProvider.notifier).state = value;
-        final isLocalSearch = ref.read(localSearchEnabledProvider);
-        if (!isLocalSearch && value.isNotEmpty) {
-          ref.read(note_providers.notesNotifierProvider.notifier).refresh();
-        }
+        // Refresh is handled by the provider listening to searchQueryProvider
       },
       onSubmitted: (value) {
-        final isLocalSearch = ref.read(localSearchEnabledProvider);
-        if (!isLocalSearch) {
-          ref.read(note_providers.notesNotifierProvider.notifier).refresh();
-        }
+        // Refresh is handled by the provider listening to searchQueryProvider
       },
     );
   }
@@ -628,19 +590,19 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
   void _handleMoveNoteToServer(String noteId) {
     if (kDebugMode) {
       print(
-        '[ItemsScreen] _handleMoveNoteToServer called for note ID: $noteId',
+        '[ItemsScreen(${widget.serverId})] _handleMoveNoteToServer called for note ID: $noteId from server: ${widget.serverId}',
       );
     }
 
     final multiServerState = ref.read(multiServerConfigProvider);
     final servers = multiServerState.servers;
-    final activeServerId = multiServerState.activeServerId;
+    // Use widget.serverId as the source server
     final availableTargetServers =
-        servers.where((s) => s.id != activeServerId).toList();
+        servers.where((s) => s.id != widget.serverId).toList();
 
     if (kDebugMode) {
       print(
-        '[ItemsScreen] Found ${availableTargetServers.length} target servers.',
+        '[ItemsScreen(${widget.serverId})] Found ${availableTargetServers.length} target servers.',
       );
     }
 
@@ -674,7 +636,7 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
             onPressed: () {
               if (kDebugMode) {
                             print(
-                              '[ItemsScreen] Selected target server: ${server.name ?? server.id}',
+                              '[ItemsScreen(${widget.serverId})] Selected target server: ${server.name ?? server.id}',
                             );
               }
               Navigator.pop(sheetContext, server);
@@ -690,20 +652,26 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
       if (selectedServer != null) {
         if (kDebugMode) {
           print(
-            '[ItemsScreen] Calling moveNoteProvider for note $noteId to server ${selectedServer.id}',
+            '[ItemsScreen(${widget.serverId})] Calling moveNoteProvider for note $noteId from ${widget.serverId} to server ${selectedServer.id}',
           );
         }
+        // Pass sourceServerId to MoveNoteParams
         final moveParams = note_providers.MoveNoteParams(
           noteId: noteId,
+          sourceServerId: widget.serverId, // Pass source server ID
           targetServer: selectedServer,
         );
+        // Call the moveNoteProvider family
         ref
             .read(note_providers.moveNoteProvider(moveParams))()
             .then((_) {
           if (kDebugMode) {
-                print('[ItemsScreen] Move successful for note $noteId');
+                print(
+                  '[ItemsScreen(${widget.serverId})] Move successful for note $noteId',
+                );
           }
           if (mounted) {
+                // Maybe pop back to hub after successful move? Or just show success.
             showCupertinoDialog(
               context: context,
               builder: (ctx) => CupertinoAlertDialog(
@@ -723,7 +691,9 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
           }
         }).catchError((error, stackTrace) {
           if (kDebugMode) {
-                print('[ItemsScreen] Move failed for note $noteId: $error');
+                print(
+                  '[ItemsScreen(${widget.serverId})] Move failed for note $noteId: $error',
+                );
             print(stackTrace);
           }
           if (mounted) {
@@ -747,7 +717,7 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
         });
       } else {
         if (kDebugMode) {
-          print('[ItemsScreen] No target server selected.');
+          print('[ItemsScreen(${widget.serverId})] No target server selected.');
         }
       }
     });
@@ -756,7 +726,7 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
   // Renamed method to reflect it builds the notes list
   // Update signature: Accept the already filtered list
   Widget _buildNotesList(
-    note_providers.NotesState notesState,
+    note_providers.NotesState notesState, // This state is now server-specific
     List<NoteItem> filteredNotes,
   ) {
     // Determine if we are in the hidden view
@@ -769,13 +739,16 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
       notes: filteredNotes,
       notesState: notesState,
       isInHiddenView: isInHiddenView, // Pass the flag
+      serverId: widget.serverId, // Pass serverId
     );
   }
 
   // --- Start Unhide All Confirmation ---
   void _showUnhideAllConfirmation() {
     final manualHiddenCount = ref.read(
-      note_providers.manuallyHiddenNoteCountProvider,
+      note_providers.manuallyHiddenNoteCountProviderFamily(
+        widget.serverId,
+      ), // Use family
     );
     if (manualHiddenCount == 0) {
       // Optionally show a message if there's nothing to unhide
@@ -788,7 +761,7 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
           (BuildContext dialogContext) => CupertinoAlertDialog(
             title: const Text('Unhide All Manually Hidden Notes?'),
             content: Text(
-              'Are you sure you want to unhide all $manualHiddenCount manually hidden notes? Notes hidden due to future start dates will remain hidden.',
+              'Are you sure you want to unhide all $manualHiddenCount manually hidden notes on this server? Notes hidden due to future start dates will remain hidden.',
             ),
             actions: <Widget>[
               CupertinoDialogAction(
@@ -805,10 +778,15 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
     ).then((confirmed) {
       if (confirmed == true) {
         if (kDebugMode) {
-          print('[ItemsScreen] Confirmed Unhide All Manually Hidden.');
+          print(
+            '[ItemsScreen(${widget.serverId})] Confirmed Unhide All Manually Hidden.',
+          );
         }
+        // Use the provider family instance
         ref
-            .read(note_providers.unhideAllNotesProvider)()
+            .read(
+              note_providers.unhideAllNotesProviderFamily(widget.serverId),
+            )()
             .then((_) {
               // Switch back to the 'today' view after unhiding
               if (mounted && ref.read(quickFilterPresetProvider) == 'hidden') {
@@ -819,7 +797,9 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
             })
             .catchError((e, s) {
               if (kDebugMode) {
-                print('[ItemsScreen] Error during Unhide All: $e\n$s');
+                print(
+                  '[ItemsScreen(${widget.serverId})] Error during Unhide All: $e\n$s',
+                );
               }
               // Show error dialog if needed
             });
@@ -829,7 +809,4 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
   // --- End Unhide All Confirmation ---
 
   // --- REMOVED Reset Logic ---
-  // void _showResetConfirmationDialog() { ... }
-  // Future<void> _performFullReset() async { ... }
-  // --- End REMOVED Reset Logic ---
 }

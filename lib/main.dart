@@ -17,6 +17,7 @@ import 'package:flutter_memos/providers/ui_providers.dart'; // Import for UI pro
 import 'package:flutter_memos/screens/chat_screen.dart'; // Keep for potential direct navigation
 import 'package:flutter_memos/screens/edit_entity/edit_entity_screen.dart';
 import 'package:flutter_memos/screens/item_detail/item_detail_screen.dart';
+import 'package:flutter_memos/screens/items/items_screen.dart'; // Import ItemsScreen
 import 'package:flutter_memos/screens/new_note/new_note_screen.dart';
 import 'package:flutter_memos/utils/keyboard_shortcuts.dart'; // Keep for other shortcuts
 import 'package:flutter_memos/utils/provider_logger.dart';
@@ -38,7 +39,7 @@ Route<dynamic>? generateRoute(RouteSettings settings) {
   }
   switch (settings.name) {
     case '/':
-      return null;
+      return null; // Handled by home in CupertinoApp
     case '/chat':
       // Pass arguments directly to ChatScreen if needed via settings
       return CupertinoPageRoute(
@@ -48,7 +49,10 @@ Route<dynamic>? generateRoute(RouteSettings settings) {
     case '/item-detail':
       final args = settings.arguments as Map<String, dynamic>?;
       final itemId = args?['itemId'] as String?;
+      final serverId =
+          args?['serverId'] as String?; // Optional serverId for context
       if (itemId != null) {
+        // Potentially pass serverId if ItemDetailScreen needs it
         return CupertinoPageRoute(
           builder: (_) => ItemDetailScreen(itemId: itemId),
           settings: settings,
@@ -59,7 +63,10 @@ Route<dynamic>? generateRoute(RouteSettings settings) {
       final args = settings.arguments as Map<String, dynamic>?;
       final entityType = args?['entityType'] as String? ?? 'note';
       final entityId = args?['entityId'] as String?;
+      final serverId =
+          args?['serverId'] as String?; // Optional serverId for context
       if (entityId != null) {
+        // Potentially pass serverId if EditEntityScreen needs it
         return CupertinoPageRoute(
           builder:
               (_) =>
@@ -69,6 +76,10 @@ Route<dynamic>? generateRoute(RouteSettings settings) {
       }
       break;
     case '/new-note':
+      final args = settings.arguments as Map<String, dynamic>?;
+      final serverId =
+          args?['serverId'] as String?; // Optional serverId for context
+      // Potentially pass serverId if NewNoteScreen needs it
       return CupertinoPageRoute(
         builder: (_) => const NewNoteScreen(),
         settings: settings,
@@ -77,7 +88,10 @@ Route<dynamic>? generateRoute(RouteSettings settings) {
       final args = settings.arguments as Map<String, dynamic>? ?? {};
       final itemId = args['itemId'] as String?;
       final commentIdToHighlight = args['commentIdToHighlight'] as String?;
+      final serverId =
+          args['serverId'] as String?; // Optional serverId for context
       if (itemId != null) {
+        // Potentially pass serverId if ItemDetailScreen needs it
         return CupertinoPageRoute(
           builder:
               (context) => ProviderScope(
@@ -92,10 +106,22 @@ Route<dynamic>? generateRoute(RouteSettings settings) {
         );
       }
       break;
+    // Add case for parameterized notes route
+    case String name when name.startsWith('/notes/'):
+      final serverId = name.substring('/notes/'.length);
+      if (serverId.isNotEmpty) {
+        return CupertinoPageRoute(
+          builder: (_) => ItemsScreen(serverId: serverId),
+          settings: settings, // Pass settings along
+        );
+      }
+      break; // Fall through if serverId is empty
+
     default:
       if (kDebugMode) {
         print('[RootNavigator] Unknown route: ${settings.name}');
       }
+      // Fallback for unknown routes
       return CupertinoPageRoute(
         builder:
             (context) => const CupertinoPageScaffold(
@@ -106,6 +132,7 @@ Route<dynamic>? generateRoute(RouteSettings settings) {
       );
   }
 
+  // Fallback for invalid arguments or missing IDs
   if (kDebugMode) {
     print('[RootNavigator] Route generation failed for: ${settings.name}');
   }
@@ -290,21 +317,27 @@ class _MyAppCoreState extends ConsumerState<MyAppCore> {
 
     if (host == 'memo' && pathSegments.isNotEmpty) {
       final memoId = pathSegments[0];
+      final serverId =
+          uri.queryParameters['serverId']; // Optional server context
       navigator.pushNamed(
         '/deep-link-target',
         arguments: {
           'itemId': memoId,
           'commentIdToHighlight': null,
+          'serverId': serverId, // Pass serverId if available
         },
       );
     } else if (host == 'comment' && pathSegments.length >= 2) {
       final memoId = pathSegments[0];
       final commentIdToHighlight = pathSegments[1];
+      final serverId =
+          uri.queryParameters['serverId']; // Optional server context
       navigator.pushNamed(
         '/deep-link-target',
         arguments: {
           'itemId': memoId,
           'commentIdToHighlight': commentIdToHighlight,
+          'serverId': serverId, // Pass serverId if available
         },
       );
     } else if (host == 'chat') {
@@ -572,6 +605,9 @@ class _MyAppCoreState extends ConsumerState<MyAppCore> {
               ),
           NewMemoIntent: CallbackAction<NewMemoIntent>(
             onInvoke: (intent) {
+              // Decide where to navigate: maybe the Notes Hub now?
+              // Or keep it opening the generic new note screen?
+              // Let's keep it generic for now.
               ref
                   .read(rootNavigatorKeyProvider)
                   .currentState
@@ -604,7 +640,7 @@ class _MyAppCoreState extends ConsumerState<MyAppCore> {
             ],
             supportedLocales: const [Locale('en', '')],
             home: const ConfigCheckWrapper(), // Initial screen after loading
-            onGenerateRoute: generateRoute,
+            onGenerateRoute: generateRoute, // Use the global route generator
             // Removed the builder that added the ChatOverlay
             builder: (context, child) => child ?? const SizedBox.shrink(),
           ),

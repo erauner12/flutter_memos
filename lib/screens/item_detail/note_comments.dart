@@ -1,6 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_memos/providers/comment_providers.dart';
-// Import note_providers instead of memo_detail_providers
+// Import note_providers and use families
 import 'package:flutter_memos/providers/note_providers.dart' as note_providers;
 import 'package:flutter_memos/providers/ui_providers.dart';
 import 'package:flutter_memos/utils/comment_utils.dart';
@@ -8,15 +8,25 @@ import 'package:flutter_memos/widgets/comment_card.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 
-class NoteComments extends ConsumerWidget { // Renamed class
-  final String noteId; // Renamed from memoId
+class NoteComments extends ConsumerWidget {
+  final String noteId;
+  final String serverId; // Add serverId
 
-  const NoteComments({super.key, required this.noteId}); // Renamed constructor and parameter
+  const NoteComments({
+    super.key,
+    required this.noteId,
+    required this.serverId,
+  }); // Make serverId required
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Use noteCommentsProvider from note_providers
-    final commentsAsync = ref.watch(note_providers.noteCommentsProvider(noteId));
+    // Use noteCommentsProviderFamily with serverId and noteId
+    final commentsAsync = ref.watch(
+      note_providers.noteCommentsProviderFamily((
+        serverId: serverId,
+        noteId: noteId,
+      )),
+    );
     final selectedCommentIndex = ref.watch(selectedCommentIndexProvider);
     final hiddenCommentIds = ref.watch(hiddenCommentIdsProvider);
     final isMultiSelectMode = ref.watch(commentMultiSelectModeProvider);
@@ -60,7 +70,8 @@ class NoteComments extends ConsumerWidget { // Renamed class
               padding: const EdgeInsets.symmetric(horizontal: 16.0),
               child: CommentCard(
                 comment: comment,
-                memoId: noteId, // Pass noteId as memoId prop (CommentCard might need update later)
+                memoId: noteId, // Pass noteId as memoId prop
+                serverId: serverId, // Pass serverId
                 isSelected: isSelected,
                 // Adding a key based on comment ID and pin status to force rebuild when pin status changes
                 key: ValueKey('${comment.id}_${comment.pinned}'),

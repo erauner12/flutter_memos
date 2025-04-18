@@ -10,7 +10,7 @@ import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/models/note_item.dart';
 import 'package:flutter_memos/providers/comment_providers.dart'
     as comment_providers;
-// Import note_providers instead of memo_providers
+// Import note_providers and use families
 import 'package:flutter_memos/providers/note_providers.dart' as note_providers;
 import 'package:flutter_memos/providers/server_config_provider.dart';
 import 'package:flutter_memos/providers/ui_providers.dart' as ui_providers;
@@ -32,10 +32,12 @@ class CaptureUtility extends ConsumerStatefulWidget {
   static final captureUtilityKey = GlobalKey<_CaptureUtilityState>();
 
   final CaptureMode mode;
-  final String? memoId;
+  final String? memoId; // Renamed to noteId internally where appropriate
   final String? hintText;
   final String? buttonText;
   final bool isTestMode;
+  // Add serverId, optional, defaults to active server if not provided
+  final String? serverId;
 
   const CaptureUtility({
     super.key,
@@ -44,6 +46,7 @@ class CaptureUtility extends ConsumerStatefulWidget {
     this.hintText,
     this.buttonText,
     this.isTestMode = false,
+    this.serverId, // Add serverId parameter
   });
 
   static void setTestFileData(
@@ -68,23 +71,28 @@ class CaptureUtility extends ConsumerStatefulWidget {
 
 class _CaptureUtilityState extends ConsumerState<CaptureUtility>
     with SingleTickerProviderStateMixin {
-  // Move these method definitions to the top of the class to fix reference errors
-  Future<void> createNote(NoteItem note) async {
-    // Changed Memo to NoteItem
-    // Use the renamed provider from note_providers
-    await ref.read(note_providers.createNoteProvider)(note);
+
+  String? _effectiveServerId; // Store the serverId to use
+
+  // --- Helper Methods ---
+  Future<void> createNote(NoteItem note, String targetServerId) async {
+    // Use createNoteProviderFamily with the target server ID
+    await ref.read(note_providers.createNoteProviderFamily(targetServerId))(
+      note,
+    );
   }
 
   Future<void> addComment(
     String content,
-    String memoId, {
+    String noteId,
+    String targetServerId, { // Add serverId parameter
     Uint8List? fileBytes,
     String? filename,
     String? contentType,
   }) async {
     if (kDebugMode) {
       print(
-        '[CaptureUtility._addComment] Adding comment: memoId=$memoId, content_empty=${content.isEmpty}, filename=$filename, contentType=$contentType, data_length=${fileBytes?.length}',
+        '[CaptureUtility._addComment] Adding comment: noteId=$noteId, serverId=$targetServerId, content_empty=${content.isEmpty}, filename=$filename, contentType=$contentType, data_length=${_selectedFileData?.length}',
       );
     }
     final newComment = Comment(
@@ -92,11 +100,16 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
       content: content,
       creatorId: '1', // Assuming '1' is a placeholder or default
       createdTs: DateTime.now(), // Use DateTime directly
-      parentId: memoId, // Pass parent ID
-      serverId:
-          ref.read(activeServerConfigProvider)?.id ?? '', // Pass server ID
+      parentId: noteId, // Pass parent ID
+      serverId: targetServerId, // Pass server ID
     );
-    await ref.read(comment_providers.createCommentProvider(memoId))(
+    // Use createCommentProviderFamily with serverId and noteId
+    await ref.read(
+      comment_providers.createCommentProviderFamily((
+        serverId: targetServerId,
+        memoId: noteId,
+      )),
+    )(
       newComment,
       fileBytes: fileBytes,
       filename: filename,
@@ -131,6 +144,7 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
       }
     });
   }
+  // --- End Helper Methods ---
 
   final TextEditingController _textController = TextEditingController();
   final FocusNode _focusNode = FocusNode();
@@ -175,13 +189,34 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
       }
     });
     _currentHeight = _collapsedHeight;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _updateEffectiveServerId(); // Determine serverId initially
+    });
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     _updateHeights(context);
+    _updateEffectiveServerId(); // Update if dependencies change (like activeServer)
   }
+
+  void _updateEffectiveServerId() {
+    // Use widget.serverId if provided, otherwise fallback to active server
+    final newServerId =
+        widget.serverId ?? ref.read(activeServerConfigProvider)?.id;
+    if (_effectiveServerId != newServerId) {
+      setState(() {
+        _effectiveServerId = newServerId;
+      });
+      if (kDebugMode) {
+        print(
+          '[CaptureUtility] Effective Server ID set to: $_effectiveServerId',
+        );
+      }
+    }
+  }
+
 
   @override
   void dispose() {
@@ -627,12 +662,42 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
   }
 
   Future<void> _handleSubmit() async {
+    // Ensure we have a serverId before proceeding
+    if (_effectiveServerId == null) {
+      if (kDebugMode) {
+        print(
+          '[CaptureUtility._handleSubmit] Aborting: No effective server ID.',
+        );
+      }
+      if (mounted) {
+        showCupertinoDialog(
+          context: context,
+          builder:
+              (context) => CupertinoAlertDialog(
+                title: const Text('Error'),
+                content: const Text(
+                  'Cannot submit: No active server context found.',
+                ),
+                actions: [
+                  CupertinoDialogAction(
+                    isDefaultAction: true,
+                    child: const Text('OK'),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ],
+              ),
+        );
+      }
+      return;
+    }
+    final targetServerId = _effectiveServerId!; // Use non-null serverId
+
     final content = _textController.text.trim();
     final hasAttachment = _selectedFileData != null;
 
     if (kDebugMode) {
       print(
-        '[CaptureUtility._handleSubmit] Submitting: mode=${widget.mode}, action=$_submitAction, content_empty=${content.isEmpty}, filename=$_selectedFilename, contentType=$_selectedContentType, data_length=${_selectedFileData?.length}',
+        '[CaptureUtility._handleSubmit] Submitting: mode=${widget.mode}, serverId=$targetServerId, action=$_submitAction, content_empty=${content.isEmpty}, filename=$_selectedFilename, contentType=$_selectedContentType, data_length=${_selectedFileData?.length}',
       );
     }
     // Allow submission even if content is empty for append/prepend actions
@@ -666,9 +731,7 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
     NoteItem? updatedMemoResult;
     try {
       if (widget.mode == CaptureMode.createMemo) {
-        // Create Memo logic (remains unchanged, attachments handled separately if needed)
-        // Here, use createNote with a NoteItem instead of a Memo
-        // This example assumes that NoteItem has similar fields to Memo.
+        // Create Memo logic
         final newNote = NoteItem(
           id: 'temp',
           content: content,
@@ -684,30 +747,34 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
           creatorId: '1',
           parentId: null,
         );
-        // Use note_providers.createNoteProvider
-        await ref.read(note_providers.createNoteProvider)(newNote);
+        // Use createNote helper with targetServerId
+        await createNote(newNote, targetServerId);
       } else if (widget.mode == CaptureMode.addComment &&
           widget.memoId != null) {
         // Add Comment logic (expanded)
-        final memoId = widget.memoId!;
+        final noteId = widget.memoId!; // Use noteId terminology
         final currentContent =
             _textController.text.trim(); // Content from text field
 
-        // Fetch necessary data within the handler
-        // Use note_providers.noteCommentsProvider
+        // Fetch necessary data within the handler using family providers
         final commentsAsync = ref.read(
-          note_providers.noteCommentsProvider(memoId),
+          note_providers.noteCommentsProviderFamily((
+            serverId: targetServerId,
+            noteId: noteId,
+          )),
         );
         final comments = commentsAsync.valueOrNull ?? [];
         // Sort comments by createdTs to reliably get the last one
         comments.sort((a, b) => a.createdTs.compareTo(b.createdTs));
         final lastComment = comments.isNotEmpty ? comments.last : null;
 
-        // Use note_providers.noteDetailProvider
         final memoAsync = ref.read(
-          note_providers.noteDetailProvider(memoId),
+          note_providers.noteDetailProviderFamily((
+            serverId: targetServerId,
+            noteId: noteId,
+          )),
         );
-        final parentMemo = memoAsync.valueOrNull; // Use valueOrNull for safety
+        final parentNote = memoAsync.valueOrNull; // Use valueOrNull for safety
 
         // Determine action based on _submitAction and attachment presence
         final currentAction =
@@ -717,14 +784,19 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
           case SubmitAction.newComment:
             await addComment(
               currentContent,
-              memoId,
+              noteId,
+              targetServerId, // Pass serverId
               fileBytes: _selectedFileData,
               filename: _selectedFilename,
               contentType: _selectedContentType,
             );
-            // After adding a comment, also refresh the parent memo detail
-            // Use note_providers.noteDetailProvider
-            final _ = ref.refresh(note_providers.noteDetailProvider(memoId));
+            // After adding a comment, also refresh the parent note detail
+            ref.invalidate(
+              note_providers.noteDetailProviderFamily((
+                serverId: targetServerId,
+                noteId: noteId,
+              )),
+            );
             break;
           case SubmitAction.appendToLastComment:
             if (lastComment != null) {
@@ -732,14 +804,21 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
               final lastContent = lastComment.content ?? '';
               final updatedContent =
                   "$lastContent\n\n$currentContent";
-              // Call updateCommentProvider (assuming it exists and takes these args)
-              await ref.read(comment_providers.updateCommentProvider)(
-                memoId,
-                lastComment.id,
-                updatedContent,
+              // Call updateCommentProviderFamily
+              await ref.read(
+                comment_providers.updateCommentProviderFamily((
+                  serverId: targetServerId,
+                  memoId: noteId,
+                  commentId: lastComment.id,
+                )),
+              )(updatedContent);
+              // Refresh parent note detail after comment update
+              ref.invalidate(
+                note_providers.noteDetailProviderFamily((
+                  serverId: targetServerId,
+                  noteId: noteId,
+                )),
               );
-              // Refresh parent memo detail after comment update
-              final _ = ref.refresh(note_providers.noteDetailProvider(memoId));
             } else {
               throw Exception("Cannot append: No last comment found.");
             }
@@ -750,71 +829,87 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
               final lastContent = lastComment.content ?? '';
               final updatedContent =
                   "$currentContent\n\n$lastContent";
-              // Call updateCommentProvider
-              await ref.read(comment_providers.updateCommentProvider)(
-                memoId,
-                lastComment.id,
-                updatedContent,
+              // Call updateCommentProviderFamily
+              await ref.read(
+                comment_providers.updateCommentProviderFamily((
+                  serverId: targetServerId,
+                  memoId: noteId,
+                  commentId: lastComment.id,
+                )),
+              )(updatedContent);
+              // Refresh parent note detail after comment update
+              ref.invalidate(
+                note_providers.noteDetailProviderFamily((
+                  serverId: targetServerId,
+                  noteId: noteId,
+                )),
               );
-              // Refresh parent memo detail after comment update
-              final _ = ref.refresh(note_providers.noteDetailProvider(memoId));
             } else {
               throw Exception("Cannot prepend: No last comment found.");
             }
             break;
           case SubmitAction.appendToMemo:
           case SubmitAction.prependToMemo:
-            if (parentMemo != null) {
+            if (parentNote != null) {
               // Ensure double newline is added between existing and new content
               final updatedContent = (currentAction == SubmitAction.appendToMemo)
-                      ? "${parentMemo.content}\n\n$currentContent"
-                      : "$currentContent\n\n${parentMemo.content}";
+                      ? "${parentNote.content}\n\n$currentContent"
+                      : "$currentContent\n\n${parentNote.content}";
 
-              // Create a NoteItem from parentMemo properties
+              // Create a NoteItem from parentNote properties
               final updatedNoteData = NoteItem(
-                id: parentMemo.id,
+                id: parentNote.id,
                 content: updatedContent,
-                pinned: parentMemo.pinned,
-                state: parentMemo.state,
-                visibility: parentMemo.visibility,
-                createTime: parentMemo.createTime,
+                pinned: parentNote.pinned,
+                state: parentNote.state,
+                visibility: parentNote.visibility,
+                createTime: parentNote.createTime,
                 updateTime: DateTime.now(),
-                displayTime: parentMemo.displayTime,
-                tags: parentMemo.tags,
-                resources: parentMemo.resources,
-                relations: parentMemo.relations,
-                creatorId: parentMemo.creatorId,
-                parentId: parentMemo.parentId,
+                displayTime: parentNote.displayTime,
+                tags: parentNote.tags,
+                resources: parentNote.resources,
+                relations: parentNote.relations,
+                creatorId: parentNote.creatorId,
+                parentId: parentNote.parentId,
               );
 
-              // Call updateNoteProvider and store the result
+              // Call updateNoteProviderFamily and store the result
               updatedMemoResult = await ref.read(
-                note_providers.updateNoteProvider(memoId),
+                note_providers.updateNoteProviderFamily((
+                  serverId: targetServerId,
+                  noteId: noteId,
+                )),
               )(updatedNoteData);
 
               // --- Manually update cache and refresh providers ---
               if (ref.exists(note_providers.noteDetailCacheProvider)) {
                 ref
                     .read(note_providers.noteDetailCacheProvider.notifier)
-                    .update((state) => {...state, memoId: updatedMemoResult!});
+                    .update((state) => {...state, noteId: updatedMemoResult!});
                 if (kDebugMode) {
                   print(
-                    '[CaptureUtility] Manually updated noteDetailCacheProvider for $memoId',
+                    '[CaptureUtility] Manually updated noteDetailCacheProvider for $noteId',
                   );
                 }
               }
-              final _ = await ref.refresh(
-                note_providers.noteDetailProvider(memoId).future,
+              // Refresh using family provider
+              ref.refresh(
+                note_providers.noteDetailProviderFamily((
+                  serverId: targetServerId,
+                  noteId: noteId,
+                )).future,
               );
-              final _ = ref.refresh(note_providers.notesNotifierProvider);
+              ref.refresh(
+                note_providers.notesNotifierProviderFamily(targetServerId),
+              );
               if (kDebugMode) {
                 print(
-                  '[CaptureUtility] Explicitly refreshed (and awaited detail) providers for $memoId',
+                  '[CaptureUtility] Explicitly refreshed providers for $noteId on server $targetServerId',
                 );
               }
             } else {
               throw Exception(
-                "Cannot ${currentAction == SubmitAction.appendToMemo ? 'append' : 'prepend'}: Parent memo not loaded or available.",
+                "Cannot ${currentAction == SubmitAction.appendToMemo ? 'append' : 'prepend'}: Parent note not loaded or available.",
               );
             }
             break;
@@ -1158,10 +1253,17 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
             ? 'Capture something...'
             : 'Add a comment...';
 
-    // Use note_providers.noteCommentsProvider
+    // Use family provider with effectiveServerId
     final commentsAsync =
-        widget.mode == CaptureMode.addComment && widget.memoId != null
-            ? ref.watch(note_providers.noteCommentsProvider(widget.memoId!))
+        widget.mode == CaptureMode.addComment &&
+                widget.memoId != null &&
+                _effectiveServerId != null
+            ? ref.watch(
+              note_providers.noteCommentsProviderFamily((
+                serverId: _effectiveServerId!,
+                noteId: widget.memoId!,
+              )),
+            )
             : const AsyncValue.data(<Comment>[]);
     final bool hasComments = commentsAsync.maybeWhen(
       data: (comments) => comments.isNotEmpty,
@@ -1169,10 +1271,17 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
     );
     final bool hasAttachment = _selectedFileData != null;
 
-    // Use note_providers.noteDetailProvider
+    // Use family provider with effectiveServerId
     final parentMemoAsyncValue =
-        widget.mode == CaptureMode.addComment && widget.memoId != null
-            ? ref.watch(note_providers.noteDetailProvider(widget.memoId!))
+        widget.mode == CaptureMode.addComment &&
+                widget.memoId != null &&
+                _effectiveServerId != null
+            ? ref.watch(
+              note_providers.noteDetailProviderFamily((
+                serverId: _effectiveServerId!,
+                noteId: widget.memoId!,
+              )),
+            )
             : const AsyncValue.data(null);
     final bool isParentMemoLoaded =
         parentMemoAsyncValue.hasValue && parentMemoAsyncValue.value != null;

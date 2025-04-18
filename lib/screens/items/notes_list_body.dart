@@ -1,39 +1,36 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-// Import note_providers instead of memo_providers
 import 'package:flutter_memos/models/note_item.dart'; // Import NoteItem model
 import 'package:flutter_memos/providers/note_providers.dart' as note_providers;
 import 'package:flutter_memos/providers/ui_providers.dart' as ui_providers;
-// Import note_list_item instead of memo_list_item
 import 'package:flutter_memos/screens/items/note_list_item.dart';
 import 'package:flutter_memos/screens/memos/memos_empty_state.dart'; // Keep for now, rename later if needed
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class NotesListBody extends ConsumerStatefulWidget { // Renamed class
-  // Renamed callback parameter
-  final void Function(String noteId)? onMoveNoteToServer; // Renamed from onMoveMemoToServer
+class NotesListBody extends ConsumerStatefulWidget {
+  final void Function(String noteId)? onMoveNoteToServer;
   final ScrollController scrollController;
-  // Add parameters to receive notes list and state directly
   final List<NoteItem> notes;
   final note_providers.NotesState notesState;
-  final bool isInHiddenView; // Add this parameter
+  final bool isInHiddenView;
+  final String serverId; // Add serverId parameter
 
-
-  const NotesListBody({ // Renamed constructor
+  const NotesListBody({
     super.key,
     required this.scrollController,
-    required this.notes, // Make notes required
-    required this.notesState, // Make notesState required
-    required this.isInHiddenView, // Make it required
-    this.onMoveNoteToServer, // Renamed parameter
+    required this.notes,
+    required this.notesState,
+    required this.isInHiddenView,
+    required this.serverId, // Make serverId required
+    this.onMoveNoteToServer,
   });
 
   @override
-  ConsumerState<NotesListBody> createState() => _NotesListBodyState(); // Renamed class
+  ConsumerState<NotesListBody> createState() => _NotesListBodyState();
 }
 
-class _NotesListBodyState extends ConsumerState<NotesListBody> { // Renamed class
+class _NotesListBodyState extends ConsumerState<NotesListBody> {
 
   @override
   void initState() {
@@ -47,19 +44,15 @@ class _NotesListBodyState extends ConsumerState<NotesListBody> { // Renamed clas
   void _ensureInitialSelection() {
     if (!mounted) return;
 
-    // Use providers from note_providers and renamed ui_providers
-    // Use the notes list passed via the widget constructor
     final notes = widget.notes;
-    // Use ui_providers.selectedItemIdProvider
     final selectedId = ref.read(ui_providers.selectedItemIdProvider);
 
     if (notes.isNotEmpty && selectedId == null) {
-      final firstNoteId = notes.first.id; // Renamed variable
-      // Use ui_providers.selectedItemIdProvider
+      final firstNoteId = notes.first.id;
       ref.read(ui_providers.selectedItemIdProvider.notifier).state = firstNoteId;
       if (kDebugMode) {
         print(
-          '[NotesListBody] Selected first note (ID=$firstNoteId) after initial load/refresh.', // Updated log identifier
+          '[NotesListBody(${widget.serverId})] Selected first note (ID=$firstNoteId) after initial load/refresh.',
         );
       }
     }
@@ -74,31 +67,39 @@ class _NotesListBodyState extends ConsumerState<NotesListBody> { // Renamed clas
   void _onScroll() {
     if (widget.scrollController.position.pixels >=
         widget.scrollController.position.maxScrollExtent - 200) {
-      // Use provider from note_providers
-      final notifier = ref.read(note_providers.notesNotifierProvider.notifier);
-      // Use provider from note_providers
-      if (ref.read(note_providers.notesNotifierProvider).canLoadMore) {
+      // Use the correct provider family instance
+      final notifier = ref.read(
+        note_providers.notesNotifierProviderFamily(widget.serverId).notifier,
+      );
+      // Use the correct state instance
+      if (ref
+          .read(note_providers.notesNotifierProviderFamily(widget.serverId))
+          .canLoadMore) {
         if (kDebugMode) {
           print(
-            '[NotesListBody] Reached near bottom, attempting to fetch more notes.', // Updated log identifier
+            '[NotesListBody(${widget.serverId})] Reached near bottom, attempting to fetch more notes.',
           );
         }
-        notifier.fetchMoreNotes(); // Use renamed method
+        notifier.fetchMoreNotes();
       } else {
         // Optional: log if needed
-        // if (kDebugMode) { print('[NotesListBody] Reached near bottom, but cannot load more.'); }
+        // if (kDebugMode) { print('[NotesListBody(${widget.serverId})] Reached near bottom, but cannot load more.'); }
       }
     }
   }
 
   Future<void> _onRefresh() async {
     if (kDebugMode) {
-      print('[NotesListBody] Pull-to-refresh triggered.'); // Updated log identifier
+      print('[NotesListBody(${widget.serverId})] Pull-to-refresh triggered.');
     }
     HapticFeedback.lightImpact();
 
-    // Use provider from note_providers
-    await ref.read(note_providers.notesNotifierProvider.notifier).refresh();
+    // Use the correct provider family instance
+    await ref
+        .read(
+          note_providers.notesNotifierProviderFamily(widget.serverId).notifier,
+        )
+        .refresh();
 
     HapticFeedback.mediumImpact();
     _ensureInitialSelection();
@@ -131,11 +132,9 @@ class _NotesListBodyState extends ConsumerState<NotesListBody> { // Renamed clas
 
   @override
   Widget build(BuildContext context) {
-    // Use providers from note_providers
     // Use the state and list passed via the widget constructor
     final notesState = widget.notesState;
-    final visibleNotes = widget.notes; // Use the passed list
-    // final hasSearchResults = ref.watch(note_providers.hasSearchResultsProvider); // TODO: do we need this?
+    final visibleNotes = widget.notes;
 
     // Loading State
     if (notesState.isLoading && notesState.notes.isEmpty) {
@@ -154,9 +153,13 @@ class _NotesListBodyState extends ConsumerState<NotesListBody> { // Renamed clas
               color: CupertinoColors.systemRed,
             ),
             const SizedBox(height: 10),
-            Text(
-              'Error: ${notesState.error}',
-              textAlign: TextAlign.center,
+            Padding(
+              // Added padding for better text wrapping
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: Text(
+                'Error loading notes for this server: ${notesState.error}',
+                textAlign: TextAlign.center,
+              ),
             ),
             const SizedBox(height: 10),
             CupertinoButton(onPressed: _onRefresh, child: const Text('Retry')),
@@ -167,7 +170,8 @@ class _NotesListBodyState extends ConsumerState<NotesListBody> { // Renamed clas
 
     // Empty State (or No Search Results)
     if (visibleNotes.isEmpty) {
-      return MemosEmptyState(onRefresh: _onRefresh); // Keep using MemosEmptyState for now
+      // Pass refresh handler to empty state
+      return MemosEmptyState(onRefresh: _onRefresh);
     }
 
     // Data State (List View)
@@ -193,25 +197,23 @@ class _NotesListBodyState extends ConsumerState<NotesListBody> { // Renamed clas
                 delegate: SliverChildBuilderDelegate((context, index) {
                   final note = visibleNotes[index];
                   if (kDebugMode) {
-                    if (widget.onMoveNoteToServer != null) { // Use renamed callback
-                      print(
-                        '[NotesListBody] Building NoteListItem for ${note.id}, passing onMoveNoteToServer callback.', // Updated log identifier
-                      );
+                    if (widget.onMoveNoteToServer != null) {
+                      // print(
+                      //   '[NotesListBody(${widget.serverId})] Building NoteListItem for ${note.id}, passing onMoveNoteToServer callback.',
+                      // );
                     }
                   }
-                  return NoteListItem( // Use renamed widget
+                  return NoteListItem(
                     key: ValueKey(note.id),
-                    note: note, // Pass NoteItem as note prop
+                    note: note,
                     index: index,
-                    isInHiddenView: widget.isInHiddenView, // Pass the flag down
-                    onMoveToServer: widget.onMoveNoteToServer != null // Use renamed callback
+                    isInHiddenView: widget.isInHiddenView,
+                    onMoveToServer:
+                        widget.onMoveNoteToServer != null
                         ? () => widget.onMoveNoteToServer!(note.id)
                         : null,
-                    // TODO: Add 'Add to Workbench' action here (e.g., in a context menu on long-press)
-                    // Action should:
-                    // 1. Get note details (id, preview, server config).
-                    // 2. Create WorkbenchItemReference(type: note).
-                    // 3. Call ref.read(workbenchProvider.notifier).addItem(...).
+                    serverId: widget.serverId, // Pass serverId down
+                    // TODO: Add 'Add to Workbench' action here
                   );
                 }, childCount: visibleNotes.length),
               ),

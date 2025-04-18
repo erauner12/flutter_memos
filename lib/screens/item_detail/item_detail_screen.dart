@@ -9,7 +9,7 @@ import 'package:flutter_memos/main.dart'; // Adjust path if main.dart is elsewhe
 import 'package:flutter_memos/models/note_item.dart'; // Import NoteItem
 import 'package:flutter_memos/models/workbench_item_reference.dart'; // Import workbench model
 import 'package:flutter_memos/models/workbench_item_type.dart'; // Import the unified enum
-// Import note_providers instead of memo_providers
+// Import note_providers and use families
 import 'package:flutter_memos/providers/note_providers.dart' as note_providers;
 import 'package:flutter_memos/providers/server_config_provider.dart'; // Import server config provider
 // Import settings_provider for manuallyHiddenNoteIdsProvider
@@ -29,10 +29,11 @@ import 'note_content.dart'; // Updated import
 
 class ItemDetailScreen extends ConsumerStatefulWidget {
   final String itemId;
+  final String? serverId; // Make serverId optional, get from active if null
   final WorkbenchItemType itemType =
       WorkbenchItemType.note; // USES IMPORTED ENUM
 
-  const ItemDetailScreen({super.key, required this.itemId});
+  const ItemDetailScreen({super.key, required this.itemId, this.serverId});
 
   @override
   ConsumerState<ItemDetailScreen> createState() => _ItemDetailScreenState();
@@ -45,17 +46,36 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
   );
   late ScrollController _scrollController;
   BuildContext? _loadingDialogContext;
+  String? _effectiveServerId; // Store the serverId to use
 
   @override
   void initState() {
     super.initState();
     _scrollController = ScrollController();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      _updateEffectiveServerId(); // Determine serverId initially
       if (mounted) {
         _screenFocusNode.requestFocus();
       }
     });
   }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _updateEffectiveServerId(); // Update if dependencies change (like activeServer)
+  }
+
+  void _updateEffectiveServerId() {
+    final newServerId =
+        widget.serverId ?? ref.read(activeServerConfigProvider)?.id;
+    if (_effectiveServerId != newServerId) {
+      setState(() {
+        _effectiveServerId = newServerId;
+      });
+    }
+  }
+
 
   @override
   void dispose() {
@@ -103,13 +123,27 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
   }
 
   Future<void> _onRefresh() async {
+    if (_effectiveServerId == null) return; // Don't refresh if no server
     if (kDebugMode) {
-      print('[ItemDetailScreen] Pull-to-refresh triggered.');
+      print(
+        '[ItemDetailScreen($_effectiveServerId)] Pull-to-refresh triggered.',
+      );
     }
     HapticFeedback.mediumImpact();
     if (!mounted) return;
-    ref.invalidate(note_providers.noteDetailProvider(widget.itemId));
-    ref.invalidate(note_providers.noteCommentsProvider(widget.itemId));
+    // Use family providers with effectiveServerId
+    ref.invalidate(
+      note_providers.noteDetailProviderFamily((
+        serverId: _effectiveServerId!,
+        noteId: widget.itemId,
+      )),
+    );
+    ref.invalidate(
+      note_providers.noteCommentsProviderFamily((
+        serverId: _effectiveServerId!,
+        noteId: widget.itemId,
+      )),
+    );
   }
 
   Widget _buildRefreshIndicator(
@@ -147,9 +181,17 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
 
   // --- Add to Workbench Action ---
   Future<void> _addNoteToWorkbench(NoteItem note) async {
-    final activeServer = ref.read(activeServerConfigProvider);
-    if (activeServer == null) {
-      _showErrorSnackbar("Cannot add to workbench: No active server.");
+    if (_effectiveServerId == null) {
+      _showErrorSnackbar("Cannot add to workbench: Server context missing.");
+      return;
+    }
+    final serverConfig = ref
+        .read(multiServerConfigProvider)
+        .servers
+        .firstWhereOrNull((s) => s.id == _effectiveServerId);
+
+    if (serverConfig == null) {
+      _showErrorSnackbar("Cannot add to workbench: Server config not found.");
       return;
     }
 
@@ -203,9 +245,9 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
       instanceId: targetInstanceId, // Use the chosen or default instance ID
       referencedItemId: note.id,
       referencedItemType: WorkbenchItemType.note, // USES IMPORTED ENUM
-      serverId: activeServer.id,
-      serverType: activeServer.serverType,
-      serverName: activeServer.name,
+      serverId: serverConfig.id, // Use the determined serverId
+      serverType: serverConfig.serverType,
+      serverName: serverConfig.name,
       previewContent:
           preview.length > 100
               ? '${preview.substring(0, 97)}...'
@@ -226,13 +268,16 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
   // --- End Add to Workbench Action ---
 
   void _showActions() {
-    if (!mounted) return;
+    if (!mounted || _effectiveServerId == null) return;
     final isFixingGrammar = ref.read(note_providers.isFixingGrammarProvider);
     final noteAsync = ref.read(
-      note_providers.noteDetailProvider(widget.itemId),
+      // Use family provider
+      note_providers.noteDetailProviderFamily((
+        serverId: _effectiveServerId!,
+        noteId: widget.itemId,
+      )),
     );
-    final activeServer = ref.read(activeServerConfigProvider);
-    final bool canInteractWithServer = activeServer != null;
+    final bool canInteractWithServer = _effectiveServerId != null;
 
     showCupertinoModalPopup<void>(
       context: context,
@@ -250,15 +295,23 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
                       arguments: {
                         'entityType': 'note',
                         'entityId': widget.itemId,
+                        'serverId': _effectiveServerId, // Pass serverId
                       },
                     )
                     .then((_) {
-                      if (!mounted) return;
+                      if (!mounted || _effectiveServerId == null) return;
+                      // Use family providers
                       ref.invalidate(
-                        note_providers.noteDetailProvider(widget.itemId),
+                        note_providers.noteDetailProviderFamily((
+                          serverId: _effectiveServerId!,
+                          noteId: widget.itemId,
+                        )),
                       );
                       ref.invalidate(
-                        note_providers.noteCommentsProvider(widget.itemId),
+                        note_providers.noteCommentsProviderFamily((
+                          serverId: _effectiveServerId!,
+                          noteId: widget.itemId,
+                        )),
                       );
                       ref
                           .read(
@@ -350,7 +403,7 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
               isDestructiveAction: true,
               onPressed: () async {
                 Navigator.pop(popupContext);
-                if (!mounted) return;
+                if (!mounted || _effectiveServerId == null) return;
                 final dialogContext = context;
                 final confirmed = await showCupertinoDialog<bool>(
                   context: dialogContext,
@@ -375,10 +428,14 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
                 );
 
                 if (confirmed == true) {
-                  if (!mounted) return;
+                  if (!mounted || _effectiveServerId == null) return;
                   try {
+                    // Use family provider
                     await ref.read(
-                      note_providers.deleteNoteProvider(widget.itemId),
+                      note_providers.deleteNoteProviderFamily((
+                        serverId: _effectiveServerId!,
+                        noteId: widget.itemId,
+                      )),
                     )();
                     if (!mounted) return;
                     if (Navigator.of(context).canPop()) {
@@ -410,14 +467,18 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
   }
 
   Future<void> _fixGrammar() async {
-    if (!mounted) return;
+    if (!mounted || _effectiveServerId == null) return;
     ref.read(note_providers.isFixingGrammarProvider.notifier).state = true;
     HapticFeedback.mediumImpact();
     _showLoadingDialog('Fixing grammar...');
 
     try {
+      // Use family provider
       await ref.read(
-        note_providers.fixNoteGrammarProvider(widget.itemId).future,
+        note_providers.fixNoteGrammarProviderFamily((
+          serverId: _effectiveServerId!,
+          noteId: widget.itemId,
+        )).future,
       );
       if (!mounted) return;
       _dismissLoadingDialog();
@@ -426,7 +487,8 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
       if (!mounted) return;
       _dismissLoadingDialog();
       _showErrorSnackbar('Failed to fix grammar: $e');
-      if (kDebugMode) print('[ItemDetailScreen] Fix Grammar Error: $e');
+      if (kDebugMode)
+        print('[ItemDetailScreen($_effectiveServerId)] Fix Grammar Error: $e');
     } finally {
       if (mounted) {
         ref.read(note_providers.isFixingGrammarProvider.notifier).state = false;
@@ -440,9 +502,8 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
     String itemId,
     WorkbenchItemType itemType, // USES IMPORTED ENUM
   ) async {
-    final activeServerId = ref.read(activeServerConfigProvider)?.id;
-    if (activeServerId == null) {
-      _showErrorSnackbar('Cannot copy thread: No active server.');
+    if (_effectiveServerId == null) {
+      _showErrorSnackbar('Cannot copy thread: Server context missing.');
       return;
     }
     _showLoadingDialog('Fetching thread...');
@@ -455,7 +516,7 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
         ref,
         itemId,
         itemType, // Pass imported enum
-        activeServerId,
+        _effectiveServerId!, // Use effective serverId
       );
       await Clipboard.setData(ClipboardData(text: fetchedContent));
     } catch (e) {
@@ -478,12 +539,10 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
     String itemId,
     WorkbenchItemType itemType, // USES IMPORTED ENUM
   ) async {
-    final activeServer = ref.read(activeServerConfigProvider);
-    if (activeServer == null) {
-      _showErrorSnackbar('Cannot start chat: No active server.');
+    if (_effectiveServerId == null) {
+      _showErrorSnackbar('Cannot start chat: Server context missing.');
       return;
     }
-    final activeServerId = activeServer.id;
 
     _showLoadingDialog('Fetching thread for chat...');
     String? fetchedContent;
@@ -494,7 +553,7 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
         ref,
         itemId,
         itemType, // Pass imported enum
-        activeServerId,
+        _effectiveServerId!, // Use effective serverId
       );
     } catch (e) {
       fetchError = e;
@@ -522,7 +581,7 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
         fetchedContent,
         itemId,
         itemType, // Pass imported enum
-        activeServerId,
+        _effectiveServerId!, // Use effective serverId
       );
     } catch (e) {
       if (mounted) {
@@ -536,13 +595,13 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
     String fetchedContent,
     String itemId,
     WorkbenchItemType itemType, // USES IMPORTED ENUM
-    String activeServerId,
+    String serverId, // Renamed from activeServerId
   ) {
     final chatArgs = {
       'contextString': fetchedContent,
       'parentItemId': itemId,
       'parentItemType': itemType, // Pass imported enum
-      'parentServerId': activeServerId,
+      'parentServerId': serverId, // Use the passed serverId
     };
 
     final rootNavigatorKey = ref.read(rootNavigatorKeyProvider);
@@ -579,9 +638,13 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
   }
 
   void _selectNextComment() {
-    if (!mounted) return;
+    if (!mounted || _effectiveServerId == null) return;
     final commentsAsync = ref.read(
-      note_providers.noteCommentsProvider(widget.itemId),
+      // Use family provider
+      note_providers.noteCommentsProviderFamily((
+        serverId: _effectiveServerId!,
+        noteId: widget.itemId,
+      )),
     );
     commentsAsync.whenData((comments) {
       if (comments.isEmpty) return;
@@ -596,9 +659,13 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
   }
 
   void _selectPreviousComment() {
-    if (!mounted) return;
+    if (!mounted || _effectiveServerId == null) return;
     final commentsAsync = ref.read(
-      note_providers.noteCommentsProvider(widget.itemId),
+      // Use family provider
+      note_providers.noteCommentsProviderFamily((
+        serverId: _effectiveServerId!,
+        noteId: widget.itemId,
+      )),
     );
     commentsAsync.whenData((comments) {
       if (comments.isEmpty) return;
@@ -614,11 +681,22 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
 
   @override
   Widget build(BuildContext context) {
+    // Ensure effectiveServerId is set before building the main UI
+    if (_effectiveServerId == null) {
+      return const CupertinoPageScaffold(
+        navigationBar: CupertinoNavigationBar(middle: Text('Loading...')),
+        child: Center(child: CupertinoActivityIndicator()),
+      );
+    }
+
     final noteAsync = ref.watch(
-      note_providers.noteDetailProvider(widget.itemId),
+      // Use family provider
+      note_providers.noteDetailProviderFamily((
+        serverId: _effectiveServerId!,
+        noteId: widget.itemId,
+      )),
     );
-    final activeServer = ref.watch(activeServerConfigProvider);
-    final bool isActiveServerItem = activeServer != null;
+    final bool canInteractWithServer = _effectiveServerId != null;
 
     return Focus(
       focusNode: _screenFocusNode,
@@ -656,12 +734,14 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
           child: Column(
             children: [
               Expanded(child: _buildBody()),
-              if (isActiveServerItem)
+              if (canInteractWithServer)
                 CaptureUtility(
                   mode: CaptureMode.addComment,
                   memoId: widget.itemId,
                   hintText: 'Add a comment...',
                   buttonText: 'Add Comment',
+                  // Pass serverId if CaptureUtility needs it
+                  // serverId: _effectiveServerId,
                 ),
             ],
           ),
@@ -671,25 +751,15 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
   }
 
   Widget _buildBody() {
-    if (!mounted) return const Center(child: CupertinoActivityIndicator());
+    if (!mounted || _effectiveServerId == null)
+      return const Center(child: CupertinoActivityIndicator());
     final noteAsync = ref.watch(
-      note_providers.noteDetailProvider(widget.itemId),
+      // Use family provider
+      note_providers.noteDetailProviderFamily((
+        serverId: _effectiveServerId!,
+        noteId: widget.itemId,
+      )),
     );
-    final activeServer = ref.watch(activeServerConfigProvider);
-    final bool isActiveServerItem = activeServer != null;
-
-    if (!isActiveServerItem) {
-      return const Center(
-        child: Padding(
-          padding: EdgeInsets.all(16.0),
-          child: Text(
-            'The server for this item is no longer active. Please switch servers to interact.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: CupertinoColors.secondaryLabel),
-          ),
-        ),
-      );
-    }
 
     return noteAsync.when(
       data: (note) {
@@ -707,7 +777,11 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
                 builder: _buildRefreshIndicator,
               ),
               SliverToBoxAdapter(
-                child: NoteContent(note: note, noteId: widget.itemId),
+                child: NoteContent(
+                  note: note,
+                  noteId: widget.itemId,
+                  serverId: _effectiveServerId!,
+                ), // Pass serverId
               ),
               SliverToBoxAdapter(
                 child: Container(
@@ -719,7 +793,12 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
                   ),
                 ),
               ),
-              SliverToBoxAdapter(child: NoteComments(noteId: widget.itemId)),
+              SliverToBoxAdapter(
+                child: NoteComments(
+                  noteId: widget.itemId,
+                  serverId: _effectiveServerId!,
+                ),
+              ), // Pass serverId
               const SliverPadding(padding: EdgeInsets.only(bottom: 20)),
             ],
           ),

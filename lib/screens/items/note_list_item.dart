@@ -1,6 +1,7 @@
 import 'dart:async'; // For Completer
 import 'dart:math'; // For min
 
+import 'package:collection/collection.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 // Remove Material import if Tooltip or other Material widgets are not used here
@@ -30,13 +31,15 @@ class NoteListItem extends ConsumerStatefulWidget {
   final NoteItem note;
   final int index;
   final VoidCallback? onMoveToServer;
-  final bool isInHiddenView; // Add this parameter
+  final bool isInHiddenView;
+  final String serverId; // Add serverId
 
   const NoteListItem({
     super.key,
     required this.note,
     required this.index,
-    required this.isInHiddenView, // Make it required
+    required this.isInHiddenView,
+    required this.serverId, // Make serverId required
     this.onMoveToServer,
   });
 
@@ -175,9 +178,9 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
         .contains(widget.note.id);
     final now = DateTime.now();
     final isFutureDated = widget.note.startDate?.isAfter(now) ?? false;
-    // List items are assumed to be on the active server
-    final bool canInteractWithServer =
-        ref.read(activeServerConfigProvider) != null;
+    // Check if the current item's server matches the globally active one
+    final activeServerId = ref.read(activeServerConfigProvider)?.id;
+    final bool canInteractWithServer = widget.serverId == activeServerId;
 
     showCupertinoModalPopup<void>(
       context: scaffoldContext,
@@ -323,9 +326,14 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
                           final newStartDate = currentStart.add(
                             const Duration(days: 1),
                           );
+                          // Use family provider
                           ref
                               .read(
-                                note_providers.notesNotifierProvider.notifier,
+                                note_providers
+                                    .notesNotifierProviderFamily(
+                                      widget.serverId,
+                                    )
+                                    .notifier,
                               )
                               .updateNoteStartDate(
                                 widget.note.id,
@@ -345,9 +353,14 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
                           final newStartDate = currentStart.add(
                             const Duration(days: 7),
                           );
+                          // Use family provider
                           ref
                               .read(
-                                note_providers.notesNotifierProvider.notifier,
+                                note_providers
+                                    .notesNotifierProviderFamily(
+                                      widget.serverId,
+                                    )
+                                    .notifier,
                               )
                               .updateNoteStartDate(
                                 widget.note.id,
@@ -364,9 +377,14 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
                       !canInteractWithServer
                           ? null
                           : () {
+                            // Use family provider
                             ref
                                 .read(
-                                  note_providers.notesNotifierProvider.notifier,
+                                  note_providers
+                                      .notesNotifierProviderFamily(
+                                        widget.serverId,
+                                      )
+                                      .notifier,
                                 )
                                 .updateNoteStartDate(widget.note.id, null);
                             Navigator.pop(popupContext);
@@ -390,17 +408,22 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
     WidgetRef ref,
     NoteItem note,
   ) {
-    final activeServer = ref.read(activeServerConfigProvider);
-    if (activeServer == null) {
+    // Use the serverId from the widget
+    final serverConfig = ref
+        .read(multiServerConfigProvider)
+        .servers
+        .firstWhereOrNull((s) => s.id == widget.serverId);
+
+    if (serverConfig == null) {
       _showAlertDialog(
         context,
         'Error',
-        "Cannot add to workbench: No active server.",
+        "Cannot add to workbench: Server config not found.",
       );
       return;
     }
 
-    // Fetch the active instance ID
+    // Fetch the active instance ID (Workbench instance is global)
     final instanceId = ref.read(
       workbenchInstancesProvider.select((s) => s.activeInstanceId),
     );
@@ -411,9 +434,9 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
       id: const Uuid().v4(),
       referencedItemId: note.id,
       referencedItemType: WorkbenchItemType.note, // USES IMPORTED ENUM
-      serverId: activeServer.id,
-      serverType: activeServer.serverType,
-      serverName: activeServer.name,
+      serverId: serverConfig.id, // Use the note's serverId
+      serverType: serverConfig.serverType,
+      serverName: serverConfig.name,
       previewContent:
           preview.length > 100 ? '${preview.substring(0, 97)}...' : preview,
       addedTimestamp: DateTime.now(),
@@ -439,25 +462,16 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
     String itemId,
     WorkbenchItemType itemType, // USES IMPORTED ENUM
   ) async {
-    final activeServerId = ref.read(activeServerConfigProvider)?.id;
-    if (activeServerId == null) {
-      _showAlertDialog(
-        buildContext,
-        'Error',
-        'Cannot copy thread: No active server.',
-      );
-      return;
-    }
-
+    // Use the serverId from the widget
+    final serverId = widget.serverId;
     _showLoadingDialog(buildContext, 'Fetching thread...');
 
     try {
-      // Assuming list items are always from the active server
       final content = await getFormattedThreadContent(
         ref,
         itemId,
         itemType, // Pass imported enum
-        activeServerId,
+        serverId, // Use the note's serverId
       );
       await Clipboard.setData(ClipboardData(text: content));
 
@@ -485,17 +499,8 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
     String itemId,
     WorkbenchItemType itemType, // USES IMPORTED ENUM
   ) async {
-    final activeServer = ref.read(activeServerConfigProvider);
-    if (activeServer == null) {
-      _showAlertDialog(
-        buildContext,
-        'Error',
-        'Cannot start chat: No active server.',
-      );
-      return;
-    }
-    final activeServerId = activeServer.id;
-
+    // Use the serverId from the widget
+    final serverId = widget.serverId;
     _showLoadingDialog(buildContext, 'Fetching thread for chat...');
 
     try {
@@ -504,7 +509,7 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
         ref,
         itemId,
         itemType, // Pass imported enum
-        activeServerId,
+        serverId, // Use the note's serverId
       );
 
       _dismissLoadingDialog(); // Dismiss before navigation
@@ -516,7 +521,7 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
         content,
         itemId,
         itemType, // Pass imported enum
-        activeServerId,
+        serverId, // Use the note's serverId
       );
 
     } catch (e) {
@@ -533,13 +538,13 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
     String fetchedContent,
     String itemId,
     WorkbenchItemType itemType, // USES IMPORTED ENUM
-    String activeServerId,
+    String serverId, // Renamed from activeServerId
   ) {
     final chatArgs = {
       'contextString': fetchedContent,
       'parentItemId': itemId,
       'parentItemType': itemType, // Pass imported enum
-      'parentServerId': activeServerId,
+      'parentServerId': serverId, // Use the passed serverId
     };
 
     // Push via root navigator only
@@ -569,7 +574,10 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
           .remove(itemIdToToggle);
     } else {
       final currentSelectedId = ref.read(ui_providers.selectedItemIdProvider);
-      final notesBeforeAction = ref.read(note_providers.filteredNotesProvider);
+      // Use family provider to get notes for the correct server
+      final notesBeforeAction = ref.read(
+        note_providers.filteredNotesProviderFamily(widget.serverId),
+      );
       final itemIdToAction = itemIdToToggle;
       String? nextSelectedId = currentSelectedId;
 
@@ -608,7 +616,13 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
     Navigator.of(
       scaffoldContext,
       rootNavigator: true, // Use root navigator to push detail screen over tabs
-    ).pushNamed('/item-detail', arguments: {'itemId': widget.note.id});
+    ).pushNamed(
+      '/item-detail',
+      arguments: {
+        'itemId': widget.note.id,
+        'serverId': widget.serverId, // Pass serverId
+      },
+    );
   }
 
   void _toggleMultiSelection(String noteId) {
@@ -627,15 +641,23 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
         .state = currentSelection;
 
     if (kDebugMode) {
-      print('[NoteListItem] Multi-selection toggled for note ID: $noteId');
-      print('[NoteListItem] Current selection: ${currentSelection.join(", ")}');
+      print(
+        '[NoteListItem(${widget.serverId})] Multi-selection toggled for note ID: $noteId',
+      );
+      print(
+        '[NoteListItem(${widget.serverId})] Current selection: ${currentSelection.join(", ")}',
+      );
     }
   }
 
   void onEdit(BuildContext scaffoldContext) {
     Navigator.of(scaffoldContext, rootNavigator: true).pushNamed(
       '/edit-entity',
-      arguments: {'entityType': 'note', 'entityId': widget.note.id},
+      arguments: {
+        'entityType': 'note',
+        'entityId': widget.note.id,
+        'serverId': widget.serverId, // Pass serverId
+      },
     );
   }
 
@@ -669,7 +691,13 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
             .read(settings_p.manuallyHiddenNoteIdsProvider.notifier)
             .add(widget.note.id);
 
-        await ref.read(note_providers.deleteNoteProvider(widget.note.id))();
+        // Use family provider
+        await ref.read(
+          note_providers.deleteNoteProviderFamily((
+            serverId: widget.serverId,
+            noteId: widget.note.id,
+          )),
+        )();
         // No need to unhide on success
       } catch (e) {
         // Unhide if delete failed
@@ -692,8 +720,15 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
     ref
         .read(settings_p.manuallyHiddenNoteIdsProvider.notifier)
         .add(widget.note.id);
-    // Attempt archive
-    ref.read(note_providers.archiveNoteProvider(widget.note.id))().catchError((
+    // Attempt archive using family provider
+    ref
+        .read(
+          note_providers.archiveNoteProviderFamily((
+            serverId: widget.serverId,
+            noteId: widget.note.id,
+          )),
+        )()
+        .catchError((
       e,
     ) {
       // Unhide if archive failed
@@ -711,7 +746,15 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
   }
 
   void onTogglePin(BuildContext scaffoldContext) {
-    ref.read(note_providers.togglePinNoteProvider(widget.note.id))().catchError(
+    // Use family provider
+    ref
+        .read(
+          note_providers.togglePinNoteProviderFamily((
+            serverId: widget.serverId,
+            noteId: widget.note.id,
+          )),
+        )()
+        .catchError(
       (e) {
         if (mounted) {
           _showAlertDialog(
@@ -759,7 +802,13 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
       onTogglePin: () => onTogglePin(scaffoldContext),
       onBump: () async {
         try {
-          await ref.read(note_providers.bumpNoteProvider(widget.note.id))();
+          // Use family provider
+          await ref.read(
+            note_providers.bumpNoteProviderFamily((
+              serverId: widget.serverId,
+              noteId: widget.note.id,
+            )),
+          )();
         } catch (e) {
           if (mounted) {
             _showAlertDialog(
