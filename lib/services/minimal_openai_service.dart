@@ -1,6 +1,8 @@
 import 'dart:async'; // Keep async import
+import 'dart:convert'; // For JSON encoding/decoding
 
 import 'package:flutter_memos/utils/logger.dart'; // Assuming logger exists
+import 'package:http/http.dart' as http; // For HTTP requests
 import 'package:openai_dart/openai_dart.dart';
 
 // A simple structure for passing messages to createChatCompletion
@@ -220,67 +222,81 @@ class MinimalOpenAiService {
     }
 
     try {
-      // Create the request with messages directly in the format expected by the API
-      final request = {
-        'model': model,
-        'messages':
+      final client = http.Client();
+      
+      try {
+        // Convert our generic messages to the format expected by the API
+        final apiMessages =
             messages.map((m) {
-          // Validate the role is one of the expected values
+              // Validate the role is one of the expected values
               if (m.role != 'system' &&
                   m.role != 'user' &&
                   m.role != 'assistant') {
-            throw ArgumentError('Unsupported role: ${m.role}');
-          }
+                throw ArgumentError('Unsupported role: ${m.role}');
+              }
+          
+              // Return message in the proper format
               return {'role': m.role, 'content': m.content};
-            }).toList(),
-      };
+            }).toList();
 
-      // Add optional parameters if provided
-      if (temperature != null) {
-        request['temperature'] = temperature;
-      }
-      if (maxTokens != null) {
-        request['max_tokens'] = maxTokens;
-      }
+        // Create complete request body
+        final Map<String, dynamic> requestBody = {
+          'model': model,
+          'messages': apiMessages,
+        };
 
-      // Make the API call using rawRequest which accepts a Map directly
-      final response = await _openAIClient.rawRequest(
-        'POST',
-        '/chat/completions',
-        body: request,
-      );
-
-      // Extract response content
-      final choices = response['choices'] as List;
-      if (choices.isEmpty) {
-        _logger.info('OpenAI returned no choices in chat completion.');
-        return '';
-      }
-
-      final message = choices.first['message'] as Map;
-      final returnedMsg = message['content'] as String? ?? '';
-
-      if (returnedMsg.isEmpty) {
-        _logger.info('OpenAI returned empty content in chat completion.');
-        return '';
-      }
-
-      if (verboseLogging) {
-        _logger.info(
-          'Chat completion successful. Response length: ${returnedMsg.length}',
+        // Add optional parameters
+        if (temperature != null) {
+          requestBody['temperature'] = temperature;
+        }
+        if (maxTokens != null) {
+          requestBody['max_tokens'] = maxTokens;
+        }
+        
+        // Make the direct HTTP request to the OpenAI API
+        final response = await client.post(
+          Uri.parse('https://api.openai.com/v1/chat/completions'),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $_authToken',
+          },
+          body: jsonEncode(requestBody),
         );
-      }
+        
+        if (response.statusCode != 200) {
+          throw Exception(
+            'API request failed with status: ${response.statusCode}, body: ${response.body}',
+          );
+        }
 
-      return returnedMsg;
-    } on OpenAIClientException catch (e) {
-      _logger.error(
-        'OpenAI API Error during chat completion: ${e.message} (Code: ${e.code})',
-      );
-      throw Exception(
-        'Failed to get chat completion from OpenAI: ${e.message}',
-      );
+        // Parse the response
+        final responseData = jsonDecode(response.body) as Map<String, dynamic>;
+        final choices = responseData['choices'] as List<dynamic>;
+        if (choices.isEmpty) {
+          _logger.info('OpenAI returned no choices in chat completion.');
+          return '';
+        }
+
+        final message = choices.first['message'] as Map<String, dynamic>;
+        final returnedMsg = message['content'] as String? ?? '';
+
+        if (returnedMsg.isEmpty) {
+          _logger.info('OpenAI returned empty content in chat completion.');
+          return '';
+        }
+
+        if (verboseLogging) {
+          _logger.info(
+            'Chat completion successful. Response length: ${returnedMsg.length}',
+          );
+        }
+
+        return returnedMsg;
+      } finally {
+        client.close();
+      }
     } catch (e) {
-      _logger.error('Unexpected error during chat completion: $e');
+      _logger.error('Error during chat completion: $e');
       rethrow;
     }
   }
