@@ -447,21 +447,42 @@ class _MyAppState extends ConsumerState<MyApp> {
                   break;
               }
 
-              const TextStyle baseTextStyle = TextStyle(
-                fontFamily: '.SF Pro Text',
-                color: CupertinoColors.label,
+              // Define base colors and font family
+              const String sfFontFamily = '.SF Pro Text';
+              final Color primaryColor =
+                  finalBrightness == Brightness.dark
+                      ? CupertinoColors.systemOrange
+                      : CupertinoColors.systemBlue;
+              final Color labelColor = CupertinoColors.label.resolveFrom(
+                context,
+              ); // Use resolved label color
+
+              // Define base TextStyles with inherit: false
+              final TextStyle baseTextStyle = TextStyle(
+                inherit: false, // Set inherit to false
+                fontFamily: sfFontFamily,
+                color: labelColor,
+                fontSize: 17,
               );
-              const TextStyle baseDarkTextStyle = TextStyle(
-                fontFamily: '.SF Pro Text',
-                color: CupertinoColors.label,
+
+              final TextStyle baseActionTextStyle = TextStyle(
+                inherit: false, // Set inherit to false
+                fontFamily: sfFontFamily,
+                color: primaryColor, // Use primary color for actions
+                fontSize: 17,
+              );
+
+              final TextStyle baseNavTitleTextStyle = TextStyle(
+                inherit: false, // Set inherit to false
+                fontFamily: sfFontFamily,
+                color: labelColor,
+                fontSize: 17,
+                fontWeight: FontWeight.w600,
               );
 
               final cupertinoTheme = CupertinoThemeData(
                 brightness: finalBrightness,
-                primaryColor:
-                    finalBrightness == Brightness.dark
-                        ? CupertinoColors.systemOrange
-                        : CupertinoColors.systemBlue,
+                primaryColor: primaryColor,
                 scaffoldBackgroundColor:
                     finalBrightness == Brightness.dark
                         ? CupertinoColors.black
@@ -470,31 +491,21 @@ class _MyAppState extends ConsumerState<MyApp> {
                     finalBrightness == Brightness.dark
                         ? const Color(0xFF1D1D1D)
                         : CupertinoColors.systemGrey6,
+                // Apply the base styles with inherit: false
                 textTheme: CupertinoTextThemeData(
-                  textStyle:
-                      finalBrightness == Brightness.dark
-                          ? baseDarkTextStyle.copyWith(fontSize: 17)
-                          : baseTextStyle.copyWith(fontSize: 17),
-                  actionTextStyle:
-                      finalBrightness == Brightness.dark
-                          ? baseDarkTextStyle.copyWith(
-                            fontSize: 17,
-                            color: CupertinoColors.systemOrange,
-                          )
-                          : baseTextStyle.copyWith(
-                            fontSize: 17,
-                            color: CupertinoColors.systemBlue,
-                          ),
-                  navTitleTextStyle:
-                      finalBrightness == Brightness.dark
-                          ? baseDarkTextStyle.copyWith(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w600,
-                          )
-                          : baseTextStyle.copyWith(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w600,
-                          ),
+                  textStyle: baseTextStyle,
+                  actionTextStyle: baseActionTextStyle,
+                  navTitleTextStyle: baseNavTitleTextStyle,
+                  // You might need to define other styles like navLargeTitleTextStyle, etc.
+                  // explicitly if they are used and need inherit: false.
+                  // Example:
+                  // navLargeTitleTextStyle: baseNavTitleTextStyle.copyWith(
+                  //   fontSize: 34,
+                  //   fontWeight: FontWeight.bold,
+                  //   letterSpacing: 0.41,
+                  // ),
+                  // pickerTextStyle: baseTextStyle.copyWith(fontSize: 21),
+                  // dateTimePickerTextStyle: baseTextStyle.copyWith(fontSize: 21),
                 ),
               );
 
