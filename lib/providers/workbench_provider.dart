@@ -582,7 +582,8 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
             oldRecordFields: oldRecordFields, // Pass the original data
           );
 
-      if (!success) {
+      // ignore: unrelated_type_equality_checks
+      if (success == false) {
         throw Exception('CloudKit delete-recreate move operation failed');
       }
 

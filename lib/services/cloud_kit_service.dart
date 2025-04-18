@@ -442,11 +442,10 @@ class CloudKitService {
     }
   }
 
-  // REMOVED the old moveWorkbenchItemReference method above
-
   /// Instead of updating the existing record,
   /// we delete it and create a brand-new record with a new ID.
-  Future<bool> moveWorkbenchItemReferenceByDeleteRecreate({
+  /// Returns the new record ID on success, or null on failure.
+  Future<String?> moveWorkbenchItemReferenceByDeleteRecreate({
     required String recordName, // old record's ID
     required String newInstanceId,
     required Map<String, dynamic> oldRecordFields, // fields from old record
@@ -468,8 +467,6 @@ class CloudKitService {
             '[CloudKitService] Failed to delete old record $recordName during move, but proceeding with creation.',
           );
         }
-        // Optionally: return false here if delete must succeed first.
-        // return false;
       } else {
         if (kDebugMode) {
           print(
@@ -501,14 +498,16 @@ class CloudKitService {
           '[CloudKitService] Successfully created new record $newRecordId for moved item (original: $recordName).',
         );
       }
-      return true;
+      // Return the new ID on success
+      return newRecordId;
     } catch (e, s) {
       if (kDebugMode) {
         print(
           '[CloudKitService] Error during delete-recreate move for $recordName: $e\n$s',
         );
       }
-      return false;
+      // Return null on failure
+      return null;
     }
   }
 
