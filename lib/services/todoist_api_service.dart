@@ -11,15 +11,19 @@ import 'package:flutter_memos/todoist_api/lib/api.dart' as todoist;
 import 'package:flutter_riverpod/flutter_riverpod.dart'; // Import Riverpod
 import 'package:http/http.dart';
 
-// Provider to expose the TodoistApiService instance
-// Other providers can watch this to react to service configuration changes.
+// Provider to expose the TodoistApiService singleton instance
 final todoistApiServiceProvider = Provider<TodoistApiService>((ref) {
-  // This simply returns the singleton instance.
-  // If configuration depended on other providers (e.g., auth token),
-  // those could be watched here, and configureService called accordingly.
-  // For now, we assume configureService is called elsewhere appropriately.
+  // Returns the existing singleton instance.
+  // Configuration is handled separately.
   return TodoistApiService();
 });
+
+// StateProvider to explicitly track if the Todoist service is configured.
+// This allows other providers/widgets to react to configuration changes.
+final isTodoistConfiguredProvider = StateProvider<bool>(
+  (ref) => TodoistApiService().isConfigured, // Initial state based on singleton
+  name: 'isTodoistConfigured',
+);
 
 
 /// Service class for interacting with the Todoist API (REST and Sync)
@@ -68,10 +72,13 @@ class TodoistApiService implements TaskApiService {
 
   /// Configure the Todoist API service with authentication token.
   /// Initializes both REST and Sync clients. Resets sync token on reconfigure.
+  /// IMPORTANT: After calling this, the caller should update `isTodoistConfiguredProvider`.
   @override
   Future<void> configureService({
     required String baseUrl, // Ignored, Todoist URLs are fixed
     required String authToken,
+    // Optional: Pass ProviderContainer or Ref to update the state provider directly
+    // required ProviderContainer container,
   }) async {
     // Make async to match Future<void> return type
     if (_authToken == authToken &&
@@ -96,7 +103,14 @@ class TodoistApiService implements TaskApiService {
         '[TodoistApiService] Configured REST & Sync with ${authToken.isNotEmpty ? 'valid' : 'empty'} token. Sync token reset to "*". Configured: $_isCurrentlyConfigured',
       );
     }
-    // Note: We don't notify listeners here directly. Riverpod handles watching the provider.
+
+    // --- IMPORTANT ---
+    // The caller of configureService MUST update the StateProvider like this:
+    // Example (assuming access to a ProviderContainer 'container'):
+    // container.read(isTodoistConfiguredProvider.notifier).state = _isCurrentlyConfigured;
+    // Or if called from within another provider/widget:
+    // ref.read(isTodoistConfiguredProvider.notifier).state = _isCurrentlyConfigured;
+    // --- IMPORTANT ---
   }
 
   /// Initializes the REST API client and associated endpoint classes.
@@ -1105,6 +1119,18 @@ class TodoistApiService implements TaskApiService {
         stderr.writeln(
           '[TodoistApiService] Authentication error ($statusCode). Service marked as unconfigured.',
         );
+        // --- IMPORTANT ---
+        // Also update the StateProvider when an auth error occurs
+        // This requires access to the ProviderContainer or Ref, which isn't ideal here.
+        // The calling code that catches this specific ApiException should update the provider.
+        // Example (in calling code):
+        // } catch (e) {
+        //   if (e is ApiException && (e.code == 401 || e.code == 403)) {
+        //     ref.read(isTodoistConfiguredProvider.notifier).state = false;
+        //   }
+        //   // Handle other errors...
+        // }
+        // --- IMPORTANT ---
       }
     } else {
       stderr.writeln('[TodoistApiService] Error - $context: $errorMessage');

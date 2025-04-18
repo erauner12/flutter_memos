@@ -1,28 +1,33 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter_memos/services/todoist_api_service.dart'; // Import the service AND the provider
+import 'package:flutter_memos/services/todoist_api_service.dart'; // Import the service AND the providers
 import 'package:flutter_memos/todoist_api/lib/api.dart' as todoist;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart'; // For date formatting
 
 // Provider to fetch activity events using the service method
-// Watches the service provider to react to configuration changes.
+// Watches the configuration status provider.
 final activityEventsProvider = FutureProvider<List<todoist.ActivityEvents>>((ref) async {
-  // Watch the service provider instance
-  final service = ref.watch(todoistApiServiceProvider);
+  // Watch the configuration status
+  final isConfigured = ref.watch(isTodoistConfiguredProvider);
 
-  // Check if configured before fetching
-  if (!service.isConfigured) {
-    // Return empty list if not configured - the UI will show the appropriate message.
+  // Only fetch if configured
+  if (!isConfigured) {
     print(
-      "[ActivityEventsProvider] Watched service is not configured. Returning empty list.",
+      "[ActivityEventsProvider] Service not configured. Returning empty list.",
     );
     return [];
   }
-  // Call the method that uses performSync with ['activity']
-  print(
-    "[ActivityEventsProvider] Watched service is configured. Fetching events...",
-  );
-  return service.getActivityEventsFromSync();
+
+  // If configured, get the service instance (can use read now) and fetch
+  print("[ActivityEventsProvider] Service is configured. Fetching events...");
+  final service = ref.read(todoistApiServiceProvider);
+  try {
+    return await service.getActivityEventsFromSync();
+  } catch (e) {
+    print("[ActivityEventsProvider] Error fetching events: $e");
+    // Propagate error to be handled by the UI's .when()
+    rethrow;
+  }
 });
 
 /// A screen to display activity events fetched from the Todoist Sync API.
@@ -33,8 +38,8 @@ class ActivityEventsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     // Watch the provider that fetches events
     final eventsAsync = ref.watch(activityEventsProvider);
-    // Also watch the service provider directly to check configuration status for UI messages
-    final service = ref.watch(todoistApiServiceProvider);
+    // Watch the config status directly for UI messages if needed (optional)
+    final isConfigured = ref.watch(isTodoistConfiguredProvider);
     final DateFormat dateFormat = DateFormat.yMd().add_jms(); // Example format
 
     return CupertinoPageScaffold(
@@ -44,17 +49,21 @@ class ActivityEventsScreen extends ConsumerWidget {
       ),
       child: SafeArea( // Ensure content is below status bar/notch
         child: eventsAsync.when(
+          // Show loading indicator regardless of config status initially
           loading: () => const Center(child: CupertinoActivityIndicator()),
           error: (err, stack) {
-            print("Error loading activity events: $err\n$stack"); // Log error
+            // Error state already logged by the provider
             return Center(child: Text('Error loading events: $err'));
           },
           data: (events) {
-            // Check configuration status *after* data/error state is resolved
-            if (!service.isConfigured) {
+            // Now check configuration status for the data state
+            if (!isConfigured) {
+              // This case should ideally not be reached if the provider logic is correct,
+              // but handle defensively.
               return const Center(child: Text('Todoist API not configured.'));
             }
             if (events.isEmpty) {
+              // If configured but no events were returned
               return const Center(child: Text('No activity events found.'));
             }
             // Sort events by date descending (most recent first)
