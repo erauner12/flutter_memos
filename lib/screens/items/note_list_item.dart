@@ -8,17 +8,16 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_memos/main.dart';
 import 'package:flutter_memos/models/note_item.dart';
-import 'package:flutter_memos/models/workbench_instance.dart';
 import 'package:flutter_memos/models/workbench_item_reference.dart';
 import 'package:flutter_memos/models/workbench_item_type.dart';
 import 'package:flutter_memos/providers/note_providers.dart' as note_providers;
 import 'package:flutter_memos/providers/server_config_provider.dart';
 import 'package:flutter_memos/providers/settings_provider.dart' as settings_p;
 import 'package:flutter_memos/providers/ui_providers.dart' as ui_providers;
-import 'package:flutter_memos/providers/workbench_instances_provider.dart';
 import 'package:flutter_memos/providers/workbench_provider.dart';
 import 'package:flutter_memos/utils/note_utils.dart';
 import 'package:flutter_memos/utils/thread_utils.dart';
+import 'package:flutter_memos/utils/workbench_utils.dart'; // Import the new utility
 import 'package:flutter_memos/widgets/note_card.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
@@ -379,15 +378,19 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
     );
   }
 
+  // --- Helper to add note to workbench ---
   Future<void> _addNoteToWorkbenchFromList(
-    BuildContext context,
+    BuildContext context, // Use BuildContext
     WidgetRef ref,
     NoteItem note,
   ) async {
+    // Make async to await user selection
+    // Use the serverId from the widget
     final serverConfig = ref
         .read(multiServerConfigProvider)
         .servers
         .firstWhereOrNull((s) => s.id == widget.serverId);
+
     if (serverConfig == null) {
       _showAlertDialog(
         context,
@@ -397,73 +400,38 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
       return;
     }
 
-    final instancesState = ref.read(workbenchInstancesProvider);
-    final availableInstances = instancesState.instances;
-    final activeInstanceId = instancesState.activeInstanceId;
-    String targetInstanceId = activeInstanceId;
-    String targetInstanceName =
-        availableInstances
-            .firstWhere(
-              (i) => i.id == activeInstanceId,
-              orElse: () => WorkbenchInstance.defaultInstance(),
-            )
-            .name;
+    // Use the utility function to get the target instance
+    final selectedInstance = await showWorkbenchInstancePicker(
+      context,
+      ref,
+      title: 'Add Note To Workbench',
+    );
 
-    if (availableInstances.length > 1) {
-      final selectedInstance = await showCupertinoModalPopup<WorkbenchInstance>(
-        context: context,
-        builder: (BuildContext popupContext) {
-          return CupertinoActionSheet(
-            title: const Text('Add Note To Workbench'),
-            actions:
-                availableInstances.map((instance) {
-                  final bool isCurrentlyActive =
-                      instance.id == activeInstanceId;
-                  return CupertinoActionSheetAction(
-                    child: Text(
-                      '${instance.name}${isCurrentlyActive ? " (Active)" : ""}',
-                    ),
-                    onPressed: () {
-                      Navigator.pop(popupContext, instance);
-                    },
-                  );
-                }).toList(),
-            cancelButton: CupertinoActionSheetAction(
-              child: const Text('Cancel'),
-              onPressed: () {
-                Navigator.pop(popupContext, null);
-              },
-            ),
-          );
-        },
-      );
-      if (selectedInstance == null) return;
-      targetInstanceId = selectedInstance.id;
-      targetInstanceName = selectedInstance.name;
-    } else if (availableInstances.isEmpty) {
-      _showAlertDialog(
-        context,
-        'Error',
-        "Cannot add to workbench: No workbench instances found.",
-      );
+    // If user cancelled or no instance selected, do nothing
+    if (selectedInstance == null) {
       return;
     }
 
+    final targetInstanceId = selectedInstance.id;
+    final targetInstanceName = selectedInstance.name;
+
     final preview = note.content.split('\n').first;
+
     final reference = WorkbenchItemReference(
       id: const Uuid().v4(),
       referencedItemId: note.id,
-      referencedItemType: WorkbenchItemType.note,
-      serverId: serverConfig.id,
+      referencedItemType: WorkbenchItemType.note, // USES IMPORTED ENUM
+      serverId: serverConfig.id, // Use the note's serverId
       serverType: serverConfig.serverType,
       serverName: serverConfig.name,
       previewContent:
           preview.length > 100 ? '${preview.substring(0, 97)}...' : preview,
       addedTimestamp: DateTime.now(),
       parentNoteId: null,
-      instanceId: targetInstanceId,
+      instanceId: targetInstanceId, // <-- PASS SELECTED instanceId
     );
 
+    // Use the notifier for the *target* instance
     ref
         .read(workbenchProviderFamily(targetInstanceId).notifier)
         .addItem(reference);
@@ -471,6 +439,7 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
     final previewText = reference.previewContent ?? 'Item';
     final dialogContent =
         'Added "${previewText.substring(0, min(30, previewText.length))}${previewText.length > 30 ? '...' : ''}" to Workbench "$targetInstanceName"';
+
     _showAlertDialog(context, 'Success', dialogContent);
   }
 
