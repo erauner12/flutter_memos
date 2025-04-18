@@ -16,11 +16,10 @@ import 'package:flutter_memos/providers/server_config_provider.dart'; // Import 
 // Import settings_provider for manuallyHiddenNoteIdsProvider
 import 'package:flutter_memos/providers/settings_provider.dart' as settings_p;
 import 'package:flutter_memos/providers/ui_providers.dart';
-// Removed import for memo_detail_providers
-import 'package:flutter_memos/providers/workbench_instances_provider.dart'; // Import instances provider
 import 'package:flutter_memos/providers/workbench_provider.dart'; // Import workbench provider family etc.
 import 'package:flutter_memos/utils/keyboard_navigation.dart';
 import 'package:flutter_memos/utils/thread_utils.dart'; // Import the utility
+import 'package:flutter_memos/utils/workbench_utils.dart';
 import 'package:flutter_memos/widgets/capture_utility.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart'; // Import Uuid
@@ -76,7 +75,6 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
       });
     }
   }
-
 
   @override
   void dispose() {
@@ -198,54 +196,26 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
       return;
     }
 
-    final instancesState = ref.read(workbenchInstancesProvider);
-    final instances = instancesState.instances;
-    final activeInstanceId = instancesState.activeInstanceId;
+    // Use the utility to let the user pick the instance
+    final selectedInstance = await showWorkbenchInstancePicker(
+      context,
+      ref,
+      title: 'Add Note To Workbench',
+    );
 
-    String targetInstanceId = activeInstanceId;
-
-    if (instances.length > 1) {
-      final String? chosenId = await showCupertinoModalPopup<String>(
-        context: context,
-        builder: (BuildContext popupContext) {
-          return CupertinoActionSheet(
-            title: const Text('Add Note to Workbench'),
-            actions:
-                instances.map((instance) {
-                  return CupertinoActionSheetAction(
-                    isDefaultAction: instance.id == activeInstanceId,
-                    onPressed: () {
-                      Navigator.pop(popupContext, instance.id);
-                    },
-                    child: Text(instance.name),
-                  );
-                }).toList(),
-            cancelButton: CupertinoActionSheetAction(
-              child: const Text('Cancel'),
-              onPressed: () {
-                Navigator.pop(popupContext);
-              },
-            ),
-          );
-        },
-      );
-
-      if (chosenId == null) {
-        return;
-      }
-      targetInstanceId = chosenId;
-    } else if (instances.isEmpty) {
-      _showErrorSnackbar(
-        "Cannot add to workbench: No workbench instances found.",
-      );
+    // If user cancelled or no instance selected, do nothing
+    if (selectedInstance == null) {
       return;
     }
+
+    final targetInstanceId = selectedInstance.id;
+    final targetInstanceName = selectedInstance.name;
 
     final preview = note.content.split('\n').first;
 
     final reference = WorkbenchItemReference(
       id: const Uuid().v4(), // Generate unique ID for the reference
-      instanceId: targetInstanceId, // Use the chosen or default instance ID
+      instanceId: targetInstanceId, // Use the chosen instance ID
       referencedItemId: note.id,
       referencedItemType: WorkbenchItemType.note, // USES IMPORTED ENUM
       serverId: serverConfig.id, // Use the determined serverId
@@ -262,12 +232,6 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
     ref
         .read(workbenchProviderFamily(targetInstanceId).notifier)
         .addItem(reference);
-
-    final targetInstance =
-        instances.firstWhereOrNull(
-      (i) => i.id == targetInstanceId,
-    ); // Use firstWhereOrNull
-    final targetInstanceName = targetInstance?.name ?? 'Workbench';
 
     _showSuccessSnackbar('Added note to "$targetInstanceName"');
   }
@@ -439,6 +403,7 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
                     // Use family provider
                     await ref.read(
                       note_providers.deleteNoteProviderFamily((
+
                         serverId: _effectiveServerId!,
                         noteId: widget.itemId,
                       )),

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart'; // Keep for Material in OverlayEntry
@@ -9,15 +10,14 @@ import 'package:flutter_memos/models/task_filter.dart'; // Import the filter enu
 import 'package:flutter_memos/models/task_item.dart';
 import 'package:flutter_memos/models/workbench_item_reference.dart';
 import 'package:flutter_memos/models/workbench_item_type.dart'; // Import the unified enum
-// Removed server_config_provider import (MultiServerConfigNotifier)
 import 'package:flutter_memos/providers/settings_provider.dart'; // Import for todoistApiKeyProvider
 import 'package:flutter_memos/providers/task_providers.dart';
-import 'package:flutter_memos/providers/workbench_instances_provider.dart'; // &lt;-- ADD THIS
 import 'package:flutter_memos/providers/workbench_provider.dart';
 import 'package:flutter_memos/screens/settings_screen.dart'; // Import SettingsScreen
 import 'package:flutter_memos/screens/tasks/new_task_screen.dart';
 import 'package:flutter_memos/screens/tasks/widgets/task_list_item.dart';
 import 'package:flutter_memos/utils/thread_utils.dart'; // Import thread utils
+import 'package:flutter_memos/utils/workbench_utils.dart'; // Import instance picker utility
 import 'package:hooks_riverpod/hooks_riverpod.dart'; // Import hooks_riverpod
 import 'package:uuid/uuid.dart';
 
@@ -39,61 +39,82 @@ class TasksScreen extends HookConsumerWidget {
 
   // Helper to show simple alert dialogs (needs context)
   void _showAlertDialog(BuildContext context, String title, String message) {
-    // Ensure dialog is shown safely if context is still valid
     if (!context.mounted) return;
     showCupertinoDialog(
       context: context,
       builder:
-          (context) => CupertinoAlertDialog(
+          (ctx) => CupertinoAlertDialog(
             title: Text(title),
             content: Text(message),
             actions: [
               CupertinoDialogAction(
                 isDefaultAction: true,
                 child: const Text('OK'),
-                onPressed: () => Navigator.of(context).pop(),
+                onPressed: () => Navigator.of(ctx).pop(),
               ),
             ],
           ),
     );
   }
 
-  // Add task to workbench - no longer needs ServerConfig parameter
-  void _addTaskToWorkbench(BuildContext context, WidgetRef ref, TaskItem task) {
-    // Check if the Todoist API key is configured
+  // Add task to workbench - updated to use picker
+  Future<void> _addTaskToWorkbench(
+    BuildContext context,
+    WidgetRef ref,
+    TaskItem task,
+  ) async {
     final apiKey = ref.read(todoistApiKeyProvider);
     if (apiKey.isEmpty) {
       _showAlertDialog(
-        context, // Pass context
+        context,
         'Error',
-        'Cannot add task: Todoist API Key not configured in Settings > Integrations.', // Update message
+        'Cannot add task: Todoist API Key not configured in Settings > Integrations.',
       );
       return;
     }
 
-    // Fetch the active instance ID
-    final instanceId = ref.read(
-      workbenchInstancesProvider.select((s) => s.activeInstanceId),
+    final selectedInstance = await showWorkbenchInstancePicker(
+      context,
+      ref,
+      title: 'Add Task To Workbench',
     );
+    if (selectedInstance == null) {
+      return;
+    }
+
+    final targetInstanceId = selectedInstance.id;
+    final targetInstanceName = selectedInstance.name;
 
     final reference = WorkbenchItemReference(
       id: const Uuid().v4(),
       referencedItemId: task.id,
-      referencedItemType: WorkbenchItemType.task, // USES IMPORTED ENUM
-      serverId: _todoistWorkbenchServerId, // Use constant ID
-      serverType: ServerType.todoist, // Use Todoist type from enum
-      serverName: _todoistWorkbenchServerName, // Use constant Name
+      referencedItemType: WorkbenchItemType.task,
+      serverId: _todoistWorkbenchServerId,
+      serverType: ServerType.todoist,
+      serverName: _todoistWorkbenchServerName,
       previewContent: task.content,
       addedTimestamp: DateTime.now(),
-      instanceId: instanceId, // &lt;-- PASS instanceId
+      instanceId: targetInstanceId,
     );
 
-    // FIX: Use activeWorkbenchNotifierProvider
-    unawaited(ref.read(activeWorkbenchNotifierProvider).addItem(reference));
+    unawaited(
+      ref
+          .read(workbenchProviderFamily(targetInstanceId).notifier)
+          .addItem(reference),
+    );
+
+    final previewText = reference.previewContent;
+    final safePreview =
+        previewText == null
+            ? 'Task'
+            : '${previewText.substring(0, min(30, previewText.length))}${previewText.length > 30 ? '...' : ''}';
+    final dialogContent =
+        'Added "$safePreview" to Workbench "$targetInstanceName"';
+
     _showAlertDialog(
-      context, // Pass context
+      context,
       'Success',
-      'Task "${task.content}" added to Workbench.',
+      dialogContent,
     );
   }
 
@@ -104,17 +125,13 @@ class TasksScreen extends HookConsumerWidget {
     TaskItem task,
     bool newCompletedState,
   ) {
-    // Remove any existing toast first
     _currentUndoToast?.remove();
-
-    // Ensure context is valid before creating overlay
     if (!context.mounted) return;
 
-    // Create a new overlay entry
     final overlayState = Overlay.of(context);
     final toast = OverlayEntry(
       builder:
-          (context) => Positioned(
+          (ctx) => Positioned(
             left: 16.0,
             bottom: 32.0,
             child: SafeArea(
@@ -137,12 +154,8 @@ class TasksScreen extends HookConsumerWidget {
                                   .arrow_counterclockwise_circle_fill,
                           color:
                               newCompletedState
-                                  ? CupertinoColors.systemGreen.resolveFrom(
-                                    context,
-                                  )
-                                  : CupertinoColors.systemBlue.resolveFrom(
-                                    context,
-                                  ),
+                                  ? CupertinoColors.systemGreen.resolveFrom(ctx)
+                                  : CupertinoColors.systemBlue.resolveFrom(ctx),
                           size: 20,
                         ),
                         const SizedBox(width: 8),
@@ -163,11 +176,8 @@ class TasksScreen extends HookConsumerWidget {
                             style: TextStyle(fontWeight: FontWeight.w600),
                           ),
                           onPressed: () {
-                            // Remove the toast first
                             _currentUndoToast?.remove();
                             _currentUndoToast = null;
-
-                            // Call appropriate method based on current state
                             if (newCompletedState) {
                               ref
                                   .read(tasksNotifierProvider.notifier)
@@ -188,11 +198,9 @@ class TasksScreen extends HookConsumerWidget {
           ),
     );
 
-    // Show the toast
     _currentUndoToast = toast;
     overlayState.insert(toast);
 
-    // Set timer to remove after 5 seconds
     Timer(const Duration(seconds: 5), () {
       if (_currentUndoToast == toast) {
         toast.remove();
@@ -207,32 +215,21 @@ class TasksScreen extends HookConsumerWidget {
     WidgetRef ref,
     String taskId,
   ) async {
-    // Optional: Show loading indicator (e.g., using a state variable or dialog)
-    // For simplicity, we'll just show errors if they occur.
-
     String? fetchedContent;
     Object? error;
-    const serverId = _todoistWorkbenchServerId; // Use the constant ID
-
+    const serverId = _todoistWorkbenchServerId;
     try {
-      // Call the utility function to get the formatted thread content
       fetchedContent = await getFormattedThreadContent(
         ref,
         taskId,
-        WorkbenchItemType.task, // Specify the type (USES IMPORTED ENUM)
+        WorkbenchItemType.task,
         serverId,
       );
     } catch (e) {
       error = e;
       debugPrint("Error fetching task thread: $e");
     }
-
-    // Optional: Dismiss loading indicator
-
-    // Check for errors or null content
-    if (!context.mounted) {
-      return; // Check context before showing dialog/navigating
-    }
+    if (!context.mounted) return;
     if (error != null || fetchedContent == null) {
       _showAlertDialog(
         context,
@@ -241,49 +238,33 @@ class TasksScreen extends HookConsumerWidget {
       );
       return;
     }
-
-    // Navigate to chat screen with context
     final rootNavigatorKey = ref.read(rootNavigatorKeyProvider);
     final chatArgs = {
       'contextString': fetchedContent,
       'parentItemId': taskId,
-      'parentItemType':
-          WorkbenchItemType.task, // Pass the correct type (USES IMPORTED ENUM)
+      'parentItemType': WorkbenchItemType.task,
       'parentServerId': serverId,
     };
-
-    // Push the chat route using the root navigator
     rootNavigatorKey.currentState?.pushNamed('/chat', arguments: chatArgs);
   }
 
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Define the refresh handler directly within build or as a local function
     Future<void> handleRefresh() async {
-      // Check if Todoist API key is configured
       final isTodoistConfigured = ref.read(todoistApiKeyProvider).isNotEmpty;
       if (isTodoistConfigured) {
-        // Fetch all tasks, filtering happens in the provider family
         await ref.read(tasksNotifierProvider.notifier).fetchTasks();
       }
     }
 
-    // Watch necessary providers
-    // Watch the API key provider to determine if Todoist is configured
     final todoistApiKey = ref.watch(todoistApiKeyProvider);
     final bool isTodoistConfigured = todoistApiKey.isNotEmpty;
-
     final tasksState = ref.watch(tasksNotifierProvider);
-    // Watch the filtered list using the provider family and the screen's filter
     final tasks = ref.watch(filteredTasksProviderFamily(filter));
 
-    // Use useEffect to fetch tasks when Todoist becomes configured or on initial load
     useEffect(
       () {
         if (isTodoistConfigured) {
-          // Fetch if configured, tasks are empty, not loading, and no error
-          // Fetch all tasks initially, filtering is done by the provider
           if (tasksState.tasks.isEmpty &&
               !tasksState.isLoading &&
               tasksState.error == null) {
@@ -292,38 +273,32 @@ class TasksScreen extends HookConsumerWidget {
             );
           }
         } else {
-          // If Todoist is *not* configured (API key removed/empty)
-          // If tasks are currently loaded, clear them
           if (tasksState.tasks.isNotEmpty) {
             Future.microtask(
               () => ref.read(tasksNotifierProvider.notifier).clearTasks(),
             );
           }
         }
-        return null; // No cleanup needed
+        return null;
       },
-      // Depend on configuration status, API key, loading state, error state, and task list emptiness
       [
         isTodoistConfigured,
-        todoistApiKey, // Add dependency on the key itself
+        todoistApiKey,
         tasksState.isLoading,
         tasksState.error,
         tasksState.tasks.isEmpty,
       ],
     );
 
-    // Get the title from the filter enum extension
     final screenTitle = filter.title;
     final emptyStateMessage = filter.emptyStateMessage;
 
     return CupertinoPageScaffold(
       navigationBar: CupertinoNavigationBar(
-        middle: Text(screenTitle), // Use dynamic title
-        // Use previousPageTitle for automatic back button text
-        previousPageTitle: 'More', // Or get dynamically if needed
+        middle: Text(screenTitle),
+        previousPageTitle: 'More',
         leading: CupertinoButton(
           padding: EdgeInsets.zero,
-          // Enable refresh only if configured and not loading
           onPressed:
               tasksState.isLoading || !isTodoistConfigured
                   ? null
@@ -331,36 +306,31 @@ class TasksScreen extends HookConsumerWidget {
           child: const Icon(CupertinoIcons.refresh),
         ),
         trailing: Row(
-          // Wrap existing and new button in a Row
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Existing Add Button
             CupertinoButton(
               padding: EdgeInsets.zero,
-              // Enable add only if configured
               onPressed:
                   !isTodoistConfigured
                   ? null
                   : () {
                         Navigator.of(context).push(
                           CupertinoPageRoute(
-                            builder: (context) => const NewTaskScreen(),
+                            builder: (ctx) => const NewTaskScreen(),
                           ),
                         );
                       },
               child: const Icon(CupertinoIcons.add),
             ),
-            const SizedBox(width: 8), // Add spacing
-            // New Settings Button
+            const SizedBox(width: 8),
             CupertinoButton(
               padding: EdgeInsets.zero,
-              child: const Icon(CupertinoIcons.settings, size: 22), // Gear icon
+              child: const Icon(CupertinoIcons.settings, size: 22),
               onPressed: () {
                 Navigator.of(context).push(
                   CupertinoPageRoute(
                     builder:
-                        (context) =>
-                            const SettingsScreen(isInitialSetup: false),
+                        (ctx) => const SettingsScreen(isInitialSetup: false),
                   ),
                 );
               },
@@ -370,41 +340,34 @@ class TasksScreen extends HookConsumerWidget {
       ),
       child: SafeArea(
         child: Builder(
-          builder: (context) {
-            // Show placeholder if Todoist API key is not configured
+          builder: (ctx) {
             if (!isTodoistConfigured) {
               return const Center(
                 child: Padding(
                   padding: EdgeInsets.all(16.0),
                   child: Text(
-                    'Please enter your Todoist API Key in Settings > Integrations to view tasks.', // Updated message
+                    'Please enter your Todoist API Key in Settings > Integrations to view tasks.',
                     textAlign: TextAlign.center,
                     style: TextStyle(color: CupertinoColors.secondaryLabel),
                   ),
                 ),
               );
             }
-
-            // Loading indicator (show only if the base task list is loading and filtered list is empty)
             if (tasksState.isLoading && tasks.isEmpty) {
               return const Center(child: CupertinoActivityIndicator());
             }
-
-            // Error display (show only if there's an error and filtered list is empty)
             if (tasksState.error != null && tasks.isEmpty) {
               return Center(
                 child: Padding(
                   padding: const EdgeInsets.all(16.0),
                   child: Text(
-                    'Error loading tasks: ${tasksState.error}\nPlease check your connection and API key in Settings > Integrations.', // Updated guidance
+                    'Error loading tasks: ${tasksState.error}\nPlease check your connection and API key in Settings > Integrations.',
                     textAlign: TextAlign.center,
                     style: const TextStyle(color: CupertinoColors.systemRed),
                   ),
                 ),
               );
             }
-
-            // Empty state (configured, not loading, no error, but no tasks match the filter)
             if (tasks.isEmpty &&
                 !tasksState.isLoading &&
                 tasksState.error == null) {
@@ -412,30 +375,24 @@ class TasksScreen extends HookConsumerWidget {
                 child: Padding(
                   padding: const EdgeInsets.all(16.0),
                   child: Text(
-                    emptyStateMessage, // Use dynamic empty state message
+                    emptyStateMessage,
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                      color: CupertinoColors.secondaryLabel.resolveFrom(
-                        context,
-                      ),
+                      color: CupertinoColors.secondaryLabel.resolveFrom(ctx),
                     ),
                   ),
                 ),
               );
             }
-
-            // Task list
             return CustomScrollView(
               slivers: [
-                CupertinoSliverRefreshControl(
-                  onRefresh: handleRefresh, // Use the local handler
-                ),
+                CupertinoSliverRefreshControl(onRefresh: handleRefresh),
                 SliverList(
                   delegate: SliverChildBuilderDelegate(
-                    (context, index) {
+                    (itemCtx, index) {
                       final task = tasks[index];
                       return TaskListItem(
-                      key: ValueKey(task.id), // Ensure key is here
+                      key: ValueKey(task.id),
                         task: task,
                         onToggleComplete: (isCompleted) async {
                           bool success;
@@ -448,13 +405,11 @@ class TasksScreen extends HookConsumerWidget {
                               .read(tasksNotifierProvider.notifier)
                               .reopenTask(task.id);
                         }
-
                         if (success) {
-                          // Show undo toast upon successful operation
-                          _showUndoToast(context, ref, task, isCompleted);
-                        } else if (context.mounted) {
+                          _showUndoToast(itemCtx, ref, task, isCompleted);
+                        } else if (itemCtx.mounted) {
                           _showAlertDialog(
-                            context,
+                            itemCtx,
                             'Error',
                             'Failed to update task status.',
                           );
@@ -463,43 +418,35 @@ class TasksScreen extends HookConsumerWidget {
                       },
                         onDelete: () async {
                         final confirmed = await showCupertinoDialog<bool>(
-                          // await the result
-                                  context: context,
-                                  builder:
-                                      (dialogContext) => CupertinoAlertDialog(
-                                        title: const Text('Delete Task?'),
-                                        content: Text(
-                                          'Are you sure you want to delete "${task.content}"? This cannot be undone.',
-                                        ),
-                                        actions: [
-                                          CupertinoDialogAction(
-                                            child: const Text('Cancel'),
-                                            onPressed:
-                                                () => Navigator.pop(
-                                                  dialogContext,
-                                                  false,
-                                                ),
-                                          ),
-                                          CupertinoDialogAction(
-                                            isDestructiveAction: true,
-                                            child: const Text('Delete'),
-                                            onPressed:
-                                                () => Navigator.pop(
-                                                  dialogContext,
-                                                  true,
-                                                ),
-                                          ),
-                                        ],
-                                      ),
-                        ); // Added await
-
+                          context: itemCtx,
+                          builder:
+                              (dialogCtx) => CupertinoAlertDialog(
+                                title: const Text('Delete Task?'),
+                                content: Text(
+                                  'Are you sure you want to delete "${task.content}"? This cannot be undone.',
+                                ),
+                                actions: [
+                                  CupertinoDialogAction(
+                                    child: const Text('Cancel'),
+                                    onPressed:
+                                        () => Navigator.pop(dialogCtx, false),
+                                  ),
+                                  CupertinoDialogAction(
+                                    isDestructiveAction: true,
+                                    child: const Text('Delete'),
+                                    onPressed:
+                                        () => Navigator.pop(dialogCtx, true),
+                                  ),
+                                ],
+                              ),
+                        );
                         if (confirmed == true) {
                           final success = await ref
                               .read(tasksNotifierProvider.notifier)
                               .deleteTask(task.id);
-                          if (!success && context.mounted) {
+                          if (!success && itemCtx.mounted) {
                             _showAlertDialog(
-                              context,
+                              itemCtx,
                               'Error',
                               'Failed to delete task.',
                             );
@@ -508,18 +455,15 @@ class TasksScreen extends HookConsumerWidget {
                         }
                         },
                         onAddToWorkbench: () {
-                        // Pass context, ref, task - no server config needed
-                        _addTaskToWorkbench(context, ref, task);
-                        },
-                      // NEW: Pass the chat handler
+                        _addTaskToWorkbench(itemCtx, ref, task);
+                      },
                       onChatWithTask: () {
-                        _chatWithTask(context, ref, task.id);
+                        _chatWithTask(itemCtx, ref, task.id);
                       },
                       onTap: () {
-                        Navigator.of(context).push(
+                        Navigator.of(itemCtx).push(
                           CupertinoPageRoute(
-                            builder:
-                                (context) => NewTaskScreen(taskToEdit: task),
+                            builder: (ctx2) => NewTaskScreen(taskToEdit: task),
                           ),
                         );
                       },

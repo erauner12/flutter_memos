@@ -13,11 +13,14 @@ import 'package:flutter_memos/providers/server_config_provider.dart';
 // Import providers needed for reset
 import 'package:flutter_memos/providers/service_providers.dart'; // For cloudKitServiceProvider
 import 'package:flutter_memos/providers/settings_provider.dart'; // Import settings provider
+import 'package:flutter_memos/providers/shared_prefs_provider.dart';
 import 'package:flutter_memos/providers/task_providers.dart';
+import 'package:flutter_memos/providers/workbench_instances_provider.dart'; // Add import for workbench instances
 import 'package:flutter_memos/providers/workbench_provider.dart';
 import 'package:flutter_memos/screens/add_edit_mcp_server_screen.dart'; // Will be created next
 import 'package:flutter_memos/screens/add_edit_server_screen.dart';
 import 'package:flutter_memos/services/base_api_service.dart'; // Import BaseApiService
+import 'package:flutter_memos/services/cloud_kit_service.dart'; // Import CloudKitService
 // Import MCP client provider (for status later) - add "as mcp_service" to solve ambiguity
 import 'package:flutter_memos/services/mcp_client_service.dart' as mcp_service;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -52,24 +55,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   @override
   void initState() {
     super.initState();
-
-    // Initialize controllers after the first frame ensures providers are ready
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-        // --- START MODIFICATION ---
-        // Directly read the persisted Todoist API key
         final initialTodoistKey = ref.read(todoistApiKeyProvider);
         _todoistApiKeyController.text = initialTodoistKey;
-        // --- END MODIFICATION ---
-
         final initialOpenAiKey = ref.read(openAiApiKeyProvider);
         _openaiApiKeyController.text = initialOpenAiKey;
-
-        // Initialize Gemini controller
         final initialGeminiKey = ref.read(geminiApiKeyProvider);
         _geminiApiKeyController.text = initialGeminiKey;
       }
-      // Fetch models after initial setup
       _fetchModels();
     });
   }
@@ -77,22 +71,20 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   @override
   void dispose() {
     _todoistApiKeyController.dispose();
-    _openaiApiKeyController.dispose(); // Dispose the new controller
-    _geminiApiKeyController.dispose(); // Dispose Gemini controller
+    _openaiApiKeyController.dispose();
+    _geminiApiKeyController.dispose();
     super.dispose();
   }
 
-  // Method to fetch models
   Future<void> _fetchModels() async {
     if (!mounted) return;
     setState(() {
       _isLoadingModels = true;
       _modelLoadError = null;
-      _availableModels = []; // Clear previous models
+      _availableModels = [];
     });
 
     final openaiService = ref.read(openaiApiServiceProvider);
-    // Check API key provider directly as service config might lag
     final apiKey = ref.read(openAiApiKeyProvider);
 
     if (apiKey.isEmpty) {
@@ -102,7 +94,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       });
       return;
     }
-    // Ensure service is configured with the latest key before fetching
     openaiService.configureService(authToken: apiKey);
 
     try {
@@ -142,7 +133,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
-  // Test Memos/Blinko connection (should not be called for Todoist)
   Future<void> _testConnection() async {
     FocusScope.of(context).unfocus();
     final activeConfig = ref.read(activeServerConfigProvider);
@@ -156,7 +146,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       return;
     }
 
-    // This button should be disabled if active server is Todoist
     if (activeConfig.serverType == ServerType.todoist) {
       _showResultDialog(
         'Info',
@@ -166,10 +155,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
 
     setState(() => _isTestingConnection = true);
-    // Get the service (already configured by the provider)
     final apiService = ref.read(apiServiceProvider);
 
-    // Check if it's a dummy service (e.g., URL was empty)
     if (apiService is DummyApiService || !apiService.isConfigured) {
       _showResultDialog(
         'Configuration Error',
@@ -181,7 +168,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
 
     try {
-      // Use checkHealth for Memos/Blinko
       final isHealthy = await apiService.checkHealth();
       if (mounted) {
         if (isHealthy) {
@@ -198,9 +184,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         }
       }
     } catch (e) {
-      if (kDebugMode) {
-        print("[SettingsScreen] Test Connection Error: \$e");
-      }
+      if (kDebugMode) print("[SettingsScreen] Test Connection Error: $e");
       if (mounted) {
         _showResultDialog(
           'Connection Failed',
@@ -213,14 +197,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
   }
 
-  // Test Todoist connection (using the dedicated service provider)
   Future<void> _testTodoistConnection() async {
     FocusScope.of(context).unfocus();
-    // Use the dedicated Todoist service provider
     final todoistService = ref.read(todoistApiServiceProvider);
-    final currentKey = ref.read(
-      todoistApiKeyProvider,
-    ); // Read the globally saved key
+    final currentKey = ref.read(todoistApiKeyProvider);
 
     if (currentKey.isEmpty) {
       _showResultDialog(
@@ -230,7 +210,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       );
       return;
     }
-    // Check if the dedicated service is configured (it should be if key is not empty)
     if (!todoistService.isConfigured) {
       _showResultDialog(
         'Service Not Configured',
@@ -241,9 +220,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
 
     setState(() => _isTestingTodoistConnection = true);
-
     try {
-      // Use the checkHealth method of the TodoistApiService instance
       final isHealthy = await todoistService.checkHealth();
       if (mounted) {
         if (isHealthy) {
@@ -257,9 +234,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         }
       }
     } catch (e) {
-      if (kDebugMode) {
-        print("[SettingsScreen] Test Todoist Connection Error: \$e");
-      }
+      if (kDebugMode)
+        print("[SettingsScreen] Test Todoist Connection Error: $e");
       if (mounted) {
         _showResultDialog(
           'Error',
@@ -272,7 +248,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
   }
 
-  // Test OpenAI connection
   Future<void> _testOpenAiConnection() async {
     FocusScope.of(context).unfocus();
     final openaiService = ref.read(openaiApiServiceProvider);
@@ -296,7 +271,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
 
     setState(() => _isTestingOpenAiConnection = true);
-
     try {
       final isHealthy = await openaiService.checkHealth();
       if (mounted) {
@@ -311,9 +285,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         }
       }
     } catch (e) {
-      if (kDebugMode) {
-        print("[SettingsScreen] Test OpenAI Connection Error: \$e");
-      }
+      if (kDebugMode)
+        print("[SettingsScreen] Test OpenAI Connection Error: $e");
       if (mounted) {
         _showResultDialog(
           'Error',
@@ -442,9 +415,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   // Helper method to build MCP server list tiles
   List<Widget> _buildMcpServerListTiles(BuildContext context, WidgetRef ref) {
-    // MODIFY: Watch the new provider
     final mcpServers = ref.watch(mcpServerConfigProvider);
-    // Watch the MCP client state to get statuses and errors
     final mcpClientState = ref.watch(mcp_service.mcpClientProvider);
     final serverStatuses = mcpClientState.serverStatuses;
     final serverErrors = mcpClientState.serverErrorMessages;
@@ -465,11 +436,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       final error = serverErrors[server.id];
       final bool userWantsActive = server.isActive;
 
-      // Build subtitle text including error message if present
-      String subtitleText;
-      subtitleText = '${server.host}:${server.port}'; // Always show host:port
+      String subtitleText = '${server.host}:${server.port}';
       if (error != null && status == mcp_service.McpConnectionStatus.error) {
-        // Limit error message length for display
         final displayError =
             error.length > 100 ? '${error.substring(0, 97)}...' : error;
         subtitleText += '\nError: $displayError';
@@ -496,7 +464,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             CupertinoSwitch(
               value: userWantsActive,
               onChanged: (bool value) {
-                // MODIFY: Call the method on the new notifier
                 ref
                     .read(mcpServerConfigProvider.notifier)
                     .toggleServerActive(server.id, value);
@@ -515,7 +482,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }).toList();
   }
 
-  // Helper to build status icon based on McpConnectionStatus
   Widget _buildMcpStatusIcon(
     mcp_service.McpConnectionStatus status,
     BuildContext context,
@@ -542,10 +508,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           size: 22,
         );
     }
-    // Add a default return statement for safety
   }
 
-  // Method to show actions for an MCP server
   void _showMcpServerActions(
     BuildContext context,
     WidgetRef ref,
@@ -556,7 +520,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       builder:
           (BuildContext context) => CupertinoActionSheet(
             title: Text(server.name),
-            // Update message based on connection type - ALWAYS SHOW HOST/PORT
             message: Text(
               '${server.host}:${server.port}',
               style: const TextStyle(fontSize: 13),
@@ -565,7 +528,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               CupertinoActionSheetAction(
                 child: const Text('Edit'),
                 onPressed: () {
-                  Navigator.pop(context); // Close the action sheet
+                  Navigator.pop(context);
                   Navigator.of(context).push(
                     CupertinoPageRoute(
                       builder:
@@ -575,13 +538,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   );
                 },
               ),
-              // Add other actions if needed (e.g., Duplicate)
               CupertinoActionSheetAction(
-                // Make Delete an action, not the cancel button
                 isDestructiveAction: true,
                 child: const Text('Delete'),
                 onPressed: () async {
-                  Navigator.pop(context); // Close action sheet
+                  Navigator.pop(context);
                   final confirmed = await showCupertinoDialog<bool>(
                     context: context,
                     builder:
@@ -604,7 +565,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         ),
                   );
                   if (confirmed == true) {
-                    // MODIFY: Call removeServer on the new notifier
                     final success = await ref
                         .read(mcpServerConfigProvider.notifier)
                         .removeServer(server.id);
@@ -625,7 +585,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ),
             ],
             cancelButton: CupertinoActionSheetAction(
-              // Add a separate Cancel button
               child: const Text('Cancel'),
               onPressed: () => Navigator.pop(context),
             ),
@@ -633,12 +592,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
-  // Method to show the model picker
   void _showModelPicker(BuildContext context) {
     final currentModel = ref.read(openAiModelIdProvider);
     int initialItem = _availableModels.indexOf(currentModel);
-    if (initialItem < 0) initialItem = 0; // Default to first if not found
-
+    if (initialItem < 0) initialItem = 0;
     String selectedValue =
         _availableModels.isNotEmpty ? _availableModels[initialItem] : '';
 
@@ -708,19 +665,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       selectedValue = _availableModels[index];
                     },
                     children:
-                        _availableModels
-                            .map(
-                              (modelId) => Center(
-                                child: Text(
-                                  modelId,
-                                  style:
-                                      CupertinoTheme.of(
-                                        context,
-                                      ).textTheme.textStyle,
-                                ),
-                              ),
-                            )
-                            .toList(),
+                        _availableModels.map((modelId) {
+                          return Center(
+                            child: Text(
+                              modelId,
+                              style:
+                                  CupertinoTheme.of(
+                                    context,
+                                  ).textTheme.textStyle,
+                            ),
+                          );
+                        }).toList(),
                   ),
                 ),
               ],
@@ -731,7 +686,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
-  // Helper to get appropriate icon for server type
   IconData _getServerIcon(ServerType type) {
     switch (type) {
       case ServerType.memos:
@@ -739,7 +693,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       case ServerType.blinko:
         return CupertinoIcons.sparkles;
       case ServerType.todoist:
-        return CupertinoIcons.check_mark_circled; // Example icon for Todoist
+        return CupertinoIcons.check_mark_circled;
     }
   }
 
@@ -761,13 +715,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     bool cloudSuccess = true;
     String cloudErrorMessage = '';
 
+    // 0. Get current workbench instance IDs *before* clearing them
+    final instanceIdsToClear =
+        ref
+            .read(workbenchInstancesProvider)
+            .instances
+            .map((i) => i.id)
+            .toList();
+
     // 1. Clear CloudKit Data
     try {
       if (kDebugMode) {
         print('[SettingsScreen] Deleting CloudKit ServerConfig records...');
       }
       bool deleteServersSuccess = await cloudKitService.deleteAllRecordsOfType(
-        'ServerConfig',
+        CloudKitService.serverConfigRecordType,
       );
       if (!deleteServersSuccess) {
         cloudSuccess = false;
@@ -781,7 +743,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         print('[SettingsScreen] Deleting CloudKit McpServerConfig records...');
       }
       bool deleteMcpSuccess = await cloudKitService.deleteAllRecordsOfType(
-        'McpServerConfig',
+        CloudKitService.mcpServerConfigRecordType,
       );
       if (!deleteMcpSuccess) {
         cloudSuccess = false;
@@ -801,6 +763,42 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         cloudErrorMessage += 'Failed to delete UserSettings record. ';
         if (kDebugMode) {
           print('[SettingsScreen] Failed CloudKit UserSettings deletion.');
+        }
+      }
+
+      // Delete Workbench Instances
+      if (kDebugMode) {
+        print(
+          '[SettingsScreen] Deleting CloudKit WorkbenchInstance records...',
+        );
+      }
+      bool deleteInstancesSuccess = await cloudKitService
+          .deleteAllRecordsOfType(CloudKitService.workbenchInstanceRecordType);
+      if (!deleteInstancesSuccess) {
+        cloudSuccess = false;
+        cloudErrorMessage += 'Failed to delete WorkbenchInstance records. ';
+        if (kDebugMode) {
+          print('[SettingsScreen] Failed CloudKit WorkbenchInstance deletion.');
+        }
+      }
+
+      // Delete Workbench Items
+      if (kDebugMode) {
+        print(
+          '[SettingsScreen] Deleting CloudKit WorkbenchItemReference records...',
+        );
+      }
+      bool deleteItemsSuccess = await cloudKitService.deleteAllRecordsOfType(
+        CloudKitService.workbenchItemRecordType,
+      );
+      if (!deleteItemsSuccess) {
+        cloudSuccess = false;
+        cloudErrorMessage +=
+            'Failed to delete WorkbenchItemReference records. ';
+        if (kDebugMode) {
+          print(
+            '[SettingsScreen] Failed CloudKit WorkbenchItemReference deletion.',
+          );
         }
       }
 
@@ -833,12 +831,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final openAiKeyNotifier = ref.read(openAiApiKeyProvider.notifier);
     final openAiModelNotifier = ref.read(openAiModelIdProvider.notifier);
     final geminiNotifier = ref.read(geminiApiKeyProvider.notifier);
-    // FIX: Use correct provider name activeWorkbenchNotifierProvider
-    final workbenchNotifier = ref.read(activeWorkbenchNotifierProvider);
+    final workbenchInstancesNotifier = ref.read(
+      workbenchInstancesProvider.notifier,
+    );
     final tasksNotifier = ref.read(tasksNotifierProvider.notifier);
     final chatNotifier = ref.read(chatProvider.notifier);
-    // Consider if notes cache needs explicit clearing or if config reset handles it
-    // final notesNotifier = ref.read(note_providers.notesNotifierProvider.notifier);
+    final sharedPrefsService = await ref.read(
+      sharedPrefsServiceProvider.future,
+    );
 
     try {
       if (kDebugMode) {
@@ -853,11 +853,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       await geminiNotifier.clear();
 
       // Clear Data Caches
-      // FIX: Use correct method name clearItems
-      await workbenchNotifier.clearItems();
-      tasksNotifier.clearTasks(); // Clear local task list
-      chatNotifier.clearChat(); // Clear chat history
-      // await notesNotifier.clearCache(); // If an explicit cache clear is needed
+      for (final instanceId in instanceIdsToClear) {
+        await ref
+            .read(workbenchProviderFamily(instanceId).notifier)
+            .clearItems();
+      }
+      await workbenchInstancesNotifier.loadInstances();
+
+      tasksNotifier.clearTasks();
+      chatNotifier.clearChat();
+      await sharedPrefsService.clearAll() ?? Future.value();
 
       if (kDebugMode) {
         print('[SettingsScreen] Local reset finished.');
@@ -873,7 +878,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             '\nAn error also occurred during local data reset.';
       } else {
         cloudErrorMessage = 'An error occurred during local data reset.';
-        cloudSuccess = false; // Mark as failed if local reset fails
+        cloudSuccess = false;
       }
     }
 
@@ -886,12 +891,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             : 'The reset process encountered errors:\n$cloudErrorMessage\nSome data might remain. Please check iCloud data manually (Settings > Apple ID > iCloud > Manage Account Storage) and restart the app.',
         isError: !cloudSuccess,
       );
-      // Invalidate providers to force reload/re-check after reset
       ref.invalidate(loadServerConfigProvider);
-      // FIX: Use correct provider name mcpServerConfigProvider
       ref.invalidate(mcpServerConfigProvider);
-      // Invalidate all instances of the notes family provider
-      // This is tricky, maybe just invalidate the active one? Or rely on config reset?
+      ref.invalidate(workbenchInstancesProvider);
       final activeServerId = ref.read(activeServerConfigProvider)?.id;
       if (activeServerId != null) {
         ref.invalidate(
@@ -899,10 +901,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         );
       }
       ref.invalidate(tasksNotifierProvider);
-      // FIX: Use correct provider name activeWorkbenchProvider
-      ref.invalidate(activeWorkbenchProvider);
+      final currentInstanceIds =
+          ref
+              .read(workbenchInstancesProvider)
+              .instances
+              .map((i) => i.id)
+              .toList();
+      for (final instanceId in currentInstanceIds) {
+        ref.invalidate(workbenchProviderFamily(instanceId));
+      }
       ref.invalidate(chatProvider);
-      // Potentially navigate away or prompt for restart
     } else {
       if (kDebugMode) {
         print(
@@ -921,10 +929,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final defaultServerId = multiServerState.defaultServerId;
     final notifier = ref.read(multiServerConfigProvider.notifier);
 
-    // Get active config to check its type for the test button
     final activeConfig = ref.watch(activeServerConfigProvider);
     final bool isTodoistActive = activeConfig?.serverType == ServerType.todoist;
-
     final bool automaticallyImplyLeading = !widget.isInitialSetup;
 
     return GestureDetector(
@@ -937,7 +943,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Button to add Memos/Blinko/Todoist server
               CupertinoButton(
                 padding: EdgeInsets.zero,
                 onPressed: () {
@@ -947,12 +952,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     ),
                   );
                 },
-                child: const Icon(
-                  CupertinoIcons.add,
-                ),
+                child: const Icon(CupertinoIcons.add),
               ),
               const SizedBox(width: 8),
-              // Button to add MCP server
               CupertinoButton(
                 padding: EdgeInsets.zero,
                 onPressed: () {
@@ -971,7 +973,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           child: ListView(
             padding: const EdgeInsets.only(top: 16.0),
             children: [
-              // Initial setup prompt
               if (widget.isInitialSetup)
                 Padding(
                   padding: const EdgeInsets.symmetric(

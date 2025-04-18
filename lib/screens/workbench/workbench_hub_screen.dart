@@ -318,7 +318,6 @@ class _WorkbenchHubScreenState extends ConsumerState<WorkbenchHubScreen> {
 
                     Widget tile = WorkbenchInstanceTile(
                       instance: instance,
-                      // isActive: isActive, // REMOVED isActive parameter
                       onTap: () {
                         // Navigate to the detail screen using the nested navigator
                         Navigator.of(

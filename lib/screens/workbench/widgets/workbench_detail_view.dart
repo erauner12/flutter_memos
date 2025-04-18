@@ -1,22 +1,25 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter_memos/providers/workbench_instances_provider.dart';
+// Removed workbench_instances_provider import
 import 'package:flutter_memos/providers/workbench_provider.dart';
 import 'package:flutter_memos/screens/workbench/widgets/workbench_item_tile.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class WorkbenchDetailView extends ConsumerWidget {
-  const WorkbenchDetailView({super.key});
+  final String instanceId; // Add instanceId parameter
+
+  const WorkbenchDetailView({
+    super.key,
+    required this.instanceId, // Make it required
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Use the activeWorkbenchProvider which automatically tracks the active instance
-    final workbenchState = ref.watch(activeWorkbenchProvider);
-    final activeInstanceId = ref.watch(
-      workbenchInstancesProvider.select((s) => s.activeInstanceId),
-    );
+    // Use the workbenchProviderFamily with the passed instanceId
+    final workbenchState = ref.watch(workbenchProviderFamily(instanceId));
+    // Removed activeInstanceId watch
     final items = workbenchState.items;
 
-    // Loading/Error states for active workbench items
+    // Loading/Error states for this specific instance's items
     if (workbenchState.isLoading && items.isEmpty) {
       return const SliverFillRemaining( // Use SliverFillRemaining for sliver context
         child: Center(child: CupertinoActivityIndicator()),
@@ -47,9 +50,12 @@ class WorkbenchDetailView extends ConsumerWidget {
               const SizedBox(height: 10),
               CupertinoButton(
                 child: const Text('Retry'),
-                // Use activeWorkbenchNotifierProvider to retry loading for the active instance
+                // Use workbenchProviderFamily with instanceId to retry loading
                 onPressed:
-                    () => ref.read(activeWorkbenchNotifierProvider).loadItems(),
+                    () =>
+                        ref
+                            .read(workbenchProviderFamily(instanceId).notifier)
+                            .loadItems(),
               ),
             ],
           ),
@@ -84,9 +90,9 @@ class WorkbenchDetailView extends ConsumerWidget {
         itemCount: items.length,
         // Callback when an item is dropped in a new position
         onReorder: (oldIndex, newIndex) {
-          // Call the reorder method on the notifier for the active instance
+          // Call the reorder method on the notifier for this specific instance
           ref
-              .read(activeWorkbenchNotifierProvider)
+              .read(workbenchProviderFamily(instanceId).notifier)
               .reorderItems(oldIndex, newIndex);
         },
         itemBuilder: (context, index) {

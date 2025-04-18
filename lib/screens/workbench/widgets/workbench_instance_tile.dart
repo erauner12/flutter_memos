@@ -13,7 +13,6 @@ class WorkbenchInstanceTile extends StatelessWidget {
     required this.onTap,
     this.isSelected = false,
     this.onLongPress,
-    required bool isActive,
   });
 
   @override

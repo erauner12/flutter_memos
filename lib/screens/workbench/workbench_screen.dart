@@ -63,17 +63,16 @@ class WorkbenchScreen extends ConsumerWidget {
           ],
         ),
       ),
-      child: const SafeArea(
+      child: SafeArea(
         bottom: false, // Allow content to scroll to bottom edge
         // Add horizontal padding to the SafeArea
         child: Padding(
-          padding: EdgeInsets.symmetric(horizontal: 8.0), // Added padding
+          padding: const EdgeInsets.symmetric(horizontal: 8.0), // Added padding
           // Use CustomScrollView to host the detail view which is expected to return slivers
           child: CustomScrollView(
             slivers: [
-              // Pass the instanceId to the detail view if needed,
-              // although it primarily uses the activeWorkbenchProvider which depends on instanceId
-              WorkbenchDetailView(),
+              // Pass the instanceId to the detail view
+              WorkbenchDetailView(instanceId: instanceId),
             ],
           ),
         ),
