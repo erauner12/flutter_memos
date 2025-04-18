@@ -27,6 +27,18 @@ final highlightedCommentIdProvider = StateProvider<String?>(
   name: 'highlightedCommentIdProvider',
 );
 
+/// Provider for the active workbench item ID
+final activeWorkbenchItemIdProvider = StateProvider<String?>(
+  (ref) => null,
+  name: 'activeWorkbenchItemIdProvider',
+);
+
+/// Provider for the active comment ID
+final activeCommentIdProvider = StateProvider<String?>(
+  (ref) => null,
+  name: 'activeCommentIdProvider',
+);
+
 /// Toggle provider for the capture utility expansion state
 final captureUtilityToggleProvider = StateProvider<bool>((ref) => false);
 
