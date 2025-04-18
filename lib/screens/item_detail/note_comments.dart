@@ -38,10 +38,10 @@ class NoteComments extends ConsumerWidget {
                 .where((c) => !hiddenCommentIds.contains('$noteId/${c.id}')) // Use noteId
                 .toList();
 
-        // Always sort comments to ensure proper order after pin/unpin operations
-        CommentUtils.sortByPinnedThenUpdateTime(
+        // Sort comments chronologically for thread view (pinned first, then oldest to newest)
+        CommentUtils.sortForThreadView(
           visibleComments,
-        ); // Use updated time sort
+        ); // Use thread view sort
 
         if (visibleComments.isEmpty) {
           return Padding(
@@ -58,29 +58,38 @@ class NoteComments extends ConsumerWidget {
           );
         }
 
-        return ListView.builder(
-          shrinkWrap: true,
-          physics:
-              const NeverScrollableScrollPhysics(), // Handled by parent scroll
-          itemCount: visibleComments.length,
-          itemBuilder: (context, index) {
-            final comment = visibleComments[index];
-            final isSelected =
-                !isMultiSelectMode && index == selectedCommentIndex;
+        // Add overall padding for the comment section
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12.0),
+          child: ListView.builder(
+            shrinkWrap: true,
+            physics:
+                const NeverScrollableScrollPhysics(), // Handled by parent scroll
+            itemCount: visibleComments.length,
+            itemBuilder: (context, index) {
+              final comment = visibleComments[index];
+              final isSelected =
+                  !isMultiSelectMode && index == selectedCommentIndex;
 
-            return Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: CommentCard(
-                // Pass required parameters
-                comment: comment,
-                memoId: noteId, // Pass noteId as memoId prop
-                serverId: serverId, // Pass serverId
-                isSelected: isSelected,
-                // Adding a key based on comment ID and pin status to force rebuild when pin status changes
-                key: ValueKey('${comment.id}_${comment.pinned}'),
-              ),
-            );
-          },
+              // Add padding between comment cards and horizontal padding
+              return Padding(
+                padding: const EdgeInsets.only(
+                  bottom: 16.0,
+                  left: 16.0,
+                  right: 16.0,
+                ),
+                child: CommentCard(
+                  // Pass required parameters
+                  comment: comment,
+                  memoId: noteId, // Pass noteId as memoId prop
+                  serverId: serverId, // Pass serverId
+                  isSelected: isSelected,
+                  // Adding a key based on comment ID and pin status to force rebuild when pin status changes
+                  key: ValueKey('${comment.id}_${comment.pinned}'),
+                ),
+              );
+            },
+          ),
         );
       },
       loading:

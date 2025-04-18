@@ -71,9 +71,15 @@ class WorkbenchDetailView extends ConsumerWidget {
       );
     }
 
-    // Item List using standard SliverList
+    // Item List using standard SliverList with padding
     return SliverPadding(
-      padding: const EdgeInsets.only(bottom: 50.0), // Padding for FAB/bottom bar space
+      // Add horizontal padding and adjust vertical padding
+      padding: const EdgeInsets.only(
+        left: 16.0,
+        right: 16.0,
+        top: 12.0,
+        bottom: 50.0,
+      ),
       sliver: SliverList(
         delegate: SliverChildBuilderDelegate((context, index) {
           final item = items[index];
@@ -102,5 +108,3 @@ class WorkbenchDetailView extends ConsumerWidget {
     );
   }
 }
-
-// Removed SliverReorderableList helper class as it's no longer used.

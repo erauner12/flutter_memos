@@ -41,4 +41,15 @@ class CommentUtils {
       return updateTimeB.compareTo(updateTimeA);
     });
   }
+
+  /// Sort comments for a thread view: pinned first, then by creation time ascending (oldest first).
+  static void sortForThreadView(List<Comment> comments) {
+    comments.sort((a, b) {
+      // 1. Pinned at top
+      if (a.pinned && !b.pinned) return -1;
+      if (!a.pinned && b.pinned) return 1;
+      // 2. Then by creation time ascending (oldest first)
+      return a.createdTs.compareTo(b.createdTs);
+    });
+  }
 }

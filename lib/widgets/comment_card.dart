@@ -241,8 +241,10 @@ class CommentCard extends ConsumerWidget {
     return GestureDetector(
       onLongPress: () => _showActions(context, ref),
       child: Container(
-        margin: const EdgeInsets.only(bottom: 12.0),
-        padding: const EdgeInsets.all(12.0),
+        margin: const EdgeInsets.only(
+          bottom: 12.0,
+        ), // Keep bottom margin for spacing between cards if needed elsewhere
+        padding: const EdgeInsets.all(16.0), // Increased padding
         decoration: BoxDecoration(
           color: cardColor,
           borderRadius: BorderRadius.circular(10.0),
@@ -274,9 +276,11 @@ class CommentCard extends ConsumerWidget {
                   }
                 },
               ),
-            // Separator if both content and resources exist
-            if (commentContent.isNotEmpty && hasResources)
-              const SizedBox(height: 8),
+            // Spacer if content exists and resources or footer will follow
+            if (commentContent.isNotEmpty &&
+                (hasResources || true)) // Add space if content exists
+              const SizedBox(height: 8.0),
+
             // Resources Grid (Simplified)
             if (hasResources)
               Wrap(
@@ -328,9 +332,10 @@ class CommentCard extends ConsumerWidget {
                       );
                     }).toList(),
               ),
-            // Separator if content or resources exist before footer
-            if (commentContent.isNotEmpty || hasResources)
-              const SizedBox(height: 8),
+            // Spacer if resources exist before footer
+            if (hasResources) // Add space if resources exist
+              const SizedBox(height: 8.0),
+
             // Footer Row (Date, Pinned Icon)
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
