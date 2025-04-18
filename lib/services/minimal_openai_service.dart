@@ -219,51 +219,49 @@ class MinimalOpenAiService {
       );
     }
 
-    // Convert local OpenAiChatMessage to openai_dart ChatCompletionMessage
-    final openAiDartMessages =
-        messages.map((m) {
-          // Map string role -> ChatMessageRole
-          ChatMessageRole openAiRole;
-          switch (m.role) {
-            case 'system':
-              openAiRole = ChatMessageRole.system;
-              break;
-            case 'assistant':
-              openAiRole = ChatMessageRole.assistant;
-              break;
-            case 'user':
-              openAiRole = ChatMessageRole.user;
-              break;
-            default:
-              // For other roles, throw or fallback
-              throw ArgumentError('Unsupported role: ${m.role}');
-          }
-
-          // In openai_dart, the 'content' is directly a string
-          // Use ChatCompletionMessage from openai_dart
-          return ChatCompletionMessage(
-            role: openAiRole,
-            content: m.content, // Content is directly a string
-          );
-        }).toList();
-
-    final request = CreateChatCompletionRequest(
-      model: ChatCompletionModel.modelId(model),
-      messages: openAiDartMessages,
-      temperature: temperature,
-      maxTokens: maxTokens,
-    );
-
     try {
-      final CreateChatCompletionResponse response = await _openAIClient
-          .createChatCompletion(request: request);
+      // Create the request with messages directly in the format expected by the API
+      final request = {
+        'model': model,
+        'messages':
+            messages.map((m) {
+          // Validate the role is one of the expected values
+              if (m.role != 'system' &&
+                  m.role != 'user' &&
+                  m.role != 'assistant') {
+            throw ArgumentError('Unsupported role: ${m.role}');
+          }
+              return {'role': m.role, 'content': m.content};
+            }).toList(),
+      };
 
-      // Correctly extract the content string.
-      // The content is directly on the message object.
-      final returnedMsg = response.choices.firstOrNull?.message.content ?? '';
+      // Add optional parameters if provided
+      if (temperature != null) {
+        request['temperature'] = temperature;
+      }
+      if (maxTokens != null) {
+        request['max_tokens'] = maxTokens;
+      }
+
+      // Make the API call using rawRequest which accepts a Map directly
+      final response = await _openAIClient.rawRequest(
+        'POST',
+        '/chat/completions',
+        body: request,
+      );
+
+      // Extract response content
+      final choices = response['choices'] as List;
+      if (choices.isEmpty) {
+        _logger.info('OpenAI returned no choices in chat completion.');
+        return '';
+      }
+
+      final message = choices.first['message'] as Map;
+      final returnedMsg = message['content'] as String? ?? '';
 
       if (returnedMsg.isEmpty) {
-        _logger.info('OpenAI returned no content in chat completion.');
+        _logger.info('OpenAI returned empty content in chat completion.');
         return '';
       }
 
