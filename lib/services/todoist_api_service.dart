@@ -8,7 +8,19 @@ import 'package:flutter_memos/models/server_config.dart'; // Use ServerConfig if
 import 'package:flutter_memos/models/task_item.dart'; // Use app's TaskItem model
 import 'package:flutter_memos/services/task_api_service.dart'; // Implement the interface
 import 'package:flutter_memos/todoist_api/lib/api.dart' as todoist;
+import 'package:flutter_riverpod/flutter_riverpod.dart'; // Import Riverpod
 import 'package:http/http.dart';
+
+// Provider to expose the TodoistApiService instance
+// Other providers can watch this to react to service configuration changes.
+final todoistApiServiceProvider = Provider<TodoistApiService>((ref) {
+  // This simply returns the singleton instance.
+  // If configuration depended on other providers (e.g., auth token),
+  // those could be watched here, and configureService called accordingly.
+  // For now, we assume configureService is called elsewhere appropriately.
+  return TodoistApiService();
+});
+
 
 /// Service class for interacting with the Todoist API (REST and Sync)
 ///
@@ -36,6 +48,7 @@ class TodoistApiService implements TaskApiService {
   final String _restBaseUrl = 'https://api.todoist.com/rest/v2';
   final String _syncBaseUrl = 'https://api.todoist.com/sync/v9'; // Adjust version if needed
   String _authToken = '';
+  bool _isCurrentlyConfigured = false; // Internal flag
 
   // --- Sync State ---
   String _lastSyncToken = '*'; // Start with '*' for initial full sync
@@ -61,7 +74,9 @@ class TodoistApiService implements TaskApiService {
     required String authToken,
   }) async {
     // Make async to match Future<void> return type
-    if (_authToken == authToken && _authToken.isNotEmpty) {
+    if (_authToken == authToken &&
+        _authToken.isNotEmpty &&
+        _isCurrentlyConfigured) {
       if (verboseLogging) {
         stderr.writeln(
           '[TodoistApiService] Configuration unchanged.',
@@ -74,12 +89,14 @@ class TodoistApiService implements TaskApiService {
     _lastSyncToken = '*'; // Reset sync token on reconfigure/new token
     _initializeClient(_authToken); // Initialize REST client
     _initializeSyncClient(_authToken); // Initialize Sync client
+    _isCurrentlyConfigured = _authToken.isNotEmpty; // Update internal flag
 
     if (verboseLogging) {
       stderr.writeln(
-        '[TodoistApiService] Configured REST & Sync with ${authToken.isNotEmpty ? 'valid' : 'empty'} token. Sync token reset to "*".',
+        '[TodoistApiService] Configured REST & Sync with ${authToken.isNotEmpty ? 'valid' : 'empty'} token. Sync token reset to "*". Configured: $_isCurrentlyConfigured',
       );
     }
+    // Note: We don't notify listeners here directly. Riverpod handles watching the provider.
   }
 
   /// Initializes the REST API client and associated endpoint classes.
@@ -142,7 +159,7 @@ class TodoistApiService implements TaskApiService {
   // apiBaseUrl is already defined as a class property getter
 
   @override
-  bool get isConfigured => _authToken.isNotEmpty;
+  bool get isConfigured => _isCurrentlyConfigured; // Use internal flag
 
   // configureService is already implemented above.
 
@@ -176,6 +193,10 @@ class TodoistApiService implements TaskApiService {
     String? filter,
     ServerConfig? targetServerOverride, // Ignored for Todoist global key
   }) async {
+    if (!isConfigured) {
+      stderr.writeln('[TodoistApiService] Not configured, cannot list tasks.');
+      return [];
+    }
     if (verboseLogging) {
       stderr.writeln('[TodoistApiService] Getting active tasks via REST (listTasks)');
     }
@@ -218,6 +239,12 @@ class TodoistApiService implements TaskApiService {
     String id, {
     ServerConfig? targetServerOverride /* Ignored */,
   }) async {
+    if (!isConfigured) {
+      stderr.writeln(
+        '[TodoistApiService] Not configured, cannot get task $id.',
+      );
+      throw Exception('Todoist API Service not configured.');
+    }
     if (verboseLogging) {
       stderr.writeln(
         '[TodoistApiService] Getting active task by ID via REST (getTask): $id',
@@ -268,6 +295,10 @@ class TodoistApiService implements TaskApiService {
     TaskItem taskItem, {
     ServerConfig? targetServerOverride /* Ignored */,
   }) async {
+    if (!isConfigured) {
+      stderr.writeln('[TodoistApiService] Not configured, cannot create task.');
+      throw Exception('Todoist API Service not configured.');
+    }
     if (verboseLogging) {
       stderr.writeln(
         '[TodoistApiService] Creating task via REST from TaskItem: ${taskItem.content}',
@@ -334,6 +365,12 @@ class TodoistApiService implements TaskApiService {
     TaskItem taskItem, {
     ServerConfig? targetServerOverride /* Ignored */,
   }) async {
+    if (!isConfigured) {
+      stderr.writeln(
+        '[TodoistApiService] Not configured, cannot update task $id.',
+      );
+      throw Exception('Todoist API Service not configured.');
+    }
     if (verboseLogging) {
       stderr.writeln('[TodoistApiService] Updating task via REST from TaskItem: $id');
     }
@@ -407,6 +444,12 @@ class TodoistApiService implements TaskApiService {
     String id, {
     ServerConfig? targetServerOverride /* Ignored */,
   }) async {
+    if (!isConfigured) {
+      stderr.writeln(
+        '[TodoistApiService] Not configured, cannot delete task $id.',
+      );
+      throw Exception('Todoist API Service not configured.');
+    }
     if (verboseLogging) {
       stderr.writeln('[TodoistApiService] Deleting task via REST (deleteTask): $id');
     }
@@ -439,6 +482,12 @@ class TodoistApiService implements TaskApiService {
     String id, {
     ServerConfig? targetServerOverride /* Ignored */,
   }) async {
+    if (!isConfigured) {
+      stderr.writeln(
+        '[TodoistApiService] Not configured, cannot complete task $id.',
+      );
+      throw Exception('Todoist API Service not configured.');
+    }
     if (verboseLogging) {
       stderr.writeln('[TodoistApiService] Closing task via REST (completeTask): $id');
     }
@@ -468,6 +517,12 @@ class TodoistApiService implements TaskApiService {
     String id, {
     ServerConfig? targetServerOverride /* Ignored */,
   }) async {
+    if (!isConfigured) {
+      stderr.writeln(
+        '[TodoistApiService] Not configured, cannot reopen task $id.',
+      );
+      throw Exception('Todoist API Service not configured.');
+    }
     if (verboseLogging) {
       stderr.writeln('[TodoistApiService] Reopening task via REST (reopenTask): $id');
     }
@@ -500,6 +555,12 @@ class TodoistApiService implements TaskApiService {
     String taskId, {
     ServerConfig? targetServerOverride /* Ignored */,
   }) async {
+    if (!isConfigured) {
+      stderr.writeln(
+        '[TodoistApiService] Not configured, cannot list comments for task $taskId.',
+      );
+      return [];
+    }
     if (verboseLogging) {
       stderr.writeln(
         '[TodoistApiService] Getting comments for task $taskId via REST (listComments)',
@@ -546,6 +607,12 @@ class TodoistApiService implements TaskApiService {
     String commentId, {
     ServerConfig? targetServerOverride /* Ignored */,
   }) async {
+    if (!isConfigured) {
+      stderr.writeln(
+        '[TodoistApiService] Not configured, cannot get comment $commentId.',
+      );
+      throw Exception('Todoist API Service not configured.');
+    }
     if (verboseLogging) {
       stderr.writeln(
         '[TodoistApiService] Getting comment by ID via REST (getComment): $commentId',
@@ -595,6 +662,12 @@ class TodoistApiService implements TaskApiService {
     ServerConfig? targetServerOverride /* Ignored */,
     List<Map<String, dynamic>>? resources /* TODO: Handle attachments via REST if supported */,
   }) async {
+    if (!isConfigured) {
+      stderr.writeln(
+        '[TodoistApiService] Not configured, cannot create comment for task $taskId.',
+      );
+      throw Exception('Todoist API Service not configured.');
+    }
     if (verboseLogging) {
       stderr.writeln('[TodoistApiService] Creating comment via REST for task $taskId');
     }
@@ -649,6 +722,12 @@ class TodoistApiService implements TaskApiService {
     Comment comment, {
     ServerConfig? targetServerOverride /* Ignored */,
   }) async {
+    if (!isConfigured) {
+      stderr.writeln(
+        '[TodoistApiService] Not configured, cannot update comment $commentId.',
+      );
+      throw Exception('Todoist API Service not configured.');
+    }
     if (verboseLogging) {
       stderr.writeln('[TodoistApiService] Updating comment $commentId via REST');
     }
@@ -697,6 +776,12 @@ class TodoistApiService implements TaskApiService {
     String commentId, {
     ServerConfig? targetServerOverride /* Ignored */,
   }) async {
+    if (!isConfigured) {
+      stderr.writeln(
+        '[TodoistApiService] Not configured, cannot delete comment $commentId.',
+      );
+      throw Exception('Todoist API Service not configured.');
+    }
     if (verboseLogging) {
       stderr.writeln(
         '[TodoistApiService] Deleting comment $commentId via REST (task $taskId)',
@@ -765,6 +850,12 @@ class TodoistApiService implements TaskApiService {
   /// Get all projects via REST API
   @override
   Future<List<todoist.Project>> listProjects() async {
+    if (!isConfigured) {
+      stderr.writeln(
+        '[TodoistApiService] Not configured, cannot list projects.',
+      );
+      return [];
+    }
     if (verboseLogging) {
       stderr.writeln('[TodoistApiService] Getting all projects via REST (listProjects)');
     }
@@ -785,6 +876,10 @@ class TodoistApiService implements TaskApiService {
   /// Get all personal labels via REST API
   @override
   Future<List<todoist.Label>> listLabels() async {
+    if (!isConfigured) {
+      stderr.writeln('[TodoistApiService] Not configured, cannot list labels.');
+      return [];
+    }
     if (verboseLogging) {
       stderr.writeln(
         '[TodoistApiService] Getting all personal labels via REST (listLabels)',
@@ -807,6 +902,12 @@ class TodoistApiService implements TaskApiService {
   /// Get all sections via REST API, optionally filtered by project
   @override
   Future<List<todoist.Section>> listSections({String? projectId}) async {
+    if (!isConfigured) {
+      stderr.writeln(
+        '[TodoistApiService] Not configured, cannot list sections.',
+      );
+      return [];
+    }
     if (verboseLogging) {
       stderr.writeln(
         '[TodoistApiService] Getting all sections via REST${projectId != null ? ' for project $projectId' : ''} (listSections)',
@@ -937,6 +1038,12 @@ class TodoistApiService implements TaskApiService {
     String? lang,
     List<int>? ids,
   }) async {
+    if (!isConfigured) {
+      stderr.writeln(
+        '[TodoistApiService] Not configured, cannot get active tasks (DEPRECATED).',
+      );
+      return [];
+    }
     if (verboseLogging) {
       stderr.writeln('[TodoistApiService] Getting active tasks via REST (DEPRECATED getActiveTasks)');
     }
@@ -990,13 +1097,22 @@ class TodoistApiService implements TaskApiService {
       stderr.writeln(
         '[TodoistApiService] API Error - $context: $errorMessage', // Already includes code if available
       );
+      // If auth error, mark service as unconfigured
+      if (statusCode == 401 || statusCode == 403) {
+        _isCurrentlyConfigured = false;
+        _authToken = ''; // Clear token
+        // Consider notifying listeners if using a state management solution that requires it
+        stderr.writeln(
+          '[TodoistApiService] Authentication error ($statusCode). Service marked as unconfigured.',
+        );
+      }
     } else {
       stderr.writeln('[TodoistApiService] Error - $context: $errorMessage');
       if (verboseLogging && error is Error) {
         stderr.writeln(error.stackTrace);
       }
     }
-    // Consider mapping specific status codes (401, 403, 404, 5xx) to specific app exceptions if needed
+    // Consider mapping specific status codes (404, 5xx) to specific app exceptions if needed
   }
 }
 

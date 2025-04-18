@@ -1,20 +1,27 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter_memos/services/todoist_api_service.dart'; // Import the service
+import 'package:flutter_memos/services/todoist_api_service.dart'; // Import the service AND the provider
 import 'package:flutter_memos/todoist_api/lib/api.dart' as todoist;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart'; // For date formatting
 
 // Provider to fetch activity events using the service method
+// Watches the service provider to react to configuration changes.
 final activityEventsProvider = FutureProvider<List<todoist.ActivityEvents>>((ref) async {
-  // Access the singleton instance of the service
-  final service = TodoistApiService();
+  // Watch the service provider instance
+  final service = ref.watch(todoistApiServiceProvider);
+
   // Check if configured before fetching
   if (!service.isConfigured) {
-    // Return empty list or throw an error if not configured
-    print("Todoist API not configured. Cannot fetch activity events.");
+    // Return empty list if not configured - the UI will show the appropriate message.
+    print(
+      "[ActivityEventsProvider] Watched service is not configured. Returning empty list.",
+    );
     return [];
   }
   // Call the method that uses performSync with ['activity']
+  print(
+    "[ActivityEventsProvider] Watched service is configured. Fetching events...",
+  );
   return service.getActivityEventsFromSync();
 });
 
@@ -24,7 +31,10 @@ class ActivityEventsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Watch the provider that fetches events
     final eventsAsync = ref.watch(activityEventsProvider);
+    // Also watch the service provider directly to check configuration status for UI messages
+    final service = ref.watch(todoistApiServiceProvider);
     final DateFormat dateFormat = DateFormat.yMd().add_jms(); // Example format
 
     return CupertinoPageScaffold(
@@ -40,21 +50,22 @@ class ActivityEventsScreen extends ConsumerWidget {
             return Center(child: Text('Error loading events: $err'));
           },
           data: (events) {
+            // Check configuration status *after* data/error state is resolved
+            if (!service.isConfigured) {
+              return const Center(child: Text('Todoist API not configured.'));
+            }
             if (events.isEmpty) {
-              // Check if the service was configured before showing "No events"
-              final service = TodoistApiService();
-              if (!service.isConfigured) {
-                return const Center(child: Text('Todoist API not configured.'));
-              }
               return const Center(child: Text('No activity events found.'));
             }
             // Sort events by date descending (most recent first)
-            events.sort((a, b) => b.eventDate.compareTo(a.eventDate));
+            // Create a mutable copy before sorting
+            final sortedEvents = List<todoist.ActivityEvents>.from(events);
+            sortedEvents.sort((a, b) => b.eventDate.compareTo(a.eventDate));
 
             return ListView.builder(
-              itemCount: events.length,
+              itemCount: sortedEvents.length,
               itemBuilder: (context, index) {
-                final e = events[index];
+                final e = sortedEvents[index];
                 // Build a more informative subtitle
                 String subtitle = 'Type: ${e.objectType}, ID: ${e.objectId}';
                 if (e.parentProjectId != null) {
@@ -68,7 +79,12 @@ class ActivityEventsScreen extends ConsumerWidget {
                 }
                 // Add extra data if present and not empty
                 if (e.extraData != null && e.extraData!.isNotEmpty) {
-                  subtitle += '\nExtra: ${e.extraData.toString()}';
+                  // Limit length of extra data string for display
+                  String extraDataStr = e.extraData.toString();
+                  if (extraDataStr.length > 100) {
+                    extraDataStr = '${extraDataStr.substring(0, 100)}...';
+                  }
+                  subtitle += '\nExtra: $extraDataStr';
                 }
 
                 return CupertinoListTile(
