@@ -4,6 +4,8 @@ import 'package:flutter_memos/providers/workbench_instances_provider.dart';
 import 'package:flutter_memos/screens/workbench/widgets/workbench_instance_tile.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../providers/workbench_provider.dart';
+
 class WorkbenchHubScreen extends ConsumerStatefulWidget {
   const WorkbenchHubScreen({super.key});
 
@@ -254,11 +256,32 @@ class _WorkbenchHubScreenState extends ConsumerState<WorkbenchHubScreen> {
       backgroundColor: CupertinoColors.systemGroupedBackground.resolveFrom(
         context,
       ),
-      navigationBar: const CupertinoNavigationBar(
-        middle: Text("Workbenches"),
+      navigationBar: CupertinoNavigationBar(
+        middle: const Text("Workbenches"),
         // No back button needed on the hub screen
         automaticallyImplyLeading: false,
-        // Trailing actions can be added here if needed (e.g., Edit button)
+        // Add trailing refresh button
+        trailing: CupertinoButton(
+          padding: EdgeInsets.zero,
+          child: const Icon(CupertinoIcons.refresh),
+          onPressed: () {
+            // Get all instance IDs
+            final instancesState = ref.read(workbenchInstancesProvider);
+            final instanceIds =
+                instancesState.instances
+                    .map((instance) => instance.id)
+                    .toList();
+
+            // Trigger loadItems for each instance
+            for (final id in instanceIds) {
+              ref.read(workbenchProviderFamily(id).notifier).loadItems();
+            }
+            // Optional: Show a confirmation or feedback
+            // ScaffoldMessenger.of(context).showSnackBar(
+            //   const SnackBar(content: Text('Refreshing all workbenches...')),
+            // );
+          },
+        ),
       ),
       child: SafeArea(
         child: CustomScrollView(
