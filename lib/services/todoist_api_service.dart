@@ -8,6 +8,7 @@ import 'package:flutter_memos/models/server_config.dart'; // Use ServerConfig if
 import 'package:flutter_memos/models/task_item.dart'; // Use app's TaskItem model
 import 'package:flutter_memos/services/task_api_service.dart'; // Implement the interface
 import 'package:flutter_memos/todoist_api/lib/api.dart' as todoist;
+import 'package:http/http.dart';
 
 /// Service class for interacting with the Todoist API (REST and Sync)
 ///
@@ -36,6 +37,9 @@ class TodoistApiService implements TaskApiService {
   final String _syncBaseUrl = 'https://api.todoist.com/sync/v9'; // Adjust version if needed
   String _authToken = '';
 
+  // --- Sync State ---
+  String _lastSyncToken = '*'; // Start with '*' for initial full sync
+
   // Configuration and logging options
   static bool verboseLogging =
       false; // Cannot use kDebugMode in non-Flutter env
@@ -50,7 +54,7 @@ class TodoistApiService implements TaskApiService {
   }
 
   /// Configure the Todoist API service with authentication token.
-  /// Initializes both REST and Sync clients.
+  /// Initializes both REST and Sync clients. Resets sync token on reconfigure.
   @override
   Future<void> configureService({
     required String baseUrl, // Ignored, Todoist URLs are fixed
@@ -67,12 +71,13 @@ class TodoistApiService implements TaskApiService {
     }
 
     _authToken = authToken;
+    _lastSyncToken = '*'; // Reset sync token on reconfigure/new token
     _initializeClient(_authToken); // Initialize REST client
     _initializeSyncClient(_authToken); // Initialize Sync client
 
     if (verboseLogging) {
       stderr.writeln(
-        '[TodoistApiService] Configured REST & Sync with ${authToken.isNotEmpty ? 'valid' : 'empty'} token',
+        '[TodoistApiService] Configured REST & Sync with ${authToken.isNotEmpty ? 'valid' : 'empty'} token. Sync token reset to "*".',
       );
     }
   }
@@ -148,8 +153,8 @@ class TodoistApiService implements TaskApiService {
     try {
       // Use a lightweight REST call for the primary health check
       await _projectsApi.getAllProjects();
-      // Optionally, add a lightweight Sync call if needed
-      // await _syncApi.someLightweightCheck();
+      // Optionally, perform an initial sync check if desired, but REST is usually sufficient
+      // await performSync(resourceTypes: ['user']); // Example: sync only user info
       return true;
     } catch (e) {
       if (verboseLogging) {
@@ -163,7 +168,8 @@ class TodoistApiService implements TaskApiService {
   // --- TaskApiService Implementation ---
 
   // --- Task Operations (Using REST API) ---
-
+  // [Existing REST methods for listTasks, getTask, createTask, updateTask, deleteTask remain unchanged]
+  // ... (Code for REST methods omitted for brevity, they are the same as previous version) ...
   /// Get all active tasks via REST API, mapped to TaskItem
   @override
   Future<List<TaskItem>> listTasks({
@@ -425,7 +431,8 @@ class TodoistApiService implements TaskApiService {
 
 
   // --- Task Actions (Using REST API) ---
-
+  // [Existing REST methods for completeTask, reopenTask remain unchanged]
+  // ... (Code for REST methods omitted for brevity, they are the same as previous version) ...
   /// Close (complete) a task via REST API
   @override
   Future<void> completeTask(
@@ -485,7 +492,8 @@ class TodoistApiService implements TaskApiService {
 
 
   // --- Task Comments (Using REST API) ---
-
+  // [Existing REST methods for listComments, getComment, createComment, updateComment, deleteComment remain unchanged]
+  // ... (Code for REST methods omitted for brevity, they are the same as previous version) ...
   /// List comments for a specific task via REST API
   @override
   Future<List<Comment>> listComments(
@@ -716,7 +724,8 @@ class TodoistApiService implements TaskApiService {
 
 
   // --- Resource Methods (Implementing BaseApiService - Generally not supported by Todoist REST/Sync directly) ---
-
+  // [Existing Resource methods uploadResource, getResourceData remain unchanged]
+  // ... (Code for Resource methods omitted for brevity, they are the same as previous version) ...
   @override
   Future<Map<String, dynamic>> uploadResource(
     Uint8List fileBytes,
@@ -749,8 +758,10 @@ class TodoistApiService implements TaskApiService {
     );
   }
 
-  // --- Todoist Specific Helper Methods (Using REST API) ---
 
+  // --- Todoist Specific Helper Methods (Using REST API) ---
+  // [Existing REST methods for listProjects, listLabels, listSections remain unchanged]
+  // ... (Code for REST methods omitted for brevity, they are the same as previous version) ...
   /// Get all projects via REST API
   @override
   Future<List<todoist.Project>> listProjects() async {
@@ -815,79 +826,68 @@ class TodoistApiService implements TaskApiService {
     }
   }
 
-  // --- NEW Sync API Methods ---
 
-  /// Retrieve the full sync data set using the Sync API (example).
-  /// Assumes a `getDataV2` method exists on `_syncApi`.
-  Future<todoist.GetDataV2Response?> getAllSyncData() async {
-     if (!isConfigured) {
-       stderr.writeln('[TodoistApiService] Cannot call getAllSyncData: Service not configured.');
-       return null;
-     }
-     if (verboseLogging) {
-       stderr.writeln('[TodoistApiService] Getting all data via Sync API (getAllSyncData)');
-     }
-     try {
-       // Replace with the actual method name from your generated SyncApi
-       final result = await _syncApi.getDataV2();
-       if (verboseLogging) {
-         stderr.writeln('[TodoistApiService] Successfully retrieved data via Sync API.');
-       }
-       return result;
-     } catch (e) {
-       _handleApiError('Error fetching sync data (getAllSyncData)', e);
-       rethrow;
-     }
-  }
+  // --- NEW Sync API Method ---
 
-  /// Retrieve activity events using the Sync API (example).
-  /// Assumes an `getActivityEvents` method exists on `_syncApi`.
-  Future<List<todoist.ActivityEvents>> listActivityEvents({
-    String? since,
-    String? until,
-    int? limit,
-    String? cursor, // For pagination if supported
+  /// Performs a sync operation using the Todoist Sync API.
+  ///
+  /// Fetches updates since the last sync or performs a full sync if necessary.
+  /// Updates the internal `_lastSyncToken` for subsequent incremental syncs.
+  ///
+  /// [resourceTypes] specifies which data types to fetch (e.g., ['all'], ['items', 'projects']).
+  /// Defaults to ['all'].
+  Future<todoist.SyncResponse?> performSync({
+    List<String> resourceTypes = const ['all'],
   }) async {
     if (!isConfigured) {
-      stderr.writeln('[TodoistApiService] Cannot call listActivityEvents: Service not configured.');
-      return [];
+      stderr.writeln(
+        '[TodoistApiService] Cannot perform sync: Service not configured.',
+      );
+      return null;
     }
     if (verboseLogging) {
-      stderr.writeln('[TodoistApiService] Listing activity events via Sync API (listActivityEvents)');
+      stderr.writeln(
+        '[TodoistApiService] Performing sync with token: $_lastSyncToken, types: $resourceTypes',
+      );
     }
     try {
-      // Replace with the actual method name and parameters from your generated SyncApi
-      // This is a hypothetical example based on common patterns
-      final result = await _syncApi.getActivityEvents(
-        // Pass parameters based on the actual SyncApi method signature
-        // e.g., limit: limit, cursor: cursor, since: since, until: until
+      final result = await _syncApi.sync(
+        syncToken: _lastSyncToken,
+        resourceTypes: resourceTypes,
       );
 
-      // Assuming the result is directly a list or needs unwrapping from pagination
-      List<todoist.ActivityEvents> events = [];
-      if (result is todoist.PaginatedListActivityEvents) {
-          events = result.results;
-          // Handle pagination cursor if needed: result.nextCursor
-      } else if (result is List<todoist.ActivityEvents>) {
-          events = result;
+      if (result != null) {
+        // Update the sync token for the next incremental sync
+        if (result.syncToken != null && result.syncToken!.isNotEmpty) {
+          _lastSyncToken = result.syncToken!;
+          if (verboseLogging) {
+            stderr.writeln(
+              '[TodoistApiService] Sync successful. Updated sync token to: $_lastSyncToken',
+            );
+          }
+        } else {
+          stderr.writeln(
+            '[TodoistApiService] Warning: Sync response did not contain a new sync_token.',
+          );
+        }
       } else {
-          stderr.writeln('[TodoistApiService] Unexpected response type from getActivityEvents: ${result?.runtimeType}');
+        stderr.writeln(
+          '[TodoistApiService] Warning: Sync call returned null response.',
+        );
       }
-
-
-      if (verboseLogging) {
-        stderr.writeln('[TodoistApiService] Retrieved ${events.length} activity events via Sync API.');
-      }
-      return events;
+      return result;
     } catch (e) {
-      _handleApiError('Error listing activity events (listActivityEvents)', e);
+      _handleApiError('Error performing sync', e);
+      // Should we reset the sync token on error? Maybe only on specific errors?
+      // For now, keep the old token and retry later.
+      // If it's an auth error (401/403), configureService should reset it.
       rethrow;
     }
   }
 
-
   // --- Old Internal Methods (Review and keep/remove as needed) ---
-
+  // [Existing DEPRECATED getActiveTasks method remains unchanged]
+  // ... (Code omitted for brevity) ...
   /// Get all active tasks, optionally filtered by parameters - DEPRECATED by listTasks
   /// Kept for reference, uses REST API.
   Future<List<todoist.Task>> getActiveTasks({
@@ -945,16 +945,11 @@ class TodoistApiService implements TaskApiService {
 
     if (error is todoist.ApiException) {
       statusCode = error.code;
-      errorMessage = error.message ?? 'Unknown API Exception';
-      // Try to decode the body if available and provides more info
-      if (error.message != null && error.message!.contains("Exception")) {
-         // Potentially already contains useful info
-      } else {
-         // If message is generic, maybe body has details (depends on ApiException impl)
-         // This part is speculative without knowing ApiException details
-      }
+      // Use the message directly as it might contain decoded JSON error details
+      errorMessage =
+          error.message ?? 'Unknown API Exception (Code: $statusCode)';
       stderr.writeln(
-        '[TodoistApiService] API Error - $context: $errorMessage (Code: $statusCode)',
+        '[TodoistApiService] API Error - $context: $errorMessage', // Already includes code if available
       );
     } else {
       stderr.writeln('[TodoistApiService] Error - $context: $errorMessage');
@@ -977,8 +972,16 @@ extension TodoistSpecificMethods on TaskApiService {
       throw UnimplementedError('listSections must be implemented by the concrete class');
 
   // Add Sync specific methods here if needed outside the main class
-  Future<todoist.GetDataV2Response?> getAllSyncData() =>
-      throw UnimplementedError('getAllSyncData must be implemented by the concrete class');
-  Future<List<todoist.ActivityEvents>> listActivityEvents({String? since, String? until, int? limit, String? cursor}) =>
-      throw UnimplementedError('listActivityEvents must be implemented by the concrete class');
+  Future<todoist.SyncResponse?> performSync({
+    required List<String> resourceTypes,
+  }) =>
+      throw UnimplementedError(
+        'performSync must be implemented by the concrete class',
+      );
+
+  // Remove old sync method placeholders
+  // Future<todoist.GetDataV2Response?> getAllSyncData() =>
+  //     throw UnimplementedError('getAllSyncData must be implemented by the concrete class');
+  // Future<List<todoist.ActivityEvents>> listActivityEvents({String? since, String? until, int? limit, String? cursor}) =>
+  //     throw UnimplementedError('listActivityEvents must be implemented by the concrete class');
 }

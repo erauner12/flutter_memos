@@ -37,24 +37,25 @@ part 'auth/http_basic_auth.dart';
 part 'auth/http_bearer_auth.dart';
 part 'auth/oauth.dart';
 // Model Parts (Ensure all needed models are included)
-part 'model/activity_events.dart'; // Sync model
-part 'model/collaborator.dart'; // REST model (used by ProjectsApi)
-part 'model/comment.dart'; // REST model
+part 'model/activity_events.dart'; // Sync model (Potentially part of SyncResponse or separate)
+part 'model/collaborator.dart'; // REST model (used by ProjectsApi, potentially in SyncResponse)
+part 'model/comment.dart'; // REST model (potentially in SyncResponse notes/project_notes)
 part 'model/create_comment_attachment_parameter.dart'; // REST model
 part 'model/create_task_request.dart'; // REST model
 part 'model/due.dart'; // REST model (part of Task)
 part 'model/duration.dart'; // REST model (part of TaskDuration) - Renamed to TodoistDuration
 part 'model/error_model.dart'; // Common model
-part 'model/exposed_collaborator_sync_view.dart'; // Sync model
-part 'model/folder_view.dart'; // Sync model (part of GetDataV2Response) - Assuming this exists
-part 'model/get_data_v2_response.dart'; // Sync model
-part 'model/item_sync_view.dart'; // Sync model (part of PaginatedListItemSyncView) - Assuming this exists
-part 'model/label.dart'; // REST model
-part 'model/paginated_list_activity_events.dart'; // Sync model
-part 'model/paginated_list_item_sync_view.dart'; // Sync model - Assuming this exists
-part 'model/project.dart'; // REST model
-part 'model/section.dart'; // REST model
-part 'model/task.dart'; // REST model
+part 'model/exposed_collaborator_sync_view.dart'; // Sync model (Potentially part of SyncResponse)
+part 'model/folder_view.dart'; // Sync model (Potentially part of SyncResponse) - Assuming this exists
+part 'model/get_data_v2_response.dart'; // Sync model (Likely replaced by SyncResponse)
+part 'model/item_sync_view.dart'; // Sync model (Potentially part of SyncResponse) - Assuming this exists
+part 'model/label.dart'; // REST model (potentially in SyncResponse)
+part 'model/paginated_list_activity_events.dart'; // Sync model (Potentially separate endpoint)
+part 'model/paginated_list_item_sync_view.dart'; // Sync model (Potentially separate endpoint)
+part 'model/project.dart'; // REST model (potentially in SyncResponse)
+part 'model/section.dart'; // REST model (potentially in SyncResponse)
+part 'model/sync_response.dart'; // NEW Sync model for the main /sync endpoint
+part 'model/task.dart'; // REST model (potentially in SyncResponse items)
 part 'model/task_due.dart'; // REST model (wrapper for Due)
 part 'model/task_duration.dart'; // REST model (wrapper for Duration)
 part 'model/update_task_request.dart'; // REST model

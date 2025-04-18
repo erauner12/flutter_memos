@@ -1,6 +1,7 @@
 //
 // PLACEHOLDER FILE - DO NOT MODIFY MANUALLY IF USING CODE GENERATION!
-// This file simulates the existence of a SyncApi class generated from an OpenAPI spec.
+// This file simulates the existence of a SyncApi class generated from an OpenAPI spec,
+// adapted to match the documented behavior of the main /sync endpoint.
 //
 // @dart=2.18
 
@@ -11,136 +12,116 @@
 
 part of openapi.api;
 
-// Placeholder class simulating the generated Sync API endpoints
+// Placeholder class simulating the generated Sync API endpoint
 class SyncApi {
   SyncApi([ApiClient? apiClient]) : apiClient = apiClient ?? defaultApiClient;
 
   final ApiClient apiClient;
 
-  /// Placeholder for fetching full data via Sync API.
-  /// Corresponds to an endpoint like GET /sync/v9/projects/get_data
-  /// The actual parameters and return type depend on the real API spec.
+  /// Performs a sync operation.
+  ///
+  /// Retrieves user resources based on the provided sync token and resource types.
+  /// Use syncToken = '*' for the initial full sync. Subsequent calls should use
+  /// the syncToken received from the previous response for incremental updates.
   ///
   /// Note: This method returns the HTTP [Response].
-  Future<Response> getDataV2WithHttpInfo({ String? projectId /* Example param */ }) async {
+  ///
+  /// Parameters:
+  ///
+  /// * [String] syncToken (required):
+  ///   Use '*' for initial sync, or the token from the last sync response.
+  ///
+  /// * [List<String>] resourceTypes (required):
+  ///   JSON array (as string) of resource types to sync (e.g., '["all"]', '["items", "projects"]').
+  Future<Response> syncWithHttpInfo({
+    required String syncToken,
+    required List<String> resourceTypes,
+    // Add other potential Sync API parameters if needed (e.g., commands for writing data)
+  }) async {
     // ignore: prefer_const_declarations
-    final path = r'/sync/v9/projects/get_data'; // Example path, adjust as needed
+    // Assuming the endpoint path is /sync relative to the base sync URL
+    // The documentation example uses /api/v1/sync, but our base is /sync/v9.
+    // Adjust if the actual endpoint is different (e.g., just /sync or /sync/v9/sync)
+    final path =
+        r'/sync'; // Or potentially '/sync/v9/sync' - needs verification
 
     // ignore: prefer_final_locals
-    Object? postBody;
+    Object?
+        postBody; // Body is sent via formParams for application/x-www-form-urlencoded
 
     final queryParams = <QueryParam>[];
     final headerParams = <String, String>{};
     final formParams = <String, String>{};
 
-    if (projectId != null) {
-      queryParams.addAll(_queryParams('', 'project_id', projectId)); // Example query param
-    }
+    // Add required form parameters
+    formParams[r'sync_token'] = parameterToString(syncToken);
+    // Encode the list of strings as a JSON array string
+    formParams[r'resource_types'] = jsonEncode(resourceTypes);
 
-    const contentTypes = <String>[];
+    // Add other form parameters if implementing write commands
 
-    // This would typically be a GET request based on the name
+    // Set the Content-Type for form data
+    const contentTypes = <String>['application/x-www-form-urlencoded'];
+
+
     return apiClient.invokeAPI(
       path,
-      'GET', // Assuming GET, adjust if it's POST
+      'POST', // Sync API uses POST
       queryParams,
       postBody,
       headerParams,
       formParams,
-      contentTypes.isEmpty ? null : contentTypes.first,
+      contentTypes.first, // Specify content type
     );
   }
 
-  /// Placeholder for fetching full data via Sync API.
-  /// Returns a [GetDataV2Response] object.
-  Future<GetDataV2Response?> getDataV2({ String? projectId /* Example param */ }) async {
-    final response = await getDataV2WithHttpInfo( projectId: projectId );
-    if (response.statusCode >= HttpStatus.badRequest) {
-      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
-    }
-    if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
-      // Ensure the type matches the actual generated model name
-      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'GetDataV2Response',) as GetDataV2Response?;
-    }
-    return null;
-  }
-
-
-  /// Placeholder for fetching activity events via Sync API.
-  /// Corresponds to an endpoint like GET /sync/v9/activity/get
-  /// The actual parameters and return type depend on the real API spec.
+  /// Performs a sync operation.
   ///
-  /// Note: This method returns the HTTP [Response].
-  Future<Response> getActivityEventsWithHttpInfo({
-      int? limit,
-      String? cursor,
-      String? since,
-      String? until,
-      String? objectType,
-      String? eventType,
-      /* Add other potential filters based on API spec */
+  /// Retrieves user resources based on the provided sync token and resource types.
+  /// Use syncToken = '*' for the initial full sync. Subsequent calls should use
+  /// the syncToken received from the previous response for incremental updates.
+  /// Returns a [SyncResponse] object.
+  ///
+  /// Parameters:
+  ///
+  /// * [String] syncToken (required):
+  ///   Use '*' for initial sync, or the token from the last sync response.
+  ///
+  /// * [List<String>] resourceTypes (required):
+  ///   List of resource types to sync (e.g., ['all'], ['items', 'projects']).
+  Future<SyncResponse?> sync({
+    required String syncToken,
+    required List<String> resourceTypes,
   }) async {
-    // ignore: prefer_const_declarations
-    final path = r'/sync/v9/activity/get'; // Example path, adjust as needed
-
-    // ignore: prefer_final_locals
-    Object? postBody;
-
-    final queryParams = <QueryParam>[];
-    final headerParams = <String, String>{};
-    final formParams = <String, String>{};
-
-    // Add query parameters based on the actual API spec
-    if (limit != null) queryParams.addAll(_queryParams('', 'limit', limit));
-    if (cursor != null) queryParams.addAll(_queryParams('', 'cursor', cursor));
-    if (since != null) queryParams.addAll(_queryParams('', 'since', since));
-    if (until != null) queryParams.addAll(_queryParams('', 'until', until));
-    if (objectType != null) queryParams.addAll(_queryParams('', 'object_type', objectType));
-    if (eventType != null) queryParams.addAll(_queryParams('', 'event_type', eventType));
-
-    const contentTypes = <String>[];
-
-    return apiClient.invokeAPI(
-      path,
-      'GET', // Assuming GET
-      queryParams,
-      postBody,
-      headerParams,
-      formParams,
-      contentTypes.isEmpty ? null : contentTypes.first,
+    final response = await syncWithHttpInfo(
+      syncToken: syncToken,
+      resourceTypes: resourceTypes,
     );
-  }
 
-  /// Placeholder for fetching activity events via Sync API.
-  /// Returns a [PaginatedListActivityEvents] object (or similar based on spec).
-  Future<PaginatedListActivityEvents?> getActivityEvents({
-      int? limit,
-      String? cursor,
-      String? since,
-      String? until,
-      String? objectType,
-      String? eventType,
-  }) async {
-    final response = await getActivityEventsWithHttpInfo(
-        limit: limit, cursor: cursor, since: since, until: until, objectType: objectType, eventType: eventType
-    );
+    final responseBodyBytes = await _decodeBodyBytes(response);
+    final responseBodyString =
+        utf8.decode(responseBodyBytes as List<int>); // Decode bytes to string
+
     if (response.statusCode >= HttpStatus.badRequest) {
-      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+      // Pass the decoded string to ApiException
+      throw ApiException(response.statusCode, responseBodyString);
     }
-    if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
-      // Ensure the type matches the actual generated model name for pagination
-      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'PaginatedListActivityEvents',) as PaginatedListActivityEvents?;
+
+    if (responseBodyString.isNotEmpty &&
+        response.statusCode != HttpStatus.noContent) {
+      // Pass the decoded string to deserializeAsync
+      return await apiClient.deserializeAsync(
+        responseBodyString,
+        'SyncResponse',
+      ) as SyncResponse?;
     }
     return null;
   }
-
-  // Add other Sync API methods here as needed based on the specification...
-
 }
 
-// Helper function (should ideally be part of ApiClient or ApiHelper in generated code)
-Future<Uint8List> _decodeBodyBytes(Response response) async => response.bodyBytes;
-List<QueryParam> _queryParams(String collectionFormat, String name, dynamic value) =>
-    ApiHelper.convertParametersForCollectionFormat(collectionFormat, name, value);
-
-```
+// Basic ApiHelper implementation (should be part of generated code)
+class ApiHelper {
+  static String parameterToString(dynamic value) {
+    return value.toString();
+  }
+}
