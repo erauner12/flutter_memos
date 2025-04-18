@@ -24,35 +24,50 @@ class TaskListItem extends StatelessWidget {
     required this.onTap,
   });
 
-  // Helper to build context menu actions
-  List<Widget> _buildContextActions(BuildContext context) {
-    return <Widget>[
-      CupertinoContextMenuAction(
-        child: Text(task.isCompleted ? 'Reopen Task' : 'Complete Task'),
-        onPressed: () {
-          Navigator.pop(context); // Close the menu
-          onToggleComplete(!task.isCompleted);
-        },
-      ),
-      CupertinoContextMenuAction(
-        child: const Text('Add to Workbench'),
-        onPressed: () {
-          Navigator.pop(context);
-          onAddToWorkbench();
-        },
-      ),
-      CupertinoContextMenuAction(
-        isDestructiveAction: true,
-        child: const Text('Delete Task'),
-        onPressed: () {
-          Navigator.pop(context);
-          onDelete();
-        },
-      ),
-    ];
+  // REMOVED _buildContextActions - actions are now in _showContextMenu
+
+  // NEW helper to show action sheet on long-press
+  void _showContextMenu(BuildContext context) {
+    showCupertinoModalPopup<void>(
+      context: context,
+      useRootNavigator: true, // Avoids nested navigator issues
+      builder:
+          (popupContext) => CupertinoActionSheet(
+            title: const Text('Task Actions'),
+            actions: [
+              CupertinoActionSheetAction(
+                child: Text(task.isCompleted ? 'Reopen Task' : 'Complete Task'),
+                onPressed: () {
+                  Navigator.pop(popupContext);
+                  onToggleComplete(!task.isCompleted);
+                },
+              ),
+              CupertinoActionSheetAction(
+                child: const Text('Add to Workbench'),
+                onPressed: () {
+                  Navigator.pop(popupContext);
+                  onAddToWorkbench();
+                },
+              ),
+              CupertinoActionSheetAction(
+                isDestructiveAction: true,
+                child: const Text('Delete Task'),
+                onPressed: () {
+                  Navigator.pop(popupContext);
+                  onDelete();
+                },
+              ),
+            ],
+            cancelButton: CupertinoActionSheetAction(
+              isDefaultAction: true,
+              child: const Text('Cancel'),
+              onPressed: () => Navigator.pop(popupContext),
+            ),
+          ),
+    );
   }
 
-  // Helper to build slidable action pane
+  // Helper to build slidable action pane (remains unchanged)
   ActionPane _buildActionPane(BuildContext context) {
     return ActionPane(
       motion: const BehindMotion(), // Or StretchMotion, etc.
@@ -99,19 +114,15 @@ class TaskListItem extends StatelessWidget {
       ), // Actions revealed on swipe left
       closeOnScroll: true, // Default, good practice
 
-      child: CupertinoContextMenu(
-        actions: _buildContextActions(context),
-
-        // Removed previewBuilder again as it's not compatible with the older SDK.
-        // previewBuilder: (context, animation, child) { ... },
-
-        // The child is the regular in-list representation.
-        // _TaskRowContent now handles its own width constraint.
-        child: _TaskRowContent(
-          task: task,
-          onTap: onTap, // Pass onTap for the main content area
-          onToggleComplete: onToggleComplete, // Pass toggle for the checkbox
-        ),
+      // REMOVED CupertinoContextMenu wrapper
+      // The child is now _TaskRowContent directly.
+      // Long-press is handled inside _TaskRowContent via the new callback.
+      child: _TaskRowContent(
+        task: task,
+        onTap: onTap, // Pass onTap for the main content area
+        onToggleComplete: onToggleComplete, // Pass toggle for the checkbox
+        onLongPress:
+            () => _showContextMenu(context), // NEW: Pass long-press handler
       ),
     );
   }
@@ -122,11 +133,13 @@ class _TaskRowContent extends StatelessWidget {
   final TaskItem task;
   final VoidCallback onTap;
   final Function(bool isCompleted) onToggleComplete;
+  final VoidCallback onLongPress; // NEW: Callback for long-press
 
   const _TaskRowContent({
     required this.task,
     required this.onTap,
     required this.onToggleComplete,
+    required this.onLongPress, // NEW: Require the callback
     // No key needed here as it's managed by the parent Slidable
   });
 
@@ -201,9 +214,10 @@ class _TaskRowContent extends StatelessWidget {
         : CupertinoColors.secondaryLabel.resolveFrom(context);
 
     // Wrap the Container in a ConstrainedBox to provide finite width constraints.
+    // This can potentially be removed now that CupertinoContextMenu is gone,
+    // but it's harmless to keep.
     return ConstrainedBox(
       constraints: BoxConstraints(
-        // ensures finite width in the preview overlay; no effect in list
         maxWidth: MediaQuery.of(context).size.width,
       ),
       child: Container(
@@ -222,10 +236,12 @@ class _TaskRowContent extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             // GestureDetector now wraps only the tappable content area,
-            // allowing the outer CupertinoContextMenu to handle long-press.
+            // AND handles long-press.
             Expanded(
               child: GestureDetector(
                 onTap: onTap, // Use the passed onTap callback
+                onLongPress:
+                    onLongPress, // NEW: Use the passed onLongPress callback
                 behavior:
                     HitTestBehavior
                         .opaque, // Ensure it captures taps within bounds
