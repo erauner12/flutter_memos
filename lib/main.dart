@@ -209,70 +209,119 @@ class _MyAppCoreState extends ConsumerState<MyAppCore> {
   }
 
   void _loadInitialTheme() {
-    if (!_initialThemeLoaded) {
-      if (kDebugMode) {
-        print('[MyAppCore] Loading initial theme preference');
-      }
-      final prefs = ref.read(loadThemeModeProvider);
-      prefs.whenData((savedMode) {
-        if (mounted) {
+    // No need to check _initialThemeLoaded here, provider handles idempotency
+    if (kDebugMode) {
+      print('[MyAppCore] Requesting initial theme preference load');
+    }
+    final prefs = ref.read(loadThemeModeProvider);
+    prefs.whenData((savedMode) {
+      if (mounted && !_initialThemeLoaded) {
+        // Check flag *before* setting
+        if (kDebugMode) {
+          print('[MyAppCore] Setting initial theme to: $savedMode');
+        }
+        ref.read(themeModeProvider.notifier).state = savedMode;
+        setState(() {
+          _initialThemeLoaded = true;
           if (kDebugMode) {
-            print('[MyAppCore] Setting initial theme to: $savedMode');
+            print('[MyAppCore] _initialThemeLoaded set to true');
           }
-          ref.read(themeModeProvider.notifier).state = savedMode;
+        });
+      } else if (mounted && _initialThemeLoaded) {
+        if (kDebugMode) {
+          print(
+            '[MyAppCore] Theme already loaded, ignoring subsequent whenData.',
+          );
+        }
+      }
+    });
+    // Handle potential error case for theme loading if needed
+    prefs.maybeWhen(
+      error: (error, stackTrace) {
+        if (kDebugMode) {
+          print(
+            '[MyAppCore] Error loading theme preference: $error. Proceeding with default.',
+          );
+        }
+        if (mounted && !_initialThemeLoaded) {
           setState(() {
-            _initialThemeLoaded = true;
-            // *** ADDED DEBUG PRINT ***
+            _initialThemeLoaded =
+                true; // Mark as loaded even on error to proceed
             if (kDebugMode) {
-              print('[MyAppCore] _initialThemeLoaded set to true');
+              print(
+                '[MyAppCore] _initialThemeLoaded set to true (due to error)',
+              );
             }
           });
         }
-      });
-    }
+      },
+      orElse: () {}, // Do nothing for loading or data if already handled
+    );
   }
 
+
   void _loadServerConfig() {
-    if (!_initialConfigLoaded) {
-      if (kDebugMode) {
-        print('[MyAppCore] Loading server configuration');
-      }
-      final configLoader = ref.read(loadServerConfigProvider);
-      configLoader.when(
-        data: (_) {
-          if (mounted) {
-            setState(() {
-              _initialConfigLoaded = true;
-              // *** ADDED DEBUG PRINT ***
-              if (kDebugMode) {
-                print('[MyAppCore] _initialConfigLoaded set to true');
-              }
-            });
+    // No need to check _initialConfigLoaded here, provider handles idempotency
+    if (kDebugMode) {
+      print('[MyAppCore] Requesting server configuration load');
+    }
+    final configLoader = ref.read(loadServerConfigProvider);
+    configLoader.when(
+      data: (_) {
+        if (mounted && !_initialConfigLoaded) {
+          // Check flag *before* setting
+          setState(() {
+            _initialConfigLoaded = true;
             if (kDebugMode) {
               print(
-                '[MyAppCore] Server configuration loaded callback executed',
+                '[MyAppCore] _initialConfigLoaded set to true (data received)',
               );
             }
-          }
-        },
-        error: (error, stackTrace) {
-          // *** ADDED DEBUG PRINT for errors ***
+          });
           if (kDebugMode) {
-            print('[MyAppCore] Error loading server config: $error');
+            print('[MyAppCore] Server configuration loaded callback executed');
           }
-          // Set config loaded to true even on error to prevent infinite spinner
-          if (mounted) {
-            setState(() {
-              _initialConfigLoaded = true;
-            });
+        } else if (mounted && _initialConfigLoaded) {
+          if (kDebugMode) {
+            print(
+              '[MyAppCore] Config already loaded, ignoring subsequent data.',
+            );
           }
-        },
-        loading: () {
-          // Do nothing while loading
-        },
-      );
-    }
+        }
+      },
+      error: (error, stackTrace) {
+        if (kDebugMode) {
+          print('[MyAppCore] Error loading server config: $error');
+        }
+        // Set config loaded to true even on error to prevent infinite spinner
+        if (mounted && !_initialConfigLoaded) {
+          // Check flag *before* setting
+          setState(() {
+            _initialConfigLoaded =
+                true; // *** CRITICAL FIX: Set true on error ***
+            if (kDebugMode) {
+              print(
+                '[MyAppCore] _initialConfigLoaded set to true (error occurred)',
+              );
+            }
+          });
+        } else if (mounted && _initialConfigLoaded) {
+          if (kDebugMode) {
+            print(
+              '[MyAppCore] Config already loaded, ignoring subsequent error.',
+            );
+          }
+        }
+      },
+      loading: () {
+        if (kDebugMode) {
+          // Optional: print only once or less frequently if needed
+          // print('[MyAppCore] Server configuration is loading...');
+        }
+      },
+    );
   }
+
 
   void _initializePersistentNotifiers() {
     Future.wait<void>([
@@ -293,6 +342,8 @@ class _MyAppCoreState extends ConsumerState<MyAppCore> {
               '[MyAppCore] Error initializing PersistentStringNotifiers: $e',
             );
           }
+          // Decide if this error should block the UI or not.
+          // Currently, it doesn't block.
         });
   }
 
@@ -418,7 +469,6 @@ class _MyAppCoreState extends ConsumerState<MyAppCore> {
   Widget build(BuildContext context) {
     final themePreference = widget.themeMode;
 
-    // *** ADDED DEBUG PRINT ***
     if (kDebugMode) {
       print(
         '[MyAppCore Build] Checking loading state: _initialThemeLoaded=$_initialThemeLoaded, _initialConfigLoaded=$_initialConfigLoaded',
@@ -427,17 +477,18 @@ class _MyAppCoreState extends ConsumerState<MyAppCore> {
 
     if (!_initialThemeLoaded || !_initialConfigLoaded) {
       // Still loading theme or config
+      // Use a minimal CupertinoApp for the loading state
       return const CupertinoApp(
         theme: CupertinoThemeData(
-          brightness: Brightness.light,
-        ), // Default theme
+          brightness: Brightness.light, // Or detect system brightness
+        ),
         home: CupertinoPageScaffold(
           child: Center(child: CupertinoActivityIndicator()),
         ),
+        debugShowCheckedModeBanner: false,
       );
     }
 
-    // *** ADDED DEBUG PRINT ***
     if (kDebugMode) {
       print('[MyAppCore Build] Loading complete, building main app UI.');
     }
@@ -500,8 +551,11 @@ class _MyAppCoreState extends ConsumerState<MyAppCore> {
           },
           child: Builder(
             builder: (context) {
+              // Determine brightness based on themePreference and platform
               final platformBrightness =
-                  MediaQuery.of(context).platformBrightness;
+                  MediaQuery.platformBrightnessOf(
+                context,
+              ); // Use platformBrightnessOf
               Brightness finalBrightness;
               switch (themePreference) {
                 case ThemeMode.light:
@@ -511,6 +565,7 @@ class _MyAppCoreState extends ConsumerState<MyAppCore> {
                   finalBrightness = Brightness.dark;
                   break;
                 case ThemeMode.system:
+                default: // Default to system if preference is invalid
                   finalBrightness = platformBrightness;
                   break;
               }
@@ -520,21 +575,25 @@ class _MyAppCoreState extends ConsumerState<MyAppCore> {
                   finalBrightness == Brightness.dark
                       ? CupertinoColors.systemOrange
                       : CupertinoColors.systemBlue;
-              final Color labelColor = CupertinoColors.label.resolveFrom(
-                context,
-              );
+              // Resolve label color based on the final brightness
+              final Color labelColor =
+                  finalBrightness == Brightness.dark
+                      ? CupertinoColors.white
+                      : CupertinoColors.black;
 
               final TextStyle baseTextStyle = TextStyle(
                 inherit: false,
                 fontFamily: sfFontFamily,
                 color: labelColor,
                 fontSize: 17,
+                decoration: TextDecoration.none, // Ensure no default underlines
               );
               final TextStyle baseActionTextStyle = TextStyle(
                 inherit: false,
                 fontFamily: sfFontFamily,
                 color: primaryColor,
                 fontSize: 17,
+                decoration: TextDecoration.none,
               );
               final TextStyle baseNavTitleTextStyle = TextStyle(
                 inherit: false,
@@ -542,6 +601,7 @@ class _MyAppCoreState extends ConsumerState<MyAppCore> {
                 color: labelColor,
                 fontSize: 17,
                 fontWeight: FontWeight.w600,
+                decoration: TextDecoration.none,
               );
 
               final cupertinoTheme = CupertinoThemeData(
@@ -576,6 +636,7 @@ class _MyAppCoreState extends ConsumerState<MyAppCore> {
                 ),
               );
 
+              // Build the main CupertinoApp only when loading is complete
               return CupertinoApp(
                 theme: cupertinoTheme,
                 navigatorKey: ref.read(rootNavigatorKeyProvider),
@@ -587,7 +648,8 @@ class _MyAppCoreState extends ConsumerState<MyAppCore> {
                   GlobalCupertinoLocalizations.delegate,
                 ],
                 supportedLocales: const [Locale('en', '')],
-                home: const ConfigCheckWrapper(),
+                home:
+                    const ConfigCheckWrapper(), // This now runs after loading flags are true
                 onGenerateRoute: generateRoute,
                 builder: (context, child) => child ?? const SizedBox.shrink(),
               );
