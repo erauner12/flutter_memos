@@ -13,37 +13,19 @@ part of openapi.api;
 class Collaborator {
   /// Returns a new [Collaborator] instance.
   Collaborator({
-    this.id,
-    this.name,
-    this.email,
+    required this.id,
+    required this.name,
+    required this.email,
   });
 
-  /// Collaborator's user ID
-  ///
-  /// Please note: This property should have been non-nullable! Since the specification file
-  /// does not include a default value (using the "default:" property), however, the generated
-  /// source code must fall back to having a nullable type.
-  /// Consider adding a "default:" property in the specification file to hide this note.
-  ///
-  String? id;
+  /// The user's ID
+  String id;
 
-  /// Collaborator's name
-  ///
-  /// Please note: This property should have been non-nullable! Since the specification file
-  /// does not include a default value (using the "default:" property), however, the generated
-  /// source code must fall back to having a nullable type.
-  /// Consider adding a "default:" property in the specification file to hide this note.
-  ///
-  String? name;
+  /// The user's full name
+  String name;
 
-  /// Collaborator's email
-  ///
-  /// Please note: This property should have been non-nullable! Since the specification file
-  /// does not include a default value (using the "default:" property), however, the generated
-  /// source code must fall back to having a nullable type.
-  /// Consider adding a "default:" property in the specification file to hide this note.
-  ///
-  String? email;
+  /// The user's email address
+  String email;
 
   @override
   bool operator ==(Object other) => identical(this, other) || other is Collaborator &&
@@ -54,30 +36,18 @@ class Collaborator {
   @override
   int get hashCode =>
     // ignore: unnecessary_parenthesis
-    (id == null ? 0 : id!.hashCode) +
-    (name == null ? 0 : name!.hashCode) +
-    (email == null ? 0 : email!.hashCode);
+    (id.hashCode) +
+    (name.hashCode) +
+    (email.hashCode);
 
   @override
   String toString() => 'Collaborator[id=$id, name=$name, email=$email]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
-    if (this.id != null) {
       json[r'id'] = this.id;
-    } else {
-      json[r'id'] = null;
-    }
-    if (this.name != null) {
       json[r'name'] = this.name;
-    } else {
-      json[r'name'] = null;
-    }
-    if (this.email != null) {
       json[r'email'] = this.email;
-    } else {
-      json[r'email'] = null;
-    }
     return json;
   }
 
@@ -100,9 +70,9 @@ class Collaborator {
       }());
 
       return Collaborator(
-        id: mapValueOfType<String>(json, r'id'),
-        name: mapValueOfType<String>(json, r'name'),
-        email: mapValueOfType<String>(json, r'email'),
+        id: mapValueOfType<String>(json, r'id')!,
+        name: mapValueOfType<String>(json, r'name')!,
+        email: mapValueOfType<String>(json, r'email')!,
       );
     }
     return null;
@@ -150,6 +120,9 @@ class Collaborator {
 
   /// The list of required keys that must be present in a JSON.
   static const requiredKeys = <String>{
+    'id',
+    'name',
+    'email',
   };
 }
 

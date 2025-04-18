@@ -11,7 +11,10 @@
 part of openapi.api;
 
 class ApiClient {
-  ApiClient({this.basePath = 'https://api.todoist.com/rest/v2', this.authentication,});
+  ApiClient({
+    this.basePath = 'https://api.todoist.com/rest/v1',
+    this.authentication,
+  });
 
   final String basePath;
   final Authentication? authentication;

@@ -13,42 +13,20 @@ part of openapi.api;
 class Duration {
   /// Returns a new [Duration] instance.
   Duration({
-    this.amount,
-    this.unit,
   });
-
-  /// A positive (greater than zero) integer for the amount of duration_unit the task will take, or null to unset. If specified, you must define a duration_unit.
-  int? amount;
-
-  /// The unit of time that the duration field above represents, or null to unset. Must be either minute or day. If specified, duration must be defined as well.
-  String? unit;
 
   @override
   bool operator ==(Object other) => identical(this, other) || other is Duration &&
-    other.amount == amount &&
-    other.unit == unit;
 
   @override
   int get hashCode =>
     // ignore: unnecessary_parenthesis
-    (amount == null ? 0 : amount!.hashCode) +
-    (unit == null ? 0 : unit!.hashCode);
 
   @override
-  String toString() => 'Duration[amount=$amount, unit=$unit]';
+  String toString() => 'Duration[]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
-    if (this.amount != null) {
-      json[r'amount'] = this.amount;
-    } else {
-      json[r'amount'] = null;
-    }
-    if (this.unit != null) {
-      json[r'unit'] = this.unit;
-    } else {
-      json[r'unit'] = null;
-    }
     return json;
   }
 
@@ -71,8 +49,6 @@ class Duration {
       }());
 
       return Duration(
-        amount: mapValueOfType<int>(json, r'amount'),
-        unit: mapValueOfType<String>(json, r'unit'),
       );
     }
     return null;
