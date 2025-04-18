@@ -247,6 +247,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                         chatState.errorMessage!,
                         style: const TextStyle(
                           color: CupertinoColors.systemRed,
+                          inherit: false, // Explicitly set inherit
                         ),
                       ),
                     ),
@@ -286,7 +287,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     Expanded(
                       child: Text(
                         "Gemini API Key not set. Please configure it in Settings.",
-                        style: TextStyle(color: CupertinoColors.systemYellow),
+                        style: TextStyle(
+                          color: CupertinoColors.systemYellow,
+                          inherit: false, // Explicitly set inherit
+                        ),
                       ),
                     ),
                   ],
@@ -335,6 +339,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                           // Use the updated helper function
                           "Context: ${_getItemTypeName(chatState.currentContextItemType)} ${chatState.currentContextItemId}",
                           style: TextStyle(
+                            inherit: false, // Explicitly set inherit
                             color:
                                 // Make text blue and underlined only if tappable (Note)
                                 chatState.currentContextItemType ==
@@ -419,6 +424,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     selectable: true,
                     styleSheet: MarkdownStyleSheet(
                         p: TextStyle(
+                          inherit: false, // Explicitly set inherit
                           color:
                               message.isError
                                   ? CupertinoColors.white
@@ -426,6 +432,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                           fontSize: 16,
                         ),
                        code: TextStyle(
+                          inherit: false, // Explicitly set inherit
                           backgroundColor: CupertinoColors.black.withAlpha(25),
                          fontFamily: 'monospace',
                          color: message.isError ? CupertinoColors.white : textColor,
