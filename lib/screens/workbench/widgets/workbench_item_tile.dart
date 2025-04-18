@@ -44,7 +44,22 @@ class WorkbenchItemTile extends ConsumerWidget {
     WorkbenchItemReference item,
     VoidCallback originalOnTap,
   ) {
+    // Capture necessary providers/notifiers before showing the sheet
     final instancesState = ref.read(workbenchInstancesProvider);
+    final workbenchNotifier = ref.read(
+      workbenchProviderFamily(item.instanceId).notifier,
+    );
+    final activeCommentNotifier = ref.read(activeCommentIdProvider.notifier);
+    final selectedItemNotifier = ref.read(
+      selectedWorkbenchItemIdProvider.notifier,
+    );
+    final selectedCommentNotifier = ref.read(
+      selectedWorkbenchCommentIdProvider.notifier,
+    );
+    final currentSelectedItemId = ref.read(
+      selectedWorkbenchItemIdProvider,
+    ); // Read current state if needed for logic
+
     final currentInstanceId = item.instanceId;
     final otherInstances =
         instancesState.instances
@@ -58,6 +73,8 @@ class WorkbenchItemTile extends ConsumerWidget {
           child: const Text('Move to...'),
           onPressed: () {
             Navigator.pop(context);
+            // Pass captured ref, not the original one if _showMoveDestinationSheet needs it
+            // Or better, ensure _showMoveDestinationSheet also captures its needs
             _showMoveDestinationSheet(context, ref, item, otherInstances);
           },
         ),
@@ -78,11 +95,10 @@ class WorkbenchItemTile extends ConsumerWidget {
                 child: const Text('Open Item'),
                 onPressed: () {
                   Navigator.pop(context);
-                  ref.read(activeCommentIdProvider.notifier).state = null;
-                  ref.read(selectedWorkbenchItemIdProvider.notifier).state =
-                      null;
-                  ref.read(selectedWorkbenchCommentIdProvider.notifier).state =
-                      null;
+                  // Use captured notifiers
+                  activeCommentNotifier.state = null;
+                  selectedItemNotifier.state = null;
+                  selectedCommentNotifier.state = null;
                   originalOnTap();
                 },
               ),
@@ -92,12 +108,11 @@ class WorkbenchItemTile extends ConsumerWidget {
                 child: const Text('Remove from Workbench'),
                 onPressed: () {
                   Navigator.pop(context);
-                  ref
-                      .read(workbenchProviderFamily(item.instanceId).notifier)
-                      .removeItem(item.id);
-                  if (ref.read(selectedWorkbenchItemIdProvider) == item.id) {
-                    ref.read(selectedWorkbenchItemIdProvider.notifier).state =
-                        null;
+                  // Use captured notifier
+                  workbenchNotifier.removeItem(item.id);
+                  // Use captured current state and notifier
+                  if (currentSelectedItemId == item.id) {
+                    selectedItemNotifier.state = null;
                   }
                 },
               ),
@@ -116,6 +131,11 @@ class WorkbenchItemTile extends ConsumerWidget {
     WorkbenchItemReference itemToMove,
     List<WorkbenchInstance> destinations,
   ) {
+    // Capture the relevant notifier once before showing the sheet
+    final sourceNotifier = ref.read(
+      workbenchProviderFamily(itemToMove.instanceId).notifier,
+    );
+
     showCupertinoModalPopup(
       context: context,
       builder:
@@ -127,16 +147,11 @@ class WorkbenchItemTile extends ConsumerWidget {
                     child: Text(dest.name),
                     onPressed: () {
                       Navigator.pop(context);
-                      ref
-                          .read(
-                            workbenchProviderFamily(
-                              itemToMove.instanceId,
-                            ).notifier,
-                          )
-                          .moveItem(
-                            itemId: itemToMove.id,
-                            targetInstanceId: dest.id,
-                          );
+                      // Use the captured notifier, not ref.read(...)
+                      sourceNotifier.moveItem(
+                        itemId: itemToMove.id,
+                        targetInstanceId: dest.id,
+                      );
                     },
                   );
                 }).toList(),
@@ -396,6 +411,14 @@ class WorkbenchItemTile extends ConsumerWidget {
     WidgetRef ref,
     Comment comment,
   ) {
+    // Capture necessary providers/notifiers before showing the sheet
+    final selectedCommentNotifier = ref.read(
+      selectedWorkbenchCommentIdProvider.notifier,
+    );
+    final currentSelectedCommentId = ref.read(
+      selectedWorkbenchCommentIdProvider,
+    ); // Read current state if needed
+
     showCupertinoModalPopup(
       context: context,
       builder:
@@ -413,6 +436,7 @@ class WorkbenchItemTile extends ConsumerWidget {
                   print(
                     'Edit action for comment ${comment.id} (Not Implemented)',
                   );
+                  // If edit needed ref access, capture it above
                 },
               ),
               CupertinoActionSheetAction(
@@ -422,6 +446,7 @@ class WorkbenchItemTile extends ConsumerWidget {
                   print(
                     'Pin/Unpin action for comment ${comment.id} (Not Implemented)',
                   );
+                  // If pin/unpin needed ref access, capture it above
                 },
               ),
               CupertinoActionSheetAction(
@@ -432,12 +457,12 @@ class WorkbenchItemTile extends ConsumerWidget {
                   print(
                     'Delete action for comment ${comment.id} (Not Implemented)',
                   );
-                  if (ref.read(selectedWorkbenchCommentIdProvider) ==
-                      comment.id) {
-                    ref
-                        .read(selectedWorkbenchCommentIdProvider.notifier)
-                        .state = null;
+                  // Use captured current state and notifier
+                  if (currentSelectedCommentId == comment.id) {
+                    selectedCommentNotifier.state = null;
                   }
+                  // If actual deletion needed ref access (e.g., calling an API via a provider),
+                  // capture that provider/notifier above as well.
                 },
               ),
             ],
