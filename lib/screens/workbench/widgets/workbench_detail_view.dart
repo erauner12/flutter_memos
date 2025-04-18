@@ -73,34 +73,40 @@ class WorkbenchDetailView extends ConsumerWidget {
 
     // Item List using standard SliverList with padding
     return SliverPadding(
-      // Add horizontal padding and adjust vertical padding
+      // Ensure consistent side margins and vertical padding
       padding: const EdgeInsets.only(
-        left: 16.0,
-        right: 16.0,
+        left: 16.0, // Consistent side margin
+        right: 16.0, // Consistent side margin
         top: 12.0,
-        bottom: 50.0,
+        bottom: 50.0, // Keep bottom padding for scroll buffer
       ),
       sliver: SliverList(
         delegate: SliverChildBuilderDelegate((context, index) {
           final item = items[index];
-          return WorkbenchItemTile(
-            key: ValueKey(item.id), // Use unique item ID for key
-            itemReference: item,
-            // Removed index parameter as reordering is disabled for now
-            // index: index,
-            onTap: () {
-              // Update last opened item for the *currently active* instance
-              ref
-                  .read(workbenchInstancesProvider.notifier)
-                  .setLastOpenedItem(activeInstanceId, item.id);
-              // Navigate using the context from the builder, which should be within the nested navigator
-              Navigator.of(context).push(
-                CupertinoPageRoute(
-                  builder:
-                      (_) => ItemDetailScreen(itemId: item.referencedItemId),
-                ),
-              );
-            },
+          // Add Padding wrapper for vertical spacing between items
+          return Padding(
+            padding: const EdgeInsets.only(
+              bottom: 12.0,
+            ), // Add space below each item
+            child: WorkbenchItemTile(
+              key: ValueKey(item.id), // Use unique item ID for key
+              itemReference: item,
+              // Removed index parameter as reordering is disabled for now
+              // index: index,
+              onTap: () {
+                // Update last opened item for the *currently active* instance
+                ref
+                    .read(workbenchInstancesProvider.notifier)
+                    .setLastOpenedItem(activeInstanceId, item.id);
+                // Navigate using the context from the builder, which should be within the nested navigator
+                Navigator.of(context).push(
+                  CupertinoPageRoute(
+                    builder:
+                        (_) => ItemDetailScreen(itemId: item.referencedItemId),
+                  ),
+                );
+              },
+            ),
           );
         },
           childCount: items.length),

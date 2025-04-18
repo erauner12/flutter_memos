@@ -148,8 +148,16 @@ class WorkbenchItemTile extends ConsumerWidget {
       onLongPress: () => _showItemActions(context, ref, itemReference),
       behavior: HitTestBehavior.opaque, // Ensure whole area is tappable
       child: Container(
-        color: theme.barBackgroundColor,
-        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+        // Apply bubble styling
+        padding: const EdgeInsets.all(16.0), // Increased internal padding
+        decoration: BoxDecoration(
+          color: CupertinoColors.secondarySystemGroupedBackground.resolveFrom(
+            context,
+          ), // Bubble background
+          borderRadius: BorderRadius.circular(8.0), // Rounded corners
+        ),
+        // Removed color: theme.barBackgroundColor
+        // padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0), // Replaced by EdgeInsets.all(16.0)
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -244,41 +252,53 @@ class WorkbenchItemTile extends ConsumerWidget {
     final commentTime = formatRelativeTime(
       comment.updatedTs ?? comment.createdTs,
     );
+    // Wrap in Padding for indentation and Container for left border
     return Padding(
-      padding: const EdgeInsets.only(top: 4.0),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            // Add padding around icon
-            padding: const EdgeInsets.only(top: 2.0),
-            child: Icon(
-              CupertinoIcons.bubble_left,
-              size: 14,
-              color: CupertinoColors.tertiaryLabel.resolveFrom(context),
+      padding: const EdgeInsets.only(top: 4.0, left: 16.0), // Indent left
+      child: Container(
+        padding: const EdgeInsets.only(left: 8.0), // Padding inside the border
+        decoration: BoxDecoration(
+          border: Border(
+            left: BorderSide(
+              width: 2.0,
+              color: CupertinoColors.separator.resolveFrom(context),
             ),
           ),
-          const SizedBox(width: 6),
-          Expanded(
-            child: Text(
-              comment.content ?? '',
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              // Add padding around icon
+              padding: const EdgeInsets.only(top: 2.0),
+              child: Icon(
+                CupertinoIcons.bubble_left,
+                size: 14,
+                color: CupertinoColors.tertiaryLabel.resolveFrom(context),
+              ),
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                comment.content ?? '',
+                style: theme.textTheme.textStyle.copyWith(
+                  // Use captionTextStyle
+                  color: CupertinoColors.secondaryLabel.resolveFrom(context),
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              commentTime,
               style: theme.textTheme.textStyle.copyWith(
                 // Use captionTextStyle
-                color: CupertinoColors.secondaryLabel.resolveFrom(context),
+                color: CupertinoColors.tertiaryLabel.resolveFrom(context),
               ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
             ),
-          ),
-          const SizedBox(width: 8),
-          Text(
-            commentTime,
-            style: theme.textTheme.textStyle.copyWith(
-              // Use captionTextStyle
-              color: CupertinoColors.tertiaryLabel.resolveFrom(context),
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
