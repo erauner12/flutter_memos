@@ -195,72 +195,19 @@ class _MyAppCoreState extends ConsumerState<MyAppCore> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _setupListeners();
+      // Keep triggering loads here
       _triggerInitialLoads();
       _initializePersistentNotifiers();
       _initAppLinks();
+      // Listeners are now set up in the build method
     });
   }
 
-  void _setupListeners() {
-    // Listen for theme loading completion
-    ref.listen<AsyncValue<ThemeMode>>(loadThemeModeProvider, (previous, next) {
-      if (!next.isLoading) {
-        // Check if loading is finished (data or error)
-        if (mounted && !_initialThemeLoaded) {
-          if (kDebugMode) {
-            print(
-              '[MyAppCore Listener] loadThemeModeProvider finished loading (State: ${next.hasError ? 'Error' : 'Data'}). Setting flag.',
-            );
-          }
-          // If data is available, apply it
-          if (next.hasValue) {
-            ref.read(themeModeProvider.notifier).state = next.value!;
-            if (kDebugMode) {
-              print('[MyAppCore Listener] Applied theme: ${next.value}');
-            }
-          } else if (next.hasError) {
-            if (kDebugMode) {
-              print(
-                '[MyAppCore Listener] Theme loading finished with error: ${next.error}. Proceeding with default.',
-              );
-            }
-          }
-          setState(() {
-            _initialThemeLoaded = true;
-          });
-        }
-      }
-    });
-
-    // Listen for server config loading completion
-    ref.listen<AsyncValue<dynamic>>(loadServerConfigProvider, (previous, next) {
-      if (!next.isLoading) {
-        // Check if loading is finished (data or error)
-        if (mounted && !_initialConfigLoaded) {
-          if (kDebugMode) {
-            print(
-              '[MyAppCore Listener] loadServerConfigProvider finished loading (State: ${next.hasError ? 'Error' : 'Data'}). Setting flag.',
-            );
-          }
-          if (next.hasError) {
-            if (kDebugMode) {
-              print(
-                '[MyAppCore Listener] Server config loading finished with error: ${next.error}.',
-              );
-            }
-          }
-          setState(() {
-            _initialConfigLoaded = true;
-          });
-        }
-      }
-    });
-  }
+  // Removed _setupListeners method
 
   void _triggerInitialLoads() {
     // Just read the providers to trigger their initialization if not already loading.
-    // The actual logic to update state is now handled by the listeners.
+    // The actual logic to update state is now handled by the listeners in build.
     if (kDebugMode) {
       print(
         '[MyAppCore] Triggering initial theme and config loads (if not already active)',
@@ -269,10 +216,6 @@ class _MyAppCoreState extends ConsumerState<MyAppCore> {
     ref.read(loadThemeModeProvider);
     ref.read(loadServerConfigProvider);
   }
-
-  // _loadInitialTheme and _loadServerConfig are no longer needed as separate methods
-  // void _loadInitialTheme() { ... }
-  // void _loadServerConfig() { ... }
 
   @override
   void dispose() {
@@ -424,6 +367,74 @@ class _MyAppCoreState extends ConsumerState<MyAppCore> {
 
   @override
   Widget build(BuildContext context) {
+    // *** Set up listeners within the build method ***
+    ref.listen<AsyncValue<ThemeMode>>(loadThemeModeProvider, (previous, next) {
+      if (!next.isLoading) {
+        // Check if loading is finished (data or error)
+        if (mounted && !_initialThemeLoaded) {
+          if (kDebugMode) {
+            print(
+              '[MyAppCore Listener - Build] loadThemeModeProvider finished loading (State: ${next.hasError ? 'Error' : 'Data'}). Setting flag.',
+            );
+          }
+          // If data is available, apply it
+          if (next.hasValue) {
+            ref.read(themeModeProvider.notifier).state = next.value!;
+            if (kDebugMode) {
+              print(
+                '[MyAppCore Listener - Build] Applied theme: ${next.value}',
+              );
+            }
+          } else if (next.hasError) {
+            if (kDebugMode) {
+              print(
+                '[MyAppCore Listener - Build] Theme loading finished with error: ${next.error}. Proceeding with default.',
+              );
+            }
+          }
+          // Use WidgetsBinding.instance.addPostFrameCallback to schedule the setState
+          // after the current build cycle completes, avoiding build-time state changes.
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted && !_initialThemeLoaded) {
+              // Double-check mounted status
+              setState(() {
+                _initialThemeLoaded = true;
+              });
+            }
+          });
+        }
+      }
+    });
+
+    ref.listen<AsyncValue<dynamic>>(loadServerConfigProvider, (previous, next) {
+      if (!next.isLoading) {
+        // Check if loading is finished (data or error)
+        if (mounted && !_initialConfigLoaded) {
+          if (kDebugMode) {
+            print(
+              '[MyAppCore Listener - Build] loadServerConfigProvider finished loading (State: ${next.hasError ? 'Error' : 'Data'}). Setting flag.',
+            );
+          }
+          if (next.hasError) {
+            if (kDebugMode) {
+              print(
+                '[MyAppCore Listener - Build] Server config loading finished with error: ${next.error}.',
+              );
+            }
+          }
+          // Use WidgetsBinding.instance.addPostFrameCallback here as well
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted && !_initialConfigLoaded) {
+              // Double-check mounted status
+              setState(() {
+                _initialConfigLoaded = true;
+              });
+            }
+          });
+        }
+      }
+    });
+
     // Read the current theme mode state for building the CupertinoApp theme
     final themePreference = ref.watch(themeModeProvider);
 
