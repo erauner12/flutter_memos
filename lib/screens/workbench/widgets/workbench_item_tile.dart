@@ -144,71 +144,57 @@ class WorkbenchItemTile extends ConsumerWidget {
       itemReference.overallLastUpdateTime,
     );
 
-    // Watch the active item ID provider
-    final activeItemId = ref.watch(activeWorkbenchItemIdProvider);
-    final isActive = activeItemId == itemReference.id;
+    // Remove watching activeWorkbenchItemIdProvider as highlight is removed
+    // final activeItemId = ref.watch(activeWorkbenchItemIdProvider);
+    // final isActive = activeItemId == itemReference.id;
 
-    // Determine background color based on active state
-    final tileColor =
-        isActive
-            ? CupertinoColors.systemGrey5.resolveFrom(
-              context,
-            ) // Highlight color
-            : CupertinoColors.secondarySystemGroupedBackground.resolveFrom(
-              context,
-            ); // Default bubble background
+    // Default background color (no active highlight)
+    final tileColor = CupertinoColors.secondarySystemGroupedBackground.resolveFrom(
+      context,
+    );
 
-    return GestureDetector(
-      onTap: () {
-        // Set this item as active when tapped
-        // Optionally, toggle: if (isActive) { ref.read(activeWorkbenchItemIdProvider.notifier).state = null; } else { ... }
-        ref.read(activeWorkbenchItemIdProvider.notifier).state =
-            itemReference.id;
-        // Also clear active comment when tapping parent item
-        ref.read(activeCommentIdProvider.notifier).state = null;
-        onTap(); // Call original onTap for navigation etc.
-      },
-      onLongPress: () => _showItemActions(context, ref, itemReference),
-      behavior: HitTestBehavior.opaque, // Ensure whole area is tappable
-      child: Container(
-        // Apply bubble styling with conditional color
-        padding: const EdgeInsets.all(16.0), // Increased internal padding
-        decoration: BoxDecoration(
-          color: tileColor, // Use the determined color
-          borderRadius: BorderRadius.circular(8.0), // Rounded corners
-        ),
-        // Removed color: theme.barBackgroundColor
-        // padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0), // Replaced by EdgeInsets.all(16.0)
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Icon based on type - Use the extension getter .icon
-            Padding(
-              padding: const EdgeInsets.only(top: 2.0), // Align icon slightly
-              child: Icon(
-                itemReference
-                    .referencedItemType
-                    .icon, // Use the extension getter
-                color: CupertinoColors.secondaryLabel.resolveFrom(context),
-                size: 20,
-              ),
+    // Remove the outer GestureDetector for long-press
+    // GestureDetector( ... onLongPress: ... )
+    return Container(
+      // Apply bubble styling
+      padding: const EdgeInsets.all(16.0),
+      decoration: BoxDecoration(
+        color: tileColor, // Use the default color
+        borderRadius: BorderRadius.circular(8.0),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Icon based on type - remains the same
+          Padding(
+            padding: const EdgeInsets.only(top: 2.0),
+            child: Icon(
+              itemReference.referencedItemType.icon,
+              color: CupertinoColors.secondaryLabel.resolveFrom(context),
+              size: 20,
             ),
-            const SizedBox(width: 16),
-            // Main content column
-            Expanded(
+          ),
+          const SizedBox(width: 16),
+          // Main content column - Wrap this Expanded in a GestureDetector for onTap navigation
+          Expanded(
+            child: GestureDetector(
+              onTap: () {
+                // Clear any active comment highlight when navigating
+                ref.read(activeCommentIdProvider.notifier).state = null;
+                onTap(); // Call original onTap for navigation etc.
+              },
+              behavior: HitTestBehavior.opaque, // Make the content area tappable
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Server Name / Item Type Row
+                  // Server Name / Item Type Row - remains the same
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Expanded(
-                        // Allow server name to take space but truncate
                         child: Text(
                           itemReference.serverName ?? 'Unknown Server',
                           style: theme.textTheme.textStyle.copyWith(
-                            // Use captionTextStyle
                             color: CupertinoColors.secondaryLabel.resolveFrom(
                               context,
                             ),
@@ -217,11 +203,10 @@ class WorkbenchItemTile extends ConsumerWidget {
                           maxLines: 1,
                         ),
                       ),
-                      const SizedBox(width: 8), // Add spacing
+                      const SizedBox(width: 8),
                       Text(
-                        relativeTime, // Show relative time
+                        relativeTime,
                         style: theme.textTheme.textStyle.copyWith(
-                          // Use captionTextStyle
                           color: CupertinoColors.tertiaryLabel.resolveFrom(
                             context,
                           ),
@@ -230,7 +215,7 @@ class WorkbenchItemTile extends ConsumerWidget {
                     ],
                   ),
                   const SizedBox(height: 4),
-                  // Preview Content
+                  // Preview Content - remains the same
                   if (itemReference.previewContent != null &&
                       itemReference.previewContent!.isNotEmpty)
                     Text(
@@ -239,32 +224,46 @@ class WorkbenchItemTile extends ConsumerWidget {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
-                  // Preview Comments
+                  // Preview Comments - remains the same structure
                   if (itemReference.previewComments.isNotEmpty) ...[
                     const SizedBox(height: 6),
                     ...itemReference.previewComments.map(
-                      // Pass ref down to the comment preview builder
                       (comment) => _buildCommentPreview(context, ref, comment),
                     ),
                   ],
                 ],
               ),
             ),
-            // Reorder handle (conditionally shown or removed)
-            // Removed ReorderableDragStartListener as reordering is disabled
-            // Padding(
-            //   padding: const EdgeInsets.only(left: 12.0, top: 0),
-            //   child: ReorderableDragStartListener(
-            //     index: index,
-            //     child: const Icon(
-            //       CupertinoIcons.bars,
-            //       color: CupertinoColors.tertiaryLabel,
-            //       size: 20,
-            //     ),
-            //   ),
-            // ),
-          ],
-        ),
+          ),
+          // Add Ellipsis Button for item actions
+          // Remove the Padding widget wrapping the CupertinoButton
+          // Padding(
+          //   padding: const EdgeInsets.only(left: 8.0, top: -8.0, right: -8.0), // Adjust padding to position top-right
+          //   child: CupertinoButton(
+          //     padding: EdgeInsets.zero,
+          //     minSize: 30, // Ensure tappable area
+          //     onPressed: () => _showItemActions(context, ref, itemReference),
+          //     child: const Icon(
+          //       CupertinoIcons.ellipsis_vertical,
+          //       size: 22,
+          //       color: CupertinoColors.secondaryLabel,
+          //     ),
+          //   ),
+          // ),
+          // Place the CupertinoButton directly
+          CupertinoButton(
+            padding: const EdgeInsets.only(
+              left: 8.0,
+            ), // Adjust left padding as needed, remove negative top/right
+            minSize: 30, // Ensure tappable area
+            onPressed: () => _showItemActions(context, ref, itemReference),
+            child: const Icon(
+              CupertinoIcons.ellipsis_vertical,
+              size: 22,
+              color: CupertinoColors.secondaryLabel,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -280,95 +279,99 @@ class WorkbenchItemTile extends ConsumerWidget {
       comment.updatedTs ?? comment.createdTs,
     );
 
-    // Watch the active comment ID provider
-    final activeCommentId = ref.watch(activeCommentIdProvider);
-    final isCommentActive = activeCommentId == comment.id;
+    // Remove watching activeCommentIdProvider as highlight is removed
+    // final activeCommentId = ref.watch(activeCommentIdProvider);
+    // final isCommentActive = activeCommentId == comment.id;
 
-    // Determine background color based on active state
-    final bubbleColor =
-        isCommentActive
-            ? CupertinoColors.systemGrey5.resolveFrom(
-              context,
-            ) // Highlight color
-            : CupertinoColors.systemGrey6.resolveFrom(
-              context,
-            ); // Default bubble background
+    // Default background color (no active highlight)
+    final bubbleColor = CupertinoColors.systemGrey6.resolveFrom(
+      context,
+    );
 
     // Wrap in Padding for top margin between comments
     return Padding(
-      padding: const EdgeInsets.only(top: 8.0), // Increased top margin
-      // Wrap the comment bubble in GestureDetector for interaction
-      child: GestureDetector(
-        onTap: () {
-          // Set this comment as active when tapped
-          ref.read(activeCommentIdProvider.notifier).state = comment.id;
-          // Also clear active parent item when tapping a comment
-          ref.read(activeWorkbenchItemIdProvider.notifier).state = null;
-        },
-        onLongPress: () {
-          // Show comment-specific actions
-          _showCommentPreviewActions(context, ref, comment);
-        },
-        behavior: HitTestBehavior.opaque,
-        child: Container(
-          // Add horizontal margin if needed, or rely on parent padding
-          // margin: const EdgeInsets.symmetric(horizontal: 16.0), // Optional horizontal margin
-          decoration: BoxDecoration(
-            color: bubbleColor, // Use the determined color
-            borderRadius: BorderRadius.circular(8.0), // Rounded corners
-          ),
-          padding: const EdgeInsets.all(
-            12.0,
-          ), // Internal padding for the bubble
-          // Removed the old Container with left border and its padding
-          // child: Container( ... decoration: BoxDecoration(border: Border(left...)) ... )
-          child: Column(
-            // Use Column for better layout control inside bubble
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                // Row for icon and text content
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Padding(
-                    // Keep icon padding consistent
-                    padding: const EdgeInsets.only(top: 2.0),
-                    child: Icon(
-                      CupertinoIcons.bubble_left, // Keep comment icon
-                      size: 16, // Adjusted size for bubble context
-                      color: CupertinoColors.tertiaryLabel.resolveFrom(context),
-                    ),
-                  ),
-                  const SizedBox(width: 8), // Space between icon and text
-                  Expanded(
-                    child: Text(
-                      comment.content ?? '',
-                      style: theme.textTheme.textStyle.copyWith(
-                        fontSize: 14, // Slightly larger font for preview bubble
-                        color: CupertinoColors.secondaryLabel.resolveFrom(
-                          context,
-                        ),
-                      ),
-                      maxLines: 2, // Allow more lines in bubble
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 4), // Space between text and timestamp
-              Align(
-                // Align timestamp to the right or keep left
-                alignment: Alignment.centerRight, // Example: align right
-                child: Text(
-                  commentTime,
-                  style: theme.textTheme.textStyle.copyWith(
-                    fontSize: 12, // Smaller font for timestamp
+      padding: const EdgeInsets.only(top: 8.0),
+      // Remove the GestureDetector wrapping the comment bubble
+      // GestureDetector( ... onTap: ... onLongPress: ... )
+      child: Container(
+        decoration: BoxDecoration(
+          color: bubbleColor, // Use the default color
+          borderRadius: BorderRadius.circular(8.0),
+        ),
+        padding: const EdgeInsets.all(12.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Icon
+                Padding(
+                  padding: const EdgeInsets.only(top: 2.0),
+                  child: Icon(
+                    CupertinoIcons.bubble_left,
+                    size: 16,
                     color: CupertinoColors.tertiaryLabel.resolveFrom(context),
                   ),
                 ),
+                const SizedBox(width: 8),
+                // Text Content
+                Expanded(
+                  child: Text(
+                    comment.content ?? '',
+                    style: theme.textTheme.textStyle.copyWith(
+                      fontSize: 14,
+                      color: CupertinoColors.secondaryLabel.resolveFrom(
+                        context,
+                      ),
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                // Add Ellipsis Button for comment actions
+                // Remove the Padding widget wrapping the CupertinoButton
+                // Padding(
+                //   padding: const EdgeInsets.only(left: 8.0, top: -4.0, bottom: -4.0), // Adjust padding
+                //   child: CupertinoButton(
+                //     padding: EdgeInsets.zero,
+                //     minSize: 24, // Smaller tappable area for comment button
+                //     onPressed: () => _showCommentPreviewActions(context, ref, comment),
+                //     child: const Icon(
+                //       CupertinoIcons.ellipsis_vertical,
+                //       size: 18, // Smaller icon for comment
+                //       color: CupertinoColors.tertiaryLabel,
+                //     ),
+                //   ),
+                // ),
+                // Place the CupertinoButton directly
+                CupertinoButton(
+                  padding: const EdgeInsets.only(
+                    left: 8.0,
+                  ), // Adjust left padding as needed, remove negative top/bottom
+                  minSize: 24, // Smaller tappable area for comment button
+                  onPressed: () => _showCommentPreviewActions(context, ref, comment),
+                  child: const Icon(
+                    CupertinoIcons.ellipsis_vertical,
+                    size: 18, // Smaller icon for comment
+                    color: CupertinoColors.tertiaryLabel,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            // Timestamp
+            Align(
+              alignment: Alignment.centerRight,
+              child: Text(
+                commentTime,
+                style: theme.textTheme.textStyle.copyWith(
+                  fontSize: 12,
+                  color: CupertinoColors.tertiaryLabel.resolveFrom(context),
+                ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

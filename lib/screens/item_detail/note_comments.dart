@@ -83,7 +83,7 @@ class NoteComments extends ConsumerWidget {
                   comment: comment,
                   memoId: noteId, // Pass noteId as memoId prop
                   serverId: serverId, // Pass serverId
-                  isSelected: isSelected,
+                  // isSelected: isSelected,
                   // Adding a key based on comment ID and pin status to force rebuild when pin status changes
                   key: ValueKey('${comment.id}_${comment.pinned}'),
                 ),

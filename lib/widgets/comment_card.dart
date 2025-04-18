@@ -12,16 +12,18 @@ import 'package:intl/intl.dart';
 
 class CommentCard extends ConsumerWidget {
   final Comment comment;
-  final String memoId; // Keep as memoId for consistency within card
-  final String serverId; // Add serverId
-  final bool isSelected; // Add isSelected
+  final String memoId;
+  final String serverId;
+  // Remove isSelected property
+  // final bool isSelected;
 
   const CommentCard({
     super.key,
     required this.comment,
     required this.memoId,
     required this.serverId,
-    required this.isSelected,
+    // Remove isSelected from constructor
+    // required this.isSelected,
   });
 
   void _showActions(BuildContext context, WidgetRef ref) {
@@ -226,71 +228,75 @@ class CommentCard extends ConsumerWidget {
     final formattedDate = DateFormat.yMd().add_jm().format(comment.createdTs);
     final bool hasResources = comment.resources.isNotEmpty ?? false;
 
+    // Remove isSelected logic for card color and border
     final Color cardColor =
-        isSelected
-            ? CupertinoColors.systemGrey5.resolveFrom(context)
-            : CupertinoColors.secondarySystemGroupedBackground.resolveFrom(
-              context,
-            );
-    final Color borderColor =
-        isSelected
-            ? CupertinoTheme.of(context).primaryColor
-            : CupertinoColors.separator.resolveFrom(context);
-    final double borderWidth = isSelected ? 1.5 : 0.5;
+        CupertinoColors.secondarySystemGroupedBackground
+        .resolveFrom(context);
+    final Color borderColor = CupertinoColors.separator.resolveFrom(context);
+    const double borderWidth = 0.5; // Use default border width
 
-    return GestureDetector(
-      onLongPress: () => _showActions(context, ref),
-      child: Container(
-        margin: const EdgeInsets.only(
-          bottom: 12.0,
-        ), // Keep bottom margin for spacing between cards if needed elsewhere
-        padding: const EdgeInsets.all(16.0), // Increased padding
-        decoration: BoxDecoration(
-          color: cardColor,
-          borderRadius: BorderRadius.circular(10.0),
-          border: Border.all(color: borderColor, width: borderWidth),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Comment Content (Markdown)
-            if (commentContent.isNotEmpty)
-              MarkdownBody(
-                data: commentContent,
-                selectable: true,
-                styleSheet: MarkdownStyleSheet.fromCupertinoTheme(
-                  CupertinoTheme.of(context),
-                ).copyWith(
-                  p: CupertinoTheme.of(context).textTheme.textStyle.copyWith(
-                    fontSize: 15, // Slightly smaller for comments
-                    height: 1.4,
+    // Remove the outer GestureDetector
+    // GestureDetector( onLongPress: () => _showActions(context, ref), ... )
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12.0),
+      padding: const EdgeInsets.only(
+        left: 16.0,
+        top: 16.0,
+        bottom: 16.0,
+        right: 8.0,
+      ), // Adjust right padding for button
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(10.0),
+        border: Border.all(color: borderColor, width: borderWidth),
+      ),
+      child: Row(
+        // Use Row to place content and button side-by-side
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            // Main content column takes available space
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Comment Content (Markdown) - remains the same
+                if (commentContent.isNotEmpty)
+                  MarkdownBody(
+                    data: commentContent,
+                    selectable: true,
+                    styleSheet: MarkdownStyleSheet.fromCupertinoTheme(
+                      CupertinoTheme.of(context),
+                    ).copyWith(
+                      p: CupertinoTheme.of(
+                        context,
+                      ).textTheme.textStyle.copyWith(fontSize: 15, height: 1.4),
+                      a: CupertinoTheme.of(
+                        context,
+                      ).textTheme.textStyle.copyWith(
+                        color: CupertinoTheme.of(context).primaryColor,
+                        decoration: TextDecoration.underline,
+                      ),
+                    ),
+                    onTapLink: (text, href, title) async {
+                      if (href != null) {
+                        UrlHelper.launchUrl(href, context: context, ref: ref);
+                      }
+                    },
                   ),
-                  a: CupertinoTheme.of(context).textTheme.textStyle.copyWith(
-                    color: CupertinoTheme.of(context).primaryColor,
-                    decoration: TextDecoration.underline,
-                  ),
-                ),
-                onTapLink: (text, href, title) async {
-                  if (href != null) {
-                    UrlHelper.launchUrl(href, context: context, ref: ref);
-                  }
-                },
-              ),
-            // Spacer if content exists and resources or footer will follow
-            if (commentContent.isNotEmpty &&
-                (hasResources || true)) // Add space if content exists
-              const SizedBox(height: 8.0),
+                // Spacer if content exists and resources or footer will follow
+                if (commentContent.isNotEmpty && (hasResources || true))
+                  const SizedBox(height: 8.0),
 
-            // Resources Grid (Simplified)
-            if (hasResources)
-              Wrap(
-                spacing: 8.0,
-                runSpacing: 8.0,
-                children:
-                    comment.resources.map((resource) {
-                      // Basic representation, enhance as needed
-                      final filename =
-                          resource['filename'] as String? ?? 'file';
+                // Resources Grid (Simplified) - remains the same
+                if (hasResources)
+                  Wrap(
+                    spacing: 8.0,
+                    runSpacing: 8.0,
+                    children:
+                        comment.resources.map((resource) {
+                          // ... resource rendering logic ...
+                          final filename =
+                              resource['filename'] as String? ?? 'file';
                       return Tooltip(
                         message: filename,
                         child: Container(
@@ -331,36 +337,54 @@ class CommentCard extends ConsumerWidget {
                         ),
                       );
                     }).toList(),
-              ),
-            // Spacer if resources exist before footer
-            if (hasResources) // Add space if resources exist
-              const SizedBox(height: 8.0),
+                  ),
+                // Spacer if resources exist before footer
+                if (hasResources) const SizedBox(height: 8.0),
 
-            // Footer Row (Date, Pinned Icon)
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  formattedDate,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: CupertinoColors.secondaryLabel.resolveFrom(context),
-                    fontStyle: FontStyle.italic,
-                  ),
-                ),
-                if (comment.pinned)
-                  Padding(
-                    padding: const EdgeInsets.only(left: 8.0),
-                    child: Icon(
-                      CupertinoIcons.pin_fill,
-                      size: 16,
-                      color: CupertinoColors.systemBlue.resolveFrom(context),
+                // Footer Row (Date, Pinned Icon) - remains the same
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      formattedDate,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: CupertinoColors.secondaryLabel.resolveFrom(
+                          context,
+                        ),
+                        fontStyle: FontStyle.italic,
+                      ),
                     ),
-                  ),
+                    if (comment.pinned)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 8.0),
+                        child: Icon(
+                          CupertinoIcons.pin_fill,
+                          size: 16,
+                          color: CupertinoColors.systemBlue.resolveFrom(
+                            context,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
               ],
             ),
-          ],
-        ),
+          ),
+          // Place the CupertinoButton directly
+          CupertinoButton(
+            padding: const EdgeInsets.only(
+              left: 0.0,
+            ), // Adjust left padding as needed, remove negative top
+            minSize: 30, // Ensure tappable area
+            onPressed: () => _showActions(context, ref),
+            child: const Icon(
+              CupertinoIcons.ellipsis_vertical,
+              size: 22,
+              color: CupertinoColors.secondaryLabel,
+            ),
+          ),
+        ],
       ),
     );
   }
