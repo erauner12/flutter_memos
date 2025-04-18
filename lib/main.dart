@@ -165,7 +165,7 @@ class AppWithChatOverlay extends ConsumerWidget {
 
     // Wrap the Stack in a Directionality or CupertinoApp to fix missing directionality.
     return Directionality(
-      textDirection: TextDirection.ltr,
+      textDirection: TextDirection.ltr, // Or TextDirection.rtl based on locale
       child: Stack(
         children: [
           Positioned.fill(child: MyAppCore(themeMode: themeMode)),
@@ -222,6 +222,10 @@ class _MyAppCoreState extends ConsumerState<MyAppCore> {
           ref.read(themeModeProvider.notifier).state = savedMode;
           setState(() {
             _initialThemeLoaded = true;
+            // *** ADDED DEBUG PRINT ***
+            if (kDebugMode) {
+              print('[MyAppCore] _initialThemeLoaded set to true');
+            }
           });
         }
       });
@@ -234,16 +238,39 @@ class _MyAppCoreState extends ConsumerState<MyAppCore> {
         print('[MyAppCore] Loading server configuration');
       }
       final configLoader = ref.read(loadServerConfigProvider);
-      configLoader.whenData((_) {
-        if (mounted) {
-          setState(() {
-            _initialConfigLoaded = true;
-          });
-          if (kDebugMode) {
-            print('[MyAppCore] Server configuration loaded');
+      configLoader.when(
+        data: (_) {
+          if (mounted) {
+            setState(() {
+              _initialConfigLoaded = true;
+              // *** ADDED DEBUG PRINT ***
+              if (kDebugMode) {
+                print('[MyAppCore] _initialConfigLoaded set to true');
+              }
+            });
+            if (kDebugMode) {
+              print(
+                '[MyAppCore] Server configuration loaded callback executed',
+              );
+            }
           }
-        }
-      });
+        },
+        error: (error, stackTrace) {
+          // *** ADDED DEBUG PRINT for errors ***
+          if (kDebugMode) {
+            print('[MyAppCore] Error loading server config: $error');
+          }
+          // Set config loaded to true even on error to prevent infinite spinner
+          if (mounted) {
+            setState(() {
+              _initialConfigLoaded = true;
+            });
+          }
+        },
+        loading: () {
+          // Do nothing while loading
+        },
+      );
     }
   }
 
@@ -390,15 +417,32 @@ class _MyAppCoreState extends ConsumerState<MyAppCore> {
   @override
   Widget build(BuildContext context) {
     final themePreference = widget.themeMode;
+
+    // *** ADDED DEBUG PRINT ***
+    if (kDebugMode) {
+      print(
+        '[MyAppCore Build] Checking loading state: _initialThemeLoaded=$_initialThemeLoaded, _initialConfigLoaded=$_initialConfigLoaded',
+      );
+    }
+
     if (!_initialThemeLoaded || !_initialConfigLoaded) {
+      // Still loading theme or config
       return const CupertinoApp(
-        theme: CupertinoThemeData(brightness: Brightness.light),
+        theme: CupertinoThemeData(
+          brightness: Brightness.light,
+        ), // Default theme
         home: CupertinoPageScaffold(
           child: Center(child: CupertinoActivityIndicator()),
         ),
       );
     }
 
+    // *** ADDED DEBUG PRINT ***
+    if (kDebugMode) {
+      print('[MyAppCore Build] Loading complete, building main app UI.');
+    }
+
+    // Main app UI build logic starts here
     return Shortcuts(
       shortcuts: buildGlobalShortcuts(),
       child: Actions(
