@@ -8,17 +8,17 @@ import 'package:flutter/cupertino.dart'
         CupertinoTabController,
         CupertinoTabScaffold,
         CupertinoTabView,
-        // Removed GestureDetector, HitTestBehavior
         GlobalKey,
         Icon,
         NavigatorState,
         Widget;
-// Removed chat overlay provider import
 import 'package:flutter_memos/screens/chat_screen.dart'; // Import ChatScreen
-import 'package:flutter_memos/screens/home_tabs.dart'; // Import the new enum
+import 'package:flutter_memos/screens/home_tabs.dart'; // Import the updated enum
 import 'package:flutter_memos/screens/items/items_screen.dart';
-import 'package:flutter_memos/screens/tasks/new_task_screen.dart';
-import 'package:flutter_memos/screens/tasks/tasks_screen.dart';
+import 'package:flutter_memos/screens/more/more_screen.dart'; // Import the new MoreScreen
+// Removed tasks screen imports as it's now navigated to from MoreScreen
+// import 'package:flutter_memos/screens/tasks/new_task_screen.dart';
+// import 'package:flutter_memos/screens/tasks/tasks_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'item_detail/item_detail_screen.dart';
@@ -46,13 +46,14 @@ final homeTabIndexMapProvider = Provider<Map<HomeTab, int>>(
   name: 'homeTabIndexMapProvider',
 );
 
-// --- Global Keys (Added chat key back) ---
-final GlobalKey<NavigatorState> chatTabNavKey =
-    GlobalKey<NavigatorState>(); // Added chat key
+// --- Global Keys (Removed tasks key, added more key) ---
+final GlobalKey<NavigatorState> chatTabNavKey = GlobalKey<NavigatorState>();
 final GlobalKey<NavigatorState> memosTabNavKey = GlobalKey<NavigatorState>();
-final GlobalKey<NavigatorState> tasksTabNavKey = GlobalKey<NavigatorState>();
+// final GlobalKey<NavigatorState> tasksTabNavKey = GlobalKey<NavigatorState>(); // Removed tasks key
 final GlobalKey<NavigatorState> workbenchTabNavKey =
     GlobalKey<NavigatorState>();
+final GlobalKey<NavigatorState> moreTabNavKey =
+    GlobalKey<NavigatorState>(); // Added more key
 
 
 // --- HomeScreen Widget ---
@@ -68,7 +69,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   late CupertinoTabController _tabController;
   late Map<HomeTab, int> _tabIndexes;
 
-  // Define the tabs dynamically based on the enum order
+  // Define the tabs dynamically based on the enum order (now Workbench, Chat, Notes, More)
   final List<HomeTab> _tabs = HomeTab.values.toList();
 
   @override
@@ -79,8 +80,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     _tabIndexes = {for (int i = 0; i < _tabs.length; i++) _tabs[i]: i};
 
     // Initialize the CupertinoTabController
+    // Default to Notes tab (index might change based on new order)
     _tabController = CupertinoTabController(
-      initialIndex: _tabIndexes[HomeTab.notes] ?? 0, // Default to Notes tab
+      initialIndex: _tabIndexes[HomeTab.notes] ?? 0,
     );
 
     _tabController.addListener(() {
@@ -102,7 +104,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         homeTabControllerProvider.overrideWithValue(_tabController),
         homeTabIndexMapProvider.overrideWithValue(_tabIndexes),
       ],
-      // Removed GestureDetector wrapper
       child: CupertinoTabScaffold(
         controller: _tabController,
         tabBar: CupertinoTabBar(
@@ -118,21 +119,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
           // Return the correct CupertinoTabView based on the enum value
           switch (currentTab) {
-            case HomeTab.chat: // Added Chat case
-              return CupertinoTabView(
-                navigatorKey: chatTabNavKey,
-                // Define routes for the chat tab if needed, otherwise just the screen
-                onGenerateRoute:
-                    (settings) => CupertinoPageRoute(
-                      builder:
-                          (_) => const CupertinoPageScaffold(
-                            // ChatScreen now likely needs its own Scaffold/NavBar
-                            child: ChatScreen(),
-                          ),
-                      settings: settings,
-                    ),
-              );
-            case HomeTab.workbench:
+            case HomeTab.workbench: // Index 0
               return CupertinoTabView(
                 navigatorKey: workbenchTabNavKey,
                 onGenerateRoute:
@@ -144,26 +131,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       settings: settings,
                     ),
               );
-            case HomeTab.tasks:
+            case HomeTab.chat: // Index 1
               return CupertinoTabView(
-                navigatorKey: tasksTabNavKey,
-                onGenerateRoute: (settings) {
-                  Widget page;
-                  switch (settings.name) {
-                    case '/tasks/new':
-                      page = const NewTaskScreen();
-                      break;
-                    case '/':
-                    default:
-                      page = const TasksScreen();
-                  }
-                  return CupertinoPageRoute(
-                    builder: (_) => CupertinoPageScaffold(child: page),
-                    settings: settings,
-                  );
-                },
+                navigatorKey: chatTabNavKey,
+                onGenerateRoute:
+                    (settings) => CupertinoPageRoute(
+                      builder:
+                          (_) => const CupertinoPageScaffold(
+                            child: ChatScreen(),
+                          ),
+                      settings: settings,
+                    ),
               );
-            case HomeTab.notes:
+            case HomeTab.notes: // Index 2
               return CupertinoTabView(
                 navigatorKey: memosTabNavKey,
                 onGenerateRoute: (settings) {
@@ -183,6 +163,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     builder: (_) => CupertinoPageScaffold(child: page),
                     settings: settings,
                   );
+                },
+              );
+            // case HomeTab.tasks: // Removed Tasks case
+            //   // ... (old tasks tab view code removed)
+            case HomeTab.more: // Index 3 - New More tab
+              return CupertinoTabView(
+                navigatorKey: moreTabNavKey, // Use the new key
+                // The MoreScreen itself will handle navigation to TasksScreen etc.
+                onGenerateRoute: (settings) {
+                  // The base route for this tab is the MoreScreen
+                  return CupertinoPageRoute(
+                    builder: (_) => const MoreScreen(),
+                    settings: settings,
+                  );
+                  // If MoreScreen needs its own sub-routes later, handle them here
+                  // e.g., if (settings.name == '/more/settings') ...
                 },
               );
           }
