@@ -39,7 +39,9 @@ class NoteComments extends ConsumerWidget {
                 .toList();
 
         // Always sort comments to ensure proper order after pin/unpin operations
-        CommentUtils.sortByPinnedThenOldestFirst(visibleComments);
+        CommentUtils.sortByPinnedThenUpdateTime(
+          visibleComments,
+        ); // Use updated time sort
 
         if (visibleComments.isEmpty) {
           return Padding(
@@ -69,6 +71,7 @@ class NoteComments extends ConsumerWidget {
             return Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16.0),
               child: CommentCard(
+                // Pass required parameters
                 comment: comment,
                 memoId: noteId, // Pass noteId as memoId prop
                 serverId: serverId, // Pass serverId

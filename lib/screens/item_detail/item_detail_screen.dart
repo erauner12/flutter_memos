@@ -1,5 +1,6 @@
 import 'dart:async'; // For Completer
 
+import 'package:collection/collection.dart'; // Import collection package
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart'; // Keep for ScaffoldMessenger, SnackBar
@@ -188,7 +189,9 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
     final serverConfig = ref
         .read(multiServerConfigProvider)
         .servers
-        .firstWhereOrNull((s) => s.id == _effectiveServerId);
+        .firstWhereOrNull(
+          (s) => s.id == _effectiveServerId,
+        ); // Use firstWhereOrNull
 
     if (serverConfig == null) {
       _showErrorSnackbar("Cannot add to workbench: Server config not found.");
@@ -253,6 +256,7 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
               ? '${preview.substring(0, 97)}...'
               : preview, // Limit preview length
       addedTimestamp: DateTime.now(),
+      parentNoteId: null, // Add this line
     );
 
     ref
@@ -260,7 +264,9 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
         .addItem(reference);
 
     final targetInstance =
-        instances.where((i) => i.id == targetInstanceId).firstOrNull;
+        instances.firstWhereOrNull(
+      (i) => i.id == targetInstanceId,
+    ); // Use firstWhereOrNull
     final targetInstanceName = targetInstance?.name ?? 'Workbench';
 
     _showSuccessSnackbar('Added note to "$targetInstanceName"');
@@ -736,12 +742,13 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
               Expanded(child: _buildBody()),
               if (canInteractWithServer)
                 CaptureUtility(
+                  key: CaptureUtility.captureUtilityKey, // Assign the key
                   mode: CaptureMode.addComment,
                   memoId: widget.itemId,
                   hintText: 'Add a comment...',
                   buttonText: 'Add Comment',
                   // Pass serverId if CaptureUtility needs it
-                  // serverId: _effectiveServerId,
+                  serverId: _effectiveServerId,
                 ),
             ],
           ),
@@ -780,8 +787,8 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
                 child: NoteContent(
                   note: note,
                   noteId: widget.itemId,
-                  serverId: _effectiveServerId!,
-                ), // Pass serverId
+                  serverId: _effectiveServerId!, // Pass serverId
+                ),
               ),
               SliverToBoxAdapter(
                 child: Container(

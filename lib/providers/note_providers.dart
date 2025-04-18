@@ -1,6 +1,6 @@
 import 'dart:async'; // Added for Timer
 
-import 'package:collection/collection.dart'; // Added for listEquals
+import 'package:collection/collection.dart'; // Added for listEquals, firstWhereOrNull
 import 'package:flutter/foundation.dart';
 import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/models/list_notes_response.dart';
@@ -112,7 +112,8 @@ class NotesState {
 }
 
 // Helper function to get and configure the API service for a specific server ID
-NoteApiService _getNoteApiServiceForServer(Ref ref, String serverId) {
+// Made public by removing the leading underscore
+NoteApiService getNoteApiServiceForServer(Ref ref, String serverId) {
   final serverConfig = ref
       .read(multiServerConfigProvider)
       .servers
@@ -166,7 +167,10 @@ class NotesNotifier extends StateNotifier<NotesState> {
       : _skipInitialFetchForTesting = skipInitialFetchForTesting,
         super(const NotesState(isLoading: true)) {
     // Get and configure the API service instance for this serverId
-    _apiService = _getNoteApiServiceForServer(_ref, serverId);
+    _apiService = getNoteApiServiceForServer(
+      _ref,
+      serverId,
+    ); // Use public helper
     _initialize();
   }
 
@@ -854,7 +858,10 @@ final archiveNoteProviderFamily = Provider.family<
   return () async {
     final serverId = ids.serverId;
     final noteId = ids.noteId;
-    final apiService = _getNoteApiServiceForServer(ref, serverId);
+    final apiService = getNoteApiServiceForServer(
+      ref,
+      serverId,
+    ); // Use public helper
 
     final currentSelectedId = ref.read(ui_providers.selectedItemIdProvider);
     final notesBeforeAction = ref.read(filteredNotesProviderFamily(serverId));
@@ -909,7 +916,10 @@ final deleteNoteProviderFamily = Provider.family<
     final noteId = ids.noteId;
     if (kDebugMode)
       print('[deleteNoteProviderFamily($serverId)] Deleting note: $noteId');
-    final apiService = _getNoteApiServiceForServer(ref, serverId);
+    final apiService = getNoteApiServiceForServer(
+      ref,
+      serverId,
+    ); // Use public helper
 
     final currentSelectedId = ref.read(ui_providers.selectedItemIdProvider);
     final notesBeforeAction = ref.read(filteredNotesProviderFamily(serverId));
@@ -975,7 +985,10 @@ final bumpNoteProviderFamily = Provider.family<
     final noteId = ids.noteId;
     if (kDebugMode)
       print('[bumpNoteProviderFamily($serverId)] Bumping note: $noteId');
-    final apiService = _getNoteApiServiceForServer(ref, serverId);
+    final apiService = getNoteApiServiceForServer(
+      ref,
+      serverId,
+    ); // Use public helper
 
     // Use the correct notifier instance
     ref
@@ -1012,7 +1025,10 @@ final updateNoteProviderFamily = Provider.family<
     final noteId = ids.noteId;
     if (kDebugMode)
       print('[updateNoteProviderFamily($serverId)] Updating note: $noteId');
-    final apiService = _getNoteApiServiceForServer(ref, serverId);
+    final apiService = getNoteApiServiceForServer(
+      ref,
+      serverId,
+    ); // Use public helper
 
     try {
       final NoteItem result = await apiService.updateNote(noteId, updatedNote);
@@ -1063,7 +1079,10 @@ final togglePinNoteProviderFamily = Provider.family<
         '[togglePinNoteProviderFamily($serverId)] Toggling pin state for note: $noteId',
       );
     }
-    final apiService = _getNoteApiServiceForServer(ref, serverId);
+    final apiService = getNoteApiServiceForServer(
+      ref,
+      serverId,
+    ); // Use public helper
 
     // Use the correct notifier instance
     ref
@@ -1156,11 +1175,13 @@ final moveNoteProvider = Provider.family<
 
     // Instantiate API services for source and target using the helper
     // Corrected calls to use the defined helper function
-    final BaseApiService sourceApiService = _getNoteApiServiceForServer(
+    final BaseApiService sourceApiService = getNoteApiServiceForServer(
+      // Use public helper
       ref,
       sourceServerId,
     );
-    final BaseApiService targetApiService = _getNoteApiServiceForServer(
+    final BaseApiService targetApiService = getNoteApiServiceForServer(
+      // Use public helper
       ref,
       targetServer.id,
     );
@@ -1469,7 +1490,10 @@ final createNoteProviderFamily = Provider.family<
   String // serverId
 >((ref, serverId) {
   return (NoteItem note) async {
-    final apiService = _getNoteApiServiceForServer(ref, serverId);
+    final apiService = getNoteApiServiceForServer(
+      ref,
+      serverId,
+    ); // Use public helper
     try {
       await apiService.createNote(note);
     } catch (e) {
@@ -1501,7 +1525,10 @@ final fixNoteGrammarProviderFamily = FutureProvider.family<
     );
   }
 
-  final notesApiService = _getNoteApiServiceForServer(ref, serverId);
+  final notesApiService = getNoteApiServiceForServer(
+    ref,
+    serverId,
+  ); // Use public helper
   final MinimalOpenAiService openaiApiService = ref.read(
     api_p.openaiApiServiceProvider, // OpenAI service is global
   );
@@ -1603,7 +1630,10 @@ final noteDetailProviderFamily =
       ref,
       ids,
     ) async {
-      final apiService = _getNoteApiServiceForServer(ref, ids.serverId);
+      final apiService = getNoteApiServiceForServer(
+        ref,
+        ids.serverId,
+      ); // Use public helper
       return apiService.getNote(ids.noteId);
     }, name: 'noteDetailProviderFamily');
 
@@ -1613,7 +1643,10 @@ final noteCommentsProviderFamily =
       ref,
       ids,
     ) async {
-      final apiService = _getNoteApiServiceForServer(ref, ids.serverId);
+      final apiService = getNoteApiServiceForServer(
+        ref,
+        ids.serverId,
+      ); // Use public helper
       final comments = await apiService.listNoteComments(ids.noteId);
   CommentUtils.sortByPinnedThenUpdateTime(comments);
   return comments;

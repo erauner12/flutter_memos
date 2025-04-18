@@ -13,7 +13,12 @@ class NoteContent extends ConsumerWidget { // Renamed class
   final String noteId; // Renamed from memoId
 
   // Update the constructor parameter type
-  const NoteContent({super.key, required this.note, required this.noteId}); // Renamed constructor and parameters
+  const NoteContent({
+    super.key,
+    required this.note,
+    required this.noteId,
+    required String serverId,
+  }); // Renamed constructor and parameters
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {

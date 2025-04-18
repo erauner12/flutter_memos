@@ -3,7 +3,6 @@ import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/models/note_item.dart'; // Import NoteItem
 // Import note_providers and use families
 import 'package:flutter_memos/providers/note_providers.dart' as note_providers;
-import 'package:flutter_memos/providers/server_config_provider.dart'; // Import for active server
 import 'package:flutter_memos/services/minimal_openai_service.dart'; // Import MinimalOpenAiService
 import 'package:flutter_memos/services/note_api_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -29,7 +28,10 @@ final archiveCommentProviderFamily = Provider.family<
     return () async {
     // Use helper to get API service for the server
     final NoteApiService apiService = note_providers
-        ._getNoteApiServiceForServer(ref, params.serverId);
+        .getNoteApiServiceForServer(
+      ref,
+      params.serverId,
+    ); // Use public helper
 
       try {
       final commentId = params.commentId; // Actual comment ID
@@ -87,7 +89,10 @@ final deleteCommentProviderFamily = Provider.family<
   return () async {
     // Use helper to get API service for the server
     final NoteApiService apiService = note_providers
-        ._getNoteApiServiceForServer(ref, params.serverId);
+        .getNoteApiServiceForServer(
+      ref,
+      params.serverId,
+    ); // Use public helper
 
     try {
       final memoId = params.memoId;
@@ -131,7 +136,10 @@ final togglePinCommentProviderFamily = Provider.family<
   return () async {
     // Use helper to get API service for the server
     final NoteApiService apiService = note_providers
-        ._getNoteApiServiceForServer(ref, params.serverId);
+        .getNoteApiServiceForServer(
+      ref,
+      params.serverId,
+    ); // Use public helper
 
     try {
       final memoId = params.memoId;
@@ -189,7 +197,10 @@ final convertCommentToNoteProviderFamily = Provider.family<
   return () async {
     // Use helper to get API service for the server
     final NoteApiService apiService = note_providers
-        ._getNoteApiServiceForServer(ref, params.serverId);
+        .getNoteApiServiceForServer(
+      ref,
+      params.serverId,
+    ); // Use public helper
 
     try {
       final memoId = params.memoId;
@@ -216,6 +227,11 @@ final convertCommentToNoteProviderFamily = Provider.family<
         createTime: DateTime.now(), // Placeholder
         updateTime: DateTime.now(), // Placeholder
         displayTime: DateTime.now(), // Placeholder
+        tags: [], // Initialize empty lists
+        resources: [],
+        relations: [],
+        creatorId: comment.creatorId, // Use comment creator if available
+        parentId: null, // New note has no parent
       );
 
       // Create the new note using NoteApiService
@@ -332,7 +348,10 @@ final createCommentProviderFamily = Provider.family<
 
     // Use helper to get API service for the server
     final NoteApiService apiService = note_providers
-        ._getNoteApiServiceForServer(ref, serverId);
+        .getNoteApiServiceForServer(
+      ref,
+      serverId,
+    ); // Use public helper
 
     List<Map<String, dynamic>>? uploadedResourceData; // Store as list of maps
 
@@ -425,7 +444,10 @@ final updateCommentProviderFamily = Provider.family<
 
     // Use helper to get API service for the server
     final NoteApiService apiService = note_providers
-        ._getNoteApiServiceForServer(ref, serverId);
+        .getNoteApiServiceForServer(
+      ref,
+      serverId,
+    ); // Use public helper
 
     if (kDebugMode) {
       print(
@@ -518,7 +540,10 @@ final fixCommentGrammarProviderFamily = FutureProvider.family<
     }
     // Use helper to get API service for the server
     final NoteApiService apiService = note_providers
-        ._getNoteApiServiceForServer(ref, serverId);
+        .getNoteApiServiceForServer(
+      ref,
+      serverId,
+    ); // Use public helper
 
     final Comment currentComment = await apiService.getNoteComment(
       commentId,

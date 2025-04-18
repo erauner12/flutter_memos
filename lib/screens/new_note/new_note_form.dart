@@ -1,3 +1,4 @@
+import 'package:collection/collection.dart'; // Import collection package
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -48,7 +49,9 @@ class _NewNoteFormState extends ConsumerState<NewNoteForm>
         final server = ref
             .read(multiServerConfigProvider)
             .servers
-            .firstWhereOrNull((s) => s.id == targetServerId);
+            .firstWhereOrNull(
+              (s) => s.id == targetServerId,
+            ); // Use firstWhereOrNull
         if (mounted) {
           setState(() {
             _selectedServerConfig = server;
@@ -248,6 +251,13 @@ class _NewNoteFormState extends ConsumerState<NewNoteForm>
         createTime: DateTime.now(),
         updateTime: DateTime.now(),
         displayTime: DateTime.now(),
+        tags: [], // Initialize empty lists
+        resources: [],
+        relations: [],
+        creatorId: null, // Let server assign creator
+        parentId: null,
+        startDate: null,
+        endDate: null,
       );
 
       // Use createNoteProviderFamily with the target server ID

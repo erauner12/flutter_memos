@@ -1,10 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_memos/models/comment.dart'; // Import Comment model
 import 'package:flutter_memos/models/note_item.dart'; // Import NoteItem model
-import 'package:flutter_memos/providers/api_providers.dart';
 // Import note_providers and use families
 import 'package:flutter_memos/providers/note_providers.dart' as note_providers;
-import 'package:flutter_memos/providers/server_config_provider.dart'; // Import for active server
 // Import settings_provider for manuallyHiddenNoteIdsProvider
 import 'package:flutter_memos/providers/settings_provider.dart' as settings_p;
 import 'package:flutter_memos/services/note_api_service.dart';
@@ -47,7 +45,10 @@ final editEntityProvider = FutureProvider.family<dynamic, EntityProviderParams>(
   (ref, params) async {
     // Use the helper to get the API service for the specific server
     final NoteApiService apiService = note_providers
-        ._getNoteApiServiceForServer(ref, params.serverId);
+        .getNoteApiServiceForServer(
+      ref,
+      params.serverId,
+    ); // Use public helper
 
     final id = params.id;
     final type = params.type;
@@ -84,7 +85,10 @@ final saveEntityProvider = Provider.family<
   return (dynamic updatedEntity) async {
     // Use the helper to get the API service for the specific server
     final NoteApiService apiService = note_providers
-        ._getNoteApiServiceForServer(ref, serverId);
+        .getNoteApiServiceForServer(
+      ref,
+      serverId,
+    ); // Use public helper
 
     if (kDebugMode) {
       print(

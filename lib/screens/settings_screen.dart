@@ -890,7 +890,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       ref.invalidate(loadServerConfigProvider);
       // FIX: Use correct provider name mcpServerConfigProvider
       ref.invalidate(mcpServerConfigProvider);
-      ref.invalidate(note_providers.notesNotifierProvider);
+      // Invalidate all instances of the notes family provider
+      // This is tricky, maybe just invalidate the active one? Or rely on config reset?
+      final activeServerId = ref.read(activeServerConfigProvider)?.id;
+      if (activeServerId != null) {
+        ref.invalidate(
+          note_providers.notesNotifierProviderFamily(activeServerId),
+        );
+      }
       ref.invalidate(tasksNotifierProvider);
       // FIX: Use correct provider name activeWorkbenchProvider
       ref.invalidate(activeWorkbenchProvider);
