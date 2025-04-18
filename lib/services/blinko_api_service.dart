@@ -4,13 +4,13 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_memos/blinko_api/lib/api.dart'
     as blinko_api; // Alias Blinko API
 import 'package:flutter_memos/models/comment.dart';
-import 'package:flutter_memos/models/list_notes_response.dart'; // Ensure import
-import 'package:flutter_memos/models/note_item.dart'; // Ensure import
+import 'package:flutter_memos/models/list_notes_response.dart';
+import 'package:flutter_memos/models/note_item.dart';
 import 'package:flutter_memos/models/server_config.dart';
 import 'package:flutter_memos/services/auth_strategy.dart'; // Import AuthStrategy
-import 'package:flutter_memos/services/note_api_service.dart'; // Implement NoteApiService
-import 'package:http/http.dart' as http; // Added http import
-import 'package:http_parser/http_parser.dart';
+import 'package:flutter_memos/services/note_api_service.dart';
+import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart'; // Implement NoteApiService
 
 // Implement NoteApiService (and implicitly BaseApiService)
 class BlinkoApiService implements NoteApiService {
@@ -19,7 +19,8 @@ class BlinkoApiService implements NoteApiService {
   factory BlinkoApiService() => _instance;
 
   late blinko_api.ApiClient _apiClient;
-  late blinko_api.FileApi _fileApi; // FileApi instance
+  late blinko_api.FileApi
+  _fileApi; // FileApi instance - used in uploadResource and getResourceData
 
   String _baseUrl = '';
   // String _authToken = ''; // Replaced by _authStrategy
@@ -115,11 +116,16 @@ class BlinkoApiService implements NoteApiService {
     }
 
     // Use the strategy to create the Authentication object
-    // Explicitly type as nullable Authentication
-    final blinko_api.Authentication authentication =
-        authStrategy
-            ?.createMemosAuth() ?? // Use MemosAuth for Blinko as it's Bearer
-        blinko_api.HttpBearerAuth(); // Default to empty auth if no strategy
+    // Fix: Cast to the correct blinko_api.Authentication type
+    blinko_api.Authentication authentication;
+    if (authStrategy != null) {
+      // Safe cast to blinko_api.Authentication
+      authentication =
+          authStrategy.createMemosAuth() as blinko_api.Authentication;
+    } else {
+      authentication =
+          blinko_api.HttpBearerAuth(); // Default to empty auth if no strategy
+    }
 
     try {
       _apiClient = blinko_api.ApiClient(
@@ -925,10 +931,11 @@ class BlinkoApiService implements NoteApiService {
     if (serverConfig == null) {
       // Ensure the default client is initialized if accessed directly
       if (!_apiClient.basePath.startsWith('http')) {
-        if (kDebugMode)
+        if (kDebugMode) {
           print(
             "[BlinkoApiService._getApiClientForServer] Warning: Default ApiClient seems uninitialized. Attempting re-init with current config.",
           );
+        }
         if (_baseUrl.isNotEmpty && _authStrategy != null) {
           _initializeClient(_baseUrl, _authStrategy);
         } else {
@@ -943,9 +950,9 @@ class BlinkoApiService implements NoteApiService {
     // Create a temporary AuthStrategy for the target server
     // Assuming ServerConfig holds authToken for this override scenario
     final targetAuthStrategy = BearerTokenAuthStrategy(serverConfig.authToken);
-    // Explicitly type as nullable Authentication
+    // Fix: Cast correctly to blinko_api.Authentication
     final blinko_api.Authentication targetAuthentication =
-        targetAuthStrategy.createMemosAuth(); // Use MemosAuth for Blinko
+        targetAuthStrategy.createMemosAuth() as blinko_api.Authentication;
 
     try {
       String targetBaseUrl = serverConfig.serverUrl;
@@ -954,7 +961,7 @@ class BlinkoApiService implements NoteApiService {
       }
       return blinko_api.ApiClient(
         basePath: targetBaseUrl,
-        authentication: targetAuthentication, // Pass nullable Authentication
+        authentication: targetAuthentication,
       );
     } catch (e) {
       throw Exception(
