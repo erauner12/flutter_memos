@@ -96,6 +96,16 @@ class WorkbenchScreen extends ConsumerWidget {
             },
           ),
           // Add other instance-specific actions here if needed
+              CupertinoActionSheetAction(
+                child: const Text('Reset Item Order'),
+                onPressed: () {
+                  Navigator.pop(context); // Close action sheet
+                  // Call resetOrder on the notifier for the current instance
+                  ref
+                      .read(workbenchProviderFamily(instanceId).notifier)
+                      .resetOrder();
+                },
+              ),
         ],
         cancelButton: CupertinoActionSheetAction(
           child: const Text('Cancel'),

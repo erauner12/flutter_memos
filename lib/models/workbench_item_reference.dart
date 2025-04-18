@@ -26,6 +26,7 @@ class WorkbenchItemReference {
   final String?
   parentNoteId; // Optional: ID of the parent note (useful for comments)
   final String instanceId; // <-- Field is present
+  final int sortOrder; // <-- New field for ordering
 
   // Transient fields (populated by WorkbenchNotifier, not persisted)
   final List<Comment> previewComments; // Store latest 1 or 2 comments
@@ -48,6 +49,7 @@ class WorkbenchItemReference {
     this.referencedItemUpdateTime,
     DateTime? overallLastUpdateTime,
     required this.instanceId, // Ensure this is required and assigned
+    this.sortOrder = 0, // Default sortOrder to 0 if not provided
   }) : overallLastUpdateTime =
            overallLastUpdateTime ??
            addedTimestamp; // Use passed value or default to added
@@ -83,6 +85,7 @@ class WorkbenchItemReference {
     // Allow explicitly passing the new calculated time, otherwise use existing
     DateTime? overallLastUpdateTime,
     String? instanceId, // <-- ADD instanceId parameter
+    int? sortOrder, // <-- ADD sortOrder parameter
   }) {
     // Determine the values for transient fields
     final List<Comment> newPreviewComments =
@@ -139,6 +142,7 @@ class WorkbenchItemReference {
       // Assign the final calculated or provided overallLastUpdateTime
       overallLastUpdateTime: calculatedUpdateTime,
       instanceId: instanceId ?? this.instanceId, // <-- ASSIGN instanceId
+      sortOrder: sortOrder ?? this.sortOrder, // <-- ASSIGN sortOrder
     );
   }
 
@@ -159,6 +163,7 @@ class WorkbenchItemReference {
       'parentNoteId': parentNoteId,
       // DO NOT include transient fields (previewComments, referencedItemUpdateTime)
       'instanceId': instanceId, // <-- ADD instanceId to JSON
+      'sortOrder': sortOrder, // <-- ADD sortOrder to JSON
     };
   }
 
@@ -193,6 +198,19 @@ class WorkbenchItemReference {
       instanceId = WorkbenchInstance.defaultInstanceId; // Assign default
     }
 
+    // Read sortOrder from JSON, default to 0 for migration if missing/invalid
+    int sortOrder = 0; // Default value
+    if (json['sortOrder'] != null) {
+      sortOrder = int.tryParse(json['sortOrder'].toString()) ?? 0;
+    } else {
+      if (kDebugMode) {
+        print(
+          '[WorkbenchItemReference.fromJson] Warning: Missing sortOrder in record $recordName. Assigning default: 0.',
+        );
+      }
+    }
+
+
     return WorkbenchItemReference(
       // Use recordName as the primary ID if 'id' field is missing/different
       id: json['id'] as String? ?? recordName,
@@ -208,6 +226,7 @@ class WorkbenchItemReference {
       parentNoteId: json['parentNoteId'] as String?,
       instanceId: instanceId, // <-- ASSIGN instanceId (potentially defaulted)
       // DO NOT parse transient fields from JSON. They default to empty/null/addedTimestamp in constructor.
+      sortOrder: sortOrder, // <-- ASSIGN sortOrder (potentially defaulted)
     );
   }
 
@@ -229,7 +248,8 @@ class WorkbenchItemReference {
         other.overallLastUpdateTime == overallLastUpdateTime &&
         // Compare preview comments list (important for UI updates)
         listEquals(other.previewComments, previewComments) &&
-        other.instanceId == instanceId; // <-- COMPARE instanceId
+        other.instanceId == instanceId && // <-- COMPARE instanceId
+        other.sortOrder == sortOrder; // <-- COMPARE sortOrder
   }
 
   @override
@@ -250,6 +270,7 @@ class WorkbenchItemReference {
       Object.hashAll(previewComments),
       // DO NOT hash referencedItemUpdateTime
       instanceId, // <-- HASH instanceId
+      sortOrder, // <-- HASH sortOrder
     );
   }
 
@@ -259,7 +280,8 @@ class WorkbenchItemReference {
     final commentIds = previewComments.map((c) => c.id).join(', ');
     // <-- INCLUDE instanceId in toString
     // Use describeEnum for enums
-    return 'WorkbenchItemReference(id: $id, instanceId: $instanceId, refId: $referencedItemId, type: ${describeEnum(referencedItemType)}, serverId: $serverId, serverType: ${describeEnum(serverType)}, parentId: $parentNoteId, added: $addedTimestamp, lastActivity: $overallLastUpdateTime, comments: [$commentIds], refUpdate: $referencedItemUpdateTime)';
+    // <-- INCLUDE sortOrder in toString
+    return 'WorkbenchItemReference(id: $id, instanceId: $instanceId, sortOrder: $sortOrder, refId: $referencedItemId, type: ${describeEnum(referencedItemType)}, serverId: $serverId, serverType: ${describeEnum(serverType)}, parentId: $parentNoteId, added: $addedTimestamp, lastActivity: $overallLastUpdateTime, comments: [$commentIds], refUpdate: $referencedItemUpdateTime)';
   }
 
   static void empty() {}

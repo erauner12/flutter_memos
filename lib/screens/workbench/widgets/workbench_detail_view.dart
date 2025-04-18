@@ -70,7 +70,7 @@ class WorkbenchDetailView extends ConsumerWidget {
       );
     }
 
-    // Item List using standard SliverList with padding
+    // Item List using SliverReorderableList with padding
     return SliverPadding(
       // Ensure consistent side margins and vertical padding
       padding: const EdgeInsets.only(
@@ -79,24 +79,42 @@ class WorkbenchDetailView extends ConsumerWidget {
         top: 12.0,
         bottom: 50.0, // Keep bottom padding for scroll buffer
       ),
-      sliver: SliverList(
-        delegate: SliverChildBuilderDelegate((context, index) {
+      // Use SliverReorderableList instead of SliverList
+      sliver: SliverReorderableList(
+        itemCount: items.length,
+        // Callback when an item is dropped in a new position
+        onReorder: (oldIndex, newIndex) {
+          // Call the reorder method on the notifier for the active instance
+          ref
+              .read(activeWorkbenchNotifierProvider)
+              .reorderItems(oldIndex, newIndex);
+        },
+        itemBuilder: (context, index) {
           final item = items[index];
           // Add Padding wrapper for vertical spacing between items
+          // IMPORTANT: The direct child of SliverReorderableList's itemBuilder
+          // MUST have a Key. We apply it to the Padding here.
           return Padding(
+            key: ValueKey(
+              item.id,
+            ), // Use unique item ID for the key required by ReorderableList
             padding: const EdgeInsets.only(
               bottom: 12.0,
             ), // Add space below each item
+            // WorkbenchItemTile itself doesn't need the key now
             child: WorkbenchItemTile(
-              key: ValueKey(item.id), // Use unique item ID for key
               itemReference: item,
-              onTap: () {},
-              // Removed index parameter as reordering is disabled for now
-              // index: index,
+              onTap: () {
+                // Handle item tap for navigation/selection (existing logic)
+                // Example: Navigate to item detail
+                // ref.read(rootNavigatorKeyProvider).currentState?.pushNamed(...);
+                print("Tapped on item: ${item.id}"); // Placeholder tap action
+              },
+              // Pass the index for the ReorderableDragStartListener inside the tile
+              index: index,
             ),
           );
         },
-          childCount: items.length),
       ),
     );
   }

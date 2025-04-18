@@ -2,11 +2,10 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/models/workbench_instance.dart';
 import 'package:flutter_memos/models/workbench_item_reference.dart';
-import 'package:flutter_memos/models/workbench_item_type.dart'; // Import the enum and extension
-import 'package:flutter_memos/providers/ui_providers.dart'; // Import UI providers
+import 'package:flutter_memos/models/workbench_item_type.dart';
+import 'package:flutter_memos/providers/ui_providers.dart';
 import 'package:flutter_memos/providers/workbench_instances_provider.dart';
 import 'package:flutter_memos/providers/workbench_provider.dart';
-// import 'package:flutter_memos/utils/time_utils.dart'; // For relative time formatting // TODO: Implement this utility
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 String formatRelativeTime(DateTime dateTime) {
@@ -14,15 +13,14 @@ String formatRelativeTime(DateTime dateTime) {
   final difference = now.difference(dateTime);
 
   if (difference.inSeconds < 60) {
-    return '${difference.inSeconds}s ago'; // Shorter format
+    return '${difference.inSeconds}s ago';
   } else if (difference.inMinutes < 60) {
-    return '${difference.inMinutes}m ago'; // Shorter format
+    return '${difference.inMinutes}m ago';
   } else if (difference.inHours < 24) {
-    return '${difference.inHours}h ago'; // Shorter format
+    return '${difference.inHours}h ago';
   } else if (difference.inDays < 7) {
-    return '${difference.inDays}d ago'; // Shorter format
+    return '${difference.inDays}d ago';
   } else {
-    // Consider using intl package for better date formatting
     return '${dateTime.day}/${dateTime.month}/${dateTime.year}';
   }
 }
@@ -30,22 +28,21 @@ String formatRelativeTime(DateTime dateTime) {
 class WorkbenchItemTile extends ConsumerWidget {
   final WorkbenchItemReference itemReference;
   final VoidCallback onTap;
-  // Removed index as it's not needed without reordering enabled via this tile's handle
-  // final int index;
+  // Add index back - needed for ReorderableDragStartListener
+  final int index;
 
   const WorkbenchItemTile({
     super.key,
     required this.itemReference,
     required this.onTap,
-    // required this.index,
+    required this.index, // Make index required again
   });
 
-  // Helper to show move/delete actions
   void _showItemActions(
     BuildContext context,
     WidgetRef ref,
     WorkbenchItemReference item,
-    VoidCallback originalOnTap, // Add original onTap for navigation
+    VoidCallback originalOnTap,
   ) {
     final instancesState = ref.read(workbenchInstancesProvider);
     final currentInstanceId = item.instanceId;
@@ -60,7 +57,7 @@ class WorkbenchItemTile extends ConsumerWidget {
         CupertinoActionSheetAction(
           child: const Text('Move to...'),
           onPressed: () {
-            Navigator.pop(context); // Close the first action sheet
+            Navigator.pop(context);
             _showMoveDestinationSheet(context, ref, item, otherInstances);
           },
         ),
@@ -77,32 +74,27 @@ class WorkbenchItemTile extends ConsumerWidget {
               overflow: TextOverflow.ellipsis,
             ),
             actions: [
-              // Add Open Item action
               CupertinoActionSheetAction(
                 child: const Text('Open Item'),
                 onPressed: () {
-                  Navigator.pop(context); // Close action sheet
-                  // Clear any active comment highlight when navigating
+                  Navigator.pop(context);
                   ref.read(activeCommentIdProvider.notifier).state = null;
-                  // Clear selection state when navigating
                   ref.read(selectedWorkbenchItemIdProvider.notifier).state =
                       null;
                   ref.read(selectedWorkbenchCommentIdProvider.notifier).state =
                       null;
-                  originalOnTap(); // Execute the original navigation logic
+                  originalOnTap();
                 },
               ),
-              ...moveActions, // Add move actions if available
+              ...moveActions,
               CupertinoActionSheetAction(
                 isDestructiveAction: true,
                 child: const Text('Remove from Workbench'),
                 onPressed: () {
-                  Navigator.pop(context); // Close action sheet
-                  // Use the notifier for the specific instance the item belongs to
+                  Navigator.pop(context);
                   ref
                       .read(workbenchProviderFamily(item.instanceId).notifier)
                       .removeItem(item.id);
-                  // Clear selection if the removed item was selected
                   if (ref.read(selectedWorkbenchItemIdProvider) == item.id) {
                     ref.read(selectedWorkbenchItemIdProvider.notifier).state =
                         null;
@@ -118,7 +110,6 @@ class WorkbenchItemTile extends ConsumerWidget {
     );
   }
 
-  // Helper to show the list of destinations for moving an item
   void _showMoveDestinationSheet(
     BuildContext context,
     WidgetRef ref,
@@ -135,7 +126,7 @@ class WorkbenchItemTile extends ConsumerWidget {
                   return CupertinoActionSheetAction(
                     child: Text(dest.name),
                     onPressed: () {
-                      Navigator.pop(context); // Close destination sheet
+                      Navigator.pop(context);
                       ref
                           .read(
                             workbenchProviderFamily(
@@ -157,7 +148,6 @@ class WorkbenchItemTile extends ConsumerWidget {
     );
   }
 
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = CupertinoTheme.of(context);
@@ -165,33 +155,25 @@ class WorkbenchItemTile extends ConsumerWidget {
       itemReference.overallLastUpdateTime,
     );
 
-    // Watch the selection provider
     final selectedItemId = ref.watch(selectedWorkbenchItemIdProvider);
     final isSelected = selectedItemId == itemReference.id;
 
-    // Determine background color based on selection
     final tileColor =
         isSelected
-            ? CupertinoColors.systemGrey5.resolveFrom(
-              context,
-            ) // Highlight color
+            ? CupertinoColors.systemGrey5.resolveFrom(context)
             : CupertinoColors.secondarySystemGroupedBackground.resolveFrom(
-              context, // Default color
+              context,
             );
 
-    // Remove the outer GestureDetector for long-press
-    // GestureDetector( ... onLongPress: ... )
     return Container(
-      // Apply bubble styling
       padding: const EdgeInsets.all(16.0),
       decoration: BoxDecoration(
-        color: tileColor, // Use the determined color
+        color: tileColor,
         borderRadius: BorderRadius.circular(8.0),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Icon based on type - remains the same
           Padding(
             padding: const EdgeInsets.only(top: 2.0),
             child: Icon(
@@ -201,29 +183,24 @@ class WorkbenchItemTile extends ConsumerWidget {
             ),
           ),
           const SizedBox(width: 16),
-          // Main content column - Wrap this Expanded in a GestureDetector for SELECTION
           Expanded(
             child: GestureDetector(
-              // onTap now handles SELECTION, not navigation
               onTap: () {
-                // Update selection state
                 final notifier = ref.read(
                   selectedWorkbenchItemIdProvider.notifier,
                 );
                 if (isSelected) {
-                  notifier.state = null; // Toggle off if already selected
+                  notifier.state = null;
                 } else {
-                  notifier.state = itemReference.id; // Select this item
-                  // Optionally clear comment selection when an item is selected
+                  notifier.state = itemReference.id;
                   ref.read(selectedWorkbenchCommentIdProvider.notifier).state =
                       null;
                 }
               },
-              behavior: HitTestBehavior.opaque, // Make the content area tappable
+              behavior: HitTestBehavior.opaque,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Server Name / Item Type Row - remains the same
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -251,7 +228,6 @@ class WorkbenchItemTile extends ConsumerWidget {
                     ],
                   ),
                   const SizedBox(height: 4),
-                  // Preview Content - remains the same
                   if (itemReference.previewContent != null &&
                       itemReference.previewContent!.isNotEmpty)
                     Text(
@@ -260,7 +236,6 @@ class WorkbenchItemTile extends ConsumerWidget {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
-                  // Preview Comments - remains the same structure
                   if (itemReference.previewComments.isNotEmpty) ...[
                     const SizedBox(height: 6),
                     ...itemReference.previewComments.map(
@@ -271,27 +246,42 @@ class WorkbenchItemTile extends ConsumerWidget {
               ),
             ),
           ),
-          // Ellipsis Button for item actions (including navigation now)
-          CupertinoButton(
-            padding: const EdgeInsets.only(
-              left: 8.0,
-            ), // Adjust left padding as needed, remove negative top/right
-            minSize: 30, // Ensure tappable area
-            // Pass the original onTap (for navigation) to the action handler
-            onPressed:
-                () => _showItemActions(context, ref, itemReference, onTap),
-            child: const Icon(
-              CupertinoIcons.ellipsis_vertical,
-              size: 22,
-              color: CupertinoColors.secondaryLabel,
-            ),
+          // Action Buttons Column (Ellipsis and Drag Handle)
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CupertinoButton(
+                padding: const EdgeInsets.only(left: 8.0,
+                  bottom: 4.0),
+                minSize: 30,
+                onPressed:
+                    () => _showItemActions(context, ref, itemReference, onTap),
+                child: const Icon(
+                  CupertinoIcons.ellipsis_vertical,
+                  size: 22,
+                  color: CupertinoColors.secondaryLabel,
+                ),
+              ),
+              ReorderableDragStartListener(
+                index: index,
+                child: CupertinoButton(
+                  padding: const EdgeInsets.only(left: 8.0, top: 4.0),
+                  minSize: 30,
+                  onPressed: () {},
+                  child: const Icon(
+                    CupertinoIcons.line_horizontal_3,
+                    size: 22,
+                    color: CupertinoColors.tertiaryLabel,
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
     );
   }
 
-  // Add WidgetRef ref parameter
   Widget _buildCommentPreview(
     BuildContext context,
     WidgetRef ref,
@@ -302,24 +292,16 @@ class WorkbenchItemTile extends ConsumerWidget {
       comment.updatedTs ?? comment.createdTs,
     );
 
-    // Watch comment selection provider
     final selectedCommentId = ref.watch(selectedWorkbenchCommentIdProvider);
     final isCommentSelected = selectedCommentId == comment.id;
 
-    // Determine background color based on selection
     final bubbleColor =
         isCommentSelected
-            ? CupertinoColors.systemGrey5.resolveFrom(
-              context,
-            ) // Highlight color
-            : CupertinoColors.systemGrey6.resolveFrom(context); // Default color
+            ? CupertinoColors.systemGrey5.resolveFrom(context)
+            : CupertinoColors.systemGrey6.resolveFrom(context);
 
-    // Wrap in Padding for top margin between comments.
-    // Ensure only top padding is applied to maintain vertical spacing
-    // without adding horizontal indentation relative to the item content column.
     return Padding(
-      padding: const EdgeInsets.only(top: 8.0), // Explicitly only top padding
-      // Wrap the content Container in GestureDetector for SELECTION
+      padding: const EdgeInsets.only(top: 8.0),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -327,22 +309,20 @@ class WorkbenchItemTile extends ConsumerWidget {
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTap: () {
-                // Update comment selection state
                 final notifier = ref.read(
                   selectedWorkbenchCommentIdProvider.notifier,
                 );
                 if (isCommentSelected) {
-                  notifier.state = null; // Toggle off
+                  notifier.state = null;
                 } else {
-                  notifier.state = comment.id; // Select this comment
-                  // Optionally clear item selection when a comment is selected
+                  notifier.state = comment.id;
                   ref.read(selectedWorkbenchItemIdProvider.notifier).state =
                       null;
                 }
               },
               child: Container(
                 decoration: BoxDecoration(
-                  color: bubbleColor, // Use the determined color
+                  color: bubbleColor,
                   borderRadius: BorderRadius.circular(8.0),
                 ),
                 padding: const EdgeInsets.all(12.0),
@@ -352,7 +332,6 @@ class WorkbenchItemTile extends ConsumerWidget {
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Icon
                         Padding(
                           padding: const EdgeInsets.only(top: 2.0),
                           child: Icon(
@@ -364,7 +343,6 @@ class WorkbenchItemTile extends ConsumerWidget {
                           ),
                         ),
                         const SizedBox(width: 8),
-                        // Text Content
                         Expanded(
                           child: Text(
                             comment.content ?? '',
@@ -378,11 +356,9 @@ class WorkbenchItemTile extends ConsumerWidget {
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        // Ellipsis button is now outside the GestureDetector
                       ],
                     ),
                     const SizedBox(height: 4),
-                    // Timestamp
                     Align(
                       alignment: Alignment.centerRight,
                       child: Text(
@@ -400,17 +376,13 @@ class WorkbenchItemTile extends ConsumerWidget {
               ),
             ),
           ),
-          // Ellipsis Button for comment actions (outside the selection GestureDetector)
           CupertinoButton(
-            padding: const EdgeInsets.only(
-              left: 8.0,
-              top: 8.0, // Add some top padding to align better
-            ),
-            minSize: 24, // Smaller tappable area for comment button
+            padding: const EdgeInsets.only(left: 8.0, top: 8.0),
+            minSize: 24,
             onPressed: () => _showCommentPreviewActions(context, ref, comment),
             child: const Icon(
               CupertinoIcons.ellipsis_vertical,
-              size: 18, // Smaller icon for comment
+              size: 18,
               color: CupertinoColors.tertiaryLabel,
             ),
           ),
@@ -419,19 +391,11 @@ class WorkbenchItemTile extends ConsumerWidget {
     );
   }
 
-  // Placeholder for comment preview actions
   void _showCommentPreviewActions(
     BuildContext context,
     WidgetRef ref,
     Comment comment,
   ) {
-    // TODO: Implement comment actions (reuse/adapt CommentCard logic?)
-    // Needs serverId, parentId (memoId) etc. which might need to be passed down or accessed differently.
-    // For now, just showing a basic sheet.
-    // Remove the unused variables - they'll be needed when implementation is completed
-    // final parentId = itemReference.referencedItemId;
-    // final serverId = itemReference.serverId;
-
     showCupertinoModalPopup(
       context: context,
       builder:
@@ -441,48 +405,33 @@ class WorkbenchItemTile extends ConsumerWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
-            // message: const Text('Actions for this comment preview.'), // Optional message
             actions: [
-              // Example: Edit Action (requires navigation setup)
               CupertinoActionSheetAction(
-                child: const Text('Edit'), // Placeholder text
+                child: const Text('Edit'),
                 onPressed: () {
                   Navigator.pop(context);
-                  // Navigate to edit screen: Needs proper routing
-                  // Example: ref.read(rootNavigatorKeyProvider).currentState?.pushNamed(...)
                   print(
                     'Edit action for comment ${comment.id} (Not Implemented)',
                   );
                 },
               ),
-              // Example: Pin Action (requires provider logic)
               CupertinoActionSheetAction(
-                child: Text(
-                  comment.pinned ? 'Unpin' : 'Pin',
-                ), // Placeholder text
+                child: Text(comment.pinned ? 'Unpin' : 'Pin'),
                 onPressed: () {
                   Navigator.pop(context);
-                  // Call pin/unpin logic: Needs provider setup similar to CommentCard
                   print(
                     'Pin/Unpin action for comment ${comment.id} (Not Implemented)',
                   );
-                  // Example: ref.read(comment_providers.togglePinCommentProviderFamily(...))();
                 },
               ),
-              // Example: Delete Action (requires provider logic)
               CupertinoActionSheetAction(
                 isDestructiveAction: true,
-                child: const Text('Delete'), // Placeholder text
-                onPressed: () async {
-                  Navigator.pop(context); // Close sheet first
-                  // Confirmation Dialog recommended here
+                child: const Text('Delete'),
+                onPressed: () {
+                  Navigator.pop(context);
                   print(
                     'Delete action for comment ${comment.id} (Not Implemented)',
                   );
-                  // Example: Call delete provider
-                  // await ref.read(comment_providers.deleteCommentProviderFamily(...))();
-
-                  // Clear selection if the deleted comment was selected
                   if (ref.read(selectedWorkbenchCommentIdProvider) ==
                       comment.id) {
                     ref
