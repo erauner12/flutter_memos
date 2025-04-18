@@ -24,29 +24,30 @@ class _WorkbenchHubScreenState extends ConsumerState<WorkbenchHubScreen> {
     _instanceNameController.clear();
     showCupertinoDialog(
       context: context,
-      builder: (context) => CupertinoAlertDialog(
-        title: const Text('New Workbench'),
-        content: Padding(
-          padding: const EdgeInsets.only(top: 8.0),
-          child: CupertinoTextField(
-            controller: _instanceNameController,
-            placeholder: 'Instance Name (e.g., Work, Project X)',
-            autofocus: true,
-            onSubmitted: (_) => _createInstance(),
+      builder:
+          (context) => CupertinoAlertDialog(
+            title: const Text('New Workbench'),
+            content: Padding(
+              padding: const EdgeInsets.only(top: 8.0),
+              child: CupertinoTextField(
+                controller: _instanceNameController,
+                placeholder: 'Instance Name (e.g., Work, Project X)',
+                autofocus: true,
+                onSubmitted: (_) => _createInstance(),
+              ),
+            ),
+            actions: [
+              CupertinoDialogAction(
+                child: const Text('Cancel'),
+                onPressed: () => Navigator.pop(context),
+              ),
+              CupertinoDialogAction(
+                isDefaultAction: true,
+                child: const Text('Create'),
+                onPressed: () => _createInstance(),
+              ),
+            ],
           ),
-        ),
-        actions: [
-          CupertinoDialogAction(
-            child: const Text('Cancel'),
-            onPressed: () => Navigator.pop(context),
-          ),
-          CupertinoDialogAction(
-            isDefaultAction: true,
-            child: const Text('Create'),
-            onPressed: () => _createInstance(),
-          ),
-        ],
-      ),
     );
   }
 
@@ -56,14 +57,23 @@ class _WorkbenchHubScreenState extends ConsumerState<WorkbenchHubScreen> {
       Navigator.pop(context);
     }
     if (name.isNotEmpty) {
-      ref.read(workbenchInstancesProvider.notifier).saveInstance(name).then((success) {
-        if (success) {
-          // Optionally navigate to the new instance immediately
-          // final newState = ref.read(workbenchInstancesProvider);
-          // final newInstanceId = newState.instances.firstWhere((i) => i.name == name).id;
-          // Navigator.of(context).pushNamed('/workbench/$newInstanceId');
-        }
-      });
+      // Pass switchToNew: false so the new instance doesn't become active automatically
+      ref
+          .read(workbenchInstancesProvider.notifier)
+          .saveInstance(name, switchToNew: false)
+          .then((success) {
+            if (success) {
+              // No automatic navigation after creation
+              if (mounted) {
+                // Optionally show a confirmation SnackBar or similar
+                // ScaffoldMessenger.of(context).showSnackBar(
+                //   SnackBar(content: Text('Workbench "$name" created.')),
+                // );
+              }
+            } else {
+              // Error handling is done within the notifier, maybe show alert here if needed
+            }
+          });
     }
   }
 
@@ -71,29 +81,30 @@ class _WorkbenchHubScreenState extends ConsumerState<WorkbenchHubScreen> {
     _instanceNameController.text = instance.name;
     showCupertinoDialog(
       context: context,
-      builder: (context) => CupertinoAlertDialog(
-        title: const Text('Rename Workbench'),
-        content: Padding(
-          padding: const EdgeInsets.only(top: 8.0),
-          child: CupertinoTextField(
-            controller: _instanceNameController,
-            placeholder: 'New Instance Name',
-            autofocus: true,
-            onSubmitted: (_) => _renameInstance(instance.id),
+      builder:
+          (context) => CupertinoAlertDialog(
+            title: const Text('Rename Workbench'),
+            content: Padding(
+              padding: const EdgeInsets.only(top: 8.0),
+              child: CupertinoTextField(
+                controller: _instanceNameController,
+                placeholder: 'New Instance Name',
+                autofocus: true,
+                onSubmitted: (_) => _renameInstance(instance.id),
+              ),
+            ),
+            actions: [
+              CupertinoDialogAction(
+                child: const Text('Cancel'),
+                onPressed: () => Navigator.pop(context),
+              ),
+              CupertinoDialogAction(
+                isDefaultAction: true,
+                child: const Text('Rename'),
+                onPressed: () => _renameInstance(instance.id),
+              ),
+            ],
           ),
-        ),
-        actions: [
-          CupertinoDialogAction(
-            child: const Text('Cancel'),
-            onPressed: () => Navigator.pop(context),
-          ),
-          CupertinoDialogAction(
-            isDefaultAction: true,
-            child: const Text('Rename'),
-            onPressed: () => _renameInstance(instance.id),
-          ),
-        ],
-      ),
     );
   }
 
@@ -114,51 +125,53 @@ class _WorkbenchHubScreenState extends ConsumerState<WorkbenchHubScreen> {
     if (instancesState.instances.length <= 1 || instance.isSystemDefault) {
       showCupertinoDialog(
         context: context,
-        builder: (context) => CupertinoAlertDialog(
-          title: const Text('Cannot Delete'),
-          content: Text(
-            instance.isSystemDefault
-                ? 'The default "${instance.name}" instance cannot be deleted.'
-                : 'Cannot delete the last remaining instance.',
-          ),
-          actions: [
-            CupertinoDialogAction(
-              isDefaultAction: true,
-              child: const Text('OK'),
-              onPressed: () => Navigator.pop(context),
+        builder:
+            (context) => CupertinoAlertDialog(
+              title: const Text('Cannot Delete'),
+              content: Text(
+                instance.isSystemDefault
+                    ? 'The default "${instance.name}" instance cannot be deleted.'
+                    : 'Cannot delete the last remaining instance.',
+              ),
+              actions: [
+                CupertinoDialogAction(
+                  isDefaultAction: true,
+                  child: const Text('OK'),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ],
             ),
-          ],
-        ),
       );
       return;
     }
 
     showCupertinoDialog(
       context: context,
-      builder: (context) => CupertinoAlertDialog(
-        title: Text('Delete "${instance.name}"?'),
-        content: const Text(
-          'Are you sure? All items within this workbench will also be permanently deleted.',
-        ),
-        actions: [
-          CupertinoDialogAction(
-            child: const Text('Cancel'),
-            onPressed: () => Navigator.pop(context),
+      builder:
+          (context) => CupertinoAlertDialog(
+            title: Text('Delete "${instance.name}"?'),
+            content: const Text(
+              'Are you sure? All items within this workbench will also be permanently deleted.',
+            ),
+            actions: [
+              CupertinoDialogAction(
+                child: const Text('Cancel'),
+                onPressed: () => Navigator.pop(context),
+              ),
+              CupertinoDialogAction(
+                isDestructiveAction: true,
+                child: const Text('Delete'),
+                onPressed: () {
+                  if (Navigator.of(context).canPop()) {
+                    Navigator.pop(context); // Close confirmation
+                  }
+                  ref
+                      .read(workbenchInstancesProvider.notifier)
+                      .deleteInstance(instance.id);
+                },
+              ),
+            ],
           ),
-          CupertinoDialogAction(
-            isDestructiveAction: true,
-            child: const Text('Delete'),
-            onPressed: () {
-              if (Navigator.of(context).canPop()) {
-                Navigator.pop(context); // Close confirmation
-              }
-              ref
-                  .read(workbenchInstancesProvider.notifier)
-                  .deleteInstance(instance.id);
-            },
-          ),
-        ],
-      ),
     );
   }
 
@@ -166,34 +179,51 @@ class _WorkbenchHubScreenState extends ConsumerState<WorkbenchHubScreen> {
     final instancesState = ref.read(workbenchInstancesProvider);
     final bool canDelete =
         instancesState.instances.length > 1 && !instance.isSystemDefault;
+    final bool isActive = instancesState.activeInstanceId == instance.id;
 
     showCupertinoModalPopup(
       context: context,
-      builder: (context) => CupertinoActionSheet(
-        title: Text('Actions for "${instance.name}"'),
-        actions: [
-          CupertinoActionSheetAction(
-            child: const Text('Rename'),
-            onPressed: () {
-              Navigator.pop(context); // Close action sheet
-              _showRenameInstanceDialog(instance);
-            },
-          ),
-          if (canDelete)
-            CupertinoActionSheetAction(
-              isDestructiveAction: true,
-              child: const Text('Delete'),
-              onPressed: () {
-                Navigator.pop(context); // Close action sheet first
-                _showDeleteConfirmationDialog(instance); // Show confirmation dialog
-              },
+      builder:
+          (context) => CupertinoActionSheet(
+            title: Text(
+              'Actions for "${instance.name}"${isActive ? " (Active)" : ""}',
+            ), // Indicate if active in title
+            actions: [
+              // Add "Set Active" action if not already active
+              if (!isActive)
+                CupertinoActionSheetAction(
+                  child: const Text('Set Active'),
+                  onPressed: () {
+                    Navigator.pop(context); // Close action sheet
+                    ref
+                        .read(workbenchInstancesProvider.notifier)
+                        .setActiveInstance(instance.id);
+                  },
+                ),
+              CupertinoActionSheetAction(
+                child: const Text('Rename'),
+                onPressed: () {
+                  Navigator.pop(context); // Close action sheet
+                  _showRenameInstanceDialog(instance);
+                },
+              ),
+              if (canDelete)
+                CupertinoActionSheetAction(
+                  isDestructiveAction: true,
+                  child: const Text('Delete'),
+                  onPressed: () {
+                    Navigator.pop(context); // Close action sheet first
+                    _showDeleteConfirmationDialog(
+                      instance,
+                    ); // Show confirmation dialog
+                  },
+                ),
+            ],
+            cancelButton: CupertinoActionSheetAction(
+              child: const Text('Cancel'),
+              onPressed: () => Navigator.pop(context),
             ),
-        ],
-        cancelButton: CupertinoActionSheetAction(
-          child: const Text('Cancel'),
-          onPressed: () => Navigator.pop(context),
-        ),
-      ),
+          ),
     );
   }
 
@@ -203,13 +233,16 @@ class _WorkbenchHubScreenState extends ConsumerState<WorkbenchHubScreen> {
     final instances = instancesState.instances;
     final isLoading = instancesState.isLoading;
     final error = instancesState.error;
+    final activeInstanceId = instancesState.activeInstanceId; // Get active ID
 
     // Sort instances: default first, then by creation date or name
     final sortedInstances = [...instances]..sort((a, b) {
-        if (a.isSystemDefault) return -1;
-        if (b.isSystemDefault) return 1;
-        return a.createdAt.compareTo(b.createdAt); // Or sort by name: a.name.compareTo(b.name)
-      });
+      if (a.isSystemDefault) return -1;
+      if (b.isSystemDefault) return 1;
+      return a.createdAt.compareTo(
+        b.createdAt,
+      ); // Or sort by name: a.name.compareTo(b.name)
+    });
 
     final separator = Container(
       height: 1,
@@ -218,7 +251,9 @@ class _WorkbenchHubScreenState extends ConsumerState<WorkbenchHubScreen> {
     );
 
     return CupertinoPageScaffold(
-      backgroundColor: CupertinoColors.systemGroupedBackground.resolveFrom(context),
+      backgroundColor: CupertinoColors.systemGroupedBackground.resolveFrom(
+        context,
+      ),
       navigationBar: const CupertinoNavigationBar(
         middle: Text("Workbenches"),
         // No back button needed on the hub screen
@@ -251,14 +286,20 @@ class _WorkbenchHubScreenState extends ConsumerState<WorkbenchHubScreen> {
                           'Error loading Workbenches: $error',
                           textAlign: TextAlign.center,
                           style: TextStyle(
-                            color: CupertinoColors.secondaryLabel.resolveFrom(context),
+                            color: CupertinoColors.secondaryLabel.resolveFrom(
+                              context,
+                            ),
                           ),
                         ),
                       ),
                       const SizedBox(height: 10),
                       CupertinoButton(
                         child: const Text('Retry'),
-                        onPressed: () => ref.read(workbenchInstancesProvider.notifier).loadInstances(),
+                        onPressed:
+                            () =>
+                                ref
+                                    .read(workbenchInstancesProvider.notifier)
+                                    .loadInstances(),
                       ),
                     ],
                   ),
@@ -270,63 +311,72 @@ class _WorkbenchHubScreenState extends ConsumerState<WorkbenchHubScreen> {
               SliverPadding(
                 padding: const EdgeInsets.symmetric(vertical: 10.0),
                 sliver: SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                    (context, index) {
-                      final instance = sortedInstances[index];
-                      final isLast = index == sortedInstances.length - 1;
+                  delegate: SliverChildBuilderDelegate((context, index) {
+                    final instance = sortedInstances[index];
+                    final isLast = index == sortedInstances.length - 1;
+                    final bool isActive =
+                        instance.id == activeInstanceId; // Check if active
 
-                      Widget tile = WorkbenchInstanceTile(
-                        instance: instance,
-                        onTap: () {
-                          // Navigate to the detail screen using the nested navigator
-                          Navigator.of(context).pushNamed('/workbench/${instance.id}');
-                        },
-                        onLongPress: () => _showInstanceActions(instance),
+                    Widget tile = WorkbenchInstanceTile(
+                      instance: instance,
+                      isActive: isActive, // Pass active status
+                      onTap: () {
+                        // Navigate to the detail screen using the nested navigator
+                        Navigator.of(
+                          context,
+                        ).pushNamed('/workbench/${instance.id}');
+                      },
+                      onLongPress: () => _showInstanceActions(instance),
+                    );
+
+                    if (!isLast) {
+                      return Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [tile, separator],
                       );
-
-                      if (!isLast) {
-                        return Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [tile, separator],
-                        );
-                      } else {
-                        return tile; // No separator after the last item
-                      }
-                    },
-                    childCount: sortedInstances.length,
-                  ),
+                    } else {
+                      return tile; // No separator after the last item
+                    }
+                  }, childCount: sortedInstances.length),
                 ),
               ),
 
             // --- Add New Instance Button ---
-             SliverPadding(
-               padding: const EdgeInsets.only(top: 10.0, bottom: 20.0), // Add padding
-               sliver: SliverToBoxAdapter(
-                 child: Container(
-                   color: CupertinoTheme.of(context).barBackgroundColor,
-                   child: CupertinoButton(
-                     padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                     onPressed: _showAddInstanceDialog,
-                     child: Row(
-                       children: [
-                         const Icon(
-                           CupertinoIcons.add_circled,
-                           color: CupertinoColors.systemGreen,
-                           size: 24,
-                         ),
-                         const SizedBox(width: 16),
-                         Expanded(
-                           child: Text(
-                             'New Workbench',
-                             style: CupertinoTheme.of(context).textTheme.textStyle,
-                           ),
-                         ),
-                       ],
-                     ),
-                   ),
-                 ),
-               ),
-             ),
+            SliverPadding(
+              padding: const EdgeInsets.only(
+                top: 10.0,
+                bottom: 20.0,
+              ), // Add padding
+              sliver: SliverToBoxAdapter(
+                child: Container(
+                  color: CupertinoTheme.of(context).barBackgroundColor,
+                  child: CupertinoButton(
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 12,
+                      horizontal: 16,
+                    ),
+                    onPressed: _showAddInstanceDialog,
+                    child: Row(
+                      children: [
+                        const Icon(
+                          CupertinoIcons.add_circled,
+                          color: CupertinoColors.systemGreen,
+                          size: 24,
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Text(
+                            'New Workbench',
+                            style:
+                                CupertinoTheme.of(context).textTheme.textStyle,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
           ],
         ),
       ),

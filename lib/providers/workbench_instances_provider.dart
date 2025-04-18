@@ -228,21 +228,20 @@ class WorkbenchInstancesNotifier extends StateNotifier<WorkbenchInstancesState> 
     }
   }
 
-
-  Future<bool> saveInstance(String name) async {
+  Future<bool> saveInstance(String name, {bool switchToNew = false}) async {
     if (!mounted || !_prefsInitialized) return false;
     if (name.trim().isEmpty) {
-       if (kDebugMode) print('[WorkbenchInstancesNotifier] Instance name cannot be empty.');
-       state = state.copyWith(error: 'Instance name cannot be empty');
-       return false;
+      if (kDebugMode)
+        print('[WorkbenchInstancesNotifier] Instance name cannot be empty.');
+      state = state.copyWith(error: 'Instance name cannot be empty');
+      return false;
     }
-     // Check for duplicate names (case-insensitive)
+    // Check for duplicate names (case-insensitive)
     if (state.instances.any((i) => i.name.toLowerCase() == name.trim().toLowerCase())) {
       if (kDebugMode) print('[WorkbenchInstancesNotifier] Instance name "$name" already exists.');
       state = state.copyWith(error: 'An instance with this name already exists.');
       return false;
     }
-
 
     final newInstance = WorkbenchInstance(
       id: const Uuid().v4(), // Client-generated UUID
@@ -251,16 +250,30 @@ class WorkbenchInstancesNotifier extends StateNotifier<WorkbenchInstancesState> 
     );
 
     final originalState = state;
-    // Optimistic update: Add new instance and make it active
+    // Optimistic update: Add new instance
+    List<WorkbenchInstance> updatedInstances = [
+      ...originalState.instances,
+      newInstance,
+    ];
+    String newActiveId =
+        originalState.activeInstanceId; // Keep original active ID by default
+
+    if (switchToNew) {
+      newActiveId =
+          newInstance.id; // Set new instance as active only if requested
+    }
+
     if (mounted) {
       state = state.copyWith(
-        instances: [...originalState.instances, newInstance],
-        activeInstanceId: newInstance.id, // Set new instance as active
+        instances: updatedInstances,
+        activeInstanceId: newActiveId, // Use potentially updated active ID
         isLoading: false,
         clearError: true,
       );
-      // Persist the new active ID optimistically
-      unawaited(_prefsService.saveActiveInstanceId(newInstance.id));
+      // Persist the new active ID optimistically ONLY if it changed
+      if (switchToNew) {
+        unawaited(_prefsService.saveActiveInstanceId(newInstance.id));
+      }
     }
 
     try {
@@ -269,8 +282,11 @@ class WorkbenchInstancesNotifier extends StateNotifier<WorkbenchInstancesState> 
         throw Exception('CloudKit save failed');
       }
       if (kDebugMode) {
-        print('[WorkbenchInstancesNotifier] Saved new instance ${newInstance.id}');
+        print(
+          '[WorkbenchInstancesNotifier] Saved new instance ${newInstance.id}. Switched active: $switchToNew',
+        );
       }
+      // No need to reload all instances here, optimistic update is sufficient
       return true;
     } catch (e, s) {
       if (kDebugMode) {
@@ -278,11 +294,13 @@ class WorkbenchInstancesNotifier extends StateNotifier<WorkbenchInstancesState> 
       }
       // Revert optimistic update
       if (mounted) {
-        state = originalState.copyWith(error: e); // Revert state
-        // Revert cached active ID
-        unawaited(
-          _prefsService.saveActiveInstanceId(originalState.activeInstanceId),
-        );
+        state = originalState.copyWith(error: e); // Revert state fully
+        // Revert cached active ID ONLY if it was changed optimistically
+        if (switchToNew) {
+          unawaited(
+            _prefsService.saveActiveInstanceId(originalState.activeInstanceId),
+          );
+        }
       }
       return false;
     }
