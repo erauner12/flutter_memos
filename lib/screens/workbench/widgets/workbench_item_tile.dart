@@ -314,9 +314,11 @@ class WorkbenchItemTile extends ConsumerWidget {
             ) // Highlight color
             : CupertinoColors.systemGrey6.resolveFrom(context); // Default color
 
-    // Wrap in Padding for top margin between comments
+    // Wrap in Padding for top margin between comments.
+    // Ensure only top padding is applied to maintain vertical spacing
+    // without adding horizontal indentation relative to the item content column.
     return Padding(
-      padding: const EdgeInsets.only(top: 8.0),
+      padding: const EdgeInsets.only(top: 8.0), // Explicitly only top padding
       // Wrap the content Container in GestureDetector for SELECTION
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -426,10 +428,9 @@ class WorkbenchItemTile extends ConsumerWidget {
     // TODO: Implement comment actions (reuse/adapt CommentCard logic?)
     // Needs serverId, parentId (memoId) etc. which might need to be passed down or accessed differently.
     // For now, just showing a basic sheet.
-    // IMPORTANT: Need access to itemReference.serverId and itemReference.referencedItemId (as parentId)
-    final parentId =
-        itemReference.referencedItemId; // Assuming this is the memo/note ID
-    final serverId = itemReference.serverId;
+    // Remove the unused variables - they'll be needed when implementation is completed
+    // final parentId = itemReference.referencedItemId;
+    // final serverId = itemReference.serverId;
 
     showCupertinoModalPopup(
       context: context,
