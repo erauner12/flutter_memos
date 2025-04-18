@@ -72,13 +72,22 @@ class TodoistApiService implements TaskApiService {
 
   /// Configure the Todoist API service with authentication token.
   /// Initializes both REST and Sync clients. Resets sync token on reconfigure.
-  /// IMPORTANT: After calling this, the caller should update `isTodoistConfiguredProvider`.
+  ///
+  /// ### VERY IMPORTANT:
+  /// After calling this method successfully, the **CALLER** is responsible for
+  /// updating the `isTodoistConfiguredProvider` state to reflect the new
+  /// configuration status (`_isCurrentlyConfigured`).
+  ///
+  /// Example:
+  /// ```dart
+  /// // Assuming 'ref' is available (e.g., inside another provider or ConsumerWidget)
+  /// await todoistApiService.configureService(authToken: '...');
+  /// ref.read(isTodoistConfiguredProvider.notifier).state = todoistApiService.isConfigured;
+  /// ```
   @override
   Future<void> configureService({
     required String baseUrl, // Ignored, Todoist URLs are fixed
     required String authToken,
-    // Optional: Pass ProviderContainer or Ref to update the state provider directly
-    // required ProviderContainer container,
   }) async {
     // Make async to match Future<void> return type
     if (_authToken == authToken &&
@@ -103,14 +112,7 @@ class TodoistApiService implements TaskApiService {
         '[TodoistApiService] Configured REST & Sync with ${authToken.isNotEmpty ? 'valid' : 'empty'} token. Sync token reset to "*". Configured: $_isCurrentlyConfigured',
       );
     }
-
-    // --- IMPORTANT ---
-    // The caller of configureService MUST update the StateProvider like this:
-    // Example (assuming access to a ProviderContainer 'container'):
-    // container.read(isTodoistConfiguredProvider.notifier).state = _isCurrentlyConfigured;
-    // Or if called from within another provider/widget:
-    // ref.read(isTodoistConfiguredProvider.notifier).state = _isCurrentlyConfigured;
-    // --- IMPORTANT ---
+    // The caller MUST update the isTodoistConfiguredProvider state after this call.
   }
 
   /// Initializes the REST API client and associated endpoint classes.
@@ -188,9 +190,6 @@ class TodoistApiService implements TaskApiService {
       // await performSync(resourceTypes: ['user']); // Example: sync only user info
       return true;
     } catch (e) {
-      if (verboseLogging) {
-        stderr.writeln('[TodoistApiService] Health check failed: $e');
-      }
       _handleApiError('Health check failed', e); // Log the specific error
       return false;
     }
@@ -1099,7 +1098,8 @@ class TodoistApiService implements TaskApiService {
   }
 
   /// Centralized error handling for API calls.
-  void _handleApiError(String context, dynamic error) {
+  /// Optionally accepts a Riverpod Reader to update global state on auth errors.
+  void _handleApiError(String context, dynamic error, {Reader? reader}) {
     String errorMessage = '$error';
     int? statusCode;
 
@@ -1113,23 +1113,33 @@ class TodoistApiService implements TaskApiService {
       );
       // If auth error, mark service as unconfigured
       if (statusCode == 401 || statusCode == 403) {
+        final wasConfigured = _isCurrentlyConfigured;
         _isCurrentlyConfigured = false;
         _authToken = ''; // Clear token
-        // Consider notifying listeners if using a state management solution that requires it
         stderr.writeln(
           '[TodoistApiService] Authentication error ($statusCode). Service marked as unconfigured.',
         );
+
         // --- IMPORTANT ---
-        // Also update the StateProvider when an auth error occurs
-        // This requires access to the ProviderContainer or Ref, which isn't ideal here.
-        // The calling code that catches this specific ApiException should update the provider.
-        // Example (in calling code):
-        // } catch (e) {
-        //   if (e is ApiException && (e.code == 401 || e.code == 403)) {
-        //     ref.read(isTodoistConfiguredProvider.notifier).state = false;
-        //   }
-        //   // Handle other errors...
-        // }
+        // Attempt to update the StateProvider if a reader is available.
+        // This is needed so providers watching the config status react.
+        if (reader != null && wasConfigured) {
+          // Use tryRead to avoid issues if the provider isn't mounted/available
+          try {
+            reader(isTodoistConfiguredProvider.notifier).state = false;
+            stderr.writeln(
+              '[TodoistApiService] Updated isTodoistConfiguredProvider state to false due to auth error.',
+            );
+          } catch (e) {
+            stderr.writeln(
+              '[TodoistApiService] Could not update isTodoistConfiguredProvider: $e',
+            );
+          }
+        } else if (wasConfigured) {
+          stderr.writeln(
+            '[TodoistApiService] Warning: Cannot update isTodoistConfiguredProvider state from _handleApiError without a Reader.',
+          );
+        }
         // --- IMPORTANT ---
       }
     } else {
