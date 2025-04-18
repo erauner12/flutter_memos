@@ -195,133 +195,90 @@ class _MyAppCoreState extends ConsumerState<MyAppCore> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _loadInitialTheme();
-      _loadServerConfig();
+      _setupListeners();
+      _triggerInitialLoads();
       _initializePersistentNotifiers();
       _initAppLinks();
     });
   }
+
+  void _setupListeners() {
+    // Listen for theme loading completion
+    ref.listen<AsyncValue<ThemeMode>>(loadThemeModeProvider, (previous, next) {
+      if (!next.isLoading) {
+        // Check if loading is finished (data or error)
+        if (mounted && !_initialThemeLoaded) {
+          if (kDebugMode) {
+            print(
+              '[MyAppCore Listener] loadThemeModeProvider finished loading (State: ${next.hasError ? 'Error' : 'Data'}). Setting flag.',
+            );
+          }
+          // If data is available, apply it
+          if (next.hasValue) {
+            ref.read(themeModeProvider.notifier).state = next.value!;
+            if (kDebugMode) {
+              print('[MyAppCore Listener] Applied theme: ${next.value}');
+            }
+          } else if (next.hasError) {
+            if (kDebugMode) {
+              print(
+                '[MyAppCore Listener] Theme loading finished with error: ${next.error}. Proceeding with default.',
+              );
+            }
+          }
+          setState(() {
+            _initialThemeLoaded = true;
+          });
+        }
+      }
+    });
+
+    // Listen for server config loading completion
+    ref.listen<AsyncValue<dynamic>>(loadServerConfigProvider, (previous, next) {
+      if (!next.isLoading) {
+        // Check if loading is finished (data or error)
+        if (mounted && !_initialConfigLoaded) {
+          if (kDebugMode) {
+            print(
+              '[MyAppCore Listener] loadServerConfigProvider finished loading (State: ${next.hasError ? 'Error' : 'Data'}). Setting flag.',
+            );
+          }
+          if (next.hasError) {
+            if (kDebugMode) {
+              print(
+                '[MyAppCore Listener] Server config loading finished with error: ${next.error}.',
+              );
+            }
+          }
+          setState(() {
+            _initialConfigLoaded = true;
+          });
+        }
+      }
+    });
+  }
+
+  void _triggerInitialLoads() {
+    // Just read the providers to trigger their initialization if not already loading.
+    // The actual logic to update state is now handled by the listeners.
+    if (kDebugMode) {
+      print(
+        '[MyAppCore] Triggering initial theme and config loads (if not already active)',
+      );
+    }
+    ref.read(loadThemeModeProvider);
+    ref.read(loadServerConfigProvider);
+  }
+
+  // _loadInitialTheme and _loadServerConfig are no longer needed as separate methods
+  // void _loadInitialTheme() { ... }
+  // void _loadServerConfig() { ... }
 
   @override
   void dispose() {
     _linkSubscription?.cancel();
     super.dispose();
   }
-
-  void _loadInitialTheme() {
-    // No need to check _initialThemeLoaded here, provider handles idempotency
-    if (kDebugMode) {
-      print('[MyAppCore] Requesting initial theme preference load');
-    }
-    final prefs = ref.read(loadThemeModeProvider);
-    prefs.whenData((savedMode) {
-      if (mounted && !_initialThemeLoaded) {
-        // Check flag *before* setting
-        if (kDebugMode) {
-          print('[MyAppCore] Setting initial theme to: $savedMode');
-        }
-        ref.read(themeModeProvider.notifier).state = savedMode;
-        setState(() {
-          _initialThemeLoaded = true;
-          if (kDebugMode) {
-            print('[MyAppCore] _initialThemeLoaded set to true');
-          }
-        });
-      } else if (mounted && _initialThemeLoaded) {
-        if (kDebugMode) {
-          print(
-            '[MyAppCore] Theme already loaded, ignoring subsequent whenData.',
-          );
-        }
-      }
-    });
-    // Handle potential error case for theme loading if needed
-    prefs.maybeWhen(
-      error: (error, stackTrace) {
-        if (kDebugMode) {
-          print(
-            '[MyAppCore] Error loading theme preference: $error. Proceeding with default.',
-          );
-        }
-        if (mounted && !_initialThemeLoaded) {
-          setState(() {
-            _initialThemeLoaded =
-                true; // Mark as loaded even on error to proceed
-            if (kDebugMode) {
-              print(
-                '[MyAppCore] _initialThemeLoaded set to true (due to error)',
-              );
-            }
-          });
-        }
-      },
-      orElse: () {}, // Do nothing for loading or data if already handled
-    );
-  }
-
-
-  void _loadServerConfig() {
-    // No need to check _initialConfigLoaded here, provider handles idempotency
-    if (kDebugMode) {
-      print('[MyAppCore] Requesting server configuration load');
-    }
-    final configLoader = ref.read(loadServerConfigProvider);
-    configLoader.when(
-      data: (_) {
-        if (mounted && !_initialConfigLoaded) {
-          // Check flag *before* setting
-          setState(() {
-            _initialConfigLoaded = true;
-            if (kDebugMode) {
-              print(
-                '[MyAppCore] _initialConfigLoaded set to true (data received)',
-              );
-            }
-          });
-          if (kDebugMode) {
-            print('[MyAppCore] Server configuration loaded callback executed');
-          }
-        } else if (mounted && _initialConfigLoaded) {
-          if (kDebugMode) {
-            print(
-              '[MyAppCore] Config already loaded, ignoring subsequent data.',
-            );
-          }
-        }
-      },
-      error: (error, stackTrace) {
-        if (kDebugMode) {
-          print('[MyAppCore] Error loading server config: $error');
-        }
-        // Set config loaded to true even on error to prevent infinite spinner
-        if (mounted && !_initialConfigLoaded) {
-          // Check flag *before* setting
-          setState(() {
-            _initialConfigLoaded =
-                true; // *** CRITICAL FIX: Set true on error ***
-            if (kDebugMode) {
-              print(
-                '[MyAppCore] _initialConfigLoaded set to true (error occurred)',
-              );
-            }
-          });
-        } else if (mounted && _initialConfigLoaded) {
-          if (kDebugMode) {
-            print(
-              '[MyAppCore] Config already loaded, ignoring subsequent error.',
-            );
-          }
-        }
-      },
-      loading: () {
-        if (kDebugMode) {
-          // Optional: print only once or less frequently if needed
-          // print('[MyAppCore] Server configuration is loading...');
-        }
-      },
-    );
-  }
-
 
   void _initializePersistentNotifiers() {
     Future.wait<void>([
@@ -467,7 +424,8 @@ class _MyAppCoreState extends ConsumerState<MyAppCore> {
 
   @override
   Widget build(BuildContext context) {
-    final themePreference = widget.themeMode;
+    // Read the current theme mode state for building the CupertinoApp theme
+    final themePreference = ref.watch(themeModeProvider);
 
     if (kDebugMode) {
       print(
