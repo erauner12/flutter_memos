@@ -1098,8 +1098,7 @@ class TodoistApiService implements TaskApiService {
   }
 
   /// Centralized error handling for API calls.
-  /// Optionally accepts a Riverpod Reader to update global state on auth errors.
-  void _handleApiError(String context, dynamic error, {Reader? reader}) {
+  void _handleApiError(String context, dynamic error) {
     String errorMessage = '$error';
     int? statusCode;
 
@@ -1111,35 +1110,24 @@ class TodoistApiService implements TaskApiService {
       stderr.writeln(
         '[TodoistApiService] API Error - $context: $errorMessage', // Already includes code if available
       );
-      // If auth error, mark service as unconfigured
+      // If auth error, mark service as unconfigured internally
       if (statusCode == 401 || statusCode == 403) {
         final wasConfigured = _isCurrentlyConfigured;
         _isCurrentlyConfigured = false;
         _authToken = ''; // Clear token
         stderr.writeln(
-          '[TodoistApiService] Authentication error ($statusCode). Service marked as unconfigured.',
+          '[TodoistApiService] Authentication error ($statusCode). Service marked as unconfigured internally.',
         );
-
         // --- IMPORTANT ---
-        // Attempt to update the StateProvider if a reader is available.
-        // This is needed so providers watching the config status react.
-        if (reader != null && wasConfigured) {
-          // Use tryRead to avoid issues if the provider isn't mounted/available
-          try {
-            reader(isTodoistConfiguredProvider.notifier).state = false;
-            stderr.writeln(
-              '[TodoistApiService] Updated isTodoistConfiguredProvider state to false due to auth error.',
-            );
-          } catch (e) {
-            stderr.writeln(
-              '[TodoistApiService] Could not update isTodoistConfiguredProvider: $e',
-            );
-          }
-        } else if (wasConfigured) {
-          stderr.writeln(
-            '[TodoistApiService] Warning: Cannot update isTodoistConfiguredProvider state from _handleApiError without a Reader.',
-          );
-        }
+        // The code *catching* this specific ApiException should update the
+        // isTodoistConfiguredProvider state if it has access to a Ref/ProviderContainer.
+        // Example (in calling code):
+        // } catch (e) {
+        //   if (e is ApiException && (e.code == 401 || e.code == 403)) {
+        //     ref.read(isTodoistConfiguredProvider.notifier).state = false;
+        //   }
+        //   // Handle other errors...
+        // }
         // --- IMPORTANT ---
       }
     } else {
