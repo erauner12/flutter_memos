@@ -1,13 +1,17 @@
 import 'dart:async'; // Keep async import
 
 import 'package:flutter_memos/utils/logger.dart'; // Assuming logger exists
-// Remove http import
-// import 'package:http/http.dart' as http;
 // Add openai_dart import
 import 'package:openai_dart/openai_dart.dart';
 
-// --- Remove Simple Data Classes (MinimalCompletionRequest, etc.) ---
-// These are now replaced by the schema from openai_dart
+// Define a simple structure for passing messages to createChatCompletion
+// Note: openai_dart also has a ChatMessage, but this avoids direct dependency leak if needed elsewhere
+class OpenAiChatMessage {
+  final String role; // 'system', 'user', 'assistant'
+  final String content;
+  OpenAiChatMessage({required this.role, required this.content});
+}
+
 
 class MinimalOpenAiService {
   static final MinimalOpenAiService _instance = MinimalOpenAiService._internal();
@@ -17,8 +21,6 @@ class MinimalOpenAiService {
   late OpenAIClient _openAIClient;
   String _authToken = '';
   bool _isConfigured = false;
-  // Remove manual http.Client
-  // final http.Client _client;
 
   // Logger instance
   late final Logger _logger;
@@ -88,6 +90,8 @@ class MinimalOpenAiService {
   }
 
   /// Fetches and filters suitable completion models from OpenAI.
+  /// Note: This lists models compatible with the *completions* endpoint.
+  /// You might want a separate method or logic for chat models.
   Future<List<String>> listCompletionModels() async {
     if (!isConfigured) {
       _logger.info('Cannot list models: Service not configured.');
@@ -152,11 +156,7 @@ class MinimalOpenAiService {
   }
 
 
-// --- Remove Core Completions Method (createCompletion) ---
-  // This manual implementation is replaced by fixGrammar using the client directly
-
-  // Grammar correction helper method using openai_dart
-  // Change signature to accept modelId
+  // Grammar correction helper method using openai_dart (Completions API)
   Future<String> fixGrammar(String text, {required String modelId}) async {
     if (!isConfigured) {
       throw Exception('MinimalOpenAiService not configured with API token.');
@@ -169,7 +169,6 @@ class MinimalOpenAiService {
     }
 
     if (verboseLogging) {
-      // Update log message
       _logger.info(
         'Fixing grammar for text (${text.length} chars) using model: $modelId',
       );
@@ -180,7 +179,6 @@ class MinimalOpenAiService {
 
     // Create request using openai_dart's schema
     final request = CreateCompletionRequest(
-      // Use the passed modelId
       model: CompletionModel.modelId(modelId),
       prompt: CompletionPrompt.string(promptText),
       maxTokens: (text.length * 1.5).ceil().clamp(
@@ -196,11 +194,8 @@ class MinimalOpenAiService {
           .createCompletion(request: request);
 
       if (response.choices.isEmpty || response.choices.first.text.isEmpty) {
-        // Use info or error instead of warning
         _logger.info('OpenAI returned no correction choices.');
-        // Decide whether to throw or return original text
         return text; // Return original text if no correction provided
-        // throw Exception('OpenAI returned no correction.');
       }
 
       final correctedText = response.choices.first.text.trim();
@@ -225,7 +220,6 @@ class MinimalOpenAiService {
       _logger.error(
         'OpenAI API Error during grammar fix: ${e.message} (Code: ${e.code})',
       );
-      // Rethrow a more specific error or the original
       throw Exception('Failed to fix grammar using OpenAI: ${e.message}');
     } catch (e) {
       _logger.error('Unexpected error during grammar fix: $e');
@@ -233,10 +227,90 @@ class MinimalOpenAiService {
     }
   }
 
+  /// NEW: Creates a chat completion using the OpenAI Chat API.
+  Future<String> createChatCompletion(
+    List<OpenAiChatMessage> messages, {
+    String model = 'gpt-4o', // Default to gpt-4o or gpt-4
+    double? temperature,
+    int? maxTokens,
+  }) async {
+    if (!isConfigured) {
+      throw Exception('MinimalOpenAiService not configured with API token.');
+    }
+    if (messages.isEmpty) {
+      throw ArgumentError('Cannot create chat completion with empty messages.');
+    }
+
+    if (verboseLogging) {
+      _logger.info(
+        'Creating chat completion with ${messages.length} messages using model: $model',
+      );
+    }
+
+    // Convert local OpenAiChatMessage to openai_dart ChatMessage
+    final openAiDartMessages =
+        messages.map((m) {
+          final role = switch (m.role) {
+            'system' => ChatMessageRole.system,
+            'user' => ChatMessageRole.user,
+            'assistant' => ChatMessageRole.assistant,
+            // Add other roles like 'tool' if needed
+            _ => throw ArgumentError('Unsupported role: ${m.role}'),
+          };
+          return ChatMessage(
+            role: role,
+            content: ChatMessageContent.string(m.content),
+          );
+        }).toList();
+
+    final request = CreateChatCompletionRequest(
+      model: ChatCompletionModel.modelId(model),
+      messages: openAiDartMessages,
+      temperature: temperature, // Pass through optional parameters
+      maxTokens: maxTokens,
+    );
+
+    try {
+      final CreateChatCompletionResponse response = await _openAIClient
+          .createChatCompletion(request: request);
+
+      final content = response.choices.firstOrNull?.message.content;
+
+      if (content == null || content.isEmpty) {
+        _logger.info('OpenAI returned no content in chat completion.');
+        return ''; // Return empty string if no content
+      }
+
+      // Assuming content is always string for now
+      final responseText =
+          content
+              .where((part) => part.text != null)
+              .map((part) => part.text!)
+              .join();
+
+      if (verboseLogging) {
+        _logger.info(
+          'Chat completion successful. Response length: ${responseText.length} chars',
+        );
+      }
+      return responseText;
+    } on OpenAIClientException catch (e) {
+      _logger.error(
+        'OpenAI API Error during chat completion: ${e.message} (Code: ${e.code})',
+      );
+      // Rethrow a more specific error or the original
+      throw Exception(
+        'Failed to get chat completion from OpenAI: ${e.message}',
+      );
+    } catch (e) {
+      _logger.error('Unexpected error during chat completion: $e');
+      rethrow; // Rethrow unexpected errors
+    }
+  }
+
+
   // Dispose method might not be needed as OpenAIClient handles its internal client.
-  // If you passed a custom client to OpenAIClient, dispose it here.
   void dispose() {
-    // _client.close(); // Remove if using default client in OpenAIClient
     if (verboseLogging) {
       _logger.info('Service disposed.');
     }

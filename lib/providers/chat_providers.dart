@@ -5,14 +5,19 @@ import 'package:flutter/widgets.dart'; // Import WidgetsBinding
 import 'package:flutter_memos/models/chat_message.dart';
 import 'package:flutter_memos/models/chat_session.dart';
 import 'package:flutter_memos/models/workbench_item_reference.dart';
+// Import service providers correctly
 import 'package:flutter_memos/providers/service_providers.dart'
-    show chatAiFacadeProvider;
-import 'package:flutter_memos/services/chat_ai.dart'; // new
+    show
+        minimalOpenAiServiceProvider,
+        mcpClientProvider; // Add minimalOpenAiServiceProvider
+import 'package:flutter_memos/services/chat_ai.dart'; // Use ChatAiBackend, ChatAiFacade, OpenAiGptBackend
 import 'package:flutter_memos/services/chat_session_cloud_kit_service.dart';
 import 'package:flutter_memos/services/local_storage_service.dart';
+import 'package:flutter_memos/services/mcp_client_service.dart'; // For McpClientNotifier
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_generative_ai/google_generative_ai.dart' as gen_ai;
 
+// --- ChatPersister and DefaultChatPersister (No changes needed) ---
 abstract class ChatPersister {
   Future<void> save(ChatSession session);
 }
@@ -28,6 +33,7 @@ class DefaultChatPersister implements ChatPersister {
   }
 }
 
+// --- ChatState (No changes needed) ---
 @immutable
 class ChatState {
   final ChatSession session;
@@ -91,19 +97,21 @@ class ChatState {
       errorMessage.hashCode;
 }
 
+// --- ChatNotifier (No functional changes needed, relies on ChatAiBackend interface) ---
+// The logic inside sendMessage correctly uses the _ai interface, which will now
+// point to the ChatAiFacade, which in turn delegates to OpenAiGptBackend or McpAiProxy.
+// The conversion to gen_ai.Content happens here, and OpenAiGptBackend handles the
+// conversion *from* gen_ai.Content to OpenAI's format.
 class ChatNotifier extends StateNotifier<ChatState> {
-  // ignore: unused_field
   final Ref _ref;
   final LocalStorageService _local;
   final ChatSessionCloudKitService _cloud;
   final ChatPersister _persister;
-  final ChatAiBackend _ai;
+  final ChatAiBackend _ai; // This remains the same interface
 
   bool _skipNextPersist = false;
   Timer? _debounce;
   final Duration _debounceDuration = const Duration(milliseconds: 500);
-
-  // Flag to indicate if context was set externally (e.g., via route arguments)
   bool _hasExternalContext = false;
 
   ChatNotifier(
@@ -111,23 +119,18 @@ class ChatNotifier extends StateNotifier<ChatState> {
     LocalStorageService local,
     ChatSessionCloudKitService cloud, {
     ChatPersister? persister,
-    required ChatAiBackend ai,
+    required ChatAiBackend ai, // Injected dependency
     bool autoInit = true,
   }) : _local = local,
        _cloud = cloud,
        _persister = persister ?? DefaultChatPersister(local),
-       _ai = ai,
+       _ai = ai, // Assign the injected AI backend facade
        super(ChatState.initial()) {
     if (autoInit) {
-      // Use addPostFrameCallback to ensure _loadInitialSession runs *after*
-      // any potential immediate calls to startChatWithContext from didChangeDependencies.
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        // Only load if no external context was set during the first frame.
         if (!_hasExternalContext && mounted) {
           _loadInitialSession();
         } else if (mounted) {
-          // If external context *was* set, ensure initializing is false.
-          // The session state is already set by startChatWithContext.
           state = state.copyWith(isInitializing: false);
           if (kDebugMode) {
             print(
@@ -137,95 +140,63 @@ class ChatNotifier extends StateNotifier<ChatState> {
         }
       });
     } else {
-      // If autoInit is false, ensure initializing is also false.
       state = state.copyWith(isInitializing: false);
     }
   }
 
   Future<void> _loadInitialSession() async {
-    // This method is now called *after* the first frame,
-    // so _hasExternalContext check in constructor handles the race condition.
-    // No need for the check here anymore.
-
-    // Ensure we don't run if the notifier is disposed during the async gap.
     if (!mounted) return;
-
-    // Set initializing true *before* loading, but only if we are actually loading.
-    // If called manually (e.g., force fetch), isInitializing might already be false.
-    if (state.isInitializing) {
-      // Already set to true by default or constructor logic handles it.
+    if (!state.isInitializing) {
+      // If already initialized (e.g. by external context), don't reload
+      // Or if called manually when not initializing, proceed but don't set flag
     } else {
-      // If called later (e.g. after clear), mark as initializing again.
-      // This path shouldn't normally be hit with the current logic, but added for safety.
-      state = state.copyWith(isInitializing: true);
+      // Mark as initializing if it's the initial load
+      // state = state.copyWith(isInitializing: true); // Already true by default
     }
 
-
-    ChatSession? cloud;
-    ChatSession? local;
+    ChatSession? cloudSession;
+    ChatSession? localSession;
     try {
-      cloud = await _cloud.getChatSession();
+      cloudSession = await _cloud.getChatSession();
     } catch (e) {
       if (kDebugMode) print("[ChatNotifier] CloudKit fetch error on init: $e");
     }
     try {
-      local = await _local.loadActiveChatSession();
+      localSession = await _local.loadActiveChatSession();
     } catch (e) {
       if (kDebugMode) print("[ChatNotifier] Local load error on init: $e");
     }
 
-    // Ensure still mounted after async operations
     if (!mounted) return;
 
     ChatSession chosen = ChatSession.initial();
 
-    if (cloud != null && local != null) {
-      if (cloud.lastUpdated.isAfter(local.lastUpdated)) {
-        chosen = cloud;
-        if (kDebugMode) {
-          print("[ChatNotifier] Init: Using newer Cloud session.");
-        }
-        // Don't save locally here, let persistSoon handle it if needed.
-        // await _local.saveActiveChatSession(chosen);
-      } else {
-        chosen = local;
-        if (kDebugMode) {
-          print("[ChatNotifier] Init: Using newer/same Local session.");
-        }
-      }
-    } else if (cloud != null) {
-      chosen = cloud;
-      if (kDebugMode) {
+    if (cloudSession != null && localSession != null) {
+      chosen =
+          cloudSession.lastUpdated.isAfter(localSession.lastUpdated)
+              ? cloudSession
+              : localSession;
+      if (kDebugMode)
+        print(
+          "[ChatNotifier] Init: Using ${chosen == cloudSession ? 'Cloud' : 'Local'} session.",
+        );
+    } else if (cloudSession != null) {
+      chosen = cloudSession;
+      if (kDebugMode)
         print("[ChatNotifier] Init: Using Cloud session (local missing).");
-      }
-      // Don't save locally here.
-      // await _local.saveActiveChatSession(chosen);
-    } else if (local != null) {
-      chosen = local;
-      if (kDebugMode) {
+    } else if (localSession != null) {
+      chosen = localSession;
+      if (kDebugMode)
         print("[ChatNotifier] Init: Using Local session (cloud missing).");
-      }
-      // Don't save to cloud here.
-      // await _cloud.saveChatSession(chosen);
     } else {
       if (kDebugMode) print("[ChatNotifier] Init: No existing session found.");
     }
 
-    // Only update state if the chosen session is different from the current one
-    // to avoid unnecessary rebuilds. Also check mounted again.
     if (mounted && state.session != chosen) {
       state = state.copyWith(session: chosen, isInitializing: false);
-      // Persist the chosen session if it came from cloud or was different from local
-      if ((cloud != null && chosen == cloud) ||
-          (local != null && chosen == local)) {
-        _persistSoon(); // Save the chosen session (local and cloud)
-      } else if (cloud == null && local == null) {
-        // If it's a brand new initial session, persist it.
-        _persistSoon();
-      }
+      _persistSoon(); // Persist if a session was loaded or newly created
     } else if (mounted) {
-      // If session is the same, just ensure initializing is false.
-      state = state.copyWith(isInitializing: false);
+      state = state.copyWith(isInitializing: false); // Ensure flag is false
     }
   }
 
@@ -235,19 +206,12 @@ class ChatNotifier extends StateNotifier<ChatState> {
     required WorkbenchItemType parentItemType,
     required String parentServerId,
   }) async {
-    // Set the flag *before* updating state.
-    // This prevents _loadInitialSession (if called later) from overwriting.
     _hasExternalContext = true;
-    if (kDebugMode)
-      print(
-        "[ChatNotifier] startChatWithContext called, setting _hasExternalContext = true.",
-      );
-
+    if (kDebugMode) print("[ChatNotifier] startChatWithContext called.");
 
     final system = ChatMessage(
       id: 'system_${DateTime.now().millisecondsSinceEpoch}',
       role: Role.system,
-      // Include item ID/Type in the system message for clarity if needed
       text: 'Context for ${parentItemType.name} $parentItemId:\n$contextString',
       timestamp: DateTime.now().toUtc(),
     );
@@ -255,19 +219,17 @@ class ChatNotifier extends StateNotifier<ChatState> {
     final s = ChatSession(
       id: ChatSession.activeSessionId,
       contextItemId: parentItemId,
-      // ChatSession expects a nullable enum, so pass the enum with explicit cast
-      contextItemType: parentItemType as WorkbenchItemType?,
+      contextItemType: parentItemType,
       contextServerId: parentServerId,
-      messages: [system], // Start with only the system message
+      messages: [system],
       lastUpdated: DateTime.now().toUtc(),
     );
 
-    // Update state and ensure initializing is false, as we now have a session.
     state = state.copyWith(
       session: s,
       isLoading: false,
       clearError: true,
-      isInitializing: false,
+      isInitializing: false, // We have initialized with context
     );
     _persistSoon();
   }
@@ -283,7 +245,6 @@ class ChatNotifier extends StateNotifier<ChatState> {
     );
     final loading = ChatMessage.loading();
 
-    // Add user message and loading indicator to the *current* messages
     final currentMessages = [...state.session.messages];
     final newMessages = [...currentMessages, user, loading];
 
@@ -292,69 +253,47 @@ class ChatNotifier extends StateNotifier<ChatState> {
       isLoading: true,
       clearError: true,
     );
-    _persistSoon(); // Persist the state including the user message and loading indicator
+    _persistSoon();
 
     try {
-      // --- Prepare history for AI ---
-      // Include system messages, exclude loading messages
+      // Prepare history for AI (using gen_ai.Content as required by the interface)
       final history =
-          currentMessages // Use messages *before* adding the current user/loading
-              .where(
-                (m) => !m.isLoading,
-              ) // Keep system, user, model; exclude loading
-              .map((m) {
-                // Map Role enum to AI Content role string
-                final roleString = switch (m.role) {
-                  Role.user => 'user',
-                  Role.model => 'model',
-                  Role.system => 'system', // Include system role
-                  Role.function => 'function', // Handle function if used
-                };
-                return gen_ai.Content(roleString, [gen_ai.TextPart(m.text)]);
-              })
-              .toList();
+          currentMessages.where((m) => !m.isLoading).map((m) {
+            // Map Role enum to AI Content role string
+            // IMPORTANT: This mapping is for the ChatAiBackend interface.
+            // The OpenAiGptBackend will handle the conversion *from* this format.
+            final roleString = switch (m.role) {
+              Role.user => 'user',
+              Role.model => 'model', // Gemini/Google role
+              Role.system => 'system', // Pass system role through
+              Role.function => 'function', // Pass function role through
+            };
+            // Ensure system messages are included here. The backend handles compatibility.
+            return gen_ai.Content(roleString, [gen_ai.TextPart(m.text)]);
+          }).toList();
 
-      // --- Debug Logging ---
       if (kDebugMode) {
         print(
-          "[ChatNotifier] Sending message. Context: ID=${state.session.contextItemId}, Type=${state.session.contextItemType?.name}",
+          "[ChatNotifier] Sending message. History size: ${history.length}",
         );
-        print(
-          "[ChatNotifier] History being sent to AI (${history.length} items):",
-        );
-        for (final c in history) {
-          final textPart =
-              c.parts.isNotEmpty && c.parts.first is gen_ai.TextPart
-                  ? (c.parts.first as gen_ai.TextPart).text
-                  : '[Non-Text Part]';
-          // Limit long context messages in logs
-          final loggedText =
-              textPart.length > 100
-                  ? '${textPart.substring(0, 97)}...'
-                  : textPart;
-          print('  Role: ${c.role}, Text: "$loggedText"');
-        }
-        print(
-          '  (Current User Message): "$text"',
-        ); // Log the message being sent now
+        // Optional: Log history details carefully
       }
-      // --- End Debug Logging ---
 
-      // Send history *plus* the new user message text to the AI backend
+      // Call the AI backend via the facade (_ai)
+      // This will route to OpenAiGptBackend or McpAiProxy
       final resp = await _ai.send(history, text);
       final replyText = resp.text;
 
       final modelMsg = ChatMessage(
         id: 'model_${DateTime.now().millisecondsSinceEpoch}',
-        role: Role.model,
+        role: Role.model, // App uses 'model' role for AI responses
         text: replyText,
         timestamp: DateTime.now().toUtc(),
+        // Potentially add sourceServerId if response came from MCP via facade?
+        // The current ChatAiResponse doesn't carry this info back easily.
       );
 
-      // Replace loading indicator with AI response
-      // Ensure mounted before accessing state after await
       if (!mounted) return;
-      // Use the *latest* state's messages list which includes user+loading
       final finalMessages =
           state.session.messages
               .map((m) => m.isLoading ? modelMsg : m)
@@ -368,11 +307,11 @@ class ChatNotifier extends StateNotifier<ChatState> {
         isLoading: false,
       );
     } catch (e) {
+      // Error handling remains the same. The specific error might now originate
+      // from OpenAiGptBackend or MinimalOpenAiService.
       if (kDebugMode) print("[ChatNotifier] SendMessage Error: $e");
       final err = ChatMessage.error('Error: $e');
-      // Ensure mounted before accessing state after await
       if (!mounted) return;
-      // Use the *latest* state's messages list
       final finalMessages =
           state.session.messages.map((m) => m.isLoading ? err : m).toList();
       state = state.copyWith(
@@ -384,27 +323,23 @@ class ChatNotifier extends StateNotifier<ChatState> {
         errorMessage: "Failed to get response from AI. ${e.toString()}",
       );
     } finally {
-      // Ensure mounted before calling persist
       if (mounted) {
-        _persistSoon(); // Persist the final state with the AI response or error
+        _persistSoon();
       }
     }
   }
 
   Future<void> clearChat() async {
-    // Reset the external context flag when clearing
     _hasExternalContext = false;
     state = state.copyWith(
       session: ChatSession.initial(),
       clearError: true,
       isLoading: false,
       isSyncing: false,
-      // Keep isInitializing false, as we have an initial (empty) session
       isInitializing: false,
     );
     await _local.deleteActiveChatSession();
     await _cloud.deleteChatSession();
-    // No need to call persistSoon as we just deleted everything.
   }
 
   void clearErrorMessage() =>
@@ -413,69 +348,49 @@ class ChatNotifier extends StateNotifier<ChatState> {
           : state = state.copyWith(clearError: true);
 
   Future<void> forceFetchFromCloud() async {
-    if (state.isSyncing || state.isInitializing) {
-      return;
-    }
+    if (state.isSyncing || state.isInitializing) return;
 
-    if (kDebugMode) {
+    if (kDebugMode)
       print("[ChatNotifier] Starting manual fetch from CloudKit...");
-    }
-    // Reset external context flag on manual fetch, assuming user wants cloud version
     _hasExternalContext = false;
     state = state.copyWith(isSyncing: true, clearError: true);
 
     try {
       final cloudSession = await _cloud.getChatSession();
-      _skipNextPersist = true; // Prevent immediate save back to cloud
+      _skipNextPersist = true;
 
-      // Ensure mounted after await
       if (!mounted) return;
 
       if (cloudSession != null) {
-        if (kDebugMode) {
-          print(
-            "[ChatNotifier] Fetched session from CloudKit (LastUpdated: ${cloudSession.lastUpdated}). Current local LastUpdated: ${state.session.lastUpdated}",
-          );
-        }
-        // Update state with the fetched session
+        if (kDebugMode) print("[ChatNotifier] Fetched session from CloudKit.");
         state = state.copyWith(
           session: cloudSession,
           isSyncing: false,
           isInitializing: false,
         );
-        // Save the fetched session locally
         await _local.saveActiveChatSession(cloudSession);
-        if (kDebugMode) {
-          print(
-            "[ChatNotifier] Updated local state and storage with fetched CloudKit session.",
-          );
-        }
+        if (kDebugMode)
+          print("[ChatNotifier] Updated local state with CloudKit session.");
       } else {
-        if (kDebugMode) {
+        if (kDebugMode)
           print("[ChatNotifier] No chat session found in CloudKit.");
-        }
-        // If no cloud session, potentially clear local? Or keep local?
-        // Current behaviour: Keep local, show error.
         state = state.copyWith(
           isSyncing: false,
           errorMessage: "No chat session found in iCloud.",
-          isInitializing:
-              false, // Ensure initializing is false even if cloud fetch fails
+          isInitializing: false,
         );
       }
     } catch (e) {
-      if (kDebugMode) {
+      if (kDebugMode)
         print("[ChatNotifier] Error during forceFetchFromCloud: $e");
-      }
-      // Ensure mounted after await
       if (!mounted) return;
       state = state.copyWith(
         isSyncing: false,
         errorMessage: "Failed to fetch from iCloud: ${e.toString()}",
-        isInitializing: false, // Ensure initializing is false on error
+        isInitializing: false,
       );
     } finally {
-      _skipNextPersist = false; // Re-enable persistence
+      _skipNextPersist = false;
     }
   }
 
@@ -492,24 +407,17 @@ class ChatNotifier extends StateNotifier<ChatState> {
           print("[ChatNotifier] Skipping debounced save (unmounted).");
         return;
       }
-      // Create a final copy of the session to save
       final sessionToSave = state.session.copyWith(
         lastUpdated: DateTime.now().toUtc(),
       );
-      // Update state silently with just the new timestamp before saving
-      // This prevents potential race conditions if state changes again quickly
-      // state = state.copyWith(session: sessionToSave); // Avoid this - causes rebuilds
 
       try {
+        // No need to update state here just for timestamp
         await _persister.save(sessionToSave);
         await _cloud.saveChatSession(sessionToSave);
-        if (kDebugMode)
-          print(
-            "[ChatNotifier] Debounced save complete for session updated at ${sessionToSave.lastUpdated}.",
-          );
+        if (kDebugMode) print("[ChatNotifier] Debounced save complete.");
       } catch (e) {
         if (kDebugMode) print("[ChatNotifier] Error during debounced save: $e");
-        // Optionally set an error state here if persistence fails critically
       }
     });
   }
@@ -521,19 +429,61 @@ class ChatNotifier extends StateNotifier<ChatState> {
   }
 }
 
-// --- Test Config and Providers (No changes needed below this line) ---
+// --- Providers ---
 
+// chatAiFacadeProvider: Now instantiates ChatAiFacade with OpenAiGptBackend
+final chatAiFacadeProvider = Provider<ChatAiBackend>((ref) {
+  // Create the OpenAI backend, providing the MinimalOpenAiService instance
+  final openAiBackend = OpenAiGptBackend(
+    ref.watch(minimalOpenAiServiceProvider),
+    // Optionally configure defaultModel: 'gpt-4' or 'gpt-4o' here if needed
+    // defaultModel: 'gpt-4o',
+  );
+
+  // Get the MCP Notifier
+  final mcpNotifier = ref.watch(mcpClientProvider.notifier);
+
+  // Return the Facade, using openAiBackend as the default
+  return ChatAiFacade(
+    defaultBackend: openAiBackend, // Use the new OpenAI backend
+    mcpNotifier: mcpNotifier,
+  );
+});
+
+// --- Other Service Providers (No changes needed) ---
+final localStorageServiceProvider = Provider<LocalStorageService>((_) {
+  return LocalStorageService();
+});
+
+final chatSessionCloudKitServiceProvider = Provider<ChatSessionCloudKitService>(
+  (_) {
+    return ChatSessionCloudKitService();
+  },
+);
+
+// --- Main Chat Provider (No changes needed, uses chatAiFacadeProvider) ---
+final chatProvider = StateNotifierProvider<ChatNotifier, ChatState>(
+  (ref) => ChatNotifier(
+    ref,
+    ref.read(localStorageServiceProvider),
+    ref.read(chatSessionCloudKitServiceProvider),
+    ai: ref.read(chatAiFacadeProvider), // Reads the configured facade
+  ),
+);
+
+
+// --- Test Config Provider (Update to reflect ChatAiBackend potentially being OpenAI) ---
 class ChatNotifierTestConfig {
   final LocalStorageService local;
   final ChatSessionCloudKitService cloud;
   final ChatPersister? persister;
-  final ChatAiBackend? ai;
+  final ChatAiBackend ai; // Keep as ChatAiBackend, could be mock, OpenAI, etc.
 
   ChatNotifierTestConfig({
     required this.local,
     required this.cloud,
     this.persister,
-    this.ai,
+    required this.ai, // Make AI required for clarity
   });
 }
 
@@ -542,34 +492,12 @@ final chatProviderTesting = StateNotifierProvider.family<
   ChatState,
   ChatNotifierTestConfig
 >((ref, cfg) {
-  // Ensure autoInit is false for testing setup unless explicitly needed
   return ChatNotifier(
     ref,
     cfg.local,
     cfg.cloud,
     persister: cfg.persister,
-    ai: cfg.ai!,
-    autoInit: false, // Typically false for controlled testing
+    ai: cfg.ai, // Pass the provided AI backend
+    autoInit: false,
   );
 });
-
-final localStorageServiceProvider = Provider<LocalStorageService>((_) {
-  // Assuming LocalStorageService has a synchronous constructor or uses getInstance internally
-  return LocalStorageService();
-});
-
-final chatSessionCloudKitServiceProvider = Provider<ChatSessionCloudKitService>(
-  (_) {
-    return ChatSessionCloudKitService();
-},
-);
-
-final chatProvider = StateNotifierProvider<ChatNotifier, ChatState>(
-  (ref) => ChatNotifier(
-    ref,
-    ref.read(localStorageServiceProvider),
-    ref.read(chatSessionCloudKitServiceProvider),
-    ai: ref.read(chatAiFacadeProvider),
-    // autoInit defaults to true, constructor handles the logic
-  ),
-);
