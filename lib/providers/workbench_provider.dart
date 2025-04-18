@@ -525,8 +525,7 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
   }
 
   Future<void> moveItem({
-    required String
-    itemId, // This is the ID of the item in the *source* instance
+    required String itemId,
     required String targetInstanceId,
   }) async {
     if (!mounted) return;
@@ -596,6 +595,8 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
           workbenchProviderFamily(targetInstanceId).notifier,
         );
         targetNotifier._addExistingItem(newItemForTarget);
+        // Automatically refresh the target instance to ensure all items are up-to-date
+        unawaited(targetNotifier.loadItems());
 
         if (kDebugMode) {
           print(
