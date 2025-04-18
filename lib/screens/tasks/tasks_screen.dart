@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
+import 'package:flutter_memos/main.dart'; // Import for rootNavigatorKeyProvider
 import 'package:flutter_memos/models/server_config.dart'; // Still needed for ServerType enum in WorkbenchItemReference
 import 'package:flutter_memos/models/task_item.dart';
 import 'package:flutter_memos/models/workbench_item_reference.dart';
@@ -14,6 +15,7 @@ import 'package:flutter_memos/providers/workbench_provider.dart';
 import 'package:flutter_memos/screens/settings_screen.dart'; // Import SettingsScreen
 import 'package:flutter_memos/screens/tasks/new_task_screen.dart';
 import 'package:flutter_memos/screens/tasks/widgets/task_list_item.dart';
+import 'package:flutter_memos/utils/thread_utils.dart'; // Import thread utils
 import 'package:hooks_riverpod/hooks_riverpod.dart'; // Import hooks_riverpod
 import 'package:uuid/uuid.dart';
 
@@ -24,12 +26,14 @@ const String _todoistWorkbenchServerName = 'Todoist';
 // Change from ConsumerStatefulWidget to HookConsumerWidget
 class TasksScreen extends HookConsumerWidget {
   const TasksScreen({super.key});
-  
+
   // Track current undo toast entry
   static OverlayEntry? _currentUndoToast;
 
   // Helper to show simple alert dialogs (needs context)
   void _showAlertDialog(BuildContext context, String title, String message) {
+    // Ensure dialog is shown safely if context is still valid
+    if (!context.mounted) return;
     showCupertinoDialog(
       context: context,
       builder:
@@ -95,6 +99,9 @@ class TasksScreen extends HookConsumerWidget {
   ) {
     // Remove any existing toast first
     _currentUndoToast?.remove();
+
+    // Ensure context is valid before creating overlay
+    if (!context.mounted) return;
 
     // Create a new overlay entry
     final overlayState = Overlay.of(context);
@@ -186,6 +193,60 @@ class TasksScreen extends HookConsumerWidget {
       }
     });
   }
+
+  // NEW: Method to handle "Chat about Task" action
+  Future<void> _chatWithTask(
+    BuildContext context,
+    WidgetRef ref,
+    String taskId,
+  ) async {
+    // Optional: Show loading indicator (e.g., using a state variable or dialog)
+    // For simplicity, we'll just show errors if they occur.
+
+    String? fetchedContent;
+    Object? error;
+    const serverId = _todoistWorkbenchServerId; // Use the constant ID
+
+    try {
+      // Call the utility function to get the formatted thread content
+      fetchedContent = await getFormattedThreadContent(
+        ref,
+        taskId,
+        WorkbenchItemType.task, // Specify the type
+        serverId,
+      );
+    } catch (e) {
+      error = e;
+      debugPrint("Error fetching task thread: $e");
+    }
+
+    // Optional: Dismiss loading indicator
+
+    // Check for errors or null content
+    if (!context.mounted)
+      return; // Check context before showing dialog/navigating
+    if (error != null || fetchedContent == null) {
+      _showAlertDialog(
+        context,
+        'Error',
+        'Unable to fetch Task thread: ${error ?? 'Unknown error'}',
+      );
+      return;
+    }
+
+    // Navigate to chat screen with context
+    final rootNavigatorKey = ref.read(rootNavigatorKeyProvider);
+    final chatArgs = {
+      'contextString': fetchedContent,
+      'parentItemId': taskId,
+      'parentItemType': WorkbenchItemType.task, // Pass the correct type
+      'parentServerId': serverId,
+    };
+
+    // Push the chat route using the root navigator
+    rootNavigatorKey.currentState?.pushNamed('/chat', arguments: chatArgs);
+  }
+
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -333,7 +394,7 @@ class TasksScreen extends HookConsumerWidget {
                 child: Padding(
                   padding: const EdgeInsets.all(16.0),
                   child: Text(
-                    'No tasks found.\\nPull down to refresh or add a new task.',
+                    'No tasks found.\nPull down to refresh or add a new task.', // Corrected newline
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: CupertinoColors.secondaryLabel.resolveFrom(
@@ -356,6 +417,7 @@ class TasksScreen extends HookConsumerWidget {
                     (context, index) {
                       final task = tasks[index];
                       return TaskListItem(
+                      key: ValueKey(task.id), // Ensure key is here
                         task: task,
                         onToggleComplete: (isCompleted) async {
                           bool success;
@@ -382,8 +444,8 @@ class TasksScreen extends HookConsumerWidget {
                           }
                       },
                         onDelete: () async {
-                        final confirmed =
-                            showCupertinoDialog<bool>(
+                        final confirmed = await showCupertinoDialog<bool>(
+                          // await the result
                                   context: context,
                                   builder:
                                       (dialogContext) => CupertinoAlertDialog(
@@ -411,7 +473,7 @@ class TasksScreen extends HookConsumerWidget {
                                           ),
                                         ],
                                       ),
-                        );
+                        ); // Added await
 
                         if (confirmed == true) {
                           final success = await ref
@@ -431,6 +493,10 @@ class TasksScreen extends HookConsumerWidget {
                         // Pass context, ref, task - no server config needed
                         _addTaskToWorkbench(context, ref, task);
                         },
+                      // NEW: Pass the chat handler
+                      onChatWithTask: () {
+                        _chatWithTask(context, ref, task.id);
+                      },
                       onTap: () {
                         Navigator.of(context).push(
                           CupertinoPageRoute(

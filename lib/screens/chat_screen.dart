@@ -50,19 +50,22 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           // Use addPostFrameCallback to ensure notifier call happens after build
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (mounted) {
+              // The startChatWithContext function handles the different types internally
               ref
                   .read(chatProvider.notifier)
                   .startChatWithContext(
                     contextString: contextString,
                     parentItemId: parentItemId,
-                    parentItemType: parentItemType,
+                    parentItemType: parentItemType, // Pass the type directly
                     parentServerId: parentServerId,
                   );
               // Set flag after processing
               // No need for setState here as it's called from postFrameCallback
               // and the provider update will trigger a rebuild anyway.
               _contextProcessed = true;
-              debugPrint("ChatScreen: Context processed from arguments.");
+              debugPrint(
+                "ChatScreen: Context processed from arguments for type $parentItemType.",
+              );
             }
           });
         } else {
@@ -117,9 +120,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       case WorkbenchItemType.note:
         return 'Note';
       case WorkbenchItemType.task:
-        return 'Task';
+        return 'Task'; // Updated to handle Task
       case WorkbenchItemType.comment:
         return 'Comment'; // Should ideally show parent type
+      // case WorkbenchItemType.project: // Added just in case
+      // return 'Project';
+      // case WorkbenchItemType.unknown:
+      // return 'Unknown Item';
       case null:
         return 'Item';
     }
@@ -291,17 +298,17 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               GestureDetector(
                 // Wrap with GestureDetector
                 onTap: () {
-                  // Navigate back to the source item if it's a note
+                  // Navigate back ONLY if it's a note (for now)
                   if (chatState.currentContextItemType ==
                           WorkbenchItemType.note &&
                       chatState.currentContextItemId != null) {
                     final rootNavigator = ref.read(rootNavigatorKeyProvider);
                     rootNavigator.currentState?.pushNamed(
-                      '/item-detail',
+                      '/item-detail', // Assuming this is the route for Note detail
                       arguments: {'itemId': chatState.currentContextItemId},
                     );
                   }
-                  // Add handling for other types if needed later
+                  // No action for tapping on Task context yet
                 },
                 child: Container(
                   color: CupertinoColors.systemBlue.withAlpha(20),
@@ -314,31 +321,29 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                       Icon(
                         CupertinoIcons.info_circle,
                         color:
+                            // Make icon blue only if tappable (Note)
                             chatState.currentContextItemType ==
                                     WorkbenchItemType.note
-                                ? CupertinoColors
-                                    .systemBlue // Keep blue for tappable notes
+                                ? CupertinoColors.systemBlue
                                 : CupertinoColors.secondaryLabel.resolveFrom(
                                   context,
-                                ), // Dim if not tappable
+                                ),
                         size: 16,
                       ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
+                          // Use the updated helper function
                           "Context: ${_getItemTypeName(chatState.currentContextItemType)} ${chatState.currentContextItemId}",
                           style: TextStyle(
                             color:
+                                // Make text blue and underlined only if tappable (Note)
                                 chatState.currentContextItemType ==
                                         WorkbenchItemType.note
-                                    ? CupertinoColors
-                                        .systemBlue // Keep blue for tappable notes
+                                    ? CupertinoColors.systemBlue
                                     : CupertinoColors.secondaryLabel
-                                        .resolveFrom(
-                                          context,
-                                        ), // Dim if not tappable
+                                        .resolveFrom(context),
                             fontSize: 13,
-                            // Add underline if it's a tappable note
                             decoration:
                                 chatState.currentContextItemType ==
                                         WorkbenchItemType.note

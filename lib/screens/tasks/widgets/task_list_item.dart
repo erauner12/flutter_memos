@@ -12,6 +12,7 @@ class TaskListItem extends StatelessWidget {
   final Function(bool isCompleted) onToggleComplete;
   final VoidCallback onDelete;
   final VoidCallback onAddToWorkbench;
+  final VoidCallback onChatWithTask; // NEW: Callback for chat action
   final VoidCallback onTap;
 
   const TaskListItem({
@@ -21,10 +22,9 @@ class TaskListItem extends StatelessWidget {
     required this.onToggleComplete,
     required this.onDelete,
     required this.onAddToWorkbench,
+    required this.onChatWithTask, // NEW: Require chat callback
     required this.onTap,
   });
-
-  // REMOVED _buildContextActions - actions are now in _showContextMenu
 
   // NEW helper to show action sheet on long-press
   void _showContextMenu(BuildContext context) {
@@ -40,6 +40,14 @@ class TaskListItem extends StatelessWidget {
                 onPressed: () {
                   Navigator.pop(popupContext);
                   onToggleComplete(!task.isCompleted);
+                },
+              ),
+              // NEW: Chat about Task action
+              CupertinoActionSheetAction(
+                child: const Text('Chat about Task'),
+                onPressed: () {
+                  Navigator.pop(popupContext);
+                  onChatWithTask(); // Call the new callback
                 },
               ),
               CupertinoActionSheetAction(
@@ -71,7 +79,8 @@ class TaskListItem extends StatelessWidget {
   ActionPane _buildActionPane(BuildContext context) {
     return ActionPane(
       motion: const BehindMotion(), // Or StretchMotion, etc.
-      extentRatio: 0.6, // Adjust how far it slides
+      extentRatio:
+          0.75, // Adjust how far it slides (increased slightly for 4 actions)
       children: [
         SlidableAction(
           onPressed: (_) => onToggleComplete(!task.isCompleted),
@@ -85,6 +94,14 @@ class TaskListItem extends StatelessWidget {
                   ? CupertinoIcons.arrow_uturn_left
                   : CupertinoIcons.check_mark,
           label: task.isCompleted ? 'Reopen' : 'Complete',
+        ),
+        // NEW: Chat action in slide pane
+        SlidableAction(
+          onPressed: (_) => onChatWithTask(),
+          backgroundColor: CupertinoColors.systemPurple.resolveFrom(context),
+          foregroundColor: CupertinoColors.white,
+          icon: CupertinoIcons.chat_bubble_2,
+          label: 'Chat',
         ),
         SlidableAction(
           onPressed: (_) => onAddToWorkbench(),
@@ -114,7 +131,6 @@ class TaskListItem extends StatelessWidget {
       ), // Actions revealed on swipe left
       closeOnScroll: true, // Default, good practice
 
-      // REMOVED CupertinoContextMenu wrapper
       // The child is now _TaskRowContent directly.
       // Long-press is handled inside _TaskRowContent via the new callback.
       child: _TaskRowContent(
@@ -122,7 +138,7 @@ class TaskListItem extends StatelessWidget {
         onTap: onTap, // Pass onTap for the main content area
         onToggleComplete: onToggleComplete, // Pass toggle for the checkbox
         onLongPress:
-            () => _showContextMenu(context), // NEW: Pass long-press handler
+            () => _showContextMenu(context), // Pass long-press handler
       ),
     );
   }
@@ -133,13 +149,13 @@ class _TaskRowContent extends StatelessWidget {
   final TaskItem task;
   final VoidCallback onTap;
   final Function(bool isCompleted) onToggleComplete;
-  final VoidCallback onLongPress; // NEW: Callback for long-press
+  final VoidCallback onLongPress; // Callback for long-press
 
   const _TaskRowContent({
     required this.task,
     required this.onTap,
     required this.onToggleComplete,
-    required this.onLongPress, // NEW: Require the callback
+    required this.onLongPress, // Require the callback
     // No key needed here as it's managed by the parent Slidable
   });
 
@@ -214,8 +230,6 @@ class _TaskRowContent extends StatelessWidget {
         : CupertinoColors.secondaryLabel.resolveFrom(context);
 
     // Wrap the Container in a ConstrainedBox to provide finite width constraints.
-    // This can potentially be removed now that CupertinoContextMenu is gone,
-    // but it's harmless to keep.
     return ConstrainedBox(
       constraints: BoxConstraints(
         maxWidth: MediaQuery.of(context).size.width,
@@ -241,7 +255,7 @@ class _TaskRowContent extends StatelessWidget {
               child: GestureDetector(
                 onTap: onTap, // Use the passed onTap callback
                 onLongPress:
-                    onLongPress, // NEW: Use the passed onLongPress callback
+                    onLongPress, // Use the passed onLongPress callback
                 behavior:
                     HitTestBehavior
                         .opaque, // Ensure it captures taps within bounds
