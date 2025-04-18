@@ -7,13 +7,12 @@ import 'package:flutter_memos/models/chat_session.dart';
 import 'package:flutter_memos/models/workbench_item_reference.dart';
 // Import service providers correctly
 import 'package:flutter_memos/providers/service_providers.dart'
-    show
-        minimalOpenAiServiceProvider,
-        mcpClientProvider; // Add minimalOpenAiServiceProvider
+    show minimalOpenAiServiceProvider; // Remove mcpClientProvider from here
 import 'package:flutter_memos/services/chat_ai.dart'; // Use ChatAiBackend, ChatAiFacade, OpenAiGptBackend
 import 'package:flutter_memos/services/chat_session_cloud_kit_service.dart';
 import 'package:flutter_memos/services/local_storage_service.dart';
-import 'package:flutter_memos/services/mcp_client_service.dart'; // For McpClientNotifier
+// Import MCP client provider with prefix to avoid ambiguity
+import 'package:flutter_memos/services/mcp_client_service.dart' as mcp_service; // For McpClientNotifier
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_generative_ai/google_generative_ai.dart' as gen_ai;
 
@@ -441,7 +440,7 @@ final chatAiFacadeProvider = Provider<ChatAiBackend>((ref) {
   );
 
   // Get the MCP Notifier
-  final mcpNotifier = ref.watch(mcpClientProvider.notifier);
+  final mcpNotifier = ref.watch(mcp_service.mcpClientProvider.notifier);
 
   // Return the Facade, using openAiBackend as the default
   return ChatAiFacade(

@@ -18,8 +18,8 @@ import 'package:flutter_memos/providers/workbench_provider.dart';
 import 'package:flutter_memos/screens/add_edit_mcp_server_screen.dart'; // Will be created next
 import 'package:flutter_memos/screens/add_edit_server_screen.dart';
 import 'package:flutter_memos/services/base_api_service.dart'; // Import BaseApiService
-// Import MCP client provider (for status later)
-import 'package:flutter_memos/services/mcp_client_service.dart';
+// Import MCP client provider (for status later) - add "as mcp_service" to solve ambiguity
+import 'package:flutter_memos/services/mcp_client_service.dart' as mcp_service;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -445,7 +445,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     // MODIFY: Watch the new provider
     final mcpServers = ref.watch(mcpServerConfigProvider);
     // Watch the MCP client state to get statuses and errors
-    final mcpClientState = ref.watch(mcpClientProvider);
+    final mcpClientState = ref.watch(mcp_service.mcpClientProvider);
     final serverStatuses = mcpClientState.serverStatuses;
     final serverErrors = mcpClientState.serverErrorMessages;
 
@@ -460,14 +460,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
     return mcpServers.map((server) {
       final status =
-          serverStatuses[server.id] ?? McpConnectionStatus.disconnected;
+          serverStatuses[server.id] ??
+          mcp_service.McpConnectionStatus.disconnected;
       final error = serverErrors[server.id];
       final bool userWantsActive = server.isActive;
 
       // Build subtitle text including error message if present
       String subtitleText;
       subtitleText = '${server.host}:${server.port}'; // Always show host:port
-      if (error != null && status == McpConnectionStatus.error) {
+      if (error != null && status == mcp_service.McpConnectionStatus.error) {
         // Limit error message length for display
         final displayError =
             error.length > 100 ? '${error.substring(0, 97)}...' : error;
@@ -484,7 +485,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           style: TextStyle(
             fontSize: 12,
             color:
-                status == McpConnectionStatus.error
+                status == mcp_service.McpConnectionStatus.error
                     ? CupertinoColors.systemRed.resolveFrom(context)
                     : CupertinoColors.secondaryLabel.resolveFrom(context),
           ),
@@ -515,29 +516,33 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   // Helper to build status icon based on McpConnectionStatus
-  Widget _buildMcpStatusIcon(McpConnectionStatus status, BuildContext context) {
+  Widget _buildMcpStatusIcon(
+    mcp_service.McpConnectionStatus status,
+    BuildContext context,
+  ) {
     switch (status) {
-      case McpConnectionStatus.connected:
+      case mcp_service.McpConnectionStatus.connected:
         return const Icon(
           CupertinoIcons.check_mark_circled_solid,
           color: CupertinoColors.activeGreen,
           size: 22,
         );
-      case McpConnectionStatus.connecting:
+      case mcp_service.McpConnectionStatus.connecting:
         return const CupertinoActivityIndicator(radius: 11);
-      case McpConnectionStatus.error:
+      case mcp_service.McpConnectionStatus.error:
         return Icon(
           CupertinoIcons.xmark_octagon_fill,
           color: CupertinoColors.systemRed.resolveFrom(context),
           size: 22,
         );
-      case McpConnectionStatus.disconnected:
+      case mcp_service.McpConnectionStatus.disconnected:
         return Icon(
           CupertinoIcons.circle,
           color: CupertinoColors.inactiveGray.resolveFrom(context),
           size: 22,
         );
     }
+    // Add a default return statement for safety
   }
 
   // Method to show actions for an MCP server
@@ -1443,7 +1448,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       minSize: 0,
                       onPressed: () {
                         // Trigger syncConnections from the MCP client notifier
-                        ref.read(mcpClientProvider.notifier).syncConnections();
+                        ref
+                            .read(mcp_service.mcpClientProvider.notifier)
+                            .syncConnections();
                         _showResultDialog(
                           'Applying Changes',
                           'Attempting to connect/disconnect MCP servers based on toggles.',
