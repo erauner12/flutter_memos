@@ -827,7 +827,7 @@ class TodoistApiService implements TaskApiService {
   }
 
 
-  // --- NEW Sync API Method ---
+  // --- Sync API Methods ---
 
   /// Performs a sync operation using the Todoist Sync API.
   ///
@@ -884,6 +884,45 @@ class TodoistApiService implements TaskApiService {
       rethrow;
     }
   }
+
+  /// Fetches activity events using the Sync API.
+  ///
+  /// This performs a sync specifically requesting the 'activity' resource type.
+  /// Note: This uses the current `_lastSyncToken`. For a full history,
+  /// you might need to manage the sync token differently or use REST API if available.
+  /// Pagination is not directly handled here; the Sync API returns events since the last sync.
+  Future<List<todoist.ActivityEvents>> getActivityEventsFromSync() async {
+    if (!isConfigured) {
+      stderr.writeln(
+        '[TodoistApiService] Not configured, cannot fetch activity events.',
+      );
+      return [];
+    }
+    if (verboseLogging) {
+      stderr.writeln(
+        '[TodoistApiService] Fetching activity events via sync...',
+      );
+    }
+    try {
+      // Perform a sync requesting only 'activity'
+      // This will use the current _lastSyncToken
+      final syncResponse = await performSync(resourceTypes: ['activity']);
+
+      // Extract the activity events from the response
+      final events = syncResponse?.activity ?? [];
+
+      if (verboseLogging) {
+        stderr.writeln(
+          '[TodoistApiService] Retrieved ${events.length} activity events from sync.',
+        );
+      }
+      return events;
+    } catch (e) {
+      _handleApiError('Error fetching activity events via sync', e);
+      rethrow; // Rethrow the error to be handled by the caller
+    }
+  }
+
 
   // --- Old Internal Methods (Review and keep/remove as needed) ---
   // [Existing DEPRECATED getActiveTasks method remains unchanged]
@@ -977,6 +1016,12 @@ extension TodoistSpecificMethods on TaskApiService {
   }) =>
       throw UnimplementedError(
         'performSync must be implemented by the concrete class',
+      );
+
+  // Add the new activity event method to the extension
+  Future<List<todoist.ActivityEvents>> getActivityEventsFromSync() =>
+      throw UnimplementedError(
+        'getActivityEventsFromSync must be implemented by the concrete class',
       );
 
   // Remove old sync method placeholders

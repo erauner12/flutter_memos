@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_memos/models/task_filter.dart'; // Import the filter enum
+import 'package:flutter_memos/screens/more/activity_events_screen.dart'; // Import the new screen
 import 'package:flutter_memos/screens/tasks/tasks_screen.dart'; // Import the TasksScreen
 
 /// A screen that displays a list of additional app features/sections.
@@ -59,6 +60,11 @@ class MoreScreen extends StatelessWidget {
       color: CupertinoColors.separator.resolveFrom(context),
       margin: const EdgeInsets.only(left: 54), // Indent separator like iOS Mail
     );
+    // Define full width separator
+    final fullSeparator = Container(
+      height: 1,
+      color: CupertinoColors.separator.resolveFrom(context),
+    );
 
     return CupertinoPageScaffold(
       navigationBar: const CupertinoNavigationBar(
@@ -99,8 +105,23 @@ class MoreScreen extends StatelessWidget {
               icon: CupertinoIcons.calendar_today, // Example icon
               onPressed: () => _navigateToTasks(context, TaskFilter.dueToday),
             ),
-            // Add a full separator after the tasks section if needed
-            Container(height: 1, color: CupertinoColors.separator.resolveFrom(context)),
+            fullSeparator, // Use full separator after the section
+            // --- Activity Log Section ---
+            _buildMenuItem(
+              context: context,
+              label: 'Activity Log', // New menu item
+              icon: CupertinoIcons.list_bullet_indent, // Example icon
+              onPressed: () {
+                Navigator.of(context).push(
+                  CupertinoPageRoute(
+                    builder:
+                        (_) =>
+                            const ActivityEventsScreen(), // Navigate to new screen
+                  ),
+                );
+              },
+            ),
+            fullSeparator, // Use full separator after the section
 
             // --- Add more items here in the future ---
             // Example: Settings (if moved here)
@@ -112,7 +133,7 @@ class MoreScreen extends StatelessWidget {
             //     // Navigate to SettingsScreen
             //   },
             // ),
-            // Container(height: 1, color: CupertinoColors.separator.resolveFrom(context)),
+            // fullSeparator,
           ],
         ),
       ),

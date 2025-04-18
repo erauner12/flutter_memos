@@ -34,6 +34,7 @@ class SyncResponse {
     this.user, // Assuming User model exists or use Map
     this.userSettings, // Assuming UserSettings model exists or use Map
     this.userPlanLimits, // Assuming UserPlanLimits model exists or use Map
+    this.activity = const [], // Added activity field
     // Add other fields from documentation as needed (completed_info, stats, etc.)
   });
 
@@ -98,6 +99,9 @@ class SyncResponse {
   /// A JSON object containing user plan limits. (Model not provided, using Map as placeholder)
   Map<String, Object>? userPlanLimits;
 
+  /// An array of activity log event objects.
+  List<ActivityEvents> activity; // Added activity field
+
   // Add other fields like completed_info, stats, locations, notification_settings, workspaces, workspace_users as needed
 
   @override
@@ -120,7 +124,9 @@ class SyncResponse {
     other.liveNotificationsLastReadId == liveNotificationsLastReadId &&
     _deepEquality.equals(other.user, user) &&
     _deepEquality.equals(other.userSettings, userSettings) &&
-    _deepEquality.equals(other.userPlanLimits, userPlanLimits);
+          _deepEquality.equals(other.userPlanLimits, userPlanLimits) &&
+          _deepEquality.equals(
+              other.activity, activity); // Added activity check
 
   @override
   int get hashCode =>
@@ -143,11 +149,13 @@ class SyncResponse {
     (liveNotificationsLastReadId == null ? 0 : liveNotificationsLastReadId!.hashCode) +
     (user == null ? 0 : user!.hashCode) +
     (userSettings == null ? 0 : userSettings!.hashCode) +
-    (userPlanLimits == null ? 0 : userPlanLimits!.hashCode);
+      (userPlanLimits == null ? 0 : userPlanLimits!.hashCode) +
+      (activity.hashCode); // Added activity hash
 
 
   @override
-  String toString() => 'SyncResponse[syncToken=$syncToken, fullSync=$fullSync, items=${items.length}, projects=${projects.length}, ...]';
+  String toString() =>
+      'SyncResponse[syncToken=$syncToken, fullSync=$fullSync, items=${items.length}, projects=${projects.length}, activity=${activity.length}, ...]'; // Added activity count
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -194,6 +202,10 @@ class SyncResponse {
     } else {
       json[r'user_plan_limits'] = null;
     }
+    json[r'activity'] = this
+        .activity
+        .map((v) => v.toJson())
+        .toList(); // Added activity serialization
     return json;
   }
 
@@ -209,8 +221,14 @@ class SyncResponse {
       // Note 2: this code is stripped in release mode!
       assert(() {
         requiredKeys.forEach((key) {
-          assert(json.containsKey(key), 'Required key "SyncResponse[$key]" is missing from JSON.');
-          assert(json[key] != null, 'Required key "SyncResponse[$key]" has a null value in JSON.');
+          // Allow optional keys like 'activity' to be missing
+          if (json.containsKey(key)) {
+            assert(json[key] != null,
+                'Required key "SyncResponse[$key]" has a null value in JSON.');
+          } else if (!optionalKeys.contains(key)) {
+            assert(false,
+                'Required key "SyncResponse[$key]" is missing from JSON.');
+          }
         });
         return true;
       }());
@@ -235,6 +253,8 @@ class SyncResponse {
         user: mapCastOfType<String, Object>(json, r'user'),
         userSettings: mapCastOfType<String, Object>(json, r'user_settings'),
         userPlanLimits: mapCastOfType<String, Object>(json, r'user_plan_limits'),
+        activity: ActivityEvents.listFromJson(
+            json[r'activity'] ?? []), // Added activity deserialization
       );
     }
     return null;
@@ -285,5 +305,29 @@ class SyncResponse {
   static const requiredKeys = <String>{
     // 'sync_token', // Making nullable for robustness
     // 'full_sync', // Making nullable for robustness
+  };
+
+  /// The list of optional keys that may be present in a JSON.
+  static const optionalKeys = <String>{
+    'sync_token',
+    'full_sync',
+    'temp_id_mapping',
+    'items',
+    'projects',
+    'labels',
+    'notes',
+    'project_notes',
+    'sections',
+    'filters',
+    'day_orders',
+    'reminders',
+    'collaborators',
+    'collaborator_states',
+    'live_notifications',
+    'live_notifications_last_read_id',
+    'user',
+    'user_settings',
+    'user_plan_limits',
+    'activity', // Added activity to optional keys
   };
 }
