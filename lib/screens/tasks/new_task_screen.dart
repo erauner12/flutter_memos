@@ -64,7 +64,8 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
         // Update existing task - copy existing and apply changes
         taskData = widget.taskToEdit!.copyWith(
           content: _contentController.text.trim(),
-          description: _descriptionController.text.trim(),
+          // Wrap description in ValueGetter
+          description: () => _descriptionController.text.trim(),
           // TODO: Add other fields like priority, due date, labels
         );
         // Call update method (needs Task ID)

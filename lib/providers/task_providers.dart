@@ -35,9 +35,6 @@ final taskDetailProvider =
   }
 });
 
-// REMOVED: Old filteredTasksProvider
-// final filteredTasksProvider = Provider<List<TaskItem>>((ref) { ... });
-
 // NEW: Provider family for filtered tasks based on TaskFilter
 final filteredTasksProviderFamily = Provider.family<
   List<TaskItem>,
@@ -45,10 +42,6 @@ final filteredTasksProviderFamily = Provider.family<
 >((ref, taskFilter) {
   final tasksState = ref.watch(tasksNotifierProvider);
   final allTasks = tasksState.tasks;
-
-  // --- Add filtering logic here based on other providers ---
-  // Example: final searchTerm = ref.watch(taskSearchProvider);
-  // Example: final statusFilter = ref.watch(taskStatusFilterProvider);
 
   // Filter based on the provided taskFilter
   List<TaskItem> filteredTasks;
@@ -136,9 +129,6 @@ class TasksNotifier extends StateNotifier<TasksState> {
     state = TasksState.initial();
   }
 
-  // Remove the old clearTasksForNonTodoist method entirely
-  // void clearTasksForNonTodoist() { ... } // REMOVE THIS METHOD
-
   Future<void> fetchTasks({String? filter}) async {
     // Use the helper which now checks configuration, not active server
     final apiService = _getTaskApiService();
@@ -149,10 +139,6 @@ class TasksNotifier extends StateNotifier<TasksState> {
 
     state = state.copyWith(isLoading: true, clearError: true); // Clear previous errors on new fetch
     try {
-      // Use the obtained service instance directly
-      // Pass the Todoist-specific filter string if provided (e.g., "today", "!recurring")
-      // Note: Our internal TaskFilter enum is mapped to these strings where applicable
-      // or handled client-side if no direct API filter exists.
       final tasks = await apiService.listTasks(filter: filter);
       // Check if still mounted before updating state
       if (!mounted) return;
@@ -162,8 +148,6 @@ class TasksNotifier extends StateNotifier<TasksState> {
         if (priorityComparison != 0) {
           return priorityComparison;
         }
-        // Optional secondary sort, e.g., by creation date descending
-        // return b.createdAt.compareTo(a.createdAt);
         return 0; // Keep original API order if priorities are equal
       });
       state = state.copyWith(isLoading: false, tasks: tasks);
@@ -175,7 +159,6 @@ class TasksNotifier extends StateNotifier<TasksState> {
        if (!mounted) return;
       state = state.copyWith(
         isLoading: false,
-        // Update error message to be more generic or specific to Todoist fetch failure
         error: 'Failed to fetch tasks from Todoist: ${e.toString()}',
         tasks: [],
       ); // Clear tasks on error
@@ -204,7 +187,6 @@ class TasksNotifier extends StateNotifier<TasksState> {
 
     try {
       await apiService.completeTask(id); // Use the service instance
-      // Success, state already updated optimistically
       return true;
     } catch (e, s) {
       if (kDebugMode) {
@@ -243,7 +225,6 @@ class TasksNotifier extends StateNotifier<TasksState> {
 
     try {
       await apiService.reopenTask(id); // Use the service instance
-      // Success, state already updated optimistically
       return true;
     } catch (e, s) {
       if (kDebugMode) {
@@ -274,7 +255,6 @@ class TasksNotifier extends StateNotifier<TasksState> {
 
     try {
       await apiService.deleteTask(id); // Use the service instance
-      // Success, state already updated optimistically
       return true;
     } catch (e, s) {
       if (kDebugMode) {
@@ -291,26 +271,20 @@ class TasksNotifier extends StateNotifier<TasksState> {
     }
   }
 
-  // Add methods for createTask, updateTask
   Future<TaskItem?> createTask(TaskItem task) async {
     final apiService = _getTaskApiService(); // Checks config
     if (apiService == null) return null;
-
-    // Set loading state specifically for creation? Maybe not needed if UI handles it.
 
     try {
       final createdTask = await apiService.createTask(
         task,
       ); // Use the service instance
-      // Add to local state optimistically or after success?
-      // Adding after success ensures we have the correct ID from the API.
       if (mounted) {
-        // Add and re-sort
         final newTasks = [...state.tasks, createdTask];
         newTasks.sort((a, b) {
           final priorityComparison = b.priority.compareTo(a.priority);
           if (priorityComparison != 0) return priorityComparison;
-          return 0; // Keep original order if priorities are equal
+          return 0;
         });
         state = state.copyWith(tasks: newTasks, clearError: true);
       }
@@ -330,7 +304,7 @@ class TasksNotifier extends StateNotifier<TasksState> {
     final apiService = _getTaskApiService(); // Checks config
     if (apiService == null) return null;
 
-    // Optimistic update (optional, but improves perceived performance)
+    // Optimistic update
     final originalTasks = List<TaskItem>.from(state.tasks);
     TaskItem? originalTask;
     bool found = false;
@@ -341,12 +315,11 @@ class TasksNotifier extends StateNotifier<TasksState> {
               if (task.id == id) {
                 originalTask = task; // Store original for revert
                 found = true;
-                // Ensure ID remains correct and merge updates
-                // Assuming taskUpdate might not have all fields, merge with originalTask
-                // This requires TaskItem.copyWith to handle nulls correctly
+                // Merge updates using copyWith
                 return originalTask!.copyWith(
                   content: taskUpdate.content,
-                  description: taskUpdate.description,
+                  // Wrap description in ValueGetter
+                  description: () => taskUpdate.description,
                   priority: taskUpdate.priority,
                   dueDate: taskUpdate.dueDate,
                   dueString: taskUpdate.dueString,
@@ -358,38 +331,31 @@ class TasksNotifier extends StateNotifier<TasksState> {
             }).toList(),
       );
     }
-    // If task wasn't found locally (shouldn't happen if called from UI list)
     if (!found) {
       print("Warning: Task $id not found in local state for update.");
-      // Potentially revert state or fetch tasks again
     }
 
     try {
-      // API update often returns the updated item or just confirms success
       final updatedTask = await apiService.updateTask(
         id,
         taskUpdate,
       ); // Use the service instance
-      // If API returns the updated task, replace it in the list. If not, the optimistic update stands.
       if (mounted) {
-        // Replace the item in the list with the one returned from API for consistency
         final updatedTasks =
             state.tasks.map((task) {
               if (task.id == id) {
-                // Use the task returned by the API service
                 return updatedTask;
               }
               return task;
             }).toList();
 
-        // Re-sort after update as priority might have changed
         updatedTasks.sort((a, b) {
           final priorityComparison = b.priority.compareTo(a.priority);
           if (priorityComparison != 0) return priorityComparison;
           return 0;
         });
         state = state.copyWith(tasks: updatedTasks, clearError: true);
-        return updatedTask; // Return the result from the API service
+        return updatedTask;
       }
       return null; // Not mounted
     } catch (e, s) {
@@ -403,17 +369,15 @@ class TasksNotifier extends StateNotifier<TasksState> {
           error: 'Failed to update task: ${e.toString()}',
         );
       } else if (mounted) {
-        // If optimistic update failed somehow or task wasn't found
         state = state.copyWith(error: 'Failed to update task: ${e.toString()}');
       }
       return null; // Indicate failure
     }
   }
 }
-// Keep TasksState class definition unchanged
+
 @immutable
 class TasksState {
-  // ... existing implementation ...
   final List<TaskItem> tasks;
   final bool isLoading;
   final String? error;

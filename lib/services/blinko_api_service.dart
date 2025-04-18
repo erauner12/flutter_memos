@@ -5,95 +5,90 @@ import 'package:flutter_memos/blinko_api/lib/api.dart'
     as blinko_api; // Alias Blinko API
 import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/models/list_notes_response.dart'; // Ensure import
-// import 'package:flutter_memos/models/memo_relation.dart'; // Removed unused import
 import 'package:flutter_memos/models/note_item.dart'; // Ensure import
 import 'package:flutter_memos/models/server_config.dart';
-import 'package:flutter_memos/services/base_api_service.dart';
+import 'package:flutter_memos/services/auth_strategy.dart'; // Import AuthStrategy
+import 'package:flutter_memos/services/note_api_service.dart'; // Implement NoteApiService
 import 'package:http/http.dart' as http; // Added http import
 import 'package:http_parser/http_parser.dart';
 
-class BlinkoApiService implements BaseApiService {
+// Implement NoteApiService (and implicitly BaseApiService)
+class BlinkoApiService implements NoteApiService {
   // Singleton pattern (optional)
   static final BlinkoApiService _instance = BlinkoApiService._internal();
   factory BlinkoApiService() => _instance;
 
   late blinko_api.ApiClient _apiClient;
-  // Removed the unused _noteApi field
-  // late blinko_api.NoteApi _noteApi;
   late blinko_api.FileApi _fileApi; // FileApi instance
 
   String _baseUrl = '';
-  String _authToken = '';
+  // String _authToken = ''; // Replaced by _authStrategy
+  AuthStrategy? _authStrategy; // Store the strategy
 
   // Static config flags (can be instance members too)
   static bool verboseLogging = true;
 
   BlinkoApiService._internal() {
     // Initialize with dummy client; configureService will set it up properly
-    _apiClient = blinko_api.ApiClient(basePath: '');
-    // Removed initialization of unused _noteApi
-    // _noteApi = blinko_api.NoteApi(_apiClient);
-    _fileApi = blinko_api.FileApi(_apiClient); // Initialize FileApi
+    _initializeClient('', null);
   }
 
   @override
   String get apiBaseUrl => _baseUrl;
 
   @override
-  bool get isConfigured => _baseUrl.isNotEmpty && _authToken.isNotEmpty;
+  bool get isConfigured => _baseUrl.isNotEmpty && _authStrategy != null;
+
+  @override
+  AuthStrategy? get authStrategy => _authStrategy; // Implement getter
 
   @override
   Future<void> configureService({
     required String baseUrl,
-    required String authToken,
+    AuthStrategy? authStrategy, // Add AuthStrategy parameter
+    @Deprecated('Use authStrategy instead')
+    String? authToken, // Add deprecated authToken
   }) async {
-    // Check if already configured with the exact same inputs and is valid
-    if (_baseUrl == baseUrl && _authToken == authToken && isConfigured) {
+    AuthStrategy? effectiveStrategy = authStrategy;
+
+    // Fallback to authToken if authStrategy is not provided
+    if (effectiveStrategy == null &&
+        authToken != null &&
+        authToken.isNotEmpty) {
+      // Blinko uses Bearer token
+      effectiveStrategy = BearerTokenAuthStrategy(authToken);
       if (kDebugMode) {
         print(
-          '[BlinkoApiService] configureService: Already configured with same URL/Token. Skipping.',
+          "[BlinkoApiService] configureService: Using fallback BearerTokenAuthStrategy from authToken.",
+        );
+      }
+    }
+
+    // Check if configuration actually changed
+    final currentToken = _authStrategy?.getSimpleToken();
+    final newToken = effectiveStrategy?.getSimpleToken();
+    if (_baseUrl == baseUrl && currentToken == newToken && isConfigured) {
+      if (kDebugMode) {
+        print('[BlinkoApiService] configureService: Configuration unchanged.',
         );
       }
       return;
     }
+
     if (kDebugMode) {
       print(
-        '[BlinkoApiService] configureService: Configuring with baseUrl=$baseUrl',
+        '[BlinkoApiService] configureService: Configuring with baseUrl=$baseUrl, Strategy=${effectiveStrategy?.runtimeType}',
       );
     }
 
     _baseUrl = baseUrl; // Store the original URL provided
-    _authToken = authToken;
-
-    // --- START MODIFICATION ---
-    String effectiveBaseUrl = baseUrl;
-    // Ensure base URL doesn't end with '/'
-    if (effectiveBaseUrl.endsWith('/')) {
-      effectiveBaseUrl = effectiveBaseUrl.substring(
-        0,
-        effectiveBaseUrl.length - 1,
-      );
-    }
-    // *** REMOVE AUTOMATIC /api APPENDING ***
-    // The user should provide the correct base URL for the API, e.g., https://host/api or https://host/api/v1
-    if (kDebugMode) {
-      print(
-        '[BlinkoApiService] configureService: Using effectiveBaseUrl for ApiClient: $effectiveBaseUrl',
-      );
-    }
-    // --- END MODIFICATION ---
+    _authStrategy = effectiveStrategy; // Store the effective strategy
 
     try {
-      _apiClient = blinko_api.ApiClient(
-        basePath: effectiveBaseUrl,
-        authentication: blinko_api.HttpBearerAuth()..accessToken = authToken,
-      );
-      // Removed initialization of unused _noteApi
-      // _noteApi = blinko_api.NoteApi(_apiClient);
-      _fileApi = blinko_api.FileApi(_apiClient);
+      _initializeClient(baseUrl, _authStrategy);
       if (kDebugMode) {
         print(
-          '[BlinkoApiService] configureService: Blinko API client configured successfully for $effectiveBaseUrl',
+          '[BlinkoApiService] configureService: Blinko API client configured successfully.',
         );
       }
     } catch (e) {
@@ -102,15 +97,59 @@ class BlinkoApiService implements BaseApiService {
           '[BlinkoApiService] configureService: Error initializing Blinko API client: $e',
         );
       }
-      _baseUrl = '';
-      _authToken = '';
+      _baseUrl = ''; // Reset on failure
+      _authStrategy = null;
       rethrow;
+    }
+  }
+
+  // Updated _initializeClient to accept AuthStrategy
+  void _initializeClient(String baseUrl, AuthStrategy? authStrategy) {
+    String effectiveBaseUrl = baseUrl;
+    // Ensure base URL doesn't end with '/'
+    if (effectiveBaseUrl.endsWith('/')) {
+      effectiveBaseUrl = effectiveBaseUrl.substring(
+        0,
+        effectiveBaseUrl.length - 1,
+      );
+    }
+
+    // Use the strategy to create the Authentication object
+    // Explicitly type as nullable Authentication
+    final blinko_api.Authentication authentication =
+        authStrategy
+            ?.createMemosAuth() ?? // Use MemosAuth for Blinko as it's Bearer
+        blinko_api.HttpBearerAuth(); // Default to empty auth if no strategy
+
+    try {
+      _apiClient = blinko_api.ApiClient(
+        basePath:
+            effectiveBaseUrl.isEmpty
+                ? 'http://dummy'
+                : effectiveBaseUrl, // Provide dummy if empty
+        authentication: authentication, // Pass nullable Authentication
+      );
+      _fileApi = blinko_api.FileApi(_apiClient);
+      if (kDebugMode && effectiveBaseUrl.isNotEmpty) {
+        print(
+          '[BlinkoApiService] _initializeClient: Blinko API client initialized. BasePath: $effectiveBaseUrl, Auth: ${authentication.runtimeType}',
+        );
+      }
+    } catch (e) {
+      // Reset clients to dummy state on error
+      _apiClient = blinko_api.ApiClient(
+        basePath: '',
+        authentication: blinko_api.HttpBearerAuth(),
+      );
+      _fileApi = blinko_api.FileApi(_apiClient);
+      throw Exception('Failed to initialize Blinko API client: $e');
     }
   }
 
   // Implement missing checkHealth method
   @override
   Future<bool> checkHealth() async {
+    if (!isConfigured) return false; // Check if configured first
     final configApi = blinko_api.ConfigApi(_apiClient);
     try {
       final response = await configApi.configListWithHttpInfo();
@@ -297,7 +336,7 @@ class BlinkoApiService implements BaseApiService {
     }
   }
 
-  // --- Implement BaseApiService Methods ---
+  // --- Implement NoteApiService Methods ---
   @override
   Future<ListNotesResponse> listNotes({
     int? pageSize = 30,
@@ -423,7 +462,6 @@ class BlinkoApiService implements BaseApiService {
     }
   }
 
-  // Change 1: Refactored createNote
   @override
   Future<NoteItem> createNote(
     NoteItem note, {
@@ -499,7 +537,6 @@ class BlinkoApiService implements BaseApiService {
     }
   }
 
-  // Change 2: Refactored updateNote
   @override
   Future<NoteItem> updateNote(
     String id,
@@ -516,13 +553,6 @@ class BlinkoApiService implements BaseApiService {
       content: note.content,
       isArchived: note.state == NoteState.archived,
       isTop: note.pinned,
-      // --- Add these lines (CRITICAL: Assumes Blinko API supports these fields in NotesUpsertRequest) ---
-      // Verify the actual field names and expected format (e.g., String ISO 8601) in the Blinko API spec.
-      // If the API uses a different structure (like NotesListRequestStartDate), adapt accordingly.
-      // If the API does *not* support updating these fields here, remove these lines.
-      // startDate: note.startDate?.toIso8601String(), // Example if API expects ISO String
-      // endDate: note.endDate?.toIso8601String(),     // Example if API expects ISO String
-      // --- End of potentially added lines ---
     );
     try {
       if (kDebugMode) {
@@ -532,7 +562,7 @@ class BlinkoApiService implements BaseApiService {
       }
       final response = await noteApi.notesUpsertWithHttpInfo(request);
       if (response.statusCode >= 200 && response.statusCode < 300) {
-        // Fetch the updated note to ensure we have the latest state, including potentially updated dates
+        // Fetch the updated note to ensure we have the latest state
         return await getNote(id, targetServerOverride: targetServerOverride);
       } else {
         if (kDebugMode) {
@@ -558,7 +588,6 @@ class BlinkoApiService implements BaseApiService {
     }
   }
 
-  // Change 3: Refactored deleteNote
   @override
   Future<void> deleteNote(
     String id, {
@@ -585,7 +614,6 @@ class BlinkoApiService implements BaseApiService {
     }
   }
 
-  // Change 4: Refactored archiveNote
   @override
   Future<NoteItem> archiveNote(
     String id, {
@@ -618,7 +646,6 @@ class BlinkoApiService implements BaseApiService {
     }
   }
 
-  // Change 5: Refactored togglePinNote
   @override
   Future<NoteItem> togglePinNote(
     String id, {
@@ -651,7 +678,6 @@ class BlinkoApiService implements BaseApiService {
     }
   }
 
-  // Change 6: Refactored listNoteComments
   @override
   Future<List<Comment>> listNoteComments(
     String noteId, {
@@ -693,7 +719,6 @@ class BlinkoApiService implements BaseApiService {
     }
   }
 
-  // Change 7: Refactored createNoteComment to accept resources parameter (though ignored)
   @override
   Future<Comment> createNoteComment(
     String noteId,
@@ -742,7 +767,6 @@ class BlinkoApiService implements BaseApiService {
     }
   }
 
-  // Change 8: Refactored updateNoteComment
   @override
   Future<Comment> updateNoteComment(
     String commentId,
@@ -794,7 +818,6 @@ class BlinkoApiService implements BaseApiService {
     }
   }
 
-  // Change 9: Refactored deleteNoteComment
   @override
   Future<void> deleteNoteComment(
     String noteId,
@@ -826,7 +849,6 @@ class BlinkoApiService implements BaseApiService {
     }
   }
 
-  // Change 10: Refactored setNoteRelations to accept List<Map<String, dynamic>>
   @override
   Future<void> setNoteRelations(
     String noteId,
@@ -893,36 +915,38 @@ class BlinkoApiService implements BaseApiService {
     }
   }
 
-  // Change 6: Implement _getFileApiForServer helper method
+  // Helper method to get FileApi for a specific server or default
   blinko_api.FileApi _getFileApiForServer(ServerConfig? serverConfig) {
-    if (serverConfig == null ||
-        (serverConfig.serverUrl == _baseUrl &&
-            serverConfig.authToken == _authToken)) {
-      if (!_fileApi.apiClient.basePath.startsWith('http')) {
-        if (kDebugMode) {
-          print(
-            "[BlinkoApiService._getFileApiForServer] Warning: Default FileApi seems uninitialized. Attempting re-init.",
-          );
-        }
-        if (_baseUrl.isNotEmpty && _authToken.isNotEmpty) {
-          configureService(baseUrl: _baseUrl, authToken: _authToken);
-        } else {
-          throw Exception(
-            "Default BlinkoApiService FileApi is not configured.",
-          );
-        }
-      }
-      return _fileApi;
-    }
     return blinko_api.FileApi(_getApiClientForServer(serverConfig));
   }
 
+  // Helper method to get ApiClient for a specific server or default
   blinko_api.ApiClient _getApiClientForServer(ServerConfig? serverConfig) {
-    if (serverConfig == null ||
-        (serverConfig.serverUrl == _baseUrl &&
-            serverConfig.authToken == _authToken)) {
+    if (serverConfig == null) {
+      // Ensure the default client is initialized if accessed directly
+      if (!_apiClient.basePath.startsWith('http')) {
+        if (kDebugMode)
+          print(
+            "[BlinkoApiService._getApiClientForServer] Warning: Default ApiClient seems uninitialized. Attempting re-init with current config.",
+          );
+        if (_baseUrl.isNotEmpty && _authStrategy != null) {
+          _initializeClient(_baseUrl, _authStrategy);
+        } else {
+          throw Exception(
+            "Default BlinkoApiService ApiClient is not configured.",
+          );
+        }
+      }
       return _apiClient;
     }
+
+    // Create a temporary AuthStrategy for the target server
+    // Assuming ServerConfig holds authToken for this override scenario
+    final targetAuthStrategy = BearerTokenAuthStrategy(serverConfig.authToken);
+    // Explicitly type as nullable Authentication
+    final blinko_api.Authentication targetAuthentication =
+        targetAuthStrategy.createMemosAuth(); // Use MemosAuth for Blinko
+
     try {
       String targetBaseUrl = serverConfig.serverUrl;
       if (targetBaseUrl.endsWith('/')) {
@@ -930,8 +954,7 @@ class BlinkoApiService implements BaseApiService {
       }
       return blinko_api.ApiClient(
         basePath: targetBaseUrl,
-        authentication:
-            blinko_api.HttpBearerAuth()..accessToken = serverConfig.authToken,
+        authentication: targetAuthentication, // Pass nullable Authentication
       );
     } catch (e) {
       throw Exception(
@@ -940,11 +963,12 @@ class BlinkoApiService implements BaseApiService {
     }
   }
 
+  // Helper method to get NoteApi for a specific server or default
   blinko_api.NoteApi _getNoteApiForServer(ServerConfig? serverConfig) {
     return blinko_api.NoteApi(_getApiClientForServer(serverConfig));
   }
 
-  // Change 16: Updated _convertBlinkoDetailToNoteItem helper method with null checks and mapping
+  // Helper method to convert Blinko note detail to NoteItem
   NoteItem _convertBlinkoDetailToNoteItem(
     blinko_api.NotesDetail200Response blinkoDetail,
   ) {
@@ -952,7 +976,6 @@ class BlinkoApiService implements BaseApiService {
       if (dateString == null || dateString.isEmpty) {
         return null;
       }
-      // Handle potential '0001-01-01T00:00:00Z' or similar zero dates from API
       if (dateString.startsWith('0001-')) {
         return null;
       }
@@ -980,10 +1003,8 @@ class BlinkoApiService implements BaseApiService {
     final String creatorIdStr =
         blinkoDetail.accountId?.toString() ?? 'unknown_creator';
 
-    // --- Parse Start/End Dates ---
-    final DateTime? startDate = null; // Assume null for now
-    final DateTime? endDate = null; // Assume null for now
-    // ---------------------------
+    final DateTime? startDate = null;
+    final DateTime? endDate = null;
 
     final List<String> tags =
         (blinkoDetail.tags ?? [])
@@ -1032,7 +1053,7 @@ class BlinkoApiService implements BaseApiService {
     );
   }
 
-  // Change 17: Updated _convertBlinkoNoteToNoteItem helper method with null checks and mapping
+  // Helper method to convert Blinko note list item to NoteItem
   NoteItem _convertBlinkoNoteToNoteItem(
     blinko_api.NotesList200ResponseInner blinkoNote,
   ) {
@@ -1067,8 +1088,8 @@ class BlinkoApiService implements BaseApiService {
     final String creatorIdStr =
         blinkoNote.accountId?.toString() ?? 'unknown_creator';
 
-    final DateTime? startDate = null; // Assume null for now
-    final DateTime? endDate = null; // Assume null for now
+    final DateTime? startDate = null;
+    final DateTime? endDate = null;
 
     final List<String> tags =
         (blinkoNote.tags ?? [])
@@ -1117,7 +1138,7 @@ class BlinkoApiService implements BaseApiService {
     );
   }
 
-  // Change 18: Updated _convertBlinkoCommentToComment helper method
+  // Helper method to convert Blinko comment to Comment
   Comment _convertBlinkoCommentToComment(
     blinko_api.CommentsList200ResponseItemsInner blinkoComment,
   ) {
@@ -1182,13 +1203,16 @@ class BlinkoApiService implements BaseApiService {
     }
 
     try {
+      // Get headers from the ApiClient's Authentication object
+      final headers = <String, String>{'Accept': '*/*'};
+      await apiClient.authentication?.applyToParams(
+        [],
+        headers,
+      ); // Populates headers
+
       final response = await http.get(
         Uri.parse(resourceUrl),
-        headers: {
-          'Authorization':
-              'Bearer ${apiClient.authentication is blinko_api.HttpBearerAuth ? (apiClient.authentication as blinko_api.HttpBearerAuth).accessToken : ''}',
-          'Accept': '*/*',
-        },
+        headers: headers,
       );
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
