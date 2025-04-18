@@ -1,5 +1,5 @@
 import 'package:flutter/foundation.dart';
-import 'package:flutter_memos/models/workbench_item_type.dart';
+// Removed import for WorkbenchItemType as it's no longer needed here.
 
 /// Parses a string [raw] into an enum value of type [T].
 ///
@@ -7,20 +7,21 @@ import 'package:flutter_memos/models/workbench_item_type.dart';
 /// of the enum values obtained via [describeEnum].
 ///
 /// If [raw] is null or does not match any enum value, returns the
-/// first value in the provided [values] iterable as a safe default.
-/// Consider throwing an error or returning null if a default is not desired.
+/// provided [defaultValue].
 T enumFromString<T>(
   Iterable<T> values,
   String? raw, {
-  required WorkbenchItemType defaultValue,
+  required T defaultValue, // Changed from WorkbenchItemType to T
 }) {
   if (raw == null) {
     // Return default if raw string is null
-    return values.first;
+    return defaultValue; // Use the provided generic default value
   }
   final rawLower = raw.toLowerCase();
   for (final value in values) {
-    if (describeEnum(value as Object).toLowerCase() == rawLower) {
+    // Ensure value is treated as Object for describeEnum
+    final enumName = describeEnum(value as Object).toLowerCase();
+    if (enumName == rawLower) {
       return value;
     }
   }
@@ -28,7 +29,9 @@ T enumFromString<T>(
   // Optionally, throw an exception here:
   // throw ArgumentError('"$raw" is not a valid value for enum $T');
   if (kDebugMode) {
-    print('Warning: Enum value "$raw" not found in ${T.toString()}. Defaulting to ${describeEnum(values.first as Object)}.');
+    print(
+      'Warning: Enum value "$raw" not found in ${T.toString()}. Defaulting to ${describeEnum(defaultValue as Object)}.',
+    );
   }
-  return values.first;
+  return defaultValue; // Use the provided generic default value
 }

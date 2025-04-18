@@ -82,10 +82,16 @@ class ServerConfig {
       );
     }
 
-    // Use the case-insensitive helper
-    ServerType? parsedType = enumFromString(ServerType.values, rawServerType);
+    // Use the case-insensitive helper, providing the required defaultValue
+    final ServerType parsedType = enumFromString<ServerType>(
+      ServerType.values,
+      rawServerType,
+      defaultValue: ServerType.memos, // Provide the default value here
+    );
 
     // Handle legacy 'todoist' or unknown types specifically for ServerConfig
+    // Note: enumFromString now handles null/unknown by returning defaultValue,
+    // so we only need to check specifically for the 'todoist' case here.
     ServerType finalType;
     if (parsedType == ServerType.todoist) {
       if (kDebugMode) {
@@ -93,17 +99,12 @@ class ServerConfig {
           '[ServerConfig.fromJson] Warning: Encountered serverType "todoist" for ID ${json['id']}. Defaulting to "memos" for this ServerConfig instance. It should be filtered by the notifier.',
         );
       }
-      finalType = ServerType.memos; // Default to memos for ServerConfig
-    } else if (parsedType == null && rawServerType != null) {
-      if (kDebugMode) {
-        print(
-          '[ServerConfig.fromJson] Warning: Unknown serverType string "$rawServerType". Defaulting to memos.',
-        );
-      }
-      finalType = ServerType.memos; // Default to memos if unknown
+      finalType =
+          ServerType
+              .memos; // Default to memos for ServerConfig if parsed as Todoist
     } else {
-      // Use the parsed type (memos/blinko) or default to memos if rawServerType was null
-      finalType = parsedType ?? ServerType.memos;
+      // Use the parsed type (which will be memos/blinko, or memos if raw was null/invalid)
+      finalType = parsedType;
     }
 
 

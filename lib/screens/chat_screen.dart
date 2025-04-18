@@ -3,7 +3,7 @@ import 'package:flutter/material.dart' show LinearProgressIndicator; // For load
 import 'package:flutter_markdown/flutter_markdown.dart'; // For rendering markdown
 import 'package:flutter_memos/main.dart'; // Import for rootNavigatorKeyProvider
 import 'package:flutter_memos/models/chat_message.dart'; // Import ChatMessage which now defines Role
-import 'package:flutter_memos/models/workbench_item_reference.dart'; // For WorkbenchItemType enum
+import 'package:flutter_memos/models/workbench_item_type.dart';
 import 'package:flutter_memos/providers/chat_providers.dart';
 import 'package:flutter_memos/providers/settings_provider.dart'; // To check API key
 import 'package:flutter_memos/screens/settings_screen.dart'; // Import SettingsScreen
@@ -120,14 +120,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       case WorkbenchItemType.note:
         return 'Note';
       case WorkbenchItemType.task:
-        return 'Task'; // Updated to handle Task
+        return 'Task';
       case WorkbenchItemType.comment:
-        return 'Comment'; // Should ideally show parent type
-      // case WorkbenchItemType.project: // Added just in case
-      // return 'Project';
-      // case WorkbenchItemType.unknown:
-      // return 'Unknown Item';
-      case null:
+        return 'Comment';
+      case WorkbenchItemType.project: // Added case for project
+        return 'Project';
+      case WorkbenchItemType.unknown: // Added case for unknown
+      case null: // Default case for exhaustiveness
         return 'Item';
     }
   }

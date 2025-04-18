@@ -52,15 +52,15 @@ class WorkbenchItemReference {
            overallLastUpdateTime ??
            addedTimestamp; // Use passed value or default to added
 
-  // Helper to get the timestamp of the latest comment in the preview list
-  DateTime? get _latestPreviewCommentTimestamp {
-    if (previewComments.isEmpty) return null;
-    // Assuming previewComments are sorted newest first
-    final latestComment = previewComments.first;
-    // Handle different comment models (Memos vs Todoist)
-    return latestComment.updatedTs ?? latestComment.createdTs; // Memos/Blinko
-    // Add Todoist logic if needed, e.g. latestComment.postedAt
-  }
+  // // Helper to get the timestamp of the latest comment in the preview list
+  // DateTime? get _latestPreviewCommentTimestamp {
+  //   if (previewComments.isEmpty) return null;
+  //   // Assuming previewComments are sorted newest first
+  //   final latestComment = previewComments.first;
+  //   // Handle different comment models (Memos vs Todoist)
+  //   return latestComment.updatedTs ?? latestComment.createdTs; // Memos/Blinko
+  //   // Add Todoist logic if needed, e.g. latestComment.postedAt
+  // }
 
   /// First (most-recent) preview comment, or `null` if none.
   Comment? get latestComment =>
@@ -167,17 +167,19 @@ class WorkbenchItemReference {
     String recordName, // CloudKit record name, often used as primary ID
   ) {
     // Use the new case-insensitive helper for enums
-    // It returns the first enum value as default if parsing fails
-    final parsedReferencedItemType = enumFromString(
+    // It returns the default value if parsing fails
+    final parsedReferencedItemType = enumFromString<WorkbenchItemType>(
       WorkbenchItemType.values, // Use the imported enum's values
       json['referencedItemType'] as String?,
       defaultValue:
           WorkbenchItemType.unknown, // Default to unknown if parse fails
     );
-    final parsedServerType = enumFromString(
+
+    // Explicitly provide generic type <ServerType> and correct defaultValue type
+    final parsedServerType = enumFromString<ServerType>(
       ServerType.values,
       json['serverType'] as String?,
-      defaultValue: WorkbenchItemType.note, // Default to memos if parse fails
+      defaultValue: ServerType.memos, // Default to memos if parse fails
     );
 
     // Read instanceId from JSON, provide default for migration if missing/empty
@@ -198,7 +200,8 @@ class WorkbenchItemReference {
       referencedItemType:
           parsedReferencedItemType, // Use result from helper (imported enum)
       serverId: json['serverId'] as String? ?? '',
-      serverType: parsedServerType, // Use result from helper
+      serverType:
+          parsedServerType, // Use result from helper (now correctly typed)
       serverName: json['serverName'] as String?,
       previewContent: json['previewContent'] as String?,
       addedTimestamp: DateTime.tryParse(json['addedTimestamp'] as String? ?? '') ?? DateTime.now(), // Default to now

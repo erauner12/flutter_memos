@@ -4,7 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart'; // Import WidgetsBinding
 import 'package:flutter_memos/models/chat_message.dart';
 import 'package:flutter_memos/models/chat_session.dart';
-import 'package:flutter_memos/models/workbench_item_reference.dart';
+import 'package:flutter_memos/models/workbench_item_type.dart';
 // Import service providers correctly
 import 'package:flutter_memos/providers/service_providers.dart'
     show minimalOpenAiServiceProvider; // Remove mcpClientProvider from here

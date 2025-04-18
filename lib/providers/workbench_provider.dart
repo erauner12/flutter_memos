@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/models/server_config.dart';
 import 'package:flutter_memos/models/workbench_item_reference.dart';
+import 'package:flutter_memos/models/workbench_item_type.dart';
 import 'package:flutter_memos/providers/api_providers.dart';
 import 'package:flutter_memos/providers/server_config_provider.dart';
 import 'package:flutter_memos/providers/service_providers.dart';
