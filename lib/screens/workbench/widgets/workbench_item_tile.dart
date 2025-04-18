@@ -252,49 +252,64 @@ class WorkbenchItemTile extends ConsumerWidget {
     final commentTime = formatRelativeTime(
       comment.updatedTs ?? comment.createdTs,
     );
-    // Wrap in Padding for indentation and Container for left border
+    // Wrap in Padding for top margin between comments
     return Padding(
-      padding: const EdgeInsets.only(top: 4.0, left: 16.0), // Indent left
+      padding: const EdgeInsets.only(top: 8.0), // Increased top margin
       child: Container(
-        padding: const EdgeInsets.only(left: 8.0), // Padding inside the border
+        // Add horizontal margin if needed, or rely on parent padding
+        // margin: const EdgeInsets.symmetric(horizontal: 16.0), // Optional horizontal margin
         decoration: BoxDecoration(
-          border: Border(
-            left: BorderSide(
-              width: 2.0,
-              color: CupertinoColors.separator.resolveFrom(context),
-            ),
-          ),
+          color: CupertinoColors.systemGrey6.resolveFrom(
+            context,
+          ), // Bubble background
+          borderRadius: BorderRadius.circular(8.0), // Rounded corners
         ),
-        child: Row(
+        padding: const EdgeInsets.all(12.0), // Internal padding for the bubble
+        // Removed the old Container with left border and its padding
+        // child: Container( ... decoration: BoxDecoration(border: Border(left...)) ... )
+        child: Column(
+          // Use Column for better layout control inside bubble
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Padding(
-              // Add padding around icon
-              padding: const EdgeInsets.only(top: 2.0),
-              child: Icon(
-                CupertinoIcons.bubble_left,
-                size: 14,
-                color: CupertinoColors.tertiaryLabel.resolveFrom(context),
-              ),
-            ),
-            const SizedBox(width: 6),
-            Expanded(
-              child: Text(
-                comment.content ?? '',
-                style: theme.textTheme.textStyle.copyWith(
-                  // Use captionTextStyle
-                  color: CupertinoColors.secondaryLabel.resolveFrom(context),
+            Row(
+              // Row for icon and text content
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  // Keep icon padding consistent
+                  padding: const EdgeInsets.only(top: 2.0),
+                  child: Icon(
+                    CupertinoIcons.bubble_left, // Keep comment icon
+                    size: 16, // Adjusted size for bubble context
+                    color: CupertinoColors.tertiaryLabel.resolveFrom(context),
+                  ),
                 ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
+                const SizedBox(width: 8), // Space between icon and text
+                Expanded(
+                  child: Text(
+                    comment.content ?? '',
+                    style: theme.textTheme.textStyle.copyWith(
+                      fontSize: 14, // Slightly larger font for preview bubble
+                      color: CupertinoColors.secondaryLabel.resolveFrom(
+                        context,
+                      ),
+                    ),
+                    maxLines: 2, // Allow more lines in bubble
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: 8),
-            Text(
-              commentTime,
-              style: theme.textTheme.textStyle.copyWith(
-                // Use captionTextStyle
-                color: CupertinoColors.tertiaryLabel.resolveFrom(context),
+            const SizedBox(height: 4), // Space between text and timestamp
+            Align(
+              // Align timestamp to the right or keep left
+              alignment: Alignment.centerRight, // Example: align right
+              child: Text(
+                commentTime,
+                style: theme.textTheme.textStyle.copyWith(
+                  fontSize: 12, // Smaller font for timestamp
+                  color: CupertinoColors.tertiaryLabel.resolveFrom(context),
+                ),
               ),
             ),
           ],
