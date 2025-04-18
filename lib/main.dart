@@ -150,35 +150,18 @@ Future<void> main() async {
         () => runApp(
           ProviderScope(
             observers: [LoggingProviderObserver()],
-            child: const AppWithChatOverlay(),
+            // Use MyAppCore directly as the root widget
+            child: const MyAppCore(),
           ),
         ),
   );
 }
 
-class AppWithChatOverlay extends ConsumerWidget {
-  const AppWithChatOverlay({super.key});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final themeMode = ref.watch(themeModeProvider);
-
-    // Wrap the Stack in a Directionality or CupertinoApp to fix missing directionality.
-    return Directionality(
-      textDirection: TextDirection.ltr, // Or TextDirection.rtl based on locale
-      child: Stack(
-        children: [
-          Positioned.fill(child: MyAppCore(themeMode: themeMode)),
-          const ChatOverlay(),
-        ],
-      ),
-    );
-  }
-}
+// Removed AppWithChatOverlay class
 
 class MyAppCore extends ConsumerStatefulWidget {
-  final ThemeMode themeMode;
-  const MyAppCore({required this.themeMode, super.key});
+  // Removed themeMode parameter as it's watched inside build
+  const MyAppCore({super.key});
 
   @override
   ConsumerState<MyAppCore> createState() => _MyAppCoreState();
@@ -202,8 +185,6 @@ class _MyAppCoreState extends ConsumerState<MyAppCore> {
       // Listeners are now set up in the build method
     });
   }
-
-  // Removed _setupListeners method
 
   void _triggerInitialLoads() {
     // Just read the providers to trigger their initialization if not already loading.
@@ -463,6 +444,85 @@ class _MyAppCoreState extends ConsumerState<MyAppCore> {
     }
 
     // Main app UI build logic starts here
+    // Determine brightness based on themePreference and platform
+    final platformBrightness = MediaQuery.platformBrightnessOf(context);
+    Brightness finalBrightness;
+    switch (themePreference) {
+      case ThemeMode.light:
+        finalBrightness = Brightness.light;
+        break;
+      case ThemeMode.dark:
+        finalBrightness = Brightness.dark;
+        break;
+      case ThemeMode.system:
+      default:
+        finalBrightness = platformBrightness;
+        break;
+    }
+
+    const String sfFontFamily = '.SF Pro Text';
+    final Color primaryColor =
+        finalBrightness == Brightness.dark
+            ? CupertinoColors.systemOrange
+            : CupertinoColors.systemBlue;
+    final Color labelColor =
+        finalBrightness == Brightness.dark
+            ? CupertinoColors.white
+            : CupertinoColors.black;
+
+    final TextStyle baseTextStyle = TextStyle(
+      inherit: false,
+      fontFamily: sfFontFamily,
+      color: labelColor,
+      fontSize: 17,
+      decoration: TextDecoration.none,
+    );
+    final TextStyle baseActionTextStyle = TextStyle(
+      inherit: false,
+      fontFamily: sfFontFamily,
+      color: primaryColor,
+      fontSize: 17,
+      decoration: TextDecoration.none,
+    );
+    final TextStyle baseNavTitleTextStyle = TextStyle(
+      inherit: false,
+      fontFamily: sfFontFamily,
+      color: labelColor,
+      fontSize: 17,
+      fontWeight: FontWeight.w600,
+      decoration: TextDecoration.none,
+    );
+
+    final cupertinoTheme = CupertinoThemeData(
+      brightness: finalBrightness,
+      primaryColor: primaryColor,
+      scaffoldBackgroundColor:
+          finalBrightness == Brightness.dark
+              ? CupertinoColors.black
+              : CupertinoColors.systemGroupedBackground,
+      barBackgroundColor:
+          finalBrightness == Brightness.dark
+              ? const Color(0xFF1D1D1D)
+              : CupertinoColors.systemGrey6,
+      textTheme: CupertinoTextThemeData(
+        textStyle: baseTextStyle,
+        actionTextStyle: baseActionTextStyle,
+        navTitleTextStyle: baseNavTitleTextStyle,
+        navLargeTitleTextStyle: baseNavTitleTextStyle.copyWith(
+          fontSize: 34,
+          fontWeight: FontWeight.bold,
+          letterSpacing: 0.41,
+          inherit: false,
+        ),
+        pickerTextStyle: baseTextStyle.copyWith(fontSize: 21, inherit: false),
+        dateTimePickerTextStyle: baseTextStyle.copyWith(
+          fontSize: 21,
+          inherit: false,
+        ),
+      ),
+    );
+
+    // Build the main CupertinoApp only when loading is complete
     return Shortcuts(
       shortcuts: buildGlobalShortcuts(),
       child: Actions(
@@ -515,112 +575,33 @@ class _MyAppCoreState extends ConsumerState<MyAppCore> {
           ),
         },
         child: GestureDetector(
+          // Keep GestureDetector for unfocus
           onTap: () {
             FocusManager.instance.primaryFocus?.unfocus();
           },
-          child: Builder(
-            builder: (context) {
-              // Determine brightness based on themePreference and platform
-              final platformBrightness =
-                  MediaQuery.platformBrightnessOf(
-                context,
-              ); // Use platformBrightnessOf
-              Brightness finalBrightness;
-              switch (themePreference) {
-                case ThemeMode.light:
-                  finalBrightness = Brightness.light;
-                  break;
-                case ThemeMode.dark:
-                  finalBrightness = Brightness.dark;
-                  break;
-                case ThemeMode.system:
-                default: // Default to system if preference is invalid
-                  finalBrightness = platformBrightness;
-                  break;
-              }
-
-              const String sfFontFamily = '.SF Pro Text';
-              final Color primaryColor =
-                  finalBrightness == Brightness.dark
-                      ? CupertinoColors.systemOrange
-                      : CupertinoColors.systemBlue;
-              // Resolve label color based on the final brightness
-              final Color labelColor =
-                  finalBrightness == Brightness.dark
-                      ? CupertinoColors.white
-                      : CupertinoColors.black;
-
-              final TextStyle baseTextStyle = TextStyle(
-                inherit: false,
-                fontFamily: sfFontFamily,
-                color: labelColor,
-                fontSize: 17,
-                decoration: TextDecoration.none, // Ensure no default underlines
-              );
-              final TextStyle baseActionTextStyle = TextStyle(
-                inherit: false,
-                fontFamily: sfFontFamily,
-                color: primaryColor,
-                fontSize: 17,
-                decoration: TextDecoration.none,
-              );
-              final TextStyle baseNavTitleTextStyle = TextStyle(
-                inherit: false,
-                fontFamily: sfFontFamily,
-                color: labelColor,
-                fontSize: 17,
-                fontWeight: FontWeight.w600,
-                decoration: TextDecoration.none,
-              );
-
-              final cupertinoTheme = CupertinoThemeData(
-                brightness: finalBrightness,
-                primaryColor: primaryColor,
-                scaffoldBackgroundColor:
-                    finalBrightness == Brightness.dark
-                        ? CupertinoColors.black
-                        : CupertinoColors.systemGroupedBackground,
-                barBackgroundColor:
-                    finalBrightness == Brightness.dark
-                        ? const Color(0xFF1D1D1D)
-                        : CupertinoColors.systemGrey6,
-                textTheme: CupertinoTextThemeData(
-                  textStyle: baseTextStyle,
-                  actionTextStyle: baseActionTextStyle,
-                  navTitleTextStyle: baseNavTitleTextStyle,
-                  navLargeTitleTextStyle: baseNavTitleTextStyle.copyWith(
-                    fontSize: 34,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 0.41,
-                    inherit: false,
-                  ),
-                  pickerTextStyle: baseTextStyle.copyWith(
-                    fontSize: 21,
-                    inherit: false,
-                  ),
-                  dateTimePickerTextStyle: baseTextStyle.copyWith(
-                    fontSize: 21,
-                    inherit: false,
-                  ),
-                ),
-              );
-
-              // Build the main CupertinoApp only when loading is complete
-              return CupertinoApp(
-                theme: cupertinoTheme,
-                navigatorKey: ref.read(rootNavigatorKeyProvider),
-                title: 'Flutter Memos',
-                debugShowCheckedModeBanner: false,
-                localizationsDelegates: const [
-                  GlobalMaterialLocalizations.delegate,
-                  GlobalWidgetsLocalizations.delegate,
-                  GlobalCupertinoLocalizations.delegate,
+          child: CupertinoApp(
+            // This is now the root UI widget
+            theme: cupertinoTheme,
+            navigatorKey: ref.read(rootNavigatorKeyProvider),
+            title: 'Flutter Memos',
+            debugShowCheckedModeBanner: false,
+            localizationsDelegates: const [
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
+            supportedLocales: const [Locale('en', '')],
+            home: const ConfigCheckWrapper(), // Initial screen after loading
+            onGenerateRoute: generateRoute,
+            // Use the builder to insert the ChatOverlay
+            builder: (context, child) {
+              return Stack(
+                children: [
+                  // The main app content managed by the Navigator
+                  child ?? const SizedBox.shrink(),
+                  // The ChatOverlay, now sharing the same Overlay ancestor
+                  const ChatOverlay(),
                 ],
-                supportedLocales: const [Locale('en', '')],
-                home:
-                    const ConfigCheckWrapper(), // This now runs after loading flags are true
-                onGenerateRoute: generateRoute,
-                builder: (context, child) => child ?? const SizedBox.shrink(),
               );
             },
           ),
