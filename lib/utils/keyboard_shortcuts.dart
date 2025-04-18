@@ -12,6 +12,10 @@ class SelectPreviousMemoIntent extends Intent {}
 class SelectNextMemoIntent extends Intent {}
 class ToggleCaptureUtilityIntent extends Intent {}
 class NewMemoIntent extends Intent {}
+class ToggleChatOverlayIntent extends Intent {
+  // Define the new intent
+  const ToggleChatOverlayIntent();
+}
 
 /// Creates a map of keyboard shortcuts to intents
 Map<ShortcutActivator, Intent> buildGlobalShortcuts() {
@@ -28,13 +32,17 @@ Map<ShortcutActivator, Intent> buildGlobalShortcuts() {
     // Support Shift+Up/Down for navigation
     const SingleActivator(LogicalKeyboardKey.arrowUp, shift: true): SelectPreviousMemoIntent(),
     const SingleActivator(LogicalKeyboardKey.arrowDown, shift: true): SelectNextMemoIntent(),
-    
+
     // Command/Ctrl + Shift + M => Toggle Capture Utility
     const SingleActivator(LogicalKeyboardKey.keyM, meta: true, shift: true):
         ToggleCaptureUtilityIntent(),
-        
+
     // Command/Ctrl + Shift + N => Create New Memo
     const SingleActivator(LogicalKeyboardKey.keyN, meta: true, shift: true):
         NewMemoIntent(),
+
+    // Command/Ctrl + Shift + C => Toggle Chat Overlay (Example shortcut)
+    const SingleActivator(LogicalKeyboardKey.keyC, meta: true, shift: true):
+        const ToggleChatOverlayIntent(),
   };
 }

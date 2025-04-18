@@ -17,12 +17,9 @@ import 'package:flutter_memos/screens/chat/chat_overlay.dart'; // Import the new
 // Import ChatScreen - Keep for potential direct navigation if needed, though primary access is overlay
 import 'package:flutter_memos/screens/chat_screen.dart';
 import 'package:flutter_memos/screens/edit_entity/edit_entity_screen.dart'; // Updated import
-// Remove import for the env file
-// import 'package:flutter_memos/utils/env.dart';
-import 'package:flutter_memos/screens/home_screen.dart'; // Import HomeScreen
 import 'package:flutter_memos/screens/item_detail/item_detail_screen.dart'; // Updated import
 import 'package:flutter_memos/screens/new_note/new_note_screen.dart'; // Updated import
-import 'package:flutter_memos/utils/keyboard_shortcuts.dart'; // Import keyboard shortcuts
+import 'package:flutter_memos/utils/keyboard_shortcuts.dart'; // Import keyboard shortcuts (including ToggleChatOverlayIntent)
 import 'package:flutter_memos/utils/provider_logger.dart';
 import 'package:flutter_memos/widgets/config_check_wrapper.dart'; // Import the new wrapper
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -363,7 +360,9 @@ class _MyAppCoreState extends ConsumerState<MyAppCore> {
         }
       }
     } catch (e) {
-      if (kDebugMode) print('[AppLinks] Error getting initial link: $e');
+      if (kDebugMode) {
+        print('[AppLinks] Error getting initial link: $e');
+      }
     }
 
     // Handle links received while the app is running
@@ -443,31 +442,33 @@ class _MyAppCoreState extends ConsumerState<MyAppCore> {
         try {
           contextItemType = WorkbenchItemType.values.byName(contextItemTypeStr);
         } catch (_) {
-          if (kDebugMode)
+          if (kDebugMode) {
             print('[DeepLink] Invalid contextItemType: $contextItemTypeStr');
+          }
+          contextItemType = WorkbenchItemType.unknown; // Fallback
         }
 
-        if (contextItemType != null) {
-          // Use addPostFrameCallback to ensure notifier call happens after build/overlay animation
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) {
-              ref
-                  .read(chatProvider.notifier)
-                  .startChatWithContext(
-                    contextString:
-                        contextString ??
-                        "Context from deep link", // Provide default or use query param
-                    parentItemId: contextItemId,
-                    parentItemType: contextItemType,
-                    parentServerId: parentServerId,
-                  );
-              if (kDebugMode)
-                print(
-                  '[DeepLink] Started chat with context: $contextItemId ($contextItemType)',
+        // Use addPostFrameCallback to ensure notifier call happens after build/overlay animation
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            ref
+                .read(chatProvider.notifier)
+                .startChatWithContext(
+                  contextString:
+                      contextString ??
+                      "Context from deep link", // Provide default or use query param
+                  parentItemId: contextItemId,
+                  // Pass the non-nullable type (or fallback)
+                  parentItemType: contextItemType ?? WorkbenchItemType.unknown,
+                  parentServerId: parentServerId,
                 );
+            if (kDebugMode) {
+              print(
+                '[DeepLink] Started chat with context: $contextItemId ($contextItemType)',
+              );
             }
-          });
-        }
+          }
+        });
       }
     } else {
       if (kDebugMode) {
@@ -484,11 +485,11 @@ class _MyAppCoreState extends ConsumerState<MyAppCore> {
     // Use the themeMode passed from AppWithChatOverlay
     final themePreference = widget.themeMode;
 
-    if (kDebugMode) {
-      // print(
-      //   '[MyAppCore] Building with theme mode: $themePreference',
-      // );
-    }
+    // if (kDebugMode) {
+    //   // print(
+    //   //   '[MyAppCore] Building with theme mode: $themePreference',
+    //   // );
+    // }
 
     // Show loading indicator until initial theme/config are loaded
     if (!_initialThemeLoaded || !_initialConfigLoaded) {
@@ -581,9 +582,9 @@ class _MyAppCoreState extends ConsumerState<MyAppCore> {
                   finalBrightness = Brightness.dark;
                   break;
                 case ThemeMode.system:
-                default: // Default to system if somehow invalid
                   finalBrightness = platformBrightness;
                   break;
+                // Removed default clause as it's covered by the enum cases
               }
 
               // Define base colors and font family

@@ -52,8 +52,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         _checkInitialContext();
         // Mark as processed even if no context found initially, provider listener will handle future changes
         _contextProcessed = true;
-        if (kDebugMode)
+        if (kDebugMode) {
           print("ChatScreen: No context arguments found via ModalRoute.");
+        }
       }
     }
   }
@@ -66,8 +67,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           chatState.currentContextItemType != null) {
         // Context already exists in the provider, likely set externally (e.g., deep link)
         _contextProcessed = true; // Mark as processed
-        if (kDebugMode)
+        if (kDebugMode) {
           print("ChatScreen: Initial context found in provider state.");
+        }
         // UI will update automatically via watch
       }
     }
@@ -96,19 +98,21 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 parentServerId: parentServerId,
               );
           _contextProcessed = true; // Set flag after processing
-          if (kDebugMode)
+          if (kDebugMode) {
             print(
               "ChatScreen: Context processed from arguments for type $parentItemType.",
             );
+          }
         }
       });
     } else {
       // If args exist but are invalid, mark as processed to avoid retrying
       _contextProcessed = true;
-      if (kDebugMode)
+      if (kDebugMode) {
         print(
           "ChatScreen: Received arguments but context data was incomplete.",
         );
+      }
     }
   }
 
@@ -188,13 +192,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       if (nextContextId != null && !_contextProcessed && mounted) {
         // Context was set externally after initial build/check
         _contextProcessed = true; // Mark as processed
-        if (kDebugMode)
+        if (kDebugMode) {
           print("ChatScreen: Context updated via provider listener.");
+        }
       } else if (nextContextId == null && _contextProcessed) {
         // Context was cleared, reset the flag
         _contextProcessed = false;
-        if (kDebugMode)
+        if (kDebugMode) {
           print("ChatScreen: Context cleared, resetting processed flag.");
+        }
       }
     });
 

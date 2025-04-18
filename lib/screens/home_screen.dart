@@ -2,21 +2,17 @@ import 'package:flutter/cupertino.dart'
     show
         BottomNavigationBarItem,
         BuildContext,
-        ConsumerState,
-        ConsumerStatefulWidget,
-        CupertinoAlertDialog,
         CupertinoPageRoute,
         CupertinoPageScaffold,
         CupertinoTabBar,
-        CupertinoTabController, // Added
-        CupertinoTabScaffold, // Added
-        CupertinoTabView, // Added
-        GestureDetector, // Added for swipe detection
+        CupertinoTabController,
+        CupertinoTabScaffold,
+        CupertinoTabView,
+        GestureDetector,
         GlobalKey,
+        HitTestBehavior,
         Icon,
         NavigatorState,
-        State,
-        StatefulWidget,
         Widget;
 import 'package:flutter/foundation.dart'; // For kDebugMode
 import 'package:flutter_memos/providers/chat_overlay_providers.dart'; // Import overlay provider
@@ -93,9 +89,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     // Optional: Add listener for debugging or state changes if needed
     _tabController.addListener(() {
-      if (kDebugMode) {
-        // print('[HomeScreen] Tab changed to: ${_tabs[_tabController.index].name}');
-      }
+      // if (kDebugMode) {
+      //   // print('[HomeScreen] Tab changed to: ${_tabs[_tabController.index].name}');
+      // }
       // If you need to update other providers based on tab index, do it here.
     });
   }

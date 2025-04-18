@@ -96,11 +96,7 @@ class ChatState {
       errorMessage.hashCode;
 }
 
-// --- ChatNotifier (No functional changes needed, relies on ChatAiBackend interface) ---
-// The logic inside sendMessage correctly uses the _ai interface, which will now
-// point to the ChatAiFacade, which in turn delegates to OpenAiGptBackend or McpAiProxy.
-// The conversion to gen_ai.Content happens here, and OpenAiGptBackend handles the
-// conversion *from* gen_ai.Content to OpenAI's format.
+// --- ChatNotifier ---
 class ChatNotifier extends StateNotifier<ChatState> {
   final Ref _ref;
   final LocalStorageService _local;
@@ -158,12 +154,16 @@ class ChatNotifier extends StateNotifier<ChatState> {
     try {
       cloudSession = await _cloud.getChatSession();
     } catch (e) {
-      if (kDebugMode) print("[ChatNotifier] CloudKit fetch error on init: $e");
+      if (kDebugMode) {
+        print("[ChatNotifier] CloudKit fetch error on init: $e");
+      }
     }
     try {
       localSession = await _local.loadActiveChatSession();
     } catch (e) {
-      if (kDebugMode) print("[ChatNotifier] Local load error on init: $e");
+      if (kDebugMode) {
+        print("[ChatNotifier] Local load error on init: $e");
+      }
     }
 
     if (!mounted) return;
@@ -175,20 +175,25 @@ class ChatNotifier extends StateNotifier<ChatState> {
           cloudSession.lastUpdated.isAfter(localSession.lastUpdated)
               ? cloudSession
               : localSession;
-      if (kDebugMode)
+      if (kDebugMode) {
         print(
           "[ChatNotifier] Init: Using ${chosen == cloudSession ? 'Cloud' : 'Local'} session.",
         );
+      }
     } else if (cloudSession != null) {
       chosen = cloudSession;
-      if (kDebugMode)
+      if (kDebugMode) {
         print("[ChatNotifier] Init: Using Cloud session (local missing).");
+      }
     } else if (localSession != null) {
       chosen = localSession;
-      if (kDebugMode)
+      if (kDebugMode) {
         print("[ChatNotifier] Init: Using Local session (cloud missing).");
+      }
     } else {
-      if (kDebugMode) print("[ChatNotifier] Init: No existing session found.");
+      if (kDebugMode) {
+        print("[ChatNotifier] Init: No existing session found.");
+      }
     }
 
     if (mounted && state.session != chosen) {
@@ -206,7 +211,9 @@ class ChatNotifier extends StateNotifier<ChatState> {
     required String parentServerId,
   }) async {
     _hasExternalContext = true;
-    if (kDebugMode) print("[ChatNotifier] startChatWithContext called.");
+    if (kDebugMode) {
+      print("[ChatNotifier] startChatWithContext called.");
+    }
 
     final system = ChatMessage(
       id: 'system_${DateTime.now().millisecondsSinceEpoch}',
@@ -308,7 +315,9 @@ class ChatNotifier extends StateNotifier<ChatState> {
     } catch (e) {
       // Error handling remains the same. The specific error might now originate
       // from OpenAiGptBackend or MinimalOpenAiService.
-      if (kDebugMode) print("[ChatNotifier] SendMessage Error: $e");
+      if (kDebugMode) {
+        print("[ChatNotifier] SendMessage Error: $e");
+      }
       final err = ChatMessage.error('Error: $e');
       if (!mounted) return;
       final finalMessages =
@@ -341,16 +350,44 @@ class ChatNotifier extends StateNotifier<ChatState> {
     await _cloud.deleteChatSession();
   }
 
-  void clearErrorMessage() =>
-      state.errorMessage == null
-          ? null
-          : state = state.copyWith(clearError: true);
+  /// Clears the context information (item ID, type, server ID) from the current chat session.
+  void clearChatContext() {
+    if (state.session.contextItemId == null &&
+        state.session.contextItemType == null) {
+      // No context to clear
+      return;
+    }
+    if (kDebugMode) {
+      print("[ChatNotifier] Clearing chat context.");
+    }
+    // Create a new session instance with context fields set to null
+    // Assuming ChatSession.copyWith handles nulling these fields when passed null
+    // or has a specific flag like `clearContext`. If not, adjust accordingly.
+    // For simplicity, let's assume direct nulling works:
+    final clearedSession = state.session.copyWith(
+      contextItemId: null, // Explicitly set to null
+      contextItemType: null, // Explicitly set to null
+      contextServerId: null, // Explicitly set to null
+      // Keep existing messages unless clearing context should also clear messages
+      // messages: state.session.messages,
+      lastUpdated: DateTime.now().toUtc(),
+    );
+    state = state.copyWith(session: clearedSession);
+    _persistSoon();
+  }
+
+  void clearErrorMessage() {
+    if (state.errorMessage != null) {
+      state = state.copyWith(clearError: true);
+    }
+  }
 
   Future<void> forceFetchFromCloud() async {
     if (state.isSyncing || state.isInitializing) return;
 
-    if (kDebugMode)
+    if (kDebugMode) {
       print("[ChatNotifier] Starting manual fetch from CloudKit...");
+    }
     _hasExternalContext = false;
     state = state.copyWith(isSyncing: true, clearError: true);
 
@@ -361,18 +398,22 @@ class ChatNotifier extends StateNotifier<ChatState> {
       if (!mounted) return;
 
       if (cloudSession != null) {
-        if (kDebugMode) print("[ChatNotifier] Fetched session from CloudKit.");
+        if (kDebugMode) {
+          print("[ChatNotifier] Fetched session from CloudKit.");
+        }
         state = state.copyWith(
           session: cloudSession,
           isSyncing: false,
           isInitializing: false,
         );
         await _local.saveActiveChatSession(cloudSession);
-        if (kDebugMode)
+        if (kDebugMode) {
           print("[ChatNotifier] Updated local state with CloudKit session.");
+        }
       } else {
-        if (kDebugMode)
+        if (kDebugMode) {
           print("[ChatNotifier] No chat session found in CloudKit.");
+        }
         state = state.copyWith(
           isSyncing: false,
           errorMessage: "No chat session found in iCloud.",
@@ -380,8 +421,9 @@ class ChatNotifier extends StateNotifier<ChatState> {
         );
       }
     } catch (e) {
-      if (kDebugMode)
+      if (kDebugMode) {
         print("[ChatNotifier] Error during forceFetchFromCloud: $e");
+      }
       if (!mounted) return;
       state = state.copyWith(
         isSyncing: false,
@@ -398,12 +440,15 @@ class ChatNotifier extends StateNotifier<ChatState> {
     _debounce = Timer(_debounceDuration, () async {
       if (_skipNextPersist) {
         _skipNextPersist = false;
-        if (kDebugMode) print("[ChatNotifier] Skipping debounced save.");
+        if (kDebugMode) {
+          print("[ChatNotifier] Skipping debounced save.");
+        }
         return;
       }
       if (!mounted) {
-        if (kDebugMode)
+        if (kDebugMode) {
           print("[ChatNotifier] Skipping debounced save (unmounted).");
+        }
         return;
       }
       final sessionToSave = state.session.copyWith(
@@ -414,9 +459,13 @@ class ChatNotifier extends StateNotifier<ChatState> {
         // No need to update state here just for timestamp
         await _persister.save(sessionToSave);
         await _cloud.saveChatSession(sessionToSave);
-        if (kDebugMode) print("[ChatNotifier] Debounced save complete.");
+        if (kDebugMode) {
+          print("[ChatNotifier] Debounced save complete.");
+        }
       } catch (e) {
-        if (kDebugMode) print("[ChatNotifier] Error during debounced save: $e");
+        if (kDebugMode) {
+          print("[ChatNotifier] Error during debounced save: $e");
+        }
       }
     });
   }
