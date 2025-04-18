@@ -6,6 +6,7 @@ import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/providers/comment_providers.dart'
     as comment_providers;
 import 'package:flutter_memos/providers/note_providers.dart' as note_providers;
+import 'package:flutter_memos/providers/ui_providers.dart'; // Replace workbench_providers.dart with ui_providers.dart
 import 'package:flutter_memos/utils/url_helper.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -169,6 +170,13 @@ class CommentCard extends ConsumerWidget {
                       commentId: comment.id,
                     )),
                   )();
+                  // Clear selection if the deleted comment was selected
+                  if (ref.read(selectedWorkbenchCommentIdProvider) ==
+                      comment.id) {
+                    ref
+                        .read(selectedWorkbenchCommentIdProvider.notifier)
+                        .state = null;
+                  }
                 }
               },
             ),
@@ -223,28 +231,36 @@ class CommentCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final isDarkMode = CupertinoTheme.of(context).brightness == Brightness.dark;
     final commentContent = comment.content ?? '';
     final formattedDate = DateFormat.yMd().add_jm().format(comment.createdTs);
-    final bool hasResources = comment.resources.isNotEmpty ?? false;
+    final bool hasResources = comment.resources.isNotEmpty;
 
-    // Remove isSelected logic for card color and border
+    // Watch selection provider
+    final selectedCommentId = ref.watch(selectedWorkbenchCommentIdProvider);
+    final isSelected = selectedCommentId == comment.id;
+
+    // Determine card color and border based on selection
     final Color cardColor =
-        CupertinoColors.secondarySystemGroupedBackground
-        .resolveFrom(context);
-    final Color borderColor = CupertinoColors.separator.resolveFrom(context);
-    const double borderWidth = 0.5; // Use default border width
+        isSelected
+            ? CupertinoColors.systemGrey5.resolveFrom(
+              context,
+            ) // Highlight background
+            : CupertinoColors.secondarySystemGroupedBackground.resolveFrom(
+              context,
+            ); // Default background
+    final Color borderColor =
+        isSelected
+            ? CupertinoColors.activeBlue.resolveFrom(
+              context,
+            ) // Highlight border
+            : CupertinoColors.separator.resolveFrom(context); // Default border
+    final double borderWidth =
+        isSelected ? 1.5 : 0.5; // Thicker border when selected
 
-    // Remove the outer GestureDetector
-    // GestureDetector( onLongPress: () => _showActions(context, ref), ... )
+    // Remove the outer GestureDetector for long press, add it for selection tap
     return Container(
       margin: const EdgeInsets.only(bottom: 12.0),
-      padding: const EdgeInsets.only(
-        left: 16.0,
-        top: 16.0,
-        bottom: 16.0,
-        right: 8.0,
-      ), // Adjust right padding for button
+      // Padding is now inside the GestureDetector's child Container
       decoration: BoxDecoration(
         color: cardColor,
         borderRadius: BorderRadius.circular(10.0),
@@ -255,127 +271,155 @@ class CommentCard extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Expanded(
-            // Main content column takes available space
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Comment Content (Markdown) - remains the same
-                if (commentContent.isNotEmpty)
-                  MarkdownBody(
-                    data: commentContent,
-                    selectable: true,
-                    styleSheet: MarkdownStyleSheet.fromCupertinoTheme(
-                      CupertinoTheme.of(context),
-                    ).copyWith(
-                      p: CupertinoTheme.of(
-                        context,
-                      ).textTheme.textStyle.copyWith(fontSize: 15, height: 1.4),
-                      a: CupertinoTheme.of(
-                        context,
-                      ).textTheme.textStyle.copyWith(
-                        color: CupertinoTheme.of(context).primaryColor,
-                        decoration: TextDecoration.underline,
-                      ),
-                    ),
-                    onTapLink: (text, href, title) async {
-                      if (href != null) {
-                        UrlHelper.launchUrl(href, context: context, ref: ref);
-                      }
-                    },
-                  ),
-                // Spacer if content exists and resources or footer will follow
-                if (commentContent.isNotEmpty && (hasResources || true))
-                  const SizedBox(height: 8.0),
-
-                // Resources Grid (Simplified) - remains the same
-                if (hasResources)
-                  Wrap(
-                    spacing: 8.0,
-                    runSpacing: 8.0,
-                    children:
-                        comment.resources.map((resource) {
-                          // ... resource rendering logic ...
-                          final filename =
-                              resource['filename'] as String? ?? 'file';
-                      return Tooltip(
-                        message: filename,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 3,
-                      ),
-                          decoration: BoxDecoration(
-                            color: CupertinoColors.systemGrey4.resolveFrom(
-                              context,
-                            ),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                CupertinoIcons.paperclip,
-                                size: 12,
-                                color: CupertinoColors.secondaryLabel
-                                    .resolveFrom(
-                              context,
-                            ),
-                          ),
-                              const SizedBox(width: 4),
-                              Text(
-                                filename.length > 15
-                                    ? '${filename.substring(0, 12)}...'
-                                    : filename,
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: CupertinoColors.secondaryLabel
-                                      .resolveFrom(context),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                // Spacer if resources exist before footer
-                if (hasResources) const SizedBox(height: 8.0),
-
-                // Footer Row (Date, Pinned Icon) - remains the same
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            // Wrap content in GestureDetector for SELECTION
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () {
+                // Update comment selection state
+                final notifier = ref.read(
+                  selectedWorkbenchCommentIdProvider.notifier,
+                );
+                if (isSelected) {
+                  notifier.state = null; // Toggle off
+                } else {
+                  notifier.state = comment.id; // Select this comment
+                  // Optionally clear item selection
+                  ref.read(selectedWorkbenchItemIdProvider.notifier).state =
+                      null;
+                }
+              },
+              child: Padding(
+                // Add padding inside the tappable area
+                padding: const EdgeInsets.only(
+                  left: 16.0,
+                  top: 16.0,
+                  bottom: 16.0,
+                  right: 8.0, // Keep right padding smaller for button space
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      formattedDate,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: CupertinoColors.secondaryLabel.resolveFrom(
-                          context,
-                        ),
-                        fontStyle: FontStyle.italic,
-                      ),
-                    ),
-                    if (comment.pinned)
-                      Padding(
-                        padding: const EdgeInsets.only(left: 8.0),
-                        child: Icon(
-                          CupertinoIcons.pin_fill,
-                          size: 16,
-                          color: CupertinoColors.systemBlue.resolveFrom(
+                    // Comment Content (Markdown) - remains the same
+                    if (commentContent.isNotEmpty)
+                      MarkdownBody(
+                        data: commentContent,
+                        selectable: true,
+                        styleSheet: MarkdownStyleSheet.fromCupertinoTheme(
+                          CupertinoTheme.of(context),
+                        ).copyWith(
+                          p: CupertinoTheme.of(context).textTheme.textStyle
+                              .copyWith(fontSize: 15, height: 1.4),
+                          a: CupertinoTheme.of(
                             context,
+                          ).textTheme.textStyle.copyWith(
+                            color: CupertinoTheme.of(context).primaryColor,
+                            decoration: TextDecoration.underline,
                           ),
                         ),
+                        onTapLink: (text, href, title) async {
+                          if (href != null) {
+                            UrlHelper.launchUrl(
+                              href,
+                              context: context,
+                              ref: ref,
+                            );
+                          }
+                        },
                       ),
+                    // Spacer if content exists and resources or footer will follow
+                    if (commentContent.isNotEmpty && (hasResources || true))
+                      const SizedBox(height: 8.0),
+
+                    // Resources Grid (Simplified) - remains the same
+                    if (hasResources)
+                      Wrap(
+                        spacing: 8.0,
+                        runSpacing: 8.0,
+                        children:
+                            comment.resources.map((resource) {
+                              // ... resource rendering logic ...
+                              final filename =
+                                  resource['filename'] as String? ?? 'file';
+                              return Tooltip(
+                                message: filename,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 3,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: CupertinoColors.systemGrey4
+                                        .resolveFrom(context),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        CupertinoIcons.paperclip,
+                                        size: 12,
+                                        color: CupertinoColors.secondaryLabel
+                                            .resolveFrom(context),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        filename.length > 15
+                                            ? '${filename.substring(0, 12)}...'
+                                            : filename,
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color: CupertinoColors.secondaryLabel
+                                              .resolveFrom(context),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            }).toList(),
+                      ),
+                    // Spacer if resources exist before footer
+                    if (hasResources) const SizedBox(height: 8.0),
+
+                    // Footer Row (Date, Pinned Icon) - remains the same
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          formattedDate,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: CupertinoColors.secondaryLabel.resolveFrom(
+                              context,
+                            ),
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                        if (comment.pinned)
+                          Padding(
+                            padding: const EdgeInsets.only(left: 8.0),
+                            child: Icon(
+                              CupertinoIcons.pin_fill,
+                              size: 16,
+                              color: CupertinoColors.systemBlue.resolveFrom(
+                                context,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
                   ],
                 ),
-              ],
+              ),
             ),
           ),
-          // Place the CupertinoButton directly
+          // Ellipsis Button (outside the selection GestureDetector)
           CupertinoButton(
             padding: const EdgeInsets.only(
               left: 0.0,
-            ), // Adjust left padding as needed, remove negative top
+              right: 8.0, // Add some right padding for visual spacing
+              top: 8.0, // Add top padding to align better
+            ),
             minSize: 30, // Ensure tappable area
             onPressed: () => _showActions(context, ref),
             child: const Icon(

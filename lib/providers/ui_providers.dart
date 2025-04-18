@@ -39,6 +39,20 @@ final activeCommentIdProvider = StateProvider<String?>(
   name: 'activeCommentIdProvider',
 );
 
+/// Stores the ID of the currently selected WorkbenchItemReference in the list.
+/// Used for highlighting and potential keyboard navigation/actions.
+final selectedWorkbenchItemIdProvider = StateProvider<String?>(
+  (ref) => null,
+  name: 'selectedWorkbenchItemIdProvider',
+);
+
+/// Stores the ID of the currently selected Comment (either in preview or full card).
+/// Used for highlighting and potential keyboard navigation/actions.
+final selectedWorkbenchCommentIdProvider = StateProvider<String?>(
+  (ref) => null,
+  name: 'selectedWorkbenchCommentIdProvider',
+);
+
 /// Toggle provider for the capture utility expansion state
 final captureUtilityToggleProvider = StateProvider<bool>((ref) => false);
 

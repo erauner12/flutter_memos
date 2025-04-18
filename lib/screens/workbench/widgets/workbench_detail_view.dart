@@ -1,7 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_memos/providers/workbench_instances_provider.dart';
 import 'package:flutter_memos/providers/workbench_provider.dart';
-import 'package:flutter_memos/screens/item_detail/item_detail_screen.dart';
 import 'package:flutter_memos/screens/workbench/widgets/workbench_item_tile.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -91,21 +90,9 @@ class WorkbenchDetailView extends ConsumerWidget {
             child: WorkbenchItemTile(
               key: ValueKey(item.id), // Use unique item ID for key
               itemReference: item,
+              onTap: () {},
               // Removed index parameter as reordering is disabled for now
               // index: index,
-              onTap: () {
-                // Update last opened item for the *currently active* instance
-                ref
-                    .read(workbenchInstancesProvider.notifier)
-                    .setLastOpenedItem(activeInstanceId, item.id);
-                // Navigate using the context from the builder, which should be within the nested navigator
-                Navigator.of(context).push(
-                  CupertinoPageRoute(
-                    builder:
-                        (_) => ItemDetailScreen(itemId: item.referencedItemId),
-                  ),
-                );
-              },
             ),
           );
         },
