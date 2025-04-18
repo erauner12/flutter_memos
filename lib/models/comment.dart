@@ -74,7 +74,7 @@ class Comment {
   /// Factory constructor from Todoist Comment
   factory Comment.fromTodoistComment(
     todoist.Comment todoistComment,
-    String? parentIdContext,
+    String? parentIdContext, {required String serverId},
   ) {
     // Determine the parentId: Use context first, then task ID, then project ID from comment
     final String effectiveParentId =

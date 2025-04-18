@@ -1,13 +1,16 @@
 import 'package:collection/collection.dart'; // For listEquals
 import 'package:flutter/foundation.dart';
+import 'package:flutter_memos/models/base_item.dart'; // Import BaseItem
 
-// Enums matching Memos structure for simplicity, adapt if Blinko differs significantly
+// Enums matching Memos structure for simplicity
 enum NoteState { normal, archived }
 
 enum NoteVisibility { public, private, protected }
 
 @immutable
-class NoteItem {
+class NoteItem implements BaseItem {
+  // Implement BaseItem
+  @override
   final String id; // Server-assigned ID (string format for consistency)
   final String content;
   final bool pinned;
@@ -16,13 +19,13 @@ class NoteItem {
   final DateTime createTime;
   final DateTime updateTime;
   final DateTime displayTime;
-  final List<String> tags; // Assuming tags are simple strings for now
+  final List<String> tags;
   final List<Map<String, dynamic>>? resources;
   final List<Map<String, dynamic>>? relations;
-  final String? creatorId; // String ID of the creator user
-  final String? parentId; // String ID of the parent memo/note
-  final DateTime? startDate; // Added start date
-  final DateTime? endDate; // Added end date
+  final String? creatorId;
+  final String? parentId;
+  final DateTime? startDate;
+  final DateTime? endDate;
 
   const NoteItem({
     required this.id,
@@ -38,9 +41,44 @@ class NoteItem {
     this.relations = const [],
     this.creatorId,
     this.parentId,
-    this.startDate, // Added start date
-    this.endDate, // Added end date
+    this.startDate,
+    this.endDate,
   });
+
+  // --- BaseItem Implementation ---
+
+  @override
+  String get title {
+    // Use the first non-empty line as title, fallback to first 50 chars
+    final lines = content.split('\n').where((line) => line.trim().isNotEmpty);
+    if (lines.isNotEmpty) {
+      return lines.first.trim();
+    }
+    // Fallback if content is empty or only whitespace lines
+    return content.length > 50 ? '${content.substring(0, 50)}...' : content;
+  }
+
+  @override
+  String? get description {
+    // Return null for description for now, or potentially the rest of the content?
+    // Let's return null for simplicity, UI can show full content if needed.
+    return null;
+    // Alternative: return content excluding the first line if it exists
+    // final lines = content.split('\n').where((line) => line.trim().isNotEmpty).toList();
+    // if (lines.length > 1) {
+    //   return lines.skip(1).join('\n').trim();
+    // }
+    // return null;
+  }
+
+  @override
+  DateTime get createdAt => createTime; // Map createTime to createdAt
+
+  @override
+  BaseItemType get itemType => BaseItemType.note; // This is a Note
+
+  // --- End BaseItem Implementation ---
+
 
   NoteItem copyWith({
     String? id,
@@ -56,8 +94,8 @@ class NoteItem {
     List<Map<String, dynamic>>? relations,
     String? creatorId,
     String? parentId,
-    DateTime? startDate, // Added start date
-    DateTime? endDate, // Added end date
+    DateTime? startDate,
+    DateTime? endDate,
   }) {
     return NoteItem(
       id: id ?? this.id,
@@ -73,8 +111,8 @@ class NoteItem {
       relations: relations ?? this.relations,
       creatorId: creatorId ?? this.creatorId,
       parentId: parentId ?? this.parentId,
-      startDate: startDate ?? this.startDate, // Added start date
-      endDate: endDate ?? this.endDate, // Added end date
+      startDate: startDate ?? this.startDate,
+      endDate: endDate ?? this.endDate,
     );
   }
 
@@ -93,12 +131,18 @@ class NoteItem {
         other.updateTime == updateTime &&
         other.displayTime == displayTime &&
         listEquals(other.tags, tags) &&
-        listEquals(other.resources, other.resources) &&
-        listEquals(other.relations, other.relations) &&
+        listEquals(
+          other.resources,
+          resources,
+        ) && // Corrected: compare other.resources with this.resources
+        listEquals(
+          other.relations,
+          relations,
+        ) && // Corrected: compare other.relations with this.relations
         other.creatorId == creatorId &&
         other.parentId == parentId &&
-        other.startDate == startDate && // Added start date check
-        other.endDate == endDate; // Added end date check
+        other.startDate == startDate &&
+        other.endDate == endDate;
   }
 
   @override
@@ -118,14 +162,13 @@ class NoteItem {
       listEquality.hash(relations),
       creatorId,
       parentId,
-      startDate, // Added start date
-      endDate, // Added end date
+      startDate,
+      endDate,
     );
   }
 
   @override
   String toString() {
-    // Optionally add startDate/endDate to toString
-    return 'NoteItem(id: $id, state: ${state.name}, pinned: $pinned, startDate: $startDate, content: ${content.substring(0, (content.length > 20 ? 20 : content.length))}...)';
+    return 'NoteItem(id: $id, state: ${state.name}, pinned: $pinned, startDate: $startDate, title: ${title.substring(0, (title.length > 20 ? 20 : title.length))}...)';
   }
 }

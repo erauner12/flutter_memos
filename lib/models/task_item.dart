@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter_memos/models/base_item.dart'; // Import BaseItem
 import 'package:flutter_memos/todoist_api/lib/api.dart' as todoist;
 
 /// Enum for task status (open/completed)
@@ -6,10 +7,13 @@ enum TaskStatus { open, completed }
 
 /// App-level model for a Todoist task
 @immutable
-class TaskItem {
+class TaskItem implements BaseItem {
+  // Implement BaseItem
+  @override
   final String id; // Todoist task ID (string)
   final String serverId; // Identifier for the "Todoist integration" instance
   final String content; // Todoist task content
+  @override
   final String? description; // Todoist task description
   final bool isCompleted;
   final int priority; // 1-4
@@ -21,11 +25,10 @@ class TaskItem {
   final String? sectionId;
   final String? parentId; // For sub-tasks
   final int commentCount;
-  final DateTime createdAt;
+  @override
+  final DateTime createdAt; // Already exists
   final String? creatorId;
   final String? assigneeId;
-
-  // Add other relevant fields as needed
 
   const TaskItem({
     required this.id,
@@ -47,52 +50,79 @@ class TaskItem {
     this.assigneeId,
   });
 
+  // --- BaseItem Implementation ---
+
+  // 'id' getter is implicitly provided by the final field 'id'
+  // 'createdAt' getter is implicitly provided by the final field 'createdAt'
+  // 'description' getter is implicitly provided by the final field 'description'
+
+  @override
+  String get title => content; // Use task content as the title
+
+  @override
+  BaseItemType get itemType => BaseItemType.task; // This is a Task
+
+  // --- End BaseItem Implementation ---
+
+
   /// Factory to create TaskItem from a todoist.Task
   factory TaskItem.fromTodoistTask(todoist.Task task, String serverId) {
-    // Access the nested Due object within TaskDue
-    final todoistDue = task.due?.dueObject;
+    final todoistDue = task.due; // Access TaskDue directly
 
-    // Prefer datetime if available, else date, else null
     DateTime? parsedDueDate;
-    if (todoistDue?.datetime != null) {
-      parsedDueDate = todoistDue!.datetime;
-    } else if (todoistDue?.date != null) {
-      // Todoist date is just YYYY-MM-DD, parse it as such.
-      // DateTime.tryParse might require time components, use specific format parsing if needed
-      // For simplicity, assuming DateTime.tryParse handles 'YYYY-MM-DD' correctly,
-      // or consider using a date formatting library if issues arise.
-      // Let's ensure it parses correctly, assuming local timezone for date-only values.
+    if (todoistDue?.dueObject?.datetime != null) {
       try {
-        parsedDueDate = DateTime.parse(
-          todoistDue!.date.toIso8601String().substring(0, 10),
-        );
+        // Todoist datetime includes timezone info (e.g., "2016-09-01T12:00:00Z" or "...T12:00:00")
+        // DateTime.parse handles ISO 8601 format including 'Z' for UTC
+        parsedDueDate = todoistDue!.dueObject!.datetime;
       } catch (e) {
         if (kDebugMode) {
-          print("Error parsing todoist date string ${todoistDue!.date}: $e");
+          print(
+            "Error parsing todoist datetime string ${todoistDue?.dueObject?.datetime}: $e",
+          );
         }
-        // Fallback or leave null
+      }
+    } else if (todoistDue?.dueObject?.date != null) {
+      // Todoist date is just YYYY-MM-DD. Parse as local date at midnight.
+      try {
+        parsedDueDate = todoistDue!.dueObject!.date;
+      } catch (e) {
+        if (kDebugMode) {
+          print(
+            "Error parsing todoist date string ${todoistDue?.dueObject?.date}: $e",
+          );
+        }
       }
     }
 
+    DateTime parsedCreatedAt;
+    try {
+      // Todoist createdAt is ISO 8601 string "YYYY-MM-DDTHH:MM:SS.ssssssZ"
+      parsedCreatedAt = DateTime.parse(task.createdAt ?? '');
+    } catch (e) {
+      if (kDebugMode) {
+        print("Error parsing todoist createdAt string ${task.createdAt}: $e");
+      }
+      parsedCreatedAt = DateTime.now(); // Fallback to now
+    }
+
+
     return TaskItem(
-      // Ensure ID is treated as String consistently
       id: task.id ?? '', // Todoist Task ID is String
       serverId: serverId,
       content: task.content ?? '',
-      description: task.description ?? '', // Default to empty string if null
+      description: task.description ?? '', // Use description field directly
       isCompleted: task.isCompleted ?? false,
       priority: task.priority ?? 1,
       dueDate: parsedDueDate,
-      dueString: todoistDue?.string,
-      isRecurring: todoistDue?.isRecurring ?? false,
-      labels: task.labels, // Ensure labels list is not null
+      dueString: todoistDue?.dueObject?.string,
+      isRecurring: todoistDue?.dueObject?.isRecurring ?? false,
+      labels: task.labels, // Labels can't be null based on compiler message
       projectId: task.projectId,
       sectionId: task.sectionId,
       parentId: task.parentId,
       commentCount: task.commentCount ?? 0,
-      createdAt:
-          DateTime.tryParse(task.createdAt ?? '') ??
-          DateTime.now(), // API provides string date
+      createdAt: parsedCreatedAt, // Use parsed createdAt
       creatorId: task.creatorId,
       assigneeId: task.assigneeId,
     );
@@ -127,7 +157,8 @@ class TaskItem {
       id: json['id'] as String,
       serverId: json['serverId'] as String,
       content: json['content'] as String,
-      description: json['description'] as String?,
+      description:
+          json['description'] as String?, // Matches BaseItem description
       isCompleted: json['isCompleted'] as bool,
       priority: json['priority'] as int,
       dueDate: json['dueDate'] != null ? DateTime.parse(json['dueDate']) : null,
@@ -138,7 +169,9 @@ class TaskItem {
       sectionId: json['sectionId'] as String?,
       parentId: json['parentId'] as String?,
       commentCount: json['commentCount'] as int,
-      createdAt: DateTime.parse(json['createdAt'] as String),
+      createdAt: DateTime.parse(
+        json['createdAt'] as String,
+      ), // Matches BaseItem createdAt
       creatorId: json['creatorId'] as String?,
       assigneeId: json['assigneeId'] as String?,
     );
@@ -148,7 +181,8 @@ class TaskItem {
     String? id,
     String? serverId,
     String? content,
-    String? description,
+    // Allow description to be explicitly set to null
+    ValueGetter<String?>? description,
     bool? isCompleted,
     int? priority,
     DateTime? dueDate,
@@ -167,7 +201,7 @@ class TaskItem {
       id: id ?? this.id,
       serverId: serverId ?? this.serverId,
       content: content ?? this.content,
-      description: description ?? this.description,
+      description: description != null ? description() : this.description,
       isCompleted: isCompleted ?? this.isCompleted,
       priority: priority ?? this.priority,
       dueDate: dueDate ?? this.dueDate,
@@ -182,5 +216,54 @@ class TaskItem {
       creatorId: creatorId ?? this.creatorId,
       assigneeId: assigneeId ?? this.assigneeId,
     );
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is TaskItem &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          serverId == other.serverId &&
+          content == other.content &&
+          description == other.description &&
+          isCompleted == other.isCompleted &&
+          priority == other.priority &&
+          dueDate == other.dueDate &&
+          dueString == other.dueString &&
+          isRecurring == other.isRecurring &&
+          listEquals(labels, other.labels) &&
+          projectId == other.projectId &&
+          sectionId == other.sectionId &&
+          parentId == other.parentId &&
+          commentCount == other.commentCount &&
+          createdAt == other.createdAt &&
+          creatorId == other.creatorId &&
+          assigneeId == other.assigneeId;
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    serverId,
+    content,
+    description,
+    isCompleted,
+    priority,
+    dueDate,
+    dueString,
+    isRecurring,
+    Object.hashAll(labels), // Use Object.hashAll for list
+    projectId,
+    sectionId,
+    parentId,
+    commentCount,
+    createdAt,
+    creatorId,
+    assigneeId,
+  );
+
+  @override
+  String toString() {
+    return 'TaskItem(id: $id, isCompleted: $isCompleted, title: ${title.substring(0, (title.length > 20 ? 20 : title.length))}...)';
   }
 }

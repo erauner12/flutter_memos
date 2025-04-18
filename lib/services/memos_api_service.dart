@@ -6,6 +6,7 @@ import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/models/list_notes_response.dart';
 import 'package:flutter_memos/models/note_item.dart'; // Use NoteItem
 import 'package:flutter_memos/models/server_config.dart';
+import 'package:flutter_memos/services/auth_strategy.dart'; // Import AuthStrategy
 import 'package:flutter_memos/services/note_api_service.dart'; // Implement NoteApiService
 import 'package:flutter_memos/utils/env.dart';
 import 'package:http/http.dart' as http;
@@ -20,13 +21,17 @@ class MemosApiService implements NoteApiService {
   late memos_api.ApiClient _apiClient;
 
   String _baseUrl = '';
-  String _authToken = '';
+  // String _authToken = ''; // Replaced by _authStrategy
+  AuthStrategy? _authStrategy; // Store the strategy
 
   @override
   String get apiBaseUrl => _baseUrl;
 
   @override
-  bool get isConfigured => _baseUrl.isNotEmpty && _authToken.isNotEmpty;
+  bool get isConfigured => _baseUrl.isNotEmpty && _authStrategy != null;
+
+  @override
+  AuthStrategy? get authStrategy => _authStrategy;
 
   static bool verboseLogging = true;
 
@@ -34,31 +39,68 @@ class MemosApiService implements NoteApiService {
   static List<String> get lastServerOrder => _lastServerOrder ?? [];
 
   MemosApiService._internal() {
-    _initializeClient('', '');
+    // Initialize with dummy client initially
+    _initializeClient('', null);
   }
 
   @override
   Future<void> configureService({
     required String baseUrl,
-    required String authToken,
+    AuthStrategy? authStrategy,
+    @Deprecated('Use authStrategy instead') String? authToken,
   }) async {
-    if (_baseUrl == baseUrl && _authToken == authToken && isConfigured) {
+    AuthStrategy? effectiveStrategy = authStrategy;
+
+    // Fallback to authToken if authStrategy is not provided
+    if (effectiveStrategy == null &&
+        authToken != null &&
+        authToken.isNotEmpty) {
+      // Assuming Memos uses Bearer token based on previous implementation
+      effectiveStrategy = BearerTokenAuthStrategy(authToken);
+      if (kDebugMode) {
+        print(
+          "[MemosApiService] configureService: Using fallback BearerTokenAuthStrategy from authToken.",
+        );
+      }
+    }
+
+    // Check if configuration actually changed
+    final currentToken = _authStrategy?.getSimpleToken();
+    final newToken = effectiveStrategy?.getSimpleToken();
+    if (_baseUrl == baseUrl && currentToken == newToken && isConfigured) {
+      if (kDebugMode) {
+        print("[MemosApiService] configureService: Configuration unchanged.");
+      }
       return;
     }
+
     _baseUrl = baseUrl;
-    _authToken = authToken;
+    _authStrategy = effectiveStrategy;
+
     try {
-      _initializeClient(baseUrl, authToken);
+      _initializeClient(baseUrl, _authStrategy);
+      if (kDebugMode) {
+        print(
+          "[MemosApiService] configureService: Service configured. Base URL: $_baseUrl, Auth Strategy: ${_authStrategy?.runtimeType}",
+        );
+      }
     } catch (e) {
+      _baseUrl = ''; // Reset on failure
+      _authStrategy = null;
+      if (kDebugMode) {
+        print("[MemosApiService] configureService: Configuration failed. $e");
+      }
       rethrow;
     }
   }
 
-  void _initializeClient(String baseUrl, String authToken) {
+  void _initializeClient(String baseUrl, AuthStrategy? authStrategy) {
     try {
       if (baseUrl.isEmpty) {
-        baseUrl = Env.apiBaseUrl;
+        baseUrl =
+            Env.apiBaseUrl; // Fallback to env if needed, though configureService should provide it
       }
+      // Normalize base URL
       if (baseUrl.toLowerCase().contains('/api/v1')) {
         final apiIndex = baseUrl.toLowerCase().indexOf('/api/v1');
         baseUrl = baseUrl.substring(0, apiIndex);
@@ -69,14 +111,31 @@ class MemosApiService implements NoteApiService {
         baseUrl = baseUrl.substring(0, baseUrl.length - 1);
       }
 
-      final token = authToken.isNotEmpty ? authToken : Env.memosApiKey;
+      // Use the strategy to create the Authentication object
+      final authentication =
+          authStrategy?.createMemosAuth() ??
+          memos_api.HttpBearerAuth(); // Default to empty auth if no strategy
+
       _apiClient = memos_api.ApiClient(
         basePath: baseUrl,
-        authentication: memos_api.HttpBearerAuth()..accessToken = token,
+        authentication: authentication,
       );
       _memoApi = memos_api.MemoServiceApi(_apiClient);
       _resourceApi = memos_api.ResourceServiceApi(_apiClient);
+
+      if (kDebugMode) {
+        print(
+          "[MemosApiService] _initializeClient: Memos API client initialized. BasePath: $baseUrl, Auth: ${authentication.runtimeType}",
+        );
+      }
+
     } catch (e) {
+      // Ensure client instances are reset or handled if initialization fails
+      _apiClient = memos_api.ApiClient(
+        authentication: memos_api.HttpBearerAuth(),
+      ); // Reset to dummy
+      _memoApi = memos_api.MemoServiceApi(_apiClient);
+      _resourceApi = memos_api.ResourceServiceApi(_apiClient);
       throw Exception('Failed to initialize Memos API client: $e');
     }
   }
@@ -502,13 +561,16 @@ class MemosApiService implements NoteApiService {
     }
 
     try {
+      // Get headers from the ApiClient's Authentication object
+      final headers = <String, String>{'Accept': '*/*'};
+      await apiClient.authentication?.applyToParams(
+        [],
+        headers,
+      ); // Populates headers
+
       final response = await http.get(
         Uri.parse(resourceUrl),
-        headers: {
-          'Authorization':
-              'Bearer ${apiClient.authentication is memos_api.HttpBearerAuth ? (apiClient.authentication as memos_api.HttpBearerAuth).accessToken : ''}',
-          'Accept': '*/*',
-        },
+        headers: headers,
       );
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
@@ -609,7 +671,10 @@ class MemosApiService implements NoteApiService {
   Future<bool> checkHealth() async {
     if (!isConfigured) return false;
     try {
+      // Use a lightweight call, like getting workspace profile or listing 1 memo
       await listNotes(pageSize: 1);
+      // Alternatively, Memos has a health check endpoint if the generated client supports it
+      // await _someHealthCheckApi.getHealth();
       return true;
     } catch (e) {
       if (kDebugMode) print('[MemosApiService] Health check failed: $e');
@@ -620,39 +685,41 @@ class MemosApiService implements NoteApiService {
   // --- HELPER METHODS ---
 
   memos_api.MemoServiceApi _getMemoApiForServer(ServerConfig? serverConfig) {
-    if (serverConfig == null ||
-        (serverConfig.serverUrl == _baseUrl &&
-         serverConfig.authToken == _authToken)) {
-      return _memoApi;
-    }
+    if (serverConfig == null) return _memoApi; // Use default configured client
     return memos_api.MemoServiceApi(_getApiClientForServer(serverConfig));
   }
 
   memos_api.ResourceServiceApi _getResourceApiForServer(ServerConfig? serverConfig) {
-    if (serverConfig == null ||
-        (serverConfig.serverUrl == _baseUrl &&
-         serverConfig.authToken == _authToken)) {
-      return _resourceApi;
-    }
+    if (serverConfig == null)
+      return _resourceApi; // Use default configured client
     return memos_api.ResourceServiceApi(_getApiClientForServer(serverConfig));
   }
 
   memos_api.ApiClient _getApiClientForServer(ServerConfig? serverConfig) {
-    if (serverConfig == null ||
-        (serverConfig.serverUrl == _baseUrl &&
-            serverConfig.authToken == _authToken)) {
+    if (serverConfig == null) {
+      // Ensure the default client is initialized if accessed directly
        if (!_apiClient.basePath.startsWith('http')) {
-         if (kDebugMode) print("[MemosApiService._getApiClientForServer] Warning: Default ApiClient seems uninitialized. Attempting re-init.");
-         if (_baseUrl.isNotEmpty && _authToken.isNotEmpty) {
-           _initializeClient(_baseUrl, _authToken);
+        if (kDebugMode)
+          print(
+            "[MemosApiService._getApiClientForServer] Warning: Default ApiClient seems uninitialized. Attempting re-init with current config.",
+          );
+        if (_baseUrl.isNotEmpty && _authStrategy != null) {
+          _initializeClient(_baseUrl, _authStrategy);
          } else {
            throw Exception("Default MemosApiService ApiClient is not configured.");
          }
        }
       return _apiClient;
     }
+
+    // Create a temporary AuthStrategy for the target server
+    // Assuming ServerConfig still holds authToken for this override scenario
+    final targetAuthStrategy = BearerTokenAuthStrategy(serverConfig.authToken);
+    final targetAuthentication = targetAuthStrategy.createMemosAuth();
+
     try {
       String targetBaseUrl = serverConfig.serverUrl;
+      // Normalize URL
       if (targetBaseUrl.toLowerCase().contains('/api/v1')) {
         targetBaseUrl = targetBaseUrl.substring(0, targetBaseUrl.toLowerCase().indexOf('/api/v1'));
       } else if (targetBaseUrl.toLowerCase().endsWith('/memos')) {
@@ -661,9 +728,10 @@ class MemosApiService implements NoteApiService {
       if (targetBaseUrl.endsWith('/')) {
         targetBaseUrl = targetBaseUrl.substring(0, targetBaseUrl.length - 1);
       }
+
       return memos_api.ApiClient(
         basePath: targetBaseUrl,
-        authentication: memos_api.HttpBearerAuth()..accessToken = serverConfig.authToken,
+        authentication: targetAuthentication,
       );
     } catch (e) {
       throw Exception('Failed to create API client for target server ${serverConfig.name ?? serverConfig.id}: $e');
@@ -671,23 +739,31 @@ class MemosApiService implements NoteApiService {
   }
 
   String _formatResourceName(String id, String resourceType) {
+    // Memos API uses 'memos/{id}' or 'resources/{id}' format
     if (id.contains('/')) {
+      // Already formatted (e.g., 'memos/123')
       return id;
     }
+    // Assume it's just the ID, format it
     return '$resourceType/$id';
   }
 
   String _extractIdFromName(String name) {
+    // Extracts '123' from 'memos/123' or 'resources/123'
     return name.split('/').last;
   }
 
   NoteItem _convertApiMemoToNoteItem(memos_api.Apiv1Memo apiMemo) {
     DateTime parseDateTimeSafe(DateTime? dt) {
-      if (dt == null || dt.year == 1 || dt.year == 1970) return DateTime(1970);
-      return dt;
+      // Handle potential null or epoch dates from API
+      if (dt == null || dt.year == 1 || dt.year == 1970)
+        return DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+      return dt
+          .toLocal(); // Convert to local time for consistency? Or keep UTC? Let's try local.
     }
     final createTime = parseDateTimeSafe(apiMemo.createTime);
     final updateTime = parseDateTimeSafe(apiMemo.updateTime);
+    // Use displayTime if available, otherwise updateTime, ensuring safety
     final displayTime = parseDateTimeSafe(apiMemo.displayTime ?? apiMemo.updateTime);
 
     return NoteItem(
@@ -704,19 +780,24 @@ class MemosApiService implements NoteApiService {
       relations: apiMemo.relations.map(_convertApiRelationToMap).toList(),
       creatorId: apiMemo.creator != null ? _extractIdFromName(apiMemo.creator!) : null,
       parentId: apiMemo.parent != null ? _extractIdFromName(apiMemo.parent!) : null,
-      startDate: null,
+      startDate:
+          null, // Memos API doesn't have start/end dates directly on memo
       endDate: null,
     );
   }
 
   Map<String, dynamic> _convertApiResourceToMap(memos_api.V1Resource apiResource) {
+    DateTime? createTime;
+    if (apiResource.createTime != null) {
+      createTime = apiResource.createTime!.toLocal(); // Convert to local
+    }
     return {
       'id': apiResource.name != null ? _extractIdFromName(apiResource.name!) : null,
-      'name': apiResource.name,
+      'name': apiResource.name, // Full name like 'resources/123'
       'filename': apiResource.filename,
       'contentType': apiResource.type,
       'size': apiResource.size != null ? int.tryParse(apiResource.size!) : null,
-      'createTime': apiResource.createTime?.toIso8601String(),
+      'createTime': createTime?.toIso8601String(),
       'externalLink': apiResource.externalLink,
     };
   }
@@ -724,11 +805,12 @@ class MemosApiService implements NoteApiService {
   // Updated converter to Comment model
   Comment _convertApiMemoToComment(
     memos_api.Apiv1Memo apiMemo,
-    String serverId,
+    String serverId, // Server ID context passed in
   ) {
     DateTime parseDateTimeSafe(DateTime? dt) {
-      if (dt == null || dt.year == 1 || dt.year == 1970) return DateTime(1970);
-      return dt;
+      if (dt == null || dt.year == 1 || dt.year == 1970)
+        return DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+      return dt.toLocal(); // Convert to local time
     }
     final createTime = parseDateTimeSafe(apiMemo.createTime);
     final updateTime = parseDateTimeSafe(apiMemo.updateTime);
@@ -738,14 +820,14 @@ class MemosApiService implements NoteApiService {
       content: apiMemo.content ?? '',
       creatorId: apiMemo.creator != null ? _extractIdFromName(apiMemo.creator!) : null,
       createdTs: createTime, // Use DateTime
-      updatedTs: updateTime, // Use DateTime?
+      updatedTs: updateTime, // Use DateTime
       state: _parseApiStateToCommentState(apiMemo.state),
       pinned: apiMemo.pinned ?? false,
       resources: apiMemo.resources.map(_convertApiResourceToMap).toList(),
       parentId:
           apiMemo.parent != null
               ? _extractIdFromName(apiMemo.parent!)
-              : '', // Ensure parentId is non-null
+              : '', // Ensure parentId is non-null string
       serverId: serverId, // Pass serverId
       relations:
           const [], // Memos comments don't have relations in this context
@@ -755,8 +837,8 @@ class MemosApiService implements NoteApiService {
 
   List<Comment> _parseCommentsFromApiResponse(
     memos_api.V1ListMemoCommentsResponse response,
-    String parentId,
-    String serverId,
+    String parentId, // Parent note ID
+    String serverId, // Server ID context
   ) {
     return response.memos
         .map((apiMemo) => _convertApiMemoToComment(apiMemo, serverId))
@@ -767,7 +849,10 @@ class MemosApiService implements NoteApiService {
     return {
       'memoId': apiRelation.memo?.name != null ? _extractIdFromName(apiRelation.memo!.name!) : null,
       'relatedMemoId': apiRelation.relatedMemo?.name != null ? _extractIdFromName(apiRelation.relatedMemo!.name!) : null,
-      'type': apiRelation.type?.toJson().toUpperCase(),
+      'type':
+          apiRelation.type
+              ?.toJson()
+              .toUpperCase(), // e.g., "REFERENCE", "COMMENT"
     };
   }
 
@@ -778,14 +863,23 @@ class MemosApiService implements NoteApiService {
     if (resources == null) return [];
     return resources
         .map((resMap) {
+          // Ensure 'name' is correctly formatted as 'resources/{id}' if available
+          String? resourceName = resMap['name'] as String?;
+          final String? resourceId = resMap['id'] as String?;
+          if (resourceName == null && resourceId != null) {
+            resourceName = _formatResourceName(resourceId, 'resources');
+          }
+
           return memos_api.V1Resource(
-            name: resMap['name'] as String?, // 'name' should be 'resources/id'
+            name: resourceName, // Use formatted name
             filename: resMap['filename'] as String?,
             type: resMap['contentType'] as String?,
             // Other fields like content, size, externalLink are usually read-only or set by server
           );
         })
-        .where((r) => r.name != null && r.name!.isNotEmpty)
+        .where(
+          (r) => r.name != null && r.name!.isNotEmpty,
+        ) // Filter out invalid resources
         .toList();
   }
 
@@ -796,7 +890,7 @@ class MemosApiService implements NoteApiService {
       case memos_api.V1State.ARCHIVED:
         return NoteState.archived;
       case memos_api.V1State.NORMAL:
-      default:
+      default: // Treat unspecified or unknown as normal
         return NoteState.normal;
     }
   }
@@ -804,7 +898,7 @@ class MemosApiService implements NoteApiService {
   CommentState _parseApiStateToCommentState(memos_api.V1State? apiState) {
     switch (apiState) {
       case memos_api.V1State.ARCHIVED:
-        return CommentState.archived;
+        return CommentState.archived; // Memos only has Normal/Archived
       case memos_api.V1State.NORMAL:
       default:
         return CommentState.normal;
@@ -818,8 +912,9 @@ class MemosApiService implements NoteApiService {
       case memos_api.V1Visibility.PROTECTED:
         return NoteVisibility.protected;
       case memos_api.V1Visibility.PUBLIC:
-      default:
         return NoteVisibility.public;
+      default: // Treat unspecified or unknown as private for safety
+        return NoteVisibility.private;
     }
   }
 
@@ -836,7 +931,7 @@ class MemosApiService implements NoteApiService {
   memos_api.V1State _getApiStateFromCommentState(CommentState commentState) {
     switch (commentState) {
       case CommentState.archived:
-      case CommentState.deleted: // Map deleted to archived for Memos
+      case CommentState.deleted: // Map deleted to archived for Memos API
         return memos_api.V1State.ARCHIVED;
       case CommentState.normal:
       default:
@@ -851,15 +946,23 @@ class MemosApiService implements NoteApiService {
       case NoteVisibility.protected:
         return memos_api.V1Visibility.PROTECTED;
       case NoteVisibility.public:
+      default: // Default to public if mapping from app model
         return memos_api.V1Visibility.PUBLIC;
     }
   }
 
   Future<String> _decodeBodyBytes(http.Response response) async {
     try {
+      // Attempt to decode as UTF-8, allowing malformed sequences
       return utf8.decode(response.bodyBytes, allowMalformed: true);
     } catch (e) {
-      return response.body;
+      // Fallback to Latin-1 or raw string if UTF-8 fails
+      try {
+        return latin1.decode(response.bodyBytes);
+      } catch (_) {
+        // Last resort: return the raw body string if decoding fails completely
+        return response.body;
+      }
     }
   }
 }

@@ -1,19 +1,26 @@
 import 'package:flutter/foundation.dart'; // Import Uint8List
-// Keep ServerConfig import
 import 'package:flutter_memos/models/server_config.dart';
+import 'package:flutter_memos/services/auth_strategy.dart'; // Import AuthStrategy
 
 /// Base interface for all API services (Memos, Blinko, Todoist, etc.).
 /// Contains only methods expected to be common across *all* service types.
 abstract class BaseApiService {
   // --- Configuration & Health ---
   String get apiBaseUrl; // URL used by the service (may be fixed like Todoist)
-  bool get isConfigured; // Check if service has valid config (URL/token)
+  bool
+  get isConfigured; // Check if service has valid config (URL/token/strategy)
+  AuthStrategy? get authStrategy; // Expose the current auth strategy
 
-  /// Configure the service instance, typically with base URL and auth token.
-  /// Some services might ignore the baseUrl if it's fixed (like Todoist).
+  /// Configure the service instance using an AuthStrategy or fallback token.
+  ///
+  /// Use [authStrategy] for pluggable authentication (preferred).
+  /// Use [authToken] for direct token configuration (legacy/fallback).
+  /// Some services might ignore [baseUrl] if it's fixed (like Todoist).
   Future<void> configureService({
     required String baseUrl,
-    required String authToken,
+    AuthStrategy? authStrategy, // New preferred way
+    @Deprecated('Use authStrategy instead')
+    String? authToken, // Keep for fallback
   });
 
   /// Check the health/reachability of the configured API service.
@@ -36,23 +43,6 @@ abstract class BaseApiService {
     String resourceIdentifier, {
     ServerConfig? targetServerOverride,
   });
-
-  // --- Note Operations (Moved to NoteApiService) ---
-  // Future<ListNotesResponse> listNotes(...);
-  // Future<NoteItem> getNote(...);
-  // Future<NoteItem> createNote(...);
-  // Future<NoteItem> updateNote(...);
-  // Future<void> deleteNote(...);
-  // Future<NoteItem> archiveNote(...);
-  // Future<NoteItem> togglePinNote(...);
-  // Future<void> setNoteRelations(...);
-
-  // --- Comment Operations (Moved to NoteApiService / TaskApiService) ---
-  // Future<List<Comment>> listComments(...);
-  // Future<Comment> getComment(...);
-  // Future<Comment> createComment(...);
-  // Future<Comment> updateComment(...);
-  // Future<void> deleteComment(...);
 }
 
 // --- Dummy Implementation ---
@@ -63,11 +53,14 @@ class DummyApiService implements BaseApiService {
   String get apiBaseUrl => '';
   @override
   bool get isConfigured => false;
+  @override
+  AuthStrategy? get authStrategy => null;
 
   @override
   Future<void> configureService({
     required String baseUrl,
-    required String authToken,
+    AuthStrategy? authStrategy,
+    @Deprecated('Use authStrategy instead') String? authToken,
   }) async {
     // No-op
   }
