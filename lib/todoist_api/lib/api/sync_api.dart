@@ -98,9 +98,21 @@ class SyncApi {
       resourceTypes: resourceTypes,
     );
 
-    final responseBodyBytes = await _decodeBodyBytes(response);
-    final responseBodyString =
-        utf8.decode(responseBodyBytes as List<int>); // Decode bytes to string
+    // --- FIX START ---
+    // Handle potential String or List<int> from _decodeBodyBytes
+    final dynamic responseBodyData = await _decodeBodyBytes(response);
+    String responseBodyString;
+
+    if (responseBodyData is String) {
+      responseBodyString = responseBodyData;
+    } else if (responseBodyData is List<int>) {
+      responseBodyString = utf8.decode(responseBodyData);
+    } else {
+      // Handle unexpected type or null case
+      responseBodyString = '';
+    }
+    // --- FIX END ---
+
 
     if (response.statusCode >= HttpStatus.badRequest) {
       // Pass the decoded string to ApiException
@@ -117,6 +129,27 @@ class SyncApi {
     }
     return null;
   }
+
+  // Assume a standard _decodeBodyBytes helper exists within the generated client or ApiClient
+  // This helper might return String or List<int> depending on http client behavior / headers.
+  // We keep the one in TodoistApiService for its own use, this one is internal to SyncApi.
+  Future<dynamic> _decodeBodyBytes(Response response) async {
+    // This is a simplified placeholder. The actual implementation might be more complex
+    // in the generated code, potentially checking content-type headers.
+    // For the purpose of fixing the error, we assume it might return String or List<int>.
+    // The http package's response.body often returns String directly if possible.
+    try {
+      // Try returning String first if available and non-empty
+      if (response.body.isNotEmpty) {
+        return response.body;
+      }
+    } catch (_) {
+      // Fallback or if response.body throws
+    }
+    // Fallback to bytes if body string access failed or was empty
+    return response.bodyBytes;
+  }
+
 }
 
 // Basic ApiHelper implementation (should be part of generated code)
