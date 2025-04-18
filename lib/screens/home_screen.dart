@@ -112,6 +112,45 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             for (final tab in _tabs)
               BottomNavigationBarItem(icon: Icon(tab.icon), label: tab.label),
           ],
+          onTap: (int newIndex) {
+            final currentIndex = _tabController.index;
+
+            // If user taps the same tab that is currently active
+            if (currentIndex == newIndex) {
+              final currentTab = _tabs[newIndex];
+              switch (currentTab) {
+                case HomeTab.more:
+                  // Pop the “More” tab’s stack to root
+                  moreTabNavKey.currentState?.popUntil(
+                    (route) => route.isFirst,
+                  );
+                  break;
+                // Optional: do the same for other tabs (common iOS pattern).
+                case HomeTab.notes:
+                  memosTabNavKey.currentState?.popUntil(
+                    (route) => route.isFirst,
+                  );
+                  break;
+                case HomeTab.workbench:
+                  workbenchTabNavKey.currentState?.popUntil(
+                    (route) => route.isFirst,
+                  );
+                  break;
+                case HomeTab.chat:
+                  chatTabNavKey.currentState?.popUntil(
+                    (route) => route.isFirst,
+                  );
+                  break;
+                // No default needed as all enum cases are handled
+              }
+            } else {
+              // If it's a different tab, simply switch the tab controller index
+              // This triggers the tabBuilder to rebuild with the new index
+              setState(() {
+                _tabController.index = newIndex;
+              });
+            }
+          },
         ),
         tabBuilder: (BuildContext context, int index) {
           // Get the corresponding HomeTab enum value for the index

@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter_memos/models/task_filter.dart'; // Import the new enum
 import 'package:flutter_memos/models/task_item.dart';
 import 'package:flutter_memos/providers/api_providers.dart';
 import 'package:flutter_memos/services/task_api_service.dart';
@@ -34,23 +35,57 @@ final taskDetailProvider =
   }
 });
 
-// Basic provider that returns the list of tasks from the notifier.
-// Filtering logic (search, status, labels) can be added here later.
-final filteredTasksProvider = Provider<List<TaskItem>>((ref) {
+// REMOVED: Old filteredTasksProvider
+// final filteredTasksProvider = Provider<List<TaskItem>>((ref) { ... });
+
+// NEW: Provider family for filtered tasks based on TaskFilter
+final filteredTasksProviderFamily = Provider.family<
+  List<TaskItem>,
+  TaskFilter
+>((ref, taskFilter) {
   final tasksState = ref.watch(tasksNotifierProvider);
+  final allTasks = tasksState.tasks;
+
   // --- Add filtering logic here based on other providers ---
   // Example: final searchTerm = ref.watch(taskSearchProvider);
   // Example: final statusFilter = ref.watch(taskStatusFilterProvider);
 
-  // Simple filtering example: Show completed tasks based on a hypothetical filter provider
-  final showCompleted = ref.watch(showCompletedTasksProvider);
-  if (!showCompleted) {
-    return tasksState.tasks.where((task) => !task.isCompleted).toList();
+  // Filter based on the provided taskFilter
+  List<TaskItem> filteredTasks;
+  switch (taskFilter) {
+    case TaskFilter.recurring:
+      filteredTasks = allTasks.where((t) => t.isRecurring).toList();
+      break;
+    case TaskFilter.notRecurring:
+      filteredTasks = allTasks.where((t) => !t.isRecurring).toList();
+      break;
+    case TaskFilter.dueToday:
+      final now = DateTime.now();
+      final todayStart = DateTime(now.year, now.month, now.day);
+      final tomorrowStart = DateTime(now.year, now.month, now.day + 1);
+      filteredTasks =
+          allTasks.where((t) {
+            // Check if dueDate is not null and falls on the current calendar day
+            return t.dueDate != null &&
+                t.dueDate!.isAfter(
+                  todayStart.subtract(const Duration(microseconds: 1)),
+                ) && // >= today 00:00:00.000
+                t.dueDate!.isBefore(tomorrowStart); // < tomorrow 00:00:00.000
+          }).toList();
+      break;
+    case TaskFilter.all:
+      filteredTasks = allTasks;
   }
 
-  // Default: return all tasks fetched
-  return tasksState.tasks;
+  // Apply other filters like 'show completed'
+  final showCompleted = ref.watch(showCompletedTasksProvider);
+  if (!showCompleted) {
+    return filteredTasks.where((task) => !task.isCompleted).toList();
+  }
+
+  return filteredTasks;
 });
+
 
 // Provider for controlling task filters (Example: Show Completed toggle)
 final showCompletedTasksProvider = StateProvider<bool>(
@@ -115,6 +150,9 @@ class TasksNotifier extends StateNotifier<TasksState> {
     state = state.copyWith(isLoading: true, clearError: true); // Clear previous errors on new fetch
     try {
       // Use the obtained service instance directly
+      // Pass the Todoist-specific filter string if provided (e.g., "today", "!recurring")
+      // Note: Our internal TaskFilter enum is mapped to these strings where applicable
+      // or handled client-side if no direct API filter exists.
       final tasks = await apiService.listTasks(filter: filter);
       // Check if still mounted before updating state
       if (!mounted) return;

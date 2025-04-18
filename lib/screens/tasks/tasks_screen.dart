@@ -1,10 +1,11 @@
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart'; // Keep for Material in OverlayEntry
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:flutter_memos/main.dart'; // Import for rootNavigatorKeyProvider
 import 'package:flutter_memos/models/server_config.dart'; // Still needed for ServerType enum in WorkbenchItemReference
+import 'package:flutter_memos/models/task_filter.dart'; // Import the filter enum
 import 'package:flutter_memos/models/task_item.dart';
 import 'package:flutter_memos/models/workbench_item_reference.dart';
 import 'package:flutter_memos/models/workbench_item_type.dart'; // Import the unified enum
@@ -26,7 +27,12 @@ const String _todoistWorkbenchServerName = 'Todoist';
 
 // Change from ConsumerStatefulWidget to HookConsumerWidget
 class TasksScreen extends HookConsumerWidget {
-  const TasksScreen({super.key});
+  final TaskFilter filter; // Add filter parameter
+
+  const TasksScreen({
+    super.key,
+    this.filter = TaskFilter.all, // Default to all tasks
+  });
 
   // Track current undo toast entry
   static OverlayEntry? _currentUndoToast;
@@ -257,6 +263,7 @@ class TasksScreen extends HookConsumerWidget {
       // Check if Todoist API key is configured
       final isTodoistConfigured = ref.read(todoistApiKeyProvider).isNotEmpty;
       if (isTodoistConfigured) {
+        // Fetch all tasks, filtering happens in the provider family
         await ref.read(tasksNotifierProvider.notifier).fetchTasks();
       }
     }
@@ -267,13 +274,15 @@ class TasksScreen extends HookConsumerWidget {
     final bool isTodoistConfigured = todoistApiKey.isNotEmpty;
 
     final tasksState = ref.watch(tasksNotifierProvider);
-    final tasks = ref.watch(filteredTasksProvider); // Watch the filtered list
+    // Watch the filtered list using the provider family and the screen's filter
+    final tasks = ref.watch(filteredTasksProviderFamily(filter));
 
     // Use useEffect to fetch tasks when Todoist becomes configured or on initial load
     useEffect(
       () {
         if (isTodoistConfigured) {
           // Fetch if configured, tasks are empty, not loading, and no error
+          // Fetch all tasks initially, filtering is done by the provider
           if (tasksState.tasks.isEmpty &&
               !tasksState.isLoading &&
               tasksState.error == null) {
@@ -302,9 +311,15 @@ class TasksScreen extends HookConsumerWidget {
       ],
     );
 
+    // Get the title from the filter enum extension
+    final screenTitle = filter.title;
+    final emptyStateMessage = filter.emptyStateMessage;
+
     return CupertinoPageScaffold(
       navigationBar: CupertinoNavigationBar(
-        middle: const Text('Tasks'),
+        middle: Text(screenTitle), // Use dynamic title
+        // Use previousPageTitle for automatic back button text
+        previousPageTitle: 'More', // Or get dynamically if needed
         leading: CupertinoButton(
           padding: EdgeInsets.zero,
           // Enable refresh only if configured and not loading
@@ -369,12 +384,12 @@ class TasksScreen extends HookConsumerWidget {
               );
             }
 
-            // Loading indicator
+            // Loading indicator (show only if the base task list is loading and filtered list is empty)
             if (tasksState.isLoading && tasks.isEmpty) {
               return const Center(child: CupertinoActivityIndicator());
             }
 
-            // Error display
+            // Error display (show only if there's an error and filtered list is empty)
             if (tasksState.error != null && tasks.isEmpty) {
               return Center(
                 child: Padding(
@@ -388,7 +403,7 @@ class TasksScreen extends HookConsumerWidget {
               );
             }
 
-            // Empty state (configured but no tasks)
+            // Empty state (configured, not loading, no error, but no tasks match the filter)
             if (tasks.isEmpty &&
                 !tasksState.isLoading &&
                 tasksState.error == null) {
@@ -396,7 +411,7 @@ class TasksScreen extends HookConsumerWidget {
                 child: Padding(
                   padding: const EdgeInsets.all(16.0),
                   child: Text(
-                    'No tasks found.\nPull down to refresh or add a new task.', // Corrected newline
+                    emptyStateMessage, // Use dynamic empty state message
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: CupertinoColors.secondaryLabel.resolveFrom(
