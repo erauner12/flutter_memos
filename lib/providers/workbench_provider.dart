@@ -83,9 +83,21 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
     state = state.copyWith(isLoading: true, clearError: true);
 
     try {
+      // Add logging before fetching
+      if (kDebugMode) {
+        print(
+          '[WorkbenchNotifier($instanceId)] loadItems: Fetching references for this instance.',
+        );
+      }
       final references = await _cloudKitService.getAllWorkbenchItemReferences(
         instanceId: instanceId,
       );
+      // Add logging after fetching, before sorting/processing
+      if (kDebugMode) {
+        print(
+          '[WorkbenchNotifier($instanceId)] loadItems: Fetched ${references.length} raw references from CloudKit.',
+        );
+      }
       references.sort((a, b) => b.addedTimestamp.compareTo(a.addedTimestamp));
       if (mounted) {
         state = state.copyWith(items: references, isLoading: false);
@@ -128,7 +140,19 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
     final Map<String, List<WorkbenchItemReference>> itemsByServer = {};
     for (final item in itemsToProcess) {
       if (item.instanceId != instanceId) {
+        // Add logging for skipped items
+        if (kDebugMode) {
+          print(
+            '[WorkbenchNotifier($instanceId)] _fetchAndPopulateDetails: Skipping item ${item.id} because its instanceId (${item.instanceId}) does not match.',
+          );
+        }
         continue; // Skip items not belonging to this instance
+      }
+      // Add logging for items being processed
+      if (kDebugMode) {
+        print(
+          '[WorkbenchNotifier($instanceId)] _fetchAndPopulateDetails: Processing item ${item.id} for server ${item.serverId}.',
+        );
       }
       (itemsByServer[item.serverId] ??= []).add(item);
     }
@@ -651,7 +675,6 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
       }
     }
   }
-
 
   void reorderItems(int oldIndex, int newIndex) {
     if (!mounted) {
