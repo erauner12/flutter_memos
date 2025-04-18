@@ -11,6 +11,7 @@ import 'package:flutter/cupertino.dart'
         CupertinoTabController, // Added
         CupertinoTabScaffold, // Added
         CupertinoTabView, // Added
+        GestureDetector, // Added for swipe detection
         GlobalKey,
         Icon,
         NavigatorState,
@@ -18,13 +19,15 @@ import 'package:flutter/cupertino.dart'
         StatefulWidget,
         Widget;
 import 'package:flutter/foundation.dart'; // For kDebugMode
+import 'package:flutter_memos/providers/chat_overlay_providers.dart'; // Import overlay provider
 import 'package:flutter_memos/screens/home_tabs.dart'; // Import the new enum
 import 'package:flutter_memos/screens/items/items_screen.dart';
 import 'package:flutter_memos/screens/tasks/new_task_screen.dart';
 import 'package:flutter_memos/screens/tasks/tasks_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'chat_screen.dart';
+// Removed ChatScreen import as it's now in the overlay
+// import 'chat_screen.dart';
 import 'item_detail/item_detail_screen.dart';
 import 'workbench/workbench_screen.dart';
 
@@ -51,12 +54,12 @@ final homeTabIndexMapProvider = Provider<Map<HomeTab, int>>(
   name: 'homeTabIndexMapProvider',
 );
 
-// --- Global Keys (Unchanged) ---
+// --- Global Keys (Unchanged, except chat key removed) ---
 final GlobalKey<NavigatorState> memosTabNavKey = GlobalKey<NavigatorState>();
 final GlobalKey<NavigatorState> tasksTabNavKey = GlobalKey<NavigatorState>();
 final GlobalKey<NavigatorState> workbenchTabNavKey =
     GlobalKey<NavigatorState>();
-final GlobalKey<NavigatorState> chatTabNavKey = GlobalKey<NavigatorState>();
+// final GlobalKey<NavigatorState> chatTabNavKey = GlobalKey<NavigatorState>(); // Removed chat key
 
 // --- HomeScreen Widget ---
 
@@ -72,7 +75,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   late CupertinoTabController _tabController; // Changed type
   late Map<HomeTab, int> _tabIndexes;
 
-  // Define the tabs dynamically based on the enum order
+  // Define the tabs dynamically based on the enum order (chat is now removed from enum)
   final List<HomeTab> _tabs = HomeTab.values.toList();
 
   @override
@@ -113,96 +116,102 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         ), // Type matches now
         homeTabIndexMapProvider.overrideWithValue(_tabIndexes),
       ],
-      child: CupertinoTabScaffold(
-        controller: _tabController, // Use the CupertinoTabController
-        tabBar: CupertinoTabBar(
-          items: [
-            // Generate BottomNavigationBarItems from the _tabs list
-            for (final tab in _tabs)
-              BottomNavigationBarItem(
-                icon: Icon(tab.icon), label: tab.label),
-          ],
-          // onTap is handled by the controller passed to CupertinoTabScaffold
-        ),
-        tabBuilder: (BuildContext context, int index) {
-          // Get the corresponding HomeTab enum value for the index
-          final currentTab = _tabs[index];
+      // Wrap with GestureDetector to detect swipe-to-open
+      child: GestureDetector(
+        onHorizontalDragUpdate: (details) {
+          // If user swipes from left to right near the edge with enough delta, open chat overlay
+          const edgeThreshold = 30.0; // Pixels from left edge
+          const swipeThreshold = 10.0; // Minimum horizontal movement to trigger
+          final bool isOverlayVisible = ref.read(chatOverlayVisibleProvider);
 
-          // Return the correct CupertinoTabView based on the enum value
-          switch (currentTab) {
-            case HomeTab.chat:
-              return CupertinoTabView(
-                navigatorKey: chatTabNavKey,
-                // Define routes for the Chat tab's navigator
-                onGenerateRoute: (settings) {
-                  Widget page;
-                  switch (settings.name) {
-                    case '/':
-                    case '/chat': // Handle both root and explicit '/chat'
-                    default:
-                      page = const ChatScreen();
-                  }
-                  return CupertinoPageRoute(
-                    builder: (_) => CupertinoPageScaffold(child: page),
-                    settings: settings, // Pass settings for arguments
-                  );
-                },
-              );
-            case HomeTab.workbench:
-              return CupertinoTabView(
-                navigatorKey: workbenchTabNavKey,
-                onGenerateRoute:
-                    (settings) => CupertinoPageRoute(
-                      builder:
-                          (_) => const CupertinoPageScaffold(
-                            child: WorkbenchScreen(),
-                          ),
-                      settings: settings,
-                    ),
-              );
-            case HomeTab.tasks:
-              return CupertinoTabView(
-                navigatorKey: tasksTabNavKey,
-                onGenerateRoute: (settings) {
-                  Widget page;
-                  switch (settings.name) {
-                    case '/tasks/new':
-                      page = const NewTaskScreen();
-                      break;
-                    case '/':
-                    default:
-                      page = const TasksScreen();
-                  }
-                  return CupertinoPageRoute(
-                    builder: (_) => CupertinoPageScaffold(child: page),
-                    settings: settings,
-                  );
-                },
-              );
-            case HomeTab.notes:
-              return CupertinoTabView(
-                navigatorKey: memosTabNavKey,
-                onGenerateRoute: (settings) {
-                  Widget page;
-                  switch (settings.name) {
-                    case '/item-detail':
-                      final args = settings.arguments as Map<String, dynamic>?;
-                      final itemId = args?['itemId'] as String?;
-                      page = ItemDetailScreen(itemId: itemId ?? '');
-                      break;
-                    // Add other routes like /edit-entity if needed within this tab
-                    case '/':
-                    default:
-                      page = const ItemsScreen();
-                  }
-                  return CupertinoPageRoute(
-                    builder: (_) => CupertinoPageScaffold(child: page),
-                    settings: settings,
-                  );
-                },
-              );
+          // Only trigger if overlay is not already visible and swipe starts near left edge
+          if (!isOverlayVisible &&
+              details.localPosition.dx < edgeThreshold &&
+              details.delta.dx > swipeThreshold) {
+            ref.read(chatOverlayVisibleProvider.notifier).state = true;
+            if (kDebugMode) {
+              print('[HomeScreen] Swipe detected, opening chat overlay.');
+            }
           }
         },
+        behavior:
+            HitTestBehavior
+                .translucent, // Ensure gesture detector covers the area
+        child: CupertinoTabScaffold(
+          controller: _tabController, // Use the CupertinoTabController
+          tabBar: CupertinoTabBar(
+            items: [
+              // Generate BottomNavigationBarItems from the _tabs list
+              for (final tab in _tabs)
+                BottomNavigationBarItem(icon: Icon(tab.icon), label: tab.label),
+            ],
+            // onTap is handled by the controller passed to CupertinoTabScaffold
+          ),
+          tabBuilder: (BuildContext context, int index) {
+            // Get the corresponding HomeTab enum value for the index
+            final currentTab = _tabs[index];
+
+            // Return the correct CupertinoTabView based on the enum value
+            switch (currentTab) {
+              // case HomeTab.chat: // Removed Chat case
+              //   return CupertinoTabView(...);
+              case HomeTab.workbench:
+                return CupertinoTabView(
+                  navigatorKey: workbenchTabNavKey,
+                  onGenerateRoute:
+                      (settings) => CupertinoPageRoute(
+                        builder:
+                            (_) => const CupertinoPageScaffold(
+                              child: WorkbenchScreen(),
+                            ),
+                        settings: settings,
+                      ),
+                );
+              case HomeTab.tasks:
+                return CupertinoTabView(
+                  navigatorKey: tasksTabNavKey,
+                  onGenerateRoute: (settings) {
+                    Widget page;
+                    switch (settings.name) {
+                      case '/tasks/new':
+                        page = const NewTaskScreen();
+                        break;
+                      case '/':
+                      default:
+                        page = const TasksScreen();
+                    }
+                    return CupertinoPageRoute(
+                      builder: (_) => CupertinoPageScaffold(child: page),
+                      settings: settings,
+                    );
+                  },
+                );
+              case HomeTab.notes:
+                return CupertinoTabView(
+                  navigatorKey: memosTabNavKey,
+                  onGenerateRoute: (settings) {
+                    Widget page;
+                    switch (settings.name) {
+                      case '/item-detail':
+                        final args =
+                            settings.arguments as Map<String, dynamic>?;
+                        final itemId = args?['itemId'] as String?;
+                        page = ItemDetailScreen(itemId: itemId ?? '');
+                        break;
+                      // Add other routes like /edit-entity if needed within this tab
+                      case '/':
+                      default:
+                        page = const ItemsScreen();
+                    }
+                    return CupertinoPageRoute(
+                      builder: (_) => CupertinoPageScaffold(child: page),
+                      settings: settings,
+                    );
+                  },
+                );
+            }
+          },
+        ),
       ),
     );
   }
