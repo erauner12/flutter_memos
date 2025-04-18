@@ -1,3 +1,5 @@
+
+
 /// Represents the type of item referenced by a WorkbenchItemReference.
 enum WorkbenchItemType {
   /// A standard note or memo.
@@ -11,7 +13,4 @@ enum WorkbenchItemType {
 
   /// A project item (currently unused, placeholder).
   project,
-
-  /// An unknown or unsupported item type.
-  unknown,
 }

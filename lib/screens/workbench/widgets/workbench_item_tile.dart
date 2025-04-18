@@ -1,1166 +1,270 @@
-import 'dart:async';
-import 'dart:math'; // For min
-
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/foundation.dart'; // For kDebugMode
-import 'package:flutter/services.dart'; // Needed for Clipboard
-import 'package:flutter_memos/main.dart'; // For rootNavigatorKeyProvider
 import 'package:flutter_memos/models/comment.dart';
-import 'package:flutter_memos/models/server_config.dart';
+import 'package:flutter_memos/models/workbench_instance.dart';
 import 'package:flutter_memos/models/workbench_item_reference.dart';
-import 'package:flutter_memos/models/workbench_item_type.dart'; // Import the unified enum
-import 'package:flutter_memos/providers/server_config_provider.dart';
-import 'package:flutter_memos/providers/task_providers.dart';
-import 'package:flutter_memos/providers/workbench_instances_provider.dart'; // Import instances provider
+import 'package:flutter_memos/providers/workbench_instances_provider.dart';
 import 'package:flutter_memos/providers/workbench_provider.dart';
-import 'package:flutter_memos/screens/tasks/new_task_screen.dart';
-import 'package:flutter_memos/utils/thread_utils.dart'; // Import the utility
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 
-// Convert to ConsumerStatefulWidget for hover state
-class WorkbenchItemTile extends ConsumerStatefulWidget {
+String formatRelativeTime(DateTime dateTime) {
+  final now = DateTime.now();
+  final difference = now.difference(dateTime);
+
+  if (difference.inSeconds < 60) {
+    return '${difference.inSeconds} seconds ago';
+  } else if (difference.inMinutes < 60) {
+    return '${difference.inMinutes} minutes ago';
+  } else if (difference.inHours < 24) {
+    return '${difference.inHours} hours ago';
+  } else if (difference.inDays < 7) {
+    return '${difference.inDays} days ago';
+  } else {
+    return '${dateTime.day}/${dateTime.month}/${dateTime.year}';
+  }
+}
+
+class WorkbenchItemTile extends ConsumerWidget {
   final WorkbenchItemReference itemReference;
-  final int index;
-
-  // onTap is required by ReorderableListView.builder's itemBuilder
   final VoidCallback onTap;
+  // Removed index as it's not needed without reordering enabled via this tile's handle
+  // final int index;
 
   const WorkbenchItemTile({
     super.key,
     required this.itemReference,
-    required this.index,
-    required this.onTap, // Make onTap required
+    required this.onTap,
+    // required this.index,
   });
 
-  @override
-  ConsumerState<WorkbenchItemTile> createState() => _WorkbenchItemTileState();
-}
-
-class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
-  bool _isHovering = false;
-  BuildContext?
-  _loadingDialogContext; // To store the context of the loading dialog
-
-  @override
-  void dispose() {
-    _dismissLoadingDialog(); // Ensure dialog is dismissed
-    super.dispose();
-  }
-
-  // Helper to dismiss loading dialog safely
-  void _dismissLoadingDialog() {
-    if (_loadingDialogContext != null) {
-      try {
-        if (Navigator.of(_loadingDialogContext!).canPop()) {
-          Navigator.of(_loadingDialogContext!).pop();
-        }
-      } catch (_) {
-        // Ignore errors if context is already invalid or cannot pop
-      }
-      _loadingDialogContext = null;
-    }
-  }
-
-  // Helper to show loading dialog safely
-  void _showLoadingDialog(BuildContext buildContext, String message) {
-    _dismissLoadingDialog();
-    if (!mounted) return;
-    showCupertinoDialog(
-      context: buildContext,
-      barrierDismissible: false,
-      builder: (dialogContext) {
-        _loadingDialogContext = dialogContext;
-        return CupertinoAlertDialog(
-          content: Row(
-            children: [
-              const CupertinoActivityIndicator(),
-              const SizedBox(width: 15),
-              Text(message),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  // Helper to get icon based on server type
-  IconData _getServerTypeIcon(ServerType type) {
-    switch (type) {
-      case ServerType.memos:
-        return CupertinoIcons.bolt_horizontal_circle_fill;
-      case ServerType.blinko:
-        return CupertinoIcons.sparkles;
-      case ServerType.todoist:
-        return CupertinoIcons.cloud;
-    }
-  }
-
-  // Helper to format relative time strings
-  String _formatRelativeTime(DateTime dateTime) {
-    final now = DateTime.now();
-    final difference = now.difference(dateTime);
-
-    if (difference.inSeconds < 60) {
-      return 'just now';
-    } else if (difference.inMinutes < 60) {
-      return '${difference.inMinutes}m';
-    } else if (difference.inHours < 24) {
-      return '${difference.inHours}h';
-    } else if (difference.inDays == 1) {
-      return 'yesterday';
-    } else if (difference.inDays < 7) {
-      return '${difference.inDays}d';
-    } else {
-      return DateFormat.yMd().format(dateTime.toLocal());
-    }
-  }
-
-  // Helper to show simple alert dialogs
-  void _showAlertDialog(BuildContext context, String title, String message) {
-    if (!mounted) return;
-    showCupertinoDialog(
-      context: context,
-      builder: (context) => CupertinoAlertDialog(
-        title: Text(title),
-        content: Text(message),
-        actions: [
-          CupertinoDialogAction(
-            isDefaultAction: true,
-            child: const Text('OK'),
-            onPressed: () => Navigator.of(context).pop(),
-          ),
-        ],
-      ),
-    );
-  }
-
-
-  Future<void> _handleRemoveItem() async {
-    final preview = widget.itemReference.previewContent ?? 'Item';
-    final confirm = await showCupertinoDialog<bool>(
-      context: context, // Use state's context
-      builder:
-          (dialogContext) => CupertinoAlertDialog(
-            title: const Text('Remove from Workbench?'),
-            content: Text(
-              'Remove "${preview.substring(0, min(30, preview.length))}${preview.length > 30 ? '...' : ''}" from this Workbench?',
-            ),
-            actions: [
-              CupertinoDialogAction(
-                child: const Text('Cancel'),
-                onPressed: () => Navigator.pop(dialogContext, false),
-              ),
-              CupertinoDialogAction(
-                isDestructiveAction: true,
-                child: const Text('Remove'),
-                onPressed: () => Navigator.pop(dialogContext, true),
-              ),
-            ],
-          ),
-    );
-
-    if (confirm == true && mounted) {
-      unawaited(
-        ref
-            .read(activeWorkbenchNotifierProvider) // Use active notifier
-            .removeItem(widget.itemReference.id),
-      );
-    }
-  }
-
-  Future<void> _handleToggleComplete() async {
-    if (widget.itemReference.referencedItemType != WorkbenchItemType.task) {
-      // USES IMPORTED ENUM
-      return;
-    }
-
-    final activeServer = ref.read(activeServerConfigProvider);
-    final isOnActiveServer = activeServer?.id == widget.itemReference.serverId;
-    if (!isOnActiveServer) {
-      _showServerSwitchRequiredDialog(context, ref, widget.itemReference);
-      return;
-    }
-
-    _showLoadingDialog(context, 'Updating task...'); // Show loading
-
-    try {
-      final task = await ref.read(
-        taskDetailProvider(widget.itemReference.referencedItemId).future,
-      );
-      bool success;
-      String actionVerb;
-      if (task.isCompleted) {
-        actionVerb = 'reopened';
-        success = await ref
-            .read(tasksNotifierProvider.notifier)
-            .reopenTask(task.id);
-      } else {
-        actionVerb = 'completed';
-        success = await ref
-            .read(tasksNotifierProvider.notifier)
-            .completeTask(task.id);
-      }
-      _dismissLoadingDialog(); // Dismiss loading
-      if (success && mounted) {
-        _showAlertDialog(context, 'Success', 'Task $actionVerb.');
-        unawaited(
-          ref
-              .read(activeWorkbenchNotifierProvider)
-              .refreshItemDetails(), // Use active notifier
-        );
-        unawaited(ref.read(tasksNotifierProvider.notifier).fetchTasks());
-      } else if (!success && mounted) {
-        _showAlertDialog(context, 'Error', 'Failed to toggle task status.');
-      }
-    } catch (e) {
-      _dismissLoadingDialog(); // Dismiss loading on error
-      if (mounted) {
-        _showAlertDialog(context, 'Error', 'Could not toggle task: $e');
-      }
-    }
-  }
-
-  void _copyContent() {
-    final contentToCopy = widget.itemReference.previewContent ?? '';
-    if (contentToCopy.isNotEmpty) {
-      Clipboard.setData(ClipboardData(text: contentToCopy));
-      _showAlertDialog(context, 'Success', 'Content copied to clipboard.');
-    } else {
-      _showAlertDialog(context, 'Info', 'No content available to copy.');
-    }
-  }
-
-  // --- Copy Thread Content Helper ---
-  Future<void> _copyThreadContentFromWorkbench(
-    BuildContext buildContext,
+  // Helper to show move/delete actions
+  void _showItemActions(
+    BuildContext context,
     WidgetRef ref,
-    WorkbenchItemReference itemRef,
-  ) async {
-    final activeServer = ref.read(activeServerConfigProvider);
-    final isOnActiveServer = activeServer?.id == itemRef.serverId;
-
-    if (!isOnActiveServer) {
-      _showServerSwitchRequiredDialog(buildContext, ref, itemRef);
-      return;
-    }
-
-    _showLoadingDialog(buildContext, 'Fetching thread...');
-
-    try {
-      final content = await getFormattedThreadContent(
-        ref,
-        itemRef.referencedItemId,
-        itemRef.referencedItemType,
-        itemRef.serverId,
-      );
-      await Clipboard.setData(ClipboardData(text: content));
-
-      _dismissLoadingDialog();
-      if (mounted) {
-        _showAlertDialog(
-          buildContext,
-          'Success',
-          'Thread content copied to clipboard.',
-        );
-      }
-    } catch (e) {
-      _dismissLoadingDialog();
-      if (mounted) {
-        _showAlertDialog(buildContext, 'Error', 'Failed to copy thread: $e');
-      }
-    }
-  }
-
-  // Chat With Thread Helper (Workbench)
-  Future<void> _chatWithThreadFromWorkbench(
-    BuildContext buildContext,
-    WidgetRef ref,
-    WorkbenchItemReference itemRef,
-  ) async {
-    final activeServer = ref.read(activeServerConfigProvider);
-    final isOnActiveServer = activeServer?.id == itemRef.serverId;
-
-    if (!isOnActiveServer) {
-      _showServerSwitchRequiredDialog(buildContext, ref, itemRef);
-      return;
-    }
-
-    _showLoadingDialog(buildContext, 'Fetching thread for chat...');
-
-    try {
-      final content = await getFormattedThreadContent(
-        ref,
-        itemRef.referencedItemId,
-        itemRef.referencedItemType,
-        itemRef.serverId,
-      );
-
-      _dismissLoadingDialog();
-      if (!mounted) return;
-
-      final chatArgs = {
-        'contextString': content,
-        'parentItemId': itemRef.referencedItemId,
-        'parentItemType': itemRef.referencedItemType,
-        'parentServerId': itemRef.serverId,
-      };
-
-      // Removed setting overlay provider state
-      final rootNavigator = ref.read(rootNavigatorKeyProvider).currentState;
-      if (rootNavigator != null && mounted) {
-        rootNavigator.pushNamed('/chat', arguments: chatArgs);
-      } else {
-        _showAlertDialog(buildContext, 'Error', 'Could not navigate to chat.');
-      }
-    } catch (e) {
-      _dismissLoadingDialog();
-      if (mounted) {
-        _showAlertDialog(buildContext, 'Error', 'Failed to start chat: $e');
-      }
-    }
-  }
-
-  // Helper to navigate within the Chat tab specifically
-  void _navigateToChatScreenWithinTab(
-    BuildContext buildContext,
-    Map<String, dynamic> chatArgs,
-    dynamic chatTabNavKey,
+    WorkbenchItemReference item,
   ) {
-    final chatNavigator = chatTabNavKey.currentState;
-    if (chatNavigator != null) {
-      // Pop to root of chat tab first to avoid stacking chat screens
-      chatNavigator.popUntil((route) => route.isFirst);
-      // Push the chat screen with arguments using the tab's navigator
-      chatNavigator.pushNamed('/chat', arguments: chatArgs);
-    } else {
-      // Fallback or error handling if navigator key is null
-      _showAlertDialog(
-        buildContext,
-        'Error',
-        'Could not navigate within chat tab.',
-      );
-      if (kDebugMode) {
-        print("Error: chatTabNavKey.currentState is null");
-      }
-    }
-  }
-  // --- End Chat With Thread Helper (Workbench) ---
+    final instancesState = ref.read(workbenchInstancesProvider);
+    final currentInstanceId = item.instanceId;
+    final otherInstances =
+        instancesState.instances
+            .where((i) => i.id != currentInstanceId)
+            .toList();
 
-
-  void _navigateToEdit() {
-    final activeServer = ref.read(activeServerConfigProvider);
-    final isOnActiveServer = activeServer?.id == widget.itemReference.serverId;
-    if (!isOnActiveServer) {
-      _showServerSwitchRequiredDialog(context, ref, widget.itemReference);
-      return;
-    }
-
-    final itemRef = widget.itemReference;
-    // Use root navigator if workbench is potentially nested deeply
-    final bool isRootNav = true; // Assume root needed from workbench
-
-    switch (itemRef.referencedItemType) {
-      // USES IMPORTED ENUM
-      case WorkbenchItemType.note:
-        Navigator.of(context, rootNavigator: isRootNav).pushNamed(
-          '/edit-entity',
-          arguments: {
-            'entityType': 'note',
-            'entityId': itemRef.referencedItemId,
-          },
-        );
-        break;
-      case WorkbenchItemType.task:
-        _showLoadingDialog(context, 'Loading task...');
-        ref
-            .read(taskDetailProvider(itemRef.referencedItemId).future)
-            .then((task) {
-              _dismissLoadingDialog();
-              if (mounted) {
-                Navigator.of(context, rootNavigator: isRootNav).push(
-                  CupertinoPageRoute(
-                    builder: (context) => NewTaskScreen(taskToEdit: task),
-                  ),
-                );
-              }
-            })
-            .catchError((e) {
-              _dismissLoadingDialog();
-              if (mounted) {
-                _showErrorDialog(
-                  context,
-                  'Failed to load task details for editing: $e',
-                );
-              }
-            });
-        break;
-      case WorkbenchItemType.comment:
-      case WorkbenchItemType.project: // Added case
-      case WorkbenchItemType.unknown: // Added case
-      default: // Added default
-        _showAlertDialog(
-          context,
-          'Info',
-          'This item type (${describeEnum(itemRef.referencedItemType)}) cannot be edited directly.',
-        );
-        break;
-    }
-  }
-
-  // --- End Refactored Action Handlers ---
-
-  // --- Move Item Sheet ---
-  void _showMoveSheet(BuildContext context) {
-    // Get all instances EXCEPT the current one
-    final instances = ref.read(workbenchInstancesProvider).instances
-        .where((i) => i.id != widget.itemReference.instanceId)
-        .toList();
-
-    // Don't show the sheet if there are no other workbenches to move to
-    if (instances.isEmpty) {
-      _showAlertDialog(
-        context,
-        'Move Item',
-        'There are no other Workbenches to move this item to.',
-      );
-      return;
-    }
-
-    showCupertinoModalPopup<void>(
-      context: context, // Use the context passed to this method
-      builder: (BuildContext sheetContext) => CupertinoActionSheet(
-        title: const Text('Move to Workbench'),
-        actions: [
-          // Create an action for each available target workbench
-          for (final wb in instances)
-            CupertinoActionSheetAction(
-              child: Text(wb.name),
-              onPressed: () {
-                Navigator.pop(sheetContext); // Close the action sheet
-                // Call the moveItem method on the *source* notifier
-                ref
-                  .read(activeWorkbenchNotifierProvider)
-                  .moveItem(
-                    itemId: widget.itemReference.id,
-                    targetInstanceId: wb.id,
-                  );
-              },
-            ),
-        ],
-        cancelButton: CupertinoActionSheetAction(
-          child: const Text('Cancel'),
+    List<CupertinoActionSheetAction> moveActions = [];
+    if (otherInstances.isNotEmpty) {
+      moveActions.add(
+        CupertinoActionSheetAction(
+          child: const Text('Move to...'),
           onPressed: () {
-            Navigator.pop(sheetContext); // Close the action sheet
+            Navigator.pop(context); // Close the first action sheet
+            _showMoveDestinationSheet(context, ref, item, otherInstances);
           },
         ),
-      ),
-    );
-  }
-  // --- End Move Item Sheet ---
+      );
+    }
 
-
-  // --- Context Menu ---
-  void _showContextMenu(BuildContext context) {
-    final itemRef = widget.itemReference;
-    final bool isTask =
-        itemRef.referencedItemType ==
-        WorkbenchItemType.task; // USES IMPORTED ENUM
-    final bool isComment =
-        itemRef.referencedItemType ==
-        WorkbenchItemType.comment; // USES IMPORTED ENUM
-    final bool isEditable =
-        !isComment &&
-        itemRef.referencedItemType !=
-            WorkbenchItemType.project && // USES IMPORTED ENUM
-        itemRef.referencedItemType !=
-            WorkbenchItemType.unknown; // USES IMPORTED ENUM
-
-    final activeServer = ref.read(activeServerConfigProvider);
-    final isOnActiveServer = activeServer?.id == itemRef.serverId;
-
-    showCupertinoModalPopup<void>(
-      context: context, // Use the context passed to this method
+    showCupertinoModalPopup(
+      context: context,
       builder:
-          (BuildContext popupContext) => CupertinoActionSheet(
+          (context) => CupertinoActionSheet(
             title: Text(
-              itemRef.previewContent?.substring(
-                    0,
-                    min(30, itemRef.previewContent?.length ?? 0),
-                  ) ??
-                  'Item Options',
+              itemReference.previewContent ?? 'Item Actions',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
-            actions: <Widget>[
-              // View Details
-              CupertinoActionSheetAction(
-                child: const Text('View Details'),
-                onPressed: () {
-                  Navigator.pop(popupContext);
-                  if (isOnActiveServer) {
-                    _navigateToItem(
-                      context, // Use the tile's context
-                      ref,
-                      itemRef,
-                      commentIdToHighlight: null,
-                    );
-                  } else {
-                    _showServerSwitchRequiredDialog(context, ref, itemRef);
-                  }
-                },
-              ),
-              // Edit (Note/Task only)
-              if (isEditable)
-                CupertinoActionSheetAction(
-                  child: const Text('Edit'),
-                  onPressed: () {
-                    Navigator.pop(popupContext);
-                    _navigateToEdit(); // Checks for active server inside
-                  },
-                ),
-              // Toggle Complete (Task only)
-              if (isTask)
-                CupertinoActionSheetAction(
-                  child: const Text('Toggle Complete'),
-                  onPressed: () {
-                    Navigator.pop(popupContext);
-                    _handleToggleComplete(); // Checks for active server inside
-                  },
-                ),
-              // Copy Content
-              CupertinoActionSheetAction(
-                child: const Text('Copy Content'),
-                onPressed: () {
-                  Navigator.pop(popupContext);
-                  _copyContent();
-                },
-              ),
-              // Copy Full Thread Action
-              CupertinoActionSheetAction(
-                child: const Text('Copy Full Thread'),
-                onPressed: () {
-                  Navigator.pop(popupContext);
-                  _copyThreadContentFromWorkbench(
-                    context, // Pass the tile's context
-                    ref,
-                    widget.itemReference,
-                  ); // Checks for active server inside
-                },
-              ),
-              // --- Chat about Thread Action ---
-              CupertinoActionSheetAction(
-                child: const Text('Chat about Thread'),
-                onPressed: () {
-                  Navigator.pop(popupContext);
-                  _chatWithThreadFromWorkbench(
-                    context, // Pass the tile's context
-                    ref,
-                    widget.itemReference,
-                  ); // Checks for active server inside
-                },
-              ),
-              // --- End Chat about Thread Action ---
-
-              // --- Move to Workbench Action ---
-              CupertinoActionSheetAction(
-                child: const Text('Move to Workbench…'),
-                onPressed: () {
-                  Navigator.pop(popupContext); // Close this menu first
-                  _showMoveSheet(context); // Show the move target selection sheet
-                },
-              ),
-              // --- End Move to Workbench Action ---
-
-              // Remove from Workbench
+            actions: [
+              ...moveActions, // Add move actions if available
               CupertinoActionSheetAction(
                 isDestructiveAction: true,
                 child: const Text('Remove from Workbench'),
                 onPressed: () {
-                  Navigator.pop(popupContext);
-                  _handleRemoveItem(); // Use refactored handler
+                  Navigator.pop(context); // Close action sheet
+                  // Use the notifier for the specific instance the item belongs to
+                  ref
+                      .read(workbenchProviderFamily(item.instanceId).notifier)
+                      .removeItem(item.id);
                 },
               ),
-            ],
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          child: const Text('Cancel'),
+              onPressed: () => Navigator.pop(context),
+        ),
+      ),
+    );
+  }
+
+  // Helper to show the list of destinations for moving an item
+  void _showMoveDestinationSheet(
+    BuildContext context,
+    WidgetRef ref,
+    WorkbenchItemReference itemToMove,
+    List<WorkbenchInstance> destinations,
+  ) {
+    showCupertinoModalPopup(
+      context: context,
+      builder:
+          (context) => CupertinoActionSheet(
+            title: const Text('Move Item To'),
+            actions:
+                destinations.map((dest) {
+                  return CupertinoActionSheetAction(
+                    child: Text(dest.name),
+                    onPressed: () {
+                      Navigator.pop(context); // Close destination sheet
+                      ref
+                          .read(
+                            workbenchProviderFamily(
+                              itemToMove.instanceId,
+                            ).notifier,
+                          )
+                          .moveItem(
+                            itemId: itemToMove.id,
+                            targetInstanceId: dest.id,
+                          );
+                    },
+                  );
+                }).toList(),
             cancelButton: CupertinoActionSheetAction(
               child: const Text('Cancel'),
-              onPressed: () {
-                Navigator.pop(popupContext);
-              },
+              onPressed: () => Navigator.pop(context),
             ),
           ),
     );
   }
-  // --- End Context Menu ---
+
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = CupertinoTheme.of(context);
-    final preview =
-        widget.itemReference.previewContent ?? 'No preview available';
-    final serverDisplayName =
-        widget.itemReference.serverName ?? widget.itemReference.serverId;
-    final lastActivityRelative = _formatRelativeTime(
-      widget.itemReference.overallLastUpdateTime.toLocal(),
-    );
-
-    final activeServer = ref.watch(activeServerConfigProvider);
-    final isOnActiveServer = activeServer?.id == widget.itemReference.serverId;
-
-    final bool isTask =
-        widget.itemReference.referencedItemType ==
-        WorkbenchItemType.task; // USES IMPORTED ENUM
-    final bool isCommentItem =
-        widget.itemReference.referencedItemType ==
-        WorkbenchItemType.comment; // USES IMPORTED ENUM
-
-    // Define action buttons for the hover bar
-    final List<Widget> actions = [
-      // View Details / Navigate Action
-      CupertinoButton(
-        padding: const EdgeInsets.all(4),
-        minSize: 0,
-        child: Icon(CupertinoIcons.eye, size: 18, color: theme.primaryColor),
-        onPressed: () {
-          if (isOnActiveServer) {
-            _navigateToItem(
-              context,
-              ref,
-              widget.itemReference,
-              commentIdToHighlight: null,
-            );
-          } else {
-            _showServerSwitchRequiredDialog(context, ref, widget.itemReference);
-          }
-        },
-      ),
-      const SizedBox(width: 6),
-      // Toggle Complete Action (only for tasks)
-      if (isTask) ...[
-        CupertinoButton(
-          padding: const EdgeInsets.all(4),
-          minSize: 0,
-          onPressed: _handleToggleComplete, // Checks active server inside
-          child: Icon(
-            CupertinoIcons.check_mark_circled,
-            size: 18,
-            color: theme.primaryColor,
-          ),
-        ),
-        const SizedBox(width: 6),
-      ],
-      // Remove Action
-      CupertinoButton(
-        padding: const EdgeInsets.all(4),
-        minSize: 0,
-        onPressed: _handleRemoveItem,
-        child: const Icon(
-          CupertinoIcons.trash,
-          size: 18,
-          color: CupertinoColors.systemRed,
-        ),
-      ),
-    ];
-
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8.0),
-          margin: const EdgeInsets.only(top: 6, bottom: 6),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Drag Handle
-              Padding(
-                padding: const EdgeInsets.only(top: 12.0, right: 6.0),
-                child: ReorderableDragStartListener(
-                  index: widget.index,
-                  key: ValueKey('drag-handle-${widget.itemReference.id}'),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 6.0,
-                      vertical: 4.0,
-                    ),
-                    child: Icon(
-                      CupertinoIcons.bars,
-                      color: CupertinoColors.systemGrey2.resolveFrom(context),
-                      size: 20,
-                    ),
-                  ),
-                ),
-              ),
-
-              // Main Content Area
-              Expanded(
-                child: GestureDetector(
-                  onLongPress: () => _showContextMenu(context),
-                  child: MouseRegion(
-                    onEnter: (_) => setState(() => _isHovering = true),
-                    onExit: (_) => setState(() => _isHovering = false),
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      // Use the onTap passed from the parent (WorkbenchScreen)
-                      onTap: widget.onTap,
-                      child: Stack(
-                        children: [
-                          // Main Content Column
-                          Padding(
-                            padding: const EdgeInsets.symmetric(
-                              vertical: 8.0,
-                              horizontal: 4.0,
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                // Header Row
-                                Row(
-                                  crossAxisAlignment: CrossAxisAlignment.center,
-                                  children: [
-                                    Icon(
-                                      _getServerTypeIcon(
-                                        widget.itemReference.serverType,
-                                      ),
-                                      size: 16,
-                                      color: CupertinoColors.secondaryLabel
-                                          .resolveFrom(context),
-                                    ),
-                                    const SizedBox(width: 6),
-                                    Expanded(
-                                      child: Text(
-                                        serverDisplayName,
-                                        style: TextStyle(
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w600,
-                                          color: CupertinoColors.label
-                                              .resolveFrom(context),
-                                        ),
-                                        overflow: TextOverflow.ellipsis,
-                                        maxLines: 1,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 6),
-                                    Text(
-                                      lastActivityRelative,
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: CupertinoColors.tertiaryLabel
-                                            .resolveFrom(context),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 6),
-
-                                // Preview Content (only if not a comment item)
-                                if (!isCommentItem)
-                                  Padding(
-                                    padding: const EdgeInsets.only(
-                                      left: 4.0,
-                                      right: 4.0,
-                                    ),
-                                    child: Text(
-                                      preview,
-                                      style: TextStyle(
-                                        fontSize: 15,
-                                        color: CupertinoColors.label
-                                            .resolveFrom(context),
-                                      ),
-                                      maxLines: 5,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                if (!isCommentItem) const SizedBox(height: 8),
-
-                                // Comment Previews or Single Comment Content
-                                Padding(
-                                  padding: EdgeInsets.only(
-                                    left: 4.0,
-                                    right: 4.0,
-                                    top: isCommentItem ? 4.0 : 0,
-                                  ),
-                                  child: isCommentItem
-                                      ? _buildSingleCommentPreview(
-                                          context,
-                                          ref,
-                                          widget.itemReference,
-                                          // Create a dummy comment object
-                                          Comment(
-                                            id: widget.itemReference.referencedItemId,
-                                            content: widget.itemReference.previewContent,
-                                            createdTs: widget.itemReference.referencedItemUpdateTime ?? 
-                                                widget.itemReference.addedTimestamp,
-                                            parentId: widget.itemReference.parentNoteId ?? '',
-                                            serverId: widget.itemReference.serverId,
-                                          ),
-                                        )
-                                      : _buildCommentPreviews(
-                                          context,
-                                          ref,
-                                          widget.itemReference,
-                                        ),
-                                ),
-                              ],
-                            ),
-                          ),
-
-                          // Hover Action Bar
-                          if (_isHovering)
-                            Positioned(
-                              top: 4,
-                              right: 4,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 6,
-                                  vertical: 3,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: CupertinoColors.systemGrey5
-                                      .resolveFrom(context),
-                                  borderRadius: BorderRadius.circular(6),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: CupertinoColors.black.withAlpha(
-                                        (255 * 0.1).round(),
-                                      ),
-                                      blurRadius: 4,
-                                      offset: const Offset(0, 1),
-                                    ),
-                                  ],
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: actions,
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ), // End of main content Container
-        // Divider
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0),
-          child: Container(
-            height: 0.5,
-            color: CupertinoColors.separator.resolveFrom(context),
-          ),
-        ),
-      ],
-    );
-  }
-
-  // Builds the list of comment previews
-  Widget _buildCommentPreviews(
-    BuildContext context,
-    WidgetRef ref,
-    WorkbenchItemReference itemRef,
-  ) {
-    final comments = itemRef.previewComments;
-    if (comments.isEmpty) {
-      return const SizedBox.shrink(); // Don't show anything if no comments
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: List.generate(comments.length, (index) {
-        final comment = comments[index];
-        final spacing =
-            (index > 0) ? const SizedBox(height: 6) : const SizedBox.shrink();
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            spacing,
-            _buildSingleCommentPreview(context, ref, itemRef, comment),
-          ],
-        );
-      }),
-    );
-  }
-
-  // Builds a single comment preview widget
-  Widget _buildSingleCommentPreview(
-    BuildContext context,
-    WidgetRef ref,
-    WorkbenchItemReference itemRef, // The workbench item reference
-    Comment? comment, // The actual comment data
-  ) {
-    // This should always be called with a non-null comment now
-    if (comment == null) return const SizedBox.shrink();
-
-    final textStyle = TextStyle(
-      fontSize: 14,
-      color: CupertinoColors.secondaryLabel.resolveFrom(context),
-    );
-
-    final BoxDecoration decoration = BoxDecoration(
-      color: CupertinoColors.systemGrey6.resolveFrom(context),
-      border: Border(
-        left: BorderSide(
-          color: CupertinoColors.systemGrey3.resolveFrom(context),
-          width: 3,
-        ),
-      ),
-    );
-
-    final displayContent = comment.content ?? '';
-    // Fix null safety handling - comment.createdTs can't be null
-    DateTime commentTime = comment.createdTs;
-    final relativeTime = _formatRelativeTime(commentTime.toLocal());
-    final commentIdToShow = comment.id;
-
-    Widget contentWidget = Row(
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        Expanded(
-          child: Text(
-            displayContent,
-            maxLines: 3,
-            overflow: TextOverflow.ellipsis,
-            style: textStyle,
-          ),
-        ),
-        const SizedBox(width: 8),
-        Text(
-          relativeTime,
-          style: TextStyle(
-            fontSize: 11,
-            color: CupertinoColors.tertiaryLabel.resolveFrom(context),
-          ),
-        ),
-      ],
+    final relativeTime = formatRelativeTime(
+      itemReference.overallLastUpdateTime,
     );
 
     return GestureDetector(
-      onTap: () {
-        // Navigate to parent item, highlighting this specific comment
-        final activeServer = ref.read(activeServerConfigProvider);
-        final isOnActiveServer = activeServer?.id == itemRef.serverId;
-        if (isOnActiveServer) {
-          _navigateToItem(
-            context,
-            ref,
-            itemRef, // Pass the original workbench reference
-            commentIdToHighlight:
-                commentIdToShow, // Highlight the specific comment ID
-          );
-        } else {
-          _showServerSwitchRequiredDialog(context, ref, itemRef);
-        }
-      },
+      onTap: onTap,
+      onLongPress: () => _showItemActions(context, ref, itemReference),
       child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        decoration: decoration,
-        child: contentWidget,
+        color: theme.barBackgroundColor,
+        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Icon based on type
+            Padding(
+              padding: const EdgeInsets.only(top: 2.0), // Align icon slightly
+              child: Icon(
+                itemReference.referencedItemType.icon,
+                color: CupertinoColors.secondaryLabel.resolveFrom(context),
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 16),
+            // Main content column
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Server Name / Item Type Row
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        itemReference.serverName ?? 'Unknown Server',
+                        // Use captionTextStyle instead of captionStyle1
+                        style: theme.textTheme.textStyle.copyWith(
+                          color: CupertinoColors.secondaryLabel.resolveFrom(
+                            context,
+                          ),
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      Text(
+                        relativeTime, // Show relative time
+                        // Use captionTextStyle instead of captionStyle1
+                        style: theme.textTheme.textStyle.copyWith(
+                          color: CupertinoColors.tertiaryLabel.resolveFrom(
+                            context,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  // Preview Content
+                  if (itemReference.previewContent != null &&
+                      itemReference.previewContent!.isNotEmpty)
+                    Text(
+                      itemReference.previewContent!,
+                      style: theme.textTheme.textStyle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  // Preview Comments
+                  if (itemReference.previewComments.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    ...itemReference.previewComments.map(
+                      (comment) => _buildCommentPreview(context, comment),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            // Reorder handle (conditionally shown or removed)
+            // Removed ReorderableDragStartListener as reordering is disabled
+            // Padding(
+            //   padding: const EdgeInsets.only(left: 12.0, top: 0),
+            //   child: ReorderableDragStartListener(
+            //     index: index,
+            //     child: const Icon(
+            //       CupertinoIcons.bars,
+            //       color: CupertinoColors.tertiaryLabel,
+            //       size: 20,
+            //     ),
+            //   ),
+            // ),
+          ],
+        ),
       ),
     );
   }
 
-  // Helper for actual navigation
-  Future<void> _navigateToItem(
-    BuildContext context,
-    WidgetRef ref,
-    WorkbenchItemReference itemRef,
-  {
-    String? commentIdToHighlight,
-  }
-  ) async {
-    final String referencedItemId = itemRef.referencedItemId;
-    // Use root navigator from workbench
-    final bool isRootNav = true;
-
-    // Determine the actual item ID to navigate to (parent for comments)
-    String targetItemId = referencedItemId;
-    WorkbenchItemType effectiveNavigationType =
-        itemRef.referencedItemType; // USES IMPORTED ENUM
-
-    if (itemRef.referencedItemType == WorkbenchItemType.comment) {
-      // USES IMPORTED ENUM
-      // We need the parent ID. Assume it's stored in parentNoteId for now.
-      // TODO: This needs to be more robust if comments can belong to Tasks.
-      targetItemId = itemRef.parentNoteId ?? '';
-      // If navigating *from* a comment workbench item, highlight that comment ID
-      commentIdToHighlight ??= referencedItemId;
-      // Assume parent is Note for now
-      // TODO: Make this dynamic based on parent type if Tasks support comments in workbench.
-      effectiveNavigationType = WorkbenchItemType.note; // USES IMPORTED ENUM
-    }
-
-    if (targetItemId.isEmpty) {
-      _showErrorDialog(
-        context,
-        'Cannot navigate: Target item ID is missing or could not be determined.',
-      );
-      return;
-    }
-
-
-    final Map<String, dynamic> arguments = {
-      'itemId': targetItemId, // Navigate to the parent item
-      if (commentIdToHighlight != null) 'commentIdToHighlight': commentIdToHighlight,
-    };
-
-    switch (effectiveNavigationType) {
-      // USES IMPORTED ENUM
-      case WorkbenchItemType.note:
-        Navigator.of(context, rootNavigator: isRootNav).pushNamed(
-          '/item-detail', // Navigate to Note detail screen
-          arguments: arguments,
-        );
-        break;
-      case WorkbenchItemType.task:
-        _showLoadingDialog(context, 'Loading task...');
-        try {
-          final task = await ref.read(taskDetailProvider(targetItemId).future);
-          _dismissLoadingDialog();
-          if (mounted) {
-            Navigator.of(context, rootNavigator: isRootNav).push(
-              CupertinoPageRoute(
-                builder: (context) => NewTaskScreen(taskToEdit: task),
-                // Pass commentIdToHighlight if Task screen supports it
-                // settings: RouteSettings(arguments: arguments),
-              ),
-            );
-          }
-        } catch (e) {
-          _dismissLoadingDialog();
-          if (mounted) {
-            _showErrorDialog(context, 'Failed to load task details: $e');
-          }
-        }
-        break;
-      case WorkbenchItemType.comment:
-        // This case should not be reached due to effectiveNavigationType logic
-        _showErrorDialog(
-          context,
-          'Internal navigation error: Unexpected item type (comment).',
-        );
-        break;
-      case WorkbenchItemType.project: // Added case
-      case WorkbenchItemType.unknown: // Added case
-      default: // Added default
-        _showErrorDialog(
-          context,
-          'Cannot navigate: Unsupported item type (${describeEnum(effectiveNavigationType)}).',
-        );
-        break;
-    }
-  }
-
-  // Helper to show error dialog
-  void _showErrorDialog(BuildContext context, String message) {
-    if (!mounted) return;
-    showCupertinoDialog(
-      context: context,
-      builder:
-          (ctx) => CupertinoAlertDialog(
-            title: const Text('Navigation Error'),
-            content: Text(message),
-            actions: [
-              CupertinoDialogAction(
-                isDefaultAction: true,
-                child: const Text('OK'),
-                onPressed: () => Navigator.pop(ctx),
-              ),
-            ],
-          ),
+  Widget _buildCommentPreview(BuildContext context, Comment comment) {
+    final theme = CupertinoTheme.of(context);
+    final commentTime = formatRelativeTime(
+      comment.updatedTs ?? comment.createdTs,
     );
-  }
-
-  // Server Switch Dialog
-  void _showServerSwitchRequiredDialog(
-    BuildContext context,
-    WidgetRef ref,
-    WorkbenchItemReference itemRef,
-  ) {
-    if (!mounted) return;
-    showCupertinoDialog(
-      context: context,
-      builder:
-          (dialogContext) => CupertinoAlertDialog(
-            title: const Text('Server Switch Required'),
-            content: Text(
-              'This item is on server "${itemRef.serverName ?? itemRef.serverId}". Switch to this server to interact with the item?',
-            ),
-            actions: [
-              CupertinoDialogAction(
-                child: const Text('Cancel'),
-                onPressed: () => Navigator.pop(dialogContext),
-              ),
-              CupertinoDialogAction(
-                isDefaultAction: true,
-                child: const Text('Switch Server'),
-                onPressed: () async {
-                  Navigator.pop(dialogContext); // Close this dialog first
-                  _showLoadingDialog(context, 'Switching server...');
-
-                  // Perform the switch
-                  ref
-                      .read(multiServerConfigProvider.notifier)
-                      .setActiveServer(itemRef.serverId);
-
-                  // Wait for the activeServerConfigProvider to reflect the change
-                  final completer = Completer<void>();
-                  ProviderSubscription<ServerConfig?>? sub;
-
-                  void listener(ServerConfig? previous, ServerConfig? next) {
-                    if (sub != null &&
-                        next?.id == itemRef.serverId &&
-                        !completer.isCompleted) {
-                      completer.complete();
-                      sub!.close();
-                      sub = null;
-                    }
-                  }
-                  void errorHandler(Object error, StackTrace stackTrace) {
-                    if (!completer.isCompleted) {
-                      completer.completeError(error, stackTrace);
-                      sub?.close();
-                      sub = null;
-                    }
-                  }
-                  sub = ref.listenManual<ServerConfig?>(
-                    activeServerConfigProvider,
-                    listener,
-                    onError: errorHandler,
-                    fireImmediately: true,
-                  );
-
-                  try {
-                    await completer.future.timeout(const Duration(seconds: 5));
-                    _dismissLoadingDialog();
-                    if (mounted) {
-                      _showAlertDialog(
-                        context,
-                        'Success',
-                        'Switched to server "${itemRef.serverName ?? itemRef.serverId}". You can now interact with the item.',
-                      );
-                      // Optionally auto-trigger the original action here if needed
-                    }
-                  } catch (e) {
-                    _dismissLoadingDialog();
-                    if (mounted) {
-                      _showAlertDialog(
-                        context,
-                        'Error',
-                        'Failed to switch server or timed out. Please try switching manually from Settings.',
-                      );
-                    }
-                  } finally {
-                    sub?.close();
-                    sub = null;
-                  }
-                },
-              ),
-            ],
+    return Padding(
+      padding: const EdgeInsets.only(top: 4.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            CupertinoIcons.bubble_left,
+            size: 14,
+            color: CupertinoColors.tertiaryLabel.resolveFrom(context),
           ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              comment.content ?? '',
+              // Use captionTextStyle instead of captionStyle1
+              style: theme.textTheme.textStyle.copyWith(
+                color: CupertinoColors.secondaryLabel.resolveFrom(context),
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            commentTime,
+            // Use captionTextStyle instead of captionStyle1
+            style: theme.textTheme.textStyle.copyWith(
+              color: CupertinoColors.tertiaryLabel.resolveFrom(context),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
