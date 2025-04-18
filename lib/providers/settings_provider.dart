@@ -23,6 +23,9 @@ class PreferenceKeys {
 
   // Key for manually hidden note IDs (stored as JSON Set<String>)
   static const String manuallyHiddenNoteIds = 'manually_hidden_note_ids';
+
+  // Key for the last selected tab index
+  static const String selectedTabIndex = 'selectedTabIndex'; // <<< ADDED
 }
 
 /// Provider for the Todoist API key with persistence using SharedPreferences
@@ -81,6 +84,125 @@ final manuallyHiddenNoteIdsProvider =
       ),
       name: 'manuallyHiddenNoteIdsProvider',
     );
+
+// --- Start Selected Tab Index Persistence ---
+
+/// Notifier to manage the selected tab index, persisting it to SharedPreferences.
+class SelectedTabIndexNotifier extends StateNotifier<int> {
+  final Ref _ref;
+  final int defaultValue;
+  final String storageKey = PreferenceKeys.selectedTabIndex;
+  SharedPreferences? _prefs;
+  bool _initialized = false;
+  final _initLock = Lock(); // Lock for initialization
+
+  SelectedTabIndexNotifier(this._ref, this.defaultValue) : super(defaultValue);
+
+  Future<void> init() async {
+    await _initLock.synchronized(() async {
+      if (_initialized) return;
+
+      try {
+        _prefs = await SharedPreferences.getInstance();
+        final savedIndex = _prefs?.getInt(storageKey);
+        if (savedIndex != null) {
+          if (mounted) {
+            state = savedIndex;
+          }
+          if (kDebugMode) {
+            print(
+              '[SelectedTabIndexNotifier] Loaded saved tab index: $savedIndex',
+            );
+          }
+        } else {
+          if (mounted) {
+            state = defaultValue; // Ensure state is default if nothing loaded
+          }
+          if (kDebugMode) {
+            print(
+              '[SelectedTabIndexNotifier] No saved tab index found, using default: $defaultValue',
+            );
+          }
+        }
+      } catch (e) {
+        if (kDebugMode) {
+          print('[SelectedTabIndexNotifier] Error loading tab index: $e');
+        }
+        if (mounted) {
+          state = defaultValue; // Fallback to default on error
+        }
+      } finally {
+        _initialized = true;
+      }
+    });
+  }
+
+  Future<void> set(int value) async {
+    // Ensure initialized before setting
+    if (!_initialized) {
+      if (kDebugMode) {
+        print(
+          '[SelectedTabIndexNotifier] Waiting for initialization before setting value...',
+        );
+      }
+      await init(); // Wait for initialization to complete
+    }
+
+    if (mounted && state != value) {
+      state = value;
+      try {
+        await _prefs?.setInt(storageKey, value);
+        if (kDebugMode) {
+          print('[SelectedTabIndexNotifier] Saved tab index: $value');
+        }
+      } catch (e) {
+        if (kDebugMode) {
+          print('[SelectedTabIndexNotifier] Error saving tab index: $e');
+        }
+      }
+    } else if (mounted && state == value) {
+      // If state is already correct, ensure storage is consistent
+      try {
+        final storedValue = _prefs?.getInt(storageKey);
+        if (storedValue != value) {
+          await _prefs?.setInt(storageKey, value);
+          if (kDebugMode) {
+            print(
+              '[SelectedTabIndexNotifier] Corrected inconsistent storage for tab index: $value',
+            );
+          }
+        }
+      } catch (e) {
+        if (kDebugMode) {
+          print(
+            '[SelectedTabIndexNotifier] Error checking/correcting storage consistency: $e',
+          );
+        }
+      }
+    } else if (!mounted && kDebugMode) {
+      print(
+        '[SelectedTabIndexNotifier] Warning: Attempted to set state on unmounted notifier.',
+      );
+    }
+  }
+}
+
+/// Provider for the persisted selected tab index.
+/// Defaults to 1 (Workbench) if no value is saved.
+final selectedTabIndexProvider =
+    StateNotifierProvider<SelectedTabIndexNotifier, int>((ref) {
+      // Default index is 1 (Workbench in the new order)
+      const defaultIndex = 1;
+      final notifier = SelectedTabIndexNotifier(ref, defaultIndex);
+      // Initialize asynchronously after creation
+      // Do not await here, let it load in the background.
+      // The dependent providers will react once the state is loaded.
+      notifier.init();
+      return notifier;
+    }, name: 'selectedTabIndexProvider');
+
+// --- End Selected Tab Index Persistence ---
+
 
 /// A StateNotifier that persists string values to SharedPreferences
 class PersistentStringNotifier extends StateNotifier<String> {

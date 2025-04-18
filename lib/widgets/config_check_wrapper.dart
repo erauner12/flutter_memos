@@ -2,10 +2,12 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_memos/providers/navigation_providers.dart'; // Import navigation providers
 import 'package:flutter_memos/providers/server_config_provider.dart';
 import 'package:flutter_memos/screens/chat_screen.dart';
+import 'package:flutter_memos/screens/home_tabs.dart'; // Import HomeTab enum
 import 'package:flutter_memos/screens/items/items_screen.dart'; // Keep for route generation
 import 'package:flutter_memos/screens/items/notes_hub_screen.dart'; // Import Notes Hub
-import 'package:flutter_memos/screens/more/more_screen.dart';
+// Removed MoreScreen import
 import 'package:flutter_memos/screens/settings_screen.dart';
+import 'package:flutter_memos/screens/tasks/tasks_screen.dart'; // Import TasksScreen
 // Import Hub and Detail screens directly for routing
 import 'package:flutter_memos/screens/workbench/workbench_hub_screen.dart';
 import 'package:flutter_memos/screens/workbench/workbench_screen.dart';
@@ -51,7 +53,7 @@ class ConfigCheckWrapper extends ConsumerWidget {
 class MainAppTabs extends ConsumerWidget {
   const MainAppTabs({super.key});
 
-  // Define the route generation logic for the Notes tab (Index 0)
+  // Define the route generation logic for the Notes tab (Index 3)
   Route<dynamic>? _notesOnGenerateRoute(RouteSettings settings) {
     WidgetBuilder builder;
     switch (settings.name) {
@@ -105,51 +107,43 @@ class MainAppTabs extends ConsumerWidget {
     final currentIndex = ref.watch(currentTabIndexProvider);
     final tabController = ref.watch(
       homeTabControllerProvider,
-    ); // Assuming this controls the CupertinoTabScaffold index
+    ); // Controls the CupertinoTabScaffold index
 
-    // Retrieve navigation keys from providers
+    // Retrieve navigation keys from providers according to the new order
+    // Chat (0), Workbench (1), Tasks (2), Notes (3)
+    final chatNavKey = ref.watch(chatNavKeyProvider);
+    final workbenchNavKey = ref.watch(workbenchNavKeyProvider);
+    final tasksNavKey = ref.watch(tasksNavKeyProvider);
     final notesNavKey = ref.watch(
       homeNavKeyProvider,
-    ); // Reuse homeNavKey for Notes (index 0)
-    final workbenchNavKey = ref.watch(
-      workbenchNavKeyProvider,
-    ); // Key for the Workbench tab's navigator
-    final chatNavKey = ref.watch(chatNavKeyProvider);
-    final moreNavKey = ref.watch(moreNavKeyProvider);
+    ); // Using homeNavKey for Notes
 
     // Map index to the key for the CupertinoTabView's navigator
+    // This MUST match the order in HomeTab enum and the tabBuilder switch
     final Map<int, GlobalKey<NavigatorState>> tabViewNavKeys = {
-      0: notesNavKey, // Assign key to Notes tab view (index 0)
-      1: workbenchNavKey, // Assign key to Workbench tab view (index 1)
-      2: chatNavKey, // Assign key to Chat tab view (index 2)
-      3: moreNavKey, // Assign key to More tab view (index 3)
+      HomeTab.chat.index: chatNavKey, // 0
+      HomeTab.workbench.index: workbenchNavKey, // 1
+      HomeTab.tasks.index: tasksNavKey, // 2
+      HomeTab.notes.index: notesNavKey, // 3
     };
 
 
-    // Define the BottomNavigationBarItems - Update Index 0 for Notes
-    const List<BottomNavigationBarItem> navBarItems = [
-      BottomNavigationBarItem(
-        icon: Icon(CupertinoIcons.news_solid), // Notes Icon
-        label: 'Notes', // Notes Label
-      ),
-      BottomNavigationBarItem(
-        icon: Icon(CupertinoIcons.square_list), // Workbench Icon
-        label: 'Workbench',
-      ),
-      BottomNavigationBarItem(
-        icon: Icon(CupertinoIcons.chat_bubble_2), // Chat Icon
-        label: 'Chat',
-      ),
-      BottomNavigationBarItem(
-        icon: Icon(CupertinoIcons.ellipsis_circle), // More Icon
-        label: 'More',
-      ),
-    ];
+    // Define the BottomNavigationBarItems DIRECTLY from HomeTab enum order
+    // This ensures the icons and labels match the enum definition exactly.
+    final List<BottomNavigationBarItem> navBarItems =
+        HomeTab.values
+            .map(
+              (tab) => BottomNavigationBarItem(
+                icon: Icon(tab.icon), // Use icon from enum
+                label: tab.label, // Use label from enum
+              ),
+            )
+            .toList();
 
     return CupertinoTabScaffold(
       controller: tabController, // Link the controller
       tabBar: CupertinoTabBar(
-        items: navBarItems,
+        items: navBarItems, // Use the generated list based on HomeTab enum
         currentIndex: currentIndex, // Use the state provider value
         onTap: (index) {
           final previousIndex = ref.read(currentTabIndexProvider);
@@ -171,43 +165,50 @@ class MainAppTabs extends ConsumerWidget {
         },
       ),
       tabBuilder: (BuildContext context, int index) {
-        // Return a CupertinoTabView for each tab to manage navigation stacks
-        switch (index) {
-          case 0: // Notes Tab (Index 0)
+        // Return a CupertinoTabView for each tab based on the index,
+        // matching the HomeTab enum order.
+        // Use HomeTab.values[index] to ensure alignment with the enum order.
+        final HomeTab currentTab = HomeTab.values[index];
+        switch (currentTab) {
+          // Switch on the enum value directly
+          case HomeTab.chat: // Index 0
             return CupertinoTabView(
-              navigatorKey: tabViewNavKeys[index], // Assign the key
-              onGenerateRoute: _notesOnGenerateRoute, // Assign route generator
-              builder: (BuildContext context) {
-                // The builder now returns the initial screen (Hub) for this tab's navigator
-                return const NotesHubScreen();
-              },
-            );
-          case 1: // Workbench Tab (Index 1)
-            return CupertinoTabView(
-              navigatorKey: tabViewNavKeys[index], // Assign the key
-              onGenerateRoute:
-                  _workbenchOnGenerateRoute, // Assign route generator
-              builder: (BuildContext context) {
-                return const WorkbenchHubScreen();
-              },
-            );
-          case 2: // Chat Tab (Index 2)
-            return CupertinoTabView(
-              navigatorKey: tabViewNavKeys[index],
+              navigatorKey:
+                  tabViewNavKeys[HomeTab.chat.index], // Use index from enum
               builder: (BuildContext context) {
                 return const ChatScreen();
               },
             );
-          case 3: // More Tab (Index 3)
+          case HomeTab.workbench: // Index 1
             return CupertinoTabView(
-              navigatorKey: tabViewNavKeys[index],
+              navigatorKey:
+                  tabViewNavKeys[HomeTab
+                      .workbench
+                      .index], // Use index from enum
+              onGenerateRoute: _workbenchOnGenerateRoute,
               builder: (BuildContext context) {
-                return const MoreScreen();
+                return const WorkbenchHubScreen();
               },
             );
-          default:
-            // Fallback, should not happen
-            return const Center(child: Text('Unknown Tab'));
+          case HomeTab.tasks: // Index 2
+            return CupertinoTabView(
+              navigatorKey:
+                  tabViewNavKeys[HomeTab.tasks.index], // Use index from enum
+              builder: (BuildContext context) {
+                // Use the actual TasksScreen now
+                return const TasksScreen();
+              },
+            );
+          case HomeTab.notes: // Index 3
+            return CupertinoTabView(
+              navigatorKey:
+                  tabViewNavKeys[HomeTab.notes.index], // Use index from enum
+              onGenerateRoute: _notesOnGenerateRoute,
+              builder: (BuildContext context) {
+                return const NotesHubScreen();
+              },
+            );
+          // No default needed as the switch is exhaustive for the current HomeTab enum
         }
       },
     );
