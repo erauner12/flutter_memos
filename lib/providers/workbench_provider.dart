@@ -13,8 +13,6 @@ import 'package:flutter_memos/services/cloud_kit_service.dart';
 import 'package:flutter_memos/services/note_api_service.dart';
 import 'package:flutter_memos/services/task_api_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-// Add Uuid import
-import 'package:uuid/uuid.dart';
 
 @immutable
 class WorkbenchState {
@@ -571,32 +569,25 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
 
     try {
       // 3. Convert old item to a map for re-creation
-      // We pass the original fields to the CloudKit service
       final oldRecordFields = itemToMove.toJson();
 
-      // 4. CloudKit delete + create using the new service method
-      final success = await _cloudKitService
+      // 4. CloudKit delete + create using the new service method, capture the new ID
+      final maybeNewCloudKitId = await _cloudKitService
           .moveWorkbenchItemReferenceByDeleteRecreate(
-            recordName: itemId, // The ID of the record to delete
+            recordName: itemId,
             newInstanceId: targetInstanceId,
-            oldRecordFields: oldRecordFields, // Pass the original data
+            oldRecordFields: oldRecordFields,
           );
 
-      // ignore: unrelated_type_equality_checks
-      if (success == false) {
+      // Check if the CloudKit operation failed (returned null)
+      if (maybeNewCloudKitId == null) {
         throw Exception('CloudKit delete-recreate move operation failed');
       }
 
-      // 5. Build the new item locally with a *new ID* and the target instanceId
-      // The new ID should match the one generated implicitly by the CloudKit service,
-      // but since the service doesn't return it, we generate a new one here for local state.
-      // This assumes the CloudKit operation succeeded and created a record with *some* new ID.
-      // A more robust approach might involve the service returning the new ID.
-      final newLocalId = const Uuid().v4();
+      // 5. Build the new item locally using the EXACT ID returned from CloudKit
       final newItemForTarget = itemToMove.copyWith(
-        id: newLocalId, // Assign the new UUID
+        id: maybeNewCloudKitId,
         instanceId: targetInstanceId,
-        // Reset transient fields or keep them? Let's keep them for now.
       );
 
       // 6. Insert new item into target instance's local state
@@ -607,7 +598,7 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
 
         if (kDebugMode) {
           print(
-            '[WorkbenchNotifier($instanceId)] Successfully processed move for item original ID $itemId to instance $targetInstanceId (new local ID: $newLocalId).',
+            '[WorkbenchNotifier($instanceId)] Successfully processed move for item original ID $itemId to instance $targetInstanceId (new CloudKit ID: $maybeNewCloudKitId).',
           );
         }
         // Clear last opened item if it was the one moved
