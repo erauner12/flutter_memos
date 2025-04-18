@@ -57,13 +57,13 @@ class _WorkbenchHubScreenState extends ConsumerState<WorkbenchHubScreen> {
       Navigator.pop(context);
     }
     if (name.isNotEmpty) {
-      // Pass switchToNew: false so the new instance doesn't become active automatically
+      // REMOVED Pass switchToNew: false
       ref
           .read(workbenchInstancesProvider.notifier)
-          .saveInstance(name, switchToNew: false)
+          .saveInstance(name) // Removed switchToNew parameter
           .then((success) {
             if (success) {
-              // No automatic navigation after creation
+              // No automatic navigation or active setting after creation
               if (mounted) {
                 // Optionally show a confirmation SnackBar or similar
                 // ScaffoldMessenger.of(context).showSnackBar(
@@ -179,27 +179,27 @@ class _WorkbenchHubScreenState extends ConsumerState<WorkbenchHubScreen> {
     final instancesState = ref.read(workbenchInstancesProvider);
     final bool canDelete =
         instancesState.instances.length > 1 && !instance.isSystemDefault;
-    final bool isActive = instancesState.activeInstanceId == instance.id;
+    // final bool isActive = instancesState.activeInstanceId == instance.id; // REMOVED isActive check
 
     showCupertinoModalPopup(
       context: context,
       builder:
           (context) => CupertinoActionSheet(
             title: Text(
-              'Actions for "${instance.name}"${isActive ? " (Active)" : ""}',
-            ), // Indicate if active in title
+              'Actions for "${instance.name}"', // REMOVED indication of active status
+            ),
             actions: [
-              // Add "Set Active" action if not already active
-              if (!isActive)
-                CupertinoActionSheetAction(
-                  child: const Text('Set Active'),
-                  onPressed: () {
-                    Navigator.pop(context); // Close action sheet
-                    ref
-                        .read(workbenchInstancesProvider.notifier)
-                        .setActiveInstance(instance.id);
-                  },
-                ),
+              // REMOVED "Set Active" action
+              // if (!isActive)
+              //   CupertinoActionSheetAction(
+              //     child: const Text('Set Active'),
+              //     onPressed: () {
+              //       Navigator.pop(context); // Close action sheet
+              //       ref
+              //           .read(workbenchInstancesProvider.notifier)
+              //           .setActiveInstance(instance.id);
+              //     },
+              //   ),
               CupertinoActionSheetAction(
                 child: const Text('Rename'),
                 onPressed: () {
@@ -233,7 +233,7 @@ class _WorkbenchHubScreenState extends ConsumerState<WorkbenchHubScreen> {
     final instances = instancesState.instances;
     final isLoading = instancesState.isLoading;
     final error = instancesState.error;
-    final activeInstanceId = instancesState.activeInstanceId; // Get active ID
+    // final activeInstanceId = instancesState.activeInstanceId; // REMOVED - No longer needed
 
     // Sort instances: default first, then by creation date or name
     final sortedInstances = [...instances]..sort((a, b) {
@@ -314,12 +314,11 @@ class _WorkbenchHubScreenState extends ConsumerState<WorkbenchHubScreen> {
                   delegate: SliverChildBuilderDelegate((context, index) {
                     final instance = sortedInstances[index];
                     final isLast = index == sortedInstances.length - 1;
-                    final bool isActive =
-                        instance.id == activeInstanceId; // Check if active
+                    // final bool isActive = instance.id == activeInstanceId; // REMOVED isActive check
 
                     Widget tile = WorkbenchInstanceTile(
                       instance: instance,
-                      isActive: isActive, // Pass active status
+                      // isActive: isActive, // REMOVED isActive parameter
                       onTap: () {
                         // Navigate to the detail screen using the nested navigator
                         Navigator.of(

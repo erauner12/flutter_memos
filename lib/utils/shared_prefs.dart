@@ -4,10 +4,9 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Service class for managing simple key-value storage using SharedPreferences.
-/// Used for caching non-critical UI state like last active workbench instance
-/// and last opened item per instance.
+/// Used for caching non-critical UI state like last opened item per instance.
 class SharedPrefsService {
-  static const String _activeInstanceIdKey = 'activeWorkbenchInstanceId';
+  // static const String _activeInstanceIdKey = 'activeWorkbenchInstanceId';
   static const String _lastOpenedItemMapKey = 'lastOpenedItemMap';
 
   late SharedPreferences _prefs;
@@ -36,26 +35,6 @@ class SharedPrefsService {
     }
   }
 
-  // --- Active Workbench Instance ID ---
-
-  /// Saves the last active workbench instance ID.
-  Future<bool> saveActiveInstanceId(String instanceId) async {
-    if (kDebugMode) {
-      print('[SharedPrefsService] Saving active instance ID: $instanceId');
-    }
-    return _prefs.setString(_activeInstanceIdKey, instanceId);
-  }
-
-  /// Retrieves the last active workbench instance ID.
-  /// Returns null if no ID has been saved.
-  String? getActiveInstanceId() {
-    final id = _prefs.getString(_activeInstanceIdKey);
-    if (kDebugMode && id != null) {
-      // print('[SharedPrefsService] Retrieved active instance ID: $id');
-    }
-    return id;
-  }
-
   // --- Last Opened Item Map ---
 
   /// Saves the map of last opened item IDs per workbench instance.
@@ -64,7 +43,7 @@ class SharedPrefsService {
     try {
       final jsonString = jsonEncode(map);
       if (kDebugMode) {
-        print('[SharedPrefsService] Saving last opened item map: $jsonString');
+        // print('[SharedPrefsService] Saving last opened item map: $jsonString'); // Keep logging minimal
       }
       return _prefs.setString(_lastOpenedItemMapKey, jsonString);
     } catch (e) {
@@ -88,7 +67,7 @@ class SharedPrefsService {
             (key, value) => MapEntry(key.toString(), value?.toString()),
           );
            if (kDebugMode) {
-             // print('[SharedPrefsService] Retrieved last opened item map: $resultMap');
+             // print('[SharedPrefsService] Retrieved last opened item map: $resultMap'); // Keep logging minimal
            }
           return resultMap;
         }
@@ -103,11 +82,10 @@ class SharedPrefsService {
 
   /// Clears all data stored by this service.
   Future<bool> clearAll() async {
-    final activeCleared = await _prefs.remove(_activeInstanceIdKey);
     final mapCleared = await _prefs.remove(_lastOpenedItemMapKey);
      if (kDebugMode) {
       print('[SharedPrefsService] Cleared all cached data.');
     }
-    return activeCleared && mapCleared;
+    return mapCleared;
   }
 }

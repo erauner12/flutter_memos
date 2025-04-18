@@ -39,16 +39,13 @@ class WorkbenchState {
       items: items ?? this.items,
       isLoading: isLoading ?? this.isLoading,
       error: clearError ? null : (error ?? this.error),
-      isRefreshingDetails:
-          isRefreshingDetails ?? this.isRefreshingDetails,
+      isRefreshingDetails: isRefreshingDetails ?? this.isRefreshingDetails,
     );
   }
 
   @override
   bool operator ==(Object other) {
-    if (identical(this, other)) {
-      return true;
-    }
+    if (identical(this, other)) return true;
     return other is WorkbenchState &&
         listEquals(other.items, items) &&
         other.isLoading == isLoading &&
@@ -57,8 +54,8 @@ class WorkbenchState {
   }
 
   @override
-  int get hashCode => Object.hash(
-        Object.hashAll(items), isLoading, error, isRefreshingDetails);
+  int get hashCode =>
+      Object.hash(Object.hashAll(items), isLoading, error, isRefreshingDetails);
 }
 
 class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
@@ -73,17 +70,12 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
   }
 
   Future<void> loadItems() async {
-    if (state.isLoading || state.isRefreshingDetails) {
-      return;
-    }
-    if (!mounted) {
-      return;
-    }
+    if (state.isLoading || state.isRefreshingDetails) return;
+    if (!mounted) return;
 
     state = state.copyWith(isLoading: true, clearError: true);
 
     try {
-      // Add logging before fetching
       if (kDebugMode) {
         print(
           '[WorkbenchNotifier($instanceId)] loadItems: Fetching references for this instance.',
@@ -92,7 +84,6 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
       final references = await _cloudKitService.getAllWorkbenchItemReferences(
         instanceId: instanceId,
       );
-      // Add logging after fetching, before sorting/processing
       if (kDebugMode) {
         print(
           '[WorkbenchNotifier($instanceId)] loadItems: Fetched ${references.length} raw references from CloudKit.',
@@ -127,12 +118,9 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
   Future<void> _fetchAndPopulateDetails(
     List<WorkbenchItemReference> itemsToProcess,
   ) async {
-    // Add instanceId to log messages
     if (!mounted || itemsToProcess.isEmpty) {
-      if (state.isRefreshingDetails) {
-        if (mounted) {
-          state = state.copyWith(isRefreshingDetails: false);
-        }
+      if (state.isRefreshingDetails && mounted) {
+        state = state.copyWith(isRefreshingDetails: false);
       }
       return;
     }
@@ -140,15 +128,13 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
     final Map<String, List<WorkbenchItemReference>> itemsByServer = {};
     for (final item in itemsToProcess) {
       if (item.instanceId != instanceId) {
-        // Add logging for skipped items
         if (kDebugMode) {
           print(
             '[WorkbenchNotifier($instanceId)] _fetchAndPopulateDetails: Skipping item ${item.id} because its instanceId (${item.instanceId}) does not match.',
           );
         }
-        continue; // Skip items not belonging to this instance
+        continue;
       }
-      // Add logging for items being processed
       if (kDebugMode) {
         print(
           '[WorkbenchNotifier($instanceId)] _fetchAndPopulateDetails: Processing item ${item.id} for server ${item.serverId}.',
@@ -193,7 +179,7 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
         detailFetchFutures.addAll(
           serverItems.map((item) => Future.value(item)),
         );
-        continue; // Skip if server config doesn't exist anymore
+        continue;
       }
 
       final baseApiService = _ref.read(apiServiceProvider);
@@ -204,18 +190,6 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
               baseApiService is NoteApiService) ||
           ((serverConfig.serverType == ServerType.todoist) &&
               baseApiService is TaskApiService);
-
-      if (serverConfig.id != _ref.read(activeServerConfigProvider)?.id) {
-        if (kDebugMode) {
-          print(
-            '[WorkbenchNotifier($instanceId)] Skipping detail fetch for items on non-active server $serverId (${serverConfig.serverType.name}).',
-          );
-        }
-        detailFetchFutures.addAll(
-          serverItems.map((item) => Future.value(item)),
-        );
-        continue; // Skip fetching for this server group
-      }
 
       if (!serviceTypeMatches) {
         if (kDebugMode) {
@@ -267,9 +241,7 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
                     '[WorkbenchNotifier($instanceId)] Error fetching note ${itemRef.referencedItemId} on server $serverId: $e',
                   );
                 }
-                // Keep original preview/times if fetch fails
               }
-
               try {
                 fetchedComments = await noteApiService.listNoteComments(
                   itemRef.referencedItemId,
@@ -292,7 +264,6 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
                 if (referencedItemUpdateTime.isAfter(overallLastUpdateTime)) {
                   overallLastUpdateTime = referencedItemUpdateTime;
                 }
-
                 try {
                   fetchedComments = await taskApiService.listComments(
                     itemRef.referencedItemId,
@@ -310,7 +281,6 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
                     '[WorkbenchNotifier($instanceId)] Error fetching task ${itemRef.referencedItemId} on server $serverId: $e',
                   );
                 }
-                // Keep original preview/times if fetch fails
               }
             }
 
@@ -342,9 +312,9 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
                 '[WorkbenchNotifier($instanceId)] Error processing item ${itemRef.id} (refId: ${itemRef.referencedItemId}) on server $serverId: $e',
               );
             }
-            return itemRef; // Return original item on error for this specific item
+            return itemRef;
           }
-        }()); // Immediately invoke the async closure
+        }());
       }
     }
 
@@ -380,14 +350,9 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
   }
 
   Future<void> refreshItemDetails() async {
-    if (state.isLoading || state.isRefreshingDetails) {
-      return;
-    }
-    if (!mounted) {
-      return;
-    }
+    if (state.isLoading || state.isRefreshingDetails) return;
+    if (!mounted) return;
 
-    // Check if there are items to refresh
     if (state.items.isEmpty) {
       if (kDebugMode) {
         print(
@@ -409,9 +374,7 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
   }
 
   void resetOrder() {
-    if (!mounted) {
-      return;
-    }
+    if (!mounted) return;
 
     final List<WorkbenchItemReference> currentItems = List.from(state.items);
     currentItems.sort(
@@ -426,14 +389,9 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
     }
   }
 
-  /// Adds an item to the workbench, including saving to CloudKit.
-  /// Checks for duplicates based on referencedItemId and serverId within the instance.
   Future<void> addItem(WorkbenchItemReference item) async {
-    if (!mounted) {
-      return;
-    }
+    if (!mounted) return;
 
-    // Ensure the item being added belongs to this notifier's instance
     if (item.instanceId != instanceId) {
       if (kDebugMode) {
         print(
@@ -472,9 +430,7 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
 
     try {
       final success = await _cloudKitService.saveWorkbenchItemReference(item);
-      if (!success) {
-        throw Exception('CloudKit save failed');
-      }
+      if (!success) throw Exception('CloudKit save failed');
       if (kDebugMode) {
         print(
           '[WorkbenchNotifier($instanceId)] Added item ${item.id} successfully.',
@@ -500,12 +456,8 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
     }
   }
 
-  /// Private helper to add an existing item reference to the local state
-  /// *without* saving to CloudKit and *without* duplicate checks.
-  /// Used internally by `moveItem`.
   void _addExistingItem(WorkbenchItemReference item) {
     if (!mounted) return;
-    // Ensure item belongs to this instance before adding
     if (item.instanceId != instanceId) {
       if (kDebugMode) {
         print(
@@ -525,17 +477,12 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
         '[WorkbenchNotifier($instanceId)] Added existing item ${item.id} locally.',
       );
     }
-    // Fetch details for the newly added item
     unawaited(_fetchAndPopulateDetails([item]));
   }
 
-
   Future<void> removeItem(String itemId) async {
-    if (!mounted) {
-      return;
-    }
+    if (!mounted) return;
 
-    // Check if the item exists in the current state before optimistic update
     final itemExists = state.items.any((item) => item.id == itemId);
     if (!itemExists) {
       if (kDebugMode) {
@@ -556,9 +503,7 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
       final success = await _cloudKitService.deleteWorkbenchItemReference(
         itemId,
       );
-      if (!success) {
-        throw Exception('CloudKit delete failed');
-      }
+      if (!success) throw Exception('CloudKit delete failed');
       if (kDebugMode) {
         print(
           '[WorkbenchNotifier($instanceId)] Removed item $itemId successfully.',
@@ -582,7 +527,6 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
     }
   }
 
-  /// Moves an item from this workbench instance to another.
   Future<void> moveItem({
     required String itemId,
     required String targetInstanceId,
@@ -594,15 +538,13 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
           '[WorkbenchNotifier($instanceId)] Attempted to move item $itemId to the same instance. Skipping.',
         );
       }
-      return; // Cannot move to the same instance
+      return;
     }
 
-    // 1. Find the item in the current state
     WorkbenchItemReference? itemToMove;
     try {
       itemToMove = state.items.firstWhere((i) => i.id == itemId);
     } catch (e) {
-      // Item not found in current state
       if (kDebugMode) {
         print(
           '[WorkbenchNotifier($instanceId)] Item with ID $itemId not found for move operation.',
@@ -612,10 +554,7 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
       return;
     }
 
-    // Store original state for potential rollback
     final originalItems = List<WorkbenchItemReference>.from(state.items);
-
-    // 2. Optimistic UI update: Remove from current notifier's list
     final newItems = originalItems.where((item) => item.id != itemId).toList();
     if (mounted) {
       state = state.copyWith(items: newItems, clearError: true);
@@ -627,20 +566,15 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
     }
 
     try {
-      // 3. Call CloudKit service to update the instanceId
       final success = await _cloudKitService.moveWorkbenchItemReference(
         recordName: itemId,
         newInstanceId: targetInstanceId,
       );
 
-      if (!success) {
-        throw Exception('CloudKit move operation failed');
-      }
+      if (!success) throw Exception('CloudKit move operation failed');
 
-      // 4. On success: Push a copy to the destination notifier
       if (mounted) {
         final movedItemCopy = itemToMove.copyWith(instanceId: targetInstanceId);
-        // Use the private helper on the target notifier
         _ref
             .read(workbenchProviderFamily(targetInstanceId).notifier)
             ._addExistingItem(movedItemCopy);
@@ -650,7 +584,6 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
             '[WorkbenchNotifier($instanceId)] Successfully moved item $itemId to instance $targetInstanceId.',
           );
         }
-        // Clear last opened if it was the moved item
         final lastOpened =
             _ref.read(workbenchInstancesProvider).lastOpenedItemId[instanceId];
         if (lastOpened == itemId) {
@@ -660,14 +593,12 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
         }
       }
     } catch (e, s) {
-      // 5. On error: Revert local list and surface error
       if (kDebugMode) {
         print(
           '[WorkbenchNotifier($instanceId)] Error moving item $itemId to $targetInstanceId: $e\n$s',
         );
       }
       if (mounted) {
-        // Re-sort original items before reverting state
         originalItems.sort(
           (a, b) => b.overallLastUpdateTime.compareTo(a.overallLastUpdateTime),
         );
@@ -677,24 +608,15 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
   }
 
   void reorderItems(int oldIndex, int newIndex) {
-    if (!mounted) {
-      return;
-    }
-    if (oldIndex < 0 || oldIndex >= state.items.length) {
-      return;
-    }
-    if (newIndex < 0 || newIndex > state.items.length) {
-      return;
-    } // Allow newIndex == length
+    if (!mounted) return;
+    if (oldIndex < 0 || oldIndex >= state.items.length) return;
+    if (newIndex < 0 || newIndex > state.items.length) return;
 
     final currentItems = List<WorkbenchItemReference>.from(state.items);
     final item = currentItems.removeAt(oldIndex);
-
     final effectiveNewIndex = (newIndex > oldIndex) ? newIndex - 1 : newIndex;
-
-    if (effectiveNewIndex < 0 || effectiveNewIndex > currentItems.length) {
+    if (effectiveNewIndex < 0 || effectiveNewIndex > currentItems.length)
       return;
-    }
 
     currentItems.insert(effectiveNewIndex, item);
     if (mounted) {
@@ -705,13 +627,10 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
         );
       }
     }
-    // Note: Reordering is local only, not persisted.
   }
 
   Future<void> clearItems() async {
-    if (!mounted) {
-      return;
-    }
+    if (!mounted) return;
     if (state.items.isEmpty) {
       if (kDebugMode) {
         print('[WorkbenchNotifier($instanceId)] No items to clear.');
@@ -781,7 +700,7 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
           .setLastOpenedItem(instanceId, null);
     }
   }
-} // End of WorkbenchNotifier class
+}
 
 // --- Provider Definitions ---
 
@@ -792,21 +711,5 @@ final workbenchProviderFamily =
     ) {
       final notifier = WorkbenchNotifier(ref, instanceId);
       notifier.loadItems();
-  return notifier;
-});
-
-final activeWorkbenchProvider = Provider<WorkbenchState>((ref) {
-  final activeInstanceId = ref.watch(
-    workbenchInstancesProvider.select((s) => s.activeInstanceId),
-  );
-  // Ensure family provider is watched correctly
-  return ref.watch(workbenchProviderFamily(activeInstanceId));
-});
-
-final activeWorkbenchNotifierProvider = Provider<WorkbenchNotifier>((ref) {
-  final activeInstanceId = ref.watch(
-    workbenchInstancesProvider.select((s) => s.activeInstanceId),
-  );
-  // Ensure family provider notifier is watched correctly
-  return ref.watch(workbenchProviderFamily(activeInstanceId).notifier);
-});
+      return notifier;
+    });

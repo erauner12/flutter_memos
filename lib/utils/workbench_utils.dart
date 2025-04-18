@@ -15,7 +15,7 @@ Future<WorkbenchInstance?> showWorkbenchInstancePicker(
 }) async {
   final instancesState = ref.read(workbenchInstancesProvider);
   final availableInstances = instancesState.instances;
-  final activeInstanceId = instancesState.activeInstanceId;
+  // final activeInstanceId = instancesState.activeInstanceId; // REMOVED - No longer needed
 
   if (availableInstances.isEmpty) {
     // Handle case where no instances exist (should ideally not happen due to default)
@@ -48,10 +48,11 @@ Future<WorkbenchInstance?> showWorkbenchInstancePicker(
       return CupertinoActionSheet(
         title: Text(title),
         actions: availableInstances.map((instance) {
-          final bool isCurrentlyActive = instance.id == activeInstanceId;
+              // final bool isCurrentlyActive = instance.id == activeInstanceId; // REMOVED isActive check
           return CupertinoActionSheetAction(
             child: Text(
-              '${instance.name}${isCurrentlyActive ? " (Active)" : ""}',
+                  // '${instance.name}${isCurrentlyActive ? " (Active)" : ""}', // REMOVED (Active) indicator
+                  instance.name, // Just show the name
             ),
             onPressed: () {
               Navigator.pop(popupContext, instance); // Return the selected instance
