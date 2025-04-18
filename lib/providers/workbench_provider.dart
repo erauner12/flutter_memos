@@ -595,8 +595,29 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
           workbenchProviderFamily(targetInstanceId).notifier,
         );
         targetNotifier._addExistingItem(newItemForTarget);
-        // Automatically refresh the target instance to ensure all items are up-to-date
-        unawaited(targetNotifier.loadItems());
+        
+        // Immediately add the item to local state (optimistic update)
+        if (kDebugMode) {
+          print(
+            '[WorkbenchNotifier($instanceId)] Added item to target instance. Now adding delayed refresh to handle CloudKit consistency.',
+          );
+        }
+
+        // Add a delay before loading items to allow CloudKit indexing to catch up
+        // This addresses the eventual consistency issue where new records
+        // might not be immediately available in query results
+        if (mounted) {
+          Future.delayed(const Duration(milliseconds: 1500), () {
+            if (mounted) {
+              targetNotifier.loadItems();
+              if (kDebugMode) {
+                print(
+                  '[WorkbenchNotifier($instanceId)] Executed delayed loadItems() on target instance after move.',
+                );
+              }
+            }
+          });
+        }
 
         if (kDebugMode) {
           print(
