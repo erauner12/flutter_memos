@@ -21,7 +21,8 @@ String formatRelativeTime(DateTime dateTime) {
   } else if (difference.inDays < 7) {
     return '${difference.inDays}d ago';
   } else {
-    return '${dateTime.day}/${dateTime.month}/${dateTime.year}';
+    // Use a more standard date format
+    return '${dateTime.month}/${dateTime.day}/${dateTime.year % 100}'; // MM/DD/YY
   }
 }
 
@@ -42,7 +43,8 @@ class WorkbenchItemTile extends ConsumerWidget {
     BuildContext context,
     WidgetRef ref,
     WorkbenchItemReference item,
-    VoidCallback originalOnTap,
+    VoidCallback
+    originalOnTap, // Renamed to avoid confusion with constructor onTap
   ) {
     // Capture necessary providers/notifiers before showing the sheet
     final instancesState = ref.read(workbenchInstancesProvider);
@@ -99,7 +101,7 @@ class WorkbenchItemTile extends ConsumerWidget {
                   activeCommentNotifier.state = null;
                   selectedItemNotifier.state = null;
                   selectedCommentNotifier.state = null;
-                  originalOnTap();
+                  originalOnTap(); // Call the original onTap passed to this method
                 },
               ),
               ...moveActions,
@@ -181,10 +183,22 @@ class WorkbenchItemTile extends ConsumerWidget {
             );
 
     return Container(
+      // Add some vertical margin between tiles
+      margin: const EdgeInsets.symmetric(vertical: 4.0),
       padding: const EdgeInsets.all(16.0),
       decoration: BoxDecoration(
         color: tileColor,
-        borderRadius: BorderRadius.circular(8.0),
+        borderRadius: BorderRadius.circular(12.0), // Slightly larger radius
+        // Add a subtle shadow for depth
+        boxShadow: [
+          BoxShadow(
+            color: CupertinoColors.systemGrey
+                .resolveFrom(context)
+                .withOpacity(0.1),
+            blurRadius: 5,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -201,18 +215,27 @@ class WorkbenchItemTile extends ConsumerWidget {
           Expanded(
             child: GestureDetector(
               onTap: () {
+                // 1. Perform selection logic (as before)
                 final notifier = ref.read(
                   selectedWorkbenchItemIdProvider.notifier,
                 );
                 if (isSelected) {
+                  // If already selected, tapping again might deselect or just navigate
+                  // Let's keep the deselect logic for now.
                   notifier.state = null;
                 } else {
                   notifier.state = itemReference.id;
+                  // Deselect any selected comment when an item is selected
                   ref.read(selectedWorkbenchCommentIdProvider.notifier).state =
                       null;
                 }
+
+                // 2. Call the onTap callback passed from the parent widget
+                // This callback should contain the navigation logic.
+                onTap();
               },
-              behavior: HitTestBehavior.opaque,
+              behavior:
+                  HitTestBehavior.opaque, // Ensure the whole area is tappable
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -223,6 +246,7 @@ class WorkbenchItemTile extends ConsumerWidget {
                         child: Text(
                           itemReference.serverName ?? 'Unknown Server',
                           style: theme.textTheme.textStyle.copyWith(
+                            fontSize: 13, // Slightly smaller server name
                             color: CupertinoColors.secondaryLabel.resolveFrom(
                               context,
                             ),
@@ -235,6 +259,7 @@ class WorkbenchItemTile extends ConsumerWidget {
                       Text(
                         relativeTime,
                         style: theme.textTheme.textStyle.copyWith(
+                          fontSize: 13, // Slightly smaller time
                           color: CupertinoColors.tertiaryLabel.resolveFrom(
                             context,
                           ),
@@ -247,12 +272,14 @@ class WorkbenchItemTile extends ConsumerWidget {
                       itemReference.previewContent!.isNotEmpty)
                     Text(
                       itemReference.previewContent!,
-                      style: theme.textTheme.textStyle,
+                      style: theme.textTheme.textStyle.copyWith(
+                        fontSize: 16,
+                      ), // Slightly larger content
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
                   if (itemReference.previewComments.isNotEmpty) ...[
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 8), // Increased spacing
                     ...itemReference.previewComments.map(
                       (comment) => _buildCommentPreview(context, ref, comment),
                     ),
@@ -266,26 +293,37 @@ class WorkbenchItemTile extends ConsumerWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               CupertinoButton(
-                padding: const EdgeInsets.only(left: 8.0,
-                  bottom: 4.0),
+                padding: const EdgeInsets.only(
+                  left: 12.0,
+                  bottom: 4.0,
+                ), // Adjusted padding
                 minSize: 30,
                 onPressed:
-                    () => _showItemActions(context, ref, itemReference, onTap),
+                    () => _showItemActions(
+                      context,
+                      ref,
+                      itemReference,
+                      onTap, // Pass the main onTap for the "Open Item" action sheet option
+                    ),
                 child: const Icon(
-                  CupertinoIcons.ellipsis_vertical,
-                  size: 22,
+                  CupertinoIcons.ellipsis, // Use horizontal ellipsis
+                  size: 24, // Slightly larger icon
                   color: CupertinoColors.secondaryLabel,
                 ),
               ),
+              // Only show drag handle if needed (e.g., if reordering is enabled)
               ReorderableDragStartListener(
                 index: index,
                 child: CupertinoButton(
-                  padding: const EdgeInsets.only(left: 8.0, top: 4.0),
+                  padding: const EdgeInsets.only(
+                    left: 12.0,
+                    top: 4.0,
+                  ), // Adjusted padding
                   minSize: 30,
-                  onPressed: () {},
+                  onPressed: () {}, // Drag handle doesn't need an action
                   child: const Icon(
                     CupertinoIcons.line_horizontal_3,
-                    size: 22,
+                    size: 24, // Slightly larger icon
                     color: CupertinoColors.tertiaryLabel,
                   ),
                 ),
@@ -331,16 +369,24 @@ class WorkbenchItemTile extends ConsumerWidget {
                   notifier.state = null;
                 } else {
                   notifier.state = comment.id;
+                  // Deselect the main item when a comment is selected
                   ref.read(selectedWorkbenchItemIdProvider.notifier).state =
                       null;
                 }
+                // Potentially navigate to the parent note and highlight comment here?
+                // For now, just handles selection within the workbench tile.
               },
               child: Container(
                 decoration: BoxDecoration(
                   color: bubbleColor,
-                  borderRadius: BorderRadius.circular(8.0),
+                  borderRadius: BorderRadius.circular(
+                    10.0,
+                  ), // Slightly larger radius
                 ),
-                padding: const EdgeInsets.all(12.0),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12.0,
+                  vertical: 8.0,
+                ), // Adjusted padding
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -348,16 +394,18 @@ class WorkbenchItemTile extends ConsumerWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Padding(
-                          padding: const EdgeInsets.only(top: 2.0),
+                          padding: const EdgeInsets.only(
+                            top: 3.0,
+                          ), // Align icon better
                           child: Icon(
                             CupertinoIcons.bubble_left,
-                            size: 16,
+                            size: 14, // Slightly smaller icon
                             color: CupertinoColors.tertiaryLabel.resolveFrom(
                               context,
                             ),
                           ),
                         ),
-                        const SizedBox(width: 8),
+                        const SizedBox(width: 6), // Reduced spacing
                         Expanded(
                           child: Text(
                             comment.content ?? '',
@@ -391,12 +439,16 @@ class WorkbenchItemTile extends ConsumerWidget {
               ),
             ),
           ),
+          // Keep ellipsis for comment actions if needed
           CupertinoButton(
-            padding: const EdgeInsets.only(left: 8.0, top: 8.0),
+            padding: const EdgeInsets.only(
+              left: 8.0,
+              top: 4.0,
+            ), // Adjusted padding
             minSize: 24,
             onPressed: () => _showCommentPreviewActions(context, ref, comment),
             child: const Icon(
-              CupertinoIcons.ellipsis_vertical,
+              CupertinoIcons.ellipsis, // Use horizontal ellipsis
               size: 18,
               color: CupertinoColors.tertiaryLabel,
             ),
@@ -419,6 +471,7 @@ class WorkbenchItemTile extends ConsumerWidget {
       selectedWorkbenchCommentIdProvider,
     ); // Read current state if needed
 
+    // TODO: Implement actual comment actions (Edit, Pin, Delete) via providers/API calls
     showCupertinoModalPopup(
       context: context,
       builder:
@@ -430,41 +483,63 @@ class WorkbenchItemTile extends ConsumerWidget {
             ),
             actions: [
               CupertinoActionSheetAction(
-                child: const Text('Edit'),
+                child: const Text('Go to Comment'), // Action to navigate
                 onPressed: () {
                   Navigator.pop(context);
+                  // Navigate to parent note, potentially highlighting the comment
+                  // This requires access to the parent note's ID (from itemReference)
+                  // and the comment ID. This logic should likely live where
+                  // _showCommentPreviewActions is called or be passed in.
+                  // For now, just print.
                   print(
-                    'Edit action for comment ${comment.id} (Not Implemented)',
+                    'Navigate to parent note for comment ${comment.id} (Not Implemented)',
                   );
-                  // If edit needed ref access, capture it above
+                  // Example navigation (needs parentNoteId from itemReference):
+                  // if (itemReference.parentNoteId != null) {
+                  //   Navigator.push(
+                  //     context,
+                  //     CupertinoPageRoute(
+                  //       builder: (_) => ItemDetailScreen(
+                  //         itemId: itemReference.parentNoteId!,
+                  //         serverId: itemReference.serverId,
+                  //         // Optionally pass commentId to highlight
+                  //       ),
+                  //     ),
+                  //   );
+                  // }
                 },
               ),
-              CupertinoActionSheetAction(
-                child: Text(comment.pinned ? 'Unpin' : 'Pin'),
-                onPressed: () {
-                  Navigator.pop(context);
-                  print(
-                    'Pin/Unpin action for comment ${comment.id} (Not Implemented)',
-                  );
-                  // If pin/unpin needed ref access, capture it above
-                },
-              ),
-              CupertinoActionSheetAction(
-                isDestructiveAction: true,
-                child: const Text('Delete'),
-                onPressed: () {
-                  Navigator.pop(context);
-                  print(
-                    'Delete action for comment ${comment.id} (Not Implemented)',
-                  );
-                  // Use captured current state and notifier
-                  if (currentSelectedCommentId == comment.id) {
-                    selectedCommentNotifier.state = null;
-                  }
-                  // If actual deletion needed ref access (e.g., calling an API via a provider),
-                  // capture that provider/notifier above as well.
-                },
-              ),
+              // CupertinoActionSheetAction(
+              //   child: const Text('Edit'),
+              //   onPressed: () {
+              //     Navigator.pop(context);
+              //     print(
+              //       'Edit action for comment ${comment.id} (Not Implemented)',
+              //     );
+              //   },
+              // ),
+              // CupertinoActionSheetAction(
+              //   child: Text(comment.pinned ? 'Unpin' : 'Pin'),
+              //   onPressed: () {
+              //     Navigator.pop(context);
+              //     print(
+              //       'Pin/Unpin action for comment ${comment.id} (Not Implemented)',
+              //     );
+              //   },
+              // ),
+              // CupertinoActionSheetAction(
+              //   isDestructiveAction: true,
+              //   child: const Text('Delete'),
+              //   onPressed: () {
+              //     Navigator.pop(context);
+              //     print(
+              //       'Delete action for comment ${comment.id} (Not Implemented)',
+              //     );
+              //     if (currentSelectedCommentId == comment.id) {
+              //       selectedCommentNotifier.state = null;
+              //     }
+              //   },
+              // ),
             ],
             cancelButton: CupertinoActionSheetAction(
               child: const Text('Cancel'),

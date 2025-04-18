@@ -165,6 +165,35 @@ class TasksNotifier extends StateNotifier<TasksState> {
     }
   }
 
+  /// Fetches a single task by its ID.
+  /// Returns the TaskItem or null if not found or an error occurs.
+  Future<TaskItem?> fetchTaskById(String taskId) async {
+    final apiService = _getTaskApiService();
+    if (apiService == null) {
+      // Error (not configured) already set in state by _getTaskApiService
+      return null;
+    }
+
+    try {
+      final task = await apiService.getTask(taskId);
+      // Optionally update local state if the task is already present?
+      // For now, just return the fetched task.
+      return task;
+    } catch (e, s) {
+      if (kDebugMode) {
+        print('Error fetching task by ID $taskId: $e\n$s');
+      }
+      // Set error state, but don't clear existing tasks
+      if (mounted) {
+        state = state.copyWith(
+          error: 'Failed to fetch task $taskId: ${e.toString()}',
+        );
+      }
+      return null; // Indicate failure
+    }
+  }
+
+
   Future<bool> completeTask(String id) async {
     final apiService = _getTaskApiService(); // Checks config
     if (apiService == null) return false;
