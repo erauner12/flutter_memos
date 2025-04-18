@@ -143,10 +143,6 @@ class ChatNotifier extends StateNotifier<ChatState> {
     if (!mounted) return;
     if (!state.isInitializing) {
       // If already initialized (e.g. by external context), don't reload
-      // Or if called manually when not initializing, proceed but don't set flag
-    } else {
-      // Mark as initializing if it's the initial load
-      // state = state.copyWith(isInitializing: true); // Already true by default
     }
 
     ChatSession? cloudSession;
@@ -200,7 +196,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
       state = state.copyWith(session: chosen, isInitializing: false);
       _persistSoon(); // Persist if a session was loaded or newly created
     } else if (mounted) {
-      state = state.copyWith(isInitializing: false); // Ensure flag is false
+      state = state.copyWith(isInitializing: false);
     }
   }
 
@@ -262,19 +258,14 @@ class ChatNotifier extends StateNotifier<ChatState> {
     _persistSoon();
 
     try {
-      // Prepare history for AI (using gen_ai.Content as required by the interface)
       final history =
           currentMessages.where((m) => !m.isLoading).map((m) {
-            // Map Role enum to AI Content role string
-            // IMPORTANT: This mapping is for the ChatAiBackend interface.
-            // The OpenAiGptBackend will handle the conversion *from* this format.
             final roleString = switch (m.role) {
               Role.user => 'user',
-              Role.model => 'model', // Gemini/Google role
-              Role.system => 'system', // Pass system role through
-              Role.function => 'function', // Pass function role through
+              Role.model => 'model',
+              Role.system => 'system',
+              Role.function => 'function',
             };
-            // Ensure system messages are included here. The backend handles compatibility.
             return gen_ai.Content(roleString, [gen_ai.TextPart(m.text)]);
           }).toList();
 
@@ -282,21 +273,16 @@ class ChatNotifier extends StateNotifier<ChatState> {
         print(
           "[ChatNotifier] Sending message. History size: ${history.length}",
         );
-        // Optional: Log history details carefully
       }
 
-      // Call the AI backend via the facade (_ai)
-      // This will route to OpenAiGptBackend or McpAiProxy
       final resp = await _ai.send(history, text);
       final replyText = resp.text;
 
       final modelMsg = ChatMessage(
         id: 'model_${DateTime.now().millisecondsSinceEpoch}',
-        role: Role.model, // App uses 'model' role for AI responses
+        role: Role.model,
         text: replyText,
         timestamp: DateTime.now().toUtc(),
-        // Potentially add sourceServerId if response came from MCP via facade?
-        // The current ChatAiResponse doesn't carry this info back easily.
       );
 
       if (!mounted) return;
@@ -313,8 +299,6 @@ class ChatNotifier extends StateNotifier<ChatState> {
         isLoading: false,
       );
     } catch (e) {
-      // Error handling remains the same. The specific error might now originate
-      // from OpenAiGptBackend or MinimalOpenAiService.
       if (kDebugMode) {
         print("[ChatNotifier] SendMessage Error: $e");
       }
@@ -361,15 +345,10 @@ class ChatNotifier extends StateNotifier<ChatState> {
       print("[ChatNotifier] Clearing chat context.");
     }
     // Create a new session instance with context fields set to null
-    // Assuming ChatSession.copyWith handles nulling these fields when passed null
-    // or has a specific flag like `clearContext`. If not, adjust accordingly.
-    // For simplicity, let's assume direct nulling works:
     final clearedSession = state.session.copyWith(
-      contextItemId: null, // Explicitly set to null
-      contextItemType: null, // Explicitly set to null
-      contextServerId: null, // Explicitly set to null
-      // Keep existing messages unless clearing context should also clear messages
-      // messages: state.session.messages,
+      contextItemId: null,
+      contextItemType: null,
+      contextServerId: null,
       lastUpdated: DateTime.now().toUtc(),
     );
     state = state.copyWith(session: clearedSession);
@@ -518,7 +497,6 @@ final chatProvider = StateNotifierProvider<ChatNotifier, ChatState>(
     ai: ref.read(chatAiFacadeProvider), // Reads the configured facade
   ),
 );
-
 
 // --- Test Config Provider (Update to reflect ChatAiBackend potentially being OpenAI) ---
 class ChatNotifierTestConfig {
