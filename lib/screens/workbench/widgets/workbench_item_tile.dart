@@ -9,7 +9,6 @@ import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/models/server_config.dart';
 import 'package:flutter_memos/models/workbench_item_reference.dart';
 import 'package:flutter_memos/models/workbench_item_type.dart'; // Import the unified enum
-import 'package:flutter_memos/providers/chat_overlay_providers.dart';
 import 'package:flutter_memos/providers/server_config_provider.dart';
 import 'package:flutter_memos/providers/task_providers.dart';
 import 'package:flutter_memos/providers/workbench_instances_provider.dart'; // Import instances provider
@@ -307,8 +306,7 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
         'parentServerId': itemRef.serverId,
       };
 
-      // Use chat overlay state
-      ref.read(chatOverlayVisibleProvider.notifier).state = true;
+      // Removed setting overlay provider state
       final rootNavigator = ref.read(rootNavigatorKeyProvider).currentState;
       if (rootNavigator != null && mounted) {
         rootNavigator.pushNamed('/chat', arguments: chatArgs);

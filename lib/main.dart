@@ -7,18 +7,18 @@ import 'package:flutter/material.dart'
     show ThemeMode; // Keep Material import ONLY for ThemeMode enum
 import 'package:flutter_localizations/flutter_localizations.dart'; // Import localizations
 import 'package:flutter_memos/models/workbench_item_type.dart';
-import 'package:flutter_memos/providers/chat_overlay_providers.dart'; // Import chat overlay provider
+// Removed chat overlay provider import
 import 'package:flutter_memos/providers/chat_providers.dart';
 import 'package:flutter_memos/providers/server_config_provider.dart';
 import 'package:flutter_memos/providers/settings_provider.dart'; // Import settings providers
 import 'package:flutter_memos/providers/theme_provider.dart';
 import 'package:flutter_memos/providers/ui_providers.dart'; // Import for UI providers including highlightedCommentIdProvider
-import 'package:flutter_memos/screens/chat/chat_overlay.dart'; // Import the new overlay widget
+// Removed chat overlay import
 import 'package:flutter_memos/screens/chat_screen.dart'; // Keep for potential direct navigation
 import 'package:flutter_memos/screens/edit_entity/edit_entity_screen.dart';
 import 'package:flutter_memos/screens/item_detail/item_detail_screen.dart';
 import 'package:flutter_memos/screens/new_note/new_note_screen.dart';
-import 'package:flutter_memos/utils/keyboard_shortcuts.dart'; // ToggleChatOverlayIntent, etc.
+import 'package:flutter_memos/utils/keyboard_shortcuts.dart'; // Keep for other shortcuts
 import 'package:flutter_memos/utils/provider_logger.dart';
 import 'package:flutter_memos/widgets/config_check_wrapper.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -40,8 +40,9 @@ Route<dynamic>? generateRoute(RouteSettings settings) {
     case '/':
       return null;
     case '/chat':
+      // Pass arguments directly to ChatScreen if needed via settings
       return CupertinoPageRoute(
-        builder: (_) => const ChatScreen(),
+        builder: (_) => const ChatScreen(), // ChatScreen is now a regular route
         settings: settings,
       );
     case '/item-detail':
@@ -278,9 +279,18 @@ class _MyAppCoreState extends ConsumerState<MyAppCore> {
     final pathSegments = uri.pathSegments;
     final navigator = ref.read(rootNavigatorKeyProvider).currentState;
 
+    if (navigator == null) {
+      if (kDebugMode) {
+        print('[DeepLink] Navigator not available yet.');
+      }
+      // Optionally retry later or queue the link
+      return;
+    }
+
+
     if (host == 'memo' && pathSegments.isNotEmpty) {
       final memoId = pathSegments[0];
-      navigator?.pushNamed(
+      navigator.pushNamed(
         '/deep-link-target',
         arguments: {
           'itemId': memoId,
@@ -290,7 +300,7 @@ class _MyAppCoreState extends ConsumerState<MyAppCore> {
     } else if (host == 'comment' && pathSegments.length >= 2) {
       final memoId = pathSegments[0];
       final commentIdToHighlight = pathSegments[1];
-      navigator?.pushNamed(
+      navigator.pushNamed(
         '/deep-link-target',
         arguments: {
           'itemId': memoId,
@@ -298,15 +308,17 @@ class _MyAppCoreState extends ConsumerState<MyAppCore> {
         },
       );
     } else if (host == 'chat') {
-      ref.read(chatOverlayVisibleProvider.notifier).state = true;
+      // Navigate to the chat route instead of toggling overlay
       if (kDebugMode) {
-        print('[DeepLink] Opening chat overlay via deep link.');
+        print('[DeepLink] Navigating to chat route via deep link.');
       }
       final contextItemId = uri.queryParameters['contextItemId'];
       final contextItemTypeStr = uri.queryParameters['contextItemType'];
       final contextString = uri.queryParameters['contextString'];
       final parentServerId = uri.queryParameters['parentServerId'];
 
+      // Prepare arguments for the ChatScreen route
+      Map<String, dynamic>? chatArgs;
       if (contextItemId != null &&
           contextItemTypeStr != null &&
           parentServerId != null) {
@@ -319,16 +331,25 @@ class _MyAppCoreState extends ConsumerState<MyAppCore> {
           }
           contextItemType = WorkbenchItemType.unknown;
         }
-
+        chatArgs = {
+          'contextString': contextString ?? "Context from deep link",
+          'parentItemId': contextItemId,
+          'parentItemType': contextItemType,
+          'parentServerId': parentServerId,
+        };
+        // Set context immediately if needed before navigation
+        // Use addPostFrameCallback to ensure notifier exists if called early
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) {
+            // Check mounted again inside callback
             ref
                 .read(chatProvider.notifier)
                 .startChatWithContext(
-                  contextString: contextString ?? "Context from deep link",
-                  parentItemId: contextItemId,
-                  parentItemType: contextItemType ?? WorkbenchItemType.unknown,
-                  parentServerId: parentServerId,
+                  contextString: chatArgs!['contextString'] as String,
+                  parentItemId: chatArgs['parentItemId'] as String,
+                  parentItemType:
+                      chatArgs['parentItemType'] as WorkbenchItemType,
+                  parentServerId: chatArgs['parentServerId'] as String,
                 );
             if (kDebugMode) {
               print(
@@ -338,6 +359,9 @@ class _MyAppCoreState extends ConsumerState<MyAppCore> {
           }
         });
       }
+      // Push the chat route, potentially with arguments
+      navigator.pushNamed('/chat', arguments: chatArgs);
+
     } else {
       if (kDebugMode) {
         print('[DeepLink] Invalid URI structure: $uri');
@@ -524,7 +548,7 @@ class _MyAppCoreState extends ConsumerState<MyAppCore> {
 
     // Build the main CupertinoApp only when loading is complete
     return Shortcuts(
-      shortcuts: buildGlobalShortcuts(),
+      shortcuts: buildGlobalShortcuts(), // Keep existing shortcuts
       child: Actions(
         actions: {
           NavigateBackIntent: CallbackAction<NavigateBackIntent>(
@@ -560,19 +584,7 @@ class _MyAppCoreState extends ConsumerState<MyAppCore> {
               return null;
             },
           ),
-          ToggleChatOverlayIntent: CallbackAction<ToggleChatOverlayIntent>(
-            onInvoke: (intent) {
-              final currentVisibility = ref.read(chatOverlayVisibleProvider);
-              ref.read(chatOverlayVisibleProvider.notifier).state =
-                  !currentVisibility;
-              if (kDebugMode) {
-                print(
-                  '[MyApp Actions] Toggled chat overlay visibility to ${!currentVisibility}',
-                );
-              }
-              return null;
-            },
-          ),
+          // Removed ToggleChatOverlayIntent action
         },
         child: GestureDetector(
           // Keep GestureDetector for unfocus
@@ -593,17 +605,8 @@ class _MyAppCoreState extends ConsumerState<MyAppCore> {
             supportedLocales: const [Locale('en', '')],
             home: const ConfigCheckWrapper(), // Initial screen after loading
             onGenerateRoute: generateRoute,
-            // Use the builder to insert the ChatOverlay
-            builder: (context, child) {
-              return Stack(
-                children: [
-                  // The main app content managed by the Navigator
-                  child ?? const SizedBox.shrink(),
-                  // The ChatOverlay, now sharing the same Overlay ancestor
-                  const ChatOverlay(),
-                ],
-              );
-            },
+            // Removed the builder that added the ChatOverlay
+            builder: (context, child) => child ?? const SizedBox.shrink(),
           ),
         ),
       ),

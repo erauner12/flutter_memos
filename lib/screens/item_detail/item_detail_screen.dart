@@ -9,7 +9,6 @@ import 'package:flutter_memos/main.dart'; // Adjust path if main.dart is elsewhe
 import 'package:flutter_memos/models/note_item.dart'; // Import NoteItem
 import 'package:flutter_memos/models/workbench_item_reference.dart'; // Import workbench model
 import 'package:flutter_memos/models/workbench_item_type.dart'; // Import the unified enum
-import 'package:flutter_memos/providers/chat_overlay_providers.dart';
 // Import note_providers instead of memo_providers
 import 'package:flutter_memos/providers/note_providers.dart' as note_providers;
 import 'package:flutter_memos/providers/server_config_provider.dart'; // Import server config provider
@@ -516,8 +515,7 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
     }
 
     try {
-      // Show chat overlay instead of switching tabs
-      ref.read(chatOverlayVisibleProvider.notifier).state = true;
+      // Removed setting overlay provider state
       if (!mounted) return;
       _navigateToChatScreen(
         buildContext,

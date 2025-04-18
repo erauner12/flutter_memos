@@ -11,7 +11,6 @@ import 'package:flutter_memos/main.dart'; // Adjust path if main.dart is elsewhe
 import 'package:flutter_memos/models/note_item.dart';
 import 'package:flutter_memos/models/workbench_item_reference.dart'; // Needed for Workbench
 import 'package:flutter_memos/models/workbench_item_type.dart'; // Import the unified enum
-import 'package:flutter_memos/providers/chat_overlay_providers.dart';
 import 'package:flutter_memos/providers/note_providers.dart' as note_providers;
 import 'package:flutter_memos/providers/server_config_provider.dart'; // Needed for activeServerConfigProvider
 // Import settings_provider for manuallyHiddenNoteIdsProvider
@@ -508,10 +507,9 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
         activeServerId,
       );
 
-      _dismissLoadingDialog(); // Dismiss before overlay
+      _dismissLoadingDialog(); // Dismiss before navigation
 
-      // Show chat overlay instead of tab switch
-      ref.read(chatOverlayVisibleProvider.notifier).state = true;
+      // Removed setting overlay provider state
       if (!mounted) return;
       _navigateToChatScreen(
         buildContext,

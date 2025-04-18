@@ -5,7 +5,7 @@ import 'package:flutter_markdown/flutter_markdown.dart'; // For rendering markdo
 import 'package:flutter_memos/main.dart'; // Import for rootNavigatorKeyProvider
 import 'package:flutter_memos/models/chat_message.dart'; // Import ChatMessage which now defines Role
 import 'package:flutter_memos/models/workbench_item_type.dart';
-import 'package:flutter_memos/providers/chat_overlay_providers.dart'; // Import overlay provider
+// Removed chat overlay provider import
 import 'package:flutter_memos/providers/chat_providers.dart';
 import 'package:flutter_memos/providers/settings_provider.dart'; // To check API key
 import 'package:flutter_memos/screens/settings_screen.dart'; // Import SettingsScreen
@@ -29,10 +29,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   @override
   void initState() {
     super.initState();
-    // Don't process context here, wait for didChangeDependencies or provider updates
-    // Check initial context from provider state in case it was set before screen init
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _checkInitialContext();
+      // Check context from ModalRoute first if available upon build
+      final args =
+          ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+      if (args != null) {
+        _processContextArguments(args);
+      } else {
+        _checkInitialContext(); // Check provider state if no route args
+      }
     });
   }
 
@@ -41,7 +46,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     // Process context arguments only once when the screen is loaded with them
-    // This handles cases where ChatScreen might be pushed directly (e.g., /chat route)
     if (!_contextProcessed) {
       final args =
           ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
@@ -179,7 +183,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     });
     ref.listen(chatProvider.select((state) => state.isLoading), (_, isLoading) {
       if (isLoading) {
-        // Scroll down when AI starts loading
         _scrollToBottom();
       }
     });
@@ -190,13 +193,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       nextContextId,
     ) {
       if (nextContextId != null && !_contextProcessed && mounted) {
-        // Context was set externally after initial build/check
-        _contextProcessed = true; // Mark as processed
+        _contextProcessed = true;
         if (kDebugMode) {
           print("ChatScreen: Context updated via provider listener.");
         }
       } else if (nextContextId == null && _contextProcessed) {
-        // Context was cleared, reset the flag
         _contextProcessed = false;
         if (kDebugMode) {
           print("ChatScreen: Context cleared, resetting processed flag.");
@@ -206,306 +207,254 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
 
     // Show loading indicator during initial session load
-    // Use a simple Container instead of CupertinoPageScaffold
     if (chatState.isInitializing) {
-      return const Center(child: CupertinoActivityIndicator());
+      // Return scaffold with loading indicator in body
+      return const CupertinoPageScaffold(
+        navigationBar: CupertinoNavigationBar(middle: Text('Chat')),
+        child: Center(child: CupertinoActivityIndicator()),
+      );
     }
 
-    // Removed CupertinoPageScaffold and CupertinoNavigationBar
-    return SafeArea(
-      // Keep SafeArea at the top level of the screen content
-      // Ensure SafeArea does not apply padding when inside the overlay (handled by overlay padding)
-      // However, keep it for potential direct use of ChatScreen via routing.
-      // Let the overlay manage its own padding.
-      top: false, // Overlay handles top padding
-      bottom: true, // Let SafeArea handle bottom padding for input area
-      left: false, // Overlay handles horizontal padding
-      right: false,
-      child: Column(
-        children: [
-          // --- Top Bar Area (Replaces Navigation Bar) ---
-          Container(
-            padding: const EdgeInsets.only(
-              left: 50,
-              right: 16,
-              top: 8,
-              bottom: 4,
-            ), // Adjust padding (left accommodates close button)
-            decoration: BoxDecoration(
-              // Optional: Add a subtle background or border if needed
-              // color: CupertinoTheme.of(context).barBackgroundColor.withOpacity(0.8),
-              border: Border(
-                bottom: BorderSide(
-                  color: CupertinoColors.separator
-                      .resolveFrom(context)
-                      .withOpacity(0.5),
-                  width: 0.5,
-                ),
-              ),
+    // Main screen content wrapped in CupertinoPageScaffold
+    return CupertinoPageScaffold(
+      navigationBar: CupertinoNavigationBar(
+        middle: Text('Chat (${mcpState.connectedServerCount} MCP)'),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Sync Button
+            CupertinoButton(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              minSize: 0,
+              onPressed:
+                  chatState.isSyncing || chatState.isInitializing
+                      ? null
+                      : () =>
+                          ref.read(chatProvider.notifier).forceFetchFromCloud(),
+              child:
+                  chatState.isSyncing
+                      ? const CupertinoActivityIndicator(radius: 10)
+                      : const Icon(CupertinoIcons.cloud_download, size: 22),
             ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                // Title (Optional, can be simpler)
-                Text(
-                  'Chat (${mcpState.connectedServerCount} MCP)',
-                  style: CupertinoTheme.of(
-                    context,
-                  ).textTheme.navTitleTextStyle.copyWith(fontSize: 16),
-                ),
-                // Action Buttons
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Sync Button
-                    CupertinoButton(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      minSize: 0,
-                      onPressed:
-                          chatState.isSyncing || chatState.isInitializing
-                              ? null // Disable while syncing or initializing
-                              : () {
-                                ref
-                                    .read(chatProvider.notifier)
-                                    .forceFetchFromCloud();
-                              },
-                      child:
-                          chatState.isSyncing
-                              ? const CupertinoActivityIndicator(radius: 10)
-                              : const Icon(
-                                CupertinoIcons.cloud_download,
-                                size: 22,
-                              ),
-                    ),
-                    // Trash Button
-                    CupertinoButton(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      minSize: 0,
-                      onPressed:
-                          chatState.isSyncing || chatState.isInitializing
-                              ? null // Disable while syncing or initializing
-                              : () {
-                                // Confirmation could be added here
-                                ref.read(chatProvider.notifier).clearChat();
-                                // Reset context processed flag if chat is cleared manually
-                                setState(() {
-                                  _contextProcessed = false;
-                                });
-                              },
-                      child: const Icon(CupertinoIcons.trash, size: 20),
-                    ),
-                    // Settings Button
-                    CupertinoButton(
-                      padding: const EdgeInsets.only(
-                        left: 8,
-                        right: 0,
-                      ), // Adjust padding
-                      minSize: 0,
-                      onPressed:
-                          chatState.isSyncing || chatState.isInitializing
-                              ? null // Disable while syncing or initializing
-                              : () {
-                                // Use root navigator to push settings screen over the overlay
-                                final rootNavigator = ref.read(
-                                  rootNavigatorKeyProvider,
-                                );
-                                rootNavigator.currentState?.push(
-                                  CupertinoPageRoute(
-                                    builder:
-                                        (context) => const SettingsScreen(
-                                          isInitialSetup: false,
-                                        ),
-                                  ),
-                                );
-                                // Optionally close the overlay when navigating away
-                                // ref.read(chatOverlayVisibleProvider.notifier).state = false;
-                              },
-                      child: const Icon(CupertinoIcons.settings, size: 20),
-                    ),
-                  ],
-                ),
-              ],
+            // Trash Button
+            CupertinoButton(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              minSize: 0,
+              onPressed:
+                  chatState.isSyncing || chatState.isInitializing
+                      ? null
+                      : () {
+                        ref.read(chatProvider.notifier).clearChat();
+                        setState(() {
+                          _contextProcessed = false;
+                        });
+                      },
+              child: const Icon(CupertinoIcons.trash, size: 20),
             ),
-          ),
-
-          // Display AI loading indicator
-          if (chatState.isLoading) const LinearProgressIndicator(minHeight: 2),
-          // Display general error message
-          if (chatState.errorMessage != null)
-            Container(
-              color: CupertinoColors.systemRed.withAlpha(25),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Row(
-                children: [
-                  const Icon(
-                    CupertinoIcons.exclamationmark_triangle,
-                    color: CupertinoColors.systemRed,
-                    size: 18,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      chatState.errorMessage!,
-                      style: const TextStyle(
-                        color: CupertinoColors.systemRed,
-                        inherit: false, // Explicitly set inherit
-                      ),
-                    ),
-                  ),
-                  CupertinoButton(
-                    padding: EdgeInsets.zero,
-                    minSize: 0,
-                    child: const Icon(
-                      CupertinoIcons.xmark,
-                      size: 16,
-                      color: CupertinoColors.systemRed,
-                    ),
-                    onPressed:
-                        () =>
-                            ref.read(chatProvider.notifier).clearErrorMessage(),
-                  ),
-                ],
-              ),
+            // Settings Button
+            CupertinoButton(
+              padding: const EdgeInsets.only(left: 8, right: 0),
+              minSize: 0,
+              onPressed:
+                  chatState.isSyncing || chatState.isInitializing
+                      ? null
+                      : () {
+                        // Use root navigator to push settings screen
+                        final rootNavigator = ref.read(
+                          rootNavigatorKeyProvider,
+                        );
+                        rootNavigator.currentState?.push(
+                          CupertinoPageRoute(
+                            builder:
+                                (context) =>
+                                    const SettingsScreen(isInitialSetup: false),
+                          ),
+                        );
+                      },
+              child: const Icon(CupertinoIcons.settings, size: 20),
             ),
-          // Display API key warning
-          if (!isApiKeySet)
-            Container(
-              color: CupertinoColors.systemYellow.withAlpha(38),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Row(
-                children: [
-                  const Icon(
-                    CupertinoIcons.exclamationmark_shield,
-                    color: CupertinoColors.systemYellow,
-                    size: 18,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      "Gemini API Key not set. Please configure it in Settings.",
-                      style: TextStyle(
-                        color: CupertinoColors.systemYellow.resolveFrom(
-                          context,
-                        ), // Use resolved color
-                        inherit: false, // Explicitly set inherit
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          // Display Context Indicator
-          if (chatState.currentContextItemId != null)
-            GestureDetector(
-              // Wrap with GestureDetector
-              onTap: () {
-                // Navigate back ONLY if it's a note (for now)
-                if (chatState.currentContextItemType ==
-                        WorkbenchItemType.note &&
-                    chatState.currentContextItemId != null) {
-                  final rootNavigator = ref.read(rootNavigatorKeyProvider);
-                  rootNavigator.currentState?.pushNamed(
-                    '/item-detail', // Assuming this is the route for Note detail
-                    arguments: {'itemId': chatState.currentContextItemId},
-                  );
-                  // Optionally close the overlay when navigating away
-                  ref.read(chatOverlayVisibleProvider.notifier).state = false;
-                }
-                // No action for tapping on Task context yet
-              },
-              child: Container(
-                color: CupertinoColors.systemBlue.withAlpha(20),
+          ],
+        ),
+      ),
+      child: SafeArea(
+        // SafeArea for the body content below the nav bar
+        top: false, // Nav bar handles top safe area
+        bottom: false, // Input area will handle bottom safe area
+        child: Column(
+          children: [
+            // Display AI loading indicator
+            if (chatState.isLoading)
+              const LinearProgressIndicator(minHeight: 2),
+            // Display general error message
+            if (chatState.errorMessage != null)
+              Container(
+                color: CupertinoColors.systemRed.withAlpha(25),
                 padding: const EdgeInsets.symmetric(
                   horizontal: 16,
-                  vertical: 6,
+                  vertical: 8,
                 ),
                 child: Row(
                   children: [
-                    Icon(
-                      CupertinoIcons.info_circle,
-                      color:
-                          // Make icon blue only if tappable (Note)
-                          chatState.currentContextItemType ==
-                                  WorkbenchItemType.note
-                              ? CupertinoColors.systemBlue
-                              : CupertinoColors.secondaryLabel.resolveFrom(
-                                context,
-                              ),
-                      size: 16,
+                    const Icon(
+                      CupertinoIcons.exclamationmark_triangle,
+                      color: CupertinoColors.systemRed,
+                      size: 18,
                     ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        // Use the updated helper function
-                        "Context: ${_getItemTypeName(chatState.currentContextItemType)} ${chatState.currentContextItemId?.substring(0, 8)}...", // Shorten ID
-                        style: TextStyle(
-                          inherit: false, // Explicitly set inherit
-                          color:
-                              // Make text blue and underlined only if tappable (Note)
-                              chatState.currentContextItemType ==
-                                      WorkbenchItemType.note
-                                  ? CupertinoColors.systemBlue
-                                  : CupertinoColors.secondaryLabel.resolveFrom(
-                                    context,
-                                  ),
-                          fontSize: 13,
-                          decoration:
-                              chatState.currentContextItemType ==
-                                      WorkbenchItemType.note
-                                  ? TextDecoration.underline
-                                  : TextDecoration.none,
-                          decorationColor:
-                              CupertinoColors
-                                  .systemBlue, // Ensure underline color matches text
+                        chatState.errorMessage!,
+                        style: const TextStyle(
+                          color: CupertinoColors.systemRed,
+                          inherit: false,
                         ),
-                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    // Add a clear context button
                     CupertinoButton(
-                      padding: const EdgeInsets.only(left: 8),
+                      padding: EdgeInsets.zero,
                       minSize: 0,
                       child: const Icon(
-                        CupertinoIcons.xmark_circle,
+                        CupertinoIcons.xmark,
                         size: 16,
-                        color: CupertinoColors.secondaryLabel,
+                        color: CupertinoColors.systemRed,
                       ),
-                      onPressed: () {
-                        ref.read(chatProvider.notifier).clearChatContext();
-                        setState(() {
-                          _contextProcessed =
-                              false; // Reset flag when context cleared
-                        });
-                      },
-                    )
+                      onPressed:
+                          () =>
+                              ref
+                                  .read(chatProvider.notifier)
+                                  .clearErrorMessage(),
+                    ),
                   ],
                 ),
               ),
+            // Display API key warning
+            if (!isApiKeySet)
+              Container(
+                color: CupertinoColors.systemYellow.withAlpha(38),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      CupertinoIcons.exclamationmark_shield,
+                      color: CupertinoColors.systemYellow,
+                      size: 18,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        "Gemini API Key not set. Please configure it in Settings.",
+                        style: TextStyle(
+                          color: CupertinoColors.systemYellow.resolveFrom(
+                            context,
+                          ),
+                          inherit: false,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            // Display Context Indicator
+            if (chatState.currentContextItemId != null)
+              GestureDetector(
+                onTap: () {
+                  if (chatState.currentContextItemType ==
+                          WorkbenchItemType.note &&
+                      chatState.currentContextItemId != null) {
+                    final rootNavigator = ref.read(rootNavigatorKeyProvider);
+                    rootNavigator.currentState?.pushNamed(
+                      '/item-detail',
+                      arguments: {'itemId': chatState.currentContextItemId},
+                    );
+                    // Removed closing overlay logic
+                  }
+                },
+                child: Container(
+                  color: CupertinoColors.systemBlue.withAlpha(20),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 6,
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        CupertinoIcons.info_circle,
+                        color:
+                            chatState.currentContextItemType ==
+                                    WorkbenchItemType.note
+                                ? CupertinoColors.systemBlue
+                                : CupertinoColors.secondaryLabel.resolveFrom(
+                                  context,
+                                ),
+                        size: 16,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          "Context: ${_getItemTypeName(chatState.currentContextItemType)} ${chatState.currentContextItemId?.substring(0, 8)}...",
+                          style: TextStyle(
+                            inherit: false,
+                            color:
+                                chatState.currentContextItemType ==
+                                        WorkbenchItemType.note
+                                    ? CupertinoColors.systemBlue
+                                    : CupertinoColors.secondaryLabel
+                                        .resolveFrom(context),
+                            fontSize: 13,
+                            decoration:
+                                chatState.currentContextItemType ==
+                                        WorkbenchItemType.note
+                                    ? TextDecoration.underline
+                                    : TextDecoration.none,
+                            decorationColor: CupertinoColors.systemBlue,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      CupertinoButton(
+                        padding: const EdgeInsets.only(left: 8),
+                        minSize: 0,
+                        child: const Icon(
+                          CupertinoIcons.xmark_circle,
+                          size: 16,
+                          color: CupertinoColors.secondaryLabel,
+                        ),
+                        onPressed: () {
+                          ref.read(chatProvider.notifier).clearChatContext();
+                          setState(() {
+                            _contextProcessed = false;
+                          });
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            // Message List
+            Expanded(
+              child: ListView.builder(
+                controller: _scrollController,
+                padding: const EdgeInsets.all(8.0),
+                itemCount: chatState.displayMessages.length,
+                itemBuilder: (context, index) {
+                  final message = chatState.displayMessages[index];
+                  if (message.role == Role.system) {
+                    return const SizedBox.shrink();
+                  }
+                  return _buildMessageBubble(message);
+                },
+              ),
             ),
-          // Message List
-          Expanded(
-            child: ListView.builder(
-              controller: _scrollController,
-              padding: const EdgeInsets.all(8.0),
-              itemCount: chatState.displayMessages.length,
-              itemBuilder: (context, index) {
-                final message = chatState.displayMessages[index];
-                // Don't display system messages
-                if (message.role == Role.system) {
-                  return const SizedBox.shrink();
-                }
-                return _buildMessageBubble(message);
-              },
+            // Input Area - Needs its own SafeArea handling
+            _buildInputArea(
+              context,
+              chatState.isLoading || chatState.isSyncing || !isApiKeySet,
             ),
-          ),
-          // Input Area
-          _buildInputArea(
-            context,
-            chatState.isLoading ||
-                chatState.isSyncing || // Disable input while syncing
-                !isApiKeySet,
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -527,11 +476,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         children: [
           Container(
             constraints: BoxConstraints(
-              // Constrain width relative to the overlay width, not full screen
-              maxWidth:
-                  MediaQuery.of(context).size.width *
-                  0.85 *
-                  0.75, // 75% of overlay width
+              // Constrain width relative to screen width (adjust as needed)
+              maxWidth: MediaQuery.of(context).size.width * 0.75,
             ),
             padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
             decoration: BoxDecoration(
@@ -550,7 +496,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                         CupertinoTheme.of(context),
                       ).copyWith(
                         p: TextStyle(
-                          inherit: false, // Explicitly set inherit
+                          inherit: false,
                           color:
                               message.isError
                                   ? CupertinoColors.white
@@ -558,10 +504,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                           fontSize: 16,
                         ),
                         code: TextStyle(
-                          inherit: false, // Explicitly set inherit
+                          inherit: false,
                           backgroundColor: CupertinoColors.black.withAlpha(25),
                           fontFamily: 'monospace',
-                          fontSize: 14, // Slightly smaller for code
+                          fontSize: 14,
                           color:
                               message.isError
                                   ? CupertinoColors.white
@@ -574,66 +520,65 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     ),
                   ),
           ),
-          // Optional: Timestamp
-           // Padding(
-           //   padding: const EdgeInsets.only(top: 2.0, left: 5.0, right: 5.0),
-           //   child: Text(
-          //     DateFormat.Hm().format(message.timestamp.toLocal()),
-           //     style: TextStyle(fontSize: 10, color: CupertinoColors.secondaryLabel.resolveFrom(context)),
-           //   ),
-           // )
         ],
       ),
     );
   }
 
   Widget _buildInputArea(BuildContext context, bool disabled) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
-      decoration: BoxDecoration(
-        color: CupertinoTheme.of(context).barBackgroundColor,
-        border: Border(
-          top: BorderSide(
-            color: CupertinoColors.separator.resolveFrom(context),
-            width: 0.5,
-          ),
-        ),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: CupertinoTextField(
-              controller: _textController,
-              focusNode: _focusNode,
-              placeholder: 'Enter message...',
-              maxLines: 5,
-              minLines: 1,
-              textInputAction: TextInputAction.send,
-              onSubmitted: disabled ? null : (_) => _sendMessage(),
-              padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 10.0),
-              style: TextStyle(
-                // Ensure text field text color is correct
-                color: CupertinoColors.label.resolveFrom(context),
-                inherit: false,
-              ),
-               decoration: BoxDecoration(
-                 color: CupertinoColors.tertiarySystemFill.resolveFrom(context),
-                 borderRadius: BorderRadius.circular(18.0),
-               ),
-               enabled: !disabled,
-              keyboardAppearance:
-                  CupertinoTheme.of(
-                    context,
-                  ).brightness, // Match keyboard to theme
+    // Wrap input area with SafeArea to avoid system intrusions (like keyboard)
+    return SafeArea(
+      top: false, // Only apply padding to the bottom
+      left: true, // Apply horizontal padding if needed
+      right: true,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
+        decoration: BoxDecoration(
+          color: CupertinoTheme.of(context).barBackgroundColor,
+          border: Border(
+            top: BorderSide(
+              color: CupertinoColors.separator.resolveFrom(context),
+              width: 0.5,
             ),
           ),
-          const SizedBox(width: 8.0),
-          CupertinoButton(
-            padding: const EdgeInsets.all(8.0),
-            onPressed: disabled ? null : _sendMessage,
-            child: const Icon(CupertinoIcons.arrow_up_circle_fill, size: 30),
-          ),
-        ],
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: CupertinoTextField(
+                controller: _textController,
+                focusNode: _focusNode,
+                placeholder: 'Enter message...',
+                maxLines: 5,
+                minLines: 1,
+                textInputAction: TextInputAction.send,
+                onSubmitted: disabled ? null : (_) => _sendMessage(),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12.0,
+                  vertical: 10.0,
+                ),
+                style: TextStyle(
+                  color: CupertinoColors.label.resolveFrom(context),
+                  inherit: false,
+                ),
+                decoration: BoxDecoration(
+                  color: CupertinoColors.tertiarySystemFill.resolveFrom(
+                    context,
+                  ),
+                  borderRadius: BorderRadius.circular(18.0),
+                ),
+                enabled: !disabled,
+                keyboardAppearance: CupertinoTheme.of(context).brightness,
+              ),
+            ),
+            const SizedBox(width: 8.0),
+            CupertinoButton(
+              padding: const EdgeInsets.all(8.0),
+              onPressed: disabled ? null : _sendMessage,
+              child: const Icon(CupertinoIcons.arrow_up_circle_fill, size: 30),
+            ),
+          ],
+        ),
       ),
     );
   }
