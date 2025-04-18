@@ -22,7 +22,7 @@ import 'package:flutter_memos/screens/more/more_screen.dart'; // Import the new 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'item_detail/item_detail_screen.dart';
-import 'workbench/workbench_screen.dart';
+import 'workbench/workbench_main_screen.dart'; // Import the new main screen
 
 // --- New Providers ---
 
@@ -165,7 +165,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     (settings) => CupertinoPageRoute(
                       builder:
                           (_) => const CupertinoPageScaffold(
-                            child: WorkbenchScreen(),
+                            // Use WorkbenchMainScreen here
+                            child: WorkbenchMainScreen(),
                           ),
                       settings: settings,
                     ),

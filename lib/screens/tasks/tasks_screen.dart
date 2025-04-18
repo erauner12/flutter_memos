@@ -230,8 +230,9 @@ class TasksScreen extends HookConsumerWidget {
     // Optional: Dismiss loading indicator
 
     // Check for errors or null content
-    if (!context.mounted)
+    if (!context.mounted) {
       return; // Check context before showing dialog/navigating
+    }
     if (error != null || fetchedContent == null) {
       _showAlertDialog(
         context,
