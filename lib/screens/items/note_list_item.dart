@@ -10,6 +10,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_memos/main.dart'; // Adjust path if main.dart is elsewhere
 import 'package:flutter_memos/models/note_item.dart';
 import 'package:flutter_memos/models/workbench_item_reference.dart'; // Needed for Workbench
+import 'package:flutter_memos/models/workbench_item_type.dart'; // Import the unified enum
 import 'package:flutter_memos/providers/note_providers.dart' as note_providers;
 import 'package:flutter_memos/providers/server_config_provider.dart'; // Needed for activeServerConfigProvider
 // Import settings_provider for manuallyHiddenNoteIdsProvider
@@ -255,8 +256,7 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
                             scaffoldContext,
                             ref,
                             widget.note.id,
-                            WorkbenchItemType
-                                .note, // Assuming list item is always a note
+                            WorkbenchItemType.note, // USES IMPORTED ENUM
                           );
                         },
                 child: const Text('Copy Full Thread'),
@@ -272,8 +272,7 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
                             scaffoldContext, // Pass the build context
                             ref,
                             widget.note.id,
-                            WorkbenchItemType
-                                .note, // Assuming list item is always a note
+                            WorkbenchItemType.note, // USES IMPORTED ENUM
                           );
                         },
                 child: const Text('Chat about Thread'),
@@ -414,7 +413,7 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
     final reference = WorkbenchItemReference(
       id: const Uuid().v4(),
       referencedItemId: note.id,
-      referencedItemType: WorkbenchItemType.note,
+      referencedItemType: WorkbenchItemType.note, // USES IMPORTED ENUM
       serverId: activeServer.id,
       serverType: activeServer.serverType,
       serverName: activeServer.name,
@@ -441,7 +440,7 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
     BuildContext buildContext,
     WidgetRef ref,
     String itemId,
-    WorkbenchItemType itemType,
+    WorkbenchItemType itemType, // USES IMPORTED ENUM
   ) async {
     final activeServerId = ref.read(activeServerConfigProvider)?.id;
     if (activeServerId == null) {
@@ -460,7 +459,7 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
       final content = await getFormattedThreadContent(
         ref,
         itemId,
-        itemType,
+        itemType, // Pass imported enum
         activeServerId,
       );
       await Clipboard.setData(ClipboardData(text: content));
@@ -487,7 +486,7 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
     BuildContext buildContext,
     WidgetRef ref,
     String itemId,
-    WorkbenchItemType itemType,
+    WorkbenchItemType itemType, // USES IMPORTED ENUM
   ) async {
     final activeServer = ref.read(activeServerConfigProvider);
     if (activeServer == null) {
@@ -507,7 +506,7 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
       final content = await getFormattedThreadContent(
         ref,
         itemId,
-        itemType,
+        itemType, // Pass imported enum
         activeServerId,
       );
 
@@ -527,7 +526,7 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
         buildContext,
         content,
         itemId,
-        itemType,
+        itemType, // Pass imported enum
         activeServerId,
       );
 
@@ -544,7 +543,7 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
     BuildContext buildContext,
     String fetchedContent,
     String itemId,
-    WorkbenchItemType itemType,
+    WorkbenchItemType itemType, // USES IMPORTED ENUM
     String activeServerId,
   ) {
     // Navigate within the Chat tab's navigator if possible
@@ -552,7 +551,7 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
     final chatArgs = {
       'contextString': fetchedContent,
       'parentItemId': itemId,
-      'parentItemType': itemType,
+      'parentItemType': itemType, // Pass imported enum
       'parentServerId': activeServerId,
     };
 

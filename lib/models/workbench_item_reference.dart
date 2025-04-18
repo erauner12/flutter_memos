@@ -2,17 +2,19 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_memos/models/comment.dart'; // Import Comment model
 import 'package:flutter_memos/models/server_config.dart'; // For ServerType enum (including todoist)
 import 'package:flutter_memos/models/workbench_instance.dart'; // Import WorkbenchInstance for default ID
+import 'package:flutter_memos/models/workbench_item_type.dart'; // Import the unified enum
 import 'package:flutter_memos/utils/enum_utils.dart'; // Import the new helper
 
-// Ensure this includes task
-enum WorkbenchItemType { note, comment, task }
+// REMOVED local enum definition:
+// enum WorkbenchItemType { note, comment, task }
 
 @immutable
 class WorkbenchItemReference {
   final String id; // Unique UUID for this reference itself
   final String
   referencedItemId; // ID of the original NoteItem, Comment, or Task
-  final WorkbenchItemType referencedItemType; // 'note', 'comment', or 'task'
+  final WorkbenchItemType
+  referencedItemType; // 'note', 'comment', or 'task' - USES IMPORTED ENUM
   final String
   serverId; // ServerConfig.id (for Memos/Blinko) or constant ID (for Todoist)
   // ServerType from server_config.dart (includes memos, blinko, todoist)
@@ -34,7 +36,7 @@ class WorkbenchItemReference {
   const WorkbenchItemReference({
     required this.id,
     required this.referencedItemId,
-    required this.referencedItemType,
+    required this.referencedItemType, // USES IMPORTED ENUM
     required this.serverId,
     required this.serverType, // Can be memos, blinko, or todoist
     this.serverName,
@@ -67,7 +69,7 @@ class WorkbenchItemReference {
   WorkbenchItemReference copyWith({
     String? id,
     String? referencedItemId,
-    WorkbenchItemType? referencedItemType,
+    WorkbenchItemType? referencedItemType, // USES IMPORTED ENUM
     String? serverId,
     ServerType? serverType,
     String? serverName,
@@ -122,7 +124,8 @@ class WorkbenchItemReference {
     return WorkbenchItemReference(
       id: id ?? this.id,
       referencedItemId: referencedItemId ?? this.referencedItemId,
-      referencedItemType: referencedItemType ?? this.referencedItemType,
+      referencedItemType:
+          referencedItemType ?? this.referencedItemType, // USES IMPORTED ENUM
       serverId: serverId ?? this.serverId,
       serverType:
           serverType ?? this.serverType, // Can be memos, blinko, or todoist
@@ -145,7 +148,9 @@ class WorkbenchItemReference {
       'id': id,
       'referencedItemId': referencedItemId,
       // Use describeEnum for consistent serialization
-      'referencedItemType': describeEnum(referencedItemType),
+      'referencedItemType': describeEnum(
+        referencedItemType,
+      ), // USES IMPORTED ENUM
       'serverId': serverId,
       'serverType': describeEnum(serverType),
       'serverName': serverName,
@@ -164,12 +169,15 @@ class WorkbenchItemReference {
     // Use the new case-insensitive helper for enums
     // It returns the first enum value as default if parsing fails
     final parsedReferencedItemType = enumFromString(
-      WorkbenchItemType.values,
+      WorkbenchItemType.values, // Use the imported enum's values
       json['referencedItemType'] as String?,
+      defaultValue:
+          WorkbenchItemType.unknown, // Default to unknown if parse fails
     );
     final parsedServerType = enumFromString(
       ServerType.values,
       json['serverType'] as String?,
+      defaultValue: WorkbenchItemType.note, // Default to memos if parse fails
     );
 
     // Read instanceId from JSON, provide default for migration if missing/empty
@@ -187,7 +195,8 @@ class WorkbenchItemReference {
       // Use recordName as the primary ID if 'id' field is missing/different
       id: json['id'] as String? ?? recordName,
       referencedItemId: json['referencedItemId'] as String? ?? '',
-      referencedItemType: parsedReferencedItemType, // Use result from helper
+      referencedItemType:
+          parsedReferencedItemType, // Use result from helper (imported enum)
       serverId: json['serverId'] as String? ?? '',
       serverType: parsedServerType, // Use result from helper
       serverName: json['serverName'] as String?,
@@ -206,7 +215,7 @@ class WorkbenchItemReference {
     return other is WorkbenchItemReference &&
         other.id == id &&
         other.referencedItemId == referencedItemId &&
-        other.referencedItemType == referencedItemType &&
+        other.referencedItemType == referencedItemType && // USES IMPORTED ENUM
         other.serverId == serverId &&
         other.serverType == serverType &&
         other.serverName == serverName &&
@@ -225,7 +234,7 @@ class WorkbenchItemReference {
     return Object.hash(
       id,
       referencedItemId,
-      referencedItemType,
+      referencedItemType, // USES IMPORTED ENUM
       serverId,
       serverType,
       serverName,

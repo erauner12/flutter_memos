@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_memos/main.dart'; // Adjust path if main.dart is elsewhere
 import 'package:flutter_memos/models/note_item.dart'; // Import NoteItem
 import 'package:flutter_memos/models/workbench_item_reference.dart'; // Import workbench model
+import 'package:flutter_memos/models/workbench_item_type.dart'; // Import the unified enum
 // Import note_providers instead of memo_providers
 import 'package:flutter_memos/providers/note_providers.dart' as note_providers;
 import 'package:flutter_memos/providers/server_config_provider.dart'; // Import server config provider
@@ -31,7 +32,8 @@ import 'note_content.dart'; // Updated import
 
 class ItemDetailScreen extends ConsumerStatefulWidget {
   final String itemId;
-  final WorkbenchItemType itemType = WorkbenchItemType.note;
+  final WorkbenchItemType itemType =
+      WorkbenchItemType.note; // USES IMPORTED ENUM
 
   const ItemDetailScreen({super.key, required this.itemId});
 
@@ -203,7 +205,7 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
       id: const Uuid().v4(), // Generate unique ID for the reference
       instanceId: targetInstanceId, // Use the chosen or default instance ID
       referencedItemId: note.id,
-      referencedItemType: WorkbenchItemType.note,
+      referencedItemType: WorkbenchItemType.note, // USES IMPORTED ENUM
       serverId: activeServer.id,
       serverType: activeServer.serverType,
       serverName: activeServer.name,
@@ -325,7 +327,7 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
                   context,
                   ref,
                   widget.itemId,
-                  widget.itemType,
+                  widget.itemType, // USES IMPORTED ENUM
                 );
               },
               child: const Text('Copy Full Thread'),
@@ -338,7 +340,12 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
             CupertinoActionSheetAction(
               onPressed: () {
                 Navigator.pop(popupContext);
-                _chatWithThread(context, ref, widget.itemId, widget.itemType);
+                _chatWithThread(
+                  context,
+                  ref,
+                  widget.itemId,
+                  widget.itemType,
+                ); // USES IMPORTED ENUM
               },
               child: const Text('Chat about Thread'),
             ),
@@ -439,7 +446,7 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
     BuildContext buildContext,
     WidgetRef ref,
     String itemId,
-    WorkbenchItemType itemType,
+    WorkbenchItemType itemType, // USES IMPORTED ENUM
   ) async {
     final activeServerId = ref.read(activeServerConfigProvider)?.id;
     if (activeServerId == null) {
@@ -455,7 +462,7 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
       fetchedContent = await getFormattedThreadContent(
         ref,
         itemId,
-        itemType,
+        itemType, // Pass imported enum
         activeServerId,
       );
       await Clipboard.setData(ClipboardData(text: fetchedContent));
@@ -477,7 +484,7 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
     BuildContext buildContext,
     WidgetRef ref,
     String itemId,
-    WorkbenchItemType itemType,
+    WorkbenchItemType itemType, // USES IMPORTED ENUM
   ) async {
     final activeServer = ref.read(activeServerConfigProvider);
     if (activeServer == null) {
@@ -494,7 +501,7 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
       fetchedContent = await getFormattedThreadContent(
         ref,
         itemId,
-        itemType,
+        itemType, // Pass imported enum
         activeServerId,
       );
     } catch (e) {
@@ -528,7 +535,7 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
         buildContext,
         fetchedContent,
         itemId,
-        itemType,
+        itemType, // Pass imported enum
         activeServerId,
       );
 
@@ -543,7 +550,7 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
     BuildContext buildContext,
     String fetchedContent,
     String itemId,
-    WorkbenchItemType itemType,
+    WorkbenchItemType itemType, // USES IMPORTED ENUM
     String activeServerId,
   ) {
     // Navigate within the Chat tab's navigator if possible
@@ -551,7 +558,7 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
     final chatArgs = {
       'contextString': fetchedContent,
       'parentItemId': itemId,
-      'parentItemType': itemType,
+      'parentItemType': itemType, // Pass imported enum
       'parentServerId': activeServerId,
     };
 

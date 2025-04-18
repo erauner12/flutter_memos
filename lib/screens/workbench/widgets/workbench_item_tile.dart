@@ -7,8 +7,8 @@ import 'package:flutter/services.dart'; // Needed for Clipboard
 import 'package:flutter_memos/main.dart'; // For rootNavigatorKeyProvider
 import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/models/server_config.dart';
-import 'package:flutter_memos/models/workbench_instance.dart'; // Import WorkbenchInstance
 import 'package:flutter_memos/models/workbench_item_reference.dart';
+import 'package:flutter_memos/models/workbench_item_type.dart'; // Import the unified enum
 import 'package:flutter_memos/providers/server_config_provider.dart';
 import 'package:flutter_memos/providers/task_providers.dart';
 import 'package:flutter_memos/providers/workbench_instances_provider.dart'; // Import instances provider
@@ -175,6 +175,7 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
 
   Future<void> _handleToggleComplete() async {
     if (widget.itemReference.referencedItemType != WorkbenchItemType.task) {
+      // USES IMPORTED ENUM
       return;
     }
 
@@ -255,7 +256,7 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
       final content = await getFormattedThreadContent(
         ref,
         itemRef.referencedItemId,
-        itemRef.referencedItemType,
+        itemRef.referencedItemType, // Pass imported enum
         itemRef.serverId,
       );
       await Clipboard.setData(ClipboardData(text: content));
@@ -298,7 +299,7 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
       final content = await getFormattedThreadContent(
         ref,
         itemRef.referencedItemId,
-        itemRef.referencedItemType,
+        itemRef.referencedItemType, // Pass imported enum
         itemRef.serverId,
       );
 
@@ -310,7 +311,7 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
       final chatArgs = {
         'contextString': content,
         'parentItemId': itemRef.referencedItemId,
-        'parentItemType': itemRef.referencedItemType,
+        'parentItemType': itemRef.referencedItemType, // Pass imported enum
         'parentServerId': itemRef.serverId,
       };
 
@@ -397,6 +398,7 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
     final bool isRootNav = true; // Assume root needed from workbench
 
     switch (itemRef.referencedItemType) {
+      // USES IMPORTED ENUM
       case WorkbenchItemType.note:
         Navigator.of(context, rootNavigator: isRootNav).pushNamed(
           '/edit-entity',
@@ -431,10 +433,13 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
             });
         break;
       case WorkbenchItemType.comment:
+      case WorkbenchItemType.project: // Added case
+      case WorkbenchItemType.unknown: // Added case
+      default: // Added default
         _showAlertDialog(
           context,
           'Info',
-          'Comments cannot be edited directly.',
+          'This item type (${describeEnum(itemRef.referencedItemType)}) cannot be edited directly.',
         );
         break;
     }
@@ -495,9 +500,18 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
   // --- Context Menu ---
   void _showContextMenu(BuildContext context) {
     final itemRef = widget.itemReference;
-    final bool isTask = itemRef.referencedItemType == WorkbenchItemType.task;
+    final bool isTask =
+        itemRef.referencedItemType ==
+        WorkbenchItemType.task; // USES IMPORTED ENUM
     final bool isComment =
-        itemRef.referencedItemType == WorkbenchItemType.comment;
+        itemRef.referencedItemType ==
+        WorkbenchItemType.comment; // USES IMPORTED ENUM
+    final bool isEditable =
+        !isComment &&
+        itemRef.referencedItemType !=
+            WorkbenchItemType.project && // USES IMPORTED ENUM
+        itemRef.referencedItemType !=
+            WorkbenchItemType.unknown; // USES IMPORTED ENUM
 
     final activeServer = ref.read(activeServerConfigProvider);
     final isOnActiveServer = activeServer?.id == itemRef.serverId;
@@ -534,7 +548,7 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
                 },
               ),
               // Edit (Note/Task only)
-              if (!isComment)
+              if (isEditable)
                 CupertinoActionSheetAction(
                   child: const Text('Edit'),
                   onPressed: () {
@@ -631,9 +645,11 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
     final isOnActiveServer = activeServer?.id == widget.itemReference.serverId;
 
     final bool isTask =
-        widget.itemReference.referencedItemType == WorkbenchItemType.task;
+        widget.itemReference.referencedItemType ==
+        WorkbenchItemType.task; // USES IMPORTED ENUM
     final bool isCommentItem =
-        widget.itemReference.referencedItemType == WorkbenchItemType.comment;
+        widget.itemReference.referencedItemType ==
+        WorkbenchItemType.comment; // USES IMPORTED ENUM
 
     // Define action buttons for the hover bar
     final List<Widget> actions = [
@@ -999,9 +1015,11 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
 
     // Determine the actual item ID to navigate to (parent for comments)
     String targetItemId = referencedItemId;
-    WorkbenchItemType effectiveNavigationType = itemRef.referencedItemType;
+    WorkbenchItemType effectiveNavigationType =
+        itemRef.referencedItemType; // USES IMPORTED ENUM
 
     if (itemRef.referencedItemType == WorkbenchItemType.comment) {
+      // USES IMPORTED ENUM
       // We need the parent ID. Assume it's stored in parentNoteId for now.
       // TODO: This needs to be more robust if comments can belong to Tasks.
       targetItemId = itemRef.parentNoteId ?? '';
@@ -1009,7 +1027,7 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
       commentIdToHighlight ??= referencedItemId;
       // Assume parent is Note for now
       // TODO: Make this dynamic based on parent type if Tasks support comments in workbench.
-      effectiveNavigationType = WorkbenchItemType.note;
+      effectiveNavigationType = WorkbenchItemType.note; // USES IMPORTED ENUM
     }
 
     if (targetItemId.isEmpty) {
@@ -1027,6 +1045,7 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
     };
 
     switch (effectiveNavigationType) {
+      // USES IMPORTED ENUM
       case WorkbenchItemType.note:
         Navigator.of(context, rootNavigator: isRootNav).pushNamed(
           '/item-detail', // Navigate to Note detail screen
@@ -1058,7 +1077,15 @@ class _WorkbenchItemTileState extends ConsumerState<WorkbenchItemTile> {
         // This case should not be reached due to effectiveNavigationType logic
         _showErrorDialog(
           context,
-          'Internal navigation error: Unexpected item type.',
+          'Internal navigation error: Unexpected item type (comment).',
+        );
+        break;
+      case WorkbenchItemType.project: // Added case
+      case WorkbenchItemType.unknown: // Added case
+      default: // Added default
+        _showErrorDialog(
+          context,
+          'Cannot navigate: Unsupported item type (${describeEnum(effectiveNavigationType)}).',
         );
         break;
     }

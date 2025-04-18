@@ -1,7 +1,7 @@
 import 'package:collection/collection.dart';
 import 'package:flutter/foundation.dart'; // Import for kDebugMode
 import 'package:flutter_memos/models/chat_message.dart';
-import 'package:flutter_memos/models/workbench_item_reference.dart';
+import 'package:flutter_memos/models/workbench_item_type.dart';
 
 /// Only one of these exists – the user’s *current* chat session.
 class ChatSession {

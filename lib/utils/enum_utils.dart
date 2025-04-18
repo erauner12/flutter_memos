@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter_memos/models/workbench_item_type.dart';
 
 /// Parses a string [raw] into an enum value of type [T].
 ///
@@ -8,7 +9,11 @@ import 'package:flutter/foundation.dart';
 /// If [raw] is null or does not match any enum value, returns the
 /// first value in the provided [values] iterable as a safe default.
 /// Consider throwing an error or returning null if a default is not desired.
-T enumFromString<T>(Iterable<T> values, String? raw) {
+T enumFromString<T>(
+  Iterable<T> values,
+  String? raw, {
+  required WorkbenchItemType defaultValue,
+}) {
   if (raw == null) {
     // Return default if raw string is null
     return values.first;

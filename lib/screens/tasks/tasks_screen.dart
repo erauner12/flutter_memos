@@ -7,6 +7,7 @@ import 'package:flutter_memos/main.dart'; // Import for rootNavigatorKeyProvider
 import 'package:flutter_memos/models/server_config.dart'; // Still needed for ServerType enum in WorkbenchItemReference
 import 'package:flutter_memos/models/task_item.dart';
 import 'package:flutter_memos/models/workbench_item_reference.dart';
+import 'package:flutter_memos/models/workbench_item_type.dart'; // Import the unified enum
 // Removed server_config_provider import (MultiServerConfigNotifier)
 import 'package:flutter_memos/providers/settings_provider.dart'; // Import for todoistApiKeyProvider
 import 'package:flutter_memos/providers/task_providers.dart';
@@ -72,7 +73,7 @@ class TasksScreen extends HookConsumerWidget {
     final reference = WorkbenchItemReference(
       id: const Uuid().v4(),
       referencedItemId: task.id,
-      referencedItemType: WorkbenchItemType.task,
+      referencedItemType: WorkbenchItemType.task, // USES IMPORTED ENUM
       serverId: _todoistWorkbenchServerId, // Use constant ID
       serverType: ServerType.todoist, // Use Todoist type from enum
       serverName: _todoistWorkbenchServerName, // Use constant Name
@@ -212,7 +213,7 @@ class TasksScreen extends HookConsumerWidget {
       fetchedContent = await getFormattedThreadContent(
         ref,
         taskId,
-        WorkbenchItemType.task, // Specify the type
+        WorkbenchItemType.task, // Specify the type (USES IMPORTED ENUM)
         serverId,
       );
     } catch (e) {
@@ -239,7 +240,8 @@ class TasksScreen extends HookConsumerWidget {
     final chatArgs = {
       'contextString': fetchedContent,
       'parentItemId': taskId,
-      'parentItemType': WorkbenchItemType.task, // Pass the correct type
+      'parentItemType':
+          WorkbenchItemType.task, // Pass the correct type (USES IMPORTED ENUM)
       'parentServerId': serverId,
     };
 
