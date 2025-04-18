@@ -13,6 +13,8 @@ import 'package:flutter_memos/services/cloud_kit_service.dart';
 import 'package:flutter_memos/services/note_api_service.dart';
 import 'package:flutter_memos/services/task_api_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+// Add Uuid import
+import 'package:uuid/uuid.dart';
 
 @immutable
 class WorkbenchState {
@@ -165,10 +167,7 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
           .read(multiServerConfigProvider)
           .servers
           .cast<ServerConfig?>()
-          .firstWhere(
-            (s) => s?.id == serverId,
-            orElse: () => null,
-          );
+          .firstWhere((s) => s?.id == serverId, orElse: () => null);
 
       if (serverConfig == null) {
         if (kDebugMode) {
@@ -528,7 +527,8 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
   }
 
   Future<void> moveItem({
-    required String itemId,
+    required String
+    itemId, // This is the ID of the item in the *source* instance
     required String targetInstanceId,
   }) async {
     if (!mounted) return;
@@ -543,6 +543,7 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
 
     WorkbenchItemReference? itemToMove;
     try {
+      // 1. Grab the item from local state of the *source* instance
       itemToMove = state.items.firstWhere((i) => i.id == itemId);
     } catch (e) {
       if (kDebugMode) {
@@ -550,10 +551,13 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
           '[WorkbenchNotifier($instanceId)] Item with ID $itemId not found for move operation.',
         );
       }
-      state = state.copyWith(error: Exception('Item to move not found.'));
+      if (mounted) {
+        state = state.copyWith(error: Exception('Item to move not found.'));
+      }
       return;
     }
 
+    // 2. Remove from this (source) instance's state optimistically
     final originalItems = List<WorkbenchItemReference>.from(state.items);
     final newItems = originalItems.where((item) => item.id != itemId).toList();
     if (mounted) {
@@ -566,24 +570,46 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
     }
 
     try {
-      final success = await _cloudKitService.moveWorkbenchItemReference(
-        recordName: itemId,
-        newInstanceId: targetInstanceId,
+      // 3. Convert old item to a map for re-creation
+      // We pass the original fields to the CloudKit service
+      final oldRecordFields = itemToMove.toJson();
+
+      // 4. CloudKit delete + create using the new service method
+      final success = await _cloudKitService
+          .moveWorkbenchItemReferenceByDeleteRecreate(
+            recordName: itemId, // The ID of the record to delete
+            newInstanceId: targetInstanceId,
+            oldRecordFields: oldRecordFields, // Pass the original data
+          );
+
+      if (!success) {
+        throw Exception('CloudKit delete-recreate move operation failed');
+      }
+
+      // 5. Build the new item locally with a *new ID* and the target instanceId
+      // The new ID should match the one generated implicitly by the CloudKit service,
+      // but since the service doesn't return it, we generate a new one here for local state.
+      // This assumes the CloudKit operation succeeded and created a record with *some* new ID.
+      // A more robust approach might involve the service returning the new ID.
+      final newLocalId = const Uuid().v4();
+      final newItemForTarget = itemToMove.copyWith(
+        id: newLocalId, // Assign the new UUID
+        instanceId: targetInstanceId,
+        // Reset transient fields or keep them? Let's keep them for now.
       );
 
-      if (!success) throw Exception('CloudKit move operation failed');
-
+      // 6. Insert new item into target instance's local state
       if (mounted) {
-        final movedItemCopy = itemToMove.copyWith(instanceId: targetInstanceId);
         _ref
             .read(workbenchProviderFamily(targetInstanceId).notifier)
-            ._addExistingItem(movedItemCopy);
+            ._addExistingItem(newItemForTarget);
 
         if (kDebugMode) {
           print(
-            '[WorkbenchNotifier($instanceId)] Successfully moved item $itemId to instance $targetInstanceId.',
+            '[WorkbenchNotifier($instanceId)] Successfully processed move for item original ID $itemId to instance $targetInstanceId (new local ID: $newLocalId).',
           );
         }
+        // Clear last opened item if it was the one moved
         final lastOpened =
             _ref.read(workbenchInstancesProvider).lastOpenedItemId[instanceId];
         if (lastOpened == itemId) {
@@ -598,6 +624,7 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
           '[WorkbenchNotifier($instanceId)] Error moving item $itemId to $targetInstanceId: $e\n$s',
         );
       }
+      // Revert local state change on failure
       if (mounted) {
         originalItems.sort(
           (a, b) => b.overallLastUpdateTime.compareTo(a.overallLastUpdateTime),

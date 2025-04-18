@@ -12,6 +12,8 @@ import 'package:flutter_memos/models/workbench_instance.dart'; // Import Workben
 import 'package:flutter_memos/models/workbench_item_reference.dart';
 // Env import
 import 'package:flutter_memos/utils/env.dart';
+// Add Uuid import
+import 'package:uuid/uuid.dart';
 
 /// Service class for interacting with Apple CloudKit.
 ///
@@ -440,110 +442,70 @@ class CloudKitService {
     }
   }
 
-  /// Updates only the instanceId field of an existing WorkbenchItemReference record.
-  /// Fetches the existing record, extracts its changeTag, updates the instanceId,
-  /// and saves it back using the changeTag to ensure an update operation.
-  /// Returns true if successful, false otherwise.
-  Future<bool> moveWorkbenchItemReference({
-    required String recordName,
+  // REMOVED the old moveWorkbenchItemReference method above
+
+  /// Instead of updating the existing record,
+  /// we delete it and create a brand-new record with a new ID.
+  Future<bool> moveWorkbenchItemReferenceByDeleteRecreate({
+    required String recordName, // old record's ID
     required String newInstanceId,
+    required Map<String, dynamic> oldRecordFields, // fields from old record
   }) async {
     if (kDebugMode) {
       print(
-        '[CloudKitService] moveWorkbenchItemReference called for $recordName to instance $newInstanceId',
+        '[CloudKitService] moveWorkbenchItemReferenceByDeleteRecreate called for $recordName to instance $newInstanceId',
       );
     }
     try {
-      // 1. Fetch the existing record to get its changeTag
-      final record = await _cloudKit.getRecord(
-        scope: _scope,
-        recordName: recordName,
-      );
-
-      if (record.recordType != workbenchItemRecordType) {
+      // 1. Delete the old record from CloudKit
+      // Use the existing delete method for robustness
+      final deleteSuccess = await deleteWorkbenchItemReference(recordName);
+      if (!deleteSuccess) {
+        // Log the failure but proceed to attempt creation anyway,
+        // in case the delete failed because the record was already gone.
         if (kDebugMode) {
           print(
-            '[CloudKitService] Error moving item $recordName: Record found but has incorrect type ${record.recordType}',
+            '[CloudKitService] Failed to delete old record $recordName during move, but proceeding with creation.',
           );
         }
-        return false;
-      }
-
-      // 2. Extract the changeTag directly from the record object
-      // This is the property expected by the plugin, even if it was null before.
-      final String? changeTag = record.recordChangeTag;
-
-      if (changeTag == null) {
-        // Log clearly if the changeTag is still missing from the fetched record.
-        // This indicates an issue with the plugin or the record state in CloudKit.
-        if (kDebugMode) {
-          print(
-            '[CloudKitService] Warning moving item $recordName: Fetched record is missing recordChangeTag. Save will likely fail as insert.',
-          );
-        }
-        // Proceeding without changeTag will likely cause the "insert already exists" error again.
-        // Consider returning false here if a changeTag is strictly required for updates.
+        // Optionally: return false here if delete must succeed first.
         // return false;
+      } else {
+        if (kDebugMode) {
+          print(
+            '[CloudKitService] Successfully deleted old record $recordName during move.',
+          );
+        }
       }
-      if (kDebugMode && changeTag != null) {
-        print('[CloudKitService] Using changeTag: $changeTag for update.');
-      }
 
-      // 3. Create a mutable map and update the instanceId
-      // Use record.values which contains the fields of the record.
-      final values = Map<String, dynamic>.from(record.values);
-      values['instanceId'] = newInstanceId;
+      // 2. Build new data map with new instanceId and potentially new ID
+      final newValues = Map<String, dynamic>.from(oldRecordFields);
+      newValues['instanceId'] = newInstanceId;
 
-      // 4. Serialize the updated map
-      final updatedRecordData = _serializeMap(values);
+      // 3. Generate a new random ID for the new record
+      final newRecordId = const Uuid().v4();
+      // Update the 'id' field in the map to match the new recordName
+      newValues['id'] = newRecordId;
 
-      // 5. Save the record back, providing the changeTag to signal an update
-      // Pass the extracted changeTag (which might be null) to the named parameter.
+      // 4. Serialize fields & save new record
+      final recordData = _serializeMap(newValues);
       await _cloudKit.saveRecord(
         scope: _scope,
         recordType: workbenchItemRecordType,
-        recordName: recordName, // Use the original recordName
-        record: updatedRecordData,
-        changeTag: changeTag, // Pass the potentially null changeTag here
+        recordName: newRecordId, // Use the new UUID as the record name
+        record: recordData,
       );
 
       if (kDebugMode) {
         print(
-          '[CloudKitService] Successfully moved WorkbenchItemReference $recordName to instance $newInstanceId using update (changeTag: $changeTag).',
+          '[CloudKitService] Successfully created new record $newRecordId for moved item (original: $recordName).',
         );
       }
       return true;
-    } on PlatformException catch (e, s) {
-      // Handle potential conflicts when using changeTag
-      // Use e.code for checking specific CloudKit errors
-      if (e.code == 'CKErrorServerRecordChanged') {
-         if (kDebugMode) {
-          print(
-            '[CloudKitService] Conflict moving WorkbenchItemReference $recordName: Record changed on server since fetch. Code: ${e.code}, Message: ${e.message}\n$s',
-          );
-        }
-        // TODO: Implement retry logic or conflict resolution if needed
-      } else if (e.message != null && e.message!.contains('record to insert already exists')) {
-        // This error indicates the changeTag was likely null or invalid.
-         if (kDebugMode) {
-          print(
-            '[CloudKitService] Error moving WorkbenchItemReference $recordName (Insert Conflict - changeTag likely null): $e\n$s',
-          );
-        }
-      } else {
-        // Log other platform exceptions
-        if (kDebugMode) {
-          print(
-            '[CloudKitService] PlatformException moving WorkbenchItemReference $recordName: Code: ${e.code}, Message: ${e.message}\n$s',
-          );
-        }
-      }
-      return false; // Return false on platform exceptions
     } catch (e, s) {
-      // Catch-all for other errors
       if (kDebugMode) {
         print(
-          '[CloudKitService] Generic error moving WorkbenchItemReference $recordName: $e\n$s',
+          '[CloudKitService] Error during delete-recreate move for $recordName: $e\n$s',
         );
       }
       return false;
