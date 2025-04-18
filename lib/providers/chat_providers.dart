@@ -247,7 +247,8 @@ class ChatNotifier extends StateNotifier<ChatState> {
     final system = ChatMessage(
       id: 'system_${DateTime.now().millisecondsSinceEpoch}',
       role: Role.system,
-      text: 'Context:\n$contextString',
+      // Include item ID/Type in the system message for clarity if needed
+      text: 'Context for ${parentItemType.name} $parentItemId:\n$contextString',
       timestamp: DateTime.now().toUtc(),
     );
 
@@ -257,7 +258,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
       // ChatSession expects a nullable enum, so pass the enum with explicit cast
       contextItemType: parentItemType as WorkbenchItemType?,
       contextServerId: parentServerId,
-      messages: [system],
+      messages: [system], // Start with only the system message
       lastUpdated: DateTime.now().toUtc(),
     );
 
@@ -282,25 +283,64 @@ class ChatNotifier extends StateNotifier<ChatState> {
     );
     final loading = ChatMessage.loading();
 
-    final newMessages = [...state.session.messages, user, loading];
+    // Add user message and loading indicator to the *current* messages
+    final currentMessages = [...state.session.messages];
+    final newMessages = [...currentMessages, user, loading];
+
     state = state.copyWith(
       session: state.session.copyWith(messages: newMessages),
       isLoading: true,
       clearError: true,
     );
-    _persistSoon();
+    _persistSoon(); // Persist the state including the user message and loading indicator
 
     try {
+      // --- Prepare history for AI ---
+      // Include system messages, exclude loading messages
       final history =
-          state.session.messages
-              .where((m) => m.role != Role.system && !m.isLoading)
-              .map(
-                (m) => gen_ai.Content(m.role == Role.user ? 'user' : 'model', [
-                  gen_ai.TextPart(m.text),
-                ]),
-              )
+          currentMessages // Use messages *before* adding the current user/loading
+              .where(
+                (m) => !m.isLoading,
+              ) // Keep system, user, model; exclude loading
+              .map((m) {
+                // Map Role enum to AI Content role string
+                final roleString = switch (m.role) {
+                  Role.user => 'user',
+                  Role.model => 'model',
+                  Role.system => 'system', // Include system role
+                  Role.function => 'function', // Handle function if used
+                };
+                return gen_ai.Content(roleString, [gen_ai.TextPart(m.text)]);
+              })
               .toList();
 
+      // --- Debug Logging ---
+      if (kDebugMode) {
+        print(
+          "[ChatNotifier] Sending message. Context: ID=${state.session.contextItemId}, Type=${state.session.contextItemType?.name}",
+        );
+        print(
+          "[ChatNotifier] History being sent to AI (${history.length} items):",
+        );
+        for (final c in history) {
+          final textPart =
+              c.parts.isNotEmpty && c.parts.first is gen_ai.TextPart
+                  ? (c.parts.first as gen_ai.TextPart).text
+                  : '[Non-Text Part]';
+          // Limit long context messages in logs
+          final loggedText =
+              textPart.length > 100
+                  ? '${textPart.substring(0, 97)}...'
+                  : textPart;
+          print('  Role: ${c.role}, Text: "$loggedText"');
+        }
+        print(
+          '  (Current User Message): "$text"',
+        ); // Log the message being sent now
+      }
+      // --- End Debug Logging ---
+
+      // Send history *plus* the new user message text to the AI backend
       final resp = await _ai.send(history, text);
       final replyText = resp.text;
 
@@ -314,14 +354,15 @@ class ChatNotifier extends StateNotifier<ChatState> {
       // Replace loading indicator with AI response
       // Ensure mounted before accessing state after await
       if (!mounted) return;
-      final replaced =
+      // Use the *latest* state's messages list which includes user+loading
+      final finalMessages =
           state.session.messages
               .map((m) => m.isLoading ? modelMsg : m)
               .toList();
 
       state = state.copyWith(
         session: state.session.copyWith(
-          messages: replaced,
+          messages: finalMessages,
           lastUpdated: DateTime.now().toUtc(),
         ),
         isLoading: false,
@@ -331,11 +372,12 @@ class ChatNotifier extends StateNotifier<ChatState> {
       final err = ChatMessage.error('Error: $e');
       // Ensure mounted before accessing state after await
       if (!mounted) return;
-      final replaced =
+      // Use the *latest* state's messages list
+      final finalMessages =
           state.session.messages.map((m) => m.isLoading ? err : m).toList();
       state = state.copyWith(
         session: state.session.copyWith(
-          messages: replaced,
+          messages: finalMessages,
           lastUpdated: DateTime.now().toUtc(),
         ),
         isLoading: false,
@@ -344,7 +386,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
     } finally {
       // Ensure mounted before calling persist
       if (mounted) {
-        _persistSoon();
+        _persistSoon(); // Persist the final state with the AI response or error
       }
     }
   }
