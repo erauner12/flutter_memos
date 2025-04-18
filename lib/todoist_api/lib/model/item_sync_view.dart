@@ -22,8 +22,8 @@ class ItemSyncView {
     required this.assignedByUid,
     required this.responsibleUid,
     this.labels = const [],
-    this.deadline = const {},
-    this.duration = const {},
+    this.deadline, // Changed initialization to null
+    this.duration, // Changed initialization to null
     required this.checked,
     required this.isDeleted,
     required this.addedAt,
@@ -57,9 +57,11 @@ class ItemSyncView {
 
   List<String> labels;
 
-  Map<String, ItemSyncViewDeadlineValue>? deadline;
+  // Changed type to Map<String, Object>?
+  Map<String, Object>? deadline;
 
-  Map<String, ItemSyncViewDurationValue>? duration;
+  // Changed type to Map<String, Object>?
+  Map<String, Object>? duration;
 
   bool checked;
 
@@ -230,8 +232,14 @@ class ItemSyncView {
       // Note 2: this code is stripped in release mode!
       assert(() {
         requiredKeys.forEach((key) {
-          assert(json.containsKey(key), 'Required key "ItemSyncView[$key]" is missing from JSON.');
-          assert(json[key] != null, 'Required key "ItemSyncView[$key]" has a null value in JSON.');
+          // Allow optional keys like deadline/duration to be missing
+          if (json.containsKey(key)) {
+            assert(json[key] != null,
+                'Required key "ItemSyncView[$key]" has a null value in JSON.');
+          } else if (!optionalKeys.contains(key)) {
+            assert(false,
+                'Required key "ItemSyncView[$key]" is missing from JSON.');
+          }
         });
         return true;
       }());
@@ -248,8 +256,9 @@ class ItemSyncView {
         labels: json[r'labels'] is Iterable
             ? (json[r'labels'] as Iterable).cast<String>().toList(growable: false)
             : const [],
-        deadline: ItemSyncViewDeadlineValue.mapFromJson(json[r'deadline']),
-        duration: ItemSyncViewDurationValue.mapFromJson(json[r'duration']),
+        // Use mapCastOfType for generic map deserialization
+        deadline: mapCastOfType<String, Object>(json, r'deadline'),
+        duration: mapCastOfType<String, Object>(json, r'duration'),
         checked: mapValueOfType<bool>(json, r'checked')!,
         isDeleted: mapValueOfType<bool>(json, r'is_deleted')!,
         addedAt: mapValueOfType<String>(json, r'added_at'),
@@ -313,20 +322,20 @@ class ItemSyncView {
     'user_id',
     'id',
     'project_id',
-    'section_id',
-    'parent_id',
-    'added_by_uid',
-    'assigned_by_uid',
-    'responsible_uid',
+    // 'section_id', // Often null
+    // 'parent_id', // Often null
+    // 'added_by_uid', // Often null
+    // 'assigned_by_uid', // Often null
+    // 'responsible_uid', // Often null
     'labels',
-    'deadline',
-    'duration',
+    // 'deadline', // Often null
+    // 'duration', // Often null
     'checked',
     'is_deleted',
-    'added_at',
-    'completed_at',
-    'updated_at',
-    'due',
+    // 'added_at', // Often null
+    // 'completed_at', // Often null
+    // 'updated_at', // Often null
+    // 'due', // Often null
     'priority',
     'child_order',
     'content',
@@ -335,5 +344,19 @@ class ItemSyncView {
     'day_order',
     'is_collapsed',
   };
-}
 
+  /// List of optional keys.
+  static const optionalKeys = <String>{
+    'section_id',
+    'parent_id',
+    'added_by_uid',
+    'assigned_by_uid',
+    'responsible_uid',
+    'deadline',
+    'duration',
+    'added_at',
+    'completed_at',
+    'updated_at',
+    'due',
+  };
+}

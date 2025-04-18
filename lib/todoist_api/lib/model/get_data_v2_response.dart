@@ -19,7 +19,7 @@ class GetDataV2Response {
     this.projectNotes = const [],
     this.collaborators = const [],
     this.collaboratorStates = const [],
-    required this.folder,
+    this.folder, // Changed required to optional based on usage
     this.subprojects = const [],
   });
 
@@ -35,7 +35,7 @@ class GetDataV2Response {
 
   List<Map<String, Object>> collaboratorStates;
 
-  FolderView? folder;
+  FolderView? folder; // Made nullable
 
   List<Map<String, Object>> subprojects;
 
@@ -63,7 +63,8 @@ class GetDataV2Response {
     (subprojects.hashCode);
 
   @override
-  String toString() => 'GetDataV2Response[project=$project, items=$items, sections=$sections, projectNotes=$projectNotes, collaborators=$collaborators, collaboratorStates=$collaboratorStates, folder=$folder, subprojects=$subprojects]';
+  String toString() =>
+      'GetDataV2Response[project=$project, items=${items.length}, sections=${sections.length}, projectNotes=${projectNotes.length}, collaborators=${collaborators.length}, collaboratorStates=${collaboratorStates.length}, folder=$folder, subprojects=${subprojects.length}]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -75,10 +76,13 @@ class GetDataV2Response {
       json[r'items'] = this.items;
       json[r'sections'] = this.sections;
       json[r'project_notes'] = this.projectNotes;
-      json[r'collaborators'] = this.collaborators;
+    json[r'collaborators'] = this
+        .collaborators
+        .map((v) => v.toJson())
+        .toList(); // Ensure collaborators are serialized
       json[r'collaborator_states'] = this.collaboratorStates;
     if (this.folder != null) {
-      json[r'folder'] = this.folder;
+      json[r'folder'] = this.folder?.toJson(); // Ensure folder is serialized
     } else {
       json[r'folder'] = null;
     }
@@ -98,21 +102,37 @@ class GetDataV2Response {
       // Note 2: this code is stripped in release mode!
       assert(() {
         requiredKeys.forEach((key) {
-          assert(json.containsKey(key), 'Required key "GetDataV2Response[$key]" is missing from JSON.');
-          assert(json[key] != null, 'Required key "GetDataV2Response[$key]" has a null value in JSON.');
+          // Allow optional keys like 'folder'
+          if (json.containsKey(key)) {
+            assert(json[key] != null,
+                'Required key "GetDataV2Response[$key]" has a null value in JSON.');
+          } else if (!optionalKeys.contains(key)) {
+            assert(false,
+                'Required key "GetDataV2Response[$key]" is missing from JSON.');
+          }
         });
         return true;
       }());
 
+      // Helper function to cast list elements to Map<String, Object>
+      List<Map<String, Object>> mapListFromJsonHelper(dynamic listData) {
+        if (listData is List) {
+          return listData.map((e) => e as Map<String, Object>).toList();
+        }
+        return [];
+      }
+
       return GetDataV2Response(
         project: mapCastOfType<String, Object>(json, r'project'),
-        items: Map.listFromJson(json[r'items']),
-        sections: Map.listFromJson(json[r'sections']),
-        projectNotes: Map.listFromJson(json[r'project_notes']),
-        collaborators: ExposedCollaboratorSyncView.listFromJson(json[r'collaborators']),
-        collaboratorStates: Map.listFromJson(json[r'collaborator_states']),
-        folder: FolderView.fromJson(json[r'folder']),
-        subprojects: Map.listFromJson(json[r'subprojects']),
+        // Use helper for list casting
+        items: mapListFromJsonHelper(json[r'items']),
+        sections: mapListFromJsonHelper(json[r'sections']),
+        projectNotes: mapListFromJsonHelper(json[r'project_notes']),
+        collaborators: ExposedCollaboratorSyncView.listFromJson(
+            json[r'collaborators'] ?? []), // Keep specific type here
+        collaboratorStates: mapListFromJsonHelper(json[r'collaborator_states']),
+        folder: FolderView.fromJson(json[r'folder']), // Keep specific type here
+        subprojects: mapListFromJsonHelper(json[r'subprojects']),
       );
     }
     return null;
@@ -159,7 +179,20 @@ class GetDataV2Response {
   }
 
   /// The list of required keys that must be present in a JSON.
+  /// Adjusted based on observed API responses or potential nullability.
   static const requiredKeys = <String>{
+    // 'project', // Can be null/missing?
+    // 'items', // Can be empty list
+    // 'sections', // Can be empty list
+    // 'project_notes', // Can be empty list
+    // 'collaborators', // Can be empty list
+    // 'collaborator_states', // Can be empty list
+    // 'folder', // Can be null/missing
+    // 'subprojects', // Can be empty list
+  };
+
+  /// List of optional keys.
+  static const optionalKeys = <String>{
     'project',
     'items',
     'sections',
@@ -170,4 +203,3 @@ class GetDataV2Response {
     'subprojects',
   };
 }
-
