@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -138,6 +139,43 @@ final clearNavigationHistoryProvider =
         return true;
       };
     }, name: 'clearNavigationHistory');
+
+/// Provider to track the current tab index
+final currentTabIndexProvider = StateProvider<int>(
+  (ref) => 0,
+  name: 'currentTabIndex',
+);
+
+/// Provider to handle tab controller for CupertinoTabScaffold
+final homeTabControllerProvider = Provider<CupertinoTabController>((ref) {
+  return CupertinoTabController(
+    initialIndex: ref.watch(currentTabIndexProvider),
+  );
+}, name: 'homeTabController');
+
+/// Navigation key providers for each tab
+final homeNavKeyProvider = Provider<GlobalKey<NavigatorState>>(
+  (ref) => GlobalKey<NavigatorState>(),
+  name: 'homeNavKey',
+);
+final workbenchNavKeyProvider = Provider<GlobalKey<NavigatorState>>(
+  (ref) => GlobalKey<NavigatorState>(),
+  name: 'workbenchNavKey',
+);
+final chatNavKeyProvider = Provider<GlobalKey<NavigatorState>>(
+  (ref) => GlobalKey<NavigatorState>(),
+  name: 'chatNavKey',
+);
+final moreNavKeyProvider = Provider<GlobalKey<NavigatorState>>(
+  (ref) => GlobalKey<NavigatorState>(),
+  name: 'moreNavKey',
+);
+
+/// Provider to track tab reselection events
+final reselectTabProvider = StateProvider<int?>(
+  (ref) => null,
+  name: 'reselectTab',
+);
 
 /// OPTIMIZATION: New provider for handling deep linking
 final handleDeepLinkProvider =
