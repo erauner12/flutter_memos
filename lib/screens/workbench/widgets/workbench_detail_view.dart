@@ -10,6 +10,7 @@ class WorkbenchDetailView extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Use the activeWorkbenchProvider which automatically tracks the active instance
     final workbenchState = ref.watch(activeWorkbenchProvider);
     final activeInstanceId = ref.watch(
       workbenchInstancesProvider.select((s) => s.activeInstanceId),
@@ -47,6 +48,7 @@ class WorkbenchDetailView extends ConsumerWidget {
               const SizedBox(height: 10),
               CupertinoButton(
                 child: const Text('Retry'),
+                // Use activeWorkbenchNotifierProvider to retry loading for the active instance
                 onPressed:
                     () => ref.read(activeWorkbenchNotifierProvider).loadItems(),
               ),
@@ -85,6 +87,7 @@ class WorkbenchDetailView extends ConsumerWidget {
               ref
                   .read(workbenchInstancesProvider.notifier)
                   .setLastOpenedItem(activeInstanceId, item.id);
+              // Navigate using the context from the builder, which should be within the nested navigator
               Navigator.of(context).push(
                 CupertinoPageRoute(
                   builder:

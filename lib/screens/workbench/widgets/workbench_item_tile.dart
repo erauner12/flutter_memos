@@ -13,14 +13,15 @@ String formatRelativeTime(DateTime dateTime) {
   final difference = now.difference(dateTime);
 
   if (difference.inSeconds < 60) {
-    return '${difference.inSeconds} seconds ago';
+    return '${difference.inSeconds}s ago'; // Shorter format
   } else if (difference.inMinutes < 60) {
-    return '${difference.inMinutes} minutes ago';
+    return '${difference.inMinutes}m ago'; // Shorter format
   } else if (difference.inHours < 24) {
-    return '${difference.inHours} hours ago';
+    return '${difference.inHours}h ago'; // Shorter format
   } else if (difference.inDays < 7) {
-    return '${difference.inDays} days ago';
+    return '${difference.inDays}d ago'; // Shorter format
   } else {
+    // Consider using intl package for better date formatting
     return '${dateTime.day}/${dateTime.month}/${dateTime.year}';
   }
 }
@@ -145,6 +146,7 @@ class WorkbenchItemTile extends ConsumerWidget {
     return GestureDetector(
       onTap: onTap,
       onLongPress: () => _showItemActions(context, ref, itemReference),
+      behavior: HitTestBehavior.opaque, // Ensure whole area is tappable
       child: Container(
         color: theme.barBackgroundColor,
         padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
@@ -172,20 +174,25 @@ class WorkbenchItemTile extends ConsumerWidget {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        itemReference.serverName ?? 'Unknown Server',
-                        // Use captionTextStyle instead of captionStyle1
-                        style: theme.textTheme.textStyle.copyWith(
-                          color: CupertinoColors.secondaryLabel.resolveFrom(
-                            context,
+                      Expanded(
+                        // Allow server name to take space but truncate
+                        child: Text(
+                          itemReference.serverName ?? 'Unknown Server',
+                          style: theme.textTheme.textStyle.copyWith(
+                            // Use captionTextStyle
+                            color: CupertinoColors.secondaryLabel.resolveFrom(
+                              context,
+                            ),
                           ),
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
                         ),
-                        overflow: TextOverflow.ellipsis,
                       ),
+                      const SizedBox(width: 8), // Add spacing
                       Text(
                         relativeTime, // Show relative time
-                        // Use captionTextStyle instead of captionStyle1
                         style: theme.textTheme.textStyle.copyWith(
+                          // Use captionTextStyle
                           color: CupertinoColors.tertiaryLabel.resolveFrom(
                             context,
                           ),
@@ -242,17 +249,21 @@ class WorkbenchItemTile extends ConsumerWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
-            CupertinoIcons.bubble_left,
-            size: 14,
-            color: CupertinoColors.tertiaryLabel.resolveFrom(context),
+          Padding(
+            // Add padding around icon
+            padding: const EdgeInsets.only(top: 2.0),
+            child: Icon(
+              CupertinoIcons.bubble_left,
+              size: 14,
+              color: CupertinoColors.tertiaryLabel.resolveFrom(context),
+            ),
           ),
           const SizedBox(width: 6),
           Expanded(
             child: Text(
               comment.content ?? '',
-              // Use captionTextStyle instead of captionStyle1
               style: theme.textTheme.textStyle.copyWith(
+                // Use captionTextStyle
                 color: CupertinoColors.secondaryLabel.resolveFrom(context),
               ),
               maxLines: 1,
@@ -262,8 +273,8 @@ class WorkbenchItemTile extends ConsumerWidget {
           const SizedBox(width: 8),
           Text(
             commentTime,
-            // Use captionTextStyle instead of captionStyle1
             style: theme.textTheme.textStyle.copyWith(
+              // Use captionTextStyle
               color: CupertinoColors.tertiaryLabel.resolveFrom(context),
             ),
           ),

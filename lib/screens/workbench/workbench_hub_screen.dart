@@ -1,31 +1,24 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_memos/models/workbench_instance.dart';
 import 'package:flutter_memos/providers/workbench_instances_provider.dart';
-import 'package:flutter_memos/providers/workbench_provider.dart';
-import 'package:flutter_memos/screens/settings_screen.dart';
-import 'package:flutter_memos/screens/workbench/widgets/workbench_detail_view.dart';
+import 'package:flutter_memos/screens/workbench/widgets/workbench_instance_tile.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class WorkbenchMainScreen extends ConsumerStatefulWidget {
-  const WorkbenchMainScreen({super.key});
+class WorkbenchHubScreen extends ConsumerStatefulWidget {
+  const WorkbenchHubScreen({super.key});
 
   @override
-  ConsumerState<WorkbenchMainScreen> createState() => _WorkbenchMainScreenState();
+  ConsumerState<WorkbenchHubScreen> createState() => _WorkbenchHubScreenState();
 }
 
-class _WorkbenchMainScreenState extends ConsumerState<WorkbenchMainScreen> {
-  final ScrollController _scrollController = ScrollController();
+class _WorkbenchHubScreenState extends ConsumerState<WorkbenchHubScreen> {
   final TextEditingController _instanceNameController = TextEditingController();
-  final GlobalKey _detailAreaKey = GlobalKey(); // Key to find detail area position
 
   @override
   void dispose() {
-    _scrollController.dispose();
     _instanceNameController.dispose();
     super.dispose();
   }
-
-  // --- Instance Management Dialogs (Moved from WorkbenchScreenState) ---
 
   void _showAddInstanceDialog() {
     _instanceNameController.clear();
@@ -64,11 +57,12 @@ class _WorkbenchMainScreenState extends ConsumerState<WorkbenchMainScreen> {
     }
     if (name.isNotEmpty) {
       ref.read(workbenchInstancesProvider.notifier).saveInstance(name).then((success) {
-         if (success) {
-           // Optionally scroll to bottom after creating and activating
-           // Need to wait for state update and layout pass
-           WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToDetailArea());
-         }
+        if (success) {
+          // Optionally navigate to the new instance immediately
+          // final newState = ref.read(workbenchInstancesProvider);
+          // final newInstanceId = newState.instances.firstWhere((i) => i.name == name).id;
+          // Navigator.of(context).pushNamed('/workbench/$newInstanceId');
+        }
       });
     }
   }
@@ -168,8 +162,7 @@ class _WorkbenchMainScreenState extends ConsumerState<WorkbenchMainScreen> {
     );
   }
 
-  // Action sheet for Rename/Delete instance actions (triggered by long-press on menu item)
-  void showInstanceActions(WorkbenchInstance instance) {
+  void _showInstanceActions(WorkbenchInstance instance) {
     final instancesState = ref.read(workbenchInstancesProvider);
     final bool canDelete =
         instancesState.instances.length > 1 && !instance.isSystemDefault;
@@ -204,142 +197,43 @@ class _WorkbenchMainScreenState extends ConsumerState<WorkbenchMainScreen> {
     );
   }
 
-  // --- Scrolling ---
-  void _scrollToDetailArea() {
-     // Ensure the detail area widget has rendered and has a size
-    final RenderBox? detailBox = _detailAreaKey.currentContext?.findRenderObject() as RenderBox?;
-    if (detailBox != null && _scrollController.hasClients) {
-      final offset = _scrollController.position.maxScrollExtent; // Scroll to the end
-      // Alternative: Calculate offset based on detailBox position if needed
-      // final offset = _scrollController.offset + detailBox.localToGlobal(Offset.zero).dy - kToolbarHeight - MediaQuery.of(context).padding.top;
-
-      _scrollController.animateTo(
-        offset,
-        duration: const Duration(milliseconds: 400),
-        curve: Curves.easeInOut,
-      );
-    } else {
-       // Fallback or retry logic if needed
-       WidgetsBinding.instance.addPostFrameCallback((_) {
-         if (mounted && _scrollController.hasClients) {
-            _scrollController.animateTo(
-              _scrollController.position.maxScrollExtent,
-              duration: const Duration(milliseconds: 400),
-              curve: Curves.easeInOut,
-            );
-         }
-       });
-    }
-  }
-
-  // --- Build Menu Item ---
-  Widget _buildWorkbenchMenuItem({
-    required BuildContext context, // Pass context
-    required WorkbenchInstance instance,
-    required bool isActive,
-    required VoidCallback onTap,
-    required VoidCallback onLongPress,
-  }) {
-    final theme = CupertinoTheme.of(context);
-    return Container(
-      color: theme.barBackgroundColor,
-      child: CupertinoButton(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-        onPressed: onTap,
-        onLongPress: onLongPress, // Add long press handler
-        child: Row(
-          children: [
-            Icon(
-              isActive ? CupertinoIcons.square_list_fill : CupertinoIcons.square_list,
-              color: isActive ? theme.primaryColor : CupertinoColors.secondaryLabel.resolveFrom(context),
-              size: 22,
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Text(
-                instance.name,
-                style: theme.textTheme.textStyle.copyWith(
-                  fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
-                ),
-              ),
-            ),
-            Icon(
-              CupertinoIcons.forward,
-              color: CupertinoColors.tertiaryLabel.resolveFrom(context),
-              size: 18,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final instancesState = ref.watch(workbenchInstancesProvider);
     final instances = instancesState.instances;
-    final activeInstanceId = instancesState.activeInstanceId;
-    final workbenchState = ref.watch(activeWorkbenchProvider); // Watch active state for refresh button
+    final isLoading = instancesState.isLoading;
+    final error = instancesState.error;
 
-    final bool canRefresh = !workbenchState.isLoading && !workbenchState.isRefreshingDetails;
+    // Sort instances: default first, then by creation date or name
+    final sortedInstances = [...instances]..sort((a, b) {
+        if (a.isSystemDefault) return -1;
+        if (b.isSystemDefault) return 1;
+        return a.createdAt.compareTo(b.createdAt); // Or sort by name: a.name.compareTo(b.name)
+      });
 
-    // Define separator widget for reuse
     final separator = Container(
       height: 1,
       color: CupertinoColors.separator.resolveFrom(context),
-      margin: const EdgeInsets.only(left: 54), // Indent separator
+      margin: const EdgeInsets.only(left: 56), // Indent separator past icon
     );
 
     return CupertinoPageScaffold(
       backgroundColor: CupertinoColors.systemGroupedBackground.resolveFrom(context),
-      navigationBar: CupertinoNavigationBar(
-        middle: const Text("Workbenches"),
-        // Prevent back button on root tab screen
+      navigationBar: const CupertinoNavigationBar(
+        middle: Text("Workbenches"),
+        // No back button needed on the hub screen
         automaticallyImplyLeading: false,
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-             CupertinoButton(
-              padding: const EdgeInsets.only(left: 8.0),
-              onPressed: _showAddInstanceDialog,
-              child: const Icon(CupertinoIcons.add),
-            ),
-             CupertinoButton(
-              padding: const EdgeInsets.only(left: 8.0),
-              onPressed: canRefresh
-                  ? () => ref.read(activeWorkbenchNotifierProvider).refreshItemDetails()
-                  : null,
-              child: canRefresh
-                  ? const Icon(CupertinoIcons.refresh)
-                  : const CupertinoActivityIndicator(radius: 10),
-            ),
-            const SizedBox(width: 8),
-            CupertinoButton(
-              padding: EdgeInsets.zero,
-              child: const Icon(CupertinoIcons.settings, size: 22),
-              onPressed: () {
-                Navigator.of(context).push(
-                  CupertinoPageRoute(
-                    builder: (context) => const SettingsScreen(isInitialSetup: false),
-                  ),
-                );
-              },
-            ),
-          ],
-        ),
+        // Trailing actions can be added here if needed (e.g., Edit button)
       ),
       child: SafeArea(
-        // Use SafeArea to avoid notch/system areas
-        bottom: false, // Allow content to go to bottom edge if needed
         child: CustomScrollView(
-          controller: _scrollController,
           slivers: [
-            // --- Loading/Error for Instances ---
-            if (instancesState.isLoading && instances.isEmpty)
+            // --- Loading/Error States ---
+            if (isLoading && instances.isEmpty)
               const SliverFillRemaining(
                 child: Center(child: CupertinoActivityIndicator()),
               ),
-            if (instancesState.error != null && instances.isEmpty)
+            if (error != null && instances.isEmpty)
               SliverFillRemaining(
                 child: Center(
                   child: Column(
@@ -354,7 +248,7 @@ class _WorkbenchMainScreenState extends ConsumerState<WorkbenchMainScreen> {
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16.0),
                         child: Text(
-                          'Error loading Workbenches: ${instancesState.error}',
+                          'Error loading Workbenches: $error',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             color: CupertinoColors.secondaryLabel.resolveFrom(context),
@@ -371,61 +265,68 @@ class _WorkbenchMainScreenState extends ConsumerState<WorkbenchMainScreen> {
                 ),
               ),
 
-            // --- Top Menu Section (List of Workbenches) ---
+            // --- Instance List ---
             if (instances.isNotEmpty)
               SliverPadding(
-                padding: const EdgeInsets.symmetric(vertical: 10.0), // Add some padding around the list
+                padding: const EdgeInsets.symmetric(vertical: 10.0),
                 sliver: SliverList(
                   delegate: SliverChildBuilderDelegate(
                     (context, index) {
-                      final instance = instances[index];
-                      final isActive = instance.id == activeInstanceId;
-                      // Add separator logic
-                      final isLast = index == instances.length - 1;
-                      Widget item = _buildWorkbenchMenuItem(
-                        context: context, // Pass context
+                      final instance = sortedInstances[index];
+                      final isLast = index == sortedInstances.length - 1;
+
+                      Widget tile = WorkbenchInstanceTile(
                         instance: instance,
-                        isActive: isActive,
                         onTap: () {
-                          if (!isActive) {
-                             ref.read(workbenchInstancesProvider.notifier).setActiveInstance(instance.id);
-                          }
-                          // Always scroll after tap
-                          _scrollToDetailArea();
+                          // Navigate to the detail screen using the nested navigator
+                          Navigator.of(context).pushNamed('/workbench/${instance.id}');
                         },
-                        onLongPress: () => showInstanceActions(instance), // Add long press
+                        onLongPress: () => _showInstanceActions(instance),
                       );
 
                       if (!isLast) {
                         return Column(
                           mainAxisSize: MainAxisSize.min,
-                          children: [item, separator],
+                          children: [tile, separator],
                         );
                       } else {
-                        return item; // No separator after the last item
+                        return tile; // No separator after the last item
                       }
                     },
-                    childCount: instances.length,
+                    childCount: sortedInstances.length,
                   ),
                 ),
               ),
-            if (instances.isEmpty && !instancesState.isLoading)
-              const SliverFillRemaining(
-                 child: Center(
-                   child: Text(
-                     'No Workbenches found.\nTap the + button to create one.',
-                     textAlign: TextAlign.center,
-                     style: TextStyle(color: CupertinoColors.secondaryLabel),
+
+            // --- Add New Instance Button ---
+             SliverPadding(
+               padding: const EdgeInsets.only(top: 10.0, bottom: 20.0), // Add padding
+               sliver: SliverToBoxAdapter(
+                 child: Container(
+                   color: CupertinoTheme.of(context).barBackgroundColor,
+                   child: CupertinoButton(
+                     padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                     onPressed: _showAddInstanceDialog,
+                     child: Row(
+                       children: [
+                         const Icon(
+                           CupertinoIcons.add_circled,
+                           color: CupertinoColors.systemGreen,
+                           size: 24,
+                         ),
+                         const SizedBox(width: 16),
+                         Expanded(
+                           child: Text(
+                             'New Workbench',
+                             style: CupertinoTheme.of(context).textTheme.textStyle,
+                           ),
+                         ),
+                       ],
+                     ),
                    ),
                  ),
                ),
-
-            // --- Bottom "Detail" Section ---
-            // Add a key to identify the start of the detail area for scrolling
-             SliverToBoxAdapter(child: SizedBox(key: _detailAreaKey, height: 10)), // Spacer with key
-            // Conditionally display detail view only if there are instances
-            if (instances.isNotEmpty)
-              const WorkbenchDetailView(),
+             ),
           ],
         ),
       ),
