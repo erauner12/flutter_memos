@@ -10,30 +10,29 @@
 
 part of openapi.api;
 
-class Duration {
-  /// Returns a new [Duration] instance.
-  Duration({
-  });
+class TodoistDuration {
+  /// Returns a new [TodoistDuration] instance.
+  const TodoistDuration();
 
   @override
-  bool operator ==(Object other) => identical(this, other) || other is Duration &&
+  bool operator ==(Object other) =>
+      identical(this, other) || other is TodoistDuration;
 
   @override
-  int get hashCode =>
-    // ignore: unnecessary_parenthesis
+  int get hashCode => 0;
 
   @override
-  String toString() => 'Duration[]';
+  String toString() => 'TodoistDuration[]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
     return json;
   }
 
-  /// Returns a new [Duration] instance and imports its values from
+  /// Returns a new [TodoistDuration] instance and imports its values from
   /// [value] if it's a [Map], null otherwise.
   // ignore: prefer_constructors_over_static_methods
-  static Duration? fromJson(dynamic value) {
+  static TodoistDuration? fromJson(dynamic value) {
     if (value is Map) {
       final json = value.cast<String, dynamic>();
 
@@ -42,23 +41,28 @@ class Duration {
       // Note 2: this code is stripped in release mode!
       assert(() {
         requiredKeys.forEach((key) {
-          assert(json.containsKey(key), 'Required key "Duration[$key]" is missing from JSON.');
-          assert(json[key] != null, 'Required key "Duration[$key]" has a null value in JSON.');
+          assert(json.containsKey(key),
+              'Required key "TodoistDuration[$key]" is missing from JSON.');
+          assert(json[key] != null,
+              'Required key "TodoistDuration[$key]" has a null value in JSON.');
         });
         return true;
       }());
 
-      return Duration(
+      return TodoistDuration(
       );
     }
     return null;
   }
 
-  static List<Duration> listFromJson(dynamic json, {bool growable = false,}) {
-    final result = <Duration>[];
+  static List<TodoistDuration> listFromJson(
+    dynamic json, {
+    bool growable = false,
+  }) {
+    final result = <TodoistDuration>[];
     if (json is List && json.isNotEmpty) {
       for (final row in json) {
-        final value = Duration.fromJson(row);
+        final value = TodoistDuration.fromJson(row);
         if (value != null) {
           result.add(value);
         }
@@ -67,12 +71,12 @@ class Duration {
     return result.toList(growable: growable);
   }
 
-  static Map<String, Duration> mapFromJson(dynamic json) {
-    final map = <String, Duration>{};
+  static Map<String, TodoistDuration> mapFromJson(dynamic json) {
+    final map = <String, TodoistDuration>{};
     if (json is Map && json.isNotEmpty) {
       json = json.cast<String, dynamic>(); // ignore: parameter_assignments
       for (final entry in json.entries) {
-        final value = Duration.fromJson(entry.value);
+        final value = TodoistDuration.fromJson(entry.value);
         if (value != null) {
           map[entry.key] = value;
         }
@@ -81,14 +85,20 @@ class Duration {
     return map;
   }
 
-  // maps a json object with a list of Duration-objects as value to a dart map
-  static Map<String, List<Duration>> mapListFromJson(dynamic json, {bool growable = false,}) {
-    final map = <String, List<Duration>>{};
+  // maps a json object with a list of TodoistDuration-objects as value to a dart map
+  static Map<String, List<TodoistDuration>> mapListFromJson(
+    dynamic json, {
+    bool growable = false,
+  }) {
+    final map = <String, List<TodoistDuration>>{};
     if (json is Map && json.isNotEmpty) {
       // ignore: parameter_assignments
       json = json.cast<String, dynamic>();
       for (final entry in json.entries) {
-        map[entry.key] = Duration.listFromJson(entry.value, growable: growable,);
+        map[entry.key] = TodoistDuration.listFromJson(
+          entry.value,
+          growable: growable,
+        );
       }
     }
     return map;

@@ -22,7 +22,7 @@ class TaskDuration {
   /// source code must fall back to having a nullable type.
   /// Consider adding a "default:" property in the specification file to hide this note.
   ///
-  Duration? durationObject;
+  TodoistDuration? durationObject;
 
   @override
   bool operator ==(Object other) => identical(this, other) || other is TaskDuration &&
@@ -65,7 +65,7 @@ class TaskDuration {
       }());
 
       return TaskDuration(
-        durationObject: Duration.fromJson(json[r'durationObject']),
+        durationObject: TodoistDuration.fromJson(json[r'durationObject']),
       );
     }
     return null;

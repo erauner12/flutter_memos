@@ -195,8 +195,8 @@ class ApiClient {
           return CreateTaskRequest.fromJson(value);
         case 'Due':
           return Due.fromJson(value);
-        case 'Duration':
-          return Duration.fromJson(value);
+        case 'TodoistDuration':
+          return TodoistDuration.fromJson(value);
         case 'ErrorModel':
           return ErrorModel.fromJson(value);
         case 'Label':
