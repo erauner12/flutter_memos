@@ -1,8 +1,9 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_memos/models/task_filter.dart'; // Import the new enum
 import 'package:flutter_memos/models/task_item.dart';
-import 'package:flutter_memos/providers/api_providers.dart';
-import 'package:flutter_memos/services/task_api_service.dart';
+// Keep this if used elsewhere
+// Remove Todoist service import: import 'package:flutter_memos/services/task_api_service.dart';
+import 'package:flutter_memos/services/vikunja_api_service.dart'; // Import Vikunja service
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 // Provider to fetch details for a single task by ID
@@ -11,35 +12,33 @@ final taskDetailProvider =
   ref,
   taskId,
 ) async {
+  // Use the Vikunja service provider
+  final vikunjaService = ref.watch(vikunjaApiServiceProvider);
 
-  // Always try to get the dedicated Todoist service for task details,
-  // regardless of the *active* server in the main UI.
-  // This assumes task details are only ever fetched for Todoist tasks.
-  final todoistService = ref.watch(todoistApiServiceProvider);
+  // Check if the Vikunja service is configured
+  // We might need a way to access the isVikunjaConfiguredProvider state here,
+  // or rely on the service's internal state/error handling.
+  // For simplicity, let's assume the service throws if not configured.
+  // if (!vikunjaService.isConfigured) { // Or use the provider: ref.watch(isVikunjaConfiguredProvider)
+  //   throw Exception('Vikunja API not configured in Settings.');
+  // }
 
-  if (!todoistService.isConfigured) {
-    throw Exception('Todoist API Key not configured in Settings.');
-  }
-
-  // Use the dedicated service instance
   try {
-    final task = await todoistService.getTask(taskId);
+    // The service method now handles parsing String ID to int if needed
+    final task = await vikunjaService.getTask(taskId);
     return task;
   } catch (e) {
     if (kDebugMode) {
-      print(
-        'Error fetching task detail for $taskId via dedicated provider: $e',
-      );
+      print('Error fetching task detail for $taskId via Vikunja provider: $e');
     }
+    // Rethrow a more user-friendly error or the original exception
     throw Exception('Failed to load task details for ID: $taskId. Error: $e');
   }
 });
 
-// NEW: Provider family for filtered tasks based on TaskFilter
-final filteredTasksProviderFamily = Provider.family<
-  List<TaskItem>,
-  TaskFilter
->((ref, taskFilter) {
+// Provider family for filtered tasks based on TaskFilter
+final filteredTasksProviderFamily = Provider.family<List<TaskItem>, TaskFilter>(
+  (ref, taskFilter) {
   final tasksState = ref.watch(tasksNotifierProvider);
   final allTasks = tasksState.tasks;
 
@@ -47,24 +46,27 @@ final filteredTasksProviderFamily = Provider.family<
   List<TaskItem> filteredTasks;
   switch (taskFilter) {
     case TaskFilter.recurring:
-      filteredTasks = allTasks.where((t) => t.isRecurring).toList();
+        // TODO: Adapt for Vikunja's recurring logic (e.g., repeatAfter != null)
+        // filteredTasks = allTasks.where((t) => t.isRecurring).toList();
+        filteredTasks = allTasks; // Placeholder: Show all for now
       break;
     case TaskFilter.notRecurring:
-      filteredTasks = allTasks.where((t) => !t.isRecurring).toList();
+        // TODO: Adapt for Vikunja's recurring logic
+        // filteredTasks = allTasks.where((t) => !t.isRecurring).toList();
+        filteredTasks = allTasks; // Placeholder: Show all for now
       break;
     case TaskFilter.dueToday:
       final now = DateTime.now();
       final todayStart = DateTime(now.year, now.month, now.day);
       final tomorrowStart = DateTime(now.year, now.month, now.day + 1);
-      filteredTasks =
-          allTasks.where((t) {
-            // Check if dueDate is not null and falls on the current calendar day
-            return t.dueDate != null &&
-                t.dueDate!.isAfter(
-                  todayStart.subtract(const Duration(microseconds: 1)),
-                ) && // >= today 00:00:00.000
-                t.dueDate!.isBefore(tomorrowStart); // < tomorrow 00:00:00.000
-          }).toList();
+        filteredTasks =
+            allTasks.where((t) {
+              return t.dueDate != null &&
+                  t.dueDate!.isAfter(
+                    todayStart.subtract(const Duration(microseconds: 1)),
+                  ) &&
+                  t.dueDate!.isBefore(tomorrowStart);
+            }).toList();
       break;
     case TaskFilter.all:
       filteredTasks = allTasks;
@@ -73,7 +75,8 @@ final filteredTasksProviderFamily = Provider.family<
   // Apply other filters like 'show completed'
   final showCompleted = ref.watch(showCompletedTasksProvider);
   if (!showCompleted) {
-    return filteredTasks.where((task) => !task.isCompleted).toList();
+      // Use 'done' field instead of 'isCompleted'
+      return filteredTasks.where((task) => !task.done).toList();
   }
 
   return filteredTasks;
@@ -100,14 +103,16 @@ class TasksNotifier extends StateNotifier<TasksState> {
 
   TasksNotifier(this._ref) : super(TasksState.initial());
 
-  // Helper to get the configured Todoist TaskApiService or handle errors
-  TaskApiService? _getTaskApiService() {
-    // Use the dedicated Todoist service provider
-    final todoistService = _ref.read(todoistApiServiceProvider);
+  // Helper to get the configured Vikunja TaskApiService or handle errors
+  VikunjaApiService? _getVikunjaApiService() {
+    // Use the dedicated Vikunja service provider
+    final vikunjaService = _ref.read(vikunjaApiServiceProvider);
+    final isConfigured = _ref.read(
+      isVikunjaConfiguredProvider,
+    ); // Read the state provider
 
-    if (!todoistService.isConfigured) {
-      // If Todoist API key isn't set up
-      final errorMessage = 'Todoist API Key not configured in Settings.';
+    if (!isConfigured) {
+      final errorMessage = 'Vikunja API not configured in Settings.';
       if (state.error != errorMessage) {
         state = TasksState.initial().copyWith(
           error: errorMessage,
@@ -121,7 +126,7 @@ class TasksNotifier extends StateNotifier<TasksState> {
     if (state.error != null) {
       state = state.copyWith(clearError: true);
     }
-    return todoistService; // Return the configured service instance
+    return vikunjaService; // Return the configured service instance
   }
 
   /// Clears tasks and resets state to initial.
@@ -130,101 +135,114 @@ class TasksNotifier extends StateNotifier<TasksState> {
   }
 
   Future<void> fetchTasks({String? filter}) async {
-    // Use the helper which now checks configuration, not active server
-    final apiService = _getTaskApiService();
-    if (apiService == null) return; // Error handled in _getTaskApiService
+    final apiService = _getVikunjaApiService();
+    if (apiService == null) return; // Error handled in _getVikunjaApiService
 
-    // Prevent concurrent fetches
     if (state.isLoading) return;
 
-    state = state.copyWith(isLoading: true, clearError: true); // Clear previous errors on new fetch
+    state = state.copyWith(isLoading: true, clearError: true);
     try {
       final tasks = await apiService.listTasks(filter: filter);
-      // Check if still mounted before updating state
       if (!mounted) return;
+
       // Sort tasks (e.g., by priority descending, then maybe creation date)
+      // Adjust sorting based on Vikunja priority meaning if kept
       tasks.sort((a, b) {
-        final priorityComparison = b.priority.compareTo(a.priority);
+        // Handle null priority
+        final priorityA = a.priority ?? 99; // Assign low priority if null
+        final priorityB = b.priority ?? 99;
+        final priorityComparison = priorityB.compareTo(
+          priorityA,
+        ); // Vikunja priority might be different scale
         if (priorityComparison != 0) {
           return priorityComparison;
         }
-        return 0; // Keep original API order if priorities are equal
+        // Fallback sort by creation date if priorities are equal
+        return a.createdAt.compareTo(b.createdAt);
       });
       state = state.copyWith(isLoading: false, tasks: tasks);
     } catch (e, s) {
        if (kDebugMode) {
-         print('Error fetching tasks: $e\n$s');
-       }
-       // Check if still mounted before updating state
+        print('Error fetching tasks from Vikunja: $e\n$s');
+      }
        if (!mounted) return;
       state = state.copyWith(
         isLoading: false,
-        error: 'Failed to fetch tasks from Todoist: ${e.toString()}',
+        error: 'Failed to fetch tasks from Vikunja: ${e.toString()}',
         tasks: [],
-      ); // Clear tasks on error
+      );
     }
   }
 
   /// Fetches a single task by its ID.
-  /// Returns the TaskItem or null if not found or an error occurs.
   Future<TaskItem?> fetchTaskById(String taskId) async {
-    final apiService = _getTaskApiService();
-    if (apiService == null) {
-      // Error (not configured) already set in state by _getTaskApiService
-      return null;
-    }
+    final apiService = _getVikunjaApiService();
+    if (apiService == null) return null;
 
     try {
-      final task = await apiService.getTask(taskId);
-      // Optionally update local state if the task is already present?
-      // For now, just return the fetched task.
+      final task = await apiService.getTask(
+        taskId,
+      ); // Service handles ID parsing
       return task;
     } catch (e, s) {
       if (kDebugMode) {
-        print('Error fetching task by ID $taskId: $e\n$s');
+        print('Error fetching Vikunja task by ID $taskId: $e\n$s');
       }
-      // Set error state, but don't clear existing tasks
       if (mounted) {
         state = state.copyWith(
           error: 'Failed to fetch task $taskId: ${e.toString()}',
         );
       }
-      return null; // Indicate failure
+      return null;
     }
   }
 
 
   Future<bool> completeTask(String id) async {
-    final apiService = _getTaskApiService(); // Checks config
+    final apiService = _getVikunjaApiService();
     if (apiService == null) return false;
 
-    // Optimistic update
+    // Optimistic update using 'done' field
     final originalTasks = List<TaskItem>.from(state.tasks);
     TaskItem? originalTask;
+    bool taskFound = false;
     if (mounted) {
       state = state.copyWith(
         tasks:
             state.tasks.map((task) {
-              if (task.id == id) {
-                originalTask = task; // Store original for potential revert
-                return task.copyWith(isCompleted: true);
+              // Compare String ID from UI/state with int ID from TaskItem
+              if (task.id.toString() == id) {
+                taskFound = true;
+                originalTask = task;
+                return task.copyWith(done: true); // Use 'done'
               }
               return task;
             }).toList(),
       );
     }
 
+    if (!taskFound) {
+      print("Warning: Task $id not found in local state for completion.");
+      // Optionally revert or handle differently
+    }
+
+
     try {
-      await apiService.completeTask(id); // Use the service instance
+      await apiService.completeTask(id); // Service handles ID parsing
       return true;
     } catch (e, s) {
       if (kDebugMode) {
-        print('Error completing task $id: $e\n$s');
+        print('Error completing Vikunja task $id: $e\n$s');
       }
       // Revert optimistic update on failure
-      if (mounted && originalTask != null) {
+      if (mounted && taskFound) {
+        // Only revert if we found and modified it
         state = state.copyWith(
-          tasks: originalTasks, // Revert to original list
+          tasks: originalTasks,
+          error: 'Failed to complete task: ${e.toString()}',
+        );
+      } else if (mounted) {
+        state = state.copyWith(
           error: 'Failed to complete task: ${e.toString()}',
         );
       }
@@ -233,104 +251,127 @@ class TasksNotifier extends StateNotifier<TasksState> {
   }
 
   Future<bool> reopenTask(String id) async {
-    final apiService = _getTaskApiService(); // Checks config
+    final apiService = _getVikunjaApiService();
     if (apiService == null) return false;
 
-    // Optimistic update
+    // Optimistic update using 'done' field
     final originalTasks = List<TaskItem>.from(state.tasks);
     TaskItem? originalTask;
+    bool taskFound = false;
     if (mounted) {
       state = state.copyWith(
         tasks:
             state.tasks.map((task) {
-              if (task.id == id) {
-                originalTask = task; // Store original for potential revert
-                return task.copyWith(isCompleted: false);
+              if (task.id.toString() == id) {
+                taskFound = true;
+                originalTask = task;
+                return task.copyWith(done: false); // Use 'done'
               }
               return task;
             }).toList(),
       );
     }
 
+    if (!taskFound) {
+      print("Warning: Task $id not found in local state for reopening.");
+    }
+
     try {
-      await apiService.reopenTask(id); // Use the service instance
+      await apiService.reopenTask(id); // Service handles ID parsing
       return true;
     } catch (e, s) {
       if (kDebugMode) {
-        print('Error reopening task $id: $e\n$s');
+        print('Error reopening Vikunja task $id: $e\n$s');
       }
       // Revert optimistic update on failure
-      if (mounted && originalTask != null) {
+      if (mounted && taskFound) {
         state = state.copyWith(
-          tasks: originalTasks, // Revert to original list
+          tasks: originalTasks,
           error: 'Failed to reopen task: ${e.toString()}',
         );
+      } else if (mounted) {
+        state = state.copyWith(error: 'Failed to reopen task: ${e.toString()}');
       }
       return false;
     }
   }
 
   Future<bool> deleteTask(String id) async {
-    final apiService = _getTaskApiService(); // Checks config
+    final apiService = _getVikunjaApiService();
     if (apiService == null) return false;
 
     // Optimistic update
     final originalTasks = List<TaskItem>.from(state.tasks);
+    bool taskFound = false;
     if (mounted) {
-      state = state.copyWith(
-        tasks: state.tasks.where((task) => task.id != id).toList(),
-      );
+      final initialLength = state.tasks.length;
+      final newTasks =
+          state.tasks.where((task) => task.id.toString() != id).toList();
+      if (newTasks.length < initialLength) {
+        taskFound = true;
+        state = state.copyWith(tasks: newTasks);
+      } else {
+        print("Warning: Task $id not found in local state for deletion.");
+      }
     }
 
     try {
-      await apiService.deleteTask(id); // Use the service instance
+      await apiService.deleteTask(id); // Service handles ID parsing
       return true;
     } catch (e, s) {
       if (kDebugMode) {
-        print('Error deleting task $id: $e\n$s');
+        print('Error deleting Vikunja task $id: $e\n$s');
       }
       // Revert optimistic update on failure
-      if (mounted) {
+      if (mounted && taskFound) {
+        // Only revert if we actually removed it
         state = state.copyWith(
           tasks: originalTasks,
           error: 'Failed to delete task: ${e.toString()}',
         );
+      } else if (mounted) {
+        state = state.copyWith(error: 'Failed to delete task: ${e.toString()}');
       }
       return false;
     }
   }
 
-  Future<TaskItem?> createTask(TaskItem task) async {
-    final apiService = _getTaskApiService(); // Checks config
+  Future<TaskItem?> createTask(TaskItem task, {int? projectId}) async {
+    final apiService = _getVikunjaApiService();
     if (apiService == null) return null;
 
     try {
+      // Pass projectId if provided
       final createdTask = await apiService.createTask(
         task,
-      ); // Use the service instance
+        projectId: projectId,
+      );
       if (mounted) {
         final newTasks = [...state.tasks, createdTask];
+        // Re-sort based on updated logic
         newTasks.sort((a, b) {
-          final priorityComparison = b.priority.compareTo(a.priority);
+          final priorityA = a.priority ?? 99;
+          final priorityB = b.priority ?? 99;
+          final priorityComparison = priorityB.compareTo(priorityA);
           if (priorityComparison != 0) return priorityComparison;
-          return 0;
+          return a.createdAt.compareTo(b.createdAt);
         });
         state = state.copyWith(tasks: newTasks, clearError: true);
       }
       return createdTask;
     } catch (e, s) {
       if (kDebugMode) {
-        print('Error creating task: $e\n$s');
+        print('Error creating Vikunja task: $e\n$s');
       }
       if (mounted) {
         state = state.copyWith(error: 'Failed to create task: ${e.toString()}');
       }
-      return null; // Indicate failure
+      return null;
     }
   }
 
   Future<TaskItem?> updateTask(String id, TaskItem taskUpdate) async {
-    final apiService = _getTaskApiService(); // Checks config
+    final apiService = _getVikunjaApiService();
     if (apiService == null) return null;
 
     // Optimistic update
@@ -341,19 +382,23 @@ class TasksNotifier extends StateNotifier<TasksState> {
       state = state.copyWith(
         tasks:
             state.tasks.map((task) {
-              if (task.id == id) {
-                originalTask = task; // Store original for revert
+              if (task.id.toString() == id) {
+                originalTask = task;
                 found = true;
-                // Merge updates using copyWith
+                // Merge updates using copyWith - ensure all relevant fields are copied
                 return originalTask!.copyWith(
-                  content: taskUpdate.content,
-                  // Wrap description in ValueGetter
-                  description: () => taskUpdate.description,
+                  title: taskUpdate.title,
+                  description:
+                      () =>
+                          taskUpdate
+                              .description, // Use ValueGetter for nullability
                   priority: taskUpdate.priority,
                   dueDate: taskUpdate.dueDate,
-                  dueString: taskUpdate.dueString,
-                  labels: taskUpdate.labels,
-                  // Add other updatable fields here
+                  done: taskUpdate.done, // Include 'done' if updatable here
+                  projectId: taskUpdate.projectId,
+                  bucketId: taskUpdate.bucketId,
+                  percentDone: taskUpdate.percentDone,
+                  // Add other updatable fields from Vikunja if needed
                 );
               }
               return task;
@@ -362,26 +407,31 @@ class TasksNotifier extends StateNotifier<TasksState> {
     }
     if (!found) {
       print("Warning: Task $id not found in local state for update.");
+      // Decide how to handle - maybe fetch first or return null?
     }
 
     try {
+      // Pass the original TaskItem with merged updates to the service
       final updatedTask = await apiService.updateTask(
         id,
         taskUpdate,
-      ); // Use the service instance
+      ); // Service handles ID parsing
       if (mounted) {
         final updatedTasks =
             state.tasks.map((task) {
-              if (task.id == id) {
-                return updatedTask;
+              if (task.id.toString() == id) {
+                return updatedTask; // Replace with the task returned by the API
               }
               return task;
             }).toList();
 
+        // Re-sort
         updatedTasks.sort((a, b) {
-          final priorityComparison = b.priority.compareTo(a.priority);
+          final priorityA = a.priority ?? 99;
+          final priorityB = b.priority ?? 99;
+          final priorityComparison = priorityB.compareTo(priorityA);
           if (priorityComparison != 0) return priorityComparison;
-          return 0;
+          return a.createdAt.compareTo(b.createdAt);
         });
         state = state.copyWith(tasks: updatedTasks, clearError: true);
         return updatedTask;
@@ -389,10 +439,11 @@ class TasksNotifier extends StateNotifier<TasksState> {
       return null; // Not mounted
     } catch (e, s) {
       if (kDebugMode) {
-        print('Error updating task $id: $e\n$s');
+        print('Error updating Vikunja task $id: $e\n$s');
       }
       // Revert optimistic update on failure
-      if (mounted && originalTask != null) {
+      if (mounted && found) {
+        // Only revert if we found and modified it
         state = state.copyWith(
           tasks: originalTasks,
           error: 'Failed to update task: ${e.toString()}',
@@ -400,11 +451,12 @@ class TasksNotifier extends StateNotifier<TasksState> {
       } else if (mounted) {
         state = state.copyWith(error: 'Failed to update task: ${e.toString()}');
       }
-      return null; // Indicate failure
+      return null;
     }
   }
 }
 
+// TasksState remains the same
 @immutable
 class TasksState {
   final List<TaskItem> tasks;

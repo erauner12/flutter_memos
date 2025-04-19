@@ -23,7 +23,8 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
   void initState() {
     super.initState();
     if (_isEditing) {
-      _contentController.text = widget.taskToEdit!.content;
+      // Use title instead of content
+      _contentController.text = widget.taskToEdit!.title;
       _descriptionController.text = widget.taskToEdit!.description ?? '';
       // TODO: Initialize other fields (priority, due date, etc.)
     }
@@ -63,15 +64,19 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
       if (_isEditing) {
         // Update existing task - copy existing and apply changes
         taskData = widget.taskToEdit!.copyWith(
-          content: _contentController.text.trim(),
+          // Use title instead of content
+          title: _contentController.text.trim(),
           // Wrap description in ValueGetter
-          description: () => _descriptionController.text.trim(),
+          description: () => _descriptionController.text.trim().isEmpty
+                           ? null
+                           : _descriptionController.text.trim(),
           // TODO: Add other fields like priority, due date, labels
         );
-        // Call update method (needs Task ID)
+        // Call update method (needs Task ID as String)
         final updatedTask = await ref
             .read(tasksNotifierProvider.notifier)
-            .updateTask(widget.taskToEdit!.id, taskData); // Assuming notifier has updateTask
+            // Convert int ID to String for the notifier method
+            .updateTask(widget.taskToEdit!.id.toString(), taskData);
 
          if (updatedTask != null && mounted) {
            Navigator.of(context).pop(); // Close screen on success
@@ -82,17 +87,22 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
       } else {
         // Create new task - construct from form fields
          taskData = TaskItem(
-           id: '', // ID will be assigned by API/Notifier
-           serverId: '', // Server ID will likely be handled by notifier/service
-           content: _contentController.text.trim(),
-           description: _descriptionController.text.trim(),
-           isCompleted: false,
-           priority: 1, // Default priority
-           isRecurring: false,
-           labels: [],
-           commentCount: 0,
-           createdAt: DateTime.now(), // Temp value
-           // TODO: Assign other fields from form
+           // ID is int, but API assigns it, pass 0 or handle differently if needed locally before creation
+           id: 0, // Temporary ID, service/API will assign the real one
+           // serverId removed
+           // Use title instead of content
+           title: _contentController.text.trim(),
+           description: _descriptionController.text.trim().isEmpty
+                        ? null
+                        : _descriptionController.text.trim(),
+           // Use done instead of isCompleted
+           done: false,
+           priority: null, // Default priority (Vikunja might use null or 0)
+           // isRecurring removed
+           // labels removed
+           // commentCount removed
+           createdAt: DateTime.now(), // Temp value, API assigns real one
+           // TODO: Assign other fields from form (dueDate, projectId etc.)
         );
          // Call create method
         final createdTask = await ref

@@ -73,6 +73,12 @@ dependencies:
       path: pkgs/markdown
       ref: main
 
+  # Vikunja API
+  vikunja_flutter_api:
+    git:
+      url: git@github.com:erauner12/dart-vikunja.git
+      ref: main
+
 dependency_overrides:
   markdown:
     git:

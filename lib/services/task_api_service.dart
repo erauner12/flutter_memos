@@ -3,49 +3,48 @@ import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/models/server_config.dart';
 import 'package:flutter_memos/models/task_item.dart';
 import 'package:flutter_memos/services/base_api_service.dart';
-// Import todoist API models specifically for comment return types if needed,
-// or rely on the app's Comment model if sufficient mapping exists.
-import 'package:flutter_memos/todoist_api/lib/api.dart' as todoist;
+// Remove todoist import: import 'package:flutter_memos/todoist_api/lib/api.dart' as todoist;
 
 
-/// Interface for API services that primarily deal with Tasks (e.g., Todoist).
+/// Interface for API services that primarily deal with Tasks (e.g., Vikunja).
 abstract class TaskApiService extends BaseApiService {
 
   // --- Task Operations ---
   Future<List<TaskItem>> listTasks({
     String? filter, // Implementation specific filter
-    ServerConfig? targetServerOverride, // Likely not needed for Todoist global key
+    ServerConfig? targetServerOverride,
   });
 
   Future<TaskItem> getTask(
-    String id, {
+    String id, { // Keep String ID for interface consistency, parse in implementation
     ServerConfig? targetServerOverride,
   });
 
   Future<TaskItem> createTask(
     TaskItem task, { // Pass app model, implementation maps to API request
     ServerConfig? targetServerOverride,
+    int? projectId, // Add optional projectId if needed for creation
   });
 
   Future<TaskItem> updateTask(
-    String id,
+    String id, // Keep String ID for interface consistency
     TaskItem task, { // Pass app model for updates
     ServerConfig? targetServerOverride,
   });
 
   Future<void> deleteTask(
-    String id, {
+    String id, { // Keep String ID for interface consistency
     ServerConfig? targetServerOverride,
   });
 
   // --- Task Actions ---
   Future<void> completeTask(
-    String id, {
+    String id, { // Keep String ID for interface consistency
     ServerConfig? targetServerOverride,
   });
 
   Future<void> reopenTask(
-    String id, {
+    String id, { // Keep String ID for interface consistency
     ServerConfig? targetServerOverride,
   });
 
@@ -55,19 +54,19 @@ abstract class TaskApiService extends BaseApiService {
 
   @override
   Future<List<Comment>> listComments(
-    String taskId, { // parentId is the taskId here
+    String taskId, { // parentId is the taskId here (keep String ID)
     ServerConfig? targetServerOverride,
   });
 
   @override
   Future<Comment> getComment(
-    String commentId, { // commentId is sufficient
+    String commentId, { // commentId is sufficient (keep String ID)
     ServerConfig? targetServerOverride,
   });
 
   @override
   Future<Comment> createComment(
-    String taskId, // parentId is the taskId
+    String taskId, // parentId is the taskId (keep String ID)
     Comment comment, { // Use app's Comment model for input consistency
     ServerConfig? targetServerOverride,
     List<Map<String, dynamic>>? resources, // Optional attachments
@@ -75,21 +74,22 @@ abstract class TaskApiService extends BaseApiService {
 
   @override
   Future<Comment> updateComment(
-    String commentId, // commentId is sufficient
+    String commentId, // commentId is sufficient (keep String ID)
     Comment comment, { // Use app's Comment model
     ServerConfig? targetServerOverride,
   });
 
   @override
   Future<void> deleteComment(
-    String taskId, // parentId is taskId, maybe needed for context/permissions?
-    String commentId, {
+    String taskId, // parentId is taskId (keep String ID)
+    String commentId, { // Keep String ID
     ServerConfig? targetServerOverride,
   });
 
-  // Add other task-specific methods as needed (e.g., listProjects, listLabels)
-  // These might not fit BaseApiService but are needed by the task UI.
+  // Remove Todoist-specific methods
+  /*
   Future<List<todoist.Project>> listProjects();
   Future<List<todoist.Label>> listLabels();
   Future<List<todoist.Section>> listSections({String? projectId});
+  */
 }

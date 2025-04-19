@@ -3,7 +3,7 @@ import 'package:flutter_memos/utils/enum_utils.dart'; // Import the new helper
 import 'package:uuid/uuid.dart';
 
 // Ensure all required types are present.
-enum ServerType { memos, blinko, todoist }
+enum ServerType { memos, blinko, todoist, vikunja }
 
 /// Server configuration model for device-level storage
 class ServerConfig {

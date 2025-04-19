@@ -1,5 +1,5 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter_memos/services/todoist_api_service.dart'; // Import the service AND the providers
+import 'package:flutter_memos/services/todoist_api_service.dart.disabled'; // Import the service AND the providers
 import 'package:flutter_memos/todoist_api/lib/api.dart' as todoist;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart'; // For date formatting

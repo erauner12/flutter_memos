@@ -1,7 +1,8 @@
 import 'package:flutter_memos/api/lib/api.dart' as memos_api; // For Memos Authentication interface
 import 'package:flutter_memos/blinko_api/lib/api.dart'
     as blinko_api; // For Blinko Authentication interface
-import 'package:flutter_memos/todoist_api/lib/api.dart' as todoist; // For Todoist Authentication interface
+import 'package:vikunja_flutter_api/vikunja_api/lib/api.dart'
+    as vikunja; // For Vikunja Authentication interface
 
 /// Defines a contract for providing authentication details for API services.
 abstract class AuthStrategy {
@@ -23,6 +24,9 @@ abstract class AuthStrategy {
 
   /// Creates an Authentication object suitable for the Blinko API client.
   blinko_api.Authentication createBlinkoAuth();
+
+  /// Creates an Authentication object suitable for the Vikunja API client.
+  vikunja.Authentication createVikunjaAuth();
 }
 
 // --- Concrete Implementations ---
@@ -57,6 +61,12 @@ class BearerTokenAuthStrategy implements AuthStrategy {
   blinko_api.Authentication createBlinkoAuth() {
     // Blinko uses Bearer token directly in its HttpBearerAuth
     return blinko_api.HttpBearerAuth()..accessToken = _token;
+  }
+
+  @override
+  vikunja.Authentication createVikunjaAuth() {
+    // Vikunja also uses Bearer token authentication
+    return vikunja.HttpBearerAuth()..accessToken = _token;
   }
 
   // Add concrete implementation for refreshIfNeeded
@@ -122,13 +132,22 @@ class ApiKeyAuthStrategy implements AuthStrategy {
     // return BlinkoAuthWrapper(this); // Requires BlinkoAuthWrapper implementation
   }
 
+  @override
+  vikunja.Authentication createVikunjaAuth() {
+    // For Vikunja, we'll use bearer auth by default even with API key strategy
+    // Consider adding proper logging if this warning is important
+    // print("Warning: ApiKeyAuthStrategy used for Vikunja, which expects Bearer. Using key as Bearer.");
+    return vikunja.HttpBearerAuth()..accessToken = _apiKey;
+    // If a custom header is needed:
+    // return VikunjaAuthWrapper(this);
+  }
+
   // Add concrete implementation for refreshIfNeeded
   @override
   Future<void> refreshIfNeeded() async {
     // No-op for simple API key
   }
 }
-
 
 // --- Custom Authentication Wrappers (If needed for non-standard headers) ---
 // These wrappers would be necessary if the generated API clients don't
@@ -176,6 +195,22 @@ class BlinkoAuthWrapper implements blinko_api.Authentication {
   @override
   Future<void> applyToParams(
     List<blinko_api.QueryParam> queryParams,
+    Map<String, String> headerParams,
+  ) async {
+    await _strategy.refreshIfNeeded();
+    headerParams.addAll(_strategy.getAuthHeaders());
+  }
+}
+
+/// Wraps an AuthStrategy for the Vikunja API client's Authentication interface.
+class VikunjaAuthWrapper implements vikunja.Authentication {
+  final AuthStrategy _strategy;
+
+  VikunjaAuthWrapper(this._strategy);
+
+  @override
+  Future<void> applyToParams(
+    List<vikunja.QueryParam> queryParams,
     Map<String, String> headerParams,
   ) async {
     await _strategy.refreshIfNeeded();
