@@ -142,24 +142,27 @@ class MainAppTabs extends ConsumerWidget {
       tabBar: CupertinoTabBar(
         items: navBarItems, // Use the generated list based on HomeTab enum
         currentIndex: currentIndex, // Use the state provider value
-        onTap: (index) {
-          final previousIndex = ref.read(currentTabIndexProvider);
-
-          // Defer state updates and navigation logic to avoid concurrent modification
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            // Check if the widget is still mounted before updating state
+        onTap: (tappedIndex) { // Use tappedIndex to avoid potential shadowing
+          // Defer state updates and navigation logic using a microtask
+          // to ensure it runs after the current event loop completes.
+          Future.microtask(() {
+            // Check if the widget is still mounted *inside* the microtask
             if (!context.mounted) return;
 
-            // Update the current tab index state
-            ref.read(currentTabIndexProvider.notifier).state = index;
+            // Read the previous index *inside* the microtask
+            final previousIndex = ref.read(currentTabIndexProvider);
 
-            // Handle re-selection: notify provider so nested navigators can react
-            if (previousIndex == index) {
+            // Update the current tab index state
+            ref.read(currentTabIndexProvider.notifier).state = tappedIndex;
+
+            // Handle re-selection logic *inside* the microtask
+            if (previousIndex == tappedIndex) {
               // Notify the reselect provider so nested navigators can react
-              ref.read(reselectTabProvider.notifier).state = index;
+              ref.read(reselectTabProvider.notifier).state = tappedIndex;
 
               // Pop the CupertinoTabView's navigation stack to the root
-              final currentTabViewNavKey = tabViewNavKeys[index];
+              // Access tabViewNavKeys defined in the build method scope
+              final currentTabViewNavKey = tabViewNavKeys[tappedIndex];
               currentTabViewNavKey?.currentState?.popUntil(
                 (route) => route.isFirst,
               );
@@ -193,10 +196,12 @@ class MainAppTabs extends ConsumerWidget {
                 return const WorkbenchHubScreen();
               },
             );
-          case HomeTab.notes: // Index 3
+          case HomeTab.notes: // Index 3 (Note: Enum index is 2, but map key uses 3 based on previous code?)
+            // IMPORTANT: Double-check if HomeTab.notes.index should be used here (which is 2)
+            // or if the key '3' is intentional. Assuming HomeTab.notes.index is correct.
             return CupertinoTabView(
               navigatorKey:
-                  tabViewNavKeys[HomeTab.notes.index], // Use index from enum
+                  tabViewNavKeys[HomeTab.notes.index], // Use index from enum (2)
               onGenerateRoute: _notesOnGenerateRoute,
               builder: (BuildContext context) {
                 return const NotesHubScreen();
