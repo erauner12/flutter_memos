@@ -145,20 +145,26 @@ class MainAppTabs extends ConsumerWidget {
         onTap: (index) {
           final previousIndex = ref.read(currentTabIndexProvider);
 
-          // Always update the current tab index state
-          ref.read(currentTabIndexProvider.notifier).state = index;
+          // Defer state updates and navigation logic to avoid concurrent modification
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            // Check if the widget is still mounted before updating state
+            if (!context.mounted) return;
 
-          // Handle re-selection: notify provider and pop the tab's stack
-          if (previousIndex == index) {
-            // Notify the reselect provider so nested navigators can react
-            ref.read(reselectTabProvider.notifier).state = index;
+            // Update the current tab index state
+            ref.read(currentTabIndexProvider.notifier).state = index;
 
-            // Pop the CupertinoTabView's navigation stack to the root
-            final currentTabViewNavKey = tabViewNavKeys[index];
-            currentTabViewNavKey?.currentState?.popUntil(
-              (route) => route.isFirst,
-            );
-          }
+            // Handle re-selection: notify provider so nested navigators can react
+            if (previousIndex == index) {
+              // Notify the reselect provider so nested navigators can react
+              ref.read(reselectTabProvider.notifier).state = index;
+
+              // Pop the CupertinoTabView's navigation stack to the root
+              final currentTabViewNavKey = tabViewNavKeys[index];
+              currentTabViewNavKey?.currentState?.popUntil(
+                (route) => route.isFirst,
+              );
+            }
+          });
         },
       ),
       tabBuilder: (BuildContext context, int index) {
@@ -196,8 +202,7 @@ class MainAppTabs extends ConsumerWidget {
                 return const NotesHubScreen();
               },
             );
-          default:
-            return const Center(child: Text('Unknown Tab'));
+          // No default needed as HomeTab covers all cases
         }
       },
     );
