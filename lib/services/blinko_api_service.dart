@@ -23,7 +23,6 @@ class BlinkoApiService implements NoteApiService {
   _fileApi; // FileApi instance - used in uploadResource and getResourceData
 
   String _baseUrl = '';
-  // String _authToken = ''; // Replaced by _authStrategy
   AuthStrategy? _authStrategy; // Store the strategy
 
   // Static config flags (can be instance members too)
@@ -70,8 +69,7 @@ class BlinkoApiService implements NoteApiService {
     final newToken = effectiveStrategy?.getSimpleToken();
     if (_baseUrl == baseUrl && currentToken == newToken && isConfigured) {
       if (kDebugMode) {
-        print('[BlinkoApiService] configureService: Configuration unchanged.',
-        );
+        print('[BlinkoApiService] configureService: Configuration unchanged.');
       }
       return;
     }
@@ -116,12 +114,11 @@ class BlinkoApiService implements NoteApiService {
     }
 
     // Use the strategy to create the Authentication object
-    // Fix: Cast to the correct blinko_api.Authentication type
+    // Fix: Use the correct createBlinkoAuth method and remove unnecessary cast
     blinko_api.Authentication authentication;
     if (authStrategy != null) {
-      // Safe cast to blinko_api.Authentication
-      authentication =
-          authStrategy.createMemosAuth() as blinko_api.Authentication;
+      // Use the new method specifically for Blinko
+      authentication = authStrategy.createBlinkoAuth();
     } else {
       authentication =
           blinko_api.HttpBearerAuth(); // Default to empty auth if no strategy
@@ -950,9 +947,9 @@ class BlinkoApiService implements NoteApiService {
     // Create a temporary AuthStrategy for the target server
     // Assuming ServerConfig holds authToken for this override scenario
     final targetAuthStrategy = BearerTokenAuthStrategy(serverConfig.authToken);
-    // Fix: Cast correctly to blinko_api.Authentication
+    // Fix: Use the correct createBlinkoAuth method and remove unnecessary cast
     final blinko_api.Authentication targetAuthentication =
-        targetAuthStrategy.createMemosAuth() as blinko_api.Authentication;
+        targetAuthStrategy.createBlinkoAuth();
 
     try {
       String targetBaseUrl = serverConfig.serverUrl;

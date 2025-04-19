@@ -1,4 +1,6 @@
 import 'package:flutter_memos/api/lib/api.dart' as memos_api; // For Memos Authentication interface
+import 'package:flutter_memos/blinko_api/lib/api.dart'
+    as blinko_api; // For Blinko Authentication interface
 import 'package:flutter_memos/todoist_api/lib/api.dart' as todoist; // For Todoist Authentication interface
 
 /// Defines a contract for providing authentication details for API services.
@@ -18,6 +20,9 @@ abstract class AuthStrategy {
 
   /// Creates an Authentication object suitable for the Todoist API client.
   todoist.Authentication createTodoistAuth();
+
+  /// Creates an Authentication object suitable for the Blinko API client.
+  blinko_api.Authentication createBlinkoAuth();
 }
 
 // --- Concrete Implementations ---
@@ -46,6 +51,12 @@ class BearerTokenAuthStrategy implements AuthStrategy {
   todoist.Authentication createTodoistAuth() {
     // Todoist also uses Bearer token directly in its HttpBearerAuth
     return todoist.HttpBearerAuth()..accessToken = _token;
+  }
+
+  @override
+  blinko_api.Authentication createBlinkoAuth() {
+    // Blinko uses Bearer token directly in its HttpBearerAuth
+    return blinko_api.HttpBearerAuth()..accessToken = _token;
   }
 
   // Add concrete implementation for refreshIfNeeded
@@ -100,6 +111,17 @@ class ApiKeyAuthStrategy implements AuthStrategy {
     // return TodoistAuthWrapper(this); // Requires TodoistAuthWrapper implementation
   }
 
+  @override
+  blinko_api.Authentication createBlinkoAuth() {
+    // Blinko generated client uses HttpBearerAuth.
+    // Assuming Bearer for now based on BlinkoApiService implementation.
+    // Consider adding proper logging instead of print if this warning is important.
+    // print("Warning: ApiKeyAuthStrategy used for Blinko, but client expects Bearer. Using key as Bearer.");
+    return blinko_api.HttpBearerAuth()..accessToken = _apiKey;
+    // If a custom header is strictly required:
+    // return BlinkoAuthWrapper(this); // Requires BlinkoAuthWrapper implementation
+  }
+
   // Add concrete implementation for refreshIfNeeded
   @override
   Future<void> refreshIfNeeded() async {
@@ -138,6 +160,22 @@ class TodoistAuthWrapper implements todoist.Authentication {
   @override
   Future<void> applyToParams(
     List<todoist.QueryParam> queryParams,
+    Map<String, String> headerParams,
+  ) async {
+    await _strategy.refreshIfNeeded();
+    headerParams.addAll(_strategy.getAuthHeaders());
+  }
+}
+
+/// Wraps an AuthStrategy for the Blinko API client's Authentication interface.
+class BlinkoAuthWrapper implements blinko_api.Authentication {
+  final AuthStrategy _strategy;
+
+  BlinkoAuthWrapper(this._strategy);
+
+  @override
+  Future<void> applyToParams(
+    List<blinko_api.QueryParam> queryParams,
     Map<String, String> headerParams,
   ) async {
     await _strategy.refreshIfNeeded();

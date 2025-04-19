@@ -43,8 +43,7 @@ class WorkbenchItemTile extends ConsumerWidget {
     BuildContext context,
     WidgetRef ref,
     WorkbenchItemReference item,
-    VoidCallback
-    originalOnTap, // Renamed to avoid confusion with constructor onTap
+    VoidCallback originalOnTap,
   ) {
     // Capture necessary providers/notifiers before showing the sheet
     final instancesState = ref.read(workbenchInstancesProvider);
@@ -60,8 +59,7 @@ class WorkbenchItemTile extends ConsumerWidget {
     );
     final currentSelectedItemId = ref.read(
       selectedWorkbenchItemIdProvider,
-    ); // Read current state if needed for logic
-
+    );
     final currentInstanceId = item.instanceId;
     final otherInstances =
         instancesState.instances
@@ -75,8 +73,6 @@ class WorkbenchItemTile extends ConsumerWidget {
           child: const Text('Move to...'),
           onPressed: () {
             Navigator.pop(context);
-            // Pass captured ref, not the original one if _showMoveDestinationSheet needs it
-            // Or better, ensure _showMoveDestinationSheet also captures its needs
             _showMoveDestinationSheet(context, ref, item, otherInstances);
           },
         ),
@@ -97,11 +93,10 @@ class WorkbenchItemTile extends ConsumerWidget {
                 child: const Text('Open Item'),
                 onPressed: () {
                   Navigator.pop(context);
-                  // Use captured notifiers
                   activeCommentNotifier.state = null;
                   selectedItemNotifier.state = null;
                   selectedCommentNotifier.state = null;
-                  originalOnTap(); // Call the original onTap passed to this method
+                  originalOnTap();
                 },
               ),
               ...moveActions,
@@ -110,9 +105,7 @@ class WorkbenchItemTile extends ConsumerWidget {
                 child: const Text('Remove from Workbench'),
                 onPressed: () {
                   Navigator.pop(context);
-                  // Use captured notifier
                   workbenchNotifier.removeItem(item.id);
-                  // Use captured current state and notifier
                   if (currentSelectedItemId == item.id) {
                     selectedItemNotifier.state = null;
                   }
@@ -133,7 +126,6 @@ class WorkbenchItemTile extends ConsumerWidget {
     WorkbenchItemReference itemToMove,
     List<WorkbenchInstance> destinations,
   ) {
-    // Capture the relevant notifier once before showing the sheet
     final sourceNotifier = ref.read(
       workbenchProviderFamily(itemToMove.instanceId).notifier,
     );
@@ -149,7 +141,6 @@ class WorkbenchItemTile extends ConsumerWidget {
                     child: Text(dest.name),
                     onPressed: () {
                       Navigator.pop(context);
-                      // Use the captured notifier, not ref.read(...)
                       sourceNotifier.moveItem(
                         itemId: itemToMove.id,
                         targetInstanceId: dest.id,
@@ -183,13 +174,11 @@ class WorkbenchItemTile extends ConsumerWidget {
             );
 
     return Container(
-      // Add some vertical margin between tiles
       margin: const EdgeInsets.symmetric(vertical: 4.0),
       padding: const EdgeInsets.all(16.0),
       decoration: BoxDecoration(
         color: tileColor,
-        borderRadius: BorderRadius.circular(12.0), // Slightly larger radius
-        // Add a subtle shadow for depth
+        borderRadius: BorderRadius.circular(12.0),
         boxShadow: [
           BoxShadow(
             color: CupertinoColors.systemGrey
@@ -215,23 +204,16 @@ class WorkbenchItemTile extends ConsumerWidget {
           Expanded(
             child: GestureDetector(
               onTap: () {
-                // 1. Perform selection logic (as before)
                 final notifier = ref.read(
                   selectedWorkbenchItemIdProvider.notifier,
                 );
                 if (isSelected) {
-                  // If already selected, tapping again might deselect or just navigate
-                  // Let's keep the deselect logic for now.
                   notifier.state = null;
                 } else {
                   notifier.state = itemReference.id;
-                  // Deselect any selected comment when an item is selected
                   ref.read(selectedWorkbenchCommentIdProvider.notifier).state =
                       null;
                 }
-
-                // 2. Call the onTap callback passed from the parent widget
-                // This callback should contain the navigation logic.
                 onTap();
               },
               behavior:
@@ -246,7 +228,7 @@ class WorkbenchItemTile extends ConsumerWidget {
                         child: Text(
                           itemReference.serverName ?? 'Unknown Server',
                           style: theme.textTheme.textStyle.copyWith(
-                            fontSize: 13, // Slightly smaller server name
+                            fontSize: 13,
                             color: CupertinoColors.secondaryLabel.resolveFrom(
                               context,
                             ),
@@ -259,7 +241,7 @@ class WorkbenchItemTile extends ConsumerWidget {
                       Text(
                         relativeTime,
                         style: theme.textTheme.textStyle.copyWith(
-                          fontSize: 13, // Slightly smaller time
+                          fontSize: 13,
                           color: CupertinoColors.tertiaryLabel.resolveFrom(
                             context,
                           ),
@@ -274,12 +256,12 @@ class WorkbenchItemTile extends ConsumerWidget {
                       itemReference.previewContent!,
                       style: theme.textTheme.textStyle.copyWith(
                         fontSize: 16,
-                      ), // Slightly larger content
+                      ),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
                   if (itemReference.previewComments.isNotEmpty) ...[
-                    const SizedBox(height: 8), // Increased spacing
+                    const SizedBox(height: 8),
                     ...itemReference.previewComments.map(
                       (comment) => _buildCommentPreview(context, ref, comment),
                     ),
@@ -288,7 +270,6 @@ class WorkbenchItemTile extends ConsumerWidget {
               ),
             ),
           ),
-          // Action Buttons Column (Ellipsis and Drag Handle)
           Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -296,34 +277,29 @@ class WorkbenchItemTile extends ConsumerWidget {
                 padding: const EdgeInsets.only(
                   left: 12.0,
                   bottom: 4.0,
-                ), // Adjusted padding
+                ),
                 minSize: 30,
                 onPressed:
-                    () => _showItemActions(
-                      context,
-                      ref,
-                      itemReference,
-                      onTap, // Pass the main onTap for the "Open Item" action sheet option
-                    ),
+                    () => _showItemActions(context, ref, itemReference,
+                  onTap),
                 child: const Icon(
-                  CupertinoIcons.ellipsis, // Use horizontal ellipsis
-                  size: 24, // Slightly larger icon
+                  CupertinoIcons.ellipsis,
+                  size: 24,
                   color: CupertinoColors.secondaryLabel,
                 ),
               ),
-              // Only show drag handle if needed (e.g., if reordering is enabled)
               ReorderableDragStartListener(
                 index: index,
                 child: CupertinoButton(
                   padding: const EdgeInsets.only(
                     left: 12.0,
                     top: 4.0,
-                  ), // Adjusted padding
+                  ),
                   minSize: 30,
-                  onPressed: () {}, // Drag handle doesn't need an action
+                  onPressed: () {},
                   child: const Icon(
                     CupertinoIcons.line_horizontal_3,
-                    size: 24, // Slightly larger icon
+                    size: 24,
                     color: CupertinoColors.tertiaryLabel,
                   ),
                 ),
@@ -369,24 +345,21 @@ class WorkbenchItemTile extends ConsumerWidget {
                   notifier.state = null;
                 } else {
                   notifier.state = comment.id;
-                  // Deselect the main item when a comment is selected
                   ref.read(selectedWorkbenchItemIdProvider.notifier).state =
                       null;
                 }
-                // Potentially navigate to the parent note and highlight comment here?
-                // For now, just handles selection within the workbench tile.
               },
               child: Container(
                 decoration: BoxDecoration(
                   color: bubbleColor,
                   borderRadius: BorderRadius.circular(
                     10.0,
-                  ), // Slightly larger radius
+                  ),
                 ),
                 padding: const EdgeInsets.symmetric(
                   horizontal: 12.0,
                   vertical: 8.0,
-                ), // Adjusted padding
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -396,16 +369,16 @@ class WorkbenchItemTile extends ConsumerWidget {
                         Padding(
                           padding: const EdgeInsets.only(
                             top: 3.0,
-                          ), // Align icon better
+                          ),
                           child: Icon(
                             CupertinoIcons.bubble_left,
-                            size: 14, // Slightly smaller icon
+                            size: 14,
                             color: CupertinoColors.tertiaryLabel.resolveFrom(
                               context,
                             ),
                           ),
                         ),
-                        const SizedBox(width: 6), // Reduced spacing
+                        const SizedBox(width: 6),
                         Expanded(
                           child: Text(
                             comment.content ?? '',
@@ -439,16 +412,15 @@ class WorkbenchItemTile extends ConsumerWidget {
               ),
             ),
           ),
-          // Keep ellipsis for comment actions if needed
           CupertinoButton(
             padding: const EdgeInsets.only(
               left: 8.0,
               top: 4.0,
-            ), // Adjusted padding
+            ),
             minSize: 24,
             onPressed: () => _showCommentPreviewActions(context, ref, comment),
             child: const Icon(
-              CupertinoIcons.ellipsis, // Use horizontal ellipsis
+              CupertinoIcons.ellipsis,
               size: 18,
               color: CupertinoColors.tertiaryLabel,
             ),
@@ -463,15 +435,13 @@ class WorkbenchItemTile extends ConsumerWidget {
     WidgetRef ref,
     Comment comment,
   ) {
-    // Capture necessary providers/notifiers before showing the sheet
     final selectedCommentNotifier = ref.read(
       selectedWorkbenchCommentIdProvider.notifier,
     );
     final currentSelectedCommentId = ref.read(
       selectedWorkbenchCommentIdProvider,
-    ); // Read current state if needed
+    );
 
-    // TODO: Implement actual comment actions (Edit, Pin, Delete) via providers/API calls
     showCupertinoModalPopup(
       context: context,
       builder:
@@ -483,63 +453,14 @@ class WorkbenchItemTile extends ConsumerWidget {
             ),
             actions: [
               CupertinoActionSheetAction(
-                child: const Text('Go to Comment'), // Action to navigate
+                child: const Text('Go to Comment'),
                 onPressed: () {
                   Navigator.pop(context);
-                  // Navigate to parent note, potentially highlighting the comment
-                  // This requires access to the parent note's ID (from itemReference)
-                  // and the comment ID. This logic should likely live where
-                  // _showCommentPreviewActions is called or be passed in.
-                  // For now, just print.
                   print(
                     'Navigate to parent note for comment ${comment.id} (Not Implemented)',
                   );
-                  // Example navigation (needs parentNoteId from itemReference):
-                  // if (itemReference.parentNoteId != null) {
-                  //   Navigator.push(
-                  //     context,
-                  //     CupertinoPageRoute(
-                  //       builder: (_) => ItemDetailScreen(
-                  //         itemId: itemReference.parentNoteId!,
-                  //         serverId: itemReference.serverId,
-                  //         // Optionally pass commentId to highlight
-                  //       ),
-                  //     ),
-                  //   );
-                  // }
                 },
               ),
-              // CupertinoActionSheetAction(
-              //   child: const Text('Edit'),
-              //   onPressed: () {
-              //     Navigator.pop(context);
-              //     print(
-              //       'Edit action for comment ${comment.id} (Not Implemented)',
-              //     );
-              //   },
-              // ),
-              // CupertinoActionSheetAction(
-              //   child: Text(comment.pinned ? 'Unpin' : 'Pin'),
-              //   onPressed: () {
-              //     Navigator.pop(context);
-              //     print(
-              //       'Pin/Unpin action for comment ${comment.id} (Not Implemented)',
-              //     );
-              //   },
-              // ),
-              // CupertinoActionSheetAction(
-              //   isDestructiveAction: true,
-              //   child: const Text('Delete'),
-              //   onPressed: () {
-              //     Navigator.pop(context);
-              //     print(
-              //       'Delete action for comment ${comment.id} (Not Implemented)',
-              //     );
-              //     if (currentSelectedCommentId == comment.id) {
-              //       selectedCommentNotifier.state = null;
-              //     }
-              //   },
-              // ),
             ],
             cancelButton: CupertinoActionSheetAction(
               child: const Text('Cancel'),

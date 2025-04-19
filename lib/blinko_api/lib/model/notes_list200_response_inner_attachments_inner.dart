@@ -20,7 +20,7 @@ class NotesList200ResponseInnerAttachmentsInner {
     required this.path,
     required this.size,
     required this.noteId,
-    required this.accountId,
+    this.accountId, // Changed to optional
     required this.createdAt,
     required this.sortOrder,
     required this.updatedAt,
@@ -43,7 +43,7 @@ class NotesList200ResponseInnerAttachmentsInner {
 
   int? noteId;
 
-  int? accountId;
+  int? accountId; // Changed type to nullable int?
 
   String createdAt;
 
@@ -66,7 +66,7 @@ class NotesList200ResponseInnerAttachmentsInner {
     other.path == path &&
     other.size == size &&
     other.noteId == noteId &&
-    other.accountId == accountId &&
+          other.accountId == accountId && // Compare nullable accountId
     other.createdAt == createdAt &&
     other.sortOrder == sortOrder &&
     other.updatedAt == updatedAt &&
@@ -84,7 +84,7 @@ class NotesList200ResponseInnerAttachmentsInner {
     (path.hashCode) +
     (size == null ? 0 : size!.hashCode) +
     (noteId == null ? 0 : noteId!.hashCode) +
-    (accountId == null ? 0 : accountId!.hashCode) +
+      (accountId == null ? 0 : accountId!.hashCode) + // Handle null accountId
     (createdAt.hashCode) +
     (sortOrder.hashCode) +
     (updatedAt.hashCode) +
@@ -113,7 +113,7 @@ class NotesList200ResponseInnerAttachmentsInner {
       json[r'noteId'] = null;
     }
     if (this.accountId != null) {
-      json[r'accountId'] = this.accountId;
+      json[r'accountId'] = this.accountId; // Serialize nullable accountId
     } else {
       json[r'accountId'] = null;
     }
@@ -147,7 +147,11 @@ class NotesList200ResponseInnerAttachmentsInner {
       assert(() {
         requiredKeys.forEach((key) {
           assert(json.containsKey(key), 'Required key "NotesList200ResponseInnerAttachmentsInner[$key]" is missing from JSON.');
-          assert(json[key] != null, 'Required key "NotesList200ResponseInnerAttachmentsInner[$key]" has a null value in JSON.');
+          // Allow null for keys not in requiredKeys anymore (like accountId)
+          if (requiredKeys.contains(key)) {
+            assert(json[key] != null,
+                'Required key "NotesList200ResponseInnerAttachmentsInner[$key]" has a null value in JSON.');
+          }
         });
         return true;
       }());
@@ -160,7 +164,8 @@ class NotesList200ResponseInnerAttachmentsInner {
         path: mapValueOfType<String>(json, r'path')!,
         size: NotesList200ResponseInnerAttachmentsInnerSize.fromJson(json[r'size']),
         noteId: mapValueOfType<int>(json, r'noteId'),
-        accountId: mapValueOfType<int>(json, r'accountId'),
+        accountId:
+            mapValueOfType<int>(json, r'accountId'), // Parse nullable accountId
         createdAt: mapValueOfType<String>(json, r'createdAt')!,
         sortOrder: mapValueOfType<int>(json, r'sortOrder')!,
         updatedAt: mapValueOfType<String>(json, r'updatedAt')!,
@@ -221,11 +226,10 @@ class NotesList200ResponseInnerAttachmentsInner {
     'path',
     'size',
     'noteId',
-    'accountId',
+    // 'accountId', // Removed accountId from required keys
     'createdAt',
     'sortOrder',
     'updatedAt',
     'type',
   };
 }
-
