@@ -1,6 +1,5 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter_memos/providers/settings_provider.dart'; // Import settings provider
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// Provider for the current screen in the app
@@ -140,87 +139,6 @@ final clearNavigationHistoryProvider =
         return true;
       };
     }, name: 'clearNavigationHistory');
-
-/// Provider to track the current tab index in UI state.
-/// Reads initial value from persisted storage and writes changes back.
-final currentTabIndexProvider = StateProvider<int>(
-  (ref) {
-  // Read the initial value from the persisted state notifier
-  final initialIndex = ref.watch(selectedTabIndexProvider);
-
-  // Listen for changes in this UI state provider and persist them
-  ref.listenSelf((previous, next) {
-    // Avoid writing back the initial load value if it hasn't changed
-    // Also check if the notifier is initialized to prevent writing default value during init race condition
-    final notifier = ref.read(selectedTabIndexProvider.notifier);
-    // This check might be redundant if SelectedTabIndexNotifier handles init correctly, but adds safety
-    // if (previous != next && notifier.mounted) { // Check if notifier is mounted (safer)
-    if (previous != next) {
-      // Simpler check, assuming notifier handles init state
-      notifier.set(next);
-    }
-  });
-
-  return initialIndex;
-},
-  name: 'currentTabIndex',
-);
-
-
-/// Provider to handle tab controller for CupertinoTabScaffold
-final homeTabControllerProvider = Provider.autoDispose<CupertinoTabController>((
-  ref,
-) {
-  // Watch the UI state provider for the current index to ensure rebuilds
-  // when the index changes externally.
-  final currentIndex = ref.watch(currentTabIndexProvider);
-
-  // Create the controller *once* per provider lifecycle,
-  // setting the initialIndex based on the *current* state from the watched provider.
-  final controller = CupertinoTabController(initialIndex: currentIndex);
-
-  // Dispose the controller when the provider is disposed
-  ref.onDispose(() => controller.dispose());
-
-  // The CupertinoTabScaffold should handle updating its internal state
-  // based on the `currentIndex` passed to it, which comes from `currentTabIndexProvider`.
-  // No explicit listener needed here to update controller.index.
-
-  return controller;
-}, name: 'homeTabController');
-
-
-/// Navigation key providers for each tab
-final homeNavKeyProvider = Provider<GlobalKey<NavigatorState>>(
-  (ref) => GlobalKey<NavigatorState>(),
-  name: 'homeNavKey', // Keep this if 'Notes' tab uses it
-);
-final workbenchNavKeyProvider = Provider<GlobalKey<NavigatorState>>(
-  (ref) => GlobalKey<NavigatorState>(),
-  name: 'workbenchNavKey',
-);
-final chatNavKeyProvider = Provider<GlobalKey<NavigatorState>>(
-  (ref) => GlobalKey<NavigatorState>(),
-  name: 'chatNavKey',
-);
-// Renamed from moreNavKeyProvider
-final tasksNavKeyProvider = Provider<GlobalKey<NavigatorState>>(
-  (ref) => GlobalKey<NavigatorState>(),
-  name: 'tasksNavKey', // <<< RENAMED
-);
-
-// Note: Depending on which screen uses `homeNavKeyProvider`, you might need
-// to rename it to `notesNavKeyProvider` if the 'Notes' tab (now last)
-// was previously associated with the 'home' key. Assuming 'Notes' uses `homeNavKeyProvider`.
-// If 'Chat' (now first) should use `homeNavKeyProvider`, adjust accordingly.
-// Current setup assumes: Chat -> chatNavKey, Workbench -> workbenchNavKey, Tasks -> tasksNavKey, Notes -> homeNavKey
-
-
-/// Provider to track tab reselection events
-final reselectTabProvider = StateProvider<int?>(
-  (ref) => null,
-  name: 'reselectTab',
-);
 
 /// OPTIMIZATION: New provider for handling deep linking
 final handleDeepLinkProvider =

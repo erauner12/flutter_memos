@@ -1,5 +1,4 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter_memos/providers/navigation_providers.dart'; // Import navigation providers
 import 'package:flutter_memos/providers/server_config_provider.dart';
 import 'package:flutter_memos/screens/chat_screen.dart';
 import 'package:flutter_memos/screens/home_tabs.dart'; // Import HomeTab enum
@@ -10,7 +9,7 @@ import 'package:flutter_memos/screens/settings_screen.dart';
 // Import Hub and Detail screens directly for routing
 import 'package:flutter_memos/screens/workbench/workbench_hub_screen.dart';
 import 'package:flutter_memos/screens/workbench/workbench_screen.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart'; // Keep for ConfigCheckWrapper
 
 
 class ConfigCheckWrapper extends ConsumerWidget {
@@ -49,10 +48,38 @@ class ConfigCheckWrapper extends ConsumerWidget {
   }
 }
 
-class MainAppTabs extends ConsumerWidget {
+// Convert MainAppTabs to StatefulWidget
+class MainAppTabs extends StatefulWidget {
   const MainAppTabs({super.key});
 
-  // Define the route generation logic for the Notes tab (Index 3)
+  @override
+  State<MainAppTabs> createState() => _MainAppTabsState();
+}
+
+class _MainAppTabsState extends State<MainAppTabs> {
+  late CupertinoTabController _controller;
+
+  // Each tab has its own nav key, managed locally
+  final Map<int, GlobalKey<NavigatorState>> tabViewNavKeys = {
+    HomeTab.chat.index: GlobalKey<NavigatorState>(), // 0
+    HomeTab.workbench.index: GlobalKey<NavigatorState>(), // 1
+    HomeTab.notes.index: GlobalKey<NavigatorState>(), // 2
+  };
+
+  @override
+  void initState() {
+    super.initState();
+    // Initialize the controller, defaulting to the first tab (Chat)
+    _controller = CupertinoTabController(initialIndex: HomeTab.chat.index);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose(); // Dispose the controller
+    super.dispose();
+  }
+
+  // Define the route generation logic for the Notes tab (Index 2)
   Route<dynamic>? _notesOnGenerateRoute(RouteSettings settings) {
     WidgetBuilder builder;
     switch (settings.name) {
@@ -102,31 +129,10 @@ class MainAppTabs extends ConsumerWidget {
 
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final currentIndex = ref.watch(currentTabIndexProvider);
-    final tabController = ref.watch(
-      homeTabControllerProvider,
-    ); // Controls the CupertinoTabScaffold index
-
-    // Retrieve navigation keys from providers according to the new order
-    // Chat (0), Workbench (1), Notes (3)
-    final chatNavKey = ref.watch(chatNavKeyProvider);
-    final workbenchNavKey = ref.watch(workbenchNavKeyProvider);
-    final notesNavKey = ref.watch(
-      homeNavKeyProvider,
-    ); // Using homeNavKey for Notes
-
-    // Map index to the key for the CupertinoTabView's navigator
-    // This MUST match the order in HomeTab enum and the tabBuilder switch
-    final Map<int, GlobalKey<NavigatorState>> tabViewNavKeys = {
-      HomeTab.chat.index: chatNavKey, // 0
-      HomeTab.workbench.index: workbenchNavKey, // 1
-      HomeTab.notes.index: notesNavKey, // 3
-    };
-
+  Widget build(BuildContext context) {
+    // Remove ref parameter and Riverpod watches for tab index/controller/keys
 
     // Define the BottomNavigationBarItems DIRECTLY from HomeTab enum order
-    // This ensures the icons and labels match the enum definition exactly.
     final List<BottomNavigationBarItem> navBarItems =
         HomeTab.values
             .map(
@@ -138,49 +144,39 @@ class MainAppTabs extends ConsumerWidget {
             .toList();
 
     return CupertinoTabScaffold(
-      controller: tabController, // Link the controller
+      controller: _controller, // Use the local controller
       tabBar: CupertinoTabBar(
         items: navBarItems, // Use the generated list based on HomeTab enum
-        currentIndex: currentIndex, // Use the state provider value
-        onTap: (tappedIndex) { // Use tappedIndex to avoid potential shadowing
-          // Defer state updates and navigation logic using a microtask
-          // to ensure it runs after the current event loop completes.
-          Future.microtask(() {
-            // Check if the widget is still mounted *inside* the microtask
-            if (!context.mounted) return;
-
-            // Read the previous index *inside* the microtask
-            final previousIndex = ref.read(currentTabIndexProvider);
-
-            // Update the current tab index state
-            ref.read(currentTabIndexProvider.notifier).state = tappedIndex;
-
-            // Handle re-selection logic *inside* the microtask
-            if (previousIndex == tappedIndex) {
-              // Notify the reselect provider so nested navigators can react
-              ref.read(reselectTabProvider.notifier).state = tappedIndex;
-
+        currentIndex: _controller.index, // Use the local controller's index
+        onTap: (tappedIndex) {
+          // Use setState for local state management
+          setState(() {
+            // Handle re-selection logic locally
+            if (_controller.index == tappedIndex) {
               // Pop the CupertinoTabView's navigation stack to the root
-              // Access tabViewNavKeys defined in the build method scope
               final currentTabViewNavKey = tabViewNavKeys[tappedIndex];
               currentTabViewNavKey?.currentState?.popUntil(
                 (route) => route.isFirst,
               );
+            } else {
+              // Switch tab
+              _controller.index = tappedIndex;
             }
           });
+          // Optional: Add listener logic here if persistence/analytics needed
+          // _controller.addListener(() { ... }); // Add outside onTap if needed once
         },
       ),
       tabBuilder: (BuildContext context, int index) {
         // Return a CupertinoTabView for each tab based on the index,
         // matching the HomeTab enum order.
-        // Use HomeTab.values[index] to ensure alignment with the enum order.
         final HomeTab currentTab = HomeTab.values[index];
         switch (currentTab) {
           // Switch on the enum value directly
           case HomeTab.chat: // Index 0
             return CupertinoTabView(
               navigatorKey:
-                  tabViewNavKeys[HomeTab.chat.index], // Use index from enum
+                  tabViewNavKeys[HomeTab.chat.index], // Use local key
               builder: (BuildContext context) {
                 return const ChatScreen();
               },
@@ -188,21 +184,17 @@ class MainAppTabs extends ConsumerWidget {
           case HomeTab.workbench: // Index 1
             return CupertinoTabView(
               navigatorKey:
-                  tabViewNavKeys[HomeTab
-                      .workbench
-                      .index], // Use index from enum
-              onGenerateRoute: _workbenchOnGenerateRoute,
+                  tabViewNavKeys[HomeTab.workbench.index], // Use local key
+              onGenerateRoute: _workbenchOnGenerateRoute, // Use local method
               builder: (BuildContext context) {
                 return const WorkbenchHubScreen();
               },
             );
-          case HomeTab.notes: // Index 3 (Note: Enum index is 2, but map key uses 3 based on previous code?)
-            // IMPORTANT: Double-check if HomeTab.notes.index should be used here (which is 2)
-            // or if the key '3' is intentional. Assuming HomeTab.notes.index is correct.
+          case HomeTab.notes: // Index 2
             return CupertinoTabView(
               navigatorKey:
-                  tabViewNavKeys[HomeTab.notes.index], // Use index from enum (2)
-              onGenerateRoute: _notesOnGenerateRoute,
+                  tabViewNavKeys[HomeTab.notes.index], // Use local key
+              onGenerateRoute: _notesOnGenerateRoute, // Use local method
               builder: (BuildContext context) {
                 return const NotesHubScreen();
               },
