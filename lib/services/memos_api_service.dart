@@ -690,8 +690,9 @@ class MemosApiService implements NoteApiService {
   }
 
   memos_api.ResourceServiceApi _getResourceApiForServer(ServerConfig? serverConfig) {
-    if (serverConfig == null)
+    if (serverConfig == null) {
       return _resourceApi; // Use default configured client
+    }
     return memos_api.ResourceServiceApi(_getApiClientForServer(serverConfig));
   }
 
@@ -699,10 +700,11 @@ class MemosApiService implements NoteApiService {
     if (serverConfig == null) {
       // Ensure the default client is initialized if accessed directly
        if (!_apiClient.basePath.startsWith('http')) {
-        if (kDebugMode)
+        if (kDebugMode) {
           print(
             "[MemosApiService._getApiClientForServer] Warning: Default ApiClient seems uninitialized. Attempting re-init with current config.",
           );
+        }
         if (_baseUrl.isNotEmpty && _authStrategy != null) {
           _initializeClient(_baseUrl, _authStrategy);
          } else {
@@ -756,8 +758,9 @@ class MemosApiService implements NoteApiService {
   NoteItem _convertApiMemoToNoteItem(memos_api.Apiv1Memo apiMemo) {
     DateTime parseDateTimeSafe(DateTime? dt) {
       // Handle potential null or epoch dates from API
-      if (dt == null || dt.year == 1 || dt.year == 1970)
+      if (dt == null || dt.year == 1 || dt.year == 1970) {
         return DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+      }
       return dt
           .toLocal(); // Convert to local time for consistency? Or keep UTC? Let's try local.
     }
@@ -808,8 +811,9 @@ class MemosApiService implements NoteApiService {
     String serverId, // Server ID context passed in
   ) {
     DateTime parseDateTimeSafe(DateTime? dt) {
-      if (dt == null || dt.year == 1 || dt.year == 1970)
+      if (dt == null || dt.year == 1 || dt.year == 1970) {
         return DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+      }
       return dt.toLocal(); // Convert to local time
     }
     final createTime = parseDateTimeSafe(apiMemo.createTime);

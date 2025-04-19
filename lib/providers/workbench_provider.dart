@@ -661,8 +661,9 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
     final currentItems = List<WorkbenchItemReference>.from(state.items);
     final item = currentItems.removeAt(oldIndex);
     final effectiveNewIndex = (newIndex > oldIndex) ? newIndex - 1 : newIndex;
-    if (effectiveNewIndex < 0 || effectiveNewIndex > currentItems.length)
+    if (effectiveNewIndex < 0 || effectiveNewIndex > currentItems.length) {
       return;
+    }
 
     currentItems.insert(effectiveNewIndex, item);
     if (mounted) {

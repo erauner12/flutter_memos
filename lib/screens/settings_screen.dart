@@ -234,8 +234,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         }
       }
     } catch (e) {
-      if (kDebugMode)
+      if (kDebugMode) {
         print("[SettingsScreen] Test Todoist Connection Error: $e");
+      }
       if (mounted) {
         _showResultDialog(
           'Error',
@@ -285,8 +286,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         }
       }
     } catch (e) {
-      if (kDebugMode)
+      if (kDebugMode) {
         print("[SettingsScreen] Test OpenAI Connection Error: $e");
+      }
       if (mounted) {
         _showResultDialog(
           'Error',

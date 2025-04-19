@@ -458,8 +458,9 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
       if (!mounted) return;
       _dismissLoadingDialog();
       _showErrorSnackbar('Failed to fix grammar: $e');
-      if (kDebugMode)
+      if (kDebugMode) {
         print('[ItemDetailScreen($_effectiveServerId)] Fix Grammar Error: $e');
+      }
     } finally {
       if (mounted) {
         ref.read(note_providers.isFixingGrammarProvider.notifier).state = false;
@@ -723,8 +724,9 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
   }
 
   Widget _buildBody() {
-    if (!mounted || _effectiveServerId == null)
+    if (!mounted || _effectiveServerId == null) {
       return const Center(child: CupertinoActivityIndicator());
+    }
     final noteAsync = ref.watch(
       // Use family provider
       note_providers.noteDetailProviderFamily((

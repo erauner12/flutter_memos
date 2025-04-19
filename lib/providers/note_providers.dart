@@ -337,8 +337,9 @@ class NotesNotifier extends StateNotifier<NotesState> {
       );
     } catch (e, st) {
       // Added stack trace
-      if (kDebugMode)
+      if (kDebugMode) {
         print('[NotesNotifier($serverId)] Error fetching page: $e\n$st');
+      }
       state = state.copyWith(isLoading: false, isLoadingMore: false, error: e);
     }
   }
@@ -392,10 +393,11 @@ class NotesNotifier extends StateNotifier<NotesState> {
     });
 
     state = state.copyWith(notes: updatedNotes);
-    if (kDebugMode)
+    if (kDebugMode) {
       print(
         '[NotesNotifier($serverId)] Optimistically updated note: ${updatedNote.id}',
       );
+    }
   }
 
   void removeNoteOptimistically(String noteId) {
@@ -430,8 +432,9 @@ class NotesNotifier extends StateNotifier<NotesState> {
             return note;
           }).toList(),
     );
-    if (kDebugMode)
+    if (kDebugMode) {
       print('[NotesNotifier($serverId)] Optimistically archived note: $noteId');
+    }
   }
 
   void togglePinOptimistically(String noteId) {
@@ -449,10 +452,11 @@ class NotesNotifier extends StateNotifier<NotesState> {
     });
 
     state = state.copyWith(notes: updatedNotes);
-    if (kDebugMode)
+    if (kDebugMode) {
       print(
         '[NotesNotifier($serverId)] Optimistically toggled pin for note: $noteId',
       );
+    }
   }
 
   void bumpNoteOptimistically(String noteId) {
@@ -467,8 +471,9 @@ class NotesNotifier extends StateNotifier<NotesState> {
         return b.updateTime.compareTo(a.updateTime);
       });
       state = state.copyWith(notes: updatedNotes);
-      if (kDebugMode)
+      if (kDebugMode) {
         print('[NotesNotifier($serverId)] Optimistically bumped note: $noteId');
+      }
     }
   }
 
@@ -762,8 +767,9 @@ final filteredNotesProviderFamily = Provider.family<List<NoteItem>, String>((
     // Show only hidden notes (manual or future-dated)
     currentList =
         currentList.where((note) {
-          if (note.state == NoteState.archived)
+          if (note.state == NoteState.archived) {
             return false; // Exclude archived from hidden view
+          }
           final isManuallyHidden = manuallyHiddenIds.contains(note.id);
           final isFutureDated =
               note.startDate != null && note.startDate!.isAfter(now);
@@ -902,10 +908,11 @@ final archiveNoteProviderFamily = Provider.family<
     try {
       await apiService.archiveNote(noteId);
     } catch (e) {
-      if (kDebugMode)
+      if (kDebugMode) {
         print(
           '[archiveNoteProviderFamily($serverId)] Error archiving note: $e',
         );
+      }
       await ref.read(notesNotifierProviderFamily(serverId).notifier).refresh();
       rethrow;
     }
@@ -923,8 +930,9 @@ final deleteNoteProviderFamily = Provider.family<
   return () async {
     final serverId = ids.serverId;
     final noteId = ids.noteId;
-    if (kDebugMode)
+    if (kDebugMode) {
       print('[deleteNoteProviderFamily($serverId)] Deleting note: $noteId');
+    }
     final apiService = getNoteApiServiceForServer(
       ref,
       serverId,
@@ -992,8 +1000,9 @@ final bumpNoteProviderFamily = Provider.family<
   return () async {
     final serverId = ids.serverId;
     final noteId = ids.noteId;
-    if (kDebugMode)
+    if (kDebugMode) {
       print('[bumpNoteProviderFamily($serverId)] Bumping note: $noteId');
+    }
     final apiService = getNoteApiServiceForServer(
       ref,
       serverId,
@@ -1032,8 +1041,9 @@ final updateNoteProviderFamily = Provider.family<
   return (NoteItem updatedNote) async {
     final serverId = ids.serverId;
     final noteId = ids.noteId;
-    if (kDebugMode)
+    if (kDebugMode) {
       print('[updateNoteProviderFamily($serverId)] Updating note: $noteId');
+    }
     final apiService = getNoteApiServiceForServer(
       ref,
       serverId,
@@ -1236,24 +1246,27 @@ final moveNoteProvider = Provider.family<
       try {
         sourceComments = await (sourceApiService)
             .listNoteComments(noteId);
-        if (kDebugMode)
+        if (kDebugMode) {
           print(
             '[moveNoteProvider] Found ${sourceComments.length} comments on source.',
           );
+        }
       } catch (e) {
-        if (kDebugMode)
+        if (kDebugMode) {
           print(
             '[moveNoteProvider] Warning: Failed to fetch comments from source: $e. Proceeding without comments.',
           );
+        }
         sourceComments = [];
       }
 
       // Fetch Resource Data
       if (sourceNoteData.resources != null && sourceNoteData.resources!.isNotEmpty) {
-        if (kDebugMode)
+        if (kDebugMode) {
           print(
             '[moveNoteProvider] Fetching ${sourceNoteData.resources!.length} resources from source...',
           );
+        }
         for (final resourceMap in sourceNoteData.resources!) {
           String? resourceIdentifier;
           String filename = resourceMap['filename'] as String? ?? 'unknown_file';
@@ -1267,10 +1280,11 @@ final moveNoteProvider = Provider.family<
 
           if (resourceIdentifier != null) {
             try {
-              if (kDebugMode)
+              if (kDebugMode) {
                 print(
                   '[moveNoteProvider] Fetching resource data for identifier: $resourceIdentifier',
                 );
+              }
               final bytes = await sourceApiService.getResourceData(resourceIdentifier);
               sourceResourceData.add((
                 bytes: bytes,
@@ -1278,27 +1292,31 @@ final moveNoteProvider = Provider.family<
                 contentType: contentType,
                 originalIdentifier: resourceIdentifier
               ));
-              if (kDebugMode)
+              if (kDebugMode) {
                 print(
                   '[moveNoteProvider] Fetched ${bytes.length} bytes for resource: $filename',
                 );
+              }
             } catch (e) {
-              if (kDebugMode)
+              if (kDebugMode) {
                 print(
                   '[moveNoteProvider] Warning: Failed to fetch resource data for $resourceIdentifier: $e. Skipping resource.',
                 );
+              }
             }
           } else {
-            if (kDebugMode)
+            if (kDebugMode) {
               print(
                 '[moveNoteProvider] Warning: Could not determine resource identifier for resource map: $resourceMap. Skipping resource.',
               );
+            }
           }
         }
-        if (kDebugMode)
+        if (kDebugMode) {
           print(
             '[moveNoteProvider] Finished fetching resource data. Got data for ${sourceResourceData.length} resources.',
           );
+        }
       }
 
       // --- 2. Create on Target ---
@@ -1307,37 +1325,42 @@ final moveNoteProvider = Provider.family<
       // Upload Resources to Target
       List<Map<String, dynamic>> targetResourcesMetadata = [];
       if (sourceResourceData.isNotEmpty) {
-        if (kDebugMode)
+        if (kDebugMode) {
           print(
             '[moveNoteProvider] Uploading ${sourceResourceData.length} resources to target...',
           );
+        }
         for (final resourceItem in sourceResourceData) {
           try {
-            if (kDebugMode)
+            if (kDebugMode) {
               print(
                 '[moveNoteProvider] Uploading resource: ${resourceItem.filename} (${resourceItem.contentType})',
               );
+            }
             final uploadedMetadata = await targetApiService.uploadResource(
               resourceItem.bytes,
               resourceItem.filename,
               resourceItem.contentType,
             );
             targetResourcesMetadata.add(uploadedMetadata);
-            if (kDebugMode)
+            if (kDebugMode) {
               print(
                 '[moveNoteProvider] Successfully uploaded resource: ${resourceItem.filename}. Metadata: $uploadedMetadata',
               );
+            }
           } catch (e) {
-            if (kDebugMode)
+            if (kDebugMode) {
               print(
                 '[moveNoteProvider] Warning: Failed to upload resource ${resourceItem.filename} to target: $e. Skipping resource.',
               );
+            }
           }
         }
-        if (kDebugMode)
+        if (kDebugMode) {
           print(
             '[moveNoteProvider] Finished uploading resources. Got metadata for ${targetResourcesMetadata.length} resources.',
           );
+        }
       }
 
       final NoteItem noteDataForTarget = MigrationUtils.adaptNoteForTarget(
@@ -1360,10 +1383,11 @@ final moveNoteProvider = Provider.family<
 
       // Adapt and Create Comments on Target
       if (sourceComments.isNotEmpty) {
-        if (kDebugMode)
+        if (kDebugMode) {
           print(
             '[moveNoteProvider] Creating ${sourceComments.length} comments on target...',
           );
+        }
         for (final sourceComment in sourceComments) {
           try {
             final Comment commentDataForTarget = MigrationUtils.adaptCommentForTarget(
@@ -1376,10 +1400,11 @@ final moveNoteProvider = Provider.family<
               commentDataForTarget,
             );
           } catch (e) {
-            if (kDebugMode)
+            if (kDebugMode) {
               print(
                 '[moveNoteProvider] Warning: Failed to create comment (original ID: ${sourceComment.id}) on target: $e',
               );
+            }
           }
         }
         if (kDebugMode) print('[moveNoteProvider] Finished creating comments on target.');
@@ -1388,16 +1413,18 @@ final moveNoteProvider = Provider.family<
       // --- 3. Delete from Source (Only if Target Creation Succeeded and Note Exists) ---
       if (kDebugMode) print('[moveNoteProvider] Deleting note from source server...');
       await (sourceApiService).deleteNote(noteId);
-      if (kDebugMode)
+      if (kDebugMode) {
         print(
           '[moveNoteProvider] Note $noteId successfully deleted from source.',
         );
+      }
 
 
-      if (kDebugMode)
+      if (kDebugMode) {
         print(
           '[moveNoteProvider] Move completed successfully for note $noteId.',
         );
+      }
       // Optionally invalidate target server's list
       ref.invalidate(notesNotifierProviderFamily(targetServer.id));
 
@@ -1410,10 +1437,11 @@ final moveNoteProvider = Provider.family<
       }
       // Revert optimistic removal on source if error occurred
       if (originalSourceNote != null) {
-        if (kDebugMode)
+        if (kDebugMode) {
           print(
             '[moveNoteProvider] Error occurred. Attempting to refresh source list to revert optimistic removal.',
           );
+        }
         await sourceNotifier.refresh();
       } else {
         // If note wasn't in the list initially, still refresh maybe?
@@ -1422,20 +1450,23 @@ final moveNoteProvider = Provider.family<
       // If note was created on target but subsequent step failed, attempt to delete it
       if (createdNoteOnTarget != null && targetApiService is NoteApiService) {
         try {
-          if (kDebugMode)
+          if (kDebugMode) {
             print(
               '[moveNoteProvider] Attempting cleanup: Deleting partially created note ${createdNoteOnTarget.id} from target...',
             );
+          }
           await targetApiService.deleteNote(createdNoteOnTarget.id);
-          if (kDebugMode)
+          if (kDebugMode) {
             print(
               '[moveNoteProvider] Cleanup successful: Deleted note from target.',
             );
+          }
         } catch (cleanupError) {
-          if (kDebugMode)
+          if (kDebugMode) {
             print(
               '[moveNoteProvider] Cleanup failed: Could not delete note ${createdNoteOnTarget.id} from target: $cleanupError',
             );
+          }
         }
       }
       rethrow; // Rethrow original error
@@ -1555,10 +1586,11 @@ final fixNoteGrammarProviderFamily = FutureProvider.family<
   }
 
   try {
-    if (kDebugMode)
+    if (kDebugMode) {
       print(
         '[fixNoteGrammarProviderFamily($serverId)] Fetching note content...',
       );
+    }
     final NoteItem currentNote = await notesApiService.getNote(noteId);
     final String originalContent = currentNote.content;
 
