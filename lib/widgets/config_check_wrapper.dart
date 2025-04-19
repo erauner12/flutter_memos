@@ -7,7 +7,6 @@ import 'package:flutter_memos/screens/items/items_screen.dart'; // Keep for rout
 import 'package:flutter_memos/screens/items/notes_hub_screen.dart'; // Import Notes Hub
 // Removed MoreScreen import
 import 'package:flutter_memos/screens/settings_screen.dart';
-import 'package:flutter_memos/screens/tasks/tasks_screen.dart'; // Import TasksScreen
 // Import Hub and Detail screens directly for routing
 import 'package:flutter_memos/screens/workbench/workbench_hub_screen.dart';
 import 'package:flutter_memos/screens/workbench/workbench_screen.dart';
@@ -110,10 +109,9 @@ class MainAppTabs extends ConsumerWidget {
     ); // Controls the CupertinoTabScaffold index
 
     // Retrieve navigation keys from providers according to the new order
-    // Chat (0), Workbench (1), Tasks (2), Notes (3)
+    // Chat (0), Workbench (1), Notes (3)
     final chatNavKey = ref.watch(chatNavKeyProvider);
     final workbenchNavKey = ref.watch(workbenchNavKeyProvider);
-    final tasksNavKey = ref.watch(tasksNavKeyProvider);
     final notesNavKey = ref.watch(
       homeNavKeyProvider,
     ); // Using homeNavKey for Notes
@@ -123,7 +121,6 @@ class MainAppTabs extends ConsumerWidget {
     final Map<int, GlobalKey<NavigatorState>> tabViewNavKeys = {
       HomeTab.chat.index: chatNavKey, // 0
       HomeTab.workbench.index: workbenchNavKey, // 1
-      HomeTab.tasks.index: tasksNavKey, // 2
       HomeTab.notes.index: notesNavKey, // 3
     };
 
@@ -190,15 +187,6 @@ class MainAppTabs extends ConsumerWidget {
                 return const WorkbenchHubScreen();
               },
             );
-          case HomeTab.tasks: // Index 2
-            return CupertinoTabView(
-              navigatorKey:
-                  tabViewNavKeys[HomeTab.tasks.index], // Use index from enum
-              builder: (BuildContext context) {
-                // Use the actual TasksScreen now
-                return const TasksScreen();
-              },
-            );
           case HomeTab.notes: // Index 3
             return CupertinoTabView(
               navigatorKey:
@@ -208,7 +196,8 @@ class MainAppTabs extends ConsumerWidget {
                 return const NotesHubScreen();
               },
             );
-          // No default needed as the switch is exhaustive for the current HomeTab enum
+          default:
+            return const Center(child: Text('Unknown Tab'));
         }
       },
     );
