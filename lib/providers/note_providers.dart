@@ -123,6 +123,14 @@ NoteApiService getNoteApiServiceForServer(Ref ref, String serverId) {
     throw Exception("Server config not found for ID: $serverId");
   }
 
+  // +++ Add Logging +++
+  if (kDebugMode) {
+    print(
+      '[getNoteApiServiceForServer] Getting service for serverId: $serverId. Found config with serverType: ${serverConfig.serverType.name}',
+    );
+  }
+  // +++ End Logging +++
+
   BaseApiService service;
   switch (serverConfig.serverType) {
     case ServerType.memos:
@@ -137,9 +145,10 @@ NoteApiService getNoteApiServiceForServer(Ref ref, String serverId) {
       );
   }
 
+  // Configure the service
   service.configureService(
     baseUrl: serverConfig.serverUrl,
-    authToken: serverConfig.authToken,
+    authToken: serverConfig.authToken, // Uses fallback internally if needed
   );
 
   if (service is! NoteApiService) {
