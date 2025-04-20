@@ -12,7 +12,8 @@ import 'package:flutter_memos/providers/comment_providers.dart'
     as comment_providers;
 // Import note_providers and use families
 import 'package:flutter_memos/providers/note_providers.dart' as note_providers;
-import 'package:flutter_memos/providers/server_config_provider.dart';
+// Import new single config providers
+import 'package:flutter_memos/providers/note_server_config_provider.dart';
 import 'package:flutter_memos/providers/ui_providers.dart' as ui_providers;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -77,6 +78,7 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
   // --- Helper Methods ---
   Future<void> createNote(NoteItem note, String targetServerId) async {
     // Use createNoteProviderFamily with the target server ID
+    // Ensure the provider exists and is correctly referenced
     await ref.read(note_providers.createNoteProviderFamily(targetServerId))(
       note,
     );
@@ -202,9 +204,9 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
   }
 
   void _updateEffectiveServerId() {
-    // Use widget.serverId if provided, otherwise fallback to active server
+    // Use widget.serverId if provided, otherwise fallback to the configured note server
     final newServerId =
-        widget.serverId ?? ref.read(activeServerConfigProvider)?.id;
+        widget.serverId ?? ref.read(noteServerConfigProvider)?.id;
     if (_effectiveServerId != newServerId) {
       setState(() {
         _effectiveServerId = newServerId;
@@ -664,11 +666,10 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
   Future<void> _handleSubmit() async {
     // Ensure we have a serverId before proceeding
     if (_effectiveServerId == null) {
-      if (kDebugMode) {
+      if (kDebugMode)
         print(
           '[CaptureUtility._handleSubmit] Aborting: No effective server ID.',
         );
-      }
       if (mounted) {
         showCupertinoDialog(
           context: context,
@@ -676,7 +677,7 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
               (context) => CupertinoAlertDialog(
                 title: const Text('Error'),
                 content: const Text(
-                  'Cannot submit: No active server context found.',
+                  'Cannot submit: No server context found. Please configure a Note server in Settings.',
                 ),
                 actions: [
                   CupertinoDialogAction(
@@ -695,20 +696,18 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
     final content = _textController.text.trim();
     final hasAttachment = _selectedFileData != null;
 
-    if (kDebugMode) {
+    if (kDebugMode)
       print(
         '[CaptureUtility._handleSubmit] Submitting: mode=${widget.mode}, serverId=$targetServerId, action=$_submitAction, content_empty=${content.isEmpty}, filename=$_selectedFilename, contentType=$_selectedContentType, data_length=${_selectedFileData?.length}',
       );
-    }
-    // Allow submission even if content is empty for append/prepend actions
+
     if (content.isEmpty &&
         _selectedFileData == null &&
         _submitAction == SubmitAction.newComment) {
-      if (kDebugMode) {
+      if (kDebugMode)
         print(
-          '[CaptureUtility._handleSubmit] Aborting: No content or attachment for new comment.',
+          '[CaptureUtility._handleSubmit] Aborting: No content or attachment for new comment/memo.',
         );
-      }
       return;
     }
     if (content.isEmpty &&
@@ -716,22 +715,19 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
             _submitAction == SubmitAction.prependToLastComment ||
             _submitAction == SubmitAction.appendToMemo ||
             _submitAction == SubmitAction.prependToMemo)) {
-      if (kDebugMode) {
+      if (kDebugMode)
         print(
           '[CaptureUtility._handleSubmit] Aborting: No content provided for append/prepend action.',
         );
-      }
       return;
     }
 
     setState(() {
       _isSubmitting = true;
     });
-    // --- Define variable for the updated note result ---
     NoteItem? updatedMemoResult;
     try {
       if (widget.mode == CaptureMode.createMemo) {
-        // Create Memo logic
         final newNote = NoteItem(
           id: 'temp',
           content: content,
@@ -747,16 +743,11 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
           creatorId: '1',
           parentId: null,
         );
-        // Use createNote helper with targetServerId
         await createNote(newNote, targetServerId);
       } else if (widget.mode == CaptureMode.addComment &&
           widget.memoId != null) {
-        // Add Comment logic (expanded)
-        final noteId = widget.memoId!; // Use noteId terminology
-        final currentContent =
-            _textController.text.trim(); // Content from text field
-
-        // Fetch necessary data within the handler using family providers
+        final noteId = widget.memoId!;
+        final currentContent = _textController.text.trim();
         final commentsAsync = ref.read(
           note_providers.noteCommentsProviderFamily((
             serverId: targetServerId,
@@ -764,19 +755,15 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
           )),
         );
         final comments = commentsAsync.valueOrNull ?? [];
-        // Sort comments by createdTs to reliably get the last one
         comments.sort((a, b) => a.createdTs.compareTo(b.createdTs));
         final lastComment = comments.isNotEmpty ? comments.last : null;
-
         final memoAsync = ref.read(
           note_providers.noteDetailProviderFamily((
             serverId: targetServerId,
             noteId: noteId,
           )),
         );
-        final parentNote = memoAsync.valueOrNull; // Use valueOrNull for safety
-
-        // Determine action based on _submitAction and attachment presence
+        final parentNote = memoAsync.valueOrNull;
         final currentAction =
             hasAttachment ? SubmitAction.newComment : _submitAction;
 
@@ -785,12 +772,11 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
             await addComment(
               currentContent,
               noteId,
-              targetServerId, // Pass serverId
+              targetServerId,
               fileBytes: _selectedFileData,
               filename: _selectedFilename,
               contentType: _selectedContentType,
             );
-            // After adding a comment, also refresh the parent note detail
             ref.invalidate(
               note_providers.noteDetailProviderFamily((
                 serverId: targetServerId,
@@ -800,11 +786,8 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
             break;
           case SubmitAction.appendToLastComment:
             if (lastComment != null) {
-              // Ensure double newline and handle null content
               final lastContent = lastComment.content ?? '';
-              final updatedContent =
-                  "$lastContent\n\n$currentContent";
-              // Call updateCommentProviderFamily
+              final updatedContent = "$lastContent\n\n$currentContent";
               await ref.read(
                 comment_providers.updateCommentProviderFamily((
                   serverId: targetServerId,
@@ -812,24 +795,19 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
                   commentId: lastComment.id,
                 )),
               )(updatedContent);
-              // Refresh parent note detail after comment update
               ref.invalidate(
                 note_providers.noteDetailProviderFamily((
                   serverId: targetServerId,
                   noteId: noteId,
                 )),
               );
-            } else {
+            } else
               throw Exception("Cannot append: No last comment found.");
-            }
             break;
           case SubmitAction.prependToLastComment:
             if (lastComment != null) {
-              // Ensure double newline and handle null content
               final lastContent = lastComment.content ?? '';
-              final updatedContent =
-                  "$currentContent\n\n$lastContent";
-              // Call updateCommentProviderFamily
+              final updatedContent = "$currentContent\n\n$lastContent";
               await ref.read(
                 comment_providers.updateCommentProviderFamily((
                   serverId: targetServerId,
@@ -837,62 +815,41 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
                   commentId: lastComment.id,
                 )),
               )(updatedContent);
-              // Refresh parent note detail after comment update
               ref.invalidate(
                 note_providers.noteDetailProviderFamily((
                   serverId: targetServerId,
                   noteId: noteId,
                 )),
               );
-            } else {
+            } else
               throw Exception("Cannot prepend: No last comment found.");
-            }
             break;
           case SubmitAction.appendToMemo:
           case SubmitAction.prependToMemo:
             if (parentNote != null) {
-              // Ensure double newline is added between existing and new content
-              final updatedContent = (currentAction == SubmitAction.appendToMemo)
+              final updatedContent =
+                  (currentAction == SubmitAction.appendToMemo)
                       ? "${parentNote.content}\n\n$currentContent"
                       : "$currentContent\n\n${parentNote.content}";
-
-              // Create a NoteItem from parentNote properties
-              final updatedNoteData = NoteItem(
-                id: parentNote.id,
+              final updatedNoteData = parentNote.copyWith(
                 content: updatedContent,
-                pinned: parentNote.pinned,
-                state: parentNote.state,
-                visibility: parentNote.visibility,
-                createTime: parentNote.createTime,
                 updateTime: DateTime.now(),
-                displayTime: parentNote.displayTime,
-                tags: parentNote.tags,
-                resources: parentNote.resources,
-                relations: parentNote.relations,
-                creatorId: parentNote.creatorId,
-                parentId: parentNote.parentId,
               );
-
-              // Call updateNoteProviderFamily and store the result
               updatedMemoResult = await ref.read(
                 note_providers.updateNoteProviderFamily((
                   serverId: targetServerId,
                   noteId: noteId,
                 )),
               )(updatedNoteData);
-
-              // --- Manually update cache and refresh providers ---
               if (ref.exists(note_providers.noteDetailCacheProvider)) {
                 ref
                     .read(note_providers.noteDetailCacheProvider.notifier)
                     .update((state) => {...state, noteId: updatedMemoResult!});
-                if (kDebugMode) {
+                if (kDebugMode)
                   print(
                     '[CaptureUtility] Manually updated noteDetailCacheProvider for $noteId',
                   );
-                }
               }
-              // Refresh using family provider
               ref.refresh(
                 note_providers.noteDetailProviderFamily((
                   serverId: targetServerId,
@@ -900,23 +857,20 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
                 )).future,
               );
               ref.refresh(
-                note_providers.notesNotifierProviderFamily(targetServerId),
-              );
-              if (kDebugMode) {
+                note_providers.notesNotifierProvider,
+              ); // Refresh the main list
+              if (kDebugMode)
                 print(
                   '[CaptureUtility] Explicitly refreshed providers for $noteId on server $targetServerId',
                 );
-              }
-            } else {
+            } else
               throw Exception(
                 "Cannot ${currentAction == SubmitAction.appendToMemo ? 'append' : 'prepend'}: Parent note not loaded or available.",
               );
-            }
             break;
         }
       }
 
-      // Reset state after ANY successful submission
       if (mounted) {
         setState(() {
           _textController.clear();
@@ -927,9 +881,8 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
         _collapse();
       }
     } catch (e, stackTrace) {
-      if (kDebugMode) {
+      if (kDebugMode)
         print('[CaptureUtility._handleSubmit] Error: $e\n$stackTrace');
-      }
       if (mounted) {
         setState(() {
           _isSubmitting = false;
@@ -1231,11 +1184,10 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
       current,
     ) {
       if (previous != current && mounted) {
-        if (kDebugMode) {
+        if (kDebugMode)
           print(
             '[CaptureUtility] Received toggle signal. Current state expanded: $_isExpanded',
           );
-        }
         _toggleExpansionState();
       }
     });
@@ -1253,7 +1205,6 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
             ? 'Capture something...'
             : 'Add a comment...';
 
-    // Use family provider with effectiveServerId
     final commentsAsync =
         widget.mode == CaptureMode.addComment &&
                 widget.memoId != null &&
@@ -1271,7 +1222,6 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
     );
     final bool hasAttachment = _selectedFileData != null;
 
-    // Use family provider with effectiveServerId
     final parentMemoAsyncValue =
         widget.mode == CaptureMode.addComment &&
                 widget.memoId != null &&
@@ -1325,11 +1275,11 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
     _updateHeights(context);
 
     double containerWidth;
-    if (size.width > 1400) {
+    if (size.width > 1400)
       containerWidth = math.min(size.width * 0.6, 1000);
-    } else if (size.width > 800) {
+    else if (size.width > 800)
       containerWidth = math.max(size.width * 0.7, 500);
-    } else {
+    else {
       final availableWidth =
           size.width - edgeInsets.left - edgeInsets.right - 32;
       containerWidth = availableWidth > 0 ? availableWidth : size.width * 0.85;
@@ -1442,17 +1392,14 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
                                                 allowed = canAppendPrependMemo;
                                                 break;
                                             }
-                                            if (allowed) {
+                                            if (allowed)
                                               setState(() {
                                                 _submitAction = newValue;
                                               });
-                                            } else {
-                                              if (kDebugMode) {
-                                                print(
-                                                  "[CaptureUtility] Action '$newValue' disallowed.",
-                                                );
-                                              }
-                                            }
+                                            else if (kDebugMode)
+                                              print(
+                                                "[CaptureUtility] Action '$newValue' disallowed.",
+                                              );
                                           },
                                           borderColor: CupertinoColors
                                               .systemGrey

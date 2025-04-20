@@ -1,276 +1,322 @@
-import 'package:collection/collection.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_memos/models/comment.dart';
+import 'package:flutter_memos/models/note_item.dart';
 import 'package:flutter_memos/models/server_config.dart'; // Import ServerType
-import 'package:flutter_memos/providers/server_config_provider.dart';
+import 'package:flutter_memos/models/task_item.dart';
+// Import new single config providers
+import 'package:flutter_memos/providers/note_server_config_provider.dart';
 import 'package:flutter_memos/providers/settings_provider.dart';
+import 'package:flutter_memos/providers/task_server_config_provider.dart';
 // Import BaseApiService and concrete implementations
+import 'package:flutter_memos/services/auth_strategy.dart'; // Import AuthStrategy
 import 'package:flutter_memos/services/base_api_service.dart';
-import 'package:flutter_memos/services/blinko_api_service.dart'; // Import Blinko service
-import 'package:flutter_memos/services/memos_api_service.dart'; // Renamed to MemosApiService
-// Keep other service imports
+import 'package:flutter_memos/services/blinko_api_service.dart';
+import 'package:flutter_memos/services/memos_api_service.dart';
 import 'package:flutter_memos/services/minimal_openai_service.dart';
-// Import Vikunja service
+import 'package:flutter_memos/services/note_api_service.dart'; // Import NoteApiService interface
+import 'package:flutter_memos/services/task_api_service.dart'; // Import TaskApiService interface
 import 'package:flutter_memos/services/vikunja_api_service.dart';
-// Removed Todoist service import
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-/// OPTIMIZATION: Provider for API service configuration
+/// General API configuration (e.g., logging)
 final apiConfigProvider = StateProvider<Map<String, dynamic>>((ref) {
-  return {
-    'verboseLogging': true,
-    // Remove Memos-specific flags if not applicable to Blinko or handle differently
-    // 'useFilterExpressions': true,
-    // 'clientSideSorting': true,
-  };
+  return {'verboseLogging': true};
 }, name: 'apiConfig');
 
-/// Provider for the active API Service (Memos, Blinko, or Vikunja)
-/// Returns the BaseApiService interface.
-final apiServiceProvider = Provider<BaseApiService>((ref) {
-  // OPTIMIZATION: Directly watch multiServerConfigProvider to get the latest state
-  final multiServerState = ref.watch(multiServerConfigProvider);
-  final activeId = multiServerState.activeServerId;
+/// Provider for the active NOTE API Service (Memos, Blinko, or Vikunja-as-note)
+/// Returns the NoteApiService interface.
+final noteApiServiceProvider = Provider<NoteApiService>((ref) {
+  final noteServerConfig = ref.watch(noteServerConfigProvider);
   final config = ref.watch(apiConfigProvider); // General config like logging
 
-  // Get the active config directly from the latest state's servers list
-  final activeServerConfig =
-      activeId == null
-          ? null
-          : multiServerState.servers.firstWhereOrNull((s) => s.id == activeId);
-
-  // *** ADD DETAILED LOGGING HERE ***
-  if (kDebugMode) {
-    if (activeServerConfig != null) {
-      // Log the entire object using its toString() and the type directly
-      print(
-        '[apiServiceProvider] Found activeServerConfig object: ${activeServerConfig.toString()}',
-      );
-      print(
-        '[apiServiceProvider] Directly accessing activeServerConfig.serverType: ${activeServerConfig.serverType.name}',
-      );
-    } else {
-      print('[apiServiceProvider] activeServerConfig is null.');
-    }
-  }
-  // *** END ADDED LOGGING ***
-
-  if (activeServerConfig == null) {
+  if (noteServerConfig == null || noteServerConfig.serverUrl.isEmpty) {
     if (kDebugMode) {
       print(
-        '[apiServiceProvider] Warning: No active server configured. Returning DummyApiService.',
+        '[noteApiServiceProvider] Warning: No note server configured or URL is empty. Returning DummyNoteApiService.',
       );
     }
-    return DummyApiService();
+    return DummyNoteApiService();
   }
 
-  // Handle services potentially having an empty URL, but require a token
-  // Vikunja and Memos/Blinko need a URL.
-  if (activeServerConfig.serverUrl.isEmpty) {
-    if (kDebugMode) {
-      print(
-        '[apiServiceProvider] Warning: Active server (${activeServerConfig.serverType.name}) URL is empty. Returning DummyApiService.',
-      );
-    }
-    // Return a non-functional dummy service to avoid null errors downstream
-    return DummyApiService();
-  }
+  final serverUrl = noteServerConfig.serverUrl;
+  final authToken = noteServerConfig.authToken;
+  final serverType = noteServerConfig.serverType;
+  final authStrategy = BearerTokenAuthStrategy(
+    authToken,
+  ); // Assume Bearer for all note types for now
 
-  final serverUrl = activeServerConfig.serverUrl;
-  final authToken =
-      activeServerConfig.authToken; // Use the token from the active config
-  // Get the type *after* logging the object
-  final serverType = activeServerConfig.serverType;
-
-  // *** ADD MORE SPECIFIC LOGGING HERE ***
-  if (kDebugMode) {
-    // Log the variable derived from the object
-    print(
-      '[apiServiceProvider] Variable serverType before switch: ${serverType.name}',
-    );
-    print(
-      '[apiServiceProvider] Auth Token from activeServerConfig: ${authToken.isNotEmpty ? 'Present' : 'EMPTY'}',
-    );
-  }
-  // *** END ADDED LOGGING ***
-
-  BaseApiService service; // Use the abstract type
+  NoteApiService service = DummyNoteApiService(); // Initialize with dummy
 
   switch (serverType) {
     case ServerType.memos:
-      // *** ADD LOGGING INSIDE CASE ***
-      if (kDebugMode) {
-        print('[apiServiceProvider] Switch case: Matched ServerType.memos');
-      }
-      // *** END ADDED LOGGING ***
-      final memosService =
-          MemosApiService(); // Use concrete type for instantiation
-      // Configure MemosApiService
+      final memosService = MemosApiService();
       MemosApiService.verboseLogging = config['verboseLogging'] ?? true;
-      // MemosApiService.useFilterExpressions = config['useFilterExpressions'] ?? true; // Memos specific
-      memosService.configureService(baseUrl: serverUrl, authToken: authToken);
+      memosService.configureService(
+        baseUrl: serverUrl,
+        authStrategy: authStrategy,
+      );
       service = memosService;
       break;
     case ServerType.blinko:
-      // *** ADD LOGGING INSIDE CASE ***
-      if (kDebugMode) {
-        print('[apiServiceProvider] Switch case: Matched ServerType.blinko');
-      }
-      // *** END ADDED LOGGING ***
-      final blinkoService =
-          BlinkoApiService(); // Use concrete type for instantiation
-      // Configure BlinkoApiService
-      BlinkoApiService.verboseLogging =
-          config['verboseLogging'] ?? true; // Blinko specific or shared
-      blinkoService.configureService(baseUrl: serverUrl, authToken: authToken);
+      final blinkoService = BlinkoApiService();
+      BlinkoApiService.verboseLogging = config['verboseLogging'] ?? true;
+      blinkoService.configureService(
+        baseUrl: serverUrl,
+        authStrategy: authStrategy,
+      );
       service = blinkoService;
       break;
-    case ServerType.vikunja: // Add Vikunja case
-      if (kDebugMode) {
-        print('[apiServiceProvider] Switch case: Matched ServerType.vikunja');
-      }
-      final vikunjaService = VikunjaApiService(); // Get singleton instance
+    case ServerType.vikunja: // Vikunja can act as a Note service
+      final vikunjaService = VikunjaApiService();
       VikunjaApiService.verboseLogging = config['verboseLogging'] ?? true;
-
-      // Check if the authToken from the active config is valid
-      if (authToken.isEmpty) {
-        if (kDebugMode) {
-          print(
-            '[apiServiceProvider] Warning: Active Vikunja config has an empty token (authToken). Returning DummyApiService.',
-          );
-        }
-        service = DummyApiService(); // Return dummy if token is missing
-      } else {
-        // Configure the service instance.
-        // VikunjaApiService uses configureService which accepts authToken
-        vikunjaService.configureService(baseUrl: serverUrl, authToken: authToken);
-        // Update the configuration state provider AFTER configuration
-        ref.read(isVikunjaConfiguredProvider.notifier).state =
-            vikunjaService.isConfigured;
-
-        if (kDebugMode) {
-          print(
-            '[apiServiceProvider] Configured Vikunja service instance using token from active ServerConfig. isConfigured: ${vikunjaService.isConfigured}',
-          );
-        }
-        // VikunjaApiService implements TaskApiService which extends BaseApiService
-        service = vikunjaService;
-      }
+      vikunjaService.configureService(
+        baseUrl: serverUrl,
+        authStrategy: authStrategy,
+      );
+      service =
+          vikunjaService
+              as NoteApiService; // VikunjaApiService implements NoteApiService
       break;
     case ServerType.todoist:
-      if (kDebugMode) {
+      // Todoist is not a note service
+      if (kDebugMode)
         print(
-          '[apiServiceProvider] Switch case: Matched ServerType.todoist - NOT IMPLEMENTED',
+          '[noteApiServiceProvider] Error: Todoist is not a valid note server type.',
         );
-      }
-      // Todoist is removed, return Dummy or throw error
-      service = DummyApiService();
-      // Or: throw UnimplementedError('Todoist service is no longer supported.');
+      service = DummyNoteApiService();
       break;
   }
 
   if (kDebugMode) {
     print(
-      '[apiServiceProvider] Configured ${serverType.name} service for server: ${activeServerConfig.name ?? activeServerConfig.id}',
+      '[noteApiServiceProvider] Configured ${serverType.name} service for note server: ${noteServerConfig.name ?? noteServerConfig.id}',
     );
     print(
-      '[apiServiceProvider] Returning service of type: ${service.runtimeType}',
+      '[noteApiServiceProvider] Returning service of type: ${service.runtimeType}',
     );
   }
 
   ref.onDispose(() {
     if (kDebugMode) {
-      // Use a local copy of serverType because activeServerConfig might change before disposal
-      final disposedServerType = activeServerConfig.serverType;
       print(
-        '[apiServiceProvider] Disposing API service provider for ${disposedServerType.name}',
+        '[noteApiServiceProvider] Disposing API service provider for ${noteServerConfig.serverType.name}',
       );
-      // Add any cleanup specific to the service type if needed
     }
   });
 
-  return service; // Return the abstract type
-}, name: 'apiService');
+  return service;
+}, name: 'noteApiService');
 
-// --- apiStatusProvider and apiHealthCheckerProvider need updates ---
+/// Provider for the active TASK API Service (currently only Vikunja)
+/// Returns the TaskApiService interface.
+final taskApiServiceProvider = Provider<TaskApiService>((ref) {
+  final taskServerConfig = ref.watch(taskServerConfigProvider);
+  final config = ref.watch(apiConfigProvider); // General config like logging
+  // Watch the separate Vikunja API key provider as well, might be needed if not in ServerConfig token
+  final vikunjaApiKey = ref.watch(vikunjaApiKeyProvider);
 
-/// Provider for API service status (tracks the active server's health)
-final apiStatusProvider = StateProvider<String>((ref) {
-  final activeConfig = ref.watch(activeServerConfigProvider);
-  return activeConfig == null ? 'unconfigured' : 'unknown';
-}, name: 'apiStatus');
+  if (taskServerConfig == null || taskServerConfig.serverUrl.isEmpty) {
+    if (kDebugMode)
+      print(
+        '[taskApiServiceProvider] Warning: No task server configured or URL is empty. Returning DummyTaskApiService.',
+      );
+    return DummyTaskApiService();
+  }
 
-/// Provider that pings the active API periodically to check health
-final apiHealthCheckerProvider = Provider<void>((ref) {
-  ref.watch(activeServerConfigProvider); // Rerun on server change
-  _checkApiHealth(ref); // Initial check
+  // Currently only Vikunja is supported as a task server
+  if (taskServerConfig.serverType != ServerType.vikunja) {
+    if (kDebugMode)
+      print(
+        '[taskApiServiceProvider] Error: Configured task server type (${taskServerConfig.serverType}) is not Vikunja. Returning DummyTaskApiService.',
+      );
+    return DummyTaskApiService();
+  }
+
+  final serverUrl = taskServerConfig.serverUrl;
+  // Use token from config primarily, fallback to separate API key if config token is empty
+  final authToken =
+      taskServerConfig.authToken.isNotEmpty
+          ? taskServerConfig.authToken
+          : vikunjaApiKey;
+  final authStrategy = BearerTokenAuthStrategy(authToken);
+
+  if (authToken.isEmpty) {
+    if (kDebugMode)
+      print(
+        '[taskApiServiceProvider] Warning: Vikunja task server configured but token/API key is missing. Returning DummyTaskApiService.',
+      );
+    // Update the configuration status provider
+    ref.read(isVikunjaConfiguredProvider.notifier).state = false;
+    return DummyTaskApiService();
+  }
+
+  final vikunjaService = VikunjaApiService();
+  VikunjaApiService.verboseLogging = config['verboseLogging'] ?? true;
+  vikunjaService.configureService(
+    baseUrl: serverUrl,
+    authStrategy: authStrategy,
+  );
+
+  // Update the configuration status provider AFTER configuration attempt
+  ref.read(isVikunjaConfiguredProvider.notifier).state =
+      vikunjaService.isConfigured;
+
+  if (kDebugMode) {
+    print(
+      '[taskApiServiceProvider] Configured Vikunja service for task server: ${taskServerConfig.name ?? taskServerConfig.id}. isConfigured: ${vikunjaService.isConfigured}',
+    );
+  }
+
+  ref.onDispose(() {
+    if (kDebugMode)
+      print('[taskApiServiceProvider] Disposing Task API service provider.');
+  });
+
+  // Return the configured service if successful, otherwise dummy
+  return vikunjaService.isConfigured ? vikunjaService : DummyTaskApiService();
+}, name: 'taskApiService');
+
+// --- Status and Health Check Providers ---
+
+/// Provider for NOTE API service status
+final noteApiStatusProvider = StateProvider<String>((ref) {
+  final noteConfig = ref.watch(noteServerConfigProvider);
+  return noteConfig == null ? 'unconfigured' : 'unknown';
+}, name: 'noteApiStatus');
+
+/// Provider that pings the NOTE API periodically to check health
+final noteApiHealthCheckerProvider = Provider<void>((ref) {
+  ref.watch(noteServerConfigProvider); // Rerun on server change
+  _checkNoteApiHealth(ref); // Initial check
   // TODO: Add Timer.periodic for regular checks
   ref.onDispose(() {
     /* Cancel timer */
   });
-  return;
-}, name: 'apiHealthChecker');
+}, name: 'noteApiHealthChecker');
 
-// Helper function to check API health for the *active* server
-Future<void> _checkApiHealth(Ref ref) async {
-  final activeConfig = ref.read(activeServerConfigProvider);
-
-  // No active config? Status is unconfigured.
-  if (activeConfig == null) {
-    if (ref.read(apiStatusProvider) != 'unconfigured') {
-      ref.read(apiStatusProvider.notifier).state = 'unconfigured';
+// Helper function to check NOTE API health
+Future<void> _checkNoteApiHealth(Ref ref) async {
+  final noteConfig = ref.read(noteServerConfigProvider);
+  if (noteConfig == null) {
+    if (ref.read(noteApiStatusProvider) != 'unconfigured') {
+      ref.read(noteApiStatusProvider.notifier).state = 'unconfigured';
     }
     return;
   }
 
-  // Get the correctly configured service (Memos, Blinko, or Vikunja) via the main provider
-  final apiService = ref.read(apiServiceProvider);
-
-  // Check if the service is actually configured (not the DummyApiService)
-  // This covers cases where URL/token is missing for Memos/Blinko/Vikunja.
-  if (!apiService.isConfigured || apiService is DummyApiService) {
-    if (ref.read(apiStatusProvider) != 'unconfigured') {
-      ref.read(apiStatusProvider.notifier).state = 'unconfigured';
-      if (kDebugMode) {
+  final noteApiService = ref.read(noteApiServiceProvider);
+  if (!noteApiService.isConfigured || noteApiService is DummyNoteApiService) {
+    if (ref.read(noteApiStatusProvider) != 'unconfigured') {
+      ref.read(noteApiStatusProvider.notifier).state = 'unconfigured';
+      if (kDebugMode)
         print(
-          '[apiHealthChecker] Setting status to unconfigured because apiService is Dummy or not configured.',
+          '[noteApiHealthChecker] Setting status to unconfigured (service is Dummy or not configured).',
         );
-      }
     }
     return;
   }
 
-  // Proceed with health check for the configured service
-  final currentStatus = ref.read(apiStatusProvider);
+  final currentStatus = ref.read(noteApiStatusProvider);
   if (currentStatus == 'checking') return;
-  ref.read(apiStatusProvider.notifier).state = 'checking';
+  ref.read(noteApiStatusProvider.notifier).state = 'checking';
 
   try {
-    // Call the checkHealth method defined in BaseApiService
-    final isHealthy = await apiService.checkHealth();
-
+    final isHealthy = await noteApiService.checkHealth();
     // Check if config is still the same before updating state
-    final potentiallyChangedConfig = ref.read(activeServerConfigProvider);
-    if (potentiallyChangedConfig?.id == activeConfig.id &&
-        ref.read(apiStatusProvider) == 'checking') {
-      ref.read(apiStatusProvider.notifier).state =
+    final potentiallyChangedConfig = ref.read(noteServerConfigProvider);
+    if (potentiallyChangedConfig?.id == noteConfig.id &&
+        ref.read(noteApiStatusProvider) == 'checking') {
+      ref.read(noteApiStatusProvider.notifier).state =
           isHealthy ? 'available' : 'unavailable';
-      if (kDebugMode) {
+      if (kDebugMode)
         print(
-          '[apiHealthChecker] Health check for ${activeConfig.name ?? activeConfig.id} (${activeConfig.serverType.name}): ${isHealthy ? 'Available' : 'Unavailable'}',
+          '[noteApiHealthChecker] Health check for ${noteConfig.name ?? noteConfig.id}: ${isHealthy ? 'Available' : 'Unavailable'}',
         );
-      }
     }
   } catch (e) {
-    if (kDebugMode) {
+    if (kDebugMode)
       print(
-        '[apiHealthChecker] API health check failed for ${activeConfig.name ?? activeConfig.id}: $e',
+        '[noteApiHealthChecker] API health check failed for ${noteConfig.name ?? noteConfig.id}: $e',
       );
+    final potentiallyChangedConfig = ref.read(noteServerConfigProvider);
+    if (potentiallyChangedConfig?.id == noteConfig.id &&
+        ref.read(noteApiStatusProvider) == 'checking') {
+      ref.read(noteApiStatusProvider.notifier).state = 'unavailable';
     }
-    // Check if config is still the same before updating state
-    final potentiallyChangedConfig = ref.read(activeServerConfigProvider);
-    if (potentiallyChangedConfig?.id == activeConfig.id &&
-        ref.read(apiStatusProvider) == 'checking') {
-      ref.read(apiStatusProvider.notifier).state = 'unavailable'; // Or 'error'
+  }
+}
+
+/// Provider for TASK API service status (currently Vikunja)
+final taskApiStatusProvider = StateProvider<String>((ref) {
+  final taskConfig = ref.watch(taskServerConfigProvider);
+  final isConfigured = ref.watch(
+    isVikunjaConfiguredProvider,
+  ); // Use the dedicated config status
+  return (taskConfig == null || !isConfigured) ? 'unconfigured' : 'unknown';
+}, name: 'taskApiStatus');
+
+/// Provider that pings the TASK API periodically to check health
+final taskApiHealthCheckerProvider = Provider<void>((ref) {
+  ref.watch(taskServerConfigProvider); // Rerun on server change
+  ref.watch(
+    isVikunjaConfiguredProvider,
+  ); // Rerun if configuration status changes
+  _checkTaskApiHealth(ref); // Initial check
+  // TODO: Add Timer.periodic for regular checks
+  ref.onDispose(() {
+    /* Cancel timer */
+  });
+}, name: 'taskApiHealthChecker');
+
+// Helper function to check TASK API health (currently Vikunja)
+Future<void> _checkTaskApiHealth(Ref ref) async {
+  final taskConfig = ref.read(taskServerConfigProvider);
+  final isConfigured = ref.read(isVikunjaConfiguredProvider);
+
+  if (taskConfig == null || !isConfigured) {
+    if (ref.read(taskApiStatusProvider) != 'unconfigured') {
+      ref.read(taskApiStatusProvider.notifier).state = 'unconfigured';
+    }
+    return;
+  }
+
+  final taskApiService = ref.read(taskApiServiceProvider);
+  if (!taskApiService.isConfigured || taskApiService is DummyTaskApiService) {
+    if (ref.read(taskApiStatusProvider) != 'unconfigured') {
+      ref.read(taskApiStatusProvider.notifier).state = 'unconfigured';
+      if (kDebugMode)
+        print(
+          '[taskApiHealthChecker] Setting status to unconfigured (service is Dummy or not configured).',
+        );
+    }
+    return;
+  }
+
+  final currentStatus = ref.read(taskApiStatusProvider);
+  if (currentStatus == 'checking') return;
+  ref.read(taskApiStatusProvider.notifier).state = 'checking';
+
+  try {
+    final isHealthy = await taskApiService.checkHealth();
+    final potentiallyChangedConfig = ref.read(taskServerConfigProvider);
+    if (potentiallyChangedConfig?.id == taskConfig.id &&
+        ref.read(taskApiStatusProvider) == 'checking') {
+      ref.read(taskApiStatusProvider.notifier).state =
+          isHealthy ? 'available' : 'unavailable';
+      if (kDebugMode)
+        print(
+          '[taskApiHealthChecker] Health check for ${taskConfig.name ?? taskConfig.id}: ${isHealthy ? 'Available' : 'Unavailable'}',
+        );
+    }
+  } catch (e) {
+    if (kDebugMode)
+      print(
+        '[taskApiHealthChecker] API health check failed for ${taskConfig.name ?? taskConfig.id}: $e',
+      );
+    final potentiallyChangedConfig = ref.read(taskServerConfigProvider);
+    if (potentiallyChangedConfig?.id == taskConfig.id &&
+        ref.read(taskApiStatusProvider) == 'checking') {
+      ref.read(taskApiStatusProvider.notifier).state = 'unavailable';
     }
   }
 }
@@ -280,77 +326,54 @@ Future<void> _checkApiHealth(Ref ref) async {
 
 /// Provider for OpenAI API service
 final openaiApiServiceProvider = Provider<MinimalOpenAiService>((ref) {
-  // Configuration from apiConfigProvider if needed
   final config = ref.watch(apiConfigProvider);
-  // Watch the persisted API key from settings_provider
   final openaiToken = ref.watch(openAiApiKeyProvider);
-
-  // Get the singleton instance
   final openaiApiService = MinimalOpenAiService();
   MinimalOpenAiService.verboseLogging = config['verboseLogging'] ?? true;
 
   if (openaiToken.isEmpty) {
-    if (kDebugMode) {
+    if (kDebugMode)
       print(
-        '[openaiApiServiceProvider] Warning: No OpenAI API token configured via provider.',
+        '[openaiApiServiceProvider] Warning: No OpenAI API token configured.',
       );
-    }
-    // Configure with empty token (service handles initialization state)
-    // MinimalOpenAiService likely only needs authToken
     openaiApiService.configureService(authToken: '');
   } else {
-    // MinimalOpenAiService likely only needs authToken
     openaiApiService.configureService(authToken: openaiToken);
-    if (kDebugMode) {
+    if (kDebugMode)
       print(
-        '[openaiApiServiceProvider] OpenAI API service configured successfully via provider.',
+        '[openaiApiServiceProvider] OpenAI API service configured successfully.',
       );
-    }
   }
 
-  // Add cleanup if needed
   ref.onDispose(() {
-    if (kDebugMode) {
+    if (kDebugMode)
       print(
-        '[openaiApiServiceProvider] Disposing OpenAI API service provider (singleton instance persists)',
+        '[openaiApiServiceProvider] Disposing OpenAI API service provider.',
       );
-    }
-    // Optionally close the client when provider is disposed
-    // openaiApiService.dispose();
   });
 
   return openaiApiService;
 }, name: 'openaiApiService');
 
-/// Provider for OpenAI API service status (available, unavailable, etc.)
+/// Provider for OpenAI API service status
 final openaiApiStatusProvider = StateProvider<String>((ref) {
-  // Initial state depends on whether the token is configured via the provider
-  final token = ref.watch(openAiApiKeyProvider); // Watch the key provider
+  final token = ref.watch(openAiApiKeyProvider);
   return token.isEmpty ? 'unconfigured' : 'unknown';
 }, name: 'openaiApiStatus');
 
 /// Provider that checks OpenAI API health periodically
 final openaiApiHealthCheckerProvider = Provider<void>((ref) {
-  // Rerun health check when the API key changes
   ref.watch(openAiApiKeyProvider);
-  // Initial check
   _checkOpenAiApiHealth(ref);
-
   // TODO: Set up periodic health check
-
   ref.onDispose(() {
-    // Cancel any timers or other resources
+    /* Cancel timer */
   });
-
-  return;
 }, name: 'openaiApiHealthChecker');
 
 // Helper function to check OpenAI API health
 Future<void> _checkOpenAiApiHealth(Ref ref) async {
-  // Get the service instance. Configuration is handled by the provider watching the key.
   final openaiApiService = ref.read(openaiApiServiceProvider);
-
-  // If the service isn't configured (no token), set status and return.
   if (!openaiApiService.isConfigured) {
     if (ref.read(openaiApiStatusProvider) != 'unconfigured') {
       ref.read(openaiApiStatusProvider.notifier).state = 'unconfigured';
@@ -358,33 +381,178 @@ Future<void> _checkOpenAiApiHealth(Ref ref) async {
     return;
   }
 
-  // Set status to checking
   final currentStatus = ref.read(openaiApiStatusProvider);
-  if (currentStatus == 'checking') return; // Already checking
-  ref.read(openaiApiStatusProvider.notifier).state =
-      'checking'; // Corrected provider
+  if (currentStatus == 'checking') return;
+  ref.read(openaiApiStatusProvider.notifier).state = 'checking';
 
   try {
-    // Call the health check method on the service instance
     final isHealthy = await openaiApiService.checkHealth();
-
-    // Check if the status is still 'checking' before updating
     if (ref.read(openaiApiStatusProvider) == 'checking') {
-      if (isHealthy) {
-        ref.read(openaiApiStatusProvider.notifier).state = 'available';
-      } else {
-        // If checkHealth returns false, it likely means an API error (e.g., bad token)
-        ref.read(openaiApiStatusProvider.notifier).state = 'unavailable';
-      }
+      ref.read(openaiApiStatusProvider.notifier).state =
+          isHealthy ? 'available' : 'unavailable';
     }
   } catch (e) {
-    // Catch any exceptions during the health check (e.g., network error)
-    if (kDebugMode) {
-      print('[openaiApiHealthChecker] Error checking health: $e');
-    }
+    if (kDebugMode) print('[openaiApiHealthChecker] Error checking health: $e');
     if (ref.read(openaiApiStatusProvider) == 'checking') {
-      ref.read(openaiApiStatusProvider.notifier).state = // Corrected provider
-          'error'; // Or 'unavailable'
+      ref.read(openaiApiStatusProvider.notifier).state = 'error';
     }
   }
+}
+
+// --- Dummy Services ---
+class DummyNoteApiService extends BaseApiService implements NoteApiService {
+  @override
+  bool get isConfigured => false;
+  @override
+  Future<bool> checkHealth() async => false;
+  @override
+  Future<NoteItem> createNote(NoteItem note, {String? targetServerId}) async =>
+      throw UnimplementedError();
+  @override
+  Future<void> deleteNote(String id, {String? targetServerId}) async =>
+      throw UnimplementedError();
+  @override
+  Future<NoteItem> getNote(String id, {String? targetServerId}) async =>
+      throw UnimplementedError();
+  @override
+  Future<ListNotesResponse> listNotes({
+    String? filter,
+    String? state,
+    String? sort,
+    String? direction,
+    int? pageSize,
+    String? pageToken,
+    String? targetServerId,
+  }) async => ListNotesResponse(notes: [], nextPageToken: null);
+  @override
+  Future<NoteItem> updateNote(
+    String id,
+    NoteItem note, {
+    String? targetServerId,
+  }) async => throw UnimplementedError();
+  @override
+  Future<NoteItem> archiveNote(String id, {String? targetServerId}) async =>
+      throw UnimplementedError();
+  @override
+  Future<NoteItem> togglePinNote(String id, {String? targetServerId}) async =>
+      throw UnimplementedError();
+  @override
+  Future<void> setNoteRelations(
+    String noteId,
+    List<Map<String, dynamic>> relations, {
+    String? targetServerId,
+  }) async => throw UnimplementedError();
+  @override
+  Future<List<Comment>> listNoteComments(
+    String noteId, {
+    String? targetServerId,
+  }) async => [];
+  @override
+  Future<Comment> getNoteComment(
+    String commentId, {
+    String? targetServerId,
+  }) async => throw UnimplementedError();
+  @override
+  Future<Comment> createNoteComment(
+    String noteId,
+    Comment comment, {
+    String? targetServerId,
+  }) async => throw UnimplementedError();
+  @override
+  Future<Comment> updateNoteComment(
+    String commentId,
+    Comment comment, {
+    String? targetServerId,
+  }) async => throw UnimplementedError();
+  @override
+  Future<void> deleteNoteComment(
+    String noteId,
+    String commentId, {
+    String? targetServerId,
+  }) async => throw UnimplementedError();
+  @override
+  Future<Map<String, dynamic>> uploadResource(
+    Uint8List fileBytes,
+    String filename,
+    String contentType, {
+    String? targetServerId,
+  }) async => throw UnimplementedError();
+  @override
+  Future<Uint8List> getResourceData(
+    String resourceIdentifier, {
+    String? targetServerId,
+  }) async => throw UnimplementedError();
+  
+  @override
+  // TODO: implement apiBaseUrl
+  String get apiBaseUrl => throw UnimplementedError();
+  
+  @override
+  // TODO: implement authStrategy
+  AuthStrategy? get authStrategy => throw UnimplementedError();
+  
+  @override
+  Future<void> configureService({
+    required String baseUrl,
+    AuthStrategy? authStrategy,
+    String? authToken,
+  }) {
+    // TODO: implement configureService
+    throw UnimplementedError();
+  }
+}
+
+class DummyTaskApiService extends BaseApiService implements TaskApiService {
+  @override
+  bool get isConfigured => false;
+  @override
+  Future<bool> checkHealth() async => false;
+  @override
+  Future<List<TaskItem>> listTasks({
+    String? filter,
+    ServerConfig? targetServerOverride,
+  }) async => [];
+  @override
+  Future<TaskItem> getTask(
+    String id, {
+    ServerConfig? targetServerOverride,
+  }) async => throw UnimplementedError();
+  @override
+  Future<TaskItem> createTask(
+    TaskItem task, {
+    int? projectId,
+    ServerConfig? targetServerOverride,
+  }) async => throw UnimplementedError();
+  @override
+  Future<TaskItem> updateTask(
+    String id,
+    TaskItem task, {
+    ServerConfig? targetServerOverride,
+  }) async => throw UnimplementedError();
+  @override
+  Future<void> deleteTask(
+    String id, {
+    ServerConfig? targetServerOverride,
+  }) async => throw UnimplementedError();
+  @override
+  Future<TaskItem> completeTask(
+    String id, {
+    ServerConfig? targetServerOverride,
+  }) async => throw UnimplementedError();
+  @override
+  Future<TaskItem> reopenTask(
+    String id, {
+    ServerConfig? targetServerOverride,
+  }) async => throw UnimplementedError();
+  @override
+  Future<List<Comment>> listComments(
+    String taskId, {
+    ServerConfig? targetServerOverride,
+  }) async => [];
+  @override
+  Future<Comment> addComment(
+    String taskId,
+    String content, {
+    ServerConfig? targetServerOverride,
+  }) async => throw UnimplementedError();
 }

@@ -5,17 +5,16 @@ import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/models/server_config.dart';
 import 'package:flutter_memos/models/workbench_item_reference.dart';
 import 'package:flutter_memos/models/workbench_item_type.dart';
-import 'package:flutter_memos/providers/api_providers.dart';
-import 'package:flutter_memos/providers/server_config_provider.dart';
+import 'package:flutter_memos/providers/api_providers.dart'; // Import API providers
+// Import new single config providers
+import 'package:flutter_memos/providers/note_server_config_provider.dart';
 import 'package:flutter_memos/providers/service_providers.dart';
+import 'package:flutter_memos/providers/task_server_config_provider.dart';
 import 'package:flutter_memos/providers/workbench_instances_provider.dart';
-import 'package:flutter_memos/services/blinko_api_service.dart';
+import 'package:flutter_memos/services/base_api_service.dart'; // Import BaseApiService
 import 'package:flutter_memos/services/cloud_kit_service.dart';
-import 'package:flutter_memos/services/memos_api_service.dart';
 import 'package:flutter_memos/services/note_api_service.dart';
 import 'package:flutter_memos/services/task_api_service.dart';
-// Import Vikunja service provider
-import 'package:flutter_memos/services/vikunja_api_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 @immutable
@@ -80,38 +79,32 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
     state = state.copyWith(isLoading: true, clearError: true);
 
     try {
-      if (kDebugMode) {
+      if (kDebugMode)
         print(
           '[WorkbenchNotifier($instanceId)] loadItems: Fetching references for this instance.',
         );
-      }
       final references = await _cloudKitService.getAllWorkbenchItemReferences(
         instanceId: instanceId,
       );
-      if (kDebugMode) {
+      if (kDebugMode)
         print(
           '[WorkbenchNotifier($instanceId)] loadItems: Fetched ${references.length} raw references from CloudKit.',
         );
-      }
       references.sort((a, b) => b.addedTimestamp.compareTo(a.addedTimestamp));
       if (mounted) {
         state = state.copyWith(items: references, isLoading: false);
-        if (kDebugMode) {
+        if (kDebugMode)
           print(
             '[WorkbenchNotifier($instanceId)] Loaded ${references.length} references.',
           );
-        }
         unawaited(_fetchAndPopulateDetails(references));
       }
     } catch (e, s) {
-      if (kDebugMode) {
+      if (kDebugMode)
         print(
           '[WorkbenchNotifier($instanceId)] Error loading references: $e\n$s',
         );
-      }
-      if (mounted) {
-        state = state.copyWith(error: e, isLoading: false);
-      }
+      if (mounted) state = state.copyWith(error: e, isLoading: false);
     }
   }
 
@@ -123,117 +116,76 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
     List<WorkbenchItemReference> itemsToProcess,
   ) async {
     if (!mounted || itemsToProcess.isEmpty) {
-      if (state.isRefreshingDetails && mounted) {
+      if (state.isRefreshingDetails && mounted)
         state = state.copyWith(isRefreshingDetails: false);
-      }
       return;
     }
 
     final Map<String, List<WorkbenchItemReference>> itemsByServer = {};
     for (final item in itemsToProcess) {
       if (item.instanceId != instanceId) {
-        if (kDebugMode) {
+        if (kDebugMode)
           print(
             '[WorkbenchNotifier($instanceId)] _fetchAndPopulateDetails: Skipping item ${item.id} because its instanceId (${item.instanceId}) does not match.',
           );
-        }
         continue;
       }
-      if (kDebugMode) {
+      if (kDebugMode)
         print(
           '[WorkbenchNotifier($instanceId)] _fetchAndPopulateDetails: Processing item ${item.id} for server ${item.serverId}.',
         );
-      }
       (itemsByServer[item.serverId] ??= []).add(item);
     }
 
     if (itemsByServer.isEmpty && itemsToProcess.isNotEmpty) {
-      if (kDebugMode) {
+      if (kDebugMode)
         print(
           '[WorkbenchNotifier($instanceId)] _fetchAndPopulateDetails called with items not belonging to this instance.',
         );
-      }
-      if (mounted && state.isRefreshingDetails) {
+      if (mounted && state.isRefreshingDetails)
         state = state.copyWith(isRefreshingDetails: false);
-      }
       return;
     }
 
     final List<Future<WorkbenchItemReference>> detailFetchFutures = [];
+    final noteConfig = _ref.read(noteServerConfigProvider); // Read once
+    final taskConfig = _ref.read(taskServerConfigProvider); // Read once
 
     for (final serverEntry in itemsByServer.entries) {
       final serverId = serverEntry.key;
       final serverItems = serverEntry.value;
 
-      final serverConfig = _ref
-          .read(multiServerConfigProvider)
-          .servers
-          .cast<ServerConfig?>()
-          .firstWhere((s) => s?.id == serverId, orElse: () => null);
+      // Determine which config (note or task) matches this serverId
+      ServerConfig? serverConfig;
+      BaseApiService? apiService; // Use BaseApiService initially
 
-      if (serverConfig == null) {
-        if (kDebugMode) {
+      if (noteConfig?.id == serverId) {
+        serverConfig = noteConfig;
+        apiService = _ref.read(noteApiServiceProvider);
+      } else if (taskConfig?.id == serverId) {
+        serverConfig = taskConfig;
+        apiService = _ref.read(taskApiServiceProvider);
+      }
+
+      if (serverConfig == null ||
+          apiService == null ||
+          apiService is DummyNoteApiService ||
+          apiService is DummyTaskApiService) {
+        if (kDebugMode)
           print(
-            '[WorkbenchNotifier($instanceId)] Server config not found for $serverId. Skipping detail fetch for its items.',
+            '[WorkbenchNotifier($instanceId)] Server config ($serverId) not found or service not configured. Skipping detail fetch for its items.',
           );
-        }
         detailFetchFutures.addAll(
           serverItems.map((item) => Future.value(item)),
-        );
+        ); // Add items without details
         continue;
       }
 
-      // Get the API service configured for the *active* server
-      // We need to ensure this service matches the serverConfig's type
-      final baseApiService = _ref.read(apiServiceProvider);
-      final activeServerConfig = _ref.read(activeServerConfigProvider);
-
-      // Check if the current item's server matches the *active* server's config
-      if (activeServerConfig?.id != serverId) {
-        if (kDebugMode) {
-          print(
-            '[WorkbenchNotifier($instanceId)] Server $serverId is not the active server (${activeServerConfig?.id}). Skipping detail fetch for its items.',
-          );
-        }
-        detailFetchFutures.addAll(
-          serverItems.map((item) => Future.value(item)),
-        );
-        continue;
-      }
-
-      // Now check if the active service type matches the server config type
-      bool serviceTypeMatches =
-          (serverConfig.serverType == ServerType.memos &&
-              baseApiService is MemosApiService) ||
-          (serverConfig.serverType == ServerType.blinko &&
-              baseApiService is BlinkoApiService) ||
-          (serverConfig.serverType == ServerType.vikunja &&
-              baseApiService is VikunjaApiService);
-      // Removed Todoist check
-
-      if (!serviceTypeMatches) {
-        if (kDebugMode) {
-          print(
-            '[WorkbenchNotifier($instanceId)] Active API service type (${baseApiService.runtimeType}) does not match required type for server $serverId (${serverConfig.serverType.name}). Skipping detail fetch.',
-          );
-        }
-        detailFetchFutures.addAll(
-          serverItems.map((item) => Future.value(item)),
-        );
-        continue;
-      }
-
-      // Cast the service based on the server type
+      // Cast the service based on the item type we expect to fetch
       final NoteApiService? noteApiService =
-          (serverConfig.serverType == ServerType.memos ||
-                  serverConfig.serverType == ServerType.blinko)
-              ? baseApiService as NoteApiService
-              : null;
+          apiService is NoteApiService ? apiService : null;
       final TaskApiService? taskApiService =
-          (serverConfig.serverType == ServerType.vikunja) // Check for Vikunja
-              ? baseApiService
-                  as TaskApiService // Cast to TaskApiService
-              : null;
+          apiService is TaskApiService ? apiService : null;
 
       for (final itemRef in serverItems) {
         detailFetchFutures.add(() async {
@@ -252,59 +204,49 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
                 );
                 referencedItemUpdateTime = note.updateTime;
                 updatedPreviewContent = note.content;
-                if (referencedItemUpdateTime.isAfter(overallLastUpdateTime)) {
+                if (referencedItemUpdateTime.isAfter(overallLastUpdateTime))
                   overallLastUpdateTime = referencedItemUpdateTime;
-                }
               } catch (e) {
-                if (kDebugMode) {
+                if (kDebugMode)
                   print(
                     '[WorkbenchNotifier($instanceId)] Error fetching note ${itemRef.referencedItemId} on server $serverId: $e',
                   );
-                }
               }
               try {
                 fetchedComments = await noteApiService.listNoteComments(
                   itemRef.referencedItemId,
                 );
               } catch (e) {
-                if (kDebugMode) {
+                if (kDebugMode)
                   print(
                     '[WorkbenchNotifier($instanceId)] Error fetching comments for note ${itemRef.referencedItemId} on server $serverId: $e',
                   );
-                }
               }
             } else if (itemRef.referencedItemType == WorkbenchItemType.task &&
                 taskApiService != null) {
-              // Check if taskApiService is not null
               try {
                 final task = await taskApiService.getTask(
                   itemRef.referencedItemId,
                 );
-                // Use updatedAt if available, otherwise createdAt for Vikunja
                 referencedItemUpdateTime = task.updatedAt ?? task.createdAt;
-                updatedPreviewContent =
-                    task.title; // Use title instead of content
-                if (referencedItemUpdateTime.isAfter(overallLastUpdateTime)) {
+                updatedPreviewContent = task.title;
+                if (referencedItemUpdateTime.isAfter(overallLastUpdateTime))
                   overallLastUpdateTime = referencedItemUpdateTime;
-                }
                 try {
-                  // Use the TaskApiService to list comments
                   fetchedComments = await taskApiService.listComments(
                     itemRef.referencedItemId,
                   );
                 } catch (e) {
-                  if (kDebugMode) {
+                  if (kDebugMode)
                     print(
                       '[WorkbenchNotifier($instanceId)] Error fetching comments for task ${itemRef.referencedItemId} on server $serverId: $e',
                     );
-                  }
                 }
               } catch (e) {
-                if (kDebugMode) {
+                if (kDebugMode)
                   print(
                     '[WorkbenchNotifier($instanceId)] Error fetching task ${itemRef.referencedItemId} on server $serverId: $e',
                   );
-                }
               }
             }
 
@@ -317,9 +259,8 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
               latestCommentTimestamp = _getCommentTimestamp(
                 fetchedComments.first,
               );
-              if (latestCommentTimestamp.isAfter(overallLastUpdateTime)) {
+              if (latestCommentTimestamp.isAfter(overallLastUpdateTime))
                 overallLastUpdateTime = latestCommentTimestamp;
-              }
               previewComments =
                   fetchedComments.take(_maxPreviewComments).toList();
             }
@@ -331,12 +272,11 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
               previewContent: updatedPreviewContent,
             );
           } catch (e) {
-            if (kDebugMode) {
+            if (kDebugMode)
               print(
                 '[WorkbenchNotifier($instanceId)] Error processing item ${itemRef.id} (refId: ${itemRef.referencedItemId}) on server $serverId: $e',
               );
-            }
-            return itemRef;
+            return itemRef; // Return original item on error
           }
         }());
       }
@@ -364,79 +304,67 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
           isRefreshingDetails: false,
           isLoading: false,
         );
-        if (kDebugMode) {
+        if (kDebugMode)
           print(
             '[WorkbenchNotifier($instanceId)] Finished fetching details for ${results.length} items.',
           );
-        }
       }
     }
   }
 
+
   Future<void> refreshItemDetails() async {
     if (state.isLoading || state.isRefreshingDetails) return;
     if (!mounted) return;
-
     if (state.items.isEmpty) {
-      if (kDebugMode) {
+      if (kDebugMode)
         print(
           '[WorkbenchNotifier($instanceId)] No items to refresh details for.',
         );
-      }
       return;
     }
-
     if (mounted) {
       state = state.copyWith(isRefreshingDetails: true, clearError: true);
-      if (kDebugMode) {
+      if (kDebugMode)
         print(
           '[WorkbenchNotifier($instanceId)] Refreshing details for ${state.items.length} items.',
         );
-      }
       await _fetchAndPopulateDetails(List.from(state.items));
     }
   }
 
   void resetOrder() {
     if (!mounted) return;
-
     final List<WorkbenchItemReference> currentItems = List.from(state.items);
     currentItems.sort(
       (a, b) => b.overallLastUpdateTime.compareTo(a.overallLastUpdateTime),
     );
-
     state = state.copyWith(items: currentItems);
-    if (kDebugMode) {
+    if (kDebugMode)
       print(
         '[WorkbenchNotifier($instanceId)] Reset item order to default (last activity first).',
       );
-    }
   }
 
   Future<void> addItem(WorkbenchItemReference item) async {
     if (!mounted) return;
-
     if (item.instanceId != instanceId) {
-      if (kDebugMode) {
+      if (kDebugMode)
         print(
           '[WorkbenchNotifier($instanceId)] Attempted to add item ${item.id} belonging to instance ${item.instanceId}. Skipping.',
         );
-      }
       return;
     }
-
     final isDuplicate = state.items.any(
       (existingItem) =>
           existingItem.referencedItemId == item.referencedItemId &&
           existingItem.serverId == item.serverId,
     );
-
     if (isDuplicate) {
-      if (kDebugMode) {
+      if (kDebugMode)
         print(
           '[WorkbenchNotifier($instanceId)] Item with refId ${item.referencedItemId} on server ${item.serverId} already exists in this instance. Skipping add.',
         );
-      }
       return;
     }
 
@@ -448,29 +376,25 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
     newItems.sort(
       (a, b) => b.overallLastUpdateTime.compareTo(a.overallLastUpdateTime),
     );
-    if (mounted) {
-      state = state.copyWith(items: newItems, clearError: true);
-    }
+    if (mounted) state = state.copyWith(items: newItems, clearError: true);
 
     try {
       final success = await _cloudKitService.saveWorkbenchItemReference(item);
       if (!success) throw Exception('CloudKit save failed');
-      if (kDebugMode) {
+      if (kDebugMode)
         print(
           '[WorkbenchNotifier($instanceId)] Added item ${item.id} successfully.',
         );
-      }
       final addedItemInState = state.items.firstWhere(
         (i) => i.id == item.id,
         orElse: () => newItemWithDefaults,
       );
       unawaited(_fetchAndPopulateDetails([addedItemInState]));
     } catch (e, s) {
-      if (kDebugMode) {
+      if (kDebugMode)
         print(
           '[WorkbenchNotifier($instanceId)] Error adding item ${item.id}: $e\n$s',
         );
-      }
       if (mounted) {
         originalItems.sort(
           (a, b) => b.overallLastUpdateTime.compareTo(a.overallLastUpdateTime),
@@ -483,65 +407,56 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
   void _addExistingItem(WorkbenchItemReference item) {
     if (!mounted) return;
     if (item.instanceId != instanceId) {
-      if (kDebugMode) {
+      if (kDebugMode)
         print(
           '[WorkbenchNotifier($instanceId)] _addExistingItem called with item ${item.id} for wrong instance ${item.instanceId}. Skipping.',
         );
-      }
       return;
     }
-
     final newItems = [...state.items, item];
     newItems.sort(
       (a, b) => b.overallLastUpdateTime.compareTo(a.overallLastUpdateTime),
     );
     state = state.copyWith(items: newItems, clearError: true);
-    if (kDebugMode) {
+    if (kDebugMode)
       print(
         '[WorkbenchNotifier($instanceId)] Added existing item ${item.id} locally.',
       );
-    }
     unawaited(_fetchAndPopulateDetails([item]));
   }
 
   Future<void> removeItem(String itemId) async {
     if (!mounted) return;
-
     final itemExists = state.items.any((item) => item.id == itemId);
     if (!itemExists) {
-      if (kDebugMode) {
+      if (kDebugMode)
         print(
           '[WorkbenchNotifier($instanceId)] Item with ID $itemId not found in this instance. Skipping remove.',
         );
-      }
       return;
     }
 
     final originalItems = List<WorkbenchItemReference>.from(state.items);
     final newItems = originalItems.where((item) => item.id != itemId).toList();
-    if (mounted) {
-      state = state.copyWith(items: newItems, clearError: true);
-    }
+    if (mounted) state = state.copyWith(items: newItems, clearError: true);
 
     try {
       final success = await _cloudKitService.deleteWorkbenchItemReference(
         itemId,
       );
       if (!success) throw Exception('CloudKit delete failed');
-      if (kDebugMode) {
+      if (kDebugMode)
         print(
           '[WorkbenchNotifier($instanceId)] Removed item $itemId successfully.',
         );
-      }
       _ref
           .read(workbenchInstancesProvider.notifier)
           .setLastOpenedItem(instanceId, null);
     } catch (e, s) {
-      if (kDebugMode) {
+      if (kDebugMode)
         print(
           '[WorkbenchNotifier($instanceId)] Error removing item $itemId: $e\n$s',
         );
-      }
       if (mounted) {
         originalItems.sort(
           (a, b) => b.overallLastUpdateTime.compareTo(a.overallLastUpdateTime),
@@ -557,47 +472,38 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
   }) async {
     if (!mounted) return;
     if (targetInstanceId == instanceId) {
-      if (kDebugMode) {
+      if (kDebugMode)
         print(
           '[WorkbenchNotifier($instanceId)] Attempted to move item $itemId to the same instance. Skipping.',
         );
-      }
       return;
     }
 
     WorkbenchItemReference? itemToMove;
     try {
-      // 1. Grab the item from local state of the *source* instance
       itemToMove = state.items.firstWhere((i) => i.id == itemId);
     } catch (e) {
-      if (kDebugMode) {
+      if (kDebugMode)
         print(
           '[WorkbenchNotifier($instanceId)] Item with ID $itemId not found for move operation.',
         );
-      }
-      if (mounted) {
+      if (mounted)
         state = state.copyWith(error: Exception('Item to move not found.'));
-      }
       return;
     }
 
-    // 2. Remove from this (source) instance's state optimistically
     final originalItems = List<WorkbenchItemReference>.from(state.items);
     final newItems = originalItems.where((item) => item.id != itemId).toList();
     if (mounted) {
       state = state.copyWith(items: newItems, clearError: true);
-      if (kDebugMode) {
+      if (kDebugMode)
         print(
           '[WorkbenchNotifier($instanceId)] Optimistically removed item $itemId for move.',
         );
-      }
     }
 
     try {
-      // 3. Convert old item to a map for re-creation
       final oldRecordFields = itemToMove.toJson();
-
-      // 4. CloudKit delete + create using the new service method, capture the new ID
       final maybeNewCloudKitId = await _cloudKitService
           .moveWorkbenchItemReferenceByDeleteRecreate(
             recordName: itemId,
@@ -605,73 +511,56 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
             oldRecordFields: oldRecordFields,
           );
 
-      // Check if the CloudKit operation failed (returned null)
-      if (maybeNewCloudKitId == null) {
+      if (maybeNewCloudKitId == null)
         throw Exception('CloudKit delete-recreate move operation failed');
-      }
 
-      // 5. Build the new item locally using the EXACT ID returned from CloudKit
       final newItemForTarget = itemToMove.copyWith(
         id: maybeNewCloudKitId,
         instanceId: targetInstanceId,
       );
 
-      // 6. Insert new item into target instance's local state
       if (mounted) {
         final targetNotifier = _ref.read(
           workbenchProviderFamily(targetInstanceId).notifier,
         );
         targetNotifier._addExistingItem(newItemForTarget);
-
-        // Immediately add the item to local state (optimistic update)
-        if (kDebugMode) {
+        if (kDebugMode)
           print(
             '[WorkbenchNotifier($instanceId)] Added item to target instance. Now adding delayed refresh to handle CloudKit consistency.',
           );
-        }
 
-        // Add a delay before loading items to allow CloudKit indexing to catch up
-        // This addresses the eventual consistency issue where new records
-        // might not be immediately available in query results
         if (mounted) {
           Future.delayed(const Duration(milliseconds: 1500), () {
             if (mounted) {
               targetNotifier.loadItems();
-              if (kDebugMode) {
+              if (kDebugMode)
                 print(
                   '[WorkbenchNotifier($instanceId)] Executed delayed loadItems() on target instance after move.',
                 );
-              }
             }
           });
         }
 
-        if (kDebugMode) {
+        if (kDebugMode)
           print(
             '[WorkbenchNotifier($instanceId)] Successfully processed move for item original ID $itemId to instance $targetInstanceId (new CloudKit ID: $maybeNewCloudKitId).',
           );
-        }
-        // Clear last opened item if it was the one moved
         final lastOpened =
             _ref.read(workbenchInstancesProvider).lastOpenedItemId[instanceId];
-        if (lastOpened == itemId) {
+        if (lastOpened == itemId)
           _ref
               .read(workbenchInstancesProvider.notifier)
               .setLastOpenedItem(instanceId, null);
-        }
       }
     } catch (e, s) {
-      if (kDebugMode) {
+      if (kDebugMode)
         print(
           '[WorkbenchNotifier($instanceId)] Error moving item $itemId to $targetInstanceId: $e\n$s',
         );
-      }
-      // Revert local state change on failure
       if (mounted) {
         final itemsToRestore = List<WorkbenchItemReference>.from(originalItems);
-        if (!itemsToRestore.any((i) => i.id == itemId)) {
+        if (!itemsToRestore.any((i) => i.id == itemId))
           itemsToRestore.add(itemToMove);
-        }
         itemsToRestore.sort(
           (a, b) => b.overallLastUpdateTime.compareTo(a.overallLastUpdateTime),
         );
@@ -688,38 +577,34 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
     final currentItems = List<WorkbenchItemReference>.from(state.items);
     final item = currentItems.removeAt(oldIndex);
     final effectiveNewIndex = (newIndex > oldIndex) ? newIndex - 1 : newIndex;
-    if (effectiveNewIndex < 0 || effectiveNewIndex > currentItems.length) {
+    if (effectiveNewIndex < 0 || effectiveNewIndex > currentItems.length)
       return;
-    }
 
     currentItems.insert(effectiveNewIndex, item);
     if (mounted) {
       state = state.copyWith(items: currentItems);
-      if (kDebugMode) {
+      if (kDebugMode)
         print(
           '[WorkbenchNotifier($instanceId)] Reordered items: $oldIndex -> $effectiveNewIndex',
         );
-      }
     }
   }
 
   Future<void> clearItems() async {
     if (!mounted) return;
     if (state.items.isEmpty) {
-      if (kDebugMode) {
+      if (kDebugMode)
         print('[WorkbenchNotifier($instanceId)] No items to clear.');
-      }
       return;
     }
 
     final originalItems = List<WorkbenchItemReference>.from(state.items);
     if (mounted) {
       state = state.copyWith(items: [], clearError: true);
-      if (kDebugMode) {
+      if (kDebugMode)
         print(
           '[WorkbenchNotifier($instanceId)] Cleared local items optimistically.',
         );
-      }
     }
 
     Object? firstError;
@@ -733,17 +618,15 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
         firstError = Exception(
           'CloudKit deleteAllWorkbenchItemReferences failed for instance $instanceId',
         );
-        if (kDebugMode) {
+        if (kDebugMode)
           print('[WorkbenchNotifier($instanceId)] ${firstError.toString()}');
-        }
       }
     } catch (e, s) {
       firstError = e;
-      if (kDebugMode) {
+      if (kDebugMode)
         print(
           '[WorkbenchNotifier($instanceId)] Error clearing items from CloudKit: $e\n$s',
         );
-      }
       success = false;
     }
 
@@ -755,20 +638,16 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
         items: originalItems,
         error: firstError ?? Exception('Failed to clear items from CloudKit'),
       );
-      if (kDebugMode) {
+      if (kDebugMode)
         print(
           '[WorkbenchNotifier($instanceId)] Reverted state due to CloudKit clear failure. ${originalItems.length} items remain.',
         );
-      }
     } else if (mounted) {
-      if (kDebugMode) {
+      if (kDebugMode)
         print(
           '[WorkbenchNotifier($instanceId)] All items successfully cleared from CloudKit for this instance.',
         );
-      }
-      if (state.error != null) {
-        state = state.copyWith(clearError: true);
-      }
+      if (state.error != null) state = state.copyWith(clearError: true);
       _ref
           .read(workbenchInstancesProvider.notifier)
           .setLastOpenedItem(instanceId, null);
@@ -784,6 +663,6 @@ final workbenchProviderFamily =
       instanceId,
     ) {
       final notifier = WorkbenchNotifier(ref, instanceId);
-      notifier.loadItems();
+      notifier.loadItems(); // Initial load
       return notifier;
     });
