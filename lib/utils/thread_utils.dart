@@ -5,6 +5,8 @@ import 'package:flutter_memos/providers/server_config_provider.dart';
 import 'package:flutter_memos/services/base_api_service.dart'; // For BaseApiService
 import 'package:flutter_memos/services/note_api_service.dart';
 import 'package:flutter_memos/services/task_api_service.dart';
+// Import Vikunja service provider to check configuration if needed
+import 'package:flutter_memos/services/vikunja_api_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
@@ -22,50 +24,43 @@ Future<String> getFormattedThreadContent(
   final buffer = StringBuffer();
   List<Comment> comments = [];
   BaseApiService apiService; // General service variable
+  final activeServer = ref.read(activeServerConfigProvider);
 
   // 2. Determine the correct API service and perform necessary checks
   if (itemType == WorkbenchItemType.task) {
-    if (itemServerId == 'global-todoist-integration') {
-      // Use the dedicated global Todoist API provider
-      final todoistService = ref.read(todoistApiServiceProvider);
-
-      // Check if the global Todoist service is configured
-      if (!todoistService.isConfigured) {
-        throw Exception(
-          'Cannot fetch task thread: Todoist integration is not configured. Please add the API key in Settings.',
-        );
-      }
-      // We know this is a TaskApiService
-      apiService = todoistService;
-
-      // Fetch task and comments using the specific service
-      final task = await (apiService as TaskApiService).getTask(itemId);
-      buffer.writeln("# Task: ${task.content}");
-      buffer.writeln(); // Add blank line
-      buffer.writeln(
-        "**Description**: ${task.description?.isNotEmpty == true ? task.description : 'N/A'}",
+    // Check if the task's server is the currently active server
+    if (activeServer == null || activeServer.id != itemServerId) {
+      throw Exception(
+        'Task server ($itemServerId) is not the active server (${activeServer?.id}). Cannot fetch task thread.',
       );
-      buffer.writeln(); // Add blank line
-      comments = await (apiService).listComments(itemId);
-    } else {
-      // Handle other potential task servers if they exist in the future
-      throw Exception('Unrecognized or unsupported task server: $itemServerId');
-      // If other task servers could rely on the active server, add logic here:
-      // final activeServer = ref.read(activeServerConfigProvider);
-      // if (activeServer == null || activeServer.id != itemServerId) {
-      //   throw Exception('Task server ($itemServerId) is not the active server (${activeServer?.id}).');
-      // }
-      // apiService = ref.read(apiServiceProvider);
-      // if (apiService is! TaskApiService) {
-      //   throw Exception('Cannot fetch task thread: Active API service for $itemServerId is not TaskApiService.');
-      // }
-      // // Fetch task and comments using the active server's TaskApiService
-      // final task = await (apiService as TaskApiService).getTask(itemId);
-      // ... fetch comments ...
     }
+    // Get the API service for the active server
+    apiService = ref.read(apiServiceProvider);
+    // Ensure the active service is a TaskApiService (e.g., Vikunja)
+    if (apiService is! TaskApiService) {
+      throw Exception(
+        'Cannot fetch task thread: Active API service for $itemServerId is not TaskApiService.',
+      );
+    }
+    // Check if the specific service (Vikunja) is configured
+    if (apiService is VikunjaApiService && !apiService.isConfigured) {
+      throw Exception(
+        'Cannot fetch task thread: Vikunja service is not configured. Please check settings.',
+      );
+    }
+
+    // Fetch task and comments using the TaskApiService
+    final task = await (apiService).getTask(itemId);
+    buffer.writeln("# Task: ${task.title}"); // Use title instead of content
+    buffer.writeln(); // Add blank line
+    buffer.writeln(
+      "**Description**: ${task.description?.isNotEmpty == true ? task.description : 'N/A'}",
+    );
+    buffer.writeln(); // Add blank line
+    comments = await (apiService).listComments(itemId);
+
   } else if (itemType == WorkbenchItemType.note) {
     // Notes always rely on the active server
-    final activeServer = ref.read(activeServerConfigProvider);
     if (activeServer == null || activeServer.id != itemServerId) {
       throw Exception(
         'Note server ($itemServerId) is not the active server (${activeServer?.id}). Cannot fetch note thread.',
@@ -122,7 +117,7 @@ Future<String> getFormattedThreadContent(
     } else {
       for (final comment in comments) {
         // Format task comments as specified: "- Author: Text"
-        // Assuming Comment model has creatorId and content fields for Todoist
+        // Assuming Comment model has creatorId and content fields
         final author =
             comment.creatorId ?? 'Unknown Author'; // Adapt if needed
         final text =

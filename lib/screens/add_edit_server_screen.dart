@@ -7,6 +7,8 @@ import 'package:flutter_memos/providers/server_config_provider.dart';
 import 'package:flutter_memos/services/base_api_service.dart';
 import 'package:flutter_memos/services/blinko_api_service.dart';
 import 'package:flutter_memos/services/memos_api_service.dart';
+// Import Vikunja service
+import 'package:flutter_memos/services/vikunja_api_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
@@ -24,7 +26,7 @@ class _AddEditServerScreenState extends ConsumerState<AddEditServerScreen> {
   final _nameController = TextEditingController();
   final _urlController = TextEditingController();
   final _tokenController = TextEditingController();
-  // Default to memos, Todoist is no longer an option here.
+  // Default to memos
   ServerType _selectedServerType = ServerType.memos;
 
   bool _isTestingConnection = false;
@@ -32,7 +34,6 @@ class _AddEditServerScreenState extends ConsumerState<AddEditServerScreen> {
   String? _tokenError;
 
   bool get _isEditing => widget.serverToEdit != null;
-  // Removed _isTodoist getter
 
   @override
   void initState() {
@@ -41,7 +42,7 @@ class _AddEditServerScreenState extends ConsumerState<AddEditServerScreen> {
       _nameController.text = widget.serverToEdit!.name ?? '';
       _urlController.text = widget.serverToEdit!.serverUrl;
       _tokenController.text = widget.serverToEdit!.authToken;
-      // Initialize server type, ensuring it's not Todoist (should be handled by loader)
+      // Initialize server type, ensuring it's not Todoist
       _selectedServerType =
           widget.serverToEdit!.serverType == ServerType.todoist
               ? ServerType
@@ -60,7 +61,6 @@ class _AddEditServerScreenState extends ConsumerState<AddEditServerScreen> {
 
   // Basic URL validation (now always required)
   bool _validateUrl(String value) {
-    // Removed Todoist check
     if (value.isEmpty) {
       setState(() => _urlError = 'Server URL cannot be empty');
       return false;
@@ -119,12 +119,10 @@ class _AddEditServerScreenState extends ConsumerState<AddEditServerScreen> {
   }
 
   Future<void> _testConnection() async {
-    // Removed Todoist check, button should always be enabled unless testing
     FocusScope.of(context).unfocus();
     final url = _urlController.text.trim();
     final token = _tokenController.text.trim();
-    final serverType =
-        _selectedServerType; // Use current selection (Memos/Blinko)
+    final serverType = _selectedServerType;
 
     if (!_validateUrl(url)) {
       _showResultDialog('Invalid URL', _urlError ?? 'Please enter a valid server URL.', isError: true);
@@ -149,6 +147,9 @@ class _AddEditServerScreenState extends ConsumerState<AddEditServerScreen> {
         break;
       case ServerType.blinko:
         testApiService = BlinkoApiService();
+        break;
+      case ServerType.vikunja: // Added Vikunja case
+        testApiService = VikunjaApiService();
         break;
       case ServerType.todoist:
         // This case should technically be unreachable now
@@ -203,23 +204,20 @@ class _AddEditServerScreenState extends ConsumerState<AddEditServerScreen> {
 
   Future<void> _saveConfiguration() async {
     FocusScope.of(context).unfocus();
-    // Always validate URL now
     if (!_validateUrl(_urlController.text.trim())) {
        _showResultDialog('Invalid URL', _urlError ?? 'Please enter a valid server URL.', isError: true);
       return;
     }
-    // Always validate token
     if (!_validateToken(_tokenController.text.trim())) {
       _showResultDialog(
-        'Invalid Token', // Static label
-        _tokenError ?? 'Please enter a valid token.', // Static message
+        'Invalid Token',
+        _tokenError ?? 'Please enter a valid token.',
         isError: true,
       );
       return;
     }
 
     final name = _nameController.text.trim();
-    // URL is always from controller now
     final url = _urlController.text.trim();
     final token = _tokenController.text.trim();
     final notifier = ref.read(multiServerConfigProvider.notifier);
@@ -249,9 +247,9 @@ class _AddEditServerScreenState extends ConsumerState<AddEditServerScreen> {
     final config = ServerConfig(
       id: widget.serverToEdit?.id ?? const Uuid().v4(),
       name: name.isNotEmpty ? name : null,
-      serverUrl: url, // Always use URL
+      serverUrl: url,
       authToken: token,
-      serverType: _selectedServerType, // Memos or Blinko
+      serverType: _selectedServerType, // Memos, Blinko, or Vikunja
     );
 
     if (kDebugMode) {
@@ -276,9 +274,8 @@ class _AddEditServerScreenState extends ConsumerState<AddEditServerScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Static labels now
     const tokenLabel = 'Token';
-    const tokenPlaceholder = 'Enter Access Token';
+    const tokenPlaceholder = 'Enter Access Token / API Key'; // More generic
 
     return GestureDetector(
        onTap: () => FocusScope.of(context).unfocus(),
@@ -301,7 +298,7 @@ class _AddEditServerScreenState extends ConsumerState<AddEditServerScreen> {
                 CupertinoFormSection.insetGrouped(
                   header: const Text('SERVER DETAILS'),
                   children: [
-                    // Server Type Picker - Removed Todoist
+                    // Server Type Picker - Added Vikunja
                     CupertinoFormRow(
                       prefix: const Text('Type'),
                       child: CupertinoSegmentedControl<ServerType>(
@@ -314,16 +311,19 @@ class _AddEditServerScreenState extends ConsumerState<AddEditServerScreen> {
                             padding: EdgeInsets.symmetric(horizontal: 8),
                             child: Text('Blinko'),
                           ),
-                          // Removed ServerType.todoist entry
+                          ServerType.vikunja: Padding(
+                            // Added Vikunja
+                            padding: EdgeInsets.symmetric(horizontal: 8),
+                            child: Text('Vikunja'),
+                          ),
                         },
                         groupValue: _selectedServerType,
                         onValueChanged: (ServerType? newValue) {
-                          // Only allow switching between Memos and Blinko
+                          // Only allow switching between Memos, Blinko, Vikunja
                           if (newValue != null &&
                               newValue != ServerType.todoist) {
                             setState(() {
                               _selectedServerType = newValue;
-                              // Re-validate token (label doesn't change, but good practice)
                               _validateToken(_tokenController.text);
                             });
                           }
@@ -333,58 +333,55 @@ class _AddEditServerScreenState extends ConsumerState<AddEditServerScreen> {
                     CupertinoTextFormFieldRow(
                       controller: _nameController,
                       placeholder:
-                          'My Memos Server (Optional)', // Static placeholder
+                          'My Server (Optional)', // Generic placeholder
                       prefix: const Text('Name'),
                       textInputAction: TextInputAction.next,
                     ),
-                    // URL field always shown now
                     CupertinoTextFormFieldRow(
                       controller: _urlController,
-                      placeholder: 'https://memos.example.com',
+                      placeholder: 'https://server.example.com', // Generic
                       prefix: const Text('URL'),
                       keyboardType: TextInputType.url,
                       autocorrect: false,
                       textInputAction: TextInputAction.next,
-                      onChanged: _validateUrl, // Validate on change
-                      validator:
-                          (value) => _urlError, // Use state for error message
+                      onChanged: _validateUrl,
+                      validator: (value) => _urlError,
                     ),
                     if (_urlError != null)
                        Padding(
-                         padding: const EdgeInsets.only(left: 110, top: 4, bottom: 4, right: 15), // Adjust padding
+                        padding: const EdgeInsets.only(
+                          left: 110,
+                          top: 4,
+                          bottom: 4,
+                          right: 15,
+                        ),
                          child: Text(
                            _urlError!,
                            style: TextStyle(color: CupertinoColors.systemRed.resolveFrom(context), fontSize: 12),
                          ),
-                       ),
-                    // Token Field - Static labels
+                      ),
                     CupertinoTextFormFieldRow(
                       controller: _tokenController,
-                      placeholder: tokenPlaceholder,
-                      prefix: const Text(tokenLabel), // Static label
+                      placeholder: tokenPlaceholder, // Generic placeholder
+                      prefix: const Text(tokenLabel),
                       obscureText: true,
                       autocorrect: false,
                       textInputAction: TextInputAction.done,
-                      onChanged: _validateToken, // Validate on change
-                      validator:
-                          (value) => _tokenError, // Use state for error message
+                      onChanged: _validateToken,
+                      validator: (value) => _tokenError,
                     ),
-                    // Paste Button - aligned with Token field
                     Padding(
                       padding: const EdgeInsets.only(
-                        left: 110, // Align with text field content start
+                        left: 110,
                         top: 0,
                         bottom: 0,
                         right: 15,
                       ),
                       child: Row(
-                        mainAxisAlignment:
-                            MainAxisAlignment.end, // Align button to the right
+                        mainAxisAlignment: MainAxisAlignment.end,
                         children: [
                           CupertinoButton(
-                            padding: const EdgeInsets.only(
-                              right: 0,
-                            ), // Adjust padding
+                            padding: const EdgeInsets.only(right: 0),
                             minSize: 0,
                             onPressed: _pasteTokenFromClipboard,
                             child: const Icon(
@@ -397,7 +394,12 @@ class _AddEditServerScreenState extends ConsumerState<AddEditServerScreen> {
                     ),
                     if (_tokenError != null)
                        Padding(
-                         padding: const EdgeInsets.only(left: 110, top: 4, bottom: 4, right: 15), // Adjust padding
+                        padding: const EdgeInsets.only(
+                          left: 110,
+                          top: 4,
+                          bottom: 4,
+                          right: 15,
+                        ),
                          child: Text(
                            _tokenError!,
                            style: TextStyle(color: CupertinoColors.systemRed.resolveFrom(context), fontSize: 12),
@@ -408,13 +410,11 @@ class _AddEditServerScreenState extends ConsumerState<AddEditServerScreen> {
 
                 const SizedBox(height: 20),
 
-                // Test Connection Button - Always enabled unless testing
                 CupertinoButton.filled(
                   onPressed: _isTestingConnection ? null : _testConnection,
                   child: _isTestingConnection
                       ? const CupertinoActivityIndicator(color: CupertinoColors.white)
                           : const Row(
-                            // Static content now
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                               Icon(CupertinoIcons.link),
@@ -426,7 +426,6 @@ class _AddEditServerScreenState extends ConsumerState<AddEditServerScreen> {
 
                  const SizedBox(height: 20),
 
-                // Delete button only when editing
                  if (_isEditing)
                    CupertinoButton(
                      color: CupertinoColors.destructiveRed,
@@ -436,7 +435,6 @@ class _AddEditServerScreenState extends ConsumerState<AddEditServerScreen> {
                          builder: (context) => CupertinoAlertDialog(
                            title: const Text('Delete Server?'),
                               content: Text(
-                                // Updated delete confirmation message
                                 'Are you sure you want to delete "${widget.serverToEdit!.name ?? widget.serverToEdit!.serverUrl}"?',
                               ),
                            actions: [
@@ -455,9 +453,9 @@ class _AddEditServerScreenState extends ConsumerState<AddEditServerScreen> {
 
                        if (confirmed == true) {
                          final success = await ref.read(multiServerConfigProvider.notifier).removeServer(widget.serverToEdit!.id);
-                        if (!mounted) return; // Add mounted check here
+                        if (!mounted) return;
                         if (success) {
-                           Navigator.of(context).pop(); // Pop back to settings
+                          Navigator.of(context).pop();
                         } else {
                             _showResultDialog('Error', 'Failed to delete server.', isError: true);
                          }

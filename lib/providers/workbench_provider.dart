@@ -9,9 +9,13 @@ import 'package:flutter_memos/providers/api_providers.dart';
 import 'package:flutter_memos/providers/server_config_provider.dart';
 import 'package:flutter_memos/providers/service_providers.dart';
 import 'package:flutter_memos/providers/workbench_instances_provider.dart';
+import 'package:flutter_memos/services/blinko_api_service.dart';
 import 'package:flutter_memos/services/cloud_kit_service.dart';
+import 'package:flutter_memos/services/memos_api_service.dart';
 import 'package:flutter_memos/services/note_api_service.dart';
 import 'package:flutter_memos/services/task_api_service.dart';
+// Import Vikunja service provider
+import 'package:flutter_memos/services/vikunja_api_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 @immutable
@@ -179,14 +183,33 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
         continue;
       }
 
+      // Get the API service configured for the *active* server
+      // We need to ensure this service matches the serverConfig's type
       final baseApiService = _ref.read(apiServiceProvider);
+      final activeServerConfig = _ref.read(activeServerConfigProvider);
 
+      // Check if the current item's server matches the *active* server's config
+      if (activeServerConfig?.id != serverId) {
+        if (kDebugMode) {
+          print(
+            '[WorkbenchNotifier($instanceId)] Server $serverId is not the active server (${activeServerConfig?.id}). Skipping detail fetch for its items.',
+          );
+        }
+        detailFetchFutures.addAll(
+          serverItems.map((item) => Future.value(item)),
+        );
+        continue;
+      }
+
+      // Now check if the active service type matches the server config type
       bool serviceTypeMatches =
-          ((serverConfig.serverType == ServerType.memos ||
-                  serverConfig.serverType == ServerType.blinko) &&
-              baseApiService is NoteApiService) ||
-          ((serverConfig.serverType == ServerType.todoist) &&
-              baseApiService is TaskApiService);
+          (serverConfig.serverType == ServerType.memos &&
+              baseApiService is MemosApiService) ||
+          (serverConfig.serverType == ServerType.blinko &&
+              baseApiService is BlinkoApiService) ||
+          (serverConfig.serverType == ServerType.vikunja &&
+              baseApiService is VikunjaApiService);
+      // Removed Todoist check
 
       if (!serviceTypeMatches) {
         if (kDebugMode) {
@@ -200,16 +223,16 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
         continue;
       }
 
+      // Cast the service based on the server type
       final NoteApiService? noteApiService =
-          baseApiService is NoteApiService &&
-                  (serverConfig.serverType == ServerType.memos ||
-                      serverConfig.serverType == ServerType.blinko)
-              ? baseApiService
+          (serverConfig.serverType == ServerType.memos ||
+                  serverConfig.serverType == ServerType.blinko)
+              ? baseApiService as NoteApiService
               : null;
       final TaskApiService? taskApiService =
-          baseApiService is TaskApiService &&
-                  serverConfig.serverType == ServerType.todoist
+          (serverConfig.serverType == ServerType.vikunja) // Check for Vikunja
               ? baseApiService
+                  as TaskApiService // Cast to TaskApiService
               : null;
 
       for (final itemRef in serverItems) {
@@ -252,16 +275,20 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
               }
             } else if (itemRef.referencedItemType == WorkbenchItemType.task &&
                 taskApiService != null) {
+              // Check if taskApiService is not null
               try {
                 final task = await taskApiService.getTask(
                   itemRef.referencedItemId,
                 );
-                referencedItemUpdateTime = task.createdAt;
-                updatedPreviewContent = task.content;
+                // Use updatedAt if available, otherwise createdAt for Vikunja
+                referencedItemUpdateTime = task.updatedAt ?? task.createdAt;
+                updatedPreviewContent =
+                    task.title; // Use title instead of content
                 if (referencedItemUpdateTime.isAfter(overallLastUpdateTime)) {
                   overallLastUpdateTime = referencedItemUpdateTime;
                 }
                 try {
+                  // Use the TaskApiService to list comments
                   fetchedComments = await taskApiService.listComments(
                     itemRef.referencedItemId,
                   );
@@ -595,7 +622,7 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
           workbenchProviderFamily(targetInstanceId).notifier,
         );
         targetNotifier._addExistingItem(newItemForTarget);
-        
+
         // Immediately add the item to local state (optimistic update)
         if (kDebugMode) {
           print(

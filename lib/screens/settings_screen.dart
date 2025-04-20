@@ -23,6 +23,8 @@ import 'package:flutter_memos/services/base_api_service.dart'; // Import BaseApi
 import 'package:flutter_memos/services/cloud_kit_service.dart'; // Import CloudKitService
 // Import MCP client provider (for status later) - add "as mcp_service" to solve ambiguity
 import 'package:flutter_memos/services/mcp_client_service.dart' as mcp_service;
+// Import Vikunja service provider for health check
+import 'package:flutter_memos/services/vikunja_api_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -34,12 +36,12 @@ class SettingsScreen extends ConsumerStatefulWidget {
 }
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
-  // Memos/Blinko server state
+  // Memos/Blinko/Vikunja server state
   bool _isTestingConnection = false;
 
-  // Todoist state
-  final _todoistApiKeyController = TextEditingController();
-  bool _isTestingTodoistConnection = false;
+  // Todoist state (Keep controller for potential future use or remove fully)
+  // final _todoistApiKeyController = TextEditingController();
+  // bool _isTestingTodoistConnection = false;
 
   // OpenAI state
   final _openaiApiKeyController = TextEditingController();
@@ -57,8 +59,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-        final initialTodoistKey = ref.read(todoistApiKeyProvider);
-        _todoistApiKeyController.text = initialTodoistKey;
+        // Removed Todoist key loading
+        // final initialTodoistKey = ref.read(todoistApiKeyProvider);
+        // _todoistApiKeyController.text = initialTodoistKey;
         final initialOpenAiKey = ref.read(openAiApiKeyProvider);
         _openaiApiKeyController.text = initialOpenAiKey;
         final initialGeminiKey = ref.read(geminiApiKeyProvider);
@@ -70,7 +73,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   @override
   void dispose() {
-    _todoistApiKeyController.dispose();
+    // _todoistApiKeyController.dispose(); // Remove if controller is removed
     _openaiApiKeyController.dispose();
     _geminiApiKeyController.dispose();
     super.dispose();
@@ -146,21 +149,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       return;
     }
 
-    if (activeConfig.serverType == ServerType.todoist) {
-      _showResultDialog(
-        'Info',
-        'Test Todoist connection via the Integrations section below.',
-      );
-      return;
-    }
+    // Removed Todoist check
+    // if (activeConfig.serverType == ServerType.todoist) { ... }
 
     setState(() => _isTestingConnection = true);
+    // Use the generic apiServiceProvider which resolves to the correct service
     final apiService = ref.read(apiServiceProvider);
 
     if (apiService is DummyApiService || !apiService.isConfigured) {
       _showResultDialog(
         'Configuration Error',
-        'The active server is not properly configured.',
+        'The active server (${activeConfig.serverType.name}) is not properly configured (URL/Token missing?).',
         isError: true,
       );
       setState(() => _isTestingConnection = false);
@@ -168,6 +167,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
 
     try {
+      // checkHealth is defined in BaseApiService, implemented by all concrete services
       final isHealthy = await apiService.checkHealth();
       if (mounted) {
         if (isHealthy) {
@@ -197,57 +197,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
   }
 
-  Future<void> _testTodoistConnection() async {
-    FocusScope.of(context).unfocus();
-    final todoistService = ref.read(todoistApiServiceProvider);
-    final currentKey = ref.read(todoistApiKeyProvider);
-
-    if (currentKey.isEmpty) {
-      _showResultDialog(
-        'API Key Missing',
-        'Please enter and save your Todoist API key first.',
-        isError: true,
-      );
-      return;
-    }
-    if (!todoistService.isConfigured) {
-      _showResultDialog(
-        'Service Not Configured',
-        'Todoist service is not configured. Please save the key.',
-        isError: true,
-      );
-      return;
-    }
-
-    setState(() => _isTestingTodoistConnection = true);
-    try {
-      final isHealthy = await todoistService.checkHealth();
-      if (mounted) {
-        if (isHealthy) {
-          _showResultDialog('Success', 'Todoist connection successful!');
-        } else {
-          _showResultDialog(
-            'Connection Failed',
-            'Could not connect to Todoist. Please verify your API key.',
-            isError: true,
-          );
-        }
-      }
-    } catch (e) {
-      if (kDebugMode) {
-        print("[SettingsScreen] Test Todoist Connection Error: $e");
-      }
-      if (mounted) {
-        _showResultDialog(
-          'Error',
-          'An error occurred while testing the Todoist connection:\n${e.toString()}',
-          isError: true,
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isTestingTodoistConnection = false);
-    }
-  }
+  // Removed _testTodoistConnection method
 
   Future<void> _testOpenAiConnection() async {
     FocusScope.of(context).unfocus();
@@ -301,7 +251,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
   }
 
-  // Show actions for Memos/Blinko/Todoist servers
+  // Show actions for Memos/Blinko/Vikunja servers
   void _showServerActions(
     BuildContext context,
     ServerConfig server,
@@ -309,11 +259,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     bool isActive,
     bool isDefault,
   ) {
-    final bool isTodoist = server.serverType == ServerType.todoist;
-    final String displayName =
-        server.name ?? (isTodoist ? 'Todoist Config' : server.serverUrl);
-    final String subtitle =
-        isTodoist ? 'Todoist Integration' : server.serverUrl;
+    // Removed isTodoist check
+    final String displayName = server.name ?? server.serverUrl;
+    final String subtitle = server.serverUrl;
 
     showCupertinoModalPopup<void>(
       context: context,
@@ -343,7 +291,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     Navigator.pop(context);
                   },
                 ),
-              // Default setting might be less relevant for Todoist, but keep for consistency?
               if (!isDefault)
                 CupertinoActionSheetAction(
                   child: const Text('Set Default'),
@@ -694,7 +641,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         return CupertinoIcons.bolt_horizontal_circle_fill;
       case ServerType.blinko:
         return CupertinoIcons.sparkles;
+      case ServerType.vikunja: // Added Vikunja case
+        return CupertinoIcons.list_bullet; // Example icon
       case ServerType.todoist:
+        // This case should ideally not be reached for display here
         return CupertinoIcons.check_mark_circled;
     }
   }
@@ -829,7 +779,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     // 2. Clear Local Notifiers and Cache
     final multiServerNotifier = ref.read(multiServerConfigProvider.notifier);
     final mcpServerNotifier = ref.read(mcpServerConfigProvider.notifier);
-    final todoistNotifier = ref.read(todoistApiKeyProvider.notifier);
+    // Removed todoistNotifier
+    // final todoistNotifier = ref.read(todoistApiKeyProvider.notifier);
     final openAiKeyNotifier = ref.read(openAiApiKeyProvider.notifier);
     final openAiModelNotifier = ref.read(openAiModelIdProvider.notifier);
     final geminiNotifier = ref.read(geminiApiKeyProvider.notifier);
@@ -849,17 +800,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       // Reset Configs & Keys
       await multiServerNotifier.resetStateAndCache();
       await mcpServerNotifier.resetStateAndCache();
-      await todoistNotifier.clear();
+      // Removed todoistNotifier.clear()
+      // await todoistNotifier.clear();
       await openAiKeyNotifier.clear();
       await openAiModelNotifier.clear();
       await geminiNotifier.clear();
 
       // Clear Data Caches
       for (final instanceId in instanceIdsToClear) {
-        await ref
-            .read(workbenchProviderFamily(instanceId).notifier)
-            .clearItems();
+        // Invalidate the provider instead of calling clearItems directly
+        ref.invalidate(workbenchProviderFamily(instanceId));
+        // await ref.read(workbenchProviderFamily(instanceId).notifier).clearItems();
       }
+      // Reload instances after clearing CloudKit and invalidating families
       await workbenchInstancesNotifier.loadInstances();
 
       tasksNotifier.clearTasks();
@@ -893,7 +846,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             : 'The reset process encountered errors:\n$cloudErrorMessage\nSome data might remain. Please check iCloud data manually (Settings > Apple ID > iCloud > Manage Account Storage) and restart the app.',
         isError: !cloudSuccess,
       );
-      ref.invalidate(loadServerConfigProvider);
+      // Invalidate providers to force reload on next access
+      ref.invalidate(multiServerConfigProvider);
       ref.invalidate(mcpServerConfigProvider);
       ref.invalidate(workbenchInstancesProvider);
       final activeServerId = ref.read(activeServerConfigProvider)?.id;
@@ -903,16 +857,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         );
       }
       ref.invalidate(tasksNotifierProvider);
-      final currentInstanceIds =
-          ref
-              .read(workbenchInstancesProvider)
-              .instances
-              .map((i) => i.id)
-              .toList();
-      for (final instanceId in currentInstanceIds) {
-        ref.invalidate(workbenchProviderFamily(instanceId));
-      }
+      // Invalidate already happened for workbench families
       ref.invalidate(chatProvider);
+      // Invalidate API key providers
+      ref.invalidate(openAiApiKeyProvider);
+      ref.invalidate(openAiModelIdProvider);
+      ref.invalidate(geminiApiKeyProvider);
+      // Invalidate API service providers
+      ref.invalidate(apiServiceProvider);
+      ref.invalidate(openaiApiServiceProvider);
+      ref.invalidate(
+        vikunjaApiServiceProvider,
+      ); // Invalidate Vikunja specifically if needed
+
     } else {
       if (kDebugMode) {
         print(
@@ -932,7 +889,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final notifier = ref.read(multiServerConfigProvider.notifier);
 
     final activeConfig = ref.watch(activeServerConfigProvider);
-    final bool isTodoistActive = activeConfig?.serverType == ServerType.todoist;
+    // Removed isTodoistActive check
     final bool automaticallyImplyLeading = !widget.isInitialSetup;
 
     return GestureDetector(
@@ -999,7 +956,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            'Please add your Memos/Blinko/Todoist server details to get started.',
+                            'Please add your Memos/Blinko/Vikunja server details to get started.', // Updated text
                             style: TextStyle(color: CupertinoColors.systemBlue),
                           ),
                         ),
@@ -1007,10 +964,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     ),
                   ),
                 ),
-              // Server List Section (Memos/Blinko/Todoist)
+              // Server List Section (Memos/Blinko/Vikunja)
               CupertinoListSection.insetGrouped(
                 header: const Text(
-                  'SERVERS (Memos, Blinko, Todoist)',
+                  'SERVERS (Memos, Blinko, Vikunja)', // Updated header
                 ),
                 footer:
                     servers.isEmpty
@@ -1030,17 +987,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ...servers.map((server) {
                     final bool isActive = server.id == activeServerId;
                     final bool isDefault = server.id == defaultServerId;
-                    final bool isTodoist =
-                        server.serverType == ServerType.todoist;
-                    final String displayName =
-                        server.name ??
-                        (isTodoist ? 'Todoist Config' : server.serverUrl);
+                    // Removed isTodoist check
+                    final String displayName = server.name ?? server.serverUrl;
                     final String subtitle =
-                        isTodoist
-                            ? 'Todoist Integration'
-                            : (server.name != null
-                                ? server.serverUrl
-                                : 'No name');
+                        server.name != null ? server.serverUrl : 'No name';
 
                     return CupertinoListTile(
                       title: Text(displayName),
@@ -1068,7 +1018,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           Padding(
                             padding: const EdgeInsets.only(right: 8.0),
                             child: Icon(
-                              _getServerIcon(server.serverType),
+                              _getServerIcon(
+                                server.serverType,
+                              ), // Uses updated switch
                               size: 18,
                               color: CupertinoColors.tertiaryLabel.resolveFrom(
                                 context,
@@ -1115,30 +1067,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 child: CupertinoButton.filled(
                   padding: const EdgeInsets.symmetric(vertical: 12),
                   onPressed:
-                      _isTestingConnection ||
-                              activeServerId == null ||
-                              isTodoistActive
+                      _isTestingConnection || activeServerId == null
                           ? null
-                          : _testConnection,
+                          : _testConnection, // Always enabled if not testing and server exists
                   child:
                       _isTestingConnection
                           ? const CupertinoActivityIndicator(
                             color: CupertinoColors.white,
                           )
-                          : Row(
+                          : const Row(
+                            // Static text
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(
-                                isTodoistActive
-                                    ? CupertinoIcons.nosign
-                                    : CupertinoIcons.link,
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                isTodoistActive
-                                    ? 'Test Todoist via Integrations'
-                                    : 'Test Active Connection',
-                              ),
+                              Icon(CupertinoIcons.link),
+                              SizedBox(width: 8),
+                              Text('Test Active Connection'),
                             ],
                           ),
                 ),
@@ -1147,98 +1090,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               CupertinoListSection.insetGrouped(
                 header: const Text('INTEGRATIONS'),
                 children: [
-                  // Todoist Integration Tile
-                  CupertinoListTile(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 15.0,
-                      vertical: 10.0,
-                    ),
-                    title: const Text('Todoist API Key'),
-                    subtitle: Padding(
-                      padding: const EdgeInsets.only(top: 8.0),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: CupertinoTextField(
-                              controller: _todoistApiKeyController,
-                              placeholder: 'Enter Todoist API token',
-                              obscureText: true,
-                              padding: const EdgeInsets.symmetric(
-                                vertical: 10.0,
-                                horizontal: 12.0,
-                              ),
-                              decoration: BoxDecoration(
-                                color: CupertinoColors.tertiarySystemFill
-                                    .resolveFrom(context),
-                                borderRadius: BorderRadius.circular(8.0),
-                              ),
-                              clearButtonMode: OverlayVisibilityMode.editing,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          CupertinoButton(
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
-                            color: CupertinoColors.activeBlue,
-                            onPressed: () async {
-                              // Make async
-                              final newKey =
-                                  _todoistApiKeyController.text.trim();
-                              // Save the key globally using the settings provider
-                              final success = await ref
-                                  .read(todoistApiKeyProvider.notifier)
-                                  .set(newKey);
+                  // Removed Todoist Integration Tile
+                  // Removed Test Todoist Connection Tile
 
-                              FocusScope.of(context).unfocus();
-
-                              if (success) {
-                                // --- START REMOVAL ---
-                                // Removed ServerConfig update logic
-                                // --- END REMOVAL ---
-                                _showResultDialog(
-                                  'API Key Updated',
-                                  'Todoist API key has been saved.',
-                                );
-                                // Trigger health check after saving
-                                ref.read(todoistApiHealthCheckerProvider);
-                              } else {
-                                _showResultDialog(
-                                  'Error',
-                                  'Failed to save Todoist API key.',
-                                  isError: true,
-                                );
-                              }
-                            },
-                            child: const Text(
-                              'Save',
-                              style: TextStyle(color: CupertinoColors.white),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  // Test Todoist Connection Tile
-                  CupertinoListTile(
-                    title: Center(
-                      child: CupertinoButton(
-                        onPressed:
-                            _isTestingTodoistConnection
-                                ? null
-                                : _testTodoistConnection,
-                        child:
-                            _isTestingTodoistConnection
-                                ? const CupertinoActivityIndicator()
-                                : const Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(CupertinoIcons.link),
-                                    SizedBox(width: 8),
-                                    Text('Test Todoist Connection'),
-                                  ],
-                                ),
-                      ),
-                    ),
-                  ),
                   // OpenAI Integration Tile
                   CupertinoListTile(
                     padding: const EdgeInsets.symmetric(
@@ -1533,7 +1387,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       ),
                       SizedBox(height: 8),
                       Text(
-                        'Tap a server to make it active.\nUse "..." to Edit, Delete, or set a Default server.\n\nFor Memos/Blinko, the authentication token (Access Token) is under Settings > My Account on your server.\n\nFor Todoist, add a server entry and use your Todoist API Key (found in Todoist Settings > Integrations > Developer).',
+                        'Tap a server to make it active.\nUse "..." to Edit, Delete, or set a Default server.\n\nFor Memos/Blinko/Vikunja, the authentication token (Access Token or API Key) is usually found under Settings > My Account or API settings on your server.', // Updated text
                         style: TextStyle(fontSize: 14),
                       ),
                       SizedBox(height: 12),
@@ -1552,7 +1406,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       ),
                       SizedBox(height: 8),
                       Text(
-                        'API keys for integrations like Todoist, OpenAI, and Gemini are stored locally on your device. The Todoist key entered here is used for the integration.',
+                        'API keys for integrations like OpenAI and Gemini are stored locally on your device.', // Updated text
                         style: TextStyle(fontSize: 14),
                       ),
                     ],
@@ -1581,7 +1435,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             (dialogContext) => CupertinoAlertDialog(
                               title: const Text('Confirm Reset'),
                               content: const Text(
-                                'This will permanently delete ALL server configurations (Memos, Blinko, Todoist, MCP), API keys (Todoist, OpenAI, Gemini), cached data (notes, tasks, workbench items, chat history), and local settings from this device AND from your iCloud account.\n\nThis action cannot be undone. Are you absolutely sure?',
+                                'This will permanently delete ALL server configurations (Memos, Blinko, Vikunja, MCP), API keys (OpenAI, Gemini), cached data (notes, tasks, workbench items, chat history), and local settings from this device AND from your iCloud account.\n\nThis action cannot be undone. Are you absolutely sure?', // Updated text
                               ),
                               actions: [
                                 CupertinoDialogAction(
