@@ -108,18 +108,19 @@ final loadServerConfigProvider = FutureProvider<void>((ref) async {
       );
     }
   }
-  try {
-    await ref.read(vikunjaApiKeyProvider.notifier).init(); // Added Vikunja init
-    if (kDebugMode) {
-      print('[loadServerConfigProvider] Vikunja API key load triggered.');
-    }
-  } catch (e) {
-    if (kDebugMode) {
-      print(
-        '[loadServerConfigProvider] Error initializing Vikunja provider: $e',
-      );
-    }
-  }
+  // REMOVED Vikunja API Key init
+  // try {
+  //   await ref.read(vikunjaApiKeyProvider.notifier).init(); // Added Vikunja init
+  //   if (kDebugMode) {
+  //     print('[loadServerConfigProvider] Vikunja API key load triggered.');
+  //   }
+  // } catch (e) {
+  //   if (kDebugMode) {
+  //     print(
+  //       '[loadServerConfigProvider] Error initializing Vikunja provider: $e',
+  //     );
+  //   }
+  // }
   try {
     await ref.read(cloudKitServiceProvider).initialize();
     if (kDebugMode) {
