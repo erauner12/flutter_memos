@@ -24,7 +24,7 @@ final apiConfigProvider = StateProvider<Map<String, dynamic>>((ref) {
   return {'verboseLogging': true};
 }, name: 'apiConfig');
 
-/// Provider for the active NOTE API Service (Memos, Blinko, or Vikunja-as-note)
+/// Provider for the active NOTE API Service (Memos or Blinko)
 /// Returns the NoteApiService interface.
 final noteApiServiceProvider = Provider<NoteApiService>((ref) {
   final noteServerConfig = ref.watch(noteServerConfigProvider);
@@ -67,16 +67,13 @@ final noteApiServiceProvider = Provider<NoteApiService>((ref) {
       );
       service = blinkoService;
       break;
-    case ServerType.vikunja: // Vikunja can act as a Note service
-      final vikunjaService = VikunjaApiService();
-      VikunjaApiService.verboseLogging = config['verboseLogging'] ?? true;
-      vikunjaService.configureService(
-        baseUrl: serverUrl,
-        authStrategy: authStrategy,
-      );
-      service =
-          vikunjaService
-              as NoteApiService; // VikunjaApiService implements NoteApiService
+    case ServerType.vikunja: // Vikunja is NO LONGER a valid Note service type
+      if (kDebugMode) {
+        print(
+          '[noteApiServiceProvider] Error: Vikunja is not a valid note server type. Config found: ${noteServerConfig.id}. Returning DummyNoteApiService.',
+        );
+      }
+      service = DummyNoteApiService();
       break;
     case ServerType.todoist:
       // Todoist is not a note service

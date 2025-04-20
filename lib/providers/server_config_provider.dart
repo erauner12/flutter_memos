@@ -142,13 +142,13 @@ final loadServerConfigProvider = FutureProvider<void>((ref) async {
 
 /// Check if a server type is valid for note-taking (used in migration).
 bool _isValidNoteServerType(ServerType type) {
-  return type == ServerType.memos ||
-      type == ServerType.blinko ||
-      type == ServerType.vikunja;
+  // Only Memos and Blinko are valid note servers now
+  return type == ServerType.memos || type == ServerType.blinko;
 }
 
 /// Check if a server type is valid for tasks (used in migration).
 bool _isValidTaskServerType(ServerType type) {
+  // Only Vikunja is a valid task server
   return type == ServerType.vikunja;
 }
 
@@ -285,6 +285,7 @@ Future<void> _runMigrationIfNeeded(Ref ref) async {
   );
 
   if (defaultServer != null) {
+    // Use the updated helper functions
     if (_isValidNoteServerType(defaultServer.serverType)) {
       noteServerToMigrate = defaultServer;
       if (kDebugMode) {
@@ -299,6 +300,11 @@ Future<void> _runMigrationIfNeeded(Ref ref) async {
           '[Migration] Assigning default server ${defaultServer.id} (${defaultServer.serverType}) as Task server.',
         );
       }
+    } else if (kDebugMode) {
+      // Log if default server is neither valid note nor valid task (e.g., old Vikunja note server)
+      print(
+        '[Migration] Default server ${defaultServer.id} (${defaultServer.serverType}) is not a valid Note or Task server type in the new scheme. Skipping assignment.',
+      );
     }
   }
 
@@ -310,6 +316,7 @@ Future<void> _runMigrationIfNeeded(Ref ref) async {
       continue;
     }
 
+    // Use the updated helper functions
     if (noteServerToMigrate == null &&
         _isValidNoteServerType(server.serverType)) {
       noteServerToMigrate = server;
@@ -326,6 +333,14 @@ Future<void> _runMigrationIfNeeded(Ref ref) async {
           '[Migration] Assigning server ${server.id} (${server.serverType}) as Task server.',
         );
       }
+    } else if (kDebugMode &&
+        server.serverType == ServerType.vikunja &&
+        noteServerToMigrate != null) {
+      // Log if we encounter a Vikunja server but the note slot is already filled (or it's not valid for notes anyway)
+      // and the task slot is also filled or this isn't the one chosen for tasks.
+      print(
+        '[Migration] Skipping server ${server.id} (${server.serverType}) as it is not a valid Note server type or the Note/Task slots are already filled.',
+      );
     }
 
     // Stop if both slots are filled
@@ -356,9 +371,10 @@ Future<void> _runMigrationIfNeeded(Ref ref) async {
   }
 
   // --- Cleanup Old Keys ---
-  if (migrationHappened) {
+  if (migrationHappened || oldServers.isNotEmpty) {
+    // Clean up if migration happened OR if old servers were found but none were suitable
     if (kDebugMode) {
-      print('[Migration] Migration complete. Removing old keys...');
+      print('[Migration] Migration process finished. Removing old keys...');
     }
     await _removeOldKeys(prefs);
   } else {

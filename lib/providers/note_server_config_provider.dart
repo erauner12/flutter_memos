@@ -28,11 +28,11 @@ class NoteServerConfigNotifier extends StateNotifier<ServerConfig?> {
         initialStateFromCache = ServerConfig.fromJson(
           jsonDecode(cachedJsonString) as Map<String, dynamic>,
         );
-        // Ensure loaded type is valid for notes (Memos, Blinko, Vikunja?)
+        // Ensure loaded type is valid for notes (Memos, Blinko ONLY)
         if (!_isValidNoteServerType(initialStateFromCache.serverType)) {
            if (kDebugMode) {
              print(
-               '[NoteServerConfigNotifier] Invalid server type (${initialStateFromCache.serverType}) loaded from cache. Discarding.',
+              '[NoteServerConfigNotifier] Invalid server type (${initialStateFromCache.serverType}) loaded from cache for Note server. Discarding.',
              );
            }
            initialStateFromCache = null;
@@ -106,7 +106,7 @@ class NoteServerConfigNotifier extends StateNotifier<ServerConfig?> {
         if (!_isValidNoteServerType(config.serverType)) {
           if (kDebugMode) {
             print(
-              '[NoteServerConfigNotifier] Attempted to cache invalid server type: ${config.serverType}. Aborting cache update.',
+              '[NoteServerConfigNotifier] Attempted to cache invalid server type for Note server: ${config.serverType}. Aborting cache update.',
             );
           }
           return false;
@@ -138,7 +138,7 @@ class NoteServerConfigNotifier extends StateNotifier<ServerConfig?> {
      if (!_isValidNoteServerType(config.serverType)) {
        if (kDebugMode) {
          print(
-           '[NoteServerConfigNotifier] Attempted to set invalid server type: ${config.serverType}. Aborting.',
+          '[NoteServerConfigNotifier] Attempted to set invalid server type for Note server: ${config.serverType}. Aborting.',
          );
        }
        return false;
@@ -159,13 +159,6 @@ class NoteServerConfigNotifier extends StateNotifier<ServerConfig?> {
         );
       }
       return true;
-    } else {
-      if (kDebugMode) {
-        print(
-          '[NoteServerConfigNotifier] Failed to sync note server ${config.id} to CloudKit. Local state/cache not changed.',
-        );
-      }
-      return false;
     }
   }
 
@@ -189,13 +182,6 @@ class NoteServerConfigNotifier extends StateNotifier<ServerConfig?> {
         );
       }
       return true;
-    } else {
-      if (kDebugMode) {
-        print(
-          '[NoteServerConfigNotifier] Failed to sync deleted note server $currentConfigId to CloudKit. Local state/cache not changed.',
-        );
-      }
-      return false;
     }
   }
 
@@ -222,8 +208,8 @@ class NoteServerConfigNotifier extends StateNotifier<ServerConfig?> {
 
   /// Check if a server type is valid for note-taking.
   bool _isValidNoteServerType(ServerType type) {
-    // Allow Memos, Blinko, and potentially Vikunja if it supports notes
-    return type == ServerType.memos || type == ServerType.blinko || type == ServerType.vikunja;
+    // Allow Memos and Blinko ONLY
+    return type == ServerType.memos || type == ServerType.blinko;
   }
 }
 

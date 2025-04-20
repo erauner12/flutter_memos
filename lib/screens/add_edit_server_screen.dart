@@ -52,8 +52,8 @@ class _AddEditServerScreenState extends ConsumerState<AddEditServerScreen> {
     _selectedServerType =
         widget.purpose == ServerPurpose.note
             ? ServerType
-                .memos // Default for notes
-            : ServerType.vikunja; // Default for tasks
+                .memos // Default for notes (Memos)
+            : ServerType.vikunja; // Default for tasks (Vikunja)
 
     if (_isEditing) {
       _nameController.text = widget.serverToEdit!.name ?? '';
@@ -66,12 +66,14 @@ class _AddEditServerScreenState extends ConsumerState<AddEditServerScreen> {
       )) {
         _selectedServerType = widget.serverToEdit!.serverType;
       } else {
-        // If the existing type is somehow invalid for the purpose, log error and keep default
+        // If the existing type is somehow invalid for the purpose (e.g., Vikunja for Note),
+        // log error and keep the default type for that purpose.
         if (kDebugMode) {
           print(
-            "[AddEditServerScreen] Warning: Editing server with type ${widget.serverToEdit!.serverType} which is invalid for purpose ${widget.purpose}. Using default type.",
+            "[AddEditServerScreen] Warning: Editing server with type ${widget.serverToEdit!.serverType} which is invalid for purpose ${widget.purpose}. Using default type '$_selectedServerType'.",
           );
         }
+        // The default type set earlier based on purpose is already correct.
       }
     }
   }
@@ -301,10 +303,8 @@ class _AddEditServerScreenState extends ConsumerState<AddEditServerScreen> {
   // Helper to check if a server type is valid for the given purpose
   bool _isValidServerTypeForPurpose(ServerType type, ServerPurpose purpose) {
     if (purpose == ServerPurpose.note) {
-      // Memos, Blinko, Vikunja are valid note servers
-      return type == ServerType.memos ||
-          type == ServerType.blinko ||
-          type == ServerType.vikunja;
+      // Memos, Blinko are valid note servers
+      return type == ServerType.memos || type == ServerType.blinko;
     } else {
       // ServerPurpose.task
       // Only Vikunja is a valid task server currently
@@ -316,6 +316,7 @@ class _AddEditServerScreenState extends ConsumerState<AddEditServerScreen> {
   Map<ServerType, Widget> _buildServerTypeOptions() {
     Map<ServerType, Widget> options = {};
     if (widget.purpose == ServerPurpose.note) {
+      // Only Memos and Blinko for Note servers
       options = {
         ServerType.memos: const Padding(
           padding: EdgeInsets.symmetric(horizontal: 8),
@@ -325,17 +326,14 @@ class _AddEditServerScreenState extends ConsumerState<AddEditServerScreen> {
           padding: EdgeInsets.symmetric(horizontal: 8),
           child: Text('Blinko'),
         ),
-        ServerType.vikunja: const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 8),
-          child: Text('Vikunja (Notes)'),
-        ),
       };
     } else {
       // ServerPurpose.task
+      // Only Vikunja for Task servers
       options = {
         ServerType.vikunja: const Padding(
           padding: EdgeInsets.symmetric(horizontal: 8),
-          child: Text('Vikunja (Tasks)'),
+          child: Text('Vikunja'), // Simplified label
         ),
         // Add other task server types here in the future
       };
@@ -353,6 +351,19 @@ class _AddEditServerScreenState extends ConsumerState<AddEditServerScreen> {
             : 'Add ${widget.purpose == ServerPurpose.note ? "Note" : "Task"} Server';
 
     final serverTypeOptions = _buildServerTypeOptions();
+
+    // Ensure there are enough options for the segmented control
+    // If only one option exists (e.g., only Vikunja for tasks), use a non-interactive display
+    final bool showSegmentedControl = serverTypeOptions.length >= 2;
+
+    // Helper to safely extract text from the widget map
+    String getSingleOptionText() {
+      final widget = serverTypeOptions.values.first;
+      if (widget is Padding && widget.child is Text) {
+        return (widget.child as Text).data ?? '';
+      }
+      return ''; // Fallback
+    }
 
     return GestureDetector(
        onTap: () => FocusScope.of(context).unfocus(),
@@ -375,27 +386,42 @@ class _AddEditServerScreenState extends ConsumerState<AddEditServerScreen> {
                 CupertinoFormSection.insetGrouped(
                   header: const Text('SERVER DETAILS'),
                   children: [
-                    // Server Type Picker - Dynamically built
+                    // Server Type Picker or Display
                     CupertinoFormRow(
                       prefix: const Text('Type'),
-                      child: CupertinoSegmentedControl<ServerType>(
-                        children: serverTypeOptions,
-                        groupValue: _selectedServerType,
-                        onValueChanged: (ServerType? newValue) {
-                          // Only allow switching to valid types for the current purpose
-                          if (newValue != null &&
-                              _isValidServerTypeForPurpose(
-                                newValue,
-                                widget.purpose,
-                              )) {
-                            setState(() {
-                              _selectedServerType = newValue;
-                              // Re-validate token if needed (e.g., different requirements per type)
-                              _validateToken(_tokenController.text);
-                            });
-                          }
-                        },
-                      ),
+                      child:
+                          showSegmentedControl
+                              ? CupertinoSegmentedControl<ServerType>(
+                                children: serverTypeOptions,
+                                groupValue: _selectedServerType,
+                                onValueChanged: (ServerType? newValue) {
+                                  // Only allow switching to valid types for the current purpose
+                                  if (newValue != null &&
+                                      _isValidServerTypeForPurpose(
+                                        newValue,
+                                        widget.purpose,
+                                      )) {
+                                    setState(() {
+                                      _selectedServerType = newValue;
+                                      // Re-validate token if needed (e.g., different requirements per type)
+                                      _validateToken(_tokenController.text);
+                                    });
+                                  }
+                                },
+                              )
+                              : Padding(
+                                // Display single option if only one is available
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 10.0,
+                                ),
+                                child: Text(
+                                  getSingleOptionText(), // Use helper to extract text safely
+                                  style:
+                                      CupertinoTheme.of(
+                                        context,
+                                      ).textTheme.textStyle,
+                                ),
+                              ),
                     ),
                     CupertinoTextFormFieldRow(
                       controller: _nameController,
