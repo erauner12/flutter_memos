@@ -153,6 +153,7 @@ class TasksNotifier extends StateNotifier<TasksState> {
   }
 
   void clearTasks() {
+    // Resetting to initial state implicitly sets hasFetchedOnce to false
     state = TasksState.initial();
     // Mark as unconfigured when clearing tasks explicitly? Maybe not needed if taskApiServiceProvider handles it.
     // _ref.read(isVikunjaConfiguredProvider.notifier).state = false;
@@ -178,14 +179,23 @@ class TasksNotifier extends StateNotifier<TasksState> {
         if (priorityComparison != 0) return priorityComparison;
         return a.createdAt.compareTo(b.createdAt);
       });
-      state = state.copyWith(isLoading: false, tasks: tasks);
+      // Set hasFetchedOnce to true after a successful fetch, even if tasks are empty
+      state = state.copyWith(
+        isLoading: false,
+        tasks: tasks,
+        clearError: true,
+        hasFetchedOnce:
+            true, // <-- Mark that at least one successful fetch occurred
+      );
     } catch (e, s) {
       if (kDebugMode) print('Error fetching tasks: $e\n$s');
        if (!mounted) return;
+      // Do not set hasFetchedOnce on error, allow retry
       state = state.copyWith(
         isLoading: false,
         error: 'Failed to fetch tasks: ${e.toString()}',
         tasks: [],
+        // hasFetchedOnce remains unchanged (likely false or previous state)
       );
     }
   }
@@ -419,25 +429,31 @@ class TasksState {
   final List<TaskItem> tasks;
   final bool isLoading;
   final String? error;
+  final bool hasFetchedOnce; // <- new property
 
   const TasksState({
     this.tasks = const [],
     this.isLoading = false,
     this.error,
+    this.hasFetchedOnce = false, // Default to false
   });
 
-  factory TasksState.initial() => const TasksState();
+  factory TasksState.initial() =>
+      const TasksState(); // Initial state has hasFetchedOnce = false
 
   TasksState copyWith({
     List<TaskItem>? tasks,
     bool? isLoading,
     String? error,
     bool clearError = false,
+    bool? hasFetchedOnce, // Add hasFetchedOnce to copyWith parameters
   }) {
     return TasksState(
       tasks: tasks ?? this.tasks,
       isLoading: isLoading ?? this.isLoading,
       error: clearError ? null : (error ?? this.error),
+      hasFetchedOnce:
+          hasFetchedOnce ?? this.hasFetchedOnce, // Copy forward the value
     );
   }
 
@@ -447,9 +463,15 @@ class TasksState {
     return other is TasksState &&
         listEquals(other.tasks, tasks) &&
         other.isLoading == isLoading &&
-        other.error == error;
+        other.error == error &&
+        other.hasFetchedOnce == hasFetchedOnce; // Compare hasFetchedOnce
   }
 
   @override
-  int get hashCode => Object.hash(Object.hashAll(tasks), isLoading, error);
+  int get hashCode => Object.hash(
+    Object.hashAll(tasks),
+    isLoading,
+    error,
+    hasFetchedOnce, // Include hasFetchedOnce in hash
+  );
 }

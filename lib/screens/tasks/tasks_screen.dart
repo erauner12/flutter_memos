@@ -301,8 +301,8 @@ class TasksScreen extends HookConsumerWidget {
         // Use a post frame callback to ensure providers are ready
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (isVikunjaConfigured) {
-            // Fetch only if configured, tasks are empty, not loading, and no error
-            if (tasksState.tasks.isEmpty &&
+            // Fetch only if configured, haven't fetched yet, not loading, and no error
+            if (!tasksState.hasFetchedOnce && // <-- Check the new flag
                 !tasksState.isLoading &&
                 tasksState.error == null) {
               // Use Future.microtask to avoid triggering build during build
@@ -311,13 +311,12 @@ class TasksScreen extends HookConsumerWidget {
               );
             }
           } else {
-            // If not configured, ensure tasks are cleared
-            // Consider only clearing if the config was *explicitly* removed,
-            // not just because the provider is loading/erroring temporarily.
-            // For now, keeping the original logic.
+            // If not configured, ensure tasks are cleared and fetch state is reset
             if (tasksState.tasks.isNotEmpty ||
                 tasksState.error != null ||
-                tasksState.isLoading) {
+                tasksState.isLoading ||
+                tasksState.hasFetchedOnce) {
+              // Also reset if hasFetchedOnce was true
               Future.microtask(
                 () => ref.read(tasksNotifierProvider.notifier).clearTasks(),
               );
@@ -327,12 +326,12 @@ class TasksScreen extends HookConsumerWidget {
         // Return null for cleanup function
         return null;
       },
-      // Dependencies: configuration status, loading state, error state, task list emptiness
+      // Dependencies: configuration status, loading state, error state, hasFetchedOnce flag
       [
         isVikunjaConfigured,
         tasksState.isLoading,
         tasksState.error,
-        tasksState.tasks.isEmpty,
+        tasksState.hasFetchedOnce, // <-- Add hasFetchedOnce to dependencies
       ],
     );
 
