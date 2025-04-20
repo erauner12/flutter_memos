@@ -121,61 +121,86 @@ final taskApiServiceProvider = FutureProvider<TaskApiService>((ref) async {
   final taskServerConfig = ref.watch(taskServerConfigProvider);
   final config = ref.watch(apiConfigProvider); // General config like logging
 
-  if (taskServerConfig == null || taskServerConfig.serverUrl.isEmpty) {
-    if (kDebugMode) {
-      print(
-        '[taskApiServiceProvider] Warning: No task server configured or URL is empty. Returning DummyTaskApiService.',
-      );
-    }
+  // --- Start Enhanced Logging ---
+  if (taskServerConfig == null) {
+    if (kDebugMode)
+      print("[taskApiServiceProvider] No task server config. Returning dummy.");
     return DummyTaskApiService();
   }
-
-  // Currently only Vikunja is supported as a task server
+  if (taskServerConfig.serverUrl.isEmpty) {
+    if (kDebugMode)
+      print("[taskApiServiceProvider] Blank URL for Vikunja. Returning dummy.");
+    return DummyTaskApiService();
+  }
   if (taskServerConfig.serverType != ServerType.vikunja) {
-    if (kDebugMode) {
-      print(
-        '[taskApiServiceProvider] Error: Configured task server type (${taskServerConfig.serverType}) is not Vikunja. Returning DummyTaskApiService.',
-      );
-    }
-    return DummyTaskApiService();
-  }
-
-  final serverUrl = taskServerConfig.serverUrl;
-  // Use token ONLY from config. Removed fallback to separate API key.
-  final authToken = taskServerConfig.authToken;
-  final authStrategy = BearerTokenAuthStrategy(authToken);
-
-  if (authToken.isEmpty) {
     if (kDebugMode)
       print(
-        '[taskApiServiceProvider] Warning: Vikunja task server configured but token/API key is missing. Returning DummyTaskApiService.',
+        "[taskApiServiceProvider] Server type (${taskServerConfig.serverType}) not vikunja. Returning dummy.",
       );
     return DummyTaskApiService();
   }
+  if (taskServerConfig.authToken.isEmpty) {
+    if (kDebugMode)
+      print("[taskApiServiceProvider] Token is empty. Returning dummy.");
+    return DummyTaskApiService();
+  }
+  // --- End Enhanced Logging ---
 
+  // We have Vikunja config with a token:
   final vikunjaService = VikunjaApiService();
   VikunjaApiService.verboseLogging = config['verboseLogging'] ?? true;
 
-  // *** CRITICAL CHANGE: Await configureService and pass serverId ***
-  await vikunjaService.configureService(
-    baseUrl: serverUrl,
-    authStrategy: authStrategy,
-    serverId: taskServerConfig.id, // Pass the server ID from the config
-  );
-
   if (kDebugMode) {
     print(
-      '[taskApiServiceProvider] Configured Vikunja service for task server: ${taskServerConfig.name ?? taskServerConfig.id}. isConfigured: ${vikunjaService.isConfigured}',
+      "[taskApiServiceProvider] Attempting to configure Vikunja with baseUrl=${taskServerConfig.serverUrl} tokenLength=${taskServerConfig.authToken.length} serverId=${taskServerConfig.id}",
     );
   }
 
-  ref.onDispose(() {
-    if (kDebugMode)
-      print('[taskApiServiceProvider] Disposing Task API service provider.');
-  });
+  try {
+    // *** CRITICAL CHANGE: Await configureService and pass serverId ***
+    await vikunjaService.configureService(
+      baseUrl: taskServerConfig.serverUrl,
+      authStrategy: BearerTokenAuthStrategy(taskServerConfig.authToken),
+      serverId: taskServerConfig.id, // Pass the server ID from the config
+    );
 
-  // Return the configured service if successful, otherwise dummy
-  return vikunjaService.isConfigured ? vikunjaService : DummyTaskApiService();
+    if (kDebugMode) {
+      print(
+        "[taskApiServiceProvider] configureService done. isConfigured=${vikunjaService.isConfigured}",
+      );
+    }
+
+    // Return the configured service if successful, otherwise dummy
+    if (vikunjaService.isConfigured) {
+      if (kDebugMode) {
+        print(
+          '[taskApiServiceProvider] Configured Vikunja service for task server: ${taskServerConfig.name ?? taskServerConfig.id}. Returning VikunjaApiService.',
+        );
+      }
+      return vikunjaService;
+    } else {
+      if (kDebugMode) {
+        print(
+          '[taskApiServiceProvider] Vikunja service configuration failed (isConfigured=false). Returning DummyTaskApiService.',
+        );
+      }
+      return DummyTaskApiService();
+    }
+  } catch (e) {
+    if (kDebugMode) {
+      print(
+        "[taskApiServiceProvider] configureService threw error: $e. Returning DummyTaskApiService.",
+      );
+    }
+    // Ensure the internal state of the service instance is also marked as not configured
+    // (configureService should handle this, but double-check if issues persist)
+    return DummyTaskApiService();
+  } finally {
+    ref.onDispose(() {
+      if (kDebugMode)
+        print('[taskApiServiceProvider] Disposing Task API service provider.');
+    });
+  }
 }, name: 'taskApiService');
 
 
@@ -259,10 +284,31 @@ Future<void> _checkNoteApiHealth(Ref ref) async {
 /// IMPORTANT: Now watches the FutureProvider and checks the result.
 final isVikunjaConfiguredProvider = Provider<bool>((ref) {
   final taskServiceAsyncValue = ref.watch(taskApiServiceProvider);
+  // Add logging here to see what taskServiceAsyncValue contains
+  if (kDebugMode) {
+    print(
+      "[isVikunjaConfiguredProvider] taskServiceAsyncValue: $taskServiceAsyncValue",
+    );
+  }
   return taskServiceAsyncValue.when(
-    data: (service) => service.isConfigured && service is VikunjaApiService,
-    loading: () => false, // Not configured while loading
-    error: (_, __) => false, // Not configured on error
+    data: (service) {
+      if (kDebugMode) {
+        print(
+          "[isVikunjaConfiguredProvider] Data received: service.isConfigured=${service.isConfigured}, service type=${service.runtimeType}",
+        );
+      }
+      // Ensure it's the correct service type AND configured
+      return service.isConfigured && service is VikunjaApiService;
+    },
+    loading: () {
+      if (kDebugMode) print("[isVikunjaConfiguredProvider] State: loading");
+      return false; // Not configured while loading
+    },
+    error: (err, stack) {
+      if (kDebugMode)
+        print("[isVikunjaConfiguredProvider] State: error - $err");
+      return false; // Not configured on error
+    },
   );
 }, name: 'isVikunjaConfiguredProvider');
 
@@ -272,7 +318,12 @@ final taskApiStatusProvider = StateProvider<String>((ref) {
   final isConfigured = ref.watch(
     isVikunjaConfiguredProvider,
   ); // Use the computed provider
-  return !isConfigured ? 'unconfigured' : 'unknown';
+  final status = !isConfigured ? 'unconfigured' : 'unknown';
+  if (kDebugMode)
+    print(
+      "[taskApiStatusProvider] Status updated: $status (based on isVikunjaConfigured: $isConfigured)",
+    );
+  return status;
 }, name: 'taskApiStatus');
 
 /// Provider that pings the TASK API periodically to check health
@@ -296,6 +347,10 @@ Future<void> _checkTaskApiHealth(Ref ref) async {
 
   if (!isConfigured) {
     if (ref.read(taskApiStatusProvider) != 'unconfigured') {
+      if (kDebugMode)
+        print(
+          "[_checkTaskApiHealth] Not configured, setting status to unconfigured.",
+        );
       ref.read(taskApiStatusProvider.notifier).state = 'unconfigured';
     }
     return;
@@ -304,13 +359,27 @@ Future<void> _checkTaskApiHealth(Ref ref) async {
   // Read the service from the FutureProvider's result
   final taskApiServiceAsyncValue = ref.read(taskApiServiceProvider);
   TaskApiService? taskApiService;
-  taskApiServiceAsyncValue.whenData((service) => taskApiService = service);
+  // Use maybeWhen to safely extract data without crashing if it's loading/error
+  taskApiServiceAsyncValue.maybeWhen(
+    data: (service) => taskApiService = service,
+    orElse: () {
+      // Handle loading/error case for health check - treat as not ready
+      if (kDebugMode)
+        print(
+          "[_checkTaskApiHealth] Task service provider not ready (loading/error). Skipping health check.",
+        );
+    },
+  );
 
   // If service is null (still loading or error), or dummy, treat as unconfigured for health check
   if (taskApiService == null ||
       !taskApiService!.isConfigured ||
       taskApiService is DummyTaskApiService) {
     if (ref.read(taskApiStatusProvider) != 'unconfigured') {
+      if (kDebugMode)
+        print(
+          "[_checkTaskApiHealth] Service is null, dummy, or not configured internally. Setting status to unconfigured.",
+        );
       ref.read(taskApiStatusProvider.notifier).state = 'unconfigured';
     }
     return;
@@ -318,17 +387,23 @@ Future<void> _checkTaskApiHealth(Ref ref) async {
 
   final currentStatus = ref.read(taskApiStatusProvider);
   if (currentStatus == 'checking') return;
+  if (kDebugMode) print("[_checkTaskApiHealth] Setting status to checking.");
   ref.read(taskApiStatusProvider.notifier).state = 'checking';
 
   try {
-    final isHealthy = await taskApiService!.checkHealth();
+    final isHealthy =
+        await taskApiService!.checkHealth(); // checkHealth now logs internally
     // Check if still configured before updating state
     final stillConfigured = ref.read(
       isVikunjaConfiguredProvider,
     ); // Read again after await
     if (stillConfigured && ref.read(taskApiStatusProvider) == 'checking') {
-      ref.read(taskApiStatusProvider.notifier).state =
-          isHealthy ? 'available' : 'unavailable';
+      final newStatus = isHealthy ? 'available' : 'unavailable';
+      if (kDebugMode)
+        print(
+          "[_checkTaskApiHealth] Health check result: $isHealthy. Setting status to $newStatus.",
+        );
+      ref.read(taskApiStatusProvider.notifier).state = newStatus;
       if (kDebugMode) {
         final taskConfig = ref.read(
           taskServerConfigProvider,
@@ -337,6 +412,11 @@ Future<void> _checkTaskApiHealth(Ref ref) async {
           '[taskApiHealthChecker] Health check for ${taskConfig?.name ?? taskConfig?.id ?? 'Vikunja'}: ${isHealthy ? 'Available' : 'Unavailable'}',
         );
       }
+    } else {
+      if (kDebugMode)
+        print(
+          "[_checkTaskApiHealth] Configuration changed or status no longer 'checking' after health check. Not updating status.",
+        );
     }
   } catch (e) {
     final taskConfig = ref.read(taskServerConfigProvider); // Read for logging
@@ -348,7 +428,16 @@ Future<void> _checkTaskApiHealth(Ref ref) async {
       isVikunjaConfiguredProvider,
     ); // Read again after await
     if (stillConfigured && ref.read(taskApiStatusProvider) == 'checking') {
+      if (kDebugMode)
+        print(
+          "[_checkTaskApiHealth] Health check failed. Setting status to unavailable.",
+        );
       ref.read(taskApiStatusProvider.notifier).state = 'unavailable';
+    } else {
+      if (kDebugMode)
+        print(
+          "[_checkTaskApiHealth] Configuration changed or status no longer 'checking' after health check failure. Not updating status.",
+        );
     }
   }
 }

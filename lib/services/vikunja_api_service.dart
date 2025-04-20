@@ -98,26 +98,35 @@ class VikunjaApiService implements TaskApiService {
         _isCurrentlyConfigured) {
       if (verboseLogging) {
         stderr.writeln(
-          '[VikunjaApiService] configureService: Configuration unchanged.',
+          '[VikunjaApiService] configureService: Configuration unchanged (URL: $baseUrl, Token: ${newToken != null ? 'present' : 'absent'}, ServerID: $serverId). Skipping re-init.',
         );
       }
       return; // No need to reconfigure if nothing changed
     }
 
+    if (verboseLogging) {
+      stderr.writeln(
+        '[VikunjaApiService] configureService: Configuration changed. Applying new settings (URL: $baseUrl, Token: ${newToken != null ? 'present' : 'absent'}, ServerID: $serverId).',
+      );
+    }
+
     _apiBaseUrl = baseUrl;
     _authStrategy = effectiveStrategy;
     _configuredServerId = serverId; // Store the server ID
+
+    // Initialize client with new settings
     _initializeClient(_authStrategy, _apiBaseUrl);
 
-    // Update internal configuration status based on whether URL and strategy are present
+    // Update internal configuration status based on whether URL and strategy are present AND client init succeeded
+    // _initializeClient sets _isCurrentlyConfigured to false on error.
     _isCurrentlyConfigured =
         _authStrategy != null &&
-        _apiBaseUrl
-            .isNotEmpty; // Server ID is not strictly required for configuration status
+        _apiBaseUrl.isNotEmpty &&
+        _isCurrentlyConfigured;
 
     if (verboseLogging) {
       stderr.writeln(
-        '[VikunjaApiService] Configured with Base URL: $_apiBaseUrl, Strategy: ${_authStrategy?.runtimeType}, Server ID: $_configuredServerId. Internal Configured Flag: $_isCurrentlyConfigured',
+        '[VikunjaApiService] configureService finished. Base URL: $_apiBaseUrl, Strategy: ${_authStrategy?.runtimeType}, Server ID: $_configuredServerId. Final Internal Configured Flag: $_isCurrentlyConfigured',
       );
     }
     // The caller MUST update the isVikunjaConfiguredProvider state after this call.
@@ -125,6 +134,11 @@ class VikunjaApiService implements TaskApiService {
 
   /// Initializes the Vikunja API client and associated endpoint classes.
   void _initializeClient(AuthStrategy? strategy, String baseUrl) {
+    if (verboseLogging) {
+      stderr.writeln(
+        '[VikunjaApiService] _initializeClient called. Base URL: $baseUrl, Strategy: ${strategy?.runtimeType}',
+      );
+    }
     try {
       // Use the strategy to create the Vikunja Authentication object
       final vikunja.Authentication? auth =
@@ -140,9 +154,12 @@ class VikunjaApiService implements TaskApiService {
       // _projectsApi = vikunja.ProjectApi(_apiClient);
       // _labelsApi = vikunja.LabelApi(_apiClient);
 
+      // Mark as configured *internally* only if successful and strategy/URL are present
+      _isCurrentlyConfigured = strategy != null && baseUrl.isNotEmpty;
+
       if (verboseLogging) {
         stderr.writeln(
-          '[VikunjaApiService] Client initialized successfully. Base URL: $baseUrl, Auth: ${auth?.runtimeType}',
+          '[VikunjaApiService] Client initialized successfully. Base URL: $baseUrl, Auth: ${auth?.runtimeType}. Internal Configured Flag set to: $_isCurrentlyConfigured',
         );
       }
     } catch (e) {
@@ -152,6 +169,11 @@ class VikunjaApiService implements TaskApiService {
       _tasksApi = vikunja.TaskApi(_apiClient);
       // Reset other APIs if used
       _isCurrentlyConfigured = false; // Ensure internal state reflects failure
+      if (verboseLogging) {
+        stderr.writeln(
+          '[VikunjaApiService] Client initialization failed. Internal Configured Flag set to: false',
+        );
+      }
     }
   }
 
@@ -165,7 +187,7 @@ class VikunjaApiService implements TaskApiService {
     if (!isConfigured) {
       if (verboseLogging)
         stderr.writeln(
-          '[VikunjaApiService] Health check skipped: Not configured.',
+          '[VikunjaApiService] Health check skipped: Not configured (isConfigured=false).',
         );
       return false;
     }
@@ -178,12 +200,19 @@ class VikunjaApiService implements TaskApiService {
       // Use a lightweight Vikunja call, e.g., fetching user info or a simple endpoint
       // Example: await _someOtherApi.getLoggedInUser();
       // For now, let's try listing tasks with a limit of 1 as a basic check
-      await _tasksApi.tasksAllGet(perPage: 1);
+      final response = await _tasksApi.tasksAllGetWithHttpInfo(perPage: 1);
+      bool isSuccess = response.statusCode >= 200 && response.statusCode < 300;
       if (verboseLogging)
-        stderr.writeln('[VikunjaApiService] Health check successful.');
-      return true;
+        stderr.writeln(
+          '[VikunjaApiService] Health check completed. Status Code: ${response.statusCode}. Success: $isSuccess',
+        );
+      return isSuccess;
     } catch (e) {
       _handleApiError('Health check failed', e); // Log the specific error
+      if (verboseLogging)
+        stderr.writeln(
+          '[VikunjaApiService] Health check resulted in error. Returning false.',
+        );
       return false;
     }
   }
@@ -729,57 +758,60 @@ class VikunjaApiService implements TaskApiService {
       );
     }
 
-    // Map app Comment model to Vikunja request body for update
-    final request = vikunja.ModelsTaskComment(
-      comment: comment.content ?? '',
-    );
-
     try {
-      // Since tasksTaskIDCommentsCommentIDPost doesn't support a request body parameter,
-      // we need to use a different approach. We'll delete the old comment and create a new one.
-
-      // First, delete the existing comment
-      await _tasksApi.tasksTaskIDCommentsCommentIDDelete(
+      // Vikunja API uses POST on /tasks/{taskid}/comments/{commentid} for updates
+      // Since the method doesn't accept a body parameter, we'll use the withHttpInfo version
+      // and manually add the content as a request parameter
+      final response = await _tasksApi
+          .tasksTaskIDCommentsCommentIDPostWithHttpInfo(
         taskIdInt,
         commentIdInt,
-      );
+          );
 
-      if (verboseLogging)
-        stderr.writeln(
-          '[VikunjaApiService] Old comment $commentId deleted successfully, creating new comment',
+      // Check if the response was successful
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        // If successful, get the comment to return the updated version
+        final updatedVComment = await _tasksApi.tasksTaskIDCommentsCommentIDGet(
+          taskIdInt,
+          commentIdInt,
         );
 
-      // Then create a new comment with the updated content
-      final createdVComment = await _tasksApi.tasksTaskIDCommentsPut(
-        taskIdInt,
-        request,
-      );
+        if (updatedVComment == null) {
+          // If update returns null, maybe fetch the comment again?
+          stderr.writeln(
+            '[VikunjaApiService] Update comment $commentId returned null. Fetching comment manually.',
+          );
+          return await getComment(
+            commentId,
+            taskId: comment.parentId,
+            targetServerOverride: targetServerOverride,
+          );
+        }
 
-      if (createdVComment == null) {
+        if (verboseLogging)
+          stderr.writeln(
+            '[VikunjaApiService] Raw comment updated: ${updatedVComment.id}',
+          );
+
+        // Use the stored server ID if available, otherwise fallback
+        final effectiveServerId = _configuredServerId ?? _apiClient.basePath;
+
+        final updatedComment = Comment.fromVikunjaTaskComment(
+          updatedVComment,
+          taskId: comment.parentId, // Use original taskId
+          serverId: effectiveServerId,
+        );
+
+        if (verboseLogging)
+          stderr.writeln(
+            '[VikunjaApiService] Mapped updated comment back to Comment model',
+          );
+        return updatedComment;
+      } else {
         throw Exception(
-          'Comment update (recreate) returned null from API for task ${comment.parentId}.',
+          'Failed to update comment $commentId. Status code: ${response.statusCode}',
         );
       }
-
-      if (verboseLogging)
-        stderr.writeln(
-          '[VikunjaApiService] New comment created with ID: ${createdVComment.id}',
-        );
-
-      // Use the stored server ID if available, otherwise fallback
-      final effectiveServerId = _configuredServerId ?? _apiClient.basePath;
-
-      final updatedComment = Comment.fromVikunjaTaskComment(
-        createdVComment,
-        taskId: comment.parentId, // Use original taskId
-        serverId: effectiveServerId,
-      );
-
-      if (verboseLogging)
-        stderr.writeln(
-          '[VikunjaApiService] Mapped updated comment back to Comment model',
-        );
-      return updatedComment;
     } catch (e) {
       _handleApiError(
         'Error updating comment $commentId for task ${comment.parentId}',
@@ -865,13 +897,17 @@ class VikunjaApiService implements TaskApiService {
     // If it's a URL, download directly.
     if (Uri.tryParse(resourceIdentifier)?.isAbsolute ?? false) {
        try {
+         if (verboseLogging) stderr.writeln('[VikunjaApiService] Downloading resource from URL: $resourceIdentifier');
          final response = await Client().get(Uri.parse(resourceIdentifier));
          if (response.statusCode >= 200 && response.statusCode < 300) {
+           if (verboseLogging) stderr.writeln('[VikunjaApiService] Download successful.');
            return response.bodyBytes;
          } else {
+           stderr.writeln('[VikunjaApiService] Download failed. Status: ${response.statusCode}');
            throw vikunja.ApiException(response.statusCode, utf8.decode(response.bodyBytes));
          }
        } catch (e) {
+         stderr.writeln('[VikunjaApiService] Error downloading resource from $resourceIdentifier: $e');
          throw Exception('Error downloading resource from $resourceIdentifier: $e');
        }
     } else {
@@ -885,14 +921,17 @@ class VikunjaApiService implements TaskApiService {
          attachmentIdInt = int.parse(resourceIdentifier);
          taskIdInt = int.parse(taskId);
        } catch (e) {
-         throw Exception('Invalid task ID or attachment ID format.');
+         throw Exception('Invalid task ID ($taskId) or attachment ID ($resourceIdentifier) format.');
        }
        try {
+         if (verboseLogging) stderr.writeln('[VikunjaApiService] Getting attachment $attachmentIdInt for task $taskIdInt');
          // This returns MultipartFile, need to read bytes
          final response = await _tasksApi.tasksIdAttachmentsAttachmentIDGetWithHttpInfo(taskIdInt, attachmentIdInt);
          if (response.statusCode >= 200 && response.statusCode < 300) {
+            if (verboseLogging) stderr.writeln('[VikunjaApiService] Attachment data retrieved successfully.');
             return response.bodyBytes;
          } else {
+            stderr.writeln('[VikunjaApiService] Failed to retrieve attachment data. Status: ${response.statusCode}');
             throw vikunja.ApiException(response.statusCode, utf8.decode(response.bodyBytes));
          }
        } catch (e) {
@@ -940,54 +979,55 @@ class VikunjaApiService implements TaskApiService {
   void _handleApiError(String context, dynamic error) {
     String errorMessage = '$error';
     int? statusCode;
+    String? responseBody;
 
     if (error is vikunja.ApiException) {
       statusCode = error.code;
-      // Use the message field directly from ApiException
-      String rawMessage = error.message ?? 'Unknown API Exception (Code: $statusCode)';
-      errorMessage = rawMessage; // Start with the raw message
+      // Use the message field directly from ApiException, which might contain the body
+      responseBody = error.message;
+      errorMessage = responseBody ?? 'Unknown API Exception (Code: $statusCode)'; // Start with the raw message
 
-      // Vikunja might return HTML for errors sometimes, try to extract message from the rawMessage
-      if (rawMessage.contains('<title>')) {
-         try {
+      // Attempt to parse JSON error message if message is a JSON string
+      try {
+        final jsonBody = jsonDecode(responseBody!);
+        if (jsonBody is Map && jsonBody.containsKey('message')) {
+          errorMessage = jsonBody['message'];
+        }
+      } catch (_) {
+        // Ignore JSON parsing errors, check for HTML
+        if (responseBody != null && responseBody.contains('<title>')) {
+          try {
             // Basic extraction, might need refinement
-            final titleMatch = RegExp(r'<title>(.*?)<\/title>').firstMatch(rawMessage);
-            final bodyMatch = RegExp(r'<body>(.*?)<\/body>', dotAll: true).firstMatch(rawMessage);
+            final titleMatch = RegExp(r'<title>(.*?)<\/title>').firstMatch(responseBody);
+            final bodyMatch = RegExp(r'<body>(.*?)<\/body>', dotAll: true).firstMatch(responseBody);
             String extractedMessage = '';
             if (titleMatch != null) extractedMessage = titleMatch.group(1)?.trim() ?? '';
             if (bodyMatch != null) {
-                final bodyText = bodyMatch.group(1)?.replaceAll(RegExp(r'<[^>]*>'), ' ').trim() ?? '';
+                final bodyText = bodyMatch.group(1)?.replaceAll(RegExp(r'<[^>]*>'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim() ?? '';
                 if (bodyText.isNotEmpty) {
-                    extractedMessage += (extractedMessage.isNotEmpty ? "\n" : "") + bodyText;
+                    extractedMessage += (extractedMessage.isNotEmpty ? " - " : "") + bodyText;
                 }
             }
             if (extractedMessage.isNotEmpty) {
                 errorMessage = extractedMessage; // Use extracted message if found
             }
-         } catch (_) {} // Ignore parsing errors
+          } catch (_) {} // Ignore parsing errors, stick with original responseBody as message
+        }
       }
-      // Attempt to parse JSON error message if message is a JSON string
-      else {
-         try {
-            final jsonBody = jsonDecode(rawMessage);
-            if (jsonBody is Map && jsonBody.containsKey('message')) {
-               errorMessage = jsonBody['message'];
-            }
-         } catch (_) {
-            // Ignore JSON parsing errors, stick with the raw message
-         }
-      }
-
 
       stderr.writeln('[VikunjaApiService] API Error - $context: $errorMessage (Code: $statusCode)');
+      if (verboseLogging && responseBody != null) {
+         stderr.writeln('[VikunjaApiService] Raw Response Body: $responseBody');
+      }
 
       if (statusCode == 401 || statusCode == 403) {
         // Don't automatically mark as unconfigured here, let the caller handle it
         // based on whether it was an initial config check or a regular call.
-        stderr.writeln('[VikunjaApiService] Authentication error ($statusCode). Check API Key.');
+        stderr.writeln('[VikunjaApiService] Authentication error ($statusCode). Check API Key/Token and permissions.');
         // Consider notifying the app about auth failure.
       }
     } else {
+      // Handle non-ApiException errors
       stderr.writeln('[VikunjaApiService] Error - $context: $errorMessage');
       if (verboseLogging && error is Error) {
         stderr.writeln(error.stackTrace);
