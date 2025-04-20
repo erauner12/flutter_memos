@@ -721,40 +721,44 @@ class VikunjaApiService implements TaskApiService {
     }
 
     // Map app Comment model to Vikunja request body for update
-    // Use ModelsTaskComment as the payload for the POST request
     final request = vikunja.ModelsTaskComment(
       comment: comment.content ?? '',
-      // Include ID? The endpoint has it in the path. Server usually ignores ID in payload for updates.
-      // id: commentIdInt, // Probably not needed
-      // Other fields like author, timestamps are usually not updatable by client
     );
 
     try {
-      // Use the task-scoped POST endpoint, passing the request directly as the third parameter
-      final updatedVComment = await _tasksApi.tasksTaskIDCommentsCommentIDPost(
+      // Since tasksTaskIDCommentsCommentIDPost doesn't support a request body parameter,
+      // we need to use a different approach. We'll delete the old comment and create a new one.
+
+      // First, delete the existing comment
+      await _tasksApi.tasksTaskIDCommentsCommentIDDelete(
         taskIdInt,
         commentIdInt,
-        request, // Pass the ModelsTaskComment payload as direct positional parameter
+      );
+      
+      if (verboseLogging)
+        stderr.writeln(
+          '[VikunjaApiService] Old comment $commentId deleted successfully, creating new comment',
+        );
+      
+      // Then create a new comment with the updated content
+      final createdVComment = await _tasksApi.tasksTaskIDCommentsPut(
+        taskIdInt,
+        request,
       );
 
-      if (updatedVComment == null) {
-        // API might return null on success, refetch the comment
-        stderr.writeln(
-          '[VikunjaApiService] Update comment $commentId returned null. Refetching.',
+      if (createdVComment == null) {
+        throw Exception(
+          'Comment update (recreate) returned null from API for task ${comment.parentId}.',
         );
-        return await getComment(
-          commentId,
-          taskId: comment.parentId,
-        ); // Pass taskId for refetch
       }
 
       if (verboseLogging)
         stderr.writeln(
-          '[VikunjaApiService] Raw comment updated: ${updatedVComment.id}',
+          '[VikunjaApiService] New comment created with ID: ${createdVComment.id}',
         );
 
       final updatedComment = Comment.fromVikunjaTaskComment(
-        updatedVComment,
+        createdVComment,
         taskId: comment.parentId, // Use original taskId
         serverId: _configuredServerId!,
       );
