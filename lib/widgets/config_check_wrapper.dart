@@ -85,16 +85,25 @@ class _MainAppTabsState extends State<MainAppTabs> {
       case '/':
         builder = (BuildContext _) => const NotesHubScreen();
         break;
-      case String name when name.startsWith('/notes/'):
-        final serverId = name.substring('/notes/'.length);
-        if (serverId.isNotEmpty) {
-          builder = (BuildContext _) => ItemsScreen(serverId: serverId);
-        } else {
-          builder = (BuildContext _) => const NotesHubScreen();
-        }
+      // Match '/notes' or '/notes/' - this now points to ItemsScreen directly
+      case '/notes':
+      case '/notes/':
+        builder = (BuildContext _) => const ItemsScreen();
         break;
+      // Handle potential legacy routes or specific note routes if needed later
+      // case String name when name.startsWith('/notes/'):
+      //   final serverId = name.substring('/notes/'.length);
+      //   if (serverId.isNotEmpty) {
+      //     // ItemsScreen no longer takes serverId
+      //     builder = (BuildContext _) => const ItemsScreen();
+      //   } else {
+      //     builder = (BuildContext _) => const NotesHubScreen();
+      //   }
+      //   break;
       default:
-        builder = (BuildContext _) => const NotesHubScreen();
+        // Fallback to the main ItemsScreen (which uses the provider)
+        // or NotesHubScreen if no server is configured (handled internally by ItemsScreen)
+        builder = (BuildContext _) => const ItemsScreen();
     }
     return CupertinoPageRoute(builder: builder, settings: settings);
   }
@@ -168,6 +177,7 @@ class _MainAppTabsState extends State<MainAppTabs> {
             return CupertinoTabView(
               navigatorKey: tabViewNavKeys[HomeTab.notes.index],
               onGenerateRoute: _notesOnGenerateRoute,
+              // The builder now points directly to NotesHubScreen as the root
               builder: (BuildContext context) => const NotesHubScreen(),
             );
           case HomeTab.tasks:

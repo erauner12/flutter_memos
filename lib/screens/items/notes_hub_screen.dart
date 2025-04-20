@@ -110,9 +110,7 @@ class NotesHubScreen extends ConsumerWidget {
                       Navigator.of(context).push(
                         CupertinoPageRoute(
                           builder:
-                              (_) => const ItemsScreen(
-                                serverId: '',
-                              ), // Remove serverId arg
+                              (_) => const ItemsScreen(), // Remove serverId arg
                           settings: const RouteSettings(
                             name: '/notes',
                           ), // Use generic route name
