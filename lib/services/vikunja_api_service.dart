@@ -20,14 +20,7 @@ final vikunjaApiServiceProvider = Provider<VikunjaApiService>((ref) {
   return VikunjaApiService();
 });
 
-/// StateProvider to explicitly track if the Vikunja service is configured.
-/// This should be updated by the CALLER after successfully calling `configureService`
-/// and potentially verifying with `checkHealth`.
-final isVikunjaConfiguredProvider = StateProvider<bool>(
-  (ref) =>
-      false, // Default to false, let TasksNotifier or SettingsScreen update it
-  name: 'isVikunjaConfigured',
-);
+// REMOVED the conflicting StateProvider<bool> isVikunjaConfiguredProvider
 
 /// Service class for interacting with the Vikunja API
 class VikunjaApiService implements TaskApiService {
@@ -759,59 +752,53 @@ class VikunjaApiService implements TaskApiService {
     }
 
     try {
-      // Vikunja API uses POST on /tasks/{taskid}/comments/{commentid} for updates
-      // Since the method doesn't accept a body parameter, we'll use the withHttpInfo version
-      // and manually add the content as a request parameter
-      final response = await _tasksApi
-          .tasksTaskIDCommentsCommentIDPostWithHttpInfo(
-        taskIdInt,
-        commentIdInt,
-          );
+      // Since we can't access the Vikunja API client's internal HTTP client directly,
+      // and there's no named parameter support for the tasksTaskIDCommentsCommentIDPost method,
+      // we can use a workaround by:
+      // 1. First trying to create a completely new comment with the updated content
+      // 2. Then deleting the old comment if the creation succeeds
 
-      // Check if the response was successful
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        // If successful, get the comment to return the updated version
-        final updatedVComment = await _tasksApi.tasksTaskIDCommentsCommentIDGet(
-          taskIdInt,
-          commentIdInt,
-        );
-
-        if (updatedVComment == null) {
-          // If update returns null, maybe fetch the comment again?
-          stderr.writeln(
-            '[VikunjaApiService] Update comment $commentId returned null. Fetching comment manually.',
-          );
-          return await getComment(
-            commentId,
-            taskId: comment.parentId,
-            targetServerOverride: targetServerOverride,
-          );
-        }
-
-        if (verboseLogging)
-          stderr.writeln(
-            '[VikunjaApiService] Raw comment updated: ${updatedVComment.id}',
-          );
-
-        // Use the stored server ID if available, otherwise fallback
-        final effectiveServerId = _configuredServerId ?? _apiClient.basePath;
-
-        final updatedComment = Comment.fromVikunjaTaskComment(
-          updatedVComment,
-          taskId: comment.parentId, // Use original taskId
-          serverId: effectiveServerId,
-        );
-
-        if (verboseLogging)
-          stderr.writeln(
-            '[VikunjaApiService] Mapped updated comment back to Comment model',
-          );
-        return updatedComment;
-      } else {
-        throw Exception(
-          'Failed to update comment $commentId. Status code: ${response.statusCode}',
+      if (verboseLogging) {
+        stderr.writeln(
+          '[VikunjaApiService] Updating comment $commentId for task $taskIdInt using create-then-delete approach',
         );
       }
+
+      // Create a new comment with the updated content
+      final newCommentRequest = vikunja.ModelsTaskComment(
+        comment: comment.content ?? '',
+      );
+
+      // Create the new comment
+      final newComment = await _tasksApi.tasksTaskIDCommentsPut(
+        taskIdInt,
+        newCommentRequest,
+      );
+      
+      if (newComment == null) {
+        throw Exception('Failed to create new comment during update process');
+      }
+      
+      // If successfully created, delete the old comment
+      await _tasksApi.tasksTaskIDCommentsCommentIDDelete(
+        taskIdInt,
+        commentIdInt,
+      );
+
+      // Use the stored server ID if available, otherwise fallback
+      final effectiveServerId = _configuredServerId ?? _apiClient.basePath;
+
+      final updatedComment = Comment.fromVikunjaTaskComment(
+        newComment,
+        taskId: comment.parentId, // Use original taskId
+        serverId: effectiveServerId,
+      );
+
+      if (verboseLogging)
+        stderr.writeln(
+          '[VikunjaApiService] Mapped updated comment back to Comment model',
+        );
+      return updatedComment;
     } catch (e) {
       _handleApiError(
         'Error updating comment $commentId for task ${comment.parentId}',

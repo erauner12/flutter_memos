@@ -10,8 +10,10 @@ import 'package:flutter_memos/models/task_filter.dart'; // Import the filter enu
 import 'package:flutter_memos/models/task_item.dart';
 import 'package:flutter_memos/models/workbench_item_reference.dart';
 import 'package:flutter_memos/models/workbench_item_type.dart'; // Import the unified enum
+// Import the CORRECT provider
+import 'package:flutter_memos/providers/api_providers.dart'
+    show isVikunjaConfiguredProvider;
 import 'package:flutter_memos/providers/navigation_providers.dart';
-// Removed settings_provider import (vikunjaApiKeyProvider is checked via isVikunjaConfiguredProvider)
 import 'package:flutter_memos/providers/task_providers.dart';
 // Import new task server config provider
 import 'package:flutter_memos/providers/task_server_config_provider.dart';
@@ -20,7 +22,7 @@ import 'package:flutter_memos/screens/settings_screen.dart'; // Import SettingsS
 import 'package:flutter_memos/screens/tasks/new_task_screen.dart';
 import 'package:flutter_memos/screens/tasks/task_detail_screen.dart'; // Import TaskDetailScreen
 import 'package:flutter_memos/screens/tasks/widgets/task_list_item.dart';
-import 'package:flutter_memos/services/vikunja_api_service.dart'; // Import for isVikunjaConfiguredProvider
+// REMOVED incorrect import: import 'package:flutter_memos/services/vikunja_api_service.dart';
 import 'package:flutter_memos/utils/thread_utils.dart'; // Import thread utils
 import 'package:flutter_memos/utils/workbench_utils.dart'; // Import instance picker utility
 import 'package:hooks_riverpod/hooks_riverpod.dart'; // Import hooks_riverpod
@@ -66,7 +68,7 @@ class TasksScreen extends HookConsumerWidget {
     WidgetRef ref,
     TaskItem task,
   ) async {
-    // Check if Vikunja is configured
+    // Check if Vikunja is configured using the CORRECT provider
     final isConfigured = ref.read(isVikunjaConfiguredProvider);
     // Use the new taskServerConfigProvider
     final taskServer = ref.read(taskServerConfigProvider);
@@ -274,7 +276,7 @@ class TasksScreen extends HookConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Watch Vikunja configuration status
+    // Watch Vikunja configuration status using the CORRECT provider
     final isVikunjaConfigured = ref.watch(isVikunjaConfiguredProvider);
 
     Future<void> handleRefresh() async {
@@ -310,6 +312,9 @@ class TasksScreen extends HookConsumerWidget {
             }
           } else {
             // If not configured, ensure tasks are cleared
+            // Consider only clearing if the config was *explicitly* removed,
+            // not just because the provider is loading/erroring temporarily.
+            // For now, keeping the original logic.
             if (tasksState.tasks.isNotEmpty ||
                 tasksState.error != null ||
                 tasksState.isLoading) {
@@ -382,7 +387,7 @@ class TasksScreen extends HookConsumerWidget {
       child: SafeArea(
         child: Builder(
           builder: (ctx) {
-            // 1. Check if Vikunja is configured
+            // 1. Check if Vikunja is configured (using the correct provider now)
             if (!isVikunjaConfigured) {
               return Center(
                 child: Padding(
