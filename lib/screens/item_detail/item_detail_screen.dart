@@ -4,11 +4,11 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart'; // Keep for ScaffoldMessenger, SnackBar
 import 'package:flutter/services.dart';
-// Add import for the provider
-import 'package:flutter_memos/main.dart'; // Adjust path if main.dart is elsewhere
 import 'package:flutter_memos/models/note_item.dart'; // Import NoteItem
 import 'package:flutter_memos/models/workbench_item_reference.dart'; // Import workbench model
 import 'package:flutter_memos/models/workbench_item_type.dart'; // Import the unified enum
+// Add import for the provider
+import 'package:flutter_memos/providers/navigation_providers.dart';
 // Import note_providers and use non-family providers
 import 'package:flutter_memos/providers/note_providers.dart' as note_providers;
 // Import new single config provider
@@ -526,6 +526,7 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
       'parentItemType': itemType,
       'parentServerId': serverId,
     };
+    // Read the provider (now imported from navigation_providers.dart)
     final rootNavigatorKey = ref.read(
       rootNavigatorKeyProvider,
     ); // Use imported provider

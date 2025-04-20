@@ -1,15 +1,15 @@
 import 'dart:async'; // For Completer
 import 'dart:math'; // For min
 
-import 'package:collection/collection.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 // import 'package:flutter/material.dart'; // Removed unused Material import
 import 'package:flutter/services.dart';
-import 'package:flutter_memos/main.dart'; // Import for rootNavigatorKeyProvider
 import 'package:flutter_memos/models/note_item.dart';
 import 'package:flutter_memos/models/workbench_item_reference.dart';
 import 'package:flutter_memos/models/workbench_item_type.dart';
+// import 'package:flutter_memos/main.dart'; // Import for rootNavigatorKeyProvider
+import 'package:flutter_memos/providers/navigation_providers.dart';
 import 'package:flutter_memos/providers/note_providers.dart' as note_providers;
 // Import new single config provider
 import 'package:flutter_memos/providers/note_server_config_provider.dart';
@@ -522,6 +522,7 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
       'parentItemType': itemType,
       'parentServerId': serverId,
     };
+    // Read the provider (now imported from navigation_providers.dart)
     final rootNavigatorKey = ref.read(
       rootNavigatorKeyProvider,
     ); // Use imported provider
@@ -699,6 +700,7 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
         .read(
           note_providers.togglePinNoteProvider(widget.note.id),
         )()
+    // ignore: body_might_complete_normally_catch_error
         .catchError((e) {
           if (mounted) {
             _showAlertDialog(

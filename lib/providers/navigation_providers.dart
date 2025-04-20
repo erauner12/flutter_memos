@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart'; // Import for GlobalKey
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// Provider for the current screen in the app
@@ -169,3 +170,10 @@ final handleDeepLinkProvider =
         return ref.read(addToNavigationHistoryProvider)(path, data: mergedData);
       };
     }, name: 'handleDeepLink');
+
+/// Global key for accessing the root navigator state
+/// Used for navigation from outside the widget tree (e.g., providers, services)
+final rootNavigatorKeyProvider = Provider<GlobalKey<NavigatorState>>((ref) {
+  // This key should be assigned to the MaterialApp/CupertinoApp's navigatorKey
+  return GlobalKey<NavigatorState>();
+}, name: 'rootNavigatorKey');
