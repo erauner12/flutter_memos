@@ -1,11 +1,12 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_memos/providers/server_config_provider.dart';
 import 'package:flutter_memos/screens/chat_screen.dart';
-import 'package:flutter_memos/screens/home_tabs.dart'; // Import HomeTab enum
+import 'package:flutter_memos/screens/home_tabs.dart'; // Import HomeTab enum and extension
 import 'package:flutter_memos/screens/items/items_screen.dart'; // Keep for route generation
 import 'package:flutter_memos/screens/items/notes_hub_screen.dart'; // Import Notes Hub
 // Removed MoreScreen import
 import 'package:flutter_memos/screens/settings_screen.dart';
+import 'package:flutter_memos/screens/tasks/tasks_screen.dart'; // Import TasksScreen
 // Import Hub and Detail screens directly for routing
 import 'package:flutter_memos/screens/workbench/workbench_hub_screen.dart';
 import 'package:flutter_memos/screens/workbench/workbench_screen.dart';
@@ -64,12 +65,14 @@ class _MainAppTabsState extends State<MainAppTabs> {
     HomeTab.chat.index: GlobalKey<NavigatorState>(), // 0
     HomeTab.workbench.index: GlobalKey<NavigatorState>(), // 1
     HomeTab.notes.index: GlobalKey<NavigatorState>(), // 2
+    HomeTab.tasks.index: GlobalKey<NavigatorState>(), // 3 - NEW
   };
 
   @override
   void initState() {
     super.initState();
     // Initialize the controller, defaulting to the first tab (Chat)
+    // TODO: Consider using the persisted selectedTabIndexProvider here
     _controller = CupertinoTabController(initialIndex: HomeTab.chat.index);
   }
 
@@ -137,8 +140,8 @@ class _MainAppTabsState extends State<MainAppTabs> {
         HomeTab.values
             .map(
               (tab) => BottomNavigationBarItem(
-                icon: Icon(tab.icon), // Use icon from enum
-                label: tab.label, // Use label from enum
+                icon: Icon(tab.icon), // Use icon from enum extension
+                label: tab.label, // Use label from enum extension
               ),
             )
             .toList();
@@ -197,6 +200,16 @@ class _MainAppTabsState extends State<MainAppTabs> {
               onGenerateRoute: _notesOnGenerateRoute, // Use local method
               builder: (BuildContext context) {
                 return const NotesHubScreen();
+              },
+            );
+          case HomeTab.tasks: // Index 3 - NEW
+            return CupertinoTabView(
+              navigatorKey:
+                  tabViewNavKeys[HomeTab.tasks.index], // Use local key
+              // Add onGenerateRoute if Tasks tab needs nested navigation later
+              builder: (BuildContext context) {
+                // Pass the default filter or allow TasksScreen to manage it
+                return const TasksScreen();
               },
             );
           // No default needed as HomeTab covers all cases

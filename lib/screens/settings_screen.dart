@@ -19,11 +19,12 @@ import 'package:flutter_memos/providers/workbench_instances_provider.dart'; // A
 import 'package:flutter_memos/providers/workbench_provider.dart';
 import 'package:flutter_memos/screens/add_edit_mcp_server_screen.dart'; // Will be created next
 import 'package:flutter_memos/screens/add_edit_server_screen.dart';
+import 'package:flutter_memos/services/auth_strategy.dart'; // Import for BearerTokenAuthStrategy
 import 'package:flutter_memos/services/base_api_service.dart'; // Import BaseApiService
 import 'package:flutter_memos/services/cloud_kit_service.dart'; // Import CloudKitService
 // Import MCP client provider (for status later) - add "as mcp_service" to solve ambiguity
 import 'package:flutter_memos/services/mcp_client_service.dart' as mcp_service;
-// Import Vikunja service provider for health check
+// Import Vikunja service provider for health check and configuration
 import 'package:flutter_memos/services/vikunja_api_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -39,7 +40,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   // Memos/Blinko/Vikunja server state
   bool _isTestingConnection = false;
 
-  // Todoist state (Keep controller for potential future use or remove fully)
+  // Removed Todoist state
   // final _todoistApiKeyController = TextEditingController();
   // bool _isTestingTodoistConnection = false;
 
@@ -54,18 +55,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   // Gemini state
   final _geminiApiKeyController = TextEditingController();
 
+  // Vikunja state
+  final _vikunjaApiKeyController = TextEditingController(); // NEW
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         // Removed Todoist key loading
-        // final initialTodoistKey = ref.read(todoistApiKeyProvider);
-        // _todoistApiKeyController.text = initialTodoistKey;
         final initialOpenAiKey = ref.read(openAiApiKeyProvider);
         _openaiApiKeyController.text = initialOpenAiKey;
         final initialGeminiKey = ref.read(geminiApiKeyProvider);
         _geminiApiKeyController.text = initialGeminiKey;
+        final initialVikunjaKey = ref.read(vikunjaApiKeyProvider); // NEW
+        _vikunjaApiKeyController.text = initialVikunjaKey; // NEW
       }
       _fetchModels();
     });
@@ -73,9 +77,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   @override
   void dispose() {
-    // _todoistApiKeyController.dispose(); // Remove if controller is removed
+    // Removed Todoist controller dispose
     _openaiApiKeyController.dispose();
     _geminiApiKeyController.dispose();
+    _vikunjaApiKeyController.dispose(); // NEW
     super.dispose();
   }
 
@@ -150,13 +155,34 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
 
     // Removed Todoist check
-    // if (activeConfig.serverType == ServerType.todoist) { ... }
 
     setState(() => _isTestingConnection = true);
     // Use the generic apiServiceProvider which resolves to the correct service
     final apiService = ref.read(apiServiceProvider);
 
-    if (apiService is DummyApiService || !apiService.isConfigured) {
+    // Special handling for Vikunja: Ensure API key is also set for a meaningful test
+    if (activeConfig.serverType == ServerType.vikunja) {
+      final vikunjaKey = ref.read(vikunjaApiKeyProvider);
+      if (vikunjaKey.isEmpty) {
+        _showResultDialog(
+          'Configuration Error',
+          'Vikunja server is active, but the API Key is missing in Settings > Integrations.',
+          isError: true,
+        );
+        setState(() => _isTestingConnection = false);
+        return;
+      }
+      // Ensure the service is configured before testing
+      if (!ref.read(isVikunjaConfiguredProvider)) {
+        _showResultDialog(
+          'Configuration Error',
+          'Vikunja service is not configured. Please save the API key and ensure the server URL is correct.',
+          isError: true,
+        );
+        setState(() => _isTestingConnection = false);
+        return;
+      }
+    } else if (apiService is DummyApiService || !apiService.isConfigured) {
       _showResultDialog(
         'Configuration Error',
         'The active server (${activeConfig.serverType.name}) is not properly configured (URL/Token missing?).',
@@ -165,6 +191,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       setState(() => _isTestingConnection = false);
       return;
     }
+
 
     try {
       // checkHealth is defined in BaseApiService, implemented by all concrete services
@@ -178,7 +205,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         } else {
           _showResultDialog(
             'Connection Failed',
-            'Could not connect to ${activeConfig.serverType.name} server "${activeConfig.name ?? activeConfig.serverUrl}". Check configuration.',
+            'Could not connect to ${activeConfig.serverType.name} server "${activeConfig.name ?? activeConfig.serverUrl}". Check configuration and API key (if applicable).',
             isError: true,
           );
         }
@@ -212,6 +239,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       );
       return;
     }
+    // Reconfigure before testing, in case the key was just entered but not saved yet
+    openaiService.configureService(authToken: currentKey);
     if (!openaiService.isConfigured) {
       _showResultDialog(
         'Service Not Configured',
@@ -349,6 +378,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         'Deleted',
                         'Server "$displayName" deleted.',
                       );
+                      // If the deleted server was Vikunja, potentially clear the API key or mark Vikunja as unconfigured
+                      if (server.serverType == ServerType.vikunja) {
+                        ref.read(isVikunjaConfiguredProvider.notifier).state =
+                            false;
+                        // Optionally clear the key:
+                        // await ref.read(vikunjaApiKeyProvider.notifier).clear();
+                      }
                     }
                   }
                 },
@@ -373,7 +409,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       return [
         const CupertinoListTile(
           title: Text('No MCP servers added yet'),
-          subtitle: Text('Tap "+" in the navigation bar to add one'),
+          subtitle: Text('Tap the gear icon in the navigation bar to add one'),
         ),
       ];
     }
@@ -643,8 +679,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         return CupertinoIcons.sparkles;
       case ServerType.vikunja: // Added Vikunja case
         return CupertinoIcons.list_bullet; // Example icon
-      case ServerType.todoist:
-        // This case should ideally not be reached for display here
+      case ServerType.todoist: // Should not appear, but keep for safety
         return CupertinoIcons.check_mark_circled;
     }
   }
@@ -780,10 +815,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final multiServerNotifier = ref.read(multiServerConfigProvider.notifier);
     final mcpServerNotifier = ref.read(mcpServerConfigProvider.notifier);
     // Removed todoistNotifier
-    // final todoistNotifier = ref.read(todoistApiKeyProvider.notifier);
     final openAiKeyNotifier = ref.read(openAiApiKeyProvider.notifier);
     final openAiModelNotifier = ref.read(openAiModelIdProvider.notifier);
     final geminiNotifier = ref.read(geminiApiKeyProvider.notifier);
+    final vikunjaKeyNotifier = ref.read(vikunjaApiKeyProvider.notifier); // NEW
     final workbenchInstancesNotifier = ref.read(
       workbenchInstancesProvider.notifier,
     );
@@ -801,16 +836,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       await multiServerNotifier.resetStateAndCache();
       await mcpServerNotifier.resetStateAndCache();
       // Removed todoistNotifier.clear()
-      // await todoistNotifier.clear();
       await openAiKeyNotifier.clear();
       await openAiModelNotifier.clear();
       await geminiNotifier.clear();
+      await vikunjaKeyNotifier.clear(); // NEW
 
       // Clear Data Caches
       for (final instanceId in instanceIdsToClear) {
         // Invalidate the provider instead of calling clearItems directly
         ref.invalidate(workbenchProviderFamily(instanceId));
-        // await ref.read(workbenchProviderFamily(instanceId).notifier).clearItems();
       }
       // Reload instances after clearing CloudKit and invalidating families
       await workbenchInstancesNotifier.loadInstances();
@@ -818,6 +852,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       tasksNotifier.clearTasks();
       chatNotifier.clearChat();
       await sharedPrefsService.clearAll() ?? Future.value();
+
+      // Mark Vikunja as unconfigured
+      ref.read(isVikunjaConfiguredProvider.notifier).state = false; // NEW
 
       if (kDebugMode) {
         print('[SettingsScreen] Local reset finished.');
@@ -863,12 +900,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       ref.invalidate(openAiApiKeyProvider);
       ref.invalidate(openAiModelIdProvider);
       ref.invalidate(geminiApiKeyProvider);
+      ref.invalidate(vikunjaApiKeyProvider); // NEW
       // Invalidate API service providers
       ref.invalidate(apiServiceProvider);
       ref.invalidate(openaiApiServiceProvider);
       ref.invalidate(
         vikunjaApiServiceProvider,
-      ); // Invalidate Vikunja specifically if needed
+      ); // Invalidate Vikunja specifically
 
     } else {
       if (kDebugMode) {
@@ -956,7 +994,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            'Please add your Memos/Blinko/Vikunja server details to get started.', // Updated text
+                            'Please add your Memos, Blinko, or Vikunja server details to get started.', // Updated text
                             style: TextStyle(color: CupertinoColors.systemBlue),
                           ),
                         ),
@@ -1093,6 +1131,173 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   // Removed Todoist Integration Tile
                   // Removed Test Todoist Connection Tile
 
+                  // Vikunja Integration Tile (NEW)
+                  CupertinoListTile(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 15.0,
+                      vertical: 10.0,
+                    ),
+                    title: const Text('Vikunja API Key'),
+                    subtitle: Padding(
+                      padding: const EdgeInsets.only(top: 8.0),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: CupertinoTextField(
+                              controller: _vikunjaApiKeyController,
+                              placeholder: 'Enter Vikunja API key',
+                              obscureText: true,
+                              padding: const EdgeInsets.symmetric(
+                                vertical: 10.0,
+                                horizontal: 12.0,
+                              ),
+                              decoration: BoxDecoration(
+                                color: CupertinoColors.tertiarySystemFill
+                                    .resolveFrom(context),
+                                borderRadius: BorderRadius.circular(8.0),
+                              ),
+                              clearButtonMode: OverlayVisibilityMode.editing,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          CupertinoButton(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            color: CupertinoColors.activeBlue,
+                            onPressed: () async {
+                              final newKey =
+                                  _vikunjaApiKeyController.text.trim();
+                              FocusScope.of(context).unfocus();
+
+                              if (newKey.isEmpty) {
+                                _showResultDialog(
+                                  'API Key Empty',
+                                  'Vikunja API key cannot be empty.',
+                                  isError: true,
+                                );
+                                // Also mark as unconfigured if key is cleared
+                                await ref
+                                    .read(vikunjaApiKeyProvider.notifier)
+                                    .set('');
+                                ref
+                                    .read(isVikunjaConfiguredProvider.notifier)
+                                    .state = false;
+                                return;
+                              }
+
+                              // Find the active Vikunja server URL
+                              final activeVikunjaServer = ref
+                                  .read(multiServerConfigProvider)
+                                  .servers
+                                  .firstWhere(
+                                    (s) =>
+                                        s.serverType == ServerType.vikunja &&
+                                        s.id ==
+                                            ref
+                                                .read(multiServerConfigProvider)
+                                                .activeServerId,
+                                    orElse:
+                                        () => ServerConfig(
+                                          id: '',
+                                          serverUrl: '',
+                                          serverType: ServerType.vikunja,
+                                          authToken: '',
+                                        ),
+                                  );
+
+                              if (activeVikunjaServer.serverUrl.isEmpty) {
+                                _showResultDialog(
+                                  'Configuration Error',
+                                  'Could not find an active or configured Vikunja server. Please add or activate a Vikunja server first.',
+                                  isError: true,
+                                );
+                                ref
+                                    .read(isVikunjaConfiguredProvider.notifier)
+                                    .state = false;
+                                return;
+                              }
+                              final baseUrl = activeVikunjaServer.serverUrl;
+
+                              // Save the key
+                              final saveSuccess = await ref
+                                  .read(vikunjaApiKeyProvider.notifier)
+                                  .set(newKey);
+
+                              if (saveSuccess) {
+                                // Configure the service
+                                try {
+                                  await ref
+                                      .read(vikunjaApiServiceProvider)
+                                      .configureService(
+                                        baseUrl: baseUrl,
+                                        authStrategy: BearerTokenAuthStrategy(
+                                          newKey,
+                                        ),
+                                      );
+                                  // Check health after configuring
+                                  final isHealthy =
+                                      await ref
+                                          .read(vikunjaApiServiceProvider)
+                                          .checkHealth();
+                                  if (mounted) {
+                                    ref
+                                        .read(
+                                          isVikunjaConfiguredProvider.notifier,
+                                        )
+                                        .state = isHealthy;
+                                    if (isHealthy) {
+                                      _showResultDialog(
+                                        'API Key Saved & Tested',
+                                        'Vikunja API key saved and connection successful!',
+                                      );
+                                      // Trigger task refresh if needed elsewhere
+                                      ref.invalidate(tasksNotifierProvider);
+                                    } else {
+                                      _showResultDialog(
+                                        'API Key Saved, Test Failed',
+                                        'Vikunja API key saved, but connection test failed. Please verify the key and server URL ($baseUrl).',
+                                        isError: true,
+                                      );
+                                    }
+                                  }
+                                } catch (e) {
+                                  if (mounted) {
+                                    ref
+                                        .read(
+                                          isVikunjaConfiguredProvider.notifier,
+                                        )
+                                        .state = false;
+                                    _showResultDialog(
+                                      'Configuration Error',
+                                      'Failed to configure Vikunja service with the provided key and URL ($baseUrl).\nError: $e',
+                                      isError: true,
+                                    );
+                                  }
+                                }
+                              } else {
+                                if (mounted) {
+                                  ref
+                                      .read(
+                                        isVikunjaConfiguredProvider.notifier,
+                                      )
+                                      .state = false;
+                                  _showResultDialog(
+                                    'Error',
+                                    'Failed to save Vikunja API key.',
+                                    isError: true,
+                                  );
+                                }
+                              }
+                            },
+                            child: const Text(
+                              'Save',
+                              style: TextStyle(color: CupertinoColors.white),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
                   // OpenAI Integration Tile
                   CupertinoListTile(
                     padding: const EdgeInsets.symmetric(
@@ -1133,6 +1338,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                   .set(newKey);
                               FocusScope.of(context).unfocus();
                               if (success) {
+                                // Reconfigure service immediately after saving
+                                ref
+                                    .read(openaiApiServiceProvider)
+                                    .configureService(authToken: newKey);
                                 _showResultDialog(
                                   'API Key Updated',
                                   'OpenAI API key has been saved.',
@@ -1406,7 +1615,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       ),
                       SizedBox(height: 8),
                       Text(
-                        'API keys for integrations like OpenAI and Gemini are stored locally on your device.', // Updated text
+                        'API keys for integrations like Vikunja, OpenAI, and Gemini are stored securely on your device and synced via iCloud.', // Updated text
                         style: TextStyle(fontSize: 14),
                       ),
                     ],
@@ -1435,7 +1644,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             (dialogContext) => CupertinoAlertDialog(
                               title: const Text('Confirm Reset'),
                               content: const Text(
-                                'This will permanently delete ALL server configurations (Memos, Blinko, Vikunja, MCP), API keys (OpenAI, Gemini), cached data (notes, tasks, workbench items, chat history), and local settings from this device AND from your iCloud account.\n\nThis action cannot be undone. Are you absolutely sure?', // Updated text
+                                'This will permanently delete ALL server configurations (Memos, Blinko, Vikunja, MCP), API keys (Vikunja, OpenAI, Gemini), cached data (notes, tasks, workbench items, chat history), and local settings from this device AND from your iCloud account.\n\nThis action cannot be undone. Are you absolutely sure?', // Updated text
                               ),
                               actions: [
                                 CupertinoDialogAction(

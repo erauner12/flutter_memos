@@ -21,8 +21,11 @@ final vikunjaApiServiceProvider = Provider<VikunjaApiService>((ref) {
 });
 
 /// StateProvider to explicitly track if the Vikunja service is configured.
+/// This should be updated by the CALLER after successfully calling `configureService`
+/// and potentially verifying with `checkHealth`.
 final isVikunjaConfiguredProvider = StateProvider<bool>(
-  (ref) => VikunjaApiService().isConfigured,
+  (ref) =>
+      false, // Default to false, let TasksNotifier or SettingsScreen update it
   name: 'isVikunjaConfigured',
 );
 
@@ -62,7 +65,8 @@ class VikunjaApiService implements TaskApiService {
   ///
   /// ### VERY IMPORTANT:
   /// After calling this method successfully, the **CALLER** is responsible for
-  /// updating the `isVikunjaConfiguredProvider` state.
+  /// updating the `isVikunjaConfiguredProvider` state, potentially after
+  /// calling `checkHealth`. This method only updates the internal state.
   @override
   Future<void> configureService({
     required String baseUrl,
@@ -92,17 +96,19 @@ class VikunjaApiService implements TaskApiService {
           '[VikunjaApiService] configureService: Configuration unchanged.',
         );
       }
-      return;
+      return; // No need to reconfigure if nothing changed
     }
 
     _apiBaseUrl = baseUrl;
     _authStrategy = effectiveStrategy;
     _initializeClient(_authStrategy, _apiBaseUrl);
+
+    // Update internal configuration status based on whether URL and strategy are present
     _isCurrentlyConfigured = _authStrategy != null && _apiBaseUrl.isNotEmpty;
 
     if (verboseLogging) {
       stderr.writeln(
-        '[VikunjaApiService] Configured with Base URL: $_apiBaseUrl, Strategy: ${_authStrategy?.runtimeType}. Configured: $_isCurrentlyConfigured',
+        '[VikunjaApiService] Configured with Base URL: $_apiBaseUrl, Strategy: ${_authStrategy?.runtimeType}. Internal Configured Flag: $_isCurrentlyConfigured',
       );
     }
     // The caller MUST update the isVikunjaConfiguredProvider state after this call.
@@ -136,23 +142,36 @@ class VikunjaApiService implements TaskApiService {
       _apiClient = vikunja.ApiClient(basePath: baseUrl); // No auth
       _tasksApi = vikunja.TaskApi(_apiClient);
       // Reset other APIs if used
+      _isCurrentlyConfigured = false; // Ensure internal state reflects failure
     }
   }
 
   // --- BaseApiService Implementation ---
 
   @override
-  bool get isConfigured => _isCurrentlyConfigured;
+  bool get isConfigured => _isCurrentlyConfigured; // Use internal flag
 
   @override
   Future<bool> checkHealth() async {
-    if (!isConfigured) return false;
+    if (!isConfigured) {
+      if (verboseLogging)
+        stderr.writeln(
+          '[VikunjaApiService] Health check skipped: Not configured.',
+        );
+      return false;
+    }
 
     try {
+      if (verboseLogging)
+        stderr.writeln(
+          '[VikunjaApiService] Performing health check (tasksAllGet limit 1)...',
+        );
       // Use a lightweight Vikunja call, e.g., fetching user info or a simple endpoint
       // Example: await _someOtherApi.getLoggedInUser();
       // For now, let's try listing tasks with a limit of 1 as a basic check
       await _tasksApi.tasksAllGet(perPage: 1);
+      if (verboseLogging)
+        stderr.writeln('[VikunjaApiService] Health check successful.');
       return true;
     } catch (e) {
       _handleApiError('Health check failed', e); // Log the specific error
@@ -166,7 +185,8 @@ class VikunjaApiService implements TaskApiService {
   @override
   Future<List<TaskItem>> listTasks({
     String? filter,
-    ServerConfig? targetServerOverride, // TODO: Handle override if needed
+    ServerConfig?
+    targetServerOverride, // NOTE: Override is handled by configureService caller
   }) async {
     if (!isConfigured) {
       stderr.writeln('[VikunjaApiService] Not configured, cannot list tasks.');
@@ -206,7 +226,8 @@ class VikunjaApiService implements TaskApiService {
   @override
   Future<TaskItem> getTask(
     String id, {
-    ServerConfig? targetServerOverride,
+    ServerConfig?
+    targetServerOverride, // NOTE: Override is handled by configureService caller
   }) async {
     if (!isConfigured) {
       stderr.writeln('[VikunjaApiService] Not configured, cannot get task $id.');
@@ -252,7 +273,8 @@ class VikunjaApiService implements TaskApiService {
   @override
   Future<TaskItem> createTask(
     TaskItem taskItem, {
-    ServerConfig? targetServerOverride,
+    ServerConfig?
+    targetServerOverride, // NOTE: Override is handled by configureService caller
     int? projectId, // Use the optional projectId from the interface
   }) async {
     if (!isConfigured) {
@@ -309,7 +331,8 @@ class VikunjaApiService implements TaskApiService {
   Future<TaskItem> updateTask(
     String id,
     TaskItem taskItem, {
-    ServerConfig? targetServerOverride,
+    ServerConfig?
+    targetServerOverride, // NOTE: Override is handled by configureService caller
   }) async {
     if (!isConfigured) {
       stderr.writeln('[VikunjaApiService] Not configured, cannot update task $id.');
@@ -337,6 +360,7 @@ class VikunjaApiService implements TaskApiService {
         stderr.writeln(
           '[VikunjaApiService] Update task $id returned null/empty. Fetching task manually.',
         );
+        // Pass override explicitly here if needed, though it should be configured already
         return await getTask(id, targetServerOverride: targetServerOverride);
       }
 
@@ -361,7 +385,8 @@ class VikunjaApiService implements TaskApiService {
   @override
   Future<void> deleteTask(
     String id, {
-    ServerConfig? targetServerOverride,
+    ServerConfig?
+    targetServerOverride, // NOTE: Override is handled by configureService caller
   }) async {
     if (!isConfigured) {
       stderr.writeln('[VikunjaApiService] Not configured, cannot delete task $id.');
@@ -396,7 +421,8 @@ class VikunjaApiService implements TaskApiService {
   @override
   Future<void> completeTask(
     String id, {
-    ServerConfig? targetServerOverride,
+    ServerConfig?
+    targetServerOverride, // NOTE: Override is handled by configureService caller
   }) async {
     if (!isConfigured) {
       stderr.writeln('[VikunjaApiService] Not configured, cannot complete task $id.');
@@ -428,7 +454,8 @@ class VikunjaApiService implements TaskApiService {
   @override
   Future<void> reopenTask(
     String id, {
-    ServerConfig? targetServerOverride,
+    ServerConfig?
+    targetServerOverride, // NOTE: Override is handled by configureService caller
   }) async {
     if (!isConfigured) {
       stderr.writeln('[VikunjaApiService] Not configured, cannot reopen task $id.');
@@ -462,7 +489,8 @@ class VikunjaApiService implements TaskApiService {
   @override
   Future<List<Comment>> listComments(
     String taskId, {
-    ServerConfig? targetServerOverride,
+    ServerConfig?
+    targetServerOverride, // NOTE: Override is handled by configureService caller
   }) async {
     if (!isConfigured) return [];
     stderr.writeln('[VikunjaApiService] listComments for task $taskId - STUBBED');
@@ -475,7 +503,8 @@ class VikunjaApiService implements TaskApiService {
   @override
   Future<Comment> getComment(
     String commentId, {
-    ServerConfig? targetServerOverride,
+    ServerConfig?
+    targetServerOverride, // NOTE: Override is handled by configureService caller
   }) async {
     if (!isConfigured) throw Exception('Vikunja API Service not configured.');
     stderr.writeln('[VikunjaApiService] getComment $commentId - STUBBED');
@@ -490,7 +519,8 @@ class VikunjaApiService implements TaskApiService {
   Future<Comment> createComment(
     String taskId,
     Comment comment, {
-    ServerConfig? targetServerOverride,
+    ServerConfig?
+    targetServerOverride, // NOTE: Override is handled by configureService caller
     List<Map<String, dynamic>>? resources, // TODO: Handle attachments
   }) async {
     if (!isConfigured) throw Exception('Vikunja API Service not configured.');
@@ -508,7 +538,8 @@ class VikunjaApiService implements TaskApiService {
   Future<Comment> updateComment(
     String commentId,
     Comment comment, {
-    ServerConfig? targetServerOverride,
+    ServerConfig?
+    targetServerOverride, // NOTE: Override is handled by configureService caller
   }) async {
     if (!isConfigured) throw Exception('Vikunja API Service not configured.');
     stderr.writeln('[VikunjaApiService] updateComment $commentId - STUBBED');
@@ -523,7 +554,8 @@ class VikunjaApiService implements TaskApiService {
   Future<void> deleteComment(
     String taskId, // Needed for API call? Check spec.
     String commentId, {
-    ServerConfig? targetServerOverride,
+    ServerConfig?
+    targetServerOverride, // NOTE: Override is handled by configureService caller
   }) async {
     if (!isConfigured) throw Exception('Vikunja API Service not configured.');
     stderr.writeln(
@@ -539,7 +571,8 @@ class VikunjaApiService implements TaskApiService {
     Uint8List fileBytes,
     String filename,
     String contentType, {
-    ServerConfig? targetServerOverride,
+    ServerConfig?
+    targetServerOverride, // NOTE: Override is handled by configureService caller
   }) async {
     stderr.writeln(
       '[VikunjaApiService] uploadResource not directly supported. Attachments are linked via tasks/comments.',
@@ -554,7 +587,7 @@ class VikunjaApiService implements TaskApiService {
   Future<Uint8List> getResourceData(
     String resourceIdentifier, // This might be an attachment ID or URL
     {
-    ServerConfig? targetServerOverride,
+    ServerConfig? targetServerOverride, // NOTE: Override is handled by configureService caller
     String? taskId, // Need task context for attachment ID
   }) async {
     stderr.writeln(
@@ -659,7 +692,7 @@ class VikunjaApiService implements TaskApiService {
             final titleMatch = RegExp(r'<title>(.*?)<\/title>').firstMatch(rawMessage);
             final bodyMatch = RegExp(r'<body>(.*?)<\/body>', dotAll: true).firstMatch(rawMessage);
             String extractedMessage = '';
-            if (titleMatch != null) extractedMessage = titleMatch.group(1) ?? '';
+            if (titleMatch != null) extractedMessage = titleMatch.group(1)?.trim() ?? '';
             if (bodyMatch != null) {
                 final bodyText = bodyMatch.group(1)?.replaceAll(RegExp(r'<[^>]*>'), ' ').trim() ?? '';
                 if (bodyText.isNotEmpty) {
@@ -677,7 +710,7 @@ class VikunjaApiService implements TaskApiService {
       if (statusCode == 401 || statusCode == 403) {
         // Don't automatically mark as unconfigured here, let the caller handle it
         // based on whether it was an initial config check or a regular call.
-        stderr.writeln('[VikunjaApiService] Authentication error ($statusCode).');
+        stderr.writeln('[VikunjaApiService] Authentication error ($statusCode). Check API Key.');
         // Consider notifying the app about auth failure.
       }
     } else {

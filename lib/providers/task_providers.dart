@@ -1,6 +1,10 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter_memos/models/server_config.dart'; // Import ServerConfig
 import 'package:flutter_memos/models/task_filter.dart'; // Import the new enum
 import 'package:flutter_memos/models/task_item.dart';
+import 'package:flutter_memos/providers/server_config_provider.dart'; // Import server config provider
+import 'package:flutter_memos/providers/settings_provider.dart'; // Import settings for API key
+import 'package:flutter_memos/services/auth_strategy.dart'; // Import for BearerTokenAuthStrategy
 // Import Vikunja service
 import 'package:flutter_memos/services/vikunja_api_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -13,6 +17,7 @@ final taskDetailProvider =
 ) async {
   // Use the Vikunja service provider
   final vikunjaService = ref.watch(vikunjaApiServiceProvider);
+  // Check configuration status via the dedicated provider
   final isConfigured = ref.watch(isVikunjaConfiguredProvider);
 
   if (!isConfigured) {
@@ -100,56 +105,102 @@ class TasksNotifier extends StateNotifier<TasksState> {
   TasksNotifier(this._ref) : super(TasksState.initial());
 
   // Helper to get the configured Vikunja TaskApiService or handle errors
-  VikunjaApiService? _getVikunjaApiService() {
-    // Use the dedicated Vikunja service provider
+  // This now also handles configuration based on active server and API key.
+  Future<VikunjaApiService?> _getAndConfigureVikunjaApiService() async {
+    final activeServer = _ref.read(activeServerConfigProvider);
+    final vikunjaApiKey = _ref.read(vikunjaApiKeyProvider);
     final vikunjaService = _ref.read(vikunjaApiServiceProvider);
-    final isConfigured = _ref.read(
-      isVikunjaConfiguredProvider,
-    ); // Read the state provider
+    final isConfiguredNotifier = _ref.read(
+      isVikunjaConfiguredProvider.notifier,
+    );
 
-    if (!isConfigured) {
-      final errorMessage = 'Vikunja API not configured in Settings.';
+    // Check if the active server is Vikunja
+    if (activeServer == null || activeServer.serverType != ServerType.vikunja) {
+      const errorMessage = 'Active server is not a Vikunja server.';
       if (state.error != errorMessage) {
-        state = TasksState.initial().copyWith(
-          error: errorMessage,
-          tasks: [], // Clear tasks if not configured
-        );
+        state = TasksState.initial().copyWith(error: errorMessage, tasks: []);
       }
+      isConfiguredNotifier.state = false; // Mark as not configured
       return null;
     }
 
-    // Clear error if we successfully get the service and previously had an error
-    if (state.error != null) {
-      state = state.copyWith(clearError: true);
+    // Check if API key is present
+    if (vikunjaApiKey.isEmpty) {
+      const errorMessage =
+          'Vikunja API Key not configured in Settings > Integrations.';
+      if (state.error != errorMessage) {
+        state = TasksState.initial().copyWith(error: errorMessage, tasks: []);
+      }
+      isConfiguredNotifier.state = false; // Mark as not configured
+      return null;
     }
-    return vikunjaService; // Return the configured service instance
+
+    // Try to configure the service
+    try {
+      await vikunjaService.configureService(
+        baseUrl: activeServer.serverUrl,
+        authStrategy: BearerTokenAuthStrategy(vikunjaApiKey),
+      );
+
+      // Verify configuration status after attempting configuration
+      if (vikunjaService.isConfigured) {
+        if (state.error != null) {
+          state = state.copyWith(clearError: true); // Clear previous errors
+        }
+        isConfiguredNotifier.state = true; // Mark as configured
+        return vikunjaService; // Return the configured service instance
+      } else {
+        // Configuration attempt failed (e.g., invalid URL format)
+        const errorMessage =
+            'Failed to configure Vikunja service. Check URL/Key.';
+        if (state.error != errorMessage) {
+          state = TasksState.initial().copyWith(error: errorMessage, tasks: []);
+        }
+        isConfiguredNotifier.state = false;
+        return null;
+      }
+    } catch (e) {
+      final errorMessage = 'Error configuring Vikunja service: $e';
+      if (state.error != errorMessage) {
+        state = TasksState.initial().copyWith(error: errorMessage, tasks: []);
+      }
+      isConfiguredNotifier.state = false;
+      return null;
+    }
   }
 
   /// Clears tasks and resets state to initial.
   void clearTasks() {
     state = TasksState.initial();
+    // Also mark as unconfigured when clearing tasks explicitly
+    _ref.read(isVikunjaConfiguredProvider.notifier).state = false;
   }
 
   Future<void> fetchTasks({String? filter}) async {
-    final apiService = _getVikunjaApiService();
-    if (apiService == null) return; // Error handled in _getVikunjaApiService
+    final apiService =
+        await _getAndConfigureVikunjaApiService(); // Use the configuring helper
+    if (apiService == null) return; // Error handled in helper
 
     if (state.isLoading) return;
 
     state = state.copyWith(isLoading: true, clearError: true);
     try {
-      final tasks = await apiService.listTasks(filter: filter);
+      // Pass the active server override, although configureService already set it
+      final tasks = await apiService.listTasks(
+        filter: filter,
+        targetServerOverride: _ref.read(activeServerConfigProvider),
+      );
       if (!mounted) return;
 
       // Sort tasks (e.g., by priority descending, then maybe creation date)
       // Adjust sorting based on Vikunja priority meaning if kept
       tasks.sort((a, b) {
         // Handle null priority
-        final priorityA = a.priority ?? 99; // Assign low priority if null
-        final priorityB = b.priority ?? 99;
-        final priorityComparison = priorityB.compareTo(
-          priorityA,
-        ); // Vikunja priority might be different scale
+        final priorityA =
+            a.priority ?? 0; // Vikunja: 0=None, 1=Lowest..5=Highest
+        final priorityB = b.priority ?? 0;
+        // Higher priority value comes first
+        final priorityComparison = priorityB.compareTo(priorityA);
         if (priorityComparison != 0) {
           return priorityComparison;
         }
@@ -167,17 +218,20 @@ class TasksNotifier extends StateNotifier<TasksState> {
         error: 'Failed to fetch tasks from Vikunja: ${e.toString()}',
         tasks: [],
       );
+      // Mark as unconfigured on fetch error? Maybe too aggressive.
+      // _ref.read(isVikunjaConfiguredProvider.notifier).state = false;
     }
   }
 
   /// Fetches a single task by its ID.
   Future<TaskItem?> fetchTaskById(String taskId) async {
-    final apiService = _getVikunjaApiService();
+    final apiService = await _getAndConfigureVikunjaApiService();
     if (apiService == null) return null;
 
     try {
       final task = await apiService.getTask(
         taskId,
+        targetServerOverride: _ref.read(activeServerConfigProvider),
       ); // Service handles ID parsing
       return task;
     } catch (e, s) {
@@ -195,7 +249,7 @@ class TasksNotifier extends StateNotifier<TasksState> {
 
 
   Future<bool> completeTask(String id) async {
-    final apiService = _getVikunjaApiService();
+    final apiService = await _getAndConfigureVikunjaApiService();
     if (apiService == null) return false;
 
     // Optimistic update using 'done' field
@@ -225,7 +279,10 @@ class TasksNotifier extends StateNotifier<TasksState> {
 
 
     try {
-      await apiService.completeTask(id); // Service handles ID parsing
+      await apiService.completeTask(
+        id,
+        targetServerOverride: _ref.read(activeServerConfigProvider),
+      ); // Service handles ID parsing
       return true;
     } catch (e, s) {
       if (kDebugMode) {
@@ -248,7 +305,7 @@ class TasksNotifier extends StateNotifier<TasksState> {
   }
 
   Future<bool> reopenTask(String id) async {
-    final apiService = _getVikunjaApiService();
+    final apiService = await _getAndConfigureVikunjaApiService();
     if (apiService == null) return false;
 
     // Optimistic update using 'done' field
@@ -275,7 +332,10 @@ class TasksNotifier extends StateNotifier<TasksState> {
     }
 
     try {
-      await apiService.reopenTask(id); // Service handles ID parsing
+      await apiService.reopenTask(
+        id,
+        targetServerOverride: _ref.read(activeServerConfigProvider),
+      ); // Service handles ID parsing
       return true;
     } catch (e, s) {
       if (kDebugMode) {
@@ -295,7 +355,7 @@ class TasksNotifier extends StateNotifier<TasksState> {
   }
 
   Future<bool> deleteTask(String id) async {
-    final apiService = _getVikunjaApiService();
+    final apiService = await _getAndConfigureVikunjaApiService();
     if (apiService == null) return false;
 
     // Optimistic update
@@ -316,7 +376,10 @@ class TasksNotifier extends StateNotifier<TasksState> {
     }
 
     try {
-      await apiService.deleteTask(id); // Service handles ID parsing
+      await apiService.deleteTask(
+        id,
+        targetServerOverride: _ref.read(activeServerConfigProvider),
+      ); // Service handles ID parsing
       return true;
     } catch (e, s) {
       if (kDebugMode) {
@@ -337,21 +400,22 @@ class TasksNotifier extends StateNotifier<TasksState> {
   }
 
   Future<TaskItem?> createTask(TaskItem task, {int? projectId}) async {
-    final apiService = _getVikunjaApiService();
+    final apiService = await _getAndConfigureVikunjaApiService();
     if (apiService == null) return null;
 
     try {
-      // Pass projectId if provided
+      // Pass projectId if provided, and active server override
       final createdTask = await apiService.createTask(
         task,
         projectId: projectId,
+        targetServerOverride: _ref.read(activeServerConfigProvider),
       );
       if (mounted) {
         final newTasks = [...state.tasks, createdTask];
         // Re-sort based on updated logic
         newTasks.sort((a, b) {
-          final priorityA = a.priority ?? 99;
-          final priorityB = b.priority ?? 99;
+          final priorityA = a.priority ?? 0;
+          final priorityB = b.priority ?? 0;
           final priorityComparison = priorityB.compareTo(priorityA);
           if (priorityComparison != 0) return priorityComparison;
           return a.createdAt.compareTo(b.createdAt);
@@ -371,7 +435,7 @@ class TasksNotifier extends StateNotifier<TasksState> {
   }
 
   Future<TaskItem?> updateTask(String id, TaskItem taskUpdate) async {
-    final apiService = _getVikunjaApiService();
+    final apiService = await _getAndConfigureVikunjaApiService();
     if (apiService == null) return null;
 
     // Optimistic update
@@ -417,6 +481,7 @@ class TasksNotifier extends StateNotifier<TasksState> {
       final updatedTask = await apiService.updateTask(
         id,
         taskUpdate,
+        targetServerOverride: _ref.read(activeServerConfigProvider),
       ); // Service handles ID parsing
       if (mounted) {
         final updatedTasks =
@@ -430,8 +495,8 @@ class TasksNotifier extends StateNotifier<TasksState> {
 
         // Re-sort
         updatedTasks.sort((a, b) {
-          final priorityA = a.priority ?? 99;
-          final priorityB = b.priority ?? 99;
+          final priorityA = a.priority ?? 0;
+          final priorityB = b.priority ?? 0;
           final priorityComparison = priorityB.compareTo(priorityA);
           if (priorityComparison != 0) return priorityComparison;
           return a.createdAt.compareTo(b.createdAt);

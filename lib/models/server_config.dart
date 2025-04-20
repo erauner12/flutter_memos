@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/src/widgets/framework.dart';
 import 'package:flutter_memos/utils/enum_utils.dart'; // Import the new helper
 import 'package:uuid/uuid.dart';
 
@@ -159,4 +160,6 @@ class ServerConfig {
     // Use describeEnum for consistency
     return 'ServerConfig(id: $id, name: $name, type: ${describeEnum(serverType)}, serverUrl: $serverUrl, authToken: ${authToken.isNotEmpty ? "****" : "empty"})'; // Include id, name, and type
   }
+
+  static Widget empty() {}
 }

@@ -12,7 +12,7 @@ import 'package:synchronized/synchronized.dart';
 /// Keys for SharedPreferences storage (now primarily for migration check)
 /// and SecureStorage / CloudKit keys.
 class PreferenceKeys {
-  static const String todoistApiKey = 'todoist_api_key';
+  // static const String todoistApiKey = 'todoist_api_key'; // REMOVED
   static const String openAiApiKey = 'openai_api_key'; // Added OpenAI key
   static const String openAiModelId = 'openai_model_id'; // Add this key
   // Add other preference keys as needed
@@ -26,18 +26,21 @@ class PreferenceKeys {
 
   // Key for the last selected tab index
   static const String selectedTabIndex = 'selectedTabIndex'; // <<< ADDED
+
+  // Key for Vikunja API Key
+  static const String vikunjaApiKey = 'vikunja_api_key'; // NEW
 }
 
-/// Provider for the Todoist API key with persistence using SharedPreferences
-final todoistApiKeyProvider =
-    StateNotifierProvider<PersistentStringNotifier, String>(
-      (ref) => PersistentStringNotifier(
-        ref,
-        '', // default empty value
-        PreferenceKeys.todoistApiKey, // storage key
-      ),
-      name: 'todoistApiKey',
-    );
+// REMOVED Todoist API Key Provider
+// final todoistApiKeyProvider =
+//     StateNotifierProvider<PersistentStringNotifier, String>(
+//       (ref) => PersistentStringNotifier(
+//         ref,
+//         '', // default empty value
+//         PreferenceKeys.todoistApiKey, // storage key
+//       ),
+//       name: 'todoistApiKey',
+//     );
 
 /// Provider for the OpenAI API key with persistence using SharedPreferences
 final openAiApiKeyProvider =
@@ -73,6 +76,19 @@ final geminiApiKeyProvider =
       name: 'geminiApiKeyProvider', // Provider name
     );
 // --- End Gemini ---
+
+// --- Start Vikunja ---
+/// Provider for the Vikunja API key with persistence
+final vikunjaApiKeyProvider =
+    StateNotifierProvider<PersistentStringNotifier, String>(
+      (ref) => PersistentStringNotifier(
+        ref,
+        '', // default empty value
+        PreferenceKeys.vikunjaApiKey, // storage key for Vikunja
+      ),
+      name: 'vikunjaApiKeyProvider', // Provider name
+    );
+// --- End Vikunja ---
 
 /// Provider for the set of manually hidden note IDs
 final manuallyHiddenNoteIdsProvider =

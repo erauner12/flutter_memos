@@ -2,28 +2,29 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart'; // Import for kDebugMode
 import 'package:flutter/material.dart'; // Keep for Material in OverlayEntry
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:flutter_memos/main.dart'; // Import for rootNavigatorKeyProvider
-import 'package:flutter_memos/models/server_config.dart'; // Still needed for ServerType enum in WorkbenchItemReference
+import 'package:flutter_memos/models/server_config.dart'; // Needed for ServerType enum
 import 'package:flutter_memos/models/task_filter.dart'; // Import the filter enum
 import 'package:flutter_memos/models/task_item.dart';
 import 'package:flutter_memos/models/workbench_item_reference.dart';
 import 'package:flutter_memos/models/workbench_item_type.dart'; // Import the unified enum
-import 'package:flutter_memos/providers/settings_provider.dart'; // Import for todoistApiKeyProvider
+import 'package:flutter_memos/providers/server_config_provider.dart'; // Import for activeServerConfigProvider
+// Removed settings_provider import (vikunjaApiKeyProvider is checked via isVikunjaConfiguredProvider)
 import 'package:flutter_memos/providers/task_providers.dart';
 import 'package:flutter_memos/providers/workbench_provider.dart';
 import 'package:flutter_memos/screens/settings_screen.dart'; // Import SettingsScreen
 import 'package:flutter_memos/screens/tasks/new_task_screen.dart';
 import 'package:flutter_memos/screens/tasks/widgets/task_list_item.dart';
+import 'package:flutter_memos/services/vikunja_api_service.dart'; // Import for isVikunjaConfiguredProvider
 import 'package:flutter_memos/utils/thread_utils.dart'; // Import thread utils
 import 'package:flutter_memos/utils/workbench_utils.dart'; // Import instance picker utility
 import 'package:hooks_riverpod/hooks_riverpod.dart'; // Import hooks_riverpod
 import 'package:uuid/uuid.dart';
 
-// Constants for Todoist Workbench items (since there's no ServerConfig anymore)
-const String _todoistWorkbenchServerId = 'global-todoist-integration';
-const String _todoistWorkbenchServerName = 'Todoist';
+// Removed Todoist constants
 
 // Change from ConsumerStatefulWidget to HookConsumerWidget
 class TasksScreen extends HookConsumerWidget {
@@ -57,18 +58,23 @@ class TasksScreen extends HookConsumerWidget {
     );
   }
 
-  // Add task to workbench - updated to use picker
+  // Add task to workbench - updated to use active Vikunja server
   Future<void> _addTaskToWorkbench(
     BuildContext context,
     WidgetRef ref,
     TaskItem task,
   ) async {
-    final apiKey = ref.read(todoistApiKeyProvider);
-    if (apiKey.isEmpty) {
+    // Check if Vikunja is configured
+    final isConfigured = ref.read(isVikunjaConfiguredProvider);
+    final activeServer = ref.read(activeServerConfigProvider);
+
+    if (!isConfigured ||
+        activeServer == null ||
+        activeServer.serverType != ServerType.vikunja) {
       _showAlertDialog(
         context,
         'Error',
-        'Cannot add task: Todoist API Key not configured in Settings > Integrations.',
+        'Cannot add task: Vikunja is not configured or the active server is not Vikunja. Check Settings.',
       );
       return;
     }
@@ -85,14 +91,16 @@ class TasksScreen extends HookConsumerWidget {
     final targetInstanceId = selectedInstance.id;
     final targetInstanceName = selectedInstance.name;
 
+    // Use active Vikunja server details
     final reference = WorkbenchItemReference(
       id: const Uuid().v4(),
-      referencedItemId: task.id,
+      referencedItemId: task.id, // Vikunja task ID (String)
       referencedItemType: WorkbenchItemType.task,
-      serverId: _todoistWorkbenchServerId,
-      serverType: ServerType.todoist,
-      serverName: _todoistWorkbenchServerName,
-      previewContent: task.content,
+      serverId: activeServer.id, // Vikunja server ID from config
+      serverType: ServerType.vikunja, // Explicitly Vikunja
+      serverName:
+          activeServer.name ?? activeServer.serverUrl, // Vikunja server name
+      previewContent: task.title, // Use Vikunja title
       addedTimestamp: DateTime.now(),
       instanceId: targetInstanceId,
     );
@@ -162,7 +170,7 @@ class TasksScreen extends HookConsumerWidget {
                         SizedBox(
                           width: 180,
                           child: Text(
-                            task.content,
+                            task.title, // Use Vikunja title
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -209,21 +217,31 @@ class TasksScreen extends HookConsumerWidget {
     });
   }
 
-  // NEW: Method to handle "Chat about Task" action
+  // NEW: Method to handle "Chat about Task" action - updated for Vikunja
   Future<void> _chatWithTask(
     BuildContext context,
     WidgetRef ref,
     String taskId,
   ) async {
+    final activeServer = ref.read(activeServerConfigProvider);
+    if (activeServer == null || activeServer.serverType != ServerType.vikunja) {
+      _showAlertDialog(
+        context,
+        'Error',
+        'Active server must be Vikunja to chat about tasks.',
+      );
+      return;
+    }
+    final serverId = activeServer.id; // Use Vikunja server ID
+
     String? fetchedContent;
     Object? error;
-    const serverId = _todoistWorkbenchServerId;
     try {
       fetchedContent = await getFormattedThreadContent(
         ref,
         taskId,
         WorkbenchItemType.task,
-        serverId,
+        serverId, // Pass Vikunja server ID
       );
     } catch (e) {
       error = e;
@@ -243,47 +261,64 @@ class TasksScreen extends HookConsumerWidget {
       'contextString': fetchedContent,
       'parentItemId': taskId,
       'parentItemType': WorkbenchItemType.task,
-      'parentServerId': serverId,
+      'parentServerId': serverId, // Pass Vikunja server ID
     };
     rootNavigatorKey.currentState?.pushNamed('/chat', arguments: chatArgs);
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Watch Vikunja configuration status
+    final isVikunjaConfigured = ref.watch(isVikunjaConfiguredProvider);
+
     Future<void> handleRefresh() async {
-      final isTodoistConfigured = ref.read(todoistApiKeyProvider).isNotEmpty;
-      if (isTodoistConfigured) {
+      if (isVikunjaConfigured) {
+        // Fetch tasks using the notifier (which handles configuration internally)
         await ref.read(tasksNotifierProvider.notifier).fetchTasks();
+      } else {
+        // Optionally show a message or do nothing if not configured
+        if (kDebugMode) {
+          print("[TasksScreen] Refresh skipped: Vikunja not configured.");
+        }
       }
     }
 
-    final todoistApiKey = ref.watch(todoistApiKeyProvider);
-    final bool isTodoistConfigured = todoistApiKey.isNotEmpty;
     final tasksState = ref.watch(tasksNotifierProvider);
+    // Watch the filtered tasks based on the current filter
     final tasks = ref.watch(filteredTasksProviderFamily(filter));
 
+    // Effect to fetch tasks when the screen loads or configuration changes
     useEffect(
       () {
-        if (isTodoistConfigured) {
-          if (tasksState.tasks.isEmpty &&
-              !tasksState.isLoading &&
-              tasksState.error == null) {
-            Future.microtask(
-              () => ref.read(tasksNotifierProvider.notifier).fetchTasks(),
-            );
+        // Use a post frame callback to ensure providers are ready
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (isVikunjaConfigured) {
+            // Fetch only if configured, tasks are empty, not loading, and no error
+            if (tasksState.tasks.isEmpty &&
+                !tasksState.isLoading &&
+                tasksState.error == null) {
+              // Use Future.microtask to avoid triggering build during build
+              Future.microtask(
+                () => ref.read(tasksNotifierProvider.notifier).fetchTasks(),
+              );
+            }
+          } else {
+            // If not configured, ensure tasks are cleared
+            if (tasksState.tasks.isNotEmpty ||
+                tasksState.error != null ||
+                tasksState.isLoading) {
+              Future.microtask(
+                () => ref.read(tasksNotifierProvider.notifier).clearTasks(),
+              );
+            }
           }
-        } else {
-          if (tasksState.tasks.isNotEmpty) {
-            Future.microtask(
-              () => ref.read(tasksNotifierProvider.notifier).clearTasks(),
-            );
-          }
-        }
+        });
+        // Return null for cleanup function
         return null;
       },
+      // Dependencies: configuration status, loading state, error state, task list emptiness
       [
-        isTodoistConfigured,
-        todoistApiKey,
+        isVikunjaConfigured,
         tasksState.isLoading,
         tasksState.error,
         tasksState.tasks.isEmpty,
@@ -296,11 +331,11 @@ class TasksScreen extends HookConsumerWidget {
     return CupertinoPageScaffold(
       navigationBar: CupertinoNavigationBar(
         middle: Text(screenTitle),
-        previousPageTitle: 'More',
+        // previousPageTitle: 'More', // Removed 'More' screen concept
         leading: CupertinoButton(
           padding: EdgeInsets.zero,
           onPressed:
-              tasksState.isLoading || !isTodoistConfigured
+              tasksState.isLoading || !isVikunjaConfigured
                   ? null
                   : handleRefresh,
           child: const Icon(CupertinoIcons.refresh),
@@ -311,7 +346,7 @@ class TasksScreen extends HookConsumerWidget {
             CupertinoButton(
               padding: EdgeInsets.zero,
               onPressed:
-                  !isTodoistConfigured
+                  !isVikunjaConfigured
                   ? null
                   : () {
                         Navigator.of(context).push(
@@ -341,33 +376,100 @@ class TasksScreen extends HookConsumerWidget {
       child: SafeArea(
         child: Builder(
           builder: (ctx) {
-            if (!isTodoistConfigured) {
-              return const Center(
+            // 1. Check if Vikunja is configured
+            if (!isVikunjaConfigured) {
+              return Center(
                 child: Padding(
-                  padding: EdgeInsets.all(16.0),
-                  child: Text(
-                    'Please enter your Todoist API Key in Settings > Integrations to view tasks.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: CupertinoColors.secondaryLabel),
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Text(
+                        'Vikunja integration not configured.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        'Please ensure a Vikunja server is added and active, and enter your Vikunja API Key in:',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: CupertinoColors.secondaryLabel.resolveFrom(
+                            ctx,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 15),
+                      CupertinoButton(
+                        child: const Text('Settings > Integrations'),
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            CupertinoPageRoute(
+                              builder:
+                                  (ctx) => const SettingsScreen(
+                                    isInitialSetup: false,
+                                  ),
+                            ),
+                          );
+                        },
+                      ),
+                    ],
                   ),
                 ),
               );
             }
+
+            // 2. Handle loading state
             if (tasksState.isLoading && tasks.isEmpty) {
               return const Center(child: CupertinoActivityIndicator());
             }
+
+            // 3. Handle error state
             if (tasksState.error != null && tasks.isEmpty) {
               return Center(
                 child: Padding(
                   padding: const EdgeInsets.all(16.0),
-                  child: Text(
-                    'Error loading tasks: ${tasksState.error}\nPlease check your connection and API key in Settings > Integrations.',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(color: CupertinoColors.systemRed),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(
+                        CupertinoIcons.exclamationmark_triangle,
+                        size: 40,
+                        color: CupertinoColors.systemRed,
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        'Error loading tasks: ${tasksState.error}',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: CupertinoColors.systemRed,
+                        ),
+                      ),
+                      const SizedBox(height: 5),
+                      Text(
+                        'Please check your connection, Vikunja server status, and API key in Settings.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: CupertinoColors.secondaryLabel.resolveFrom(
+                            ctx,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 15),
+                      CupertinoButton(
+                        onPressed: handleRefresh,
+                        child: const Text('Retry'),
+                      ),
+                    ],
                   ),
                 ),
               );
             }
+
+            // 4. Handle empty state (configured, no error, no tasks)
             if (tasks.isEmpty &&
                 !tasksState.isLoading &&
                 tasksState.error == null) {
@@ -384,6 +486,8 @@ class TasksScreen extends HookConsumerWidget {
                 ),
               );
             }
+
+            // 5. Display task list
             return CustomScrollView(
               slivers: [
                 CupertinoSliverRefreshControl(onRefresh: handleRefresh),
@@ -392,7 +496,7 @@ class TasksScreen extends HookConsumerWidget {
                     (itemCtx, index) {
                       final task = tasks[index];
                       return TaskListItem(
-                      key: ValueKey(task.id),
+                      key: ValueKey(task.id), // Use Vikunja task ID
                         task: task,
                         onToggleComplete: (isCompleted) async {
                           bool success;
@@ -423,7 +527,7 @@ class TasksScreen extends HookConsumerWidget {
                               (dialogCtx) => CupertinoAlertDialog(
                                 title: const Text('Delete Task?'),
                                 content: Text(
-                                  'Are you sure you want to delete "${task.content}"? This cannot be undone.',
+                                  'Are you sure you want to delete "${task.title}"? This cannot be undone.', // Use title
                                 ),
                                 actions: [
                                   CupertinoDialogAction(
