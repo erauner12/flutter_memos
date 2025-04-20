@@ -52,9 +52,13 @@ final noteApiServiceProvider = Provider<NoteApiService>((ref) {
     case ServerType.memos:
       final memosService = MemosApiService();
       MemosApiService.verboseLogging = config['verboseLogging'] ?? true;
+      // Note: configureService is async but we don't necessarily need to wait here
+      // unless subsequent logic depends on it being fully configured immediately.
+      // For provider setup, it's often okay to configure without await.
       memosService.configureService(
         baseUrl: serverUrl,
         authStrategy: authStrategy,
+        serverId: noteServerConfig.id, // Pass serverId for consistency
       );
       service = memosService;
       break;
@@ -64,6 +68,7 @@ final noteApiServiceProvider = Provider<NoteApiService>((ref) {
       blinkoService.configureService(
         baseUrl: serverUrl,
         authStrategy: authStrategy,
+        serverId: noteServerConfig.id, // Pass serverId for consistency
       );
       service = blinkoService;
       break;
@@ -111,11 +116,10 @@ final noteApiServiceProvider = Provider<NoteApiService>((ref) {
 
 /// Provider for the active TASK API Service (currently only Vikunja)
 /// Returns the TaskApiService interface.
-final taskApiServiceProvider = Provider<TaskApiService>((ref) {
+/// configuration needs to be awaited. Consumers must handle the Future.
+final taskApiServiceProvider = FutureProvider<TaskApiService>((ref) async {
   final taskServerConfig = ref.watch(taskServerConfigProvider);
   final config = ref.watch(apiConfigProvider); // General config like logging
-  // REMOVED watch for legacy Vikunja API key provider
-  // final vikunjaApiKey = ref.watch(vikunjaApiKeyProvider);
 
   if (taskServerConfig == null || taskServerConfig.serverUrl.isEmpty) {
     if (kDebugMode) {
@@ -146,20 +150,18 @@ final taskApiServiceProvider = Provider<TaskApiService>((ref) {
       print(
         '[taskApiServiceProvider] Warning: Vikunja task server configured but token/API key is missing. Returning DummyTaskApiService.',
       );
-    // REMOVED direct setting of isVikunjaConfiguredProvider
-    // ref.read(isVikunjaConfiguredProvider.notifier).state = false;
     return DummyTaskApiService();
   }
 
   final vikunjaService = VikunjaApiService();
   VikunjaApiService.verboseLogging = config['verboseLogging'] ?? true;
-  vikunjaService.configureService(
+
+  // *** CRITICAL CHANGE: Await configureService and pass serverId ***
+  await vikunjaService.configureService(
     baseUrl: serverUrl,
     authStrategy: authStrategy,
+    serverId: taskServerConfig.id, // Pass the server ID from the config
   );
-
-  // REMOVED direct setting of isVikunjaConfiguredProvider
-  // ref.read(isVikunjaConfiguredProvider.notifier).state = vikunjaService.isConfigured;
 
   if (kDebugMode) {
     print(
@@ -205,9 +207,8 @@ Future<void> _checkNoteApiHealth(Ref ref) async {
     return;
   }
 
-  final noteApiService = ref.read(
-    noteApiServiceProvider,
-  ); // Read current service
+  // Read the service directly, handle potential Dummy service
+  final noteApiService = ref.read(noteApiServiceProvider);
   if (!noteApiService.isConfigured || noteApiService is DummyNoteApiService) {
     if (ref.read(noteApiStatusProvider) != 'unconfigured') {
       ref.read(noteApiStatusProvider.notifier).state = 'unconfigured';
@@ -255,9 +256,14 @@ Future<void> _checkNoteApiHealth(Ref ref) async {
 
 /// Computed provider indicating if the Vikunja task service is configured.
 /// Derives its state from the `taskApiServiceProvider`.
+/// IMPORTANT: Now watches the FutureProvider and checks the result.
 final isVikunjaConfiguredProvider = Provider<bool>((ref) {
-  final taskService = ref.watch(taskApiServiceProvider);
-  return taskService.isConfigured && taskService is VikunjaApiService;
+  final taskServiceAsyncValue = ref.watch(taskApiServiceProvider);
+  return taskServiceAsyncValue.when(
+    data: (service) => service.isConfigured && service is VikunjaApiService,
+    loading: () => false, // Not configured while loading
+    error: (_, __) => false, // Not configured on error
+  );
 }, name: 'isVikunjaConfiguredProvider');
 
 
@@ -295,17 +301,27 @@ Future<void> _checkTaskApiHealth(Ref ref) async {
     return;
   }
 
-  final taskApiService = ref.read(
-    taskApiServiceProvider,
-  ); // Read current service
-  // The isConfigured check above already handles the Dummy case implicitly
+  // Read the service from the FutureProvider's result
+  final taskApiServiceAsyncValue = ref.read(taskApiServiceProvider);
+  TaskApiService? taskApiService;
+  taskApiServiceAsyncValue.whenData((service) => taskApiService = service);
+
+  // If service is null (still loading or error), or dummy, treat as unconfigured for health check
+  if (taskApiService == null ||
+      !taskApiService!.isConfigured ||
+      taskApiService is DummyTaskApiService) {
+    if (ref.read(taskApiStatusProvider) != 'unconfigured') {
+      ref.read(taskApiStatusProvider.notifier).state = 'unconfigured';
+    }
+    return;
+  }
 
   final currentStatus = ref.read(taskApiStatusProvider);
   if (currentStatus == 'checking') return;
   ref.read(taskApiStatusProvider.notifier).state = 'checking';
 
   try {
-    final isHealthy = await taskApiService.checkHealth();
+    final isHealthy = await taskApiService!.checkHealth();
     // Check if still configured before updating state
     final stillConfigured = ref.read(
       isVikunjaConfiguredProvider,
@@ -403,14 +419,18 @@ Future<void> _checkOpenAiApiHealth(Ref ref) async {
 
   try {
     final isHealthy = await openaiApiService.checkHealth();
-    if (ref.read(openaiApiStatusProvider) == 'checking') {
+    // Check if still configured before updating state
+    final stillConfigured = ref.read(openAiApiKeyProvider).isNotEmpty;
+    if (stillConfigured && ref.read(openaiApiStatusProvider) == 'checking') {
       ref.read(openaiApiStatusProvider.notifier).state =
           isHealthy ? 'available' : 'unavailable';
     }
   } catch (e) {
     if (kDebugMode) print('[openaiApiHealthChecker] Error checking health: $e');
-    if (ref.read(openaiApiStatusProvider) == 'checking') {
-      ref.read(openaiApiStatusProvider.notifier).state = 'error';
+    final stillConfigured = ref.read(openAiApiKeyProvider).isNotEmpty;
+    if (stillConfigured && ref.read(openaiApiStatusProvider) == 'checking') {
+      // Keep status as 'checking' or set to 'error'? Let's use 'unavailable' for consistency.
+      ref.read(openaiApiStatusProvider.notifier).state = 'unavailable';
     }
   }
 }
@@ -429,6 +449,7 @@ class DummyNoteApiService extends BaseApiService implements NoteApiService {
     String? baseUrl,
     String? authToken,
     AuthStrategy? authStrategy,
+    String? serverId, // Add serverId to match interface
   }) async {}
   @override
   Future<bool> checkHealth() async => false;
@@ -489,6 +510,7 @@ class DummyNoteApiService extends BaseApiService implements NoteApiService {
   Future<Comment> getNoteComment(
     String commentId, {
     ServerConfig? targetServerOverride,
+    String? noteId, // Add noteId to match interface
   }) async => throw UnimplementedError('DummyNoteApiService.getNoteComment');
   @override
   Future<Comment> createNoteComment(
@@ -520,6 +542,7 @@ class DummyNoteApiService extends BaseApiService implements NoteApiService {
   Future<Uint8List> getResourceData(
     String resourceIdentifier, {
     ServerConfig? targetServerOverride,
+    String? noteId, // Add noteId to match interface
   }) async => throw UnimplementedError('DummyNoteApiService.getResourceData');
 }
 
@@ -536,6 +559,7 @@ class DummyTaskApiService extends BaseApiService implements TaskApiService {
     String? baseUrl,
     String? authToken,
     AuthStrategy? authStrategy,
+    String? serverId, // Add serverId to match interface
   }) async {}
   @override
   Future<bool> checkHealth() async => false;
@@ -568,12 +592,14 @@ class DummyTaskApiService extends BaseApiService implements TaskApiService {
     ServerConfig? targetServerOverride,
   }) async => throw UnimplementedError('DummyTaskApiService.deleteTask');
   @override
-  Future<TaskItem> completeTask(
+  Future<void> completeTask(
+    // Changed return type to void
     String id, {
     ServerConfig? targetServerOverride,
   }) async => throw UnimplementedError('DummyTaskApiService.completeTask');
   @override
-  Future<TaskItem> reopenTask(
+  Future<void> reopenTask(
+    // Changed return type to void
     String id, {
     ServerConfig? targetServerOverride,
   }) async => throw UnimplementedError('DummyTaskApiService.reopenTask');
@@ -582,12 +608,12 @@ class DummyTaskApiService extends BaseApiService implements TaskApiService {
     String taskId, {
     ServerConfig? targetServerOverride,
   }) async => [];
-  @override
-  Future<Comment> addComment(
-    String taskId,
-    String content, {
-    ServerConfig? targetServerOverride,
-  }) async => throw UnimplementedError('DummyTaskApiService.addComment');
+  // Removed addComment as it's not in the interface
+  // Future<Comment> addComment(
+  //   String taskId,
+  //   String content, {
+  //   ServerConfig? targetServerOverride,
+  // }) async => throw UnimplementedError('DummyTaskApiService.addComment');
   @override
   Future<Comment> createComment(
     String taskId,
@@ -605,6 +631,7 @@ class DummyTaskApiService extends BaseApiService implements TaskApiService {
   Future<Comment> getComment(
     String commentId, {
     ServerConfig? targetServerOverride,
+    String? taskId, // Add taskId to match interface
   }) async => throw UnimplementedError('DummyTaskApiService.getComment');
   @override
   Future<Comment> updateComment(
@@ -623,5 +650,6 @@ class DummyTaskApiService extends BaseApiService implements TaskApiService {
   Future<Uint8List> getResourceData(
     String resourceIdentifier, {
     ServerConfig? targetServerOverride,
+    String? taskId, // Add taskId to match interface
   }) async => throw UnimplementedError('DummyTaskApiService.getResourceData');
 }

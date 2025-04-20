@@ -47,7 +47,8 @@ class BlinkoApiService implements NoteApiService {
     required String baseUrl,
     AuthStrategy? authStrategy, // Add AuthStrategy parameter
     @Deprecated('Use authStrategy instead')
-    String? authToken, // Add deprecated authToken
+    String? authToken,
+    required String serverId,
   }) async {
     AuthStrategy? effectiveStrategy = authStrategy;
 

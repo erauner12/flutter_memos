@@ -13,20 +13,33 @@ final taskDetailProvider = FutureProvider.family<TaskItem, String>((
   ref,
   taskId,
 ) async {
-  // Use the Task API service provider
-  final taskApiService = ref.watch(taskApiServiceProvider);
+  // Use the Task API service provider - WATCH the FutureProvider
+  final taskApiServiceAsyncValue = ref.watch(taskApiServiceProvider);
 
-  if (taskApiService is DummyTaskApiService) {
-    throw Exception('Task API not configured in Settings.');
-  }
-
-  try {
-    final task = await taskApiService.getTask(taskId);
-    return task;
-  } catch (e) {
-    if (kDebugMode) print('Error fetching task detail for $taskId: $e');
-    throw Exception('Failed to load task details for ID: $taskId. Error: $e');
-  }
+  // Handle the AsyncValue states
+  return taskApiServiceAsyncValue.when(
+    data: (taskApiService) async {
+      if (taskApiService is DummyTaskApiService) {
+        throw Exception('Task API not configured in Settings.');
+      }
+      try {
+        final task = await taskApiService.getTask(taskId);
+        return task;
+      } catch (e) {
+        if (kDebugMode) print('Error fetching task detail for $taskId: $e');
+        throw Exception(
+          'Failed to load task details for ID: $taskId. Error: $e',
+        );
+      }
+    },
+    loading:
+        () =>
+            throw Exception(
+              'Task API service is loading...',
+            ), // Or return a loading state indicator if preferred
+    error:
+        (err, stack) => throw Exception('Error loading Task API service: $err'),
+  );
 });
 
 // Provider family for filtered tasks based on TaskFilter
@@ -110,21 +123,33 @@ class TasksNotifier extends StateNotifier<TasksState> {
       return null;
     }
     // Use the dedicated provider which handles configuration
-    final taskService = _ref.read(taskApiServiceProvider);
-    if (taskService is DummyTaskApiService) {
-      if (state.error != 'Task API service is not configured.') {
+    // Await the future from the FutureProvider
+    try {
+      final taskService = await _ref.read(taskApiServiceProvider.future);
+      if (taskService is DummyTaskApiService) {
+        if (state.error != 'Task API service is not configured.') {
+          state = TasksState.initial().copyWith(
+            error: 'Task API service is not configured.',
+            tasks: [],
+          );
+        }
+        return null;
+      }
+      // Clear error if service is valid
+      if (state.error != null) {
+        state = state.copyWith(clearError: true);
+      }
+      return taskService;
+    } catch (e, s) {
+      if (kDebugMode) print('Error getting Task API service: $e\n$s');
+      if (mounted) {
         state = TasksState.initial().copyWith(
-          error: 'Task API service is not configured.',
+          error: 'Failed to initialize Task API service: $e',
           tasks: [],
         );
       }
       return null;
     }
-    // Clear error if service is valid
-    if (state.error != null) {
-      state = state.copyWith(clearError: true);
-    }
-    return taskService;
   }
 
   void clearTasks() {
@@ -335,9 +360,11 @@ class TasksNotifier extends StateNotifier<TasksState> {
               if (task.id == id) {
                 originalTask = task;
                 found = true;
-                return originalTask!.copyWith(
+                // Use the existing task's data and apply updates
+                return task.copyWith(
                   title: taskUpdate.title,
-                  description: () => taskUpdate.description,
+                  description:
+                      () => taskUpdate.description, // Use lambda for nullable
                   priority: taskUpdate.priority,
                   dueDate: taskUpdate.dueDate,
                   done: taskUpdate.done,
@@ -353,7 +380,9 @@ class TasksNotifier extends StateNotifier<TasksState> {
     if (!found) print("Warning: Task $id not found in local state for update.");
 
     try {
-      final updatedTask = await apiService.updateTask(id, taskUpdate);
+      // Pass the updated task object (derived from taskUpdate) to the API
+      final taskToSend = state.tasks.firstWhere((t) => t.id == id);
+      final updatedTask = await apiService.updateTask(id, taskToSend);
       if (mounted) {
         final updatedTasks =
             state.tasks
@@ -369,7 +398,7 @@ class TasksNotifier extends StateNotifier<TasksState> {
         state = state.copyWith(tasks: updatedTasks, clearError: true);
         return updatedTask;
       }
-      return null;
+      return null; // Should not happen if mounted check passes
     } catch (e, s) {
       if (kDebugMode) print('Error updating task $id: $e\n$s');
       if (mounted && found)

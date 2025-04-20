@@ -5,19 +5,27 @@ import 'package:flutter_memos/services/task_api_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 // Helper function to get the configured TaskApiService
-TaskApiService _getTaskApiService(Ref ref) {
-  final service = ref.read(taskApiServiceProvider);
-  if (service is DummyTaskApiService) {
-    throw Exception(
-      "Task API service is not properly configured (Dummy service returned).",
-    );
+// Now returns a Future because we await the service provider
+Future<TaskApiService> _getTaskApiService(Ref ref) async {
+  try {
+    final service = await ref.read(taskApiServiceProvider.future);
+    if (service is DummyTaskApiService) {
+      throw Exception(
+        "Task API service is not properly configured (Dummy service returned).",
+      );
+    }
+    return service;
+  } catch (e, s) {
+    if (kDebugMode)
+      print('Error getting Task API service in task_comment_providers: $e\n$s');
+    throw Exception('Failed to get Task API service: $e');
   }
-  return service;
 }
 
 /// Provider family to fetch comments for a specific task ID.
 final taskCommentsProvider = FutureProvider.family<List<Comment>, String>((ref, taskId) async {
-  final apiService = _getTaskApiService(ref);
+  // Await the helper function
+  final apiService = await _getTaskApiService(ref);
   try {
     final comments = await apiService.listComments(taskId);
     // Optional: Sort comments here if needed (e.g., by creation date)
@@ -40,8 +48,10 @@ final createTaskCommentProvider = Provider.family<
   Future<Comment> Function(Comment comment),
   CreateTaskCommentParams
 >((ref, params) {
+  // The returned function needs to be async to call the async helper
   return (Comment comment) async {
-    final apiService = _getTaskApiService(ref);
+    // Await the helper function
+    final apiService = await _getTaskApiService(ref);
     final taskId = params.taskId;
     try {
       if (kDebugMode) print('[createTaskCommentProvider] Creating comment for task $taskId');
@@ -63,8 +73,10 @@ final updateTaskCommentProvider = Provider.family<
   Future<Comment> Function(String newContent),
   TaskCommentActionParams
 >((ref, params) {
+  // The returned function needs to be async
   return (String newContent) async {
-    final apiService = _getTaskApiService(ref);
+    // Await the helper function
+    final apiService = await _getTaskApiService(ref);
     final taskId = params.taskId;
     final commentId = params.commentId;
     try {
@@ -95,8 +107,10 @@ final deleteTaskCommentProvider = Provider.family<
   Future<void> Function(),
   TaskCommentActionParams
 >((ref, params) {
+  // The returned function needs to be async
   return () async {
-    final apiService = _getTaskApiService(ref);
+    // Await the helper function
+    final apiService = await _getTaskApiService(ref);
     final taskId = params.taskId;
     final commentId = params.commentId;
     try {

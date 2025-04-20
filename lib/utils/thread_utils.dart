@@ -26,61 +26,66 @@ Future<String> getFormattedThreadContent(
   BaseApiService? apiService; // Nullable initially
 
   // 2. Determine the correct API service based on itemType and itemServerId
-  if (itemType == WorkbenchItemType.note) {
-    final noteConfig = ref.read(noteServerConfigProvider);
-    if (noteConfig == null || noteConfig.id != itemServerId) {
-      throw Exception(
-        'Note server ($itemServerId) does not match configured note server (${noteConfig?.id}). Cannot fetch note thread.',
-      );
-    }
-    apiService = ref.read(
-      noteApiServiceProvider,
-    ); // Get configured note service
-    if (apiService is! NoteApiService || apiService is DummyNoteApiService) {
-      throw Exception(
-        'Cannot fetch note thread: Note API service is not properly configured.',
-      );
-    }
+  try {
+    if (itemType == WorkbenchItemType.note) {
+      final noteConfig = ref.read(noteServerConfigProvider);
+      if (noteConfig == null || noteConfig.id != itemServerId) {
+        throw Exception(
+          'Note server ($itemServerId) does not match configured note server (${noteConfig?.id}). Cannot fetch note thread.',
+        );
+      }
+      apiService = ref.read(
+        noteApiServiceProvider,
+      ); // Get configured note service (sync read is ok)
+      if (apiService is! NoteApiService || apiService is DummyNoteApiService) {
+        throw Exception(
+          'Cannot fetch note thread: Note API service is not properly configured.',
+        );
+      }
 
-    // Fetch note and comments using the NoteApiService
-    final note = await (apiService).getNote(itemId);
-    final parentTimestamp = note.createTime;
-    final parentHeader =
-        'Note (${note.id}) - ${DateFormat.yMd().add_jm().format(parentTimestamp.toLocal())}:';
-    buffer.writeln(parentHeader);
-    buffer.writeln('---');
-    buffer.writeln(note.content.trim());
-    comments = await (apiService).listNoteComments(itemId);
+      // Fetch note and comments using the NoteApiService
+      final note = await (apiService).getNote(itemId);
+      final parentTimestamp = note.createTime;
+      final parentHeader =
+          'Note (${note.id}) - ${DateFormat.yMd().add_jm().format(parentTimestamp.toLocal())}:';
+      buffer.writeln(parentHeader);
+      buffer.writeln('---');
+      buffer.writeln(note.content.trim());
+      comments = await (apiService).listNoteComments(itemId);
 
-  } else if (itemType == WorkbenchItemType.task) {
-    final taskConfig = ref.read(taskServerConfigProvider);
-    if (taskConfig == null || taskConfig.id != itemServerId) {
-      throw Exception(
-        'Task server ($itemServerId) does not match configured task server (${taskConfig?.id}). Cannot fetch task thread.',
+    } else if (itemType == WorkbenchItemType.task) {
+      final taskConfig = ref.read(taskServerConfigProvider);
+      if (taskConfig == null || taskConfig.id != itemServerId) {
+        throw Exception(
+          'Task server ($itemServerId) does not match configured task server (${taskConfig?.id}). Cannot fetch task thread.',
+        );
+      }
+      // Await the future for the task service
+      apiService = await ref.read(taskApiServiceProvider.future);
+      if (apiService is! TaskApiService || apiService is DummyTaskApiService) {
+        throw Exception(
+          'Cannot fetch task thread: Task API service is not properly configured.',
+        );
+      }
+
+      // Fetch task and comments using the TaskApiService
+      final task = await (apiService).getTask(itemId);
+      buffer.writeln("# Task: ${task.title}");
+      buffer.writeln();
+      buffer.writeln(
+        "**Description**: ${task.description?.isNotEmpty == true ? task.description : 'N/A'}",
       );
-    }
-    apiService = ref.read(
-      taskApiServiceProvider,
-    ); // Get configured task service
-    if (apiService is! TaskApiService || apiService is DummyTaskApiService) {
-      throw Exception(
-        'Cannot fetch task thread: Task API service is not properly configured.',
-      );
-    }
+      buffer.writeln();
+      comments = await (apiService).listComments(itemId);
 
-    // Fetch task and comments using the TaskApiService
-    final task = await (apiService).getTask(itemId);
-    buffer.writeln("# Task: ${task.title}");
-    buffer.writeln();
-    buffer.writeln(
-      "**Description**: ${task.description?.isNotEmpty == true ? task.description : 'N/A'}",
-    );
-    buffer.writeln();
-    comments = await (apiService).listComments(itemId);
-
-  } else {
-    throw Exception('Unsupported item type ($itemType) for thread fetching.');
+    } else {
+      throw Exception('Unsupported item type ($itemType) for thread fetching.');
+    }
+  } catch (e) {
+    // Catch errors during service retrieval or API calls
+    throw Exception('Failed to fetch thread content: $e');
   }
+
 
   // 3. Sort Comments Chronologically (Oldest First)
   comments.sort((a, b) => a.createdTs.compareTo(b.createdTs));

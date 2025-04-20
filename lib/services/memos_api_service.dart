@@ -48,6 +48,7 @@ class MemosApiService implements NoteApiService {
     required String baseUrl,
     AuthStrategy? authStrategy,
     @Deprecated('Use authStrategy instead') String? authToken,
+    required String serverId,
   }) async {
     AuthStrategy? effectiveStrategy = authStrategy;
 

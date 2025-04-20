@@ -159,13 +159,27 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
       ServerConfig? serverConfig;
       BaseApiService? apiService; // Use BaseApiService initially
 
-      if (noteConfig?.id == serverId) {
-        serverConfig = noteConfig;
-        apiService = _ref.read(noteApiServiceProvider);
-      } else if (taskConfig?.id == serverId) {
-        serverConfig = taskConfig;
-        apiService = _ref.read(taskApiServiceProvider);
+      try {
+        if (noteConfig?.id == serverId) {
+          serverConfig = noteConfig;
+          apiService = _ref.read(noteApiServiceProvider); // Sync read is fine
+        } else if (taskConfig?.id == serverId) {
+          serverConfig = taskConfig;
+          // Await the future for the task service
+          apiService = await _ref.read(taskApiServiceProvider.future);
+        }
+      } catch (e, s) {
+        if (kDebugMode)
+          print(
+            '[WorkbenchNotifier($instanceId)] Error getting API service for server $serverId: $e\n$s',
+          );
+        // Add items without details if service fails to load
+        detailFetchFutures.addAll(
+          serverItems.map((item) => Future.value(item)),
+        );
+        continue; // Skip to next server
       }
+
 
       if (serverConfig == null ||
           apiService == null ||
