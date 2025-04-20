@@ -209,6 +209,8 @@ class TaskItem implements BaseItem {
     percentDone, // ADDED
   );
 
+  get recurringInterval => null;
+
   @override
   String toString() {
     // Use 'done' instead of 'isCompleted'

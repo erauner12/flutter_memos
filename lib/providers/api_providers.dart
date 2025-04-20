@@ -1,9 +1,10 @@
 import 'package:flutter/foundation.dart';
-import 'package:flutter_memos/models/comment.dart';
-import 'package:flutter_memos/models/note_item.dart';
+import 'package:flutter_memos/models/comment.dart'; // Import Comment
+import 'package:flutter_memos/models/list_notes_response.dart'; // Import ListNotesResponse
+import 'package:flutter_memos/models/note_item.dart'; // Import NoteItem
 import 'package:flutter_memos/models/server_config.dart'; // Import ServerType
-import 'package:flutter_memos/models/task_item.dart';
 // Import new single config providers
+import 'package:flutter_memos/models/task_item.dart'; // Import TaskItem
 import 'package:flutter_memos/providers/note_server_config_provider.dart';
 import 'package:flutter_memos/providers/settings_provider.dart';
 import 'package:flutter_memos/providers/task_server_config_provider.dart';
@@ -98,14 +99,17 @@ final noteApiServiceProvider = Provider<NoteApiService>((ref) {
 
   ref.onDispose(() {
     if (kDebugMode) {
+      // Use local variable as noteServerConfig might be null during disposal
+      final disposedServerType = noteServerConfig.serverType.name;
       print(
-        '[noteApiServiceProvider] Disposing API service provider for ${noteServerConfig.serverType.name}',
+        '[noteApiServiceProvider] Disposing API service provider for $disposedServerType',
       );
     }
   });
 
   return service;
 }, name: 'noteApiService');
+
 
 /// Provider for the active TASK API Service (currently only Vikunja)
 /// Returns the TaskApiService interface.
@@ -175,6 +179,7 @@ final taskApiServiceProvider = Provider<TaskApiService>((ref) {
   // Return the configured service if successful, otherwise dummy
   return vikunjaService.isConfigured ? vikunjaService : DummyTaskApiService();
 }, name: 'taskApiService');
+
 
 // --- Status and Health Check Providers ---
 
@@ -404,16 +409,34 @@ class DummyNoteApiService extends BaseApiService implements NoteApiService {
   @override
   bool get isConfigured => false;
   @override
+  String get apiBaseUrl => ''; // Implement getter
+  @override
+  AuthStrategy? get authStrategy => null; // Implement getter
+
+  @override
+  Future<void> configureService({
+    String? baseUrl,
+    String? authToken,
+    AuthStrategy? authStrategy,
+  }) async {} // Implement method
+  @override
   Future<bool> checkHealth() async => false;
+
   @override
-  Future<NoteItem> createNote(NoteItem note, {String? targetServerId}) async =>
-      throw UnimplementedError();
+  Future<NoteItem> createNote(
+    NoteItem note, {
+    ServerConfig? targetServerOverride,
+  }) async => throw UnimplementedError('DummyNoteApiService.createNote');
   @override
-  Future<void> deleteNote(String id, {String? targetServerId}) async =>
-      throw UnimplementedError();
+  Future<void> deleteNote(
+    String id, {
+    ServerConfig? targetServerOverride,
+  }) async => throw UnimplementedError('DummyNoteApiService.deleteNote');
   @override
-  Future<NoteItem> getNote(String id, {String? targetServerId}) async =>
-      throw UnimplementedError();
+  Future<NoteItem> getNote(
+    String id, {
+    ServerConfig? targetServerOverride,
+  }) async => throw UnimplementedError('DummyNoteApiService.getNote');
   @override
   Future<ListNotesResponse> listNotes({
     String? filter,
@@ -422,91 +445,90 @@ class DummyNoteApiService extends BaseApiService implements NoteApiService {
     String? direction,
     int? pageSize,
     String? pageToken,
-    String? targetServerId,
+    ServerConfig? targetServerOverride,
   }) async => ListNotesResponse(notes: [], nextPageToken: null);
   @override
   Future<NoteItem> updateNote(
     String id,
     NoteItem note, {
-    String? targetServerId,
-  }) async => throw UnimplementedError();
+    ServerConfig? targetServerOverride,
+  }) async => throw UnimplementedError('DummyNoteApiService.updateNote');
   @override
-  Future<NoteItem> archiveNote(String id, {String? targetServerId}) async =>
-      throw UnimplementedError();
+  Future<NoteItem> archiveNote(
+    String id, {
+    ServerConfig? targetServerOverride,
+  }) async => throw UnimplementedError('DummyNoteApiService.archiveNote');
   @override
-  Future<NoteItem> togglePinNote(String id, {String? targetServerId}) async =>
-      throw UnimplementedError();
+  Future<NoteItem> togglePinNote(
+    String id, {
+    ServerConfig? targetServerOverride,
+  }) async => throw UnimplementedError('DummyNoteApiService.togglePinNote');
   @override
   Future<void> setNoteRelations(
     String noteId,
     List<Map<String, dynamic>> relations, {
-    String? targetServerId,
-  }) async => throw UnimplementedError();
+    ServerConfig? targetServerOverride,
+  }) async => throw UnimplementedError('DummyNoteApiService.setNoteRelations');
   @override
   Future<List<Comment>> listNoteComments(
     String noteId, {
-    String? targetServerId,
+    ServerConfig? targetServerOverride,
   }) async => [];
   @override
   Future<Comment> getNoteComment(
     String commentId, {
-    String? targetServerId,
-  }) async => throw UnimplementedError();
+    ServerConfig? targetServerOverride,
+  }) async => throw UnimplementedError('DummyNoteApiService.getNoteComment');
   @override
   Future<Comment> createNoteComment(
     String noteId,
     Comment comment, {
-    String? targetServerId,
-  }) async => throw UnimplementedError();
+    List<Map<String, dynamic>>? resources,
+    ServerConfig? targetServerOverride,
+  }) async => throw UnimplementedError('DummyNoteApiService.createNoteComment');
   @override
   Future<Comment> updateNoteComment(
     String commentId,
     Comment comment, {
-    String? targetServerId,
-  }) async => throw UnimplementedError();
+    ServerConfig? targetServerOverride,
+  }) async => throw UnimplementedError('DummyNoteApiService.updateNoteComment');
   @override
   Future<void> deleteNoteComment(
     String noteId,
     String commentId, {
-    String? targetServerId,
-  }) async => throw UnimplementedError();
+    ServerConfig? targetServerOverride,
+  }) async => throw UnimplementedError('DummyNoteApiService.deleteNoteComment');
   @override
   Future<Map<String, dynamic>> uploadResource(
     Uint8List fileBytes,
     String filename,
     String contentType, {
-    String? targetServerId,
-  }) async => throw UnimplementedError();
+    ServerConfig? targetServerOverride,
+  }) async => throw UnimplementedError('DummyNoteApiService.uploadResource');
   @override
   Future<Uint8List> getResourceData(
     String resourceIdentifier, {
-    String? targetServerId,
-  }) async => throw UnimplementedError();
-  
-  @override
-  // TODO: implement apiBaseUrl
-  String get apiBaseUrl => throw UnimplementedError();
-  
-  @override
-  // TODO: implement authStrategy
-  AuthStrategy? get authStrategy => throw UnimplementedError();
-  
-  @override
-  Future<void> configureService({
-    required String baseUrl,
-    AuthStrategy? authStrategy,
-    String? authToken,
-  }) {
-    // TODO: implement configureService
-    throw UnimplementedError();
-  }
+    ServerConfig? targetServerOverride,
+  }) async => throw UnimplementedError('DummyNoteApiService.getResourceData');
 }
 
 class DummyTaskApiService extends BaseApiService implements TaskApiService {
   @override
   bool get isConfigured => false;
   @override
+  String get apiBaseUrl => ''; // Implement getter
+  @override
+  AuthStrategy? get authStrategy => null; // Implement getter
+
+  @override
+  Future<void> configureService({
+    String? baseUrl,
+    String? authToken,
+    AuthStrategy? authStrategy,
+  }) async {} // Implement method
+  @override
   Future<bool> checkHealth() async => false;
+
   @override
   Future<List<TaskItem>> listTasks({
     String? filter,
@@ -516,43 +538,78 @@ class DummyTaskApiService extends BaseApiService implements TaskApiService {
   Future<TaskItem> getTask(
     String id, {
     ServerConfig? targetServerOverride,
-  }) async => throw UnimplementedError();
+  }) async => throw UnimplementedError('DummyTaskApiService.getTask');
   @override
   Future<TaskItem> createTask(
     TaskItem task, {
     int? projectId,
     ServerConfig? targetServerOverride,
-  }) async => throw UnimplementedError();
+  }) async => throw UnimplementedError('DummyTaskApiService.createTask');
   @override
   Future<TaskItem> updateTask(
     String id,
     TaskItem task, {
     ServerConfig? targetServerOverride,
-  }) async => throw UnimplementedError();
+  }) async => throw UnimplementedError('DummyTaskApiService.updateTask');
   @override
   Future<void> deleteTask(
     String id, {
     ServerConfig? targetServerOverride,
-  }) async => throw UnimplementedError();
+  }) async => throw UnimplementedError('DummyTaskApiService.deleteTask');
   @override
   Future<TaskItem> completeTask(
     String id, {
     ServerConfig? targetServerOverride,
-  }) async => throw UnimplementedError();
+  }) async => throw UnimplementedError('DummyTaskApiService.completeTask');
   @override
   Future<TaskItem> reopenTask(
     String id, {
     ServerConfig? targetServerOverride,
-  }) async => throw UnimplementedError();
+  }) async => throw UnimplementedError('DummyTaskApiService.reopenTask');
   @override
   Future<List<Comment>> listComments(
     String taskId, {
     ServerConfig? targetServerOverride,
   }) async => [];
-  @override
   Future<Comment> addComment(
     String taskId,
     String content, {
     ServerConfig? targetServerOverride,
-  }) async => throw UnimplementedError();
+  }) async => throw UnimplementedError('DummyTaskApiService.addComment');
+  @override
+  Future<Comment> createComment(
+    String taskId,
+    Comment comment, {
+    List<Map<String, dynamic>>? resources,
+    ServerConfig? targetServerOverride,
+  }) async => throw UnimplementedError('DummyTaskApiService.createComment');
+  @override
+  Future<void> deleteComment(
+    String taskId,
+    String commentId, {
+    ServerConfig? targetServerOverride,
+  }) async => throw UnimplementedError('DummyTaskApiService.deleteComment');
+  @override
+  Future<Comment> getComment(
+    String commentId, {
+    ServerConfig? targetServerOverride,
+  }) async => throw UnimplementedError('DummyTaskApiService.getComment');
+  @override
+  Future<Comment> updateComment(
+    String commentId,
+    Comment comment, {
+    ServerConfig? targetServerOverride,
+  }) async => throw UnimplementedError('DummyTaskApiService.updateComment');
+  @override
+  Future<Map<String, dynamic>> uploadResource(
+    Uint8List fileBytes,
+    String filename,
+    String contentType, {
+    ServerConfig? targetServerOverride,
+  }) async => throw UnimplementedError('DummyTaskApiService.uploadResource');
+  @override
+  Future<Uint8List> getResourceData(
+    String resourceIdentifier, {
+    ServerConfig? targetServerOverride,
+  }) async => throw UnimplementedError('DummyTaskApiService.getResourceData');
 }

@@ -1,6 +1,5 @@
 import 'dart:async'; // For Completer
 
-import 'package:collection/collection.dart'; // Import collection package
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart'; // Keep for ScaffoldMessenger, SnackBar
@@ -12,7 +11,8 @@ import 'package:flutter_memos/models/workbench_item_reference.dart'; // Import w
 import 'package:flutter_memos/models/workbench_item_type.dart'; // Import the unified enum
 // Import note_providers and use families
 import 'package:flutter_memos/providers/note_providers.dart' as note_providers;
-import 'package:flutter_memos/providers/server_config_provider.dart'; // Import server config provider
+// Import new single config provider
+import 'package:flutter_memos/providers/note_server_config_provider.dart';
 // Import settings_provider for manuallyHiddenNoteIdsProvider
 import 'package:flutter_memos/providers/settings_provider.dart' as settings_p;
 import 'package:flutter_memos/providers/ui_providers.dart';
@@ -29,11 +29,12 @@ import 'note_content.dart'; // Updated import
 
 class ItemDetailScreen extends ConsumerStatefulWidget {
   final String itemId;
-  final String? serverId; // Make serverId optional, get from active if null
+  // serverId is no longer needed, context comes from noteServerConfigProvider
+  // final String? serverId;
   final WorkbenchItemType itemType =
-      WorkbenchItemType.note; // USES IMPORTED ENUM
+      WorkbenchItemType.note; // Assuming this screen is only for notes now
 
-  const ItemDetailScreen({super.key, required this.itemId, this.serverId});
+  const ItemDetailScreen({super.key, required this.itemId});
 
   @override
   ConsumerState<ItemDetailScreen> createState() => _ItemDetailScreenState();
@@ -46,7 +47,7 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
   );
   late ScrollController _scrollController;
   BuildContext? _loadingDialogContext;
-  String? _effectiveServerId; // Store the serverId to use
+  String? _effectiveServerId; // Store the serverId from the provider
 
   @override
   void initState() {
@@ -54,21 +55,19 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
     _scrollController = ScrollController();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _updateEffectiveServerId(); // Determine serverId initially
-      if (mounted) {
-        _screenFocusNode.requestFocus();
-      }
+      if (mounted) _screenFocusNode.requestFocus();
     });
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _updateEffectiveServerId(); // Update if dependencies change (like activeServer)
+    _updateEffectiveServerId(); // Update if dependencies change (like noteServerConfigProvider)
   }
 
   void _updateEffectiveServerId() {
-    final newServerId =
-        widget.serverId ?? ref.read(activeServerConfigProvider)?.id;
+    // Get serverId directly from the single note provider
+    final newServerId = ref.read(noteServerConfigProvider)?.id;
     if (_effectiveServerId != newServerId) {
       setState(() {
         _effectiveServerId = newServerId;
@@ -88,13 +87,9 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
     if (_loadingDialogContext != null) {
       try {
         final navigator = Navigator.of(_loadingDialogContext!);
-        if (navigator.canPop()) {
-          navigator.pop();
-        }
+        if (navigator.canPop()) navigator.pop();
       } catch (e) {
-        if (kDebugMode) {
-          print("Error dismissing loading dialog: $e");
-        }
+        if (kDebugMode) print("Error dismissing loading dialog: $e");
       }
       _loadingDialogContext = null;
     }
@@ -123,26 +118,15 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
 
   Future<void> _onRefresh() async {
     if (_effectiveServerId == null) return; // Don't refresh if no server
-    if (kDebugMode) {
+    if (kDebugMode)
       print(
         '[ItemDetailScreen($_effectiveServerId)] Pull-to-refresh triggered.',
       );
-    }
     HapticFeedback.mediumImpact();
     if (!mounted) return;
     // Use family providers with effectiveServerId
-    ref.invalidate(
-      note_providers.noteDetailProviderFamily((
-        serverId: _effectiveServerId!,
-        noteId: widget.itemId,
-      )),
-    );
-    ref.invalidate(
-      note_providers.noteCommentsProviderFamily((
-        serverId: _effectiveServerId!,
-        noteId: widget.itemId,
-      )),
-    );
+    ref.invalidate(note_providers.noteDetailProvider(widget.itemId));
+    ref.invalidate(note_providers.noteCommentsProvider(widget.itemId));
   }
 
   Widget _buildRefreshIndicator(
@@ -184,55 +168,44 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
       _showErrorSnackbar("Cannot add to workbench: Server context missing.");
       return;
     }
-    final serverConfig = ref
-        .read(multiServerConfigProvider)
-        .servers
-        .firstWhereOrNull(
-          (s) => s.id == _effectiveServerId,
-        ); // Use firstWhereOrNull
+    // Get the config from the provider
+    final serverConfig = ref.read(noteServerConfigProvider);
 
     if (serverConfig == null) {
-      _showErrorSnackbar("Cannot add to workbench: Server config not found.");
+      _showErrorSnackbar(
+        "Cannot add to workbench: Note server config not found.",
+      );
       return;
     }
 
-    // Use the utility to let the user pick the instance
     final selectedInstance = await showWorkbenchInstancePicker(
       context,
       ref,
       title: 'Add Note To Workbench',
     );
-
-    // If user cancelled or no instance selected, do nothing
-    if (selectedInstance == null) {
-      return;
-    }
+    if (selectedInstance == null) return;
 
     final targetInstanceId = selectedInstance.id;
     final targetInstanceName = selectedInstance.name;
-
     final preview = note.content.split('\n').first;
 
     final reference = WorkbenchItemReference(
-      id: const Uuid().v4(), // Generate unique ID for the reference
-      instanceId: targetInstanceId, // Use the chosen instance ID
+      id: const Uuid().v4(),
+      instanceId: targetInstanceId,
       referencedItemId: note.id,
-      referencedItemType: WorkbenchItemType.note, // USES IMPORTED ENUM
-      serverId: serverConfig.id, // Use the determined serverId
+      referencedItemType: WorkbenchItemType.note,
+      serverId: serverConfig.id,
       serverType: serverConfig.serverType,
       serverName: serverConfig.name,
       previewContent:
-          preview.length > 100
-              ? '${preview.substring(0, 97)}...'
-              : preview, // Limit preview length
+          preview.length > 100 ? '${preview.substring(0, 97)}...' : preview,
       addedTimestamp: DateTime.now(),
-      parentNoteId: null, // Add this line
+      parentNoteId: null,
     );
 
     ref
         .read(workbenchProviderFamily(targetInstanceId).notifier)
         .addItem(reference);
-
     _showSuccessSnackbar('Added note to "$targetInstanceName"');
   }
   // --- End Add to Workbench Action ---
@@ -241,12 +214,8 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
     if (!mounted || _effectiveServerId == null) return;
     final isFixingGrammar = ref.read(note_providers.isFixingGrammarProvider);
     final noteAsync = ref.read(
-      // Use family provider
-      note_providers.noteDetailProviderFamily((
-        serverId: _effectiveServerId!,
-        noteId: widget.itemId,
-      )),
-    );
+      note_providers.noteDetailProvider(widget.itemId),
+    ); // Use non-family provider
     final bool canInteractWithServer = _effectiveServerId != null;
 
     showCupertinoModalPopup<void>(
@@ -265,23 +234,15 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
                       arguments: {
                         'entityType': 'note',
                         'entityId': widget.itemId,
-                        'serverId': _effectiveServerId, // Pass serverId
-                      },
+                      }, // serverId no longer needed
                     )
                     .then((_) {
                       if (!mounted || _effectiveServerId == null) return;
-                      // Use family providers
                       ref.invalidate(
-                        note_providers.noteDetailProviderFamily((
-                          serverId: _effectiveServerId!,
-                          noteId: widget.itemId,
-                        )),
+                        note_providers.noteDetailProvider(widget.itemId),
                       );
                       ref.invalidate(
-                        note_providers.noteCommentsProviderFamily((
-                          serverId: _effectiveServerId!,
-                          noteId: widget.itemId,
-                        )),
+                        note_providers.noteCommentsProvider(widget.itemId),
                       );
                       ref
                           .read(
@@ -295,7 +256,6 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
           );
         }
 
-        // Add Note to Workbench Action
         if (canInteractWithServer && noteAsync is AsyncData<NoteItem>) {
           actions.add(
             CupertinoActionSheetAction(
@@ -342,7 +302,7 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
                   context,
                   ref,
                   widget.itemId,
-                  widget.itemType, // USES IMPORTED ENUM
+                  widget.itemType,
                 );
               },
               child: const Text('Copy Full Thread'),
@@ -355,12 +315,7 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
             CupertinoActionSheetAction(
               onPressed: () {
                 Navigator.pop(popupContext);
-                _chatWithThread(
-                  context,
-                  ref,
-                  widget.itemId,
-                  widget.itemType,
-                ); // USES IMPORTED ENUM
+                _chatWithThread(context, ref, widget.itemId, widget.itemType);
               },
               child: const Text('Chat about Thread'),
             ),
@@ -396,22 +351,15 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
                         ],
                       ),
                 );
-
                 if (confirmed == true) {
                   if (!mounted || _effectiveServerId == null) return;
                   try {
-                    // Use family provider
                     await ref.read(
-                      note_providers.deleteNoteProviderFamily((
-
-                        serverId: _effectiveServerId!,
-                        noteId: widget.itemId,
-                      )),
-                    )();
+                      note_providers.deleteNoteProvider(widget.itemId),
+                    )(); // Use non-family provider
                     if (!mounted) return;
-                    if (Navigator.of(context).canPop()) {
+                    if (Navigator.of(context).canPop())
                       Navigator.of(context).pop();
-                    }
                   } catch (e) {
                     if (!mounted) return;
                     _showErrorSnackbar('Failed to delete note: $e');
@@ -428,9 +376,7 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
           actions: actions,
           cancelButton: CupertinoActionSheetAction(
             child: const Text('Cancel'),
-            onPressed: () {
-              Navigator.pop(popupContext);
-            },
+            onPressed: () => Navigator.pop(popupContext),
           ),
         );
       },
@@ -444,13 +390,9 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
     _showLoadingDialog('Fixing grammar...');
 
     try {
-      // Use family provider
       await ref.read(
-        note_providers.fixNoteGrammarProviderFamily((
-          serverId: _effectiveServerId!,
-          noteId: widget.itemId,
-        )).future,
-      );
+        note_providers.fixNoteGrammarProvider(widget.itemId).future,
+      ); // Use non-family provider
       if (!mounted) return;
       _dismissLoadingDialog();
       _showSuccessSnackbar('Grammar corrected successfully!');
@@ -458,13 +400,11 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
       if (!mounted) return;
       _dismissLoadingDialog();
       _showErrorSnackbar('Failed to fix grammar: $e');
-      if (kDebugMode) {
+      if (kDebugMode)
         print('[ItemDetailScreen($_effectiveServerId)] Fix Grammar Error: $e');
-      }
     } finally {
-      if (mounted) {
+      if (mounted)
         ref.read(note_providers.isFixingGrammarProvider.notifier).state = false;
-      }
     }
   }
 
@@ -472,68 +412,59 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
     BuildContext buildContext,
     WidgetRef ref,
     String itemId,
-    WorkbenchItemType itemType, // USES IMPORTED ENUM
+    WorkbenchItemType itemType,
   ) async {
     if (_effectiveServerId == null) {
       _showErrorSnackbar('Cannot copy thread: Server context missing.');
       return;
     }
     _showLoadingDialog('Fetching thread...');
-
     String? fetchedContent;
     Object? fetchError;
-
     try {
       fetchedContent = await getFormattedThreadContent(
         ref,
         itemId,
-        itemType, // Pass imported enum
-        _effectiveServerId!, // Use effective serverId
+        itemType,
+        _effectiveServerId!,
       );
       await Clipboard.setData(ClipboardData(text: fetchedContent));
     } catch (e) {
       fetchError = e;
     }
-
     if (!mounted) return;
     _dismissLoadingDialog();
-
-    if (fetchError != null) {
+    if (fetchError != null)
       _showErrorSnackbar('Failed to copy thread: $fetchError');
-    } else {
+    else
       _showSuccessSnackbar('Thread content copied to clipboard.');
-    }
   }
 
   Future<void> _chatWithThread(
     BuildContext buildContext,
     WidgetRef ref,
     String itemId,
-    WorkbenchItemType itemType, // USES IMPORTED ENUM
+    WorkbenchItemType itemType,
   ) async {
     if (_effectiveServerId == null) {
       _showErrorSnackbar('Cannot start chat: Server context missing.');
       return;
     }
-
     _showLoadingDialog('Fetching thread for chat...');
     String? fetchedContent;
     Object? fetchError;
-
     try {
       fetchedContent = await getFormattedThreadContent(
         ref,
         itemId,
-        itemType, // Pass imported enum
-        _effectiveServerId!, // Use effective serverId
+        itemType,
+        _effectiveServerId!,
       );
     } catch (e) {
       fetchError = e;
     }
-
     if (!mounted) return;
     _dismissLoadingDialog();
-
     if (fetchError != null) {
       _showErrorSnackbar('Failed to start chat: $fetchError');
       return;
@@ -544,21 +475,17 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
       );
       return;
     }
-
     try {
-      // Removed setting overlay provider state
       if (!mounted) return;
       _navigateToChatScreen(
         buildContext,
         fetchedContent,
         itemId,
-        itemType, // Pass imported enum
-        _effectiveServerId!, // Use effective serverId
+        itemType,
+        _effectiveServerId!,
       );
     } catch (e) {
-      if (mounted) {
-        _showErrorSnackbar('Failed to navigate to chat: $e');
-      }
+      if (mounted) _showErrorSnackbar('Failed to navigate to chat: $e');
     }
   }
 
@@ -566,24 +493,21 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
     BuildContext buildContext,
     String fetchedContent,
     String itemId,
-    WorkbenchItemType itemType, // USES IMPORTED ENUM
-    String serverId, // Renamed from activeServerId
+    WorkbenchItemType itemType,
+    String serverId,
   ) {
     final chatArgs = {
       'contextString': fetchedContent,
       'parentItemId': itemId,
-      'parentItemType': itemType, // Pass imported enum
-      'parentServerId': serverId, // Use the passed serverId
+      'parentItemType': itemType,
+      'parentServerId': serverId,
     };
-
     final rootNavigatorKey = ref.read(rootNavigatorKeyProvider);
     if (rootNavigatorKey.currentState != null) {
       rootNavigatorKey.currentState!.pushNamed('/chat', arguments: chatArgs);
     } else {
       _showErrorSnackbar('Could not access root navigator.');
-      if (kDebugMode) {
-        print("Error: rootNavigatorKey.currentState is null");
-      }
+      if (kDebugMode) print("Error: rootNavigatorKey.currentState is null");
     }
   }
 
@@ -612,62 +536,42 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
   void _selectNextComment() {
     if (!mounted || _effectiveServerId == null) return;
     final commentsAsync = ref.read(
-      // Use family provider
-      note_providers.noteCommentsProviderFamily((
-        serverId: _effectiveServerId!,
-        noteId: widget.itemId,
-      )),
-    );
+      note_providers.noteCommentsProvider(widget.itemId),
+    ); // Use non-family provider
     commentsAsync.whenData((comments) {
-      if (comments.isEmpty) return;
-      if (!mounted) return;
+      if (comments.isEmpty || !mounted) return;
       final currentIndex = ref.read(selectedCommentIndexProvider);
       final nextIndex = getNextIndex(currentIndex, comments.length);
-      if (nextIndex != currentIndex) {
-        if (!mounted) return;
+      if (nextIndex != currentIndex && mounted)
         ref.read(selectedCommentIndexProvider.notifier).state = nextIndex;
-      }
     });
   }
 
   void _selectPreviousComment() {
     if (!mounted || _effectiveServerId == null) return;
     final commentsAsync = ref.read(
-      // Use family provider
-      note_providers.noteCommentsProviderFamily((
-        serverId: _effectiveServerId!,
-        noteId: widget.itemId,
-      )),
-    );
+      note_providers.noteCommentsProvider(widget.itemId),
+    ); // Use non-family provider
     commentsAsync.whenData((comments) {
-      if (comments.isEmpty) return;
-      if (!mounted) return;
+      if (comments.isEmpty || !mounted) return;
       final currentIndex = ref.read(selectedCommentIndexProvider);
       final prevIndex = getPreviousIndex(currentIndex, comments.length);
-      if (prevIndex != currentIndex) {
-        if (!mounted) return;
+      if (prevIndex != currentIndex && mounted)
         ref.read(selectedCommentIndexProvider.notifier).state = prevIndex;
-      }
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    // Ensure effectiveServerId is set before building the main UI
     if (_effectiveServerId == null) {
       return const CupertinoPageScaffold(
         navigationBar: CupertinoNavigationBar(middle: Text('Loading...')),
         child: Center(child: CupertinoActivityIndicator()),
       );
     }
-
-    final noteAsync = ref.watch(
-      // Use family provider
-      note_providers.noteDetailProviderFamily((
-        serverId: _effectiveServerId!,
-        noteId: widget.itemId,
-      )),
-    );
+    ref.watch(
+      note_providers.noteDetailProvider(widget.itemId),
+    ); // Use non-family provider
     final bool canInteractWithServer = _effectiveServerId != null;
 
     return Focus(
@@ -708,13 +612,12 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
               Expanded(child: _buildBody()),
               if (canInteractWithServer)
                 CaptureUtility(
-                  key: CaptureUtility.captureUtilityKey, // Assign the key
+                  key: CaptureUtility.captureUtilityKey,
                   mode: CaptureMode.addComment,
                   memoId: widget.itemId,
                   hintText: 'Add a comment...',
                   buttonText: 'Add Comment',
-                  // Pass serverId if CaptureUtility needs it
-                  serverId: _effectiveServerId,
+                  serverId: _effectiveServerId, // Pass effective serverId
                 ),
             ],
           ),
@@ -724,16 +627,11 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
   }
 
   Widget _buildBody() {
-    if (!mounted || _effectiveServerId == null) {
+    if (!mounted || _effectiveServerId == null)
       return const Center(child: CupertinoActivityIndicator());
-    }
     final noteAsync = ref.watch(
-      // Use family provider
-      note_providers.noteDetailProviderFamily((
-        serverId: _effectiveServerId!,
-        noteId: widget.itemId,
-      )),
-    );
+      note_providers.noteDetailProvider(widget.itemId),
+    ); // Use non-family provider
 
     return noteAsync.when(
       data: (note) {
@@ -754,7 +652,7 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
                 child: NoteContent(
                   note: note,
                   noteId: widget.itemId,
-                  serverId: _effectiveServerId!, // Pass serverId
+                  serverId: _effectiveServerId!,
                 ),
               ),
               SliverToBoxAdapter(
@@ -772,7 +670,7 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
                   noteId: widget.itemId,
                   serverId: _effectiveServerId!,
                 ),
-              ), // Pass serverId
+              ),
               const SliverPadding(padding: EdgeInsets.only(bottom: 20)),
             ],
           ),
