@@ -3,6 +3,7 @@ import 'package:flutter_memos/blinko_api/lib/api.dart'
     as blinko_api; // For Blinko Authentication interface
 import 'package:vikunja_flutter_api/vikunja_api/lib/api.dart'
     as vikunja; // For Vikunja Authentication interface
+// Removed todoist import
 
 /// Defines a contract for providing authentication details for API services.
 abstract class AuthStrategy {
@@ -19,8 +20,7 @@ abstract class AuthStrategy {
   /// Creates an Authentication object suitable for the Memos API client.
   memos_api.Authentication createMemosAuth();
 
-  /// Creates an Authentication object suitable for the Todoist API client.
-  todoist.Authentication createTodoistAuth();
+  // Removed createTodoistAuth abstract method
 
   /// Creates an Authentication object suitable for the Blinko API client.
   blinko_api.Authentication createBlinkoAuth();
@@ -51,11 +51,7 @@ class BearerTokenAuthStrategy implements AuthStrategy {
     return memos_api.HttpBearerAuth()..accessToken = _token;
   }
 
-  @override
-  todoist.Authentication createTodoistAuth() {
-    // Todoist also uses Bearer token directly in its HttpBearerAuth
-    return todoist.HttpBearerAuth()..accessToken = _token;
-  }
+  // Removed createTodoistAuth implementation
 
   @override
   blinko_api.Authentication createBlinkoAuth() {
@@ -110,16 +106,7 @@ class ApiKeyAuthStrategy implements AuthStrategy {
     // return MemosAuthWrapper(this); // Requires MemosAuthWrapper implementation
   }
 
-  @override
-  todoist.Authentication createTodoistAuth() {
-    // Todoist uses Bearer tokens. This strategy is likely not applicable.
-    // Throwing an error or returning a default might be better.
-    // Consider adding proper logging instead of print if this warning is important.
-    // print("Warning: ApiKeyAuthStrategy used for Todoist, which expects Bearer. Using key as Bearer.");
-    return todoist.HttpBearerAuth()..accessToken = _apiKey;
-    // If a custom header is strictly required:
-    // return TodoistAuthWrapper(this); // Requires TodoistAuthWrapper implementation
-  }
+  // Removed createTodoistAuth implementation
 
   @override
   blinko_api.Authentication createBlinkoAuth() {
@@ -170,21 +157,7 @@ class MemosAuthWrapper implements memos_api.Authentication {
   }
 }
 
-/// Wraps an AuthStrategy for the Todoist API client's Authentication interface.
-class TodoistAuthWrapper implements todoist.Authentication {
-  final AuthStrategy _strategy;
-
-  TodoistAuthWrapper(this._strategy);
-
-  @override
-  Future<void> applyToParams(
-    List<todoist.QueryParam> queryParams,
-    Map<String, String> headerParams,
-  ) async {
-    await _strategy.refreshIfNeeded();
-    headerParams.addAll(_strategy.getAuthHeaders());
-  }
-}
+// Removed TodoistAuthWrapper class
 
 /// Wraps an AuthStrategy for the Blinko API client's Authentication interface.
 class BlinkoAuthWrapper implements blinko_api.Authentication {

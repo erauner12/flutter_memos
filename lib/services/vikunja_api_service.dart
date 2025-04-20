@@ -11,10 +11,12 @@ import 'package:flutter_memos/services/task_api_service.dart'; // Implement the 
 import 'package:flutter_riverpod/flutter_riverpod.dart'; // Import Riverpod
 import 'package:http/http.dart';
 // Use the correct package import for the Vikunja API client
-import 'package:vikunja_api/api.dart' as vikunja; // Corrected path
+// Ensure this path correctly points to your local or pub-cached Vikunja API library
+import 'package:vikunja_flutter_api/vikunja_api/lib/api.dart' as vikunja;
 
 /// Provider to expose the VikunjaApiService singleton instance
 final vikunjaApiServiceProvider = Provider<VikunjaApiService>((ref) {
+  // Consider how configuration is passed or managed if needed at creation
   return VikunjaApiService();
 });
 
@@ -26,7 +28,7 @@ final isVikunjaConfiguredProvider = StateProvider<bool>(
 
 /// Service class for interacting with the Vikunja API
 class VikunjaApiService implements TaskApiService {
-  // Singleton pattern
+  // Singleton pattern (optional, depends on how you manage instances)
   static final VikunjaApiService _instance = VikunjaApiService._internal();
   factory VikunjaApiService() => _instance;
 
@@ -38,12 +40,12 @@ class VikunjaApiService implements TaskApiService {
   // late vikunja.LabelApi _labelsApi;
 
   // --- Configuration ---
-  String _apiBaseUrl = '';
-  AuthStrategy? _authStrategy;
-  bool _isCurrentlyConfigured = false;
+  String _apiBaseUrl = ''; // Set during configuration
+  AuthStrategy? _authStrategy; // Store the strategy
+  bool _isCurrentlyConfigured = false; // Internal flag
 
   // Configuration and logging options
-  static bool verboseLogging = false;
+  static bool verboseLogging = false; // Keep logging option
 
   @override
   String get apiBaseUrl => _apiBaseUrl;
@@ -57,6 +59,10 @@ class VikunjaApiService implements TaskApiService {
   }
 
   /// Configure the Vikunja API service with base URL and AuthStrategy.
+  ///
+  /// ### VERY IMPORTANT:
+  /// After calling this method successfully, the **CALLER** is responsible for
+  /// updating the `isVikunjaConfiguredProvider` state.
   @override
   Future<void> configureService({
     required String baseUrl,
@@ -64,7 +70,11 @@ class VikunjaApiService implements TaskApiService {
     @Deprecated('Use authStrategy instead') String? authToken,
   }) async {
     AuthStrategy? effectiveStrategy = authStrategy;
-    if (effectiveStrategy == null && authToken != null && authToken.isNotEmpty) {
+
+    // Fallback to authToken if authStrategy is not provided (assuming Bearer)
+    if (effectiveStrategy == null &&
+        authToken != null &&
+        authToken.isNotEmpty) {
       effectiveStrategy = BearerTokenAuthStrategy(authToken);
       if (verboseLogging) {
         stderr.writeln(
@@ -73,11 +83,14 @@ class VikunjaApiService implements TaskApiService {
       }
     }
 
+    // Check if configuration actually changed
     final currentToken = _authStrategy?.getSimpleToken();
     final newToken = effectiveStrategy?.getSimpleToken();
     if (_apiBaseUrl == baseUrl && currentToken == newToken && _isCurrentlyConfigured) {
       if (verboseLogging) {
-        stderr.writeln('[VikunjaApiService] configureService: Configuration unchanged.');
+        stderr.writeln(
+          '[VikunjaApiService] configureService: Configuration unchanged.',
+        );
       }
       return;
     }
@@ -92,6 +105,7 @@ class VikunjaApiService implements TaskApiService {
         '[VikunjaApiService] Configured with Base URL: $_apiBaseUrl, Strategy: ${_authStrategy?.runtimeType}. Configured: $_isCurrentlyConfigured',
       );
     }
+    // The caller MUST update the isVikunjaConfiguredProvider state after this call.
   }
 
   /// Initializes the Vikunja API client and associated endpoint classes.
@@ -99,16 +113,15 @@ class VikunjaApiService implements TaskApiService {
     try {
       // Use the strategy to create the Vikunja Authentication object
       final vikunja.Authentication? auth =
-          strategy?.createVikunjaAuth(); // Use the new method
+          strategy?.createVikunjaAuth(); // Assumes createVikunjaAuth exists
 
       _apiClient = vikunja.ApiClient(
-        // Use correct type
         basePath: baseUrl,
         authentication: auth,
       );
 
       // Initialize Vikunja API endpoints
-      _tasksApi = vikunja.TaskApi(_apiClient); // Use correct type
+      _tasksApi = vikunja.TaskApi(_apiClient);
       // _projectsApi = vikunja.ProjectApi(_apiClient);
       // _labelsApi = vikunja.LabelApi(_apiClient);
 
@@ -120,8 +133,9 @@ class VikunjaApiService implements TaskApiService {
     } catch (e) {
       stderr.writeln('[VikunjaApiService] Error initializing client: $e');
       // Reset clients to dummy state on error
-      _apiClient = vikunja.ApiClient(basePath: baseUrl); // Use correct type
-      _tasksApi = vikunja.TaskApi(_apiClient); // Use correct type
+      _apiClient = vikunja.ApiClient(basePath: baseUrl); // No auth
+      _tasksApi = vikunja.TaskApi(_apiClient);
+      // Reset other APIs if used
     }
   }
 
@@ -133,21 +147,26 @@ class VikunjaApiService implements TaskApiService {
   @override
   Future<bool> checkHealth() async {
     if (!isConfigured) return false;
+
     try {
+      // Use a lightweight Vikunja call, e.g., fetching user info or a simple endpoint
+      // Example: await _someOtherApi.getLoggedInUser();
+      // For now, let's try listing tasks with a limit of 1 as a basic check
       await _tasksApi.tasksAllGet(perPage: 1);
       return true;
     } catch (e) {
-      _handleApiError('Health check failed', e);
+      _handleApiError('Health check failed', e); // Log the specific error
       return false;
     }
   }
 
   // --- TaskApiService Implementation ---
 
+  // --- Task Operations ---
   @override
   Future<List<TaskItem>> listTasks({
     String? filter,
-    ServerConfig? targetServerOverride,
+    ServerConfig? targetServerOverride, // TODO: Handle override if needed
   }) async {
     if (!isConfigured) {
       stderr.writeln('[VikunjaApiService] Not configured, cannot list tasks.');
@@ -156,20 +175,28 @@ class VikunjaApiService implements TaskApiService {
     if (verboseLogging) {
       stderr.writeln('[VikunjaApiService] Getting all tasks (listTasks)');
     }
+
     try {
+      // Use tasksAllGet for a general list, apply filter if provided
       final tasks = await _tasksApi.tasksAllGet(filter: filter);
+
       if (verboseLogging) {
         stderr.writeln(
           '[VikunjaApiService] Retrieved ${tasks?.length ?? 0} raw tasks',
         );
       }
+
+      // Removed serverId parameter from _toTaskItem call
       final taskItems = tasks?.map((task) => _toTaskItem(task)).toList() ?? [];
+
       if (verboseLogging) {
         stderr.writeln(
           '[VikunjaApiService] Mapped to ${taskItems.length} TaskItems',
         );
       }
+
       return taskItems;
+
     } catch (e) {
       _handleApiError('Error getting tasks (listTasks)', e);
       rethrow;
@@ -188,25 +215,34 @@ class VikunjaApiService implements TaskApiService {
     if (verboseLogging) {
       stderr.writeln('[VikunjaApiService] Getting task by ID (getTask): $id');
     }
-    late int taskIdInt;
+
+    final int taskIdInt;
     try {
       taskIdInt = int.parse(id);
     } catch (e) {
       throw Exception('Invalid task ID format: $id. Must be an integer for Vikunja.');
     }
+
     try {
       final task = await _tasksApi.tasksIdGet(taskIdInt);
+
       if (task == null) {
         throw Exception('Task with ID $id not found.');
       }
+
       if (verboseLogging) {
         stderr.writeln('[VikunjaApiService] Retrieved raw task: ${task.title}');
       }
+
+      // Removed serverId parameter from _toTaskItem call
       final taskItem = _toTaskItem(task);
+
       if (verboseLogging) {
         stderr.writeln('[VikunjaApiService] Mapped to TaskItem');
       }
+
       return taskItem;
+
     } catch (e) {
       _handleApiError('Error getting task by ID $id (getTask)', e);
       rethrow;
@@ -217,7 +253,7 @@ class VikunjaApiService implements TaskApiService {
   Future<TaskItem> createTask(
     TaskItem taskItem, {
     ServerConfig? targetServerOverride,
-    int? projectId,
+    int? projectId, // Use the optional projectId from the interface
   }) async {
     if (!isConfigured) {
       stderr.writeln('[VikunjaApiService] Not configured, cannot create task.');
@@ -226,28 +262,43 @@ class VikunjaApiService implements TaskApiService {
     if (verboseLogging) {
       stderr.writeln('[VikunjaApiService] Creating task from TaskItem: ${taskItem.title}');
     }
+
+    // Vikunja requires a project ID to create a task via projectsIdTasksPut
     final targetProjectId = projectId ?? taskItem.projectId;
     if (targetProjectId == null) {
       throw Exception('Cannot create Vikunja task: Project ID is required.');
     }
+
     final request = _fromTaskItem(taskItem);
+    // Ensure project ID is set in the request if not already mapped
     request.projectId = targetProjectId;
+
     try {
-      final createdVikunjaTask =
-          await _tasksApi.projectsIdTasksPut(targetProjectId, request);
+      // Use projectsIdTasksPut as tasksAllPut doesn't seem to exist
+      final createdVikunjaTask = await _tasksApi.projectsIdTasksPut(
+        targetProjectId,
+        request,
+      );
+
       if (createdVikunjaTask == null) {
         throw Exception("Task creation returned null from API");
       }
+
       if (verboseLogging) {
         stderr.writeln(
           '[VikunjaApiService] Raw Task created successfully with ID: ${createdVikunjaTask.id}',
         );
       }
+
+      // Removed serverId parameter from _toTaskItem call
       final createdTaskItem = _toTaskItem(createdVikunjaTask);
+
       if (verboseLogging) {
         stderr.writeln('[VikunjaApiService] Mapped created task back to TaskItem');
       }
+
       return createdTaskItem;
+
     } catch (e) {
       _handleApiError('Error creating task from TaskItem', e);
       rethrow;
@@ -267,27 +318,40 @@ class VikunjaApiService implements TaskApiService {
     if (verboseLogging) {
       stderr.writeln('[VikunjaApiService] Updating task from TaskItem: $id');
     }
-    late int taskIdInt;
+
+    final int taskIdInt;
     try {
       taskIdInt = int.parse(id);
     } catch (e) {
       throw Exception('Invalid task ID format: $id. Must be an integer for Vikunja.');
     }
+
+    // Ensure the ID in the payload matches the path parameter ID
     final request = _fromTaskItem(taskItem.copyWith(id: taskIdInt));
+
     try {
       final updatedVikunjaTask = await _tasksApi.tasksIdPost(taskIdInt, request);
+
       if (updatedVikunjaTask == null) {
-        stderr.writeln('[VikunjaApiService] Update task $id returned null/empty. Fetching task manually.');
+        // Vikunja might return the updated task or null/empty on success
+        stderr.writeln(
+          '[VikunjaApiService] Update task $id returned null/empty. Fetching task manually.',
+        );
         return await getTask(id, targetServerOverride: targetServerOverride);
       }
+
       if (verboseLogging) {
         stderr.writeln('[VikunjaApiService] Raw task updated successfully: ${updatedVikunjaTask.id}');
       }
+
+      // Removed serverId parameter from _toTaskItem call
       final updatedTaskItem = _toTaskItem(updatedVikunjaTask);
+
       if (verboseLogging) {
         stderr.writeln('[VikunjaApiService] Mapped updated task back to TaskItem');
       }
       return updatedTaskItem;
+
     } catch (e) {
       _handleApiError('Error updating task $id from TaskItem', e);
       rethrow;
@@ -306,14 +370,19 @@ class VikunjaApiService implements TaskApiService {
     if (verboseLogging) {
       stderr.writeln('[VikunjaApiService] Deleting task (deleteTask): $id');
     }
-    late int taskIdInt;
+
+    final int taskIdInt;
     try {
       taskIdInt = int.parse(id);
     } catch (e) {
-      throw Exception('Invalid task ID format: $id. Must be an integer for Vikunja.');
+      throw Exception(
+        'Invalid task ID format: $id. Must be an integer for Vikunja.',
+      );
     }
+
     try {
       await _tasksApi.tasksIdDelete(taskIdInt);
+
       if (verboseLogging) {
         stderr.writeln('[VikunjaApiService] Task $id deleted successfully');
       }
@@ -323,6 +392,7 @@ class VikunjaApiService implements TaskApiService {
     }
   }
 
+  // --- Task Actions ---
   @override
   Future<void> completeTask(
     String id, {
@@ -335,14 +405,17 @@ class VikunjaApiService implements TaskApiService {
     if (verboseLogging) {
       stderr.writeln('[VikunjaApiService] Completing task (completeTask): $id');
     }
+
     try {
+      // Vikunja doesn't have a dedicated complete endpoint, so we fetch, modify, and update.
       final currentTaskItem = await getTask(id, targetServerOverride: targetServerOverride);
       if (currentTaskItem.done) {
         if (verboseLogging) stderr.writeln('[VikunjaApiService] Task $id already completed.');
-        return;
+        return; // Already done
       }
       final updatedTaskItem = currentTaskItem.copyWith(done: true);
       await updateTask(id, updatedTaskItem, targetServerOverride: targetServerOverride);
+
       if (verboseLogging) {
         stderr.writeln('[VikunjaApiService] Task $id completed successfully via update.');
       }
@@ -364,14 +437,18 @@ class VikunjaApiService implements TaskApiService {
     if (verboseLogging) {
       stderr.writeln('[VikunjaApiService] Reopening task (reopenTask): $id');
     }
+
     try {
+      // Vikunja doesn't have a dedicated reopen endpoint, so we fetch, modify, and update.
       final currentTaskItem = await getTask(id, targetServerOverride: targetServerOverride);
       if (!currentTaskItem.done) {
-        if (verboseLogging) stderr.writeln('[VikunjaApiService] Task $id already open.');
-        return;
+        if (verboseLogging)
+          stderr.writeln('[VikunjaApiService] Task $id already open.');
+        return; // Already open
       }
       final updatedTaskItem = currentTaskItem.copyWith(done: false);
       await updateTask(id, updatedTaskItem, targetServerOverride: targetServerOverride);
+
       if (verboseLogging) {
         stderr.writeln('[VikunjaApiService] Task $id reopened successfully via update.');
       }
@@ -381,8 +458,7 @@ class VikunjaApiService implements TaskApiService {
     }
   }
 
-  // --- Task Comments (STUBBED) ---
-
+  // --- Task Comments (STUBBED - Requires Comment model adaptation) ---
   @override
   Future<List<Comment>> listComments(
     String taskId, {
@@ -390,7 +466,10 @@ class VikunjaApiService implements TaskApiService {
   }) async {
     if (!isConfigured) return [];
     stderr.writeln('[VikunjaApiService] listComments for task $taskId - STUBBED');
+    // TODO: Implement using _tasksApi.tasksTaskIDCommentsGet(int.parse(taskId))
+    // TODO: Map vikunja.ModelsTaskComment to app Comment model
     throw UnimplementedError('listComments not implemented for Vikunja yet.');
+    // return [];
   }
 
   @override
@@ -400,6 +479,10 @@ class VikunjaApiService implements TaskApiService {
   }) async {
     if (!isConfigured) throw Exception('Vikunja API Service not configured.');
     stderr.writeln('[VikunjaApiService] getComment $commentId - STUBBED');
+    // TODO: Implement using _tasksApi.tasksTaskIDCommentsCommentIDGet(taskId, commentId) - Need taskId? API seems to only need commentId. Check Vikunja docs/API spec.
+    // Assuming tasksTaskIDCommentsCommentIDGet needs both:
+    // final comment = await _tasksApi.tasksTaskIDCommentsCommentIDGet(int.parse(taskId), int.parse(commentId));
+    // TODO: Map vikunja.ModelsTaskComment to app Comment model
     throw UnimplementedError('getComment not implemented for Vikunja yet.');
   }
 
@@ -408,10 +491,16 @@ class VikunjaApiService implements TaskApiService {
     String taskId,
     Comment comment, {
     ServerConfig? targetServerOverride,
-    List<Map<String, dynamic>>? resources,
+    List<Map<String, dynamic>>? resources, // TODO: Handle attachments
   }) async {
     if (!isConfigured) throw Exception('Vikunja API Service not configured.');
-    stderr.writeln('[VikunjaApiService] createComment for task $taskId - STUBBED');
+    stderr.writeln(
+      '[VikunjaApiService] createComment for task $taskId - STUBBED',
+    );
+    // TODO: Map app Comment model to vikunja.ModelsTaskComment
+    // final request = vikunja.ModelsTaskComment(...);
+    // final created = await _tasksApi.tasksTaskIDCommentsPut(int.parse(taskId), request);
+    // TODO: Map result back to app Comment model
     throw UnimplementedError('createComment not implemented for Vikunja yet.');
   }
 
@@ -423,22 +512,28 @@ class VikunjaApiService implements TaskApiService {
   }) async {
     if (!isConfigured) throw Exception('Vikunja API Service not configured.');
     stderr.writeln('[VikunjaApiService] updateComment $commentId - STUBBED');
+    // TODO: Map app Comment model to vikunja.ModelsTaskComment for update payload
+    // final request = vikunja.ModelsTaskComment(...); // Or just the content? API takes empty body? Check spec.
+    // final updated = await _tasksApi.tasksTaskIDCommentsCommentIDPost(int.parse(taskId), int.parse(commentId) /*, request? */);
+    // TODO: Map result back to app Comment model
     throw UnimplementedError('updateComment not implemented for Vikunja yet.');
   }
 
   @override
   Future<void> deleteComment(
-    String taskId,
+    String taskId, // Needed for API call? Check spec.
     String commentId, {
     ServerConfig? targetServerOverride,
   }) async {
     if (!isConfigured) throw Exception('Vikunja API Service not configured.');
-    stderr.writeln('[VikunjaApiService] deleteComment $commentId for task $taskId - STUBBED');
+    stderr.writeln(
+      '[VikunjaApiService] deleteComment $commentId for task $taskId - STUBBED',
+    );
+    // await _tasksApi.tasksTaskIDCommentsCommentIDDelete(int.parse(taskId), int.parse(commentId));
     throw UnimplementedError('deleteComment not implemented for Vikunja yet.');
   }
 
-  // --- Resource Methods ---
-
+  // --- Resource Methods (Implementing BaseApiService - Generally not supported directly) ---
   @override
   Future<Map<String, dynamic>> uploadResource(
     Uint8List fileBytes,
@@ -449,6 +544,7 @@ class VikunjaApiService implements TaskApiService {
     stderr.writeln(
       '[VikunjaApiService] uploadResource not directly supported. Attachments are linked via tasks/comments.',
     );
+    // Vikunja uses tasksIdAttachmentsPut
     throw UnimplementedError(
       "Vikunja handles resource uploads via task attachments. Use specific methods.",
     );
@@ -456,67 +552,70 @@ class VikunjaApiService implements TaskApiService {
 
   @override
   Future<Uint8List> getResourceData(
-    String resourceIdentifier, {
+    String resourceIdentifier, // This might be an attachment ID or URL
+    {
     ServerConfig? targetServerOverride,
-    String? taskId,
+    String? taskId, // Need task context for attachment ID
   }) async {
     stderr.writeln(
       '[VikunjaApiService] getResourceData requires fetching attachment details or URL.',
     );
+    // If resourceIdentifier is an ID, need taskId to call tasksIdAttachmentsAttachmentIDGet
+    // If it's a URL, download directly.
     if (Uri.tryParse(resourceIdentifier)?.isAbsolute ?? false) {
-      try {
-        final response = await Client().get(Uri.parse(resourceIdentifier));
-        if (response.statusCode >= 200 && response.statusCode < 300) {
-          return response.bodyBytes;
-        } else {
-          // Use the correct ApiException type from the imported package
-          throw vikunja.ApiException(response.statusCode, utf8.decode(response.bodyBytes));
-        }
-      } catch (e) {
-        throw Exception('Error downloading resource from $resourceIdentifier: $e');
-      }
+       try {
+         final response = await Client().get(Uri.parse(resourceIdentifier));
+         if (response.statusCode >= 200 && response.statusCode < 300) {
+           return response.bodyBytes;
+         } else {
+           throw vikunja.ApiException(response.statusCode, utf8.decode(response.bodyBytes));
+         }
+       } catch (e) {
+         throw Exception('Error downloading resource from $resourceIdentifier: $e');
+       }
     } else {
-      if (taskId == null) {
-        throw ArgumentError('taskId is required when resourceIdentifier is an attachment ID.');
-      }
-      late int attachmentIdInt;
-      late int taskIdInt;
-      try {
-        attachmentIdInt = int.parse(resourceIdentifier);
-        taskIdInt = int.parse(taskId);
-      } catch (e) {
-        throw Exception('Invalid task ID or attachment ID format.');
-      }
-      try {
-        final response =
-            await _tasksApi.tasksIdAttachmentsAttachmentIDGetWithHttpInfo(taskIdInt, attachmentIdInt);
-        if (response.statusCode >= 200 && response.statusCode < 300) {
-          return response.bodyBytes;
-        } else {
-          // Use the correct ApiException type from the imported package
-          throw vikunja.ApiException(response.statusCode, utf8.decode(response.bodyBytes));
-        }
-      } catch (e) {
-        _handleApiError('Error getting attachment $resourceIdentifier for task $taskId', e);
-        rethrow;
-      }
+       // Assume it's an attachment ID
+       if (taskId == null) {
+         throw ArgumentError('taskId is required when resourceIdentifier is an attachment ID.');
+       }
+       final int attachmentIdInt;
+       final int taskIdInt;
+       try {
+         attachmentIdInt = int.parse(resourceIdentifier);
+         taskIdInt = int.parse(taskId);
+       } catch (e) {
+         throw Exception('Invalid task ID or attachment ID format.');
+       }
+       try {
+         // This returns MultipartFile, need to read bytes
+         final response = await _tasksApi.tasksIdAttachmentsAttachmentIDGetWithHttpInfo(taskIdInt, attachmentIdInt);
+         if (response.statusCode >= 200 && response.statusCode < 300) {
+            return response.bodyBytes;
+         } else {
+            throw vikunja.ApiException(response.statusCode, utf8.decode(response.bodyBytes));
+         }
+       } catch (e) {
+          _handleApiError('Error getting attachment $resourceIdentifier for task $taskId', e);
+          rethrow;
+       }
     }
   }
+
 
   // --- MAPPING HELPERS ---
 
   /// Maps a Vikunja ModelsTask to the app's TaskItem model.
   TaskItem _toTaskItem(vikunja.ModelsTask vTask) {
-    // Removed unused serverId parameter
     // Use the factory constructor defined in TaskItem
+    // Removed serverId argument
     return TaskItem.fromVikunjaTask(vTask);
   }
 
   /// Maps the app's TaskItem model to a Vikunja ModelsTask for API requests.
   vikunja.ModelsTask _fromTaskItem(TaskItem item) {
-    // Use correct type
     return vikunja.ModelsTask(
-      id: item.internalId, // Use the internal integer ID
+      // Map fields from TaskItem to ModelsTask
+      id: item.internalId, // Use the internal integer ID for updates
       title: item.title,
       description: item.description,
       done: item.done,
@@ -525,17 +624,21 @@ class VikunjaApiService implements TaskApiService {
       projectId: item.projectId,
       bucketId: item.bucketId,
       percentDone: item.percentDone,
-      // Map other relevant fields if needed
+      // Map other relevant fields if they exist in TaskItem and ModelsTask
+      // e.g., startDate, endDate, hexColor, repeatAfter, repeatMode
+      // Labels and Assignees need separate handling via their endpoints usually.
     );
   }
+
 
   // --- HELPER METHODS ---
 
   /// Helper to decode response body bytes safely.
   Future<Uint8List> _decodeBodyBytes(dynamic response) async {
     if (response is Response) {
-      return response.bodyBytes;
+        return response.bodyBytes;
     }
+    // Add handling for other response types if necessary
     return Uint8List(0);
   }
 
@@ -544,37 +647,38 @@ class VikunjaApiService implements TaskApiService {
     String errorMessage = '$error';
     int? statusCode;
 
-    // Use the correct ApiException type from the imported package
     if (error is vikunja.ApiException) {
-      // Check for vikunja.ApiException
       statusCode = error.code;
-      String? rawMessage = error.message;
-      errorMessage = rawMessage ?? 'Unknown API Exception (Code: $statusCode)';
+      String rawMessage = error.message ?? 'Unknown API Exception (Code: $statusCode)';
+      errorMessage = rawMessage; // Start with the raw message
 
-      // Try to extract HTML title/body if present
+      // Vikunja might return HTML for errors sometimes, try to extract message
       if (rawMessage.contains('<title>')) {
-        try {
-          final titleMatch = RegExp(r'<title>(.*?)<\/title>').firstMatch(rawMessage);
-          final bodyMatch =
-              RegExp(r'<body>(.*?)<\/body>', dotAll: true).firstMatch(rawMessage);
-          if (titleMatch != null) {
-            errorMessage = titleMatch.group(1) ?? errorMessage;
-          }
-          if (bodyMatch != null) {
-            final bodyText =
-                bodyMatch.group(1)?.replaceAll(RegExp(r'<[^>]*>'), ' ').trim() ?? '';
-            if (bodyText.isNotEmpty) {
-              errorMessage += "\n$bodyText";
+         try {
+            // Basic extraction, might need refinement
+            final titleMatch = RegExp(r'<title>(.*?)<\/title>').firstMatch(rawMessage);
+            final bodyMatch = RegExp(r'<body>(.*?)<\/body>', dotAll: true).firstMatch(rawMessage);
+            String extractedMessage = '';
+            if (titleMatch != null) extractedMessage = titleMatch.group(1) ?? '';
+            if (bodyMatch != null) {
+                final bodyText = bodyMatch.group(1)?.replaceAll(RegExp(r'<[^>]*>'), ' ').trim() ?? '';
+                if (bodyText.isNotEmpty) {
+                    extractedMessage += (extractedMessage.isNotEmpty ? "\n" : "") + bodyText;
+                }
             }
-          }
-        } catch (_) {}
+            if (extractedMessage.isNotEmpty) {
+                errorMessage = extractedMessage; // Use extracted message if found
+            }
+         } catch (_) {} // Ignore parsing errors
       }
 
-      stderr.writeln(
-          '[VikunjaApiService] API Error - $context: $errorMessage (Code: $statusCode)');
+      stderr.writeln('[VikunjaApiService] API Error - $context: $errorMessage (Code: $statusCode)');
 
       if (statusCode == 401 || statusCode == 403) {
+        // Don't automatically mark as unconfigured here, let the caller handle it
+        // based on whether it was an initial config check or a regular call.
         stderr.writeln('[VikunjaApiService] Authentication error ($statusCode).');
+        // Consider notifying the app about auth failure.
       }
     } else {
       stderr.writeln('[VikunjaApiService] Error - $context: $errorMessage');
@@ -582,5 +686,6 @@ class VikunjaApiService implements TaskApiService {
         stderr.writeln(error.stackTrace);
       }
     }
+    // Consider re-throwing a more specific app-level exception.
   }
 }

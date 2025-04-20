@@ -11,7 +11,7 @@ import 'package:flutter_memos/services/memos_api_service.dart'; // Renamed to Me
 import 'package:flutter_memos/services/minimal_openai_service.dart';
 // Import Vikunja service
 import 'package:flutter_memos/services/vikunja_api_service.dart';
-// Remove Todoist service import: import 'package:flutter_memos/services/todoist_api_service.dart';
+// Removed Todoist service import
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// OPTIMIZATION: Provider for API service configuration
@@ -24,7 +24,7 @@ final apiConfigProvider = StateProvider<Map<String, dynamic>>((ref) {
   };
 }, name: 'apiConfig');
 
-/// Provider for the active API Service (either Memos or Blinko)
+/// Provider for the active API Service (Memos, Blinko, or Vikunja)
 /// Returns the BaseApiService interface.
 final apiServiceProvider = Provider<BaseApiService>((ref) {
   // OPTIMIZATION: Directly watch multiServerConfigProvider to get the latest state
@@ -63,9 +63,9 @@ final apiServiceProvider = Provider<BaseApiService>((ref) {
     return DummyApiService();
   }
 
-  // Handle Todoist potentially having an empty URL, but require a token
-  if (activeServerConfig.serverType != ServerType.todoist &&
-      activeServerConfig.serverUrl.isEmpty) {
+  // Handle services potentially having an empty URL, but require a token
+  // Vikunja and Memos/Blinko need a URL.
+  if (activeServerConfig.serverUrl.isEmpty) {
     if (kDebugMode) {
       print(
         '[apiServiceProvider] Warning: Active server (${activeServerConfig.serverType.name}) URL is empty. Returning DummyApiService.',
@@ -75,7 +75,7 @@ final apiServiceProvider = Provider<BaseApiService>((ref) {
     return DummyApiService();
   }
 
-  final serverUrl = activeServerConfig.serverUrl; // Might be empty for Todoist
+  final serverUrl = activeServerConfig.serverUrl;
   final authToken =
       activeServerConfig.authToken; // Use the token from the active config
   // Get the type *after* logging the object
@@ -141,23 +141,31 @@ final apiServiceProvider = Provider<BaseApiService>((ref) {
         service = DummyApiService(); // Return dummy if token is missing
       } else {
         // Configure the service instance.
+        // VikunjaApiService uses configureService which accepts authToken
         vikunjaService.configureService(baseUrl: serverUrl, authToken: authToken);
+        // Update the configuration state provider AFTER configuration
+        ref.read(isVikunjaConfiguredProvider.notifier).state =
+            vikunjaService.isConfigured;
+
         if (kDebugMode) {
           print(
-            '[apiServiceProvider] Configured Vikunja service instance using token from active ServerConfig.',
+            '[apiServiceProvider] Configured Vikunja service instance using token from active ServerConfig. isConfigured: ${vikunjaService.isConfigured}',
           );
         }
         // VikunjaApiService implements TaskApiService which extends BaseApiService
         service = vikunjaService;
       }
       break;
-// No default needed if all enum cases are handled. Add if ServerType might expand.
-// default:
-//   print('[apiServiceProvider] Error: Unsupported server type: $serverType');
-    //   service = DummyApiService();
     case ServerType.todoist:
-      // TODO: Handle this case.
-      throw UnimplementedError();
+      if (kDebugMode) {
+        print(
+          '[apiServiceProvider] Switch case: Matched ServerType.todoist - NOT IMPLEMENTED',
+        );
+      }
+      // Todoist is removed, return Dummy or throw error
+      service = DummyApiService();
+      // Or: throw UnimplementedError('Todoist service is no longer supported.');
+      break;
   }
 
   if (kDebugMode) {
@@ -214,13 +222,11 @@ Future<void> _checkApiHealth(Ref ref) async {
     return;
   }
 
-  // Get the correctly configured service (Memos, Blinko, or Todoist) via the main provider
-  // This now correctly handles Todoist configuration using the active config's token.
+  // Get the correctly configured service (Memos, Blinko, or Vikunja) via the main provider
   final apiService = ref.read(apiServiceProvider);
 
   // Check if the service is actually configured (not the DummyApiService)
-  // This covers cases where URL/token is missing for Memos/Blinko,
-  // or the token is missing in the active Todoist config.
+  // This covers cases where URL/token is missing for Memos/Blinko/Vikunja.
   if (!apiService.isConfigured || apiService is DummyApiService) {
     if (ref.read(apiStatusProvider) != 'unconfigured') {
       ref.read(apiStatusProvider.notifier).state = 'unconfigured';
@@ -355,7 +361,8 @@ Future<void> _checkOpenAiApiHealth(Ref ref) async {
   // Set status to checking
   final currentStatus = ref.read(openaiApiStatusProvider);
   if (currentStatus == 'checking') return; // Already checking
-  ref.read(apiStatusProvider.notifier).state = 'checking';
+  ref.read(openaiApiStatusProvider.notifier).state =
+      'checking'; // Corrected provider
 
   try {
     // Call the health check method on the service instance
@@ -376,7 +383,7 @@ Future<void> _checkOpenAiApiHealth(Ref ref) async {
       print('[openaiApiHealthChecker] Error checking health: $e');
     }
     if (ref.read(openaiApiStatusProvider) == 'checking') {
-      ref.read(apiStatusProvider.notifier).state =
+      ref.read(openaiApiStatusProvider.notifier).state = // Corrected provider
           'error'; // Or 'unavailable'
     }
   }

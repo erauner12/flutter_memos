@@ -1,9 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_memos/models/task_filter.dart'; // Import the new enum
 import 'package:flutter_memos/models/task_item.dart';
-// Keep this if used elsewhere
-// Remove Todoist service import: import 'package:flutter_memos/services/task_api_service.dart';
-import 'package:flutter_memos/services/vikunja_api_service.dart'; // Import Vikunja service
+// Import Vikunja service
+import 'package:flutter_memos/services/vikunja_api_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 // Provider to fetch details for a single task by ID
@@ -14,14 +13,11 @@ final taskDetailProvider =
 ) async {
   // Use the Vikunja service provider
   final vikunjaService = ref.watch(vikunjaApiServiceProvider);
+  final isConfigured = ref.watch(isVikunjaConfiguredProvider);
 
-  // Check if the Vikunja service is configured
-  // We might need a way to access the isVikunjaConfiguredProvider state here,
-  // or rely on the service's internal state/error handling.
-  // For simplicity, let's assume the service throws if not configured.
-  // if (!vikunjaService.isConfigured) { // Or use the provider: ref.watch(isVikunjaConfiguredProvider)
-  //   throw Exception('Vikunja API not configured in Settings.');
-  // }
+  if (!isConfigured) {
+    throw Exception('Vikunja API not configured in Settings.');
+  }
 
   try {
     // The service method now handles parsing String ID to int if needed
@@ -47,13 +43,13 @@ final filteredTasksProviderFamily = Provider.family<List<TaskItem>, TaskFilter>(
   switch (taskFilter) {
     case TaskFilter.recurring:
         // TODO: Adapt for Vikunja's recurring logic (e.g., repeatAfter != null)
-        // filteredTasks = allTasks.where((t) => t.isRecurring).toList();
-        filteredTasks = allTasks; // Placeholder: Show all for now
+        // For now, just return all tasks as a placeholder
+        filteredTasks = allTasks;
       break;
     case TaskFilter.notRecurring:
         // TODO: Adapt for Vikunja's recurring logic
-        // filteredTasks = allTasks.where((t) => !t.isRecurring).toList();
-        filteredTasks = allTasks; // Placeholder: Show all for now
+        // For now, just return all tasks as a placeholder
+        filteredTasks = allTasks;
       break;
     case TaskFilter.dueToday:
       final now = DateTime.now();
@@ -211,7 +207,8 @@ class TasksNotifier extends StateNotifier<TasksState> {
         tasks:
             state.tasks.map((task) {
               // Compare String ID from UI/state with int ID from TaskItem
-              if (task.id.toString() == id) {
+              if (task.id == id) {
+                // Use String id getter for comparison
                 taskFound = true;
                 originalTask = task;
                 return task.copyWith(done: true); // Use 'done'
@@ -262,7 +259,8 @@ class TasksNotifier extends StateNotifier<TasksState> {
       state = state.copyWith(
         tasks:
             state.tasks.map((task) {
-              if (task.id.toString() == id) {
+              if (task.id == id) {
+                // Use String id getter for comparison
                 taskFound = true;
                 originalTask = task;
                 return task.copyWith(done: false); // Use 'done'
@@ -306,7 +304,9 @@ class TasksNotifier extends StateNotifier<TasksState> {
     if (mounted) {
       final initialLength = state.tasks.length;
       final newTasks =
-          state.tasks.where((task) => task.id.toString() != id).toList();
+          state.tasks
+              .where((task) => task.id != id)
+              .toList(); // Use String id getter
       if (newTasks.length < initialLength) {
         taskFound = true;
         state = state.copyWith(tasks: newTasks);
@@ -382,10 +382,12 @@ class TasksNotifier extends StateNotifier<TasksState> {
       state = state.copyWith(
         tasks:
             state.tasks.map((task) {
-              if (task.id.toString() == id) {
+              if (task.id == id) {
+                // Use String id getter
                 originalTask = task;
                 found = true;
                 // Merge updates using copyWith - ensure all relevant fields are copied
+                // Note: copyWith uses int id internally, but we match by String id
                 return originalTask!.copyWith(
                   title: taskUpdate.title,
                   description:
@@ -419,7 +421,8 @@ class TasksNotifier extends StateNotifier<TasksState> {
       if (mounted) {
         final updatedTasks =
             state.tasks.map((task) {
-              if (task.id.toString() == id) {
+              if (task.id == id) {
+                // Use String id getter
                 return updatedTask; // Replace with the task returned by the API
               }
               return task;

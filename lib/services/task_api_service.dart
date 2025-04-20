@@ -3,7 +3,7 @@ import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/models/server_config.dart';
 import 'package:flutter_memos/models/task_item.dart';
 import 'package:flutter_memos/services/base_api_service.dart';
-// Remove todoist import: import 'package:flutter_memos/todoist_api/lib/api.dart' as todoist;
+// Removed todoist import
 
 
 /// Interface for API services that primarily deal with Tasks (e.g., Vikunja).
@@ -86,10 +86,5 @@ abstract class TaskApiService extends BaseApiService {
     ServerConfig? targetServerOverride,
   });
 
-  // Remove Todoist-specific methods
-  /*
-  Future<List<todoist.Project>> listProjects();
-  Future<List<todoist.Label>> listLabels();
-  Future<List<todoist.Section>> listSections({String? projectId});
-  */
+  // Removed Todoist-specific methods
 }

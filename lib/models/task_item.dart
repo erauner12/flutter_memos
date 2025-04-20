@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_memos/models/base_item.dart'; // Import BaseItem
 // Use the correct package import for the Vikunja API client
-// import 'package:vikunja_flutter_api/api.dart' as vikunja; // Incorrect path
+// Ensure this path correctly points to your local or pub-cached Vikunja API library
 import 'package:vikunja_flutter_api/vikunja_api/lib/api.dart' as vikunja;
 
 /// Enum for task status (open/completed)
@@ -11,36 +11,21 @@ enum TaskStatus { open, completed } // Keep this enum for now, might be useful
 @immutable
 class TaskItem implements BaseItem {
   // Implement BaseItem
-  // final String id; // Todoist task ID (string) - REMOVED
-  // @override
-  // final int id; // Vikunja task ID (int) - CHANGED // Original field
   final int _id; // Internal Vikunja task ID (int)
   @override
   String get id => _id.toString(); // String getter for BaseItem compatibility
   int get internalId => _id; // Getter for the actual int ID when needed
 
-  // final String serverId; // Identifier for the "Todoist integration" instance - REMOVED
-  // final String content; // Todoist task content - REMOVED
   @override
   final String title; // Vikunja task title - RENAMED from content
   @override
   final String? description; // Vikunja task description - KEPT
-  // final bool isCompleted; - REMOVED
   final bool done; // Vikunja task done status - RENAMED from isCompleted
   final int?
       priority; // Vikunja priority (optional, keep for now) - KEPT (type check?)
   final DateTime? dueDate; // Parsed due date/datetime - KEPT
-  // final String? dueString; // Original due string - REMOVED
-  // final bool isRecurring; - REMOVED (Vikunja has repeatAfter/repeatMode)
-  // final List<String> labels; // List of label names - REMOVED (handle via Vikunja labels later)
-  // final String? projectId; - REMOVED (handle via Vikunja projects later)
-  // final String? sectionId; - REMOVED (handle via Vikunja buckets/sections later)
-  // final String? parentId; // For sub-tasks - REMOVED (handle via Vikunja relations later)
-  // final int commentCount; - REMOVED (can derive if needed)
   @override
   final DateTime createdAt; // Already exists - KEPT
-  // final String? creatorId; - REMOVED (handle via Vikunja createdBy later)
-  // final String? assigneeId; - REMOVED (handle via Vikunja assignees later)
   final DateTime? updatedAt; // Add Vikunja updated timestamp
   final int? projectId; // Add Vikunja project ID
   final int? bucketId; // Add Vikunja bucket ID
@@ -48,22 +33,12 @@ class TaskItem implements BaseItem {
 
   const TaskItem({
     required int id, // Keep accepting 'id' externally for simplicity
-    // serverId removed
     required this.title, // RENAMED from content
     this.description,
     required this.done, // RENAMED from isCompleted
     this.priority,
     this.dueDate,
-    // dueString removed
-    // isRecurring removed
-    // labels removed
-    // projectId removed (now added as int?)
-    // sectionId removed
-    // parentId removed
-    // commentCount removed
     required this.createdAt,
-    // creatorId removed
-    // assigneeId removed
     this.updatedAt, // ADDED
     this.projectId, // ADDED
     this.bucketId, // ADDED
@@ -71,25 +46,15 @@ class TaskItem implements BaseItem {
   }) : _id = id; // Initialize internal _id
 
   // --- BaseItem Implementation ---
-
-  // 'id' getter is implicitly provided by the final field 'id' (type checked against BaseItem)
-
-  // 'createdAt' getter is implicitly provided by the final field 'createdAt'
-  // 'description' getter is implicitly provided by the final field 'description'
-
-  // title getter removed as 'title' is now a direct field
-
   @override
   BaseItemType get itemType => BaseItemType.task; // This is a Task
-
   // --- End BaseItem Implementation ---
 
   /// Factory to create TaskItem from a vikunja.ModelsTask
   /// This will typically be called within the VikunjaApiService
   factory TaskItem.fromVikunjaTask(
     vikunja.ModelsTask vTask,
-    String serverId, // Use correct type
-    // String serverId /* Keep serverId for multi-server support */, // Removed serverId parameter
+    // Removed serverId parameter
   ) {
     DateTime? parsedDueDate;
     // Vikunja uses String for dates, parse them safely
@@ -130,10 +95,9 @@ class TaskItem implements BaseItem {
 
     return TaskItem(
       id: vTask.id ?? 0, // Vikunja Task ID is int, provide default
-      // serverId: serverId, // Removed
-      title: vTask.title ?? '',
+      title: vTask.title ?? '', // Use title
       description: vTask.description,
-      done: vTask.done ?? false,
+      done: vTask.done ?? false, // Use done
       priority: vTask.priority,
       dueDate: parsedDueDate,
       createdAt: parsedCreatedAt ?? DateTime.now(), // Provide a fallback if parsing fails
@@ -145,33 +109,16 @@ class TaskItem implements BaseItem {
     );
   }
 
-  // Remove the old fromTodoistTask factory
-  /*
-  factory TaskItem.fromTodoistTask(todoist.Task task, String serverId) {
-    // ... existing implementation ...
-  }
-  */
-
   /// Convert to JSON for potential caching (adjust fields)
   Map<String, dynamic> toJson() {
     return {
       'id': _id, // Use internal int _id
-      // serverId removed
       'title': title, // RENAMED
       'description': description,
       'done': done, // RENAMED
       'priority': priority,
       'dueDate': dueDate?.toIso8601String(),
-      // dueString removed
-      // isRecurring removed
-      // labels removed
-      // projectId removed (now added as int?)
-      // sectionId removed
-      // parentId removed
-      // commentCount removed
       'createdAt': createdAt.toIso8601String(),
-      // creatorId removed
-      // assigneeId removed
       'updatedAt': updatedAt?.toIso8601String(), // ADDED
       'projectId': projectId, // ADDED
       'bucketId': bucketId, // ADDED
@@ -183,24 +130,16 @@ class TaskItem implements BaseItem {
   factory TaskItem.fromJson(Map<String, dynamic> json) {
     return TaskItem(
       id: json['id'] as int, // Read int id
-      // serverId removed
       title: json['title'] as String, // RENAMED
       description: json['description'] as String?,
       done: json['done'] as bool, // RENAMED
       priority: json['priority'] as int?, // Allow null
       dueDate: json['dueDate'] != null
           ? DateTime.tryParse(json['dueDate'])
-          : null, // Use tryParse
-      // dueString removed
-      // isRecurring removed
-      // labels removed
-      // projectId removed (now added as int?)
-      // sectionId removed
-      // parentId removed
-      // commentCount removed
-      createdAt: DateTime.parse(json['createdAt'] as String), // Assume valid format
-      // creatorId removed
-      // assigneeId removed
+              : null, // Use tryParse
+      createdAt: DateTime.parse(
+        json['createdAt'] as String,
+      ), // Assume valid format
       updatedAt: json['updatedAt'] != null
           ? DateTime.tryParse(json['updatedAt']) // Use tryParse
           : null, // ADDED
@@ -212,22 +151,12 @@ class TaskItem implements BaseItem {
 
   TaskItem copyWith({
     int? id, // Accept int id
-    // serverId removed
     String? title, // RENAMED
     ValueGetter<String?>? description,
     bool? done, // RENAMED
     int? priority,
     DateTime? dueDate,
-    // dueString removed
-    // isRecurring removed
-    // labels removed
-    // projectId removed (now added as int?)
-    // sectionId removed
-    // parentId removed
-    // commentCount removed
     DateTime? createdAt,
-    // creatorId removed
-    // assigneeId removed
     DateTime? updatedAt, // ADDED
     int? projectId, // ADDED
     int? bucketId, // ADDED
@@ -235,22 +164,12 @@ class TaskItem implements BaseItem {
   }) {
     return TaskItem(
       id: id ?? _id, // Use provided id or existing _id
-      // serverId removed
       title: title ?? this.title, // RENAMED
       description: description != null ? description() : this.description,
       done: done ?? this.done, // RENAMED
       priority: priority ?? this.priority,
       dueDate: dueDate ?? this.dueDate,
-      // dueString removed
-      // isRecurring removed
-      // labels removed
-      // projectId removed (now added as int?)
-      // sectionId removed
-      // parentId removed
-      // commentCount removed
       createdAt: createdAt ?? this.createdAt,
-      // creatorId removed
-      // assigneeId removed
       updatedAt: updatedAt ?? this.updatedAt, // ADDED
       projectId: projectId ?? this.projectId, // ADDED
       bucketId: bucketId ?? this.bucketId, // ADDED
@@ -264,22 +183,12 @@ class TaskItem implements BaseItem {
       other is TaskItem &&
           runtimeType == other.runtimeType &&
           _id == other._id && // Use internal _id for comparison
-          // serverId removed
           title == other.title && // RENAMED
           description == other.description &&
           done == other.done && // RENAMED
           priority == other.priority &&
           dueDate == other.dueDate &&
-          // dueString removed
-          // isRecurring removed
-          // listEquals(labels, other.labels) removed
-          // projectId removed (now added as int?)
-          // sectionId removed
-          // parentId removed
-          // commentCount removed
           createdAt == other.createdAt &&
-          // creatorId removed
-          // assigneeId removed
           updatedAt == other.updatedAt && // ADDED
           projectId == other.projectId && // ADDED
           bucketId == other.bucketId && // ADDED
@@ -288,22 +197,12 @@ class TaskItem implements BaseItem {
   @override
   int get hashCode => Object.hash(
     _id, // Use internal _id
-    // serverId removed
     title, // RENAMED
     description,
     done, // RENAMED
     priority,
     dueDate,
-    // dueString removed
-    // isRecurring removed
-    // Object.hashAll(labels) removed
-    // projectId removed (now added as int?)
-    // sectionId removed
-    // parentId removed
-    // commentCount removed
     createdAt,
-    // creatorId removed
-    // assigneeId removed
     updatedAt, // ADDED
     projectId, // ADDED
     bucketId, // ADDED

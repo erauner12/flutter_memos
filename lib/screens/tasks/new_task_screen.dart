@@ -13,7 +13,8 @@ class NewTaskScreen extends ConsumerStatefulWidget {
 }
 
 class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
-  final _contentController = TextEditingController();
+  final _titleController =
+      TextEditingController(); // Renamed from _contentController
   final _descriptionController = TextEditingController();
   // TODO: Add controllers/state for priority, due date, labels, project etc.
   bool _isSaving = false;
@@ -24,7 +25,7 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
     super.initState();
     if (_isEditing) {
       // Use title instead of content
-      _contentController.text = widget.taskToEdit!.title;
+      _titleController.text = widget.taskToEdit!.title; // Use title
       _descriptionController.text = widget.taskToEdit!.description ?? '';
       // TODO: Initialize other fields (priority, due date, etc.)
     }
@@ -32,19 +33,22 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
 
   @override
   void dispose() {
-    _contentController.dispose();
+    _titleController.dispose(); // Dispose renamed controller
     _descriptionController.dispose();
     super.dispose();
   }
 
   Future<void> _saveTask() async {
-    if (_contentController.text.trim().isEmpty) {
+    if (_titleController.text.trim().isEmpty) {
+      // Check title controller
       // Show error dialog or inline validation
       showCupertinoDialog(
         context: context,
         builder: (ctx) => CupertinoAlertDialog(
-          title: const Text('Content Required'),
-          content: const Text('Task content cannot be empty.'),
+              title: const Text('Title Required'), // Updated title
+              content: const Text(
+                'Task title cannot be empty.',
+              ), // Updated message
           actions: [
             CupertinoDialogAction(
               isDefaultAction: true,
@@ -65,7 +69,7 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
         // Update existing task - copy existing and apply changes
         taskData = widget.taskToEdit!.copyWith(
           // Use title instead of content
-          title: _contentController.text.trim(),
+          title: _titleController.text.trim(), // Use title controller
           // Wrap description in ValueGetter
           description: () => _descriptionController.text.trim().isEmpty
                            ? null
@@ -75,8 +79,8 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
         // Call update method (needs Task ID as String)
         final updatedTask = await ref
             .read(tasksNotifierProvider.notifier)
-            // Convert int ID to String for the notifier method
-            .updateTask(widget.taskToEdit!.id.toString(), taskData);
+            // Use the String id getter from TaskItem
+            .updateTask(widget.taskToEdit!.id, taskData);
 
          if (updatedTask != null && mounted) {
            Navigator.of(context).pop(); // Close screen on success
@@ -88,19 +92,15 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
         // Create new task - construct from form fields
          taskData = TaskItem(
            // ID is int, but API assigns it, pass 0 or handle differently if needed locally before creation
-           id: 0, // Temporary ID, service/API will assign the real one
-           // serverId removed
+          id: 0, // Temporary ID, service/API will assign the real one
            // Use title instead of content
-           title: _contentController.text.trim(),
+          title: _titleController.text.trim(), // Use title controller
            description: _descriptionController.text.trim().isEmpty
                         ? null
                         : _descriptionController.text.trim(),
            // Use done instead of isCompleted
-           done: false,
-           priority: null, // Default priority (Vikunja might use null or 0)
-           // isRecurring removed
-           // labels removed
-           // commentCount removed
+          done: false, // Use done
+          priority: null, // Default priority (Vikunja might use null or 0)
            createdAt: DateTime.now(), // Temp value, API assigns real one
            // TODO: Assign other fields from form (dueDate, projectId etc.)
         );
@@ -166,8 +166,9 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
           padding: const EdgeInsets.all(16.0),
           children: [
             CupertinoTextField(
-              controller: _contentController,
-              placeholder: 'Task content (e.g., Buy groceries)',
+              controller: _titleController, // Use title controller
+              placeholder:
+                  'Task title (e.g., Buy groceries)', // Updated placeholder
               style: const TextStyle(fontSize: 18),
               maxLines: null, // Allow multiple lines
               textInputAction: TextInputAction.next,
