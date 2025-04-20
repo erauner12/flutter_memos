@@ -54,9 +54,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   // Gemini state
   final _geminiApiKeyController = TextEditingController();
 
-  // Vikunja state (API Key - might be redundant if Task server config holds it)
-  // Consider removing this if the token is part of ServerConfig for Vikunja Task server
-  final _vikunjaApiKeyController = TextEditingController();
+  // REMOVED Vikunja state
+  // final _vikunjaApiKeyController = TextEditingController();
 
   @override
   void initState() {
@@ -67,8 +66,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         _openaiApiKeyController.text = initialOpenAiKey;
         final initialGeminiKey = ref.read(geminiApiKeyProvider);
         _geminiApiKeyController.text = initialGeminiKey;
-        final initialVikunjaKey = ref.read(vikunjaApiKeyProvider);
-        _vikunjaApiKeyController.text = initialVikunjaKey;
+        // REMOVED Vikunja key init
+        // final initialVikunjaKey = ref.read(vikunjaApiKeyProvider);
+        // _vikunjaApiKeyController.text = initialVikunjaKey;
       }
       _fetchModels();
     });
@@ -78,7 +78,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   void dispose() {
     _openaiApiKeyController.dispose();
     _geminiApiKeyController.dispose();
-    _vikunjaApiKeyController.dispose();
+    // REMOVED Vikunja controller dispose
+    // _vikunjaApiKeyController.dispose();
     super.dispose();
   }
 
@@ -176,8 +177,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
        case ServerType.vikunja:
          testApiService = VikunjaApiService();
         // Vikunja uses Bearer token auth, already covered by default
-         final vikunjaKey = ref.read(vikunjaApiKeyProvider);
-         if (purpose == ServerPurpose.task && vikunjaKey.isEmpty && config.authToken.isEmpty) {
+        // REMOVED check for legacy key
+        if (purpose == ServerPurpose.task && config.authToken.isEmpty) {
           if (isMounted) {
             _showResultDialog(
               'Configuration Error',
@@ -226,11 +227,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           'Success',
           'Connection to ${purpose.name} server "${config.name ?? config.serverUrl}" successful!',
         );
-        // If Vikunja task server test succeeded, mark Vikunja as configured
-        if (purpose == ServerPurpose.task &&
-            config.serverType == ServerType.vikunja) {
-          ref.read(isVikunjaConfiguredProvider.notifier).state = true;
-        }
+        // REMOVED direct setting of isVikunjaConfiguredProvider
+        // if (purpose == ServerPurpose.task &&
+        //     config.serverType == ServerType.vikunja) {
+        //   ref.read(isVikunjaConfiguredProvider.notifier).state = true;
+        // }
       } else {
         _showResultDialog(
           'Connection Failed',
@@ -568,7 +569,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final openAiKeyNotifier = ref.read(openAiApiKeyProvider.notifier);
     final openAiModelNotifier = ref.read(openAiModelIdProvider.notifier);
     final geminiNotifier = ref.read(geminiApiKeyProvider.notifier);
-    final vikunjaKeyNotifier = ref.read(vikunjaApiKeyProvider.notifier);
+    // REMOVED Vikunja Key Notifier
+    // final vikunjaKeyNotifier = ref.read(vikunjaApiKeyProvider.notifier);
     final workbenchInstancesNotifier = ref.read(workbenchInstancesProvider.notifier);
     final tasksNotifier = ref.read(tasksNotifierProvider.notifier);
     final chatNotifier = ref.read(chatProvider.notifier);
@@ -583,7 +585,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       await openAiKeyNotifier.clear();
       await openAiModelNotifier.clear();
       await geminiNotifier.clear();
-      await vikunjaKeyNotifier.clear();
+      // REMOVED Vikunja Key Clear
+      // await vikunjaKeyNotifier.clear();
 
       // Clear Data Caches
       for (final instanceId in instanceIdsToClear) {
@@ -596,8 +599,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       // Remove dead null-aware operator
       await sharedPrefsService.clearAll();
 
-      // Mark Vikunja as unconfigured
-      ref.read(isVikunjaConfiguredProvider.notifier).state = false;
+      // REMOVED direct setting of isVikunjaConfiguredProvider
+      // ref.read(isVikunjaConfiguredProvider.notifier).state = false;
 
       if (kDebugMode) print('[SettingsScreen] Local reset finished.');
     } catch (e, s) {
@@ -638,12 +641,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     ref.invalidate(openAiApiKeyProvider);
     ref.invalidate(openAiModelIdProvider);
     ref.invalidate(geminiApiKeyProvider);
-    ref.invalidate(vikunjaApiKeyProvider);
+    // REMOVED Vikunja Key Invalidation
+    // ref.invalidate(vikunjaApiKeyProvider);
     // Invalidate API service providers
     ref.invalidate(noteApiServiceProvider); // Use new provider name
     ref.invalidate(taskApiServiceProvider); // Use new provider name
     ref.invalidate(openaiApiServiceProvider);
-    ref.invalidate(vikunjaApiServiceProvider);
+    ref.invalidate(
+      vikunjaApiServiceProvider,
+    ); // Keep this if VikunjaApiService is still used directly elsewhere
 
   }
   // --- END: Updated Reset Logic ---
@@ -728,10 +734,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   _showResultDialog('Error', 'Failed to delete ${purpose.name} server.', isError: true);
                 } else {
                   _showResultDialog('Deleted', '${purpose.name.substring(0,1).toUpperCase()}${purpose.name.substring(1)} server "$displayName" deleted.');
-                  // If Vikunja task server was deleted, mark Vikunja as unconfigured
-                  if (purpose == ServerPurpose.task && config.serverType == ServerType.vikunja) {
-                     ref.read(isVikunjaConfiguredProvider.notifier).state = false;
-                  }
+                  // REMOVED direct setting of isVikunjaConfiguredProvider
+                  // if (purpose == ServerPurpose.task && config.serverType == ServerType.vikunja) {
+                  //    ref.read(isVikunjaConfiguredProvider.notifier).state = false;
+                  // }
                 }
               }
             },
@@ -871,66 +877,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               CupertinoListSection.insetGrouped(
                 header: const Text('INTEGRATIONS'),
                 children: [
-                  // Vikunja API Key Tile (Consider removing if token is in Task Server Config)
-                  // If Vikunja Task Server is configured, this might be redundant.
-                  // Keeping it for now, but flag for potential removal.
-                  if (taskServerConfig?.serverType == ServerType.vikunja)
-                    CupertinoListTile(
-                      padding: const EdgeInsets.symmetric(horizontal: 15.0, vertical: 10.0),
-                      title: const Text('Vikunja API Key (Legacy)'),
-                      subtitle: Padding(
-                        padding: const EdgeInsets.only(top: 8.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                             Text(
-                               'Note: Vikunja API Key should ideally be set as the "Token" in the Task Server configuration above.',
-                               style: TextStyle(fontSize: 12, color: CupertinoColors.secondaryLabel.resolveFrom(context)),
-                             ),
-                             const SizedBox(height: 8),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: CupertinoTextField(
-                                    controller: _vikunjaApiKeyController,
-                                    placeholder: 'Enter Vikunja API key (if not in Task Server)',
-                                    obscureText: true,
-                                    padding: const EdgeInsets.symmetric(vertical: 10.0, horizontal: 12.0),
-                                    decoration: BoxDecoration(
-                                      color: CupertinoColors.tertiarySystemFill.resolveFrom(context),
-                                      borderRadius: BorderRadius.circular(8.0),
-                                    ),
-                                    clearButtonMode: OverlayVisibilityMode.editing,
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                CupertinoButton(
-                                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                                  color: CupertinoColors.activeBlue,
-                                  onPressed: () async {
-                                    final newKey = _vikunjaApiKeyController.text.trim();
-                                    FocusScope.of(context).unfocus();
-                                    final isMounted =
-                                        mounted; // Check mounted before await
-                                    final saveSuccess = await ref.read(vikunjaApiKeyProvider.notifier).set(newKey);
-                                    if (!isMounted)
-                                      return; // Check mounted after await
-                                    if (saveSuccess) {
-                                      _showResultDialog('API Key Saved', 'Legacy Vikunja API key saved.');
-                                      // Mark as configured if key is not empty
-                                      ref.read(isVikunjaConfiguredProvider.notifier).state = newKey.isNotEmpty;
-                                    } else {
-                                      _showResultDialog('Error', 'Failed to save legacy Vikunja API key.', isError: true);
-                                    }
-                                  },
-                                  child: const Text('Save', style: TextStyle(color: CupertinoColors.white)),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
+                  // REMOVED Vikunja API Key Tile (Legacy)
+                  // if (taskServerConfig?.serverType == ServerType.vikunja)
+                  //   CupertinoListTile( ... ),
 
                   // OpenAI Integration Tile
                   CupertinoListTile(
@@ -1131,7 +1080,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       Row(children: [ Icon(CupertinoIcons.info_circle, size: 18), SizedBox(width: 6), Text('Integrations', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))]),
                       SizedBox(height: 8),
                       Text(
-                        'API keys for integrations like Vikunja (if separate), OpenAI, and Gemini are stored securely on your device and synced via iCloud.',
+                        'API keys for integrations like OpenAI and Gemini are stored securely on your device and synced via iCloud.',
                         style: TextStyle(fontSize: 14),
                       ),
                     ],
@@ -1154,7 +1103,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         builder: (dialogContext) => CupertinoAlertDialog(
                           title: const Text('Confirm Reset'),
                           content: const Text(
-                            'This will permanently delete your configured Note server, Task server, all MCP servers, API keys (Vikunja, OpenAI, Gemini), cached data (notes, tasks, workbench items, chat history), and local settings from this device AND from your iCloud account.\n\nThis action cannot be undone. Are you absolutely sure?',
+                                'This will permanently delete your configured Note server, Task server, all MCP servers, API keys (OpenAI, Gemini), cached data (notes, tasks, workbench items, chat history), and local settings from this device AND from your iCloud account.\n\nThis action cannot be undone. Are you absolutely sure?',
                           ),
                           actions: [
                             CupertinoDialogAction(child: const Text('Cancel'), onPressed: () => Navigator.pop(dialogContext, false)),

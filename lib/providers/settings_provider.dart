@@ -27,8 +27,8 @@ class PreferenceKeys {
   // Key for the last selected tab index
   static const String selectedTabIndex = 'selectedTabIndex'; // <<< ADDED
 
-  // Key for Vikunja API Key
-  static const String vikunjaApiKey = 'vikunja_api_key'; // NEW
+  // REMOVED Vikunja API Key
+  // static const String vikunjaApiKey = 'vikunja_api_key'; // REMOVED
 }
 
 // REMOVED Todoist API Key Provider
@@ -78,16 +78,16 @@ final geminiApiKeyProvider =
 // --- End Gemini ---
 
 // --- Start Vikunja ---
-/// Provider for the Vikunja API key with persistence
-final vikunjaApiKeyProvider =
-    StateNotifierProvider<PersistentStringNotifier, String>(
-      (ref) => PersistentStringNotifier(
-        ref,
-        '', // default empty value
-        PreferenceKeys.vikunjaApiKey, // storage key for Vikunja
-      ),
-      name: 'vikunjaApiKeyProvider', // Provider name
-    );
+// REMOVED Vikunja API Key Provider
+// final vikunjaApiKeyProvider =
+//     StateNotifierProvider<PersistentStringNotifier, String>(
+//       (ref) => PersistentStringNotifier(
+//         ref,
+//         '', // default empty value
+//         PreferenceKeys.vikunjaApiKey, // storage key for Vikunja
+//       ),
+//       name: 'vikunjaApiKeyProvider', // Provider name
+//     );
 // --- End Vikunja ---
 
 /// Provider for the set of manually hidden note IDs

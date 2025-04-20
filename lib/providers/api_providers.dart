@@ -114,8 +114,8 @@ final noteApiServiceProvider = Provider<NoteApiService>((ref) {
 final taskApiServiceProvider = Provider<TaskApiService>((ref) {
   final taskServerConfig = ref.watch(taskServerConfigProvider);
   final config = ref.watch(apiConfigProvider); // General config like logging
-  // Watch the separate Vikunja API key provider as well, might be needed if not in ServerConfig token
-  final vikunjaApiKey = ref.watch(vikunjaApiKeyProvider);
+  // REMOVED watch for legacy Vikunja API key provider
+  // final vikunjaApiKey = ref.watch(vikunjaApiKeyProvider);
 
   if (taskServerConfig == null || taskServerConfig.serverUrl.isEmpty) {
     if (kDebugMode) {
@@ -137,11 +137,8 @@ final taskApiServiceProvider = Provider<TaskApiService>((ref) {
   }
 
   final serverUrl = taskServerConfig.serverUrl;
-  // Use token from config primarily, fallback to separate API key if config token is empty
-  final authToken =
-      taskServerConfig.authToken.isNotEmpty
-          ? taskServerConfig.authToken
-          : vikunjaApiKey;
+  // Use token ONLY from config. Removed fallback to separate API key.
+  final authToken = taskServerConfig.authToken;
   final authStrategy = BearerTokenAuthStrategy(authToken);
 
   if (authToken.isEmpty) {
@@ -149,8 +146,8 @@ final taskApiServiceProvider = Provider<TaskApiService>((ref) {
       print(
         '[taskApiServiceProvider] Warning: Vikunja task server configured but token/API key is missing. Returning DummyTaskApiService.',
       );
-    // Update the configuration status provider
-    ref.read(isVikunjaConfiguredProvider.notifier).state = false;
+    // REMOVED direct setting of isVikunjaConfiguredProvider
+    // ref.read(isVikunjaConfiguredProvider.notifier).state = false;
     return DummyTaskApiService();
   }
 
@@ -161,9 +158,8 @@ final taskApiServiceProvider = Provider<TaskApiService>((ref) {
     authStrategy: authStrategy,
   );
 
-  // Update the configuration status provider AFTER configuration attempt
-  ref.read(isVikunjaConfiguredProvider.notifier).state =
-      vikunjaService.isConfigured;
+  // REMOVED direct setting of isVikunjaConfiguredProvider
+  // ref.read(isVikunjaConfiguredProvider.notifier).state = vikunjaService.isConfigured;
 
   if (kDebugMode) {
     print(
@@ -257,13 +253,20 @@ Future<void> _checkNoteApiHealth(Ref ref) async {
   }
 }
 
+/// Computed provider indicating if the Vikunja task service is configured.
+/// Derives its state from the `taskApiServiceProvider`.
+final isVikunjaConfiguredProvider = Provider<bool>((ref) {
+  final taskService = ref.watch(taskApiServiceProvider);
+  return taskService.isConfigured && taskService is VikunjaApiService;
+}, name: 'isVikunjaConfiguredProvider');
+
+
 /// Provider for TASK API service status (currently Vikunja)
 final taskApiStatusProvider = StateProvider<String>((ref) {
-  final taskConfig = ref.watch(taskServerConfigProvider);
   final isConfigured = ref.watch(
     isVikunjaConfiguredProvider,
-  ); // Use the dedicated config status
-  return (taskConfig == null || !isConfigured) ? 'unconfigured' : 'unknown';
+  ); // Use the computed provider
+  return !isConfigured ? 'unconfigured' : 'unknown';
 }, name: 'taskApiStatus');
 
 /// Provider that pings the TASK API periodically to check health
@@ -281,10 +284,11 @@ final taskApiHealthCheckerProvider = Provider<void>((ref) {
 
 // Helper function to check TASK API health (currently Vikunja)
 Future<void> _checkTaskApiHealth(Ref ref) async {
-  final taskConfig = ref.read(taskServerConfigProvider); // Read current config
-  final isConfigured = ref.read(isVikunjaConfiguredProvider);
+  final isConfigured = ref.read(
+    isVikunjaConfiguredProvider,
+  ); // Use computed provider
 
-  if (taskConfig == null || !isConfigured) {
+  if (!isConfigured) {
     if (ref.read(taskApiStatusProvider) != 'unconfigured') {
       ref.read(taskApiStatusProvider.notifier).state = 'unconfigured';
     }
@@ -294,16 +298,7 @@ Future<void> _checkTaskApiHealth(Ref ref) async {
   final taskApiService = ref.read(
     taskApiServiceProvider,
   ); // Read current service
-  if (!taskApiService.isConfigured || taskApiService is DummyTaskApiService) {
-    if (ref.read(taskApiStatusProvider) != 'unconfigured') {
-      ref.read(taskApiStatusProvider.notifier).state = 'unconfigured';
-      if (kDebugMode)
-        print(
-          '[taskApiHealthChecker] Setting status to unconfigured (service is Dummy or not configured).',
-        );
-    }
-    return;
-  }
+  // The isConfigured check above already handles the Dummy case implicitly
 
   final currentStatus = ref.read(taskApiStatusProvider);
   if (currentStatus == 'checking') return;
@@ -311,28 +306,32 @@ Future<void> _checkTaskApiHealth(Ref ref) async {
 
   try {
     final isHealthy = await taskApiService.checkHealth();
-    final potentiallyChangedConfig = ref.read(
-      taskServerConfigProvider,
+    // Check if still configured before updating state
+    final stillConfigured = ref.read(
+      isVikunjaConfiguredProvider,
     ); // Read again after await
-    if (potentiallyChangedConfig?.id == taskConfig.id &&
-        ref.read(taskApiStatusProvider) == 'checking') {
+    if (stillConfigured && ref.read(taskApiStatusProvider) == 'checking') {
       ref.read(taskApiStatusProvider.notifier).state =
           isHealthy ? 'available' : 'unavailable';
-      if (kDebugMode)
+      if (kDebugMode) {
+        final taskConfig = ref.read(
+          taskServerConfigProvider,
+        ); // Read for logging
         print(
-          '[taskApiHealthChecker] Health check for ${taskConfig.name ?? taskConfig.id}: ${isHealthy ? 'Available' : 'Unavailable'}',
+          '[taskApiHealthChecker] Health check for ${taskConfig?.name ?? taskConfig?.id ?? 'Vikunja'}: ${isHealthy ? 'Available' : 'Unavailable'}',
         );
+      }
     }
   } catch (e) {
+    final taskConfig = ref.read(taskServerConfigProvider); // Read for logging
     if (kDebugMode)
       print(
-        '[taskApiHealthChecker] API health check failed for ${taskConfig.name ?? taskConfig.id}: $e',
+        '[taskApiHealthChecker] API health check failed for ${taskConfig?.name ?? taskConfig?.id ?? 'Vikunja'}: $e',
       );
-    final potentiallyChangedConfig = ref.read(
-      taskServerConfigProvider,
+    final stillConfigured = ref.read(
+      isVikunjaConfiguredProvider,
     ); // Read again after await
-    if (potentiallyChangedConfig?.id == taskConfig.id &&
-        ref.read(taskApiStatusProvider) == 'checking') {
+    if (stillConfigured && ref.read(taskApiStatusProvider) == 'checking') {
       ref.read(taskApiStatusProvider.notifier).state = 'unavailable';
     }
   }
