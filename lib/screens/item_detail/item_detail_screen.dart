@@ -9,7 +9,7 @@ import 'package:flutter_memos/main.dart'; // Adjust path if main.dart is elsewhe
 import 'package:flutter_memos/models/note_item.dart'; // Import NoteItem
 import 'package:flutter_memos/models/workbench_item_reference.dart'; // Import workbench model
 import 'package:flutter_memos/models/workbench_item_type.dart'; // Import the unified enum
-// Import note_providers and use families
+// Import note_providers and use non-family providers
 import 'package:flutter_memos/providers/note_providers.dart' as note_providers;
 // Import new single config provider
 import 'package:flutter_memos/providers/note_server_config_provider.dart';
@@ -72,6 +72,11 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
       setState(() {
         _effectiveServerId = newServerId;
       });
+      // Invalidate providers that depend on serverId when it changes
+      if (newServerId != null) {
+        ref.invalidate(note_providers.noteDetailProvider(widget.itemId));
+        ref.invalidate(note_providers.noteCommentsProvider(widget.itemId));
+      }
     }
   }
 
@@ -124,7 +129,7 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
       );
     HapticFeedback.mediumImpact();
     if (!mounted) return;
-    // Use family providers with effectiveServerId
+    // Use non-family providers with itemId
     ref.invalidate(note_providers.noteDetailProvider(widget.itemId));
     ref.invalidate(note_providers.noteCommentsProvider(widget.itemId));
   }
@@ -502,7 +507,9 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
       'parentItemType': itemType,
       'parentServerId': serverId,
     };
-    final rootNavigatorKey = ref.read(rootNavigatorKeyProvider);
+    final rootNavigatorKey = ref.read(
+      rootNavigatorKeyProvider,
+    ); // Use imported provider
     if (rootNavigatorKey.currentState != null) {
       rootNavigatorKey.currentState!.pushNamed('/chat', arguments: chatArgs);
     } else {
@@ -569,6 +576,7 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
         child: Center(child: CupertinoActivityIndicator()),
       );
     }
+    // Watch the detail provider to trigger rebuilds when data changes
     ref.watch(
       note_providers.noteDetailProvider(widget.itemId),
     ); // Use non-family provider
@@ -652,7 +660,7 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
                 child: NoteContent(
                   note: note,
                   noteId: widget.itemId,
-                  serverId: _effectiveServerId!,
+                  // serverId: _effectiveServerId!, // No longer needed by NoteContent
                 ),
               ),
               SliverToBoxAdapter(
@@ -668,7 +676,8 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
               SliverToBoxAdapter(
                 child: NoteComments(
                   noteId: widget.itemId,
-                  serverId: _effectiveServerId!,
+                  serverId:
+                      _effectiveServerId!, // NoteComments still needs serverId
                 ),
               ),
               const SliverPadding(padding: EdgeInsets.only(bottom: 20)),

@@ -80,10 +80,11 @@ final noteApiServiceProvider = Provider<NoteApiService>((ref) {
       break;
     case ServerType.todoist:
       // Todoist is not a note service
-      if (kDebugMode)
+      if (kDebugMode) {
         print(
           '[noteApiServiceProvider] Error: Todoist is not a valid note server type.',
         );
+      }
       service = DummyNoteApiService();
       break;
   }
@@ -120,19 +121,21 @@ final taskApiServiceProvider = Provider<TaskApiService>((ref) {
   final vikunjaApiKey = ref.watch(vikunjaApiKeyProvider);
 
   if (taskServerConfig == null || taskServerConfig.serverUrl.isEmpty) {
-    if (kDebugMode)
+    if (kDebugMode) {
       print(
         '[taskApiServiceProvider] Warning: No task server configured or URL is empty. Returning DummyTaskApiService.',
       );
+    }
     return DummyTaskApiService();
   }
 
   // Currently only Vikunja is supported as a task server
   if (taskServerConfig.serverType != ServerType.vikunja) {
-    if (kDebugMode)
+    if (kDebugMode) {
       print(
         '[taskApiServiceProvider] Error: Configured task server type (${taskServerConfig.serverType}) is not Vikunja. Returning DummyTaskApiService.',
       );
+    }
     return DummyTaskApiService();
   }
 
@@ -201,7 +204,7 @@ final noteApiHealthCheckerProvider = Provider<void>((ref) {
 
 // Helper function to check NOTE API health
 Future<void> _checkNoteApiHealth(Ref ref) async {
-  final noteConfig = ref.read(noteServerConfigProvider);
+  final noteConfig = ref.read(noteServerConfigProvider); // Read current config
   if (noteConfig == null) {
     if (ref.read(noteApiStatusProvider) != 'unconfigured') {
       ref.read(noteApiStatusProvider.notifier).state = 'unconfigured';
@@ -209,7 +212,9 @@ Future<void> _checkNoteApiHealth(Ref ref) async {
     return;
   }
 
-  final noteApiService = ref.read(noteApiServiceProvider);
+  final noteApiService = ref.read(
+    noteApiServiceProvider,
+  ); // Read current service
   if (!noteApiService.isConfigured || noteApiService is DummyNoteApiService) {
     if (ref.read(noteApiStatusProvider) != 'unconfigured') {
       ref.read(noteApiStatusProvider.notifier).state = 'unconfigured';
@@ -228,7 +233,9 @@ Future<void> _checkNoteApiHealth(Ref ref) async {
   try {
     final isHealthy = await noteApiService.checkHealth();
     // Check if config is still the same before updating state
-    final potentiallyChangedConfig = ref.read(noteServerConfigProvider);
+    final potentiallyChangedConfig = ref.read(
+      noteServerConfigProvider,
+    ); // Read again after await
     if (potentiallyChangedConfig?.id == noteConfig.id &&
         ref.read(noteApiStatusProvider) == 'checking') {
       ref.read(noteApiStatusProvider.notifier).state =
@@ -243,7 +250,9 @@ Future<void> _checkNoteApiHealth(Ref ref) async {
       print(
         '[noteApiHealthChecker] API health check failed for ${noteConfig.name ?? noteConfig.id}: $e',
       );
-    final potentiallyChangedConfig = ref.read(noteServerConfigProvider);
+    final potentiallyChangedConfig = ref.read(
+      noteServerConfigProvider,
+    ); // Read again after await
     if (potentiallyChangedConfig?.id == noteConfig.id &&
         ref.read(noteApiStatusProvider) == 'checking') {
       ref.read(noteApiStatusProvider.notifier).state = 'unavailable';
@@ -275,7 +284,7 @@ final taskApiHealthCheckerProvider = Provider<void>((ref) {
 
 // Helper function to check TASK API health (currently Vikunja)
 Future<void> _checkTaskApiHealth(Ref ref) async {
-  final taskConfig = ref.read(taskServerConfigProvider);
+  final taskConfig = ref.read(taskServerConfigProvider); // Read current config
   final isConfigured = ref.read(isVikunjaConfiguredProvider);
 
   if (taskConfig == null || !isConfigured) {
@@ -285,7 +294,9 @@ Future<void> _checkTaskApiHealth(Ref ref) async {
     return;
   }
 
-  final taskApiService = ref.read(taskApiServiceProvider);
+  final taskApiService = ref.read(
+    taskApiServiceProvider,
+  ); // Read current service
   if (!taskApiService.isConfigured || taskApiService is DummyTaskApiService) {
     if (ref.read(taskApiStatusProvider) != 'unconfigured') {
       ref.read(taskApiStatusProvider.notifier).state = 'unconfigured';
@@ -303,7 +314,9 @@ Future<void> _checkTaskApiHealth(Ref ref) async {
 
   try {
     final isHealthy = await taskApiService.checkHealth();
-    final potentiallyChangedConfig = ref.read(taskServerConfigProvider);
+    final potentiallyChangedConfig = ref.read(
+      taskServerConfigProvider,
+    ); // Read again after await
     if (potentiallyChangedConfig?.id == taskConfig.id &&
         ref.read(taskApiStatusProvider) == 'checking') {
       ref.read(taskApiStatusProvider.notifier).state =
@@ -318,7 +331,9 @@ Future<void> _checkTaskApiHealth(Ref ref) async {
       print(
         '[taskApiHealthChecker] API health check failed for ${taskConfig.name ?? taskConfig.id}: $e',
       );
-    final potentiallyChangedConfig = ref.read(taskServerConfigProvider);
+    final potentiallyChangedConfig = ref.read(
+      taskServerConfigProvider,
+    ); // Read again after await
     if (potentiallyChangedConfig?.id == taskConfig.id &&
         ref.read(taskApiStatusProvider) == 'checking') {
       ref.read(taskApiStatusProvider.notifier).state = 'unavailable';
@@ -370,13 +385,7 @@ final openaiApiStatusProvider = StateProvider<String>((ref) {
 final openaiApiHealthCheckerProvider = Provider<void>((ref) {
   ref.watch(openAiApiKeyProvider);
   _checkOpenAiApiHealth(ref);
-  @override
-  Future<Comment> createComment(
-    String taskId,
-    Comment comment, {
-    List<Map<String, dynamic>>? resources,
-    ServerConfig? targetServerOverride,
-  }) async => throw UnimplementedError('DummyTaskApiService.createComment');
+  // TODO: Set up periodic health check
   ref.onDispose(() {
     /* Cancel timer */
   });

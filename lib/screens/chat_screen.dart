@@ -268,7 +268,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                       : () {
                         // Use root navigator to push settings screen
                         final rootNavigator = ref.read(
-                          rootNavigatorKeyProvider,
+                          rootNavigatorKeyProvider, // Use the imported provider
                         );
                         rootNavigator.currentState?.push(
                           CupertinoPageRoute(
@@ -371,7 +371,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   if (chatState.currentContextItemType ==
                           WorkbenchItemType.note &&
                       chatState.currentContextItemId != null) {
-                    final rootNavigator = ref.read(rootNavigatorKeyProvider);
+                    final rootNavigator = ref.read(
+                      rootNavigatorKeyProvider,
+                    ); // Use the imported provider
                     rootNavigator.currentState?.pushNamed(
                       '/item-detail',
                       arguments: {'itemId': chatState.currentContextItemId},

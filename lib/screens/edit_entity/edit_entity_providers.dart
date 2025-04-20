@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_memos/models/comment.dart'; // Import Comment model
 import 'package:flutter_memos/models/note_item.dart'; // Import NoteItem model
+import 'package:flutter_memos/providers/api_providers.dart'
+    as api_p; // Import for noteApiServiceProvider
 // Import note_providers and use non-family providers
 import 'package:flutter_memos/providers/note_providers.dart' as note_providers;
 // Import settings_provider for manuallyHiddenNoteIdsProvider
@@ -40,8 +42,8 @@ class EntityProviderParams {
 // Provider to fetch the entity (note or comment) to be edited
 final editEntityProvider = FutureProvider.family<dynamic, EntityProviderParams>(
   (ref, params) async {
-    // Use the helper from note_providers to get the API service
-    final NoteApiService apiService = note_providers._getNoteApiService(ref);
+    // Use the api_p provider directly
+    final NoteApiService apiService = ref.read(api_p.noteApiServiceProvider);
     final id = params.id;
     final type = params.type;
 
@@ -68,7 +70,8 @@ final saveEntityProvider = Provider.family<
   final type = params.type;
 
   return (dynamic updatedEntity) async {
-    final NoteApiService apiService = note_providers._getNoteApiService(ref);
+    // Use the api_p provider directly
+    final NoteApiService apiService = ref.read(api_p.noteApiServiceProvider);
     if (kDebugMode) print('[saveEntityProvider] Saving $type with ID: $id');
 
     if (type == 'comment') {

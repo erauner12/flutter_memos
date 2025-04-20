@@ -11,9 +11,10 @@ import 'package:flutter_memos/models/task_filter.dart'; // Import the filter enu
 import 'package:flutter_memos/models/task_item.dart';
 import 'package:flutter_memos/models/workbench_item_reference.dart';
 import 'package:flutter_memos/models/workbench_item_type.dart'; // Import the unified enum
-import 'package:flutter_memos/providers/server_config_provider.dart'; // Import for activeServerConfigProvider
 // Removed settings_provider import (vikunjaApiKeyProvider is checked via isVikunjaConfiguredProvider)
 import 'package:flutter_memos/providers/task_providers.dart';
+// Import new task server config provider
+import 'package:flutter_memos/providers/task_server_config_provider.dart';
 import 'package:flutter_memos/providers/workbench_provider.dart';
 import 'package:flutter_memos/screens/settings_screen.dart'; // Import SettingsScreen
 import 'package:flutter_memos/screens/tasks/new_task_screen.dart';
@@ -66,15 +67,16 @@ class TasksScreen extends HookConsumerWidget {
   ) async {
     // Check if Vikunja is configured
     final isConfigured = ref.read(isVikunjaConfiguredProvider);
-    final activeServer = ref.read(activeServerConfigProvider);
+    // Use the new taskServerConfigProvider
+    final taskServer = ref.read(taskServerConfigProvider);
 
     if (!isConfigured ||
-        activeServer == null ||
-        activeServer.serverType != ServerType.vikunja) {
+        taskServer == null ||
+        taskServer.serverType != ServerType.vikunja) {
       _showAlertDialog(
         context,
         'Error',
-        'Cannot add task: Vikunja is not configured or the active server is not Vikunja. Check Settings.',
+        'Cannot add task: Vikunja is not configured or the task server is not Vikunja. Check Settings.',
       );
       return;
     }
@@ -96,10 +98,10 @@ class TasksScreen extends HookConsumerWidget {
       id: const Uuid().v4(),
       referencedItemId: task.id, // Vikunja task ID (String)
       referencedItemType: WorkbenchItemType.task,
-      serverId: activeServer.id, // Vikunja server ID from config
+      serverId: taskServer.id, // Vikunja server ID from config
       serverType: ServerType.vikunja, // Explicitly Vikunja
       serverName:
-          activeServer.name ?? activeServer.serverUrl, // Vikunja server name
+          taskServer.name ?? taskServer.serverUrl, // Vikunja server name
       previewContent: task.title, // Use Vikunja title
       addedTimestamp: DateTime.now(),
       instanceId: targetInstanceId,
@@ -223,16 +225,17 @@ class TasksScreen extends HookConsumerWidget {
     WidgetRef ref,
     String taskId,
   ) async {
-    final activeServer = ref.read(activeServerConfigProvider);
-    if (activeServer == null || activeServer.serverType != ServerType.vikunja) {
+    // Use the new taskServerConfigProvider
+    final taskServer = ref.read(taskServerConfigProvider);
+    if (taskServer == null || taskServer.serverType != ServerType.vikunja) {
       _showAlertDialog(
         context,
         'Error',
-        'Active server must be Vikunja to chat about tasks.',
+        'Task server must be Vikunja to chat about tasks.',
       );
       return;
     }
-    final serverId = activeServer.id; // Use Vikunja server ID
+    final serverId = taskServer.id; // Use Vikunja server ID
 
     String? fetchedContent;
     Object? error;
@@ -256,7 +259,9 @@ class TasksScreen extends HookConsumerWidget {
       );
       return;
     }
-    final rootNavigatorKey = ref.read(rootNavigatorKeyProvider);
+    final rootNavigatorKey = ref.read(
+      rootNavigatorKeyProvider,
+    ); // Use imported provider
     final chatArgs = {
       'contextString': fetchedContent,
       'parentItemId': taskId,
@@ -394,7 +399,7 @@ class TasksScreen extends HookConsumerWidget {
                       ),
                       const SizedBox(height: 10),
                       Text(
-                        'Please ensure a Vikunja server is added and active, and enter your Vikunja API Key in:',
+                        'Please ensure a Vikunja server is added and set as the Task Server, and enter your Vikunja API Key in:', // Updated text
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           color: CupertinoColors.secondaryLabel.resolveFrom(

@@ -14,7 +14,8 @@ class NotesListBody extends ConsumerStatefulWidget {
   final List<NoteItem> notes;
   final note_providers.NotesState notesState;
   final bool isInHiddenView;
-  final String serverId; // Add serverId parameter
+  // serverId is no longer needed as context comes from noteServerConfigProvider
+  // final String serverId;
 
   const NotesListBody({
     super.key,
@@ -22,7 +23,7 @@ class NotesListBody extends ConsumerStatefulWidget {
     required this.notes,
     required this.notesState,
     required this.isInHiddenView,
-    required this.serverId, // Make serverId required
+    // required this.serverId, // Removed serverId
     this.onMoveNoteToServer,
   });
 
@@ -52,7 +53,7 @@ class _NotesListBodyState extends ConsumerState<NotesListBody> {
       ref.read(ui_providers.selectedItemIdProvider.notifier).state = firstNoteId;
       if (kDebugMode) {
         print(
-          '[NotesListBody(${widget.serverId})] Selected first note (ID=$firstNoteId) after initial load/refresh.',
+          '[NotesListBody] Selected first note (ID=$firstNoteId) after initial load/refresh.',
         );
       }
     }
@@ -67,37 +68,35 @@ class _NotesListBodyState extends ConsumerState<NotesListBody> {
   void _onScroll() {
     if (widget.scrollController.position.pixels >=
         widget.scrollController.position.maxScrollExtent - 200) {
-      // Use the correct provider family instance
+      // Use the non-family provider
       final notifier = ref.read(
-        note_providers.notesNotifierProviderFamily(widget.serverId).notifier,
+        note_providers.notesNotifierProvider.notifier,
       );
-      // Use the correct state instance
-      if (ref
-          .read(note_providers.notesNotifierProviderFamily(widget.serverId))
-          .canLoadMore) {
+      // Use the non-family provider state
+      if (ref.read(note_providers.notesNotifierProvider).canLoadMore) {
         if (kDebugMode) {
           print(
-            '[NotesListBody(${widget.serverId})] Reached near bottom, attempting to fetch more notes.',
+            '[NotesListBody] Reached near bottom, attempting to fetch more notes.',
           );
         }
         notifier.fetchMoreNotes();
       } else {
         // Optional: log if needed
-        // if (kDebugMode) { print('[NotesListBody(${widget.serverId})] Reached near bottom, but cannot load more.'); }
+        // if (kDebugMode) { print('[NotesListBody] Reached near bottom, but cannot load more.'); }
       }
     }
   }
 
   Future<void> _onRefresh() async {
     if (kDebugMode) {
-      print('[NotesListBody(${widget.serverId})] Pull-to-refresh triggered.');
+      print('[NotesListBody] Pull-to-refresh triggered.');
     }
     HapticFeedback.lightImpact();
 
-    // Use the correct provider family instance
+    // Use the non-family provider
     await ref
         .read(
-          note_providers.notesNotifierProviderFamily(widget.serverId).notifier,
+          note_providers.notesNotifierProvider.notifier,
         )
         .refresh();
 
@@ -199,7 +198,7 @@ class _NotesListBodyState extends ConsumerState<NotesListBody> {
                   if (kDebugMode) {
                     if (widget.onMoveNoteToServer != null) {
                       // print(
-                      //   '[NotesListBody(${widget.serverId})] Building NoteListItem for ${note.id}, passing onMoveNoteToServer callback.',
+                      //   '[NotesListBody] Building NoteListItem for ${note.id}, passing onMoveNoteToServer callback.',
                       // );
                     }
                   }
@@ -212,7 +211,7 @@ class _NotesListBodyState extends ConsumerState<NotesListBody> {
                         widget.onMoveNoteToServer != null
                         ? () => widget.onMoveNoteToServer!(note.id)
                         : null,
-                    serverId: widget.serverId, // Pass serverId down
+                    // serverId: widget.serverId, // Removed serverId
                     // TODO: Add 'Add to Workbench' action here
                   );
                 }, childCount: visibleNotes.length),

@@ -1,6 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_memos/providers/comment_providers.dart';
-// Import note_providers and use families
+// Import note_providers and use non-family providers
 import 'package:flutter_memos/providers/note_providers.dart' as note_providers;
 import 'package:flutter_memos/providers/ui_providers.dart';
 import 'package:flutter_memos/utils/comment_utils.dart';
@@ -10,7 +10,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class NoteComments extends ConsumerWidget {
   final String noteId;
-  final String serverId; // Add serverId
+  final String serverId; // Keep serverId for CommentCard
 
   const NoteComments({
     super.key,
@@ -20,12 +20,9 @@ class NoteComments extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Use noteCommentsProviderFamily with serverId and noteId
+    // Use non-family noteCommentsProvider with noteId
     final commentsAsync = ref.watch(
-      note_providers.noteCommentsProviderFamily((
-        serverId: serverId,
-        noteId: noteId,
-      )),
+      note_providers.noteCommentsProvider(noteId),
     );
     final selectedCommentIndex = ref.watch(selectedCommentIndexProvider);
     final hiddenCommentIds = ref.watch(hiddenCommentIdsProvider);
@@ -83,7 +80,7 @@ class NoteComments extends ConsumerWidget {
                   comment: comment,
                   memoId: noteId, // Pass noteId as memoId prop
                   serverId: serverId, // Pass serverId
-                  // isSelected: isSelected,
+                  // isSelected: isSelected, // Selection handled internally now
                   // Adding a key based on comment ID and pin status to force rebuild when pin status changes
                   key: ValueKey('${comment.id}_${comment.pinned}'),
                 ),

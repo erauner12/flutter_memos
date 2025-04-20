@@ -14,7 +14,8 @@ import 'package:intl/intl.dart';
 class CommentCard extends ConsumerWidget {
   final Comment comment;
   final String memoId;
-  final String serverId;
+  final String
+  serverId; // Keep serverId as it might be needed for navigation/context
   // Remove isSelected property
   // final bool isSelected;
 
@@ -22,7 +23,7 @@ class CommentCard extends ConsumerWidget {
     super.key,
     required this.comment,
     required this.memoId,
-    required this.serverId,
+    required this.serverId, // Keep serverId
     // Remove isSelected from constructor
     // required this.isSelected,
   });
@@ -48,7 +49,7 @@ class CommentCard extends ConsumerWidget {
                   arguments: {
                     'entityType': 'comment',
                     'entityId': '$memoId/${comment.id}', // Pass combined ID
-                    'serverId': serverId, // Pass serverId
+                    // serverId is no longer needed for edit screen
                   },
                 );
               },
@@ -57,10 +58,9 @@ class CommentCard extends ConsumerWidget {
               child: Text(comment.pinned ? 'Unpin' : 'Pin'),
               onPressed: () {
                 Navigator.pop(popupContext);
-                // Use family provider with serverId, memoId, and commentId
+                // Use non-family provider with params record
                 ref.read(
-                  comment_providers.togglePinCommentProviderFamily((
-                    serverId: serverId,
+                  comment_providers.togglePinCommentProvider((
                     memoId: memoId,
                     commentId: comment.id,
                   )),
@@ -72,11 +72,10 @@ class CommentCard extends ConsumerWidget {
               onPressed: () async {
                 Navigator.pop(popupContext);
                 try {
-                  // Use family provider
+                  // Use non-family provider with params record
                   final newNote =
                       await ref.read(
-                        comment_providers.convertCommentToNoteProviderFamily((
-                          serverId: serverId,
+                        comment_providers.convertCommentToNoteProvider((
                           memoId: memoId,
                           commentId: comment.id,
                         )),
@@ -85,7 +84,9 @@ class CommentCard extends ConsumerWidget {
                     // Navigate to the new note's detail screen
                     Navigator.of(context, rootNavigator: true).pushNamed(
                       '/item-detail',
-                      arguments: {'itemId': newNote.id, 'serverId': serverId}, // Pass serverId
+                      arguments: {
+                        'itemId': newNote.id,
+                      }, // serverId no longer needed
                     );
                   }
                 } catch (e) {
@@ -162,10 +163,9 @@ class CommentCard extends ConsumerWidget {
                       ),
                 );
                 if (confirmed == true) {
-                  // Use family provider
+                  // Use non-family provider with params record
                   ref.read(
-                    comment_providers.deleteCommentProviderFamily((
-                      serverId: serverId,
+                    comment_providers.deleteCommentProvider((
                       memoId: memoId,
                       commentId: comment.id,
                     )),
@@ -196,9 +196,9 @@ class CommentCard extends ConsumerWidget {
     // Consider showing a loading indicator specific to this comment card if needed
 
     try {
+      // Use non-family provider with params record
       await ref.read(
-        comment_providers.fixCommentGrammarProviderFamily((
-          serverId: serverId,
+        comment_providers.fixCommentGrammarProvider((
           memoId: memoId,
           commentId: comment.id,
         )).future,
