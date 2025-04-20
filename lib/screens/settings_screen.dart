@@ -1140,172 +1140,196 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   // Removed Todoist Integration Tile
                   // Removed Test Todoist Connection Tile
 
-                  // Vikunja Integration Tile (NEW)
-                  CupertinoListTile(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 15.0,
-                      vertical: 10.0,
-                    ),
-                    title: const Text('Vikunja API Key'),
-                    subtitle: Padding(
-                      padding: const EdgeInsets.only(top: 8.0),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: CupertinoTextField(
-                              controller: _vikunjaApiKeyController,
-                              placeholder: 'Enter Vikunja API key',
-                              obscureText: true,
-                              padding: const EdgeInsets.symmetric(
-                                vertical: 10.0,
-                                horizontal: 12.0,
+// Vikunja Integration Tile (NEW) - Conditionally Rendered
+                  if (activeConfig?.serverType == ServerType.vikunja)
+                    CupertinoListTile(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 15.0,
+                        vertical: 10.0,
+                      ),
+                      title: const Text('Vikunja API Key'),
+                      subtitle: Padding(
+                        padding: const EdgeInsets.only(top: 8.0),
+                        child: Column(
+                          // Use Column to stack URL and TextField row
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Display active Vikunja server URL
+                            if (activeConfig != null)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 6.0),
+                                child: Text(
+                                  'Active Server: ${activeConfig.serverUrl}',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: CupertinoColors.secondaryLabel
+                                        .resolveFrom(context),
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               ),
-                              decoration: BoxDecoration(
-                                color: CupertinoColors.tertiarySystemFill
-                                    .resolveFrom(context),
-                                borderRadius: BorderRadius.circular(8.0),
-                              ),
-                              clearButtonMode: OverlayVisibilityMode.editing,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          CupertinoButton(
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
-                            color: CupertinoColors.activeBlue,
-                            onPressed: () async {
-                              final newKey =
-                                  _vikunjaApiKeyController.text.trim();
-                              FocusScope.of(context).unfocus();
+                            // Row for TextField and Save button
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: CupertinoTextField(
+                                    controller: _vikunjaApiKeyController,
+                                    placeholder: 'Enter Vikunja API key',
+                                    obscureText: true,
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 10.0,
+                                      horizontal: 12.0,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: CupertinoColors.tertiarySystemFill
+                                          .resolveFrom(context),
+                                      borderRadius: BorderRadius.circular(8.0),
+                                    ),
+                                    clearButtonMode:
+                                        OverlayVisibilityMode.editing,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                CupertinoButton(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                  ),
+                                  color: CupertinoColors.activeBlue,
+                                  onPressed: () async {
+                                    final newKey =
+                                        _vikunjaApiKeyController.text.trim();
+                                    FocusScope.of(context).unfocus();
 
-                              if (newKey.isEmpty) {
-                                _showResultDialog(
-                                  'API Key Empty',
-                                  'Vikunja API key cannot be empty.',
-                                  isError: true,
-                                );
-                                // Also mark as unconfigured if key is cleared
-                                await ref
-                                    .read(vikunjaApiKeyProvider.notifier)
-                                    .set('');
-                                ref
-                                    .read(isVikunjaConfiguredProvider.notifier)
-                                    .state = false;
-                                return;
-                              }
-
-                              // Find the active Vikunja server URL
-                              final activeVikunjaServer = ref
-                                  .read(multiServerConfigProvider)
-                                  .servers
-                                  .firstWhere(
-                                    (s) =>
-                                        s.serverType == ServerType.vikunja &&
-                                        s.id ==
-                                            ref
-                                                .read(multiServerConfigProvider)
-                                                .activeServerId,
-                                    orElse:
-                                        () => ServerConfig(
-                                          id: '',
-                                          serverUrl: '',
-                                          serverType: ServerType.vikunja,
-                                          authToken: '',
-                                        ),
-                                  );
-
-                              if (activeVikunjaServer.serverUrl.isEmpty) {
-                                _showResultDialog(
-                                  'Configuration Error',
-                                  'Could not find an active or configured Vikunja server. Please add or activate a Vikunja server first.',
-                                  isError: true,
-                                );
-                                ref
-                                    .read(isVikunjaConfiguredProvider.notifier)
-                                    .state = false;
-                                return;
-                              }
-                              final baseUrl = activeVikunjaServer.serverUrl;
-
-                              // Save the key
-                              final saveSuccess = await ref
-                                  .read(vikunjaApiKeyProvider.notifier)
-                                  .set(newKey);
-
-                              if (saveSuccess) {
-                                // Configure the service
-                                try {
-                                  await ref
-                                      .read(vikunjaApiServiceProvider)
-                                      .configureService(
-                                        baseUrl: baseUrl,
-                                        authStrategy: BearerTokenAuthStrategy(
-                                          newKey,
-                                        ),
-                                      );
-                                  // Check health after configuring
-                                  final isHealthy =
-                                      await ref
-                                          .read(vikunjaApiServiceProvider)
-                                          .checkHealth();
-                                  if (mounted) {
-                                    ref
-                                        .read(
-                                          isVikunjaConfiguredProvider.notifier,
-                                        )
-                                        .state = isHealthy;
-                                    if (isHealthy) {
+                                    if (newKey.isEmpty) {
                                       _showResultDialog(
-                                        'API Key Saved & Tested',
-                                        'Vikunja API key saved and connection successful!',
-                                      );
-                                      // Trigger task refresh if needed elsewhere
-                                      ref.invalidate(tasksNotifierProvider);
-                                    } else {
-                                      _showResultDialog(
-                                        'API Key Saved, Test Failed',
-                                        'Vikunja API key saved, but connection test failed. Please verify the key and server URL ($baseUrl).',
+                                        'API Key Empty',
+                                        'Vikunja API key cannot be empty.',
                                         isError: true,
                                       );
+                                      // Also mark as unconfigured if key is cleared
+                                      await ref
+                                          .read(vikunjaApiKeyProvider.notifier)
+                                          .set('');
+                                      ref
+                                          .read(
+                                            isVikunjaConfiguredProvider
+                                                .notifier,
+                                          )
+                                          .state = false;
+                                      return;
                                     }
-                                  }
-                                } catch (e) {
-                                  if (mounted) {
-                                    ref
-                                        .read(
-                                          isVikunjaConfiguredProvider.notifier,
-                                        )
-                                        .state = false;
-                                    _showResultDialog(
-                                      'Configuration Error',
-                                      'Failed to configure Vikunja service with the provided key and URL ($baseUrl).\nError: $e',
-                                      isError: true,
-                                    );
-                                  }
-                                }
-                              } else {
-                                if (mounted) {
-                                  ref
-                                      .read(
-                                        isVikunjaConfiguredProvider.notifier,
-                                      )
-                                      .state = false;
-                                  _showResultDialog(
-                                    'Error',
-                                    'Failed to save Vikunja API key.',
-                                    isError: true,
-                                  );
-                                }
-                              }
-                            },
-                            child: const Text(
-                              'Save',
-                              style: TextStyle(color: CupertinoColors.white),
+
+                                    // Find the active Vikunja server URL (already available in activeConfig)
+                                    if (activeConfig == null ||
+                                        activeConfig.serverType !=
+                                            ServerType.vikunja) {
+                                      _showResultDialog(
+                                        'Configuration Error',
+                                        'Could not find an active Vikunja server. Please ensure a Vikunja server is active.',
+                                        isError: true,
+                                      );
+                                      ref
+                                          .read(
+                                            isVikunjaConfiguredProvider
+                                                .notifier,
+                                          )
+                                          .state = false;
+                                      return;
+                                    }
+                                    final baseUrl = activeConfig.serverUrl;
+
+                                    // Save the key
+                                    final saveSuccess = await ref
+                                        .read(vikunjaApiKeyProvider.notifier)
+                                        .set(newKey);
+
+                                    if (saveSuccess) {
+                                      // Configure the service
+                                      try {
+                                        await ref
+                                            .read(vikunjaApiServiceProvider)
+                                            .configureService(
+                                              baseUrl: baseUrl,
+                                              authStrategy:
+                                                  BearerTokenAuthStrategy(
+                                                    newKey,
+                                                  ),
+                                            );
+                                        // Check health after configuring
+                                        final isHealthy =
+                                            await ref
+                                                .read(vikunjaApiServiceProvider)
+                                                .checkHealth();
+                                        if (mounted) {
+                                          // Set the global configured state based on health check
+                                          ref
+                                              .read(
+                                                isVikunjaConfiguredProvider
+                                                    .notifier,
+                                              )
+                                              .state = isHealthy;
+                                          if (isHealthy) {
+                                            _showResultDialog(
+                                              'API Key Saved & Tested',
+                                              'Vikunja API key saved and connection successful!',
+                                            );
+                                            // Trigger task refresh if needed elsewhere
+                                            ref.invalidate(
+                                              tasksNotifierProvider,
+                                            );
+                                          } else {
+                                            _showResultDialog(
+                                              'API Key Saved, Test Failed',
+                                              'Vikunja API key saved, but connection test failed. Please verify the key and server URL ($baseUrl).',
+                                              isError: true,
+                                            );
+                                          }
+                                        }
+                                      } catch (e) {
+                                        if (mounted) {
+                                          ref
+                                              .read(
+                                                isVikunjaConfiguredProvider
+                                                    .notifier,
+                                              )
+                                              .state = false;
+                                          _showResultDialog(
+                                            'Configuration Error',
+                                            'Failed to configure Vikunja service with the provided key and URL ($baseUrl).\nError: $e',
+                                            isError: true,
+                                          );
+                                        }
+                                      }
+                                    } else {
+                                      if (mounted) {
+                                        ref
+                                            .read(
+                                              isVikunjaConfiguredProvider
+                                                  .notifier,
+                                            )
+                                            .state = false;
+                                        _showResultDialog(
+                                          'Error',
+                                          'Failed to save Vikunja API key.',
+                                          isError: true,
+                                        );
+                                      }
+                                    }
+                                  },
+                                  child: const Text(
+                                    'Save',
+                                    style: TextStyle(
+                                      color: CupertinoColors.white,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
-                  ),
 
                   // OpenAI Integration Tile
                   CupertinoListTile(

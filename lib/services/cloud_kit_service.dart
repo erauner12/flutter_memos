@@ -87,6 +87,25 @@ class CloudKitService {
         print('[CloudKitService] Successfully saved ServerConfig ${config.id}');
       }
       return true;
+    } on PlatformException catch (e) {
+      // Handle the specific case where the record already exists (upsert behavior)
+      if (e.message != null &&
+          e.message!.contains('record to insert already exists')) {
+        if (kDebugMode) {
+          print(
+            '[CloudKitService] Handled "record already exists" for ServerConfig ${config.id}. Treating as success.',
+          );
+        }
+        return true; // Record is already there, consider it a success
+      } else {
+        // Re-throw other platform exceptions
+        if (kDebugMode) {
+          print(
+            '[CloudKitService] PlatformException saving ServerConfig ${config.id}: $e\n${e.stacktrace}',
+          );
+        }
+        return false;
+      }
     } catch (e, s) {
       if (kDebugMode) {
         print(
@@ -205,6 +224,25 @@ class CloudKitService {
         );
       }
       return true;
+    } on PlatformException catch (e) {
+      // Handle the specific case where the record already exists (upsert behavior)
+      if (e.message != null &&
+          e.message!.contains('record to insert already exists')) {
+        if (kDebugMode) {
+          print(
+            '[CloudKitService] Handled "record already exists" for McpServerConfig ${config.id}. Treating as success.',
+          );
+        }
+        return true; // Record is already there, consider it a success
+      } else {
+        // Re-throw other platform exceptions
+        if (kDebugMode) {
+          print(
+            '[CloudKitService] PlatformException saving McpServerConfig ${config.id}: $e\n${e.stacktrace}',
+          );
+        }
+        return false;
+      }
     } catch (e, s) {
       if (kDebugMode) {
         print(
@@ -299,6 +337,25 @@ class CloudKitService {
         );
       }
       return true;
+    } on PlatformException catch (e) {
+      // Handle the specific case where the record already exists (upsert behavior)
+      if (e.message != null &&
+          e.message!.contains('record to insert already exists')) {
+        if (kDebugMode) {
+          print(
+            '[CloudKitService] Handled "record already exists" for WorkbenchInstance ${instance.id}. Treating as success.',
+          );
+        }
+        return true; // Record is already there, consider it a success
+      } else {
+        // Re-throw other platform exceptions
+        if (kDebugMode) {
+          print(
+            '[CloudKitService] PlatformException saving WorkbenchInstance ${instance.id}: $e\n${e.stacktrace}',
+          );
+        }
+        return false;
+      }
     } catch (e, s) {
       if (kDebugMode) {
         print(
@@ -432,6 +489,25 @@ class CloudKitService {
         );
       }
       return true;
+    } on PlatformException catch (e) {
+      // Handle the specific case where the record already exists (upsert behavior)
+      if (e.message != null &&
+          e.message!.contains('record to insert already exists')) {
+        if (kDebugMode) {
+          print(
+            '[CloudKitService] Handled "record already exists" for WorkbenchItemReference ${item.id}. Treating as success.',
+          );
+        }
+        return true; // Record is already there, consider it a success
+      } else {
+        // Re-throw other platform exceptions
+        if (kDebugMode) {
+          print(
+            '[CloudKitService] PlatformException saving WorkbenchItemReference ${item.id}: $e\n${e.stacktrace}',
+          );
+        }
+        return false;
+      }
     } catch (e, s) {
       if (kDebugMode) {
         print(
@@ -757,21 +833,26 @@ class CloudKitService {
             );
           }
         }
-      } catch (e) {
-        if (e is PlatformException &&
-            e.message != null &&
-            e.message!.contains('Record not found')) {
+      } on PlatformException catch (e) {
+        if (e.message != null && e.message!.contains('Record not found')) {
           if (kDebugMode) {
             print(
               '[CloudKitService] UserSettings record not found, will create new one.',
             );
           }
         } else {
+          // Re-throw other platform exceptions during fetch
           if (kDebugMode) {
             print(
               '[CloudKitService] Error fetching existing UserSettings, proceeding with save attempt: $e',
             );
           }
+        }
+      } catch (e) {
+        if (kDebugMode) {
+          print(
+            '[CloudKitService] Non-PlatformException fetching existing UserSettings, proceeding with save attempt: $e',
+          );
         }
       }
 
@@ -787,17 +868,26 @@ class CloudKitService {
         print('[CloudKitService] Successfully saved setting $keyName');
       }
       return true;
-    } catch (e, s) {
-      if (e is PlatformException &&
-          e.message != null &&
+    } on PlatformException catch (e) {
+      // Handle the specific case where the record already exists (upsert behavior)
+      if (e.message != null &&
           e.message!.contains('record to insert already exists')) {
         if (kDebugMode) {
           print(
-            '[CloudKitService] Handled "record already exists" conflict for $_userSettingsRecordName. Save likely succeeded or will be retried.',
+            '[CloudKitService] Handled "record already exists" conflict for $_userSettingsRecordName. Treating as success.',
           );
         }
-        return true;
+        return true; // Record is already there, consider it a success
+      } else {
+        // Re-throw other platform exceptions during save
+        if (kDebugMode) {
+          print(
+            '[CloudKitService] PlatformException saving setting $keyName: $e\n${e.stacktrace}',
+          );
+        }
+        return false;
       }
+    } catch (e, s) {
       if (kDebugMode) {
         print('[CloudKitService] Error saving setting $keyName: $e\n$s');
       }

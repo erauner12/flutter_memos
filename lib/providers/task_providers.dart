@@ -131,7 +131,6 @@ class TasksNotifier extends StateNotifier<TasksState> {
       if (state.error != errorMessage) {
         state = TasksState.initial().copyWith(error: errorMessage, tasks: []);
       }
-      isConfiguredNotifier.state = false; // Mark as not configured
       return null;
     }
 
@@ -143,11 +142,14 @@ class TasksNotifier extends StateNotifier<TasksState> {
       );
 
       // Verify configuration status after attempting configuration
+      // We rely on the isVikunjaConfiguredProvider which should be set in Settings
+      // If the service's internal flag is true, we can proceed.
       if (vikunjaService.isConfigured) {
         if (state.error != null) {
           state = state.copyWith(clearError: true); // Clear previous errors
         }
-        isConfiguredNotifier.state = true; // Mark as configured
+        // We don't need to set isConfiguredNotifier.state = true here,
+        // as it should reflect the state set in Settings.
         return vikunjaService; // Return the configured service instance
       } else {
         // Configuration attempt failed (e.g., invalid URL format)
@@ -156,6 +158,7 @@ class TasksNotifier extends StateNotifier<TasksState> {
         if (state.error != errorMessage) {
           state = TasksState.initial().copyWith(error: errorMessage, tasks: []);
         }
+        // DO NOT set isConfiguredNotifier.state = false here
         return null;
       }
     } catch (e) {
@@ -163,6 +166,7 @@ class TasksNotifier extends StateNotifier<TasksState> {
       if (state.error != errorMessage) {
         state = TasksState.initial().copyWith(error: errorMessage, tasks: []);
       }
+      // DO NOT set isConfiguredNotifier.state = false here
       return null;
     }
   }
