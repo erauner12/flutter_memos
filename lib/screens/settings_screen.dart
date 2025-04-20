@@ -198,6 +198,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       final isHealthy = await apiService.checkHealth();
       if (mounted) {
         if (isHealthy) {
+          // If the test succeeded for a Vikunja server, explicitly mark it as configured.
+          if (activeConfig.serverType == ServerType.vikunja) {
+            ref.read(isVikunjaConfiguredProvider.notifier).state = true;
+            if (kDebugMode) {
+              print(
+                '[SettingsScreen] Vikunja connection test successful, setting isVikunjaConfiguredProvider to true.',
+              );
+            }
+          }
           _showResultDialog(
             'Success',
             'Connection to ${activeConfig.serverType.name} server "${activeConfig.name ?? activeConfig.serverUrl}" successful!',

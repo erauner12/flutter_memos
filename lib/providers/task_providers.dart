@@ -120,7 +120,7 @@ class TasksNotifier extends StateNotifier<TasksState> {
       if (state.error != errorMessage) {
         state = TasksState.initial().copyWith(error: errorMessage, tasks: []);
       }
-      isConfiguredNotifier.state = false; // Mark as not configured
+
       return null;
     }
 
@@ -156,7 +156,6 @@ class TasksNotifier extends StateNotifier<TasksState> {
         if (state.error != errorMessage) {
           state = TasksState.initial().copyWith(error: errorMessage, tasks: []);
         }
-        isConfiguredNotifier.state = false;
         return null;
       }
     } catch (e) {
@@ -164,7 +163,6 @@ class TasksNotifier extends StateNotifier<TasksState> {
       if (state.error != errorMessage) {
         state = TasksState.initial().copyWith(error: errorMessage, tasks: []);
       }
-      isConfiguredNotifier.state = false;
       return null;
     }
   }
