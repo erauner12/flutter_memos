@@ -19,6 +19,7 @@ import 'package:flutter_memos/providers/workbench_instances_provider.dart'; // A
 import 'package:flutter_memos/providers/workbench_provider.dart';
 import 'package:flutter_memos/screens/add_edit_mcp_server_screen.dart'; // Will be created next
 import 'package:flutter_memos/screens/add_edit_server_screen.dart';
+import 'package:flutter_memos/services/auth_strategy.dart'; // Import for BearerTokenAuthStrategy
 import 'package:flutter_memos/services/base_api_service.dart'; // Import BaseApiService
 import 'package:flutter_memos/services/blinko_api_service.dart';
 import 'package:flutter_memos/services/cloud_kit_service.dart'; // Import CloudKitService
@@ -119,7 +120,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   void _showResultDialog(String title, String content, {bool isError = false}) {
-    if (!mounted) return;
+    // No async gap here, so context usage is safe
     showCupertinoDialog(
       context: context,
       builder:
@@ -148,6 +149,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
        return;
      }
 
+    // Use local variable for mounted check after await
+    final isMounted = mounted;
      setState(() {
       if (purpose == ServerPurpose.note) {
         _isTestingNoteConnection = true;
@@ -158,6 +161,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
      // Instantiate the correct service based on ServerType
      BaseApiService testApiService;
+    AuthStrategy authStrategy = BearerTokenAuthStrategy(
+      config.authToken,
+    ); // Default
+
      switch (config.serverType) {
        case ServerType.memos:
          testApiService = MemosApiService();
@@ -167,76 +174,90 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
          break;
        case ServerType.vikunja:
          testApiService = VikunjaApiService();
-         // If testing Vikunja Task server, ensure API key is also set?
-         // The ServerConfig authToken should be the API key for Vikunja.
-         // We might need to check the separate Vikunja API key provider if that's still used.
+        // Vikunja uses Bearer token auth, already covered by default
          final vikunjaKey = ref.read(vikunjaApiKeyProvider);
          if (purpose == ServerPurpose.task && vikunjaKey.isEmpty && config.authToken.isEmpty) {
+          if (isMounted) {
             _showResultDialog(
               'Configuration Error',
               'Vikunja task server requires an API Key (Token) in its configuration.',
               isError: true,
             );
-            setState(() { _isTestingTaskConnection = false; });
+            setState(() {
+              _isTestingTaskConnection = false;
+            });
+          }
             return;
          }
          break;
        case ServerType.todoist: // Should not happen
-         _showResultDialog('Internal Error', 'Cannot test Todoist type.', isError: true);
-         setState(() {
-          if (purpose == ServerPurpose.note) {
-            _isTestingNoteConnection = false;
-          } else {
-            _isTestingTaskConnection = false;
-          }
-         });
+        if (isMounted) {
+          _showResultDialog(
+            'Internal Error',
+            'Cannot test Todoist type.',
+            isError: true,
+          );
+          setState(() {
+            if (purpose == ServerPurpose.note) {
+              _isTestingNoteConnection = false;
+            } else {
+              _isTestingTaskConnection = false;
+            }
+          });
+        }
          return;
      }
 
      try {
        // Configure the service with the specific server's details
-       await testApiService.configureService(baseUrl: config.serverUrl, authToken: config.authToken);
+      // Use configureService with authStrategy
+      await testApiService.configureService(
+        baseUrl: config.serverUrl,
+        authStrategy: authStrategy,
+      );
        final isHealthy = await testApiService.checkHealth();
 
-       if (mounted) {
-         if (isHealthy) {
-           _showResultDialog(
-             'Success',
-             'Connection to ${purpose.name} server "${config.name ?? config.serverUrl}" successful!',
-           );
-           // If Vikunja task server test succeeded, mark Vikunja as configured
-           if (purpose == ServerPurpose.task && config.serverType == ServerType.vikunja) {
-              ref.read(isVikunjaConfiguredProvider.notifier).state = true;
-           }
-         } else {
-           _showResultDialog(
-             'Connection Failed',
-             'Could not connect to ${purpose.name} server "${config.name ?? config.serverUrl}". Check configuration.',
-             isError: true,
-           );
-         }
-       }
+      // Check mounted *after* await
+      if (!mounted) return;
+
+      if (isHealthy) {
+        _showResultDialog(
+          'Success',
+          'Connection to ${purpose.name} server "${config.name ?? config.serverUrl}" successful!',
+        );
+        // If Vikunja task server test succeeded, mark Vikunja as configured
+        if (purpose == ServerPurpose.task &&
+            config.serverType == ServerType.vikunja) {
+          ref.read(isVikunjaConfiguredProvider.notifier).state = true;
+        }
+      } else {
+        _showResultDialog(
+          'Connection Failed',
+          'Could not connect to ${purpose.name} server "${config.name ?? config.serverUrl}". Check configuration.',
+          isError: true,
+        );
+      }
      } catch (e) {
        if (kDebugMode) print("[SettingsScreen] Test ${purpose.name} Connection Error: $e");
-       if (mounted) {
-         _showResultDialog(
-           'Connection Failed',
-           'Could not connect to ${purpose.name} server "${config.name ?? config.serverUrl}".\n\nError: ${e.toString()}',
-           isError: true,
-         );
-       }
+      // Check mounted *after* await
+      if (!mounted) return;
+      _showResultDialog(
+        'Connection Failed',
+        'Could not connect to ${purpose.name} server "${config.name ?? config.serverUrl}".\n\nError: ${e.toString()}',
+        isError: true,
+      );
      } finally {
-       if (mounted) {
-         setState(() {
-          if (purpose == ServerPurpose.note) {
-            _isTestingNoteConnection = false;
-          } else {
-            _isTestingTaskConnection = false;
-          }
-         });
-       }
-     }
-   }
+      // Check mounted *after* await
+      if (!mounted) return;
+      setState(() {
+        if (purpose == ServerPurpose.note) {
+          _isTestingNoteConnection = false;
+        } else {
+          _isTestingTaskConnection = false;
+        }
+      });
+    }
+  }
 
 
   Future<void> _testOpenAiConnection() async {
@@ -254,23 +275,35 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       return;
     }
 
+    // Use local variable for mounted check after await
+    final isMounted = mounted;
     setState(() => _isTestingOpenAiConnection = true);
     try {
       final isHealthy = await openaiService.checkHealth();
-      if (mounted) {
-        if (isHealthy) {
-          _showResultDialog('Success', 'OpenAI connection successful!');
-        } else {
-          _showResultDialog('Connection Failed', 'Could not connect to OpenAI. Please verify your API key.', isError: true);
-        }
+      // Check mounted *after* await
+      if (!isMounted) return;
+      if (isHealthy) {
+        _showResultDialog('Success', 'OpenAI connection successful!');
+      } else {
+        _showResultDialog(
+          'Connection Failed',
+          'Could not connect to OpenAI. Please verify your API key.',
+          isError: true,
+        );
       }
     } catch (e) {
       if (kDebugMode) print("[SettingsScreen] Test OpenAI Connection Error: $e");
-      if (mounted) {
-        _showResultDialog('Error', 'An error occurred while testing the OpenAI connection:\n${e.toString()}', isError: true);
-      }
+      // Check mounted *after* await
+      if (!isMounted) return;
+      _showResultDialog(
+        'Error',
+        'An error occurred while testing the OpenAI connection:\n${e.toString()}',
+        isError: true,
+      );
     } finally {
-      if (mounted) setState(() => _isTestingOpenAiConnection = false);
+      // Check mounted *after* await
+      if (!isMounted) return;
+      setState(() => _isTestingOpenAiConnection = false);
     }
   }
 
@@ -372,7 +405,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
              isDestructiveAction: true,
              child: const Text('Delete'),
              onPressed: () async {
-               Navigator.pop(context);
+                  Navigator.pop(context); // Close sheet before showing dialog
+                  final isMounted = mounted; // Check mounted before await
                final confirmed = await showCupertinoDialog<bool>(
                  context: context,
                  builder: (context) => CupertinoAlertDialog(
@@ -384,11 +418,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                    ],
                  ),
                );
+                  // Check mounted *after* await
+                  if (!isMounted) return;
                if (confirmed == true) {
                  final success = await ref.read(mcpServerConfigProvider.notifier).removeServer(server.id);
-                 if (!success && mounted) {
+                    // Check mounted again before showing result dialog
+                    if (!mounted) return;
+                    if (!success) {
                    _showResultDialog('Error', 'Failed to delete MCP server.', isError: true);
-                 } else if (success && mounted) {
+                    } else {
                    _showResultDialog('Deleted', 'MCP Server "${server.name}" deleted.');
                  }
                }
@@ -476,6 +514,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   // --- START: Updated Reset Logic ---
   Future<void> _performFullReset() async {
     if (kDebugMode) print('[SettingsScreen] Starting full data reset...');
+    // Check mounted at the beginning
     if (!mounted) return;
 
     final cloudKitService = ref.read(cloudKitServiceProvider);
@@ -553,7 +592,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
       tasksNotifier.clearTasks();
       chatNotifier.clearChat();
-      await sharedPrefsService.clearAll() ?? Future.value();
+      // Remove dead null-aware operator
+      await sharedPrefsService.clearAll();
 
       // Mark Vikunja as unconfigured
       ref.read(isVikunjaConfiguredProvider.notifier).state = false;
@@ -567,45 +607,52 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       cloudSuccess = false;
     }
 
-    // 3. Show Final Result Dialog
-    if (mounted) {
-      _showResultDialog(
-        cloudSuccess ? 'Reset Complete' : 'Reset Partially Failed',
-        cloudSuccess
-            ? 'All cloud configurations, local settings, API keys, and cached data have been cleared. Please restart the app or reconfigure servers.'
-            : 'The reset process encountered errors:\n$cloudErrorMessage\nSome data might remain. Please check iCloud data manually and restart the app.',
-        isError: !cloudSuccess,
-      );
-      // Invalidate providers to force reload on next access
-      ref.invalidate(noteServerConfigProvider);
-      ref.invalidate(taskServerConfigProvider);
-      ref.invalidate(mcpServerConfigProvider);
-      ref.invalidate(workbenchInstancesProvider);
-      // Invalidate note/task data providers (if they exist and depend on the config)
-      // ref.invalidate(notesNotifierProvider); // Example if there's a single notes provider
-      ref.invalidate(tasksNotifierProvider);
-      ref.invalidate(chatProvider);
-      // Invalidate API key providers
-      ref.invalidate(openAiApiKeyProvider);
-      ref.invalidate(openAiModelIdProvider);
-      ref.invalidate(geminiApiKeyProvider);
-      ref.invalidate(vikunjaApiKeyProvider);
-      // Invalidate API service providers
-      ref.invalidate(apiServiceProvider); // This likely needs adjustment based on new config structure
-      ref.invalidate(openaiApiServiceProvider);
-      ref.invalidate(vikunjaApiServiceProvider);
-
-    } else {
-      if (kDebugMode) print('[SettingsScreen] Widget unmounted before final reset dialog could be shown.');
+    // 3. Show Final Result Dialog - Check mounted *after* all awaits
+    if (!mounted) {
+      if (kDebugMode)
+        print(
+          '[SettingsScreen] Widget unmounted before final reset dialog could be shown.',
+        );
+      return;
     }
+    _showResultDialog(
+      cloudSuccess ? 'Reset Complete' : 'Reset Partially Failed',
+      cloudSuccess
+          ? 'All cloud configurations, local settings, API keys, and cached data have been cleared. Please restart the app or reconfigure servers.'
+          : 'The reset process encountered errors:\n$cloudErrorMessage\nSome data might remain. Please check iCloud data manually and restart the app.',
+      isError: !cloudSuccess,
+    );
+    // Invalidate providers to force reload on next access
+    ref.invalidate(noteServerConfigProvider);
+    ref.invalidate(taskServerConfigProvider);
+    ref.invalidate(mcpServerConfigProvider);
+    ref.invalidate(workbenchInstancesProvider);
+    // Invalidate note/task data providers (if they exist and depend on the config)
+    // ref.invalidate(notesNotifierProvider); // Example if there's a single notes provider
+    ref.invalidate(tasksNotifierProvider);
+    ref.invalidate(chatProvider);
+    // Invalidate API key providers
+    ref.invalidate(openAiApiKeyProvider);
+    ref.invalidate(openAiModelIdProvider);
+    ref.invalidate(geminiApiKeyProvider);
+    ref.invalidate(vikunjaApiKeyProvider);
+    // Invalidate API service providers
+    ref.invalidate(
+      apiServiceProvider,
+    ); // This likely needs adjustment based on new config structure
+    ref.invalidate(openaiApiServiceProvider);
+    ref.invalidate(vikunjaApiServiceProvider);
+
   }
   // --- END: Updated Reset Logic ---
 
   // Helper to build the configuration tile for Note or Task server
   Widget _buildServerConfigTile(ServerConfig? config, ServerPurpose purpose) {
-    final String title = purpose == ServerPurpose.note ? 'Note Server' : 'Task Server';
+    // final String title = purpose == ServerPurpose.note ? 'Note Server' : 'Task Server'; // Unused variable
     final String addText = 'Tap to Add ${purpose.name.substring(0,1).toUpperCase()}${purpose.name.substring(1)} Server';
-    final notifier = purpose == ServerPurpose.note
+    // Explicitly type the notifier based on purpose
+    final StateNotifier<ServerConfig?> notifier =
+        purpose == ServerPurpose.note
         ? ref.read(noteServerConfigProvider.notifier)
         : ref.read(taskServerConfigProvider.notifier);
 
@@ -649,6 +696,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             minSize: 0,
             child: Icon(CupertinoIcons.trash, color: CupertinoColors.systemRed.resolveFrom(context), size: 22),
             onPressed: () async {
+              // Check mounted before showing dialog
+              final isMounted = mounted;
               final confirmed = await showCupertinoDialog<bool>(
                 context: context,
                 builder: (context) => CupertinoAlertDialog(
@@ -660,11 +709,22 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ],
                 ),
               );
+              // Check mounted *after* await
+              if (!isMounted) return;
               if (confirmed == true) {
-                final success = await notifier.removeConfiguration();
-                if (!success && mounted) {
+                // Call removeConfiguration on the correctly typed notifier
+                bool success = false;
+                if (notifier is NoteServerConfigNotifier) {
+                  success = await notifier.removeConfiguration();
+                } else if (notifier is TaskServerConfigNotifier) {
+                  success = await notifier.removeConfiguration();
+                }
+
+                // Check mounted again before showing result dialog
+                if (!mounted) return;
+                if (!success) {
                   _showResultDialog('Error', 'Failed to delete ${purpose.name} server.', isError: true);
-                } else if (success && mounted) {
+                } else {
                   _showResultDialog('Deleted', '${purpose.name.substring(0,1).toUpperCase()}${purpose.name.substring(1)} server "$displayName" deleted.');
                   // If Vikunja task server was deleted, mark Vikunja as unconfigured
                   if (purpose == ServerPurpose.task && config.serverType == ServerType.vikunja) {
@@ -848,7 +908,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                   onPressed: () async {
                                     final newKey = _vikunjaApiKeyController.text.trim();
                                     FocusScope.of(context).unfocus();
+                                    final isMounted =
+                                        mounted; // Check mounted before await
                                     final saveSuccess = await ref.read(vikunjaApiKeyProvider.notifier).set(newKey);
+                                    if (!isMounted)
+                                      return; // Check mounted after await
                                     if (saveSuccess) {
                                       _showResultDialog('API Key Saved', 'Legacy Vikunja API key saved.');
                                       // Mark as configured if key is not empty
@@ -894,8 +958,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             color: CupertinoColors.activeBlue,
                             onPressed: () async {
                               final newKey = _openaiApiKeyController.text;
-                              final success = await ref.read(openAiApiKeyProvider.notifier).set(newKey);
                               FocusScope.of(context).unfocus();
+                              final isMounted =
+                                  mounted; // Check mounted before await
+                              final success = await ref.read(openAiApiKeyProvider.notifier).set(newKey);
+                              if (!isMounted)
+                                return; // Check mounted after await
                               if (success) {
                                 ref.read(openaiApiServiceProvider).configureService(authToken: newKey);
                                 _showResultDialog('API Key Updated', 'OpenAI API key has been saved.');
@@ -989,8 +1057,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                 _showResultDialog('Error', 'Gemini API Key cannot be empty.', isError: true);
                                 return;
                               }
-                              final success = await ref.read(geminiApiKeyProvider.notifier).set(newKey);
                               FocusScope.of(context).unfocus();
+                              final isMounted =
+                                  mounted; // Check mounted before await
+                              final success = await ref.read(geminiApiKeyProvider.notifier).set(newKey);
+                              if (!isMounted)
+                                return; // Check mounted after await
                               if (success) {
                                 _showResultDialog('API Key Updated', 'Gemini API key has been saved.');
                               } else {
@@ -1073,6 +1145,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     title: Text('Reset All Cloud & Local Data', style: TextStyle(color: CupertinoColors.systemRed.resolveFrom(context))),
                     leading: Icon(CupertinoIcons.exclamationmark_octagon_fill, color: CupertinoColors.systemRed.resolveFrom(context)),
                     onTap: () async {
+                      // Check mounted before showing dialog
+                      final isMounted = mounted;
                       final confirmed = await showCupertinoDialog<bool>(
                         context: context,
                         builder: (dialogContext) => CupertinoAlertDialog(
@@ -1086,7 +1160,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           ],
                         ),
                       );
-                      if (confirmed == true && mounted) {
+                      // Check mounted *after* await
+                      if (!isMounted) return;
+                      if (confirmed == true) {
                         await _performFullReset();
                       }
                     },

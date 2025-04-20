@@ -9,7 +9,6 @@ import 'package:flutter_memos/providers/note_server_config_provider.dart'; // Im
 import 'package:flutter_memos/providers/service_providers.dart'; // Import service provider
 import 'package:flutter_memos/providers/settings_provider.dart';
 import 'package:flutter_memos/providers/task_server_config_provider.dart'; // Import new provider
-import 'package:flutter_memos/services/cloud_kit_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart'; // Import Uuid
@@ -23,10 +22,11 @@ const _serverConfigCacheKey =
     'server_config_cache'; // Old multi-server cache key (might contain MultiServerConfigState JSON)
 const _oldDefaultServerIdKey = 'defaultServerId'; // Old default server ID key
 
-// --- New Keys ---
-// Defined in note_server_config_provider.dart and task_server_config_provider.dart
-// const _noteServerConfigKey = 'note_server_config';
-// const _taskServerConfigKey = 'task_server_config';
+// --- New Keys (Imported for migration check) ---
+// These constants are defined in their respective files but needed here for the migration check.
+const _noteServerConfigKey = 'note_server_config';
+const _taskServerConfigKey = 'task_server_config';
+
 
 // --- Removed MultiServerConfigNotifier ---
 
@@ -138,6 +138,19 @@ final loadServerConfigProvider = FutureProvider<void>((ref) async {
   }
 }, name: 'loadServerConfig');
 
+// --- Migration Helper Functions ---
+
+/// Check if a server type is valid for note-taking (used in migration).
+bool _isValidNoteServerType(ServerType type) {
+  return type == ServerType.memos ||
+      type == ServerType.blinko ||
+      type == ServerType.vikunja;
+}
+
+/// Check if a server type is valid for tasks (used in migration).
+bool _isValidTaskServerType(ServerType type) {
+  return type == ServerType.vikunja;
+}
 
 /// Helper function to perform one-time migration from old storage keys
 Future<void> _runMigrationIfNeeded(Ref ref) async {
@@ -148,14 +161,17 @@ Future<void> _runMigrationIfNeeded(Ref ref) async {
   // Check if new keys already exist. If so, assume migration is done.
   if (prefs.containsKey(_noteServerConfigKey) ||
       prefs.containsKey(_taskServerConfigKey)) {
-    if (kDebugMode)
+    if (kDebugMode) {
       print('[Migration] New config keys found. Skipping migration.');
+    }
     // Clean up old keys just in case they linger
     await _removeOldKeys(prefs);
     return;
   }
 
-  if (kDebugMode) print('[Migration] Checking for old configuration data...');
+  if (kDebugMode) {
+    print('[Migration] Checking for old configuration data...');
+  }
 
   List<ServerConfig> oldServers = [];
   String? oldDefaultServerId;
@@ -175,15 +191,17 @@ Future<void> _runMigrationIfNeeded(Ref ref) async {
               ) // Filter out Todoist
               .toList();
       oldDefaultServerId = decodedJson['defaultServerId'] as String?;
-      if (kDebugMode)
+      if (kDebugMode) {
         print(
           '[Migration] Loaded ${oldServers.length} servers from old cache key ($_serverConfigCacheKey).',
         );
+      }
     } catch (e) {
-      if (kDebugMode)
+      if (kDebugMode) {
         print(
           '[Migration] Error parsing old cache key ($_serverConfigCacheKey): $e. Trying next source.',
         );
+      }
       oldServers = [];
       oldDefaultServerId = null;
     }
@@ -205,15 +223,17 @@ Future<void> _runMigrationIfNeeded(Ref ref) async {
                 ) // Filter out Todoist
                 .toList();
         oldDefaultServerId = decodedJson['defaultServerId'] as String?;
-        if (kDebugMode)
+        if (kDebugMode) {
           print(
             '[Migration] Loaded ${oldServers.length} servers from old multi-server key ($_multiServerConfigKey).',
           );
+        }
       } catch (e) {
-        if (kDebugMode)
+        if (kDebugMode) {
           print(
             '[Migration] Error parsing old multi-server key ($_multiServerConfigKey): $e. Trying next source.',
           );
+        }
         oldServers = [];
         oldDefaultServerId = null;
       }
@@ -234,22 +254,26 @@ Future<void> _runMigrationIfNeeded(Ref ref) async {
       );
       oldServers = [migratedServer];
       oldDefaultServerId = migratedServer.id; // Assume legacy was default
-      if (kDebugMode) print('[Migration] Loaded 1 server from legacy keys.');
+      if (kDebugMode) {
+        print('[Migration] Loaded 1 server from legacy keys.');
+      }
     }
   }
 
   // If no old servers found, migration is not needed or possible
   if (oldServers.isEmpty) {
-    if (kDebugMode)
+    if (kDebugMode) {
       print('[Migration] No old server configurations found to migrate.');
+    }
     await _removeOldKeys(prefs); // Clean up just in case
     return;
   }
 
-  if (kDebugMode)
+  if (kDebugMode) {
     print(
       '[Migration] Found ${oldServers.length} potential servers to migrate.',
     );
+  }
 
   // --- Migration Logic: Assign servers to Note/Task ---
   ServerConfig? noteServerToMigrate;
@@ -261,18 +285,20 @@ Future<void> _runMigrationIfNeeded(Ref ref) async {
   );
 
   if (defaultServer != null) {
-    if (noteNotifier._isValidNoteServerType(defaultServer.serverType)) {
+    if (_isValidNoteServerType(defaultServer.serverType)) {
       noteServerToMigrate = defaultServer;
-      if (kDebugMode)
+      if (kDebugMode) {
         print(
           '[Migration] Assigning default server ${defaultServer.id} (${defaultServer.serverType}) as Note server.',
         );
-    } else if (taskNotifier._isValidTaskServerType(defaultServer.serverType)) {
+      }
+    } else if (_isValidTaskServerType(defaultServer.serverType)) {
       taskServerToMigrate = defaultServer;
-      if (kDebugMode)
+      if (kDebugMode) {
         print(
           '[Migration] Assigning default server ${defaultServer.id} (${defaultServer.serverType}) as Task server.',
         );
+      }
     }
   }
 
@@ -285,19 +311,21 @@ Future<void> _runMigrationIfNeeded(Ref ref) async {
     }
 
     if (noteServerToMigrate == null &&
-        noteNotifier._isValidNoteServerType(server.serverType)) {
+        _isValidNoteServerType(server.serverType)) {
       noteServerToMigrate = server;
-      if (kDebugMode)
+      if (kDebugMode) {
         print(
           '[Migration] Assigning server ${server.id} (${server.serverType}) as Note server.',
         );
+      }
     } else if (taskServerToMigrate == null &&
-        taskNotifier._isValidTaskServerType(server.serverType)) {
+        _isValidTaskServerType(server.serverType)) {
       taskServerToMigrate = server;
-      if (kDebugMode)
+      if (kDebugMode) {
         print(
           '[Migration] Assigning server ${server.id} (${server.serverType}) as Task server.',
         );
+      }
     }
 
     // Stop if both slots are filled
@@ -309,30 +337,34 @@ Future<void> _runMigrationIfNeeded(Ref ref) async {
   // --- Save Migrated Configs ---
   bool migrationHappened = false;
   if (noteServerToMigrate != null) {
-    if (kDebugMode)
+    if (kDebugMode) {
       print(
         '[Migration] Saving migrated Note server: ${noteServerToMigrate.id}',
       );
+    }
     await noteNotifier.setConfiguration(noteServerToMigrate);
     migrationHappened = true;
   }
   if (taskServerToMigrate != null) {
-    if (kDebugMode)
+    if (kDebugMode) {
       print(
         '[Migration] Saving migrated Task server: ${taskServerToMigrate.id}',
       );
+    }
     await taskNotifier.setConfiguration(taskServerToMigrate);
     migrationHappened = true;
   }
 
   // --- Cleanup Old Keys ---
   if (migrationHappened) {
-    if (kDebugMode)
+    if (kDebugMode) {
       print('[Migration] Migration complete. Removing old keys...');
+    }
     await _removeOldKeys(prefs);
   } else {
-    if (kDebugMode)
+    if (kDebugMode) {
       print('[Migration] No suitable servers found for migration.');
+    }
     await _removeOldKeys(prefs); // Clean up anyway
   }
 }
@@ -344,5 +376,7 @@ Future<void> _removeOldKeys(SharedPreferences prefs) async {
   await prefs.remove(_legacyServerUrlKey);
   await prefs.remove(_legacyAuthTokenKey);
   await prefs.remove(_oldDefaultServerIdKey);
-  if (kDebugMode) print('[Migration] Removed old SharedPreferences keys.');
+  if (kDebugMode) {
+    print('[Migration] Removed old SharedPreferences keys.');
+  }
 }
