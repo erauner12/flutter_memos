@@ -835,7 +835,7 @@ class MemosApiService implements NoteApiService {
       serverId: serverId, // Pass serverId
       relations:
           const [], // Memos comments don't have relations in this context
-      attachment: null, // Memos comments don't have Todoist-style attachments
+      // attachment: null, // Removed - This was the cause of the error
     );
   }
 
