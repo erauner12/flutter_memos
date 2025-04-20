@@ -233,11 +233,13 @@ class _MyAppCoreState extends ConsumerState<MyAppCore> {
   }
 
   void _initializePersistentNotifiers() {
+    // Initialize all persistent notifiers concurrently
     Future.wait<void>([
-          ref.read(todoistApiKeyProvider.notifier).init(),
+          // Removed todoistApiKeyProvider init
           ref.read(openAiApiKeyProvider.notifier).init(),
           ref.read(openAiModelIdProvider.notifier).init(),
           ref.read(geminiApiKeyProvider.notifier).init(),
+          ref.read(vikunjaApiKeyProvider.notifier).init(), // Added Vikunja
           ref.read(manuallyHiddenNoteIdsProvider.notifier).init(),
         ])
         .then((_) {

@@ -1,5 +1,4 @@
 import 'package:flutter/foundation.dart';
-import 'package:flutter/src/widgets/framework.dart';
 import 'package:flutter_memos/utils/enum_utils.dart'; // Import the new helper
 import 'package:uuid/uuid.dart';
 
@@ -39,6 +38,8 @@ class ServerConfig {
     String? serverUrl,
     String? authToken,
     ServerType? serverType, // Add serverType
+    // Add ValueGetter for nullable fields like name
+    ValueGetter<String?>? nameGetter,
   }) {
     // Ensure the copied type is not Todoist
     final finalServerType = serverType ?? this.serverType;
@@ -49,7 +50,10 @@ class ServerConfig {
 
     return ServerConfig(
       id: id ?? this.id,
-      name: name ?? this.name, // Copy name
+      name:
+          nameGetter != null
+              ? nameGetter()
+              : (name ?? this.name), // Handle nullable name copy
       serverUrl: serverUrl ?? this.serverUrl,
       authToken: authToken ?? this.authToken,
       serverType:
@@ -104,7 +108,7 @@ class ServerConfig {
           ServerType
               .memos; // Default to memos for ServerConfig if parsed as Todoist
     } else {
-      // Use the parsed type (which will be memos/blinko, or memos if raw was null/invalid)
+      // Use the parsed type (which will be memos/blinko/vikunja, or memos if raw was null/invalid)
       finalType = parsedType;
     }
 
@@ -161,5 +165,12 @@ class ServerConfig {
     return 'ServerConfig(id: $id, name: $name, type: ${describeEnum(serverType)}, serverUrl: $serverUrl, authToken: ${authToken.isNotEmpty ? "****" : "empty"})'; // Include id, name, and type
   }
 
-  static Widget empty() {}
+  // Corrected static empty method to return a ServerConfig
+  static ServerConfig empty() {
+    return ServerConfig(
+      serverUrl: '',
+      authToken: '',
+      serverType: ServerType.memos, // Or another appropriate default
+    );
+  }
 }

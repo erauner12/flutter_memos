@@ -242,7 +242,7 @@ class MultiServerConfigNotifier extends StateNotifier<MultiServerConfigState> {
 
       if (kDebugMode) {
         print(
-          '[MultiServerConfigNotifier] CloudKit fetch result: ${cloudServers.length} filtered (Memos/Blinko) servers.',
+          '[MultiServerConfigNotifier] CloudKit fetch result: ${cloudServers.length} filtered (Memos/Blinko/Vikunja) servers.',
         );
         for (var server in cloudServers) {
           print(
@@ -372,12 +372,12 @@ class MultiServerConfigNotifier extends StateNotifier<MultiServerConfigState> {
 
   // Helper to update the local SharedPreferences cache
   Future<bool> _updateLocalCache(List<ServerConfig> servers) async {
-    // Ensure we only cache Memos/Blinko types
+    // Ensure we only cache Memos/Blinko/Vikunja types
     final serversToCache = _filterOutTodoistConfigs(servers);
     try {
       if (kDebugMode) {
         print(
-          '[MultiServerConfigNotifier][_updateLocalCache] Preparing to cache ${serversToCache.length} servers (Memos/Blinko only):',
+          '[MultiServerConfigNotifier][_updateLocalCache] Preparing to cache ${serversToCache.length} servers (Memos/Blinko/Vikunja only):',
         );
         print(
           '[MultiServerConfigNotifier][_updateLocalCache] Caching Servers Details: ${serversToCache.map((s) => "ID=${s.id}, Name=${s.name}, Type=${s.serverType.name}").join("; ")}',
@@ -413,7 +413,7 @@ class MultiServerConfigNotifier extends StateNotifier<MultiServerConfigState> {
     final serversToMigrate = _filterOutTodoistConfigs(servers);
     if (kDebugMode) {
       print(
-        '[MultiServerConfigNotifier] Attempting background migration of ${serversToMigrate.length} servers (Memos/Blinko) to CloudKit...',
+        '[MultiServerConfigNotifier] Attempting background migration of ${serversToMigrate.length} servers (Memos/Blinko/Vikunja) to CloudKit...',
       );
     }
     for (final server in serversToMigrate) {
@@ -856,19 +856,7 @@ final loadServerConfigProvider = FutureProvider<void>((ref) async {
       );
     }
   }
-  try {
-    // Init Todoist API key provider (now independent of ServerConfig)
-    await ref.read(todoistApiKeyProvider.notifier).init();
-    if (kDebugMode) {
-      print('[loadServerConfigProvider] Todoist API key load triggered.');
-    }
-  } catch (e) {
-    if (kDebugMode) {
-      print(
-        '[loadServerConfigProvider] Error initializing Todoist provider: $e',
-      );
-    }
-  }
+  // Removed Todoist API key init here
   try {
     await ref.read(openAiApiKeyProvider.notifier).init();
     if (kDebugMode) {
@@ -890,6 +878,30 @@ final loadServerConfigProvider = FutureProvider<void>((ref) async {
     if (kDebugMode) {
       print(
         '[loadServerConfigProvider] Error initializing OpenAI Model ID provider: $e',
+      );
+    }
+  }
+  try {
+    await ref.read(geminiApiKeyProvider.notifier).init(); // Added Gemini init
+    if (kDebugMode) {
+      print('[loadServerConfigProvider] Gemini API key load triggered.');
+    }
+  } catch (e) {
+    if (kDebugMode) {
+      print(
+        '[loadServerConfigProvider] Error initializing Gemini provider: $e',
+      );
+    }
+  }
+  try {
+    await ref.read(vikunjaApiKeyProvider.notifier).init(); // Added Vikunja init
+    if (kDebugMode) {
+      print('[loadServerConfigProvider] Vikunja API key load triggered.');
+    }
+  } catch (e) {
+    if (kDebugMode) {
+      print(
+        '[loadServerConfigProvider] Error initializing Vikunja provider: $e',
       );
     }
   }

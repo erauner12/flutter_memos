@@ -646,6 +646,7 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
 
     // --- START MODIFICATION: Inject Todoist API Key ---
     McpServerConfig configToUse = serverConfig;
+    /* TODOIST INTEGRATION DISABLED
     if (serverConfig.customEnvironment.containsKey('TODOIST_API_TOKEN')) {
       debugPrint(
         "MCP [\$serverId]: Detected TODOIST_API_TOKEN key in config. Attempting to inject actual token.",
@@ -672,6 +673,7 @@ class McpClientNotifier extends StateNotifier<McpClientState> {
         );
       }
     }
+    */
     // --- END MODIFICATION ---
 
     debugPrint(
