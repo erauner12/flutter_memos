@@ -730,11 +730,11 @@ class VikunjaApiService implements TaskApiService {
     );
 
     try {
-      // Use the task-scoped POST endpoint, passing the payload via named 'body' parameter
+      // Use the task-scoped POST endpoint, passing the request directly as the third parameter
       final updatedVComment = await _tasksApi.tasksTaskIDCommentsCommentIDPost(
         taskIdInt,
         commentIdInt,
-        body: request, // Pass the ModelsTaskComment payload via named parameter
+        request, // Pass the ModelsTaskComment payload as direct positional parameter
       );
 
       if (updatedVComment == null) {
