@@ -40,7 +40,7 @@ class _WorkbenchDetailViewState extends ConsumerState<WorkbenchDetailView> {
               builder:
                   (_) => ItemDetailScreen(
                     itemId: itemRef.referencedItemId,
-                    serverId: itemRef.serverId,
+                    // serverId: itemRef.serverId, // Removed serverId argument
                   ),
             ),
           );
@@ -97,7 +97,7 @@ class _WorkbenchDetailViewState extends ConsumerState<WorkbenchDetailView> {
                 builder:
                     (_) => ItemDetailScreen(
                       itemId: itemRef.parentNoteId!, // Use parent note's ID
-                      serverId: itemRef.serverId,
+                      // serverId: itemRef.serverId, // Removed serverId argument
                       // Optionally: Pass comment ID to highlight later
                       // highlightedCommentId: itemRef.referencedItemId,
                     ),
@@ -145,7 +145,6 @@ class _WorkbenchDetailViewState extends ConsumerState<WorkbenchDetailView> {
       }
     }
   }
-
 
   @override
   Widget build(BuildContext context) {

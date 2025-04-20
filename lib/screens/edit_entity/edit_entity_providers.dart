@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_memos/models/comment.dart'; // Import Comment model
 import 'package:flutter_memos/models/note_item.dart'; // Import NoteItem model
-// Import note_providers and use families
+// Import note_providers and use non-family providers
 import 'package:flutter_memos/providers/note_providers.dart' as note_providers;
 // Import settings_provider for manuallyHiddenNoteIdsProvider
 import 'package:flutter_memos/providers/settings_provider.dart' as settings_p;
@@ -12,196 +12,123 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 class EntityProviderParams {
   final String id;
   final String type; // 'note' or 'comment'
-  // Add serverId, assuming it's needed to fetch the entity
-  final String serverId;
+  // serverId is no longer needed as context comes from noteServerConfigProvider
+  // final String serverId;
 
   EntityProviderParams({
     required this.id,
     required this.type,
-    required this.serverId,
+    // required this.serverId, // Removed
   });
 
   @override
   bool operator ==(Object other) {
     if (identical(this, other)) return true;
-
     return other is EntityProviderParams &&
         other.id == id &&
-        other.type == type &&
-        other.serverId == serverId;
+        other.type == type;
   }
 
   @override
-  int get hashCode => id.hashCode ^ type.hashCode ^ serverId.hashCode;
+  int get hashCode => id.hashCode ^ type.hashCode;
 
   @override
-  String toString() =>
-      'EntityProviderParams(id: $id, type: $type, serverId: $serverId)';
+  String toString() => 'EntityProviderParams(id: $id, type: $type)';
 }
 
 
 // Provider to fetch the entity (note or comment) to be edited
 final editEntityProvider = FutureProvider.family<dynamic, EntityProviderParams>(
   (ref, params) async {
-    // Use the helper to get the API service for the specific server
-    final NoteApiService apiService = note_providers
-        .getNoteApiServiceForServer(
-      ref,
-      params.serverId,
-    ); // Use public helper
-
+    // Use the helper from note_providers to get the API service
+    final NoteApiService apiService = note_providers._getNoteApiService(ref);
     final id = params.id;
     final type = params.type;
 
-  if (kDebugMode) {
-      print(
-        '[editEntityProvider(${params.serverId})] Fetching $type with ID: $id',
-      );
-  }
+    if (kDebugMode) print('[editEntityProvider] Fetching $type with ID: $id');
 
-  if (type == 'comment') {
-      // Assuming commentId format is "noteId/commentId" for getNoteComment
-      // The getNoteComment expects the actual comment ID, not the combined one.
+    if (type == 'comment') {
       final parts = id.split('/');
       final actualCommentId = parts.length > 1 ? parts.last : id;
-      return apiService.getNoteComment(
-        actualCommentId,
-      ); // Use getNoteComment with actual ID
-  } else {
+      return apiService.getNoteComment(actualCommentId);
+    } else {
       // Default 'note'
-      return apiService.getNote(id); // Use getNote
-  }
-}, name: 'editEntityProvider'); // Optional: Add name for debugging
+      return apiService.getNote(id);
+    }
+  },
+  name: 'editEntityProvider',
+);
 
 // Provider for saving entity (NoteItem or Comment) changes
 final saveEntityProvider = Provider.family<
   Future<void> Function(dynamic),
-  EntityProviderParams // Use EntityProviderParams
+  EntityProviderParams
 >((ref, params) {
-  final id = params.id; // Access id from params
-  final type = params.type; // Access type from params
-  final serverId = params.serverId; // Access serverId from params
+  final id = params.id;
+  final type = params.type;
 
   return (dynamic updatedEntity) async {
-    // Use the helper to get the API service for the specific server
-    final NoteApiService apiService = note_providers
-        .getNoteApiServiceForServer(
-      ref,
-      serverId,
-    ); // Use public helper
-
-    if (kDebugMode) {
-      print(
-        '[saveEntityProvider(${params.serverId})] Saving $type with ID: $id',
-      );
-    }
+    final NoteApiService apiService = note_providers._getNoteApiService(ref);
+    if (kDebugMode) print('[saveEntityProvider] Saving $type with ID: $id');
 
     if (type == 'comment') {
       final comment = updatedEntity as Comment;
       final parts = id.split('/');
-      if (parts.length < 2) {
+      if (parts.length < 2)
         throw ArgumentError('Invalid comment ID format for saving: $id');
-      }
       final parentNoteId = parts[0];
-      final actualCommentId = parts[1]; // Use the actual comment ID for update
+      final actualCommentId = parts[1];
 
-      // 1. Update the comment using the actual comment ID
-      await apiService.updateNoteComment(
-        actualCommentId,
-        comment,
-      ); // Use updateNoteComment
-      if (kDebugMode) {
+      await apiService.updateNoteComment(actualCommentId, comment);
+      if (kDebugMode)
         print(
-          '[saveEntityProvider(${params.serverId})] Comment $actualCommentId updated successfully.',
+          '[saveEntityProvider] Comment $actualCommentId updated successfully.',
         );
-      }
 
-      // 2. Bump the parent note (try-catch to avoid failing the whole save)
       try {
-        if (kDebugMode) {
-          print(
-            '[saveEntityProvider(${params.serverId})] Bumping parent note: $parentNoteId',
-          );
-        }
-        // Use bumpNoteProviderFamily with serverId and noteId
+        if (kDebugMode)
+          print('[saveEntityProvider] Bumping parent note: $parentNoteId');
         await ref.read(
-          note_providers.bumpNoteProviderFamily((
-            serverId: serverId,
-            noteId: parentNoteId,
-          )),
-        )();
-        if (kDebugMode) {
+          note_providers.bumpNoteProvider(parentNoteId),
+        )(); // Use non-family provider
+        if (kDebugMode)
           print(
-            '[saveEntityProvider(${params.serverId})] Parent note $parentNoteId bumped successfully.',
+            '[saveEntityProvider] Parent note $parentNoteId bumped successfully.',
           );
-        }
       } catch (e, s) {
-        if (kDebugMode) {
+        if (kDebugMode)
           print(
-            '[saveEntityProvider(${params.serverId})] Failed to bump parent note $parentNoteId: $e\n$s',
+            '[saveEntityProvider] Failed to bump parent note $parentNoteId: $e\n$s',
           );
-        }
-        // Optionally report error via error handler provider
-        // ref.read(errorHandlerProvider)('Failed to bump parent note after comment update', source: 'saveEntityProvider', error: e, stackTrace: s);
       }
 
-      // 3. Invalidate relevant providers
       ref.invalidate(
-        // Use noteCommentsProviderFamily with serverId and noteId
-        note_providers.noteCommentsProviderFamily((
-          serverId: serverId,
-          noteId: parentNoteId,
-        )),
-      ); // Refresh comments for the parent note
+        note_providers.noteCommentsProvider(parentNoteId),
+      ); // Use non-family provider
       await ref
-          .read(
-            // Use notesNotifierProviderFamily with serverId
-            note_providers.notesNotifierProviderFamily(serverId).notifier,
-          )
-          .refresh(); // Refresh main note list because parent was bumped
+          .read(note_providers.notesNotifierProvider.notifier)
+          .refresh(); // Use non-family provider
+
     } else {
       // type == 'note'
-      final note = updatedEntity as NoteItem; // Use NoteItem
+      final note = updatedEntity as NoteItem;
+      final savedNote = await apiService.updateNote(id, note);
+      if (kDebugMode)
+        print('[saveEntityProvider] Note $id updated successfully.');
 
-      // Update note in the backend
-      final savedNote = await apiService.updateNote(id, note); // Use updateNote
-      if (kDebugMode) {
-        print(
-          '[saveEntityProvider(${params.serverId})] Note $id updated successfully.',
-        );
-      }
-
-      // Update note detail cache if it exists
-      if (ref.exists(note_providers.noteDetailCacheProvider)) { // Use provider from note_providers
+      if (ref.exists(note_providers.noteDetailCacheProvider)) {
         ref
-            .read(
-              note_providers.noteDetailCacheProvider.notifier, // Use provider from note_providers
-            )
-            .update((state) => {...state, id: savedNote}); // Update with NoteItem directly
+            .read(note_providers.noteDetailCacheProvider.notifier)
+            .update((state) => {...state, id: savedNote});
       }
 
-      // Refresh all related providers to ensure UI is consistent
       await ref
-          .read(
-            // Use notesNotifierProviderFamily with serverId
-            note_providers.notesNotifierProviderFamily(serverId).notifier,
-          )
-          .refresh(); // Refresh the notes list
+          .read(note_providers.notesNotifierProvider.notifier)
+          .refresh(); // Use non-family provider
       ref.invalidate(
-        // Use noteDetailProviderFamily with serverId and noteId
-        note_providers.noteDetailProviderFamily((
-          serverId: serverId,
-          noteId: id,
-        )),
-      ); // Refresh note detail
-
-      // Clear any hidden item IDs for this note to ensure it's visible
-      // Use the correct provider from settings_provider and its remove method
-      ref
-          .read(
-            settings_p.manuallyHiddenNoteIdsProvider.notifier,
-          )
-          .remove(id); // Directly remove the ID if it exists
+        note_providers.noteDetailProvider(id),
+      ); // Use non-family provider
+      ref.read(settings_p.manuallyHiddenNoteIdsProvider.notifier).remove(id);
     }
   };
-}, name: 'saveEntityProvider'); // Optional: Add name for debugging
+}, name: 'saveEntityProvider');

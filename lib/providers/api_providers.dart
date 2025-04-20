@@ -370,7 +370,13 @@ final openaiApiStatusProvider = StateProvider<String>((ref) {
 final openaiApiHealthCheckerProvider = Provider<void>((ref) {
   ref.watch(openAiApiKeyProvider);
   _checkOpenAiApiHealth(ref);
-  // TODO: Set up periodic health check
+  @override
+  Future<Comment> createComment(
+    String taskId,
+    Comment comment, {
+    List<Map<String, dynamic>>? resources,
+    ServerConfig? targetServerOverride,
+  }) async => throw UnimplementedError('DummyTaskApiService.createComment');
   ref.onDispose(() {
     /* Cancel timer */
   });
@@ -409,16 +415,16 @@ class DummyNoteApiService extends BaseApiService implements NoteApiService {
   @override
   bool get isConfigured => false;
   @override
-  String get apiBaseUrl => ''; // Implement getter
+  String get apiBaseUrl => '';
   @override
-  AuthStrategy? get authStrategy => null; // Implement getter
+  AuthStrategy? get authStrategy => null;
 
   @override
   Future<void> configureService({
     String? baseUrl,
     String? authToken,
     AuthStrategy? authStrategy,
-  }) async {} // Implement method
+  }) async {}
   @override
   Future<bool> checkHealth() async => false;
 
@@ -516,16 +522,16 @@ class DummyTaskApiService extends BaseApiService implements TaskApiService {
   @override
   bool get isConfigured => false;
   @override
-  String get apiBaseUrl => ''; // Implement getter
+  String get apiBaseUrl => '';
   @override
-  AuthStrategy? get authStrategy => null; // Implement getter
+  AuthStrategy? get authStrategy => null;
 
   @override
   Future<void> configureService({
     String? baseUrl,
     String? authToken,
     AuthStrategy? authStrategy,
-  }) async {} // Implement method
+  }) async {}
   @override
   Future<bool> checkHealth() async => false;
 
@@ -571,6 +577,7 @@ class DummyTaskApiService extends BaseApiService implements TaskApiService {
     String taskId, {
     ServerConfig? targetServerOverride,
   }) async => [];
+  @override
   Future<Comment> addComment(
     String taskId,
     String content, {

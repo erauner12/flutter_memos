@@ -7,6 +7,7 @@ import 'package:flutter_memos/providers/api_providers.dart';
 import 'package:flutter_memos/providers/chat_providers.dart';
 // ADD: Import the new MCP config provider
 import 'package:flutter_memos/providers/mcp_server_config_provider.dart';
+import 'package:flutter_memos/providers/note_providers.dart' as note_providers;
 // Import new single-config providers
 import 'package:flutter_memos/providers/note_server_config_provider.dart';
 // Import providers needed for reset
@@ -628,7 +629,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     ref.invalidate(mcpServerConfigProvider);
     ref.invalidate(workbenchInstancesProvider);
     // Invalidate note/task data providers (if they exist and depend on the config)
-    // ref.invalidate(notesNotifierProvider); // Example if there's a single notes provider
+    ref.invalidate(
+      note_providers.notesNotifierProvider,
+    ); // Use non-family provider
     ref.invalidate(tasksNotifierProvider);
     ref.invalidate(chatProvider);
     // Invalidate API key providers
@@ -637,9 +640,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     ref.invalidate(geminiApiKeyProvider);
     ref.invalidate(vikunjaApiKeyProvider);
     // Invalidate API service providers
-    ref.invalidate(
-      apiServiceProvider,
-    ); // This likely needs adjustment based on new config structure
+    ref.invalidate(noteApiServiceProvider); // Use new provider name
+    ref.invalidate(taskApiServiceProvider); // Use new provider name
     ref.invalidate(openaiApiServiceProvider);
     ref.invalidate(vikunjaApiServiceProvider);
 

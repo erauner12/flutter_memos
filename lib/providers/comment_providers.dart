@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/models/note_item.dart'; // Import NoteItem
-// Import note_providers and use families
+// Import note_providers and use non-family providers
 import 'package:flutter_memos/providers/note_providers.dart' as note_providers;
 import 'package:flutter_memos/services/minimal_openai_service.dart'; // Import MinimalOpenAiService
 import 'package:flutter_memos/services/note_api_service.dart';
@@ -13,171 +13,98 @@ import 'settings_provider.dart' as settings_p; // Add import alias for settings
 /// Provider for the list of hidden comment IDs (local state only)
 final hiddenCommentIdsProvider = StateProvider<Set<String>>((ref) => {});
 
-/// Parameter record for comment action providers
-typedef CommentActionParams =
-    ({String serverId, String memoId, String commentId});
+/// Parameter record for comment action providers (now only needs memoId and commentId)
+typedef CommentActionParams = ({String memoId, String commentId});
 
-/// Parameter record for comment creation provider
-typedef CreateCommentParams = ({String serverId, String memoId});
+/// Parameter record for comment creation provider (now only needs memoId)
+typedef CreateCommentParams = ({String memoId});
+
+// Helper function (copied from note_providers) to get the configured NoteApiService
+NoteApiService _getNoteApiService(Ref ref) {
+  final service = ref.read(api_p.noteApiServiceProvider);
+  if (service is api_p.DummyNoteApiService) {
+    throw Exception(
+      "Note API service is not properly configured (Dummy service returned).",
+    );
+  }
+  return service;
+}
 
 /// Provider for archiving a comment
-final archiveCommentProviderFamily = Provider.family<
+final archiveCommentProvider = Provider.family<
   Future<void> Function(),
   CommentActionParams
 >((ref, params) {
-    return () async {
-    // Use helper to get API service for the server
-    final NoteApiService apiService = note_providers
-        .getNoteApiServiceForServer(
-      ref,
-      params.serverId,
-    ); // Use public helper
-
-      try {
-      final commentId = params.commentId; // Actual comment ID
-
-        // Get the comment using the actual comment ID
-        final comment = await apiService.getNoteComment(
-          commentId,
-        ); // Use getNoteComment
-
-        // Update the comment to archived state
-        final updatedComment = comment.copyWith(
-          pinned: false,
-          state: CommentState.archived,
-        );
-
-        // Save the updated comment using the actual comment ID
-        await apiService.updateNoteComment(
-          commentId,
-          updatedComment,
-        ); // Use updateNoteComment
-
-      // Refresh comments for this memo using the family provider
-      ref.invalidate(
-        note_providers.noteCommentsProviderFamily((
-          serverId: params.serverId,
-          noteId: params.memoId,
-        )),
+  return () async {
+    final NoteApiService apiService = _getNoteApiService(ref);
+    try {
+      final commentId = params.commentId;
+      final comment = await apiService.getNoteComment(commentId);
+      final updatedComment = comment.copyWith(
+        pinned: false,
+        state: CommentState.archived,
       );
-
-        if (kDebugMode) {
-        print(
-          '[archiveCommentProviderFamily(${params.serverId})] Comment archived: ${params.commentId}',
-        );
-        }
-      } catch (e) {
-        if (kDebugMode) {
-        print(
-          '[archiveCommentProviderFamily(${params.serverId})] Error archiving comment: $e',
-        );
-        }
-        rethrow;
-      }
-    };
-  },
-);
+      await apiService.updateNoteComment(commentId, updatedComment);
+      ref.invalidate(
+        note_providers.noteCommentsProvider(params.memoId),
+      ); // Use non-family provider
+      if (kDebugMode)
+        print('[archiveCommentProvider] Comment archived: ${params.commentId}');
+    } catch (e) {
+      if (kDebugMode)
+        print('[archiveCommentProvider] Error archiving comment: $e');
+      rethrow;
+    }
+  };
+});
 
 /// Provider for deleting a comment
-final deleteCommentProviderFamily = Provider.family<
+final deleteCommentProvider = Provider.family<
   Future<void> Function(),
   CommentActionParams
->((
-  ref,
-  params,
-) {
+>((ref, params) {
   return () async {
-    // Use helper to get API service for the server
-    final NoteApiService apiService = note_providers
-        .getNoteApiServiceForServer(
-      ref,
-      params.serverId,
-    ); // Use public helper
-
+    final NoteApiService apiService = _getNoteApiService(ref);
     try {
       final memoId = params.memoId;
-      final commentId = params.commentId; // Actual comment ID
-
-      // Delete the comment using NoteApiService
-      await apiService.deleteNoteComment(
-        memoId,
-        commentId,
-      ); // Use deleteNoteComment
-
-      // Refresh comments for this memo using the family provider
+      final commentId = params.commentId;
+      await apiService.deleteNoteComment(memoId, commentId);
       ref.invalidate(
-        note_providers.noteCommentsProviderFamily((
-          serverId: params.serverId,
-          noteId: memoId,
-        )),
-      );
-
-      if (kDebugMode) {
-        print(
-          '[deleteCommentProviderFamily(${params.serverId})] Comment deleted: ${params.commentId}',
-        );
-      }
+        note_providers.noteCommentsProvider(memoId),
+      ); // Use non-family provider
+      if (kDebugMode)
+        print('[deleteCommentProvider] Comment deleted: ${params.commentId}');
     } catch (e) {
-      if (kDebugMode) {
-        print(
-          '[deleteCommentProviderFamily(${params.serverId})] Error deleting comment: $e',
-        );
-      }
+      if (kDebugMode)
+        print('[deleteCommentProvider] Error deleting comment: $e');
       rethrow;
     }
   };
 });
 
 /// Provider for toggling the pin state of a comment
-final togglePinCommentProviderFamily = Provider.family<
+final togglePinCommentProvider = Provider.family<
   Future<void> Function(),
   CommentActionParams
 >((ref, params) {
   return () async {
-    // Use helper to get API service for the server
-    final NoteApiService apiService = note_providers
-        .getNoteApiServiceForServer(
-      ref,
-      params.serverId,
-    ); // Use public helper
-
+    final NoteApiService apiService = _getNoteApiService(ref);
     try {
       final memoId = params.memoId;
-      final commentId = params.commentId; // Actual comment ID
-
-      // Get the comment using the actual comment ID
-      final comment = await apiService.getNoteComment(
-        commentId,
-      ); // Use getNoteComment
-
-      // Toggle the pinned state
+      final commentId = params.commentId;
+      final comment = await apiService.getNoteComment(commentId);
       final updatedComment = comment.copyWith(pinned: !comment.pinned);
-
-      // Update through API using the actual comment ID
-      await apiService.updateNoteComment(
-        commentId,
-        updatedComment,
-      ); // Use updateNoteComment
-
-      // Invalidate the comments list to ensure UI refreshes using the family provider
+      await apiService.updateNoteComment(commentId, updatedComment);
       ref.invalidate(
-        note_providers.noteCommentsProviderFamily((
-          serverId: params.serverId,
-          noteId: memoId,
-        )),
-      );
-
-      if (kDebugMode) {
+        note_providers.noteCommentsProvider(memoId),
+      ); // Use non-family provider
+      if (kDebugMode)
         print(
-          '[togglePinCommentProviderFamily(${params.serverId})] Comment pin toggled: ${params.commentId}',
+          '[togglePinCommentProvider] Comment pin toggled: ${params.commentId}',
         );
-      }
     } catch (e) {
-      if (kDebugMode) {
-        print(
-          '[togglePinCommentProviderFamily(${params.serverId})] Error toggling pin: $e',
-        );
-      }
+      if (kDebugMode)
+        print('[togglePinCommentProvider] Error toggling pin: $e');
       rethrow;
     }
   };
@@ -190,98 +117,66 @@ final isCommentHiddenProvider = Provider.family<bool, String>((ref, id) {
 });
 
 /// Provider for converting a comment to a full note
-final convertCommentToNoteProviderFamily = Provider.family<
+final convertCommentToNoteProvider = Provider.family<
   Future<NoteItem> Function(),
-  CommentActionParams // Pass serverId, memoId, commentId
+  CommentActionParams
 >((ref, params) {
   return () async {
-    // Use helper to get API service for the server
-    final NoteApiService apiService = note_providers
-        .getNoteApiServiceForServer(
-      ref,
-      params.serverId,
-    ); // Use public helper
-
+    final NoteApiService apiService = _getNoteApiService(ref);
     try {
       final memoId = params.memoId;
-      final commentId = params.commentId; // Actual comment ID
-
-      if (kDebugMode) {
+      final commentId = params.commentId;
+      if (kDebugMode)
         print(
-          '[convertCommentToNoteProviderFamily(${params.serverId})] Converting comment to note: $commentId',
-        ); // Updated log
-      }
+          '[convertCommentToNoteProvider] Converting comment to note: $commentId',
+        );
 
-      // Get the comment using the actual comment ID
-      final comment = await apiService.getNoteComment(
-        commentId,
-      ); // Use getNoteComment
-
-      // Create a new note from the comment's content
+      final comment = await apiService.getNoteComment(commentId);
       final newNote = NoteItem(
         id: 'temp-${DateTime.now().millisecondsSinceEpoch}',
-        content: comment.content ?? '', // Handle nullable content
-        pinned: false, // Reset pinned state for the new note
-        state: NoteState.normal, // Use enum
-        visibility: NoteVisibility.public, // Default visibility, use enum
-        createTime: DateTime.now(), // Placeholder
-        updateTime: DateTime.now(), // Placeholder
-        displayTime: DateTime.now(), // Placeholder
-        tags: [], // Initialize empty lists
+        content: comment.content ?? '',
+        pinned: false,
+        state: NoteState.normal,
+        visibility: NoteVisibility.public,
+        createTime: DateTime.now(),
+        updateTime: DateTime.now(),
+        displayTime: DateTime.now(),
+        tags: [],
         resources: [],
         relations: [],
-        creatorId: comment.creatorId, // Use comment creator if available
-        parentId: null, // New note has no parent
+        creatorId: comment.creatorId,
+        parentId: null,
       );
+      final createdNote = await apiService.createNote(newNote);
 
-      // Create the new note using NoteApiService
-      final createdNote = await apiService.createNote(
-        newNote,
-      ); // Use createNote
-
-      // Try to create a relation between the new note and the original note
-      // But continue even if this part fails
       if (memoId.isNotEmpty) {
         try {
           final Map<String, dynamic> relationMap = {
-            'relatedMemoId': memoId, // Original note ID
-            'type': 'COMMENT', // Type indicating the origin
+            'relatedMemoId': memoId,
+            'type': 'COMMENT',
           };
-
-          await apiService.setNoteRelations(createdNote.id, [
-            relationMap,
-          ]); // Use setNoteRelations
+          await apiService.setNoteRelations(createdNote.id, [relationMap]);
         } catch (relationError) {
-          if (kDebugMode) {
+          if (kDebugMode)
             print(
-              '[convertCommentToNoteProviderFamily(${params.serverId})] Warning: Created note but failed to set relation: $relationError'
+              '[convertCommentToNoteProvider] Warning: Created note but failed to set relation: $relationError',
             );
-          }
         }
       }
 
-      // Refresh notes list using the family provider for the correct server
       await ref
-          .read(
-            note_providers
-                .notesNotifierProviderFamily(params.serverId)
-                .notifier,
-          )
-          .refresh();
-
-      if (kDebugMode) {
+          .read(note_providers.notesNotifierProvider.notifier)
+          .refresh(); // Use non-family provider
+      if (kDebugMode)
         print(
-          '[convertCommentToNoteProviderFamily(${params.serverId})] Converted comment to note: ${createdNote.id}',
-        ); // Updated log
-      }
-
-      return createdNote; // Return NoteItem
+          '[convertCommentToNoteProvider] Converted comment to note: ${createdNote.id}',
+        );
+      return createdNote;
     } catch (e) {
-      if (kDebugMode) {
+      if (kDebugMode)
         print(
-          '[convertCommentToNoteProviderFamily(${params.serverId})] Error converting comment to note: $e',
-        ); // Updated log
-      }
+          '[convertCommentToNoteProvider] Error converting comment to note: $e',
+        );
       rethrow;
     }
   };
@@ -290,40 +185,32 @@ final convertCommentToNoteProviderFamily = Provider.family<
 /// Provider for toggling visibility of a comment in the current view
 final toggleHideCommentProvider = Provider.family<void Function(), String>((
   ref,
-  id, // id is still "memoId/commentId"
+  id,
 ) {
   return () {
-    final hiddenCommentIds = ref.read(hiddenCommentIdsProvider);
-
-    if (hiddenCommentIds.contains(id)) {
-      // Unhide the comment
-      ref
-          .read(hiddenCommentIdsProvider.notifier)
-          .update((state) => state..remove(id));
-      if (kDebugMode) {
-        print('[toggleHideCommentProvider] Unhid comment: $id');
-      }
+    final hiddenCommentIdsNotifier = ref.read(
+      hiddenCommentIdsProvider.notifier,
+    );
+    final currentHiddenIds = ref.read(hiddenCommentIdsProvider);
+    if (currentHiddenIds.contains(id)) {
+      hiddenCommentIdsNotifier.update((state) => state..remove(id));
+      if (kDebugMode) print('[toggleHideCommentProvider] Unhid comment: $id');
     } else {
-      // Hide the comment
-      ref
-          .read(hiddenCommentIdsProvider.notifier)
-          .update((state) => state..add(id));
-      if (kDebugMode) {
-        print('[toggleHideCommentProvider] Hid comment: $id');
-      }
+      hiddenCommentIdsNotifier.update((state) => state..add(id));
+      if (kDebugMode) print('[toggleHideCommentProvider] Hid comment: $id');
     }
   };
 });
 
 /// Provider for creating a comment for a memo, potentially with an attachment
-final createCommentProviderFamily = Provider.family<
+final createCommentProvider = Provider.family<
   Future<Comment> Function(
     Comment comment, {
     Uint8List? fileBytes,
     String? filename,
     String? contentType,
   }),
-  CreateCommentParams // Pass serverId and memoId
+  CreateCommentParams
 >((ref, params) {
   return (
     Comment comment, {
@@ -331,287 +218,191 @@ final createCommentProviderFamily = Provider.family<
     String? filename,
     String? contentType,
   }) async {
-    final serverId = params.serverId;
     final memoId = params.memoId;
-
     if (kDebugMode) {
+      print('[createCommentProvider] Called for memoId: $memoId');
+      print('[createCommentProvider] Comment content: "${comment.content}"');
       print(
-        '[createCommentProviderFamily($serverId)] Called for memoId: $memoId',
-      );
-      print(
-        '[createCommentProviderFamily($serverId)] Comment content: "${comment.content}"',
-      );
-      print(
-        '[createCommentProviderFamily($serverId)] File details: filename=$filename, contentType=$contentType, data_length=${fileBytes?.length}',
+        '[createCommentProvider] File details: filename=$filename, contentType=$contentType, data_length=${fileBytes?.length}',
       );
     }
-
-    // Use helper to get API service for the server
-    final NoteApiService apiService = note_providers
-        .getNoteApiServiceForServer(
-      ref,
-      serverId,
-    ); // Use public helper
-
-    List<Map<String, dynamic>>? uploadedResourceData; // Store as list of maps
+    final NoteApiService apiService = _getNoteApiService(ref);
+    List<Map<String, dynamic>>? uploadedResourceData;
 
     try {
-      // 1. Upload resource if provided using NoteApiService
       if (fileBytes != null && filename != null && contentType != null) {
-        if (kDebugMode) {
+        if (kDebugMode)
           print(
-            '[createCommentProviderFamily($serverId)] Uploading attachment: $filename ($contentType, ${fileBytes.length} bytes)',
+            '[createCommentProvider] Uploading attachment: $filename ($contentType, ${fileBytes.length} bytes)',
           );
-        }
         final Map<String, dynamic> uploadedResourceMap = await apiService
-            .uploadResource(fileBytes, filename, contentType); // Expect map
+            .uploadResource(fileBytes, filename, contentType);
         uploadedResourceData = [uploadedResourceMap];
-        if (kDebugMode) {
+        if (kDebugMode)
           print(
-            "[createCommentProviderFamily($serverId)] Attachment uploaded: ${uploadedResourceMap['name']}",
+            "[createCommentProvider] Attachment uploaded: ${uploadedResourceMap['name']}",
           );
-        }
       }
 
-      // 2. Create the comment, passing uploaded resources using NoteApiService
-      if (kDebugMode) {
+      if (kDebugMode)
         print(
-          '[createCommentProviderFamily($serverId)] Creating comment for memo $memoId with ${uploadedResourceData?.length ?? 0} attachments.',
+          '[createCommentProvider] Creating comment for memo $memoId with ${uploadedResourceData?.length ?? 0} attachments.',
         );
-      }
       final createdComment = await apiService.createNoteComment(
         memoId,
         comment,
-        resources: uploadedResourceData, // Pass the list of maps
+        resources: uploadedResourceData,
       );
-      if (kDebugMode) {
-        print(
-          '[createCommentProviderFamily($serverId)] Comment created: ${createdComment.id}',
-        );
-      }
+      if (kDebugMode)
+        print('[createCommentProvider] Comment created: ${createdComment.id}');
 
-      // 3. Bump the parent memo after successful comment creation
       try {
-        if (kDebugMode) {
+        if (kDebugMode)
           print(
-            '[createCommentProviderFamily($serverId)] Bumping parent memo $memoId after comment creation.',
+            '[createCommentProvider] Bumping parent memo $memoId after comment creation.',
           );
-        }
-        // Use bumpNoteProviderFamily with serverId and memoId
         await ref.read(
-          note_providers.bumpNoteProviderFamily((
-            serverId: serverId,
-            noteId: memoId,
-          )),
-        )();
+          note_providers.bumpNoteProvider(memoId),
+        )(); // Use non-family provider
       } catch (e) {
-        if (kDebugMode) {
+        if (kDebugMode)
           print(
-            '[createCommentProviderFamily($serverId)] Warning: Error bumping parent memo $memoId: $e',
+            '[createCommentProvider] Warning: Error bumping parent memo $memoId: $e',
           );
-        }
       }
 
-      // 4. Invalidate comments list for the specific memo using the family provider
       ref.invalidate(
-        note_providers.noteCommentsProviderFamily((
-          serverId: serverId,
-          noteId: memoId,
-        )),
-      );
-
+        note_providers.noteCommentsProvider(memoId),
+      ); // Use non-family provider
       return createdComment;
     } catch (e, stackTrace) {
-      if (kDebugMode) {
+      if (kDebugMode)
         print(
-          '[createCommentProviderFamily($serverId)] Error creating comment for memo $memoId: $e\n$stackTrace',
+          '[createCommentProvider] Error creating comment for memo $memoId: $e\n$stackTrace',
         );
-      }
       rethrow;
     }
   };
 });
 
 /// Provider for updating a comment's content
-final updateCommentProviderFamily = Provider.family<
+final updateCommentProvider = Provider.family<
   Future<Comment> Function(String newContent),
-  CommentActionParams // Pass serverId, memoId, commentId
+  CommentActionParams
 >((ref, params) {
   return (String newContent) async {
-    final serverId = params.serverId;
     final memoId = params.memoId;
-    final commentId = params.commentId; // Actual comment ID
-
-    // Use helper to get API service for the server
-    final NoteApiService apiService = note_providers
-        .getNoteApiServiceForServer(
-      ref,
-      serverId,
-    ); // Use public helper
-
-    if (kDebugMode) {
+    final commentId = params.commentId;
+    final NoteApiService apiService = _getNoteApiService(ref);
+    if (kDebugMode)
       print(
-        '[updateCommentProviderFamily($serverId)] Updating comment $commentId for memo $memoId',
+        '[updateCommentProvider] Updating comment $commentId for memo $memoId',
       );
-    }
 
     try {
-      // 1. Get the existing comment to preserve other properties
-      final existingComment = await apiService.getNoteComment(
-        commentId,
-      ); // Use getNoteComment
-
-      // 2. Create the updated comment object with new content
-      // Use ValueGetter for nullable content
+      final existingComment = await apiService.getNoteComment(commentId);
       final updatedCommentData = existingComment.copyWith(
         content: () => newContent,
       );
-
-      // 3. Call the API service to update the comment
       final resultComment = await apiService.updateNoteComment(
         commentId,
         updatedCommentData,
       );
-
-      // 4. Invalidate the comments list for the specific memo to refresh UI using the family provider
       ref.invalidate(
-        note_providers.noteCommentsProviderFamily((
-          serverId: serverId,
-          noteId: memoId,
-        )),
-      );
-
-      if (kDebugMode) {
+        note_providers.noteCommentsProvider(memoId),
+      ); // Use non-family provider
+      if (kDebugMode)
         print(
-          '[updateCommentProviderFamily($serverId)] Comment $commentId updated successfully.',
+          '[updateCommentProvider] Comment $commentId updated successfully.',
         );
-      }
       return resultComment;
     } catch (e, stackTrace) {
-      if (kDebugMode) {
+      if (kDebugMode)
         print(
-          '[updateCommentProviderFamily($serverId)] Error updating comment $commentId: $e\n$stackTrace',
+          '[updateCommentProvider] Error updating comment $commentId: $e\n$stackTrace',
         );
-      }
       rethrow;
     }
   };
 });
 
 /// Provider to fix grammar of a comment using OpenAI
-final fixCommentGrammarProviderFamily = FutureProvider.family<
+final fixCommentGrammarProvider = FutureProvider.family<
   void,
   CommentActionParams
->((
-  ref,
-  params,
-) async {
-  final serverId = params.serverId;
+>((ref, params) async {
   final memoId = params.memoId;
-  final commentId = params.commentId; // Actual comment ID
-
-  if (kDebugMode) {
+  final commentId = params.commentId;
+  if (kDebugMode)
     print(
-      '[fixCommentGrammarProviderFamily($serverId)] Starting grammar fix for comment: $commentId',
+      '[fixCommentGrammarProvider] Starting grammar fix for comment: $commentId',
     );
-  }
 
   final MinimalOpenAiService openaiApiService = ref.read(
-    api_p.openaiApiServiceProvider, // Global OpenAI service
+    api_p.openaiApiServiceProvider,
   );
-  final String selectedModelId = ref.read(
-    settings_p.openAiModelIdProvider,
-  ); // Global setting
+  final String selectedModelId = ref.read(settings_p.openAiModelIdProvider);
 
   if (!openaiApiService.isConfigured) {
-    if (kDebugMode) {
+    if (kDebugMode)
       print(
-        '[fixCommentGrammarProviderFamily($serverId)] OpenAI service not configured. Aborting.',
+        '[fixCommentGrammarProvider] OpenAI service not configured. Aborting.',
       );
-    }
     throw Exception('OpenAI API key is not configured in settings.');
   }
 
   try {
-    if (kDebugMode) {
-      print(
-        '[fixCommentGrammarProviderFamily($serverId)] Fetching comment content...',
-      );
-    }
-    // Use helper to get API service for the server
-    final NoteApiService apiService = note_providers
-        .getNoteApiServiceForServer(
-      ref,
-      serverId,
-    ); // Use public helper
-
-    final Comment currentComment = await apiService.getNoteComment(
-      commentId,
-    );
-    final String originalContent =
-        currentComment.content ?? ''; // Handle nullable
+    if (kDebugMode)
+      print('[fixCommentGrammarProvider] Fetching comment content...');
+    final NoteApiService apiService = _getNoteApiService(ref);
+    final Comment currentComment = await apiService.getNoteComment(commentId);
+    final String originalContent = currentComment.content ?? '';
 
     if (originalContent.trim().isEmpty) {
-      if (kDebugMode) {
+      if (kDebugMode)
         print(
-          '[fixCommentGrammarProviderFamily($serverId)] Comment content is empty. Skipping.',
+          '[fixCommentGrammarProvider] Comment content is empty. Skipping.',
         );
-      }
       return;
     }
 
-    if (kDebugMode) {
+    if (kDebugMode)
       print(
-        '[fixCommentGrammarProviderFamily($serverId)] Calling OpenAI API with model $selectedModelId...',
+        '[fixCommentGrammarProvider] Calling OpenAI API with model $selectedModelId...',
       );
-    }
     final String correctedContent = await openaiApiService.fixGrammar(
       originalContent,
       modelId: selectedModelId,
     );
-
     if (correctedContent == originalContent ||
         correctedContent.trim().isEmpty) {
-      if (kDebugMode) {
+      if (kDebugMode)
         print(
-          '[fixCommentGrammarProviderFamily($serverId)] Content unchanged or correction empty. No update needed.',
+          '[fixCommentGrammarProvider] Content unchanged or correction empty. No update needed.',
         );
-      }
       return;
     }
 
-    if (kDebugMode) {
+    if (kDebugMode)
       print(
-        '[fixCommentGrammarProviderFamily($serverId)] Content corrected. Updating comment...',
+        '[fixCommentGrammarProvider] Content corrected. Updating comment...',
       );
-    }
-
-    // Use ValueGetter for nullable content
     final Comment updatedCommentData = currentComment.copyWith(
       content: () => correctedContent,
     );
     await apiService.updateNoteComment(commentId, updatedCommentData);
-
-    // Invalidate comments list using the family provider
     ref.invalidate(
-      note_providers.noteCommentsProviderFamily((
-        serverId: serverId,
-        noteId: memoId,
-      )),
-    );
-
-    if (kDebugMode) {
+      note_providers.noteCommentsProvider(memoId),
+    ); // Use non-family provider
+    if (kDebugMode)
       print(
-        '[fixCommentGrammarProviderFamily($serverId)] Comment $commentId updated successfully with corrected grammar.',
+        '[fixCommentGrammarProvider] Comment $commentId updated successfully with corrected grammar.',
       );
-    }
   } catch (e, stackTrace) {
-    if (kDebugMode) {
+    if (kDebugMode)
       print(
-        '[fixCommentGrammarProviderFamily($serverId)] Error fixing grammar for comment $commentId: $e',
+        '[fixCommentGrammarProvider] Error fixing grammar for comment $commentId: $e\n$stackTrace',
       );
-      print(stackTrace);
-    }
     rethrow;
   }
 });

@@ -106,14 +106,14 @@ class NotesHubScreen extends ConsumerWidget {
                     onTap: () {
                       // Navigate to the ItemsScreen for this server
                       // The route '/notes/:serverId' is now just '/notes'
-                      // We pass the serverId as an argument to ItemsScreen constructor
+                      // ItemsScreen no longer takes serverId
                       Navigator.of(context).push(
                         CupertinoPageRoute(
                           builder:
-                              (_) => ItemsScreen(serverId: noteServerConfig.id),
-                          settings: RouteSettings(
-                            name: '/notes/${noteServerConfig.id}',
-                          ), // Keep route name for potential deep linking?
+                              (_) => const ItemsScreen(), // Remove serverId arg
+                          settings: const RouteSettings(
+                            name: '/notes',
+                          ), // Use generic route name
                         ),
                       );
                     },
