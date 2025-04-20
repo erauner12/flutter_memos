@@ -18,6 +18,7 @@ import 'package:flutter_memos/providers/task_server_config_provider.dart';
 import 'package:flutter_memos/providers/workbench_provider.dart';
 import 'package:flutter_memos/screens/settings_screen.dart'; // Import SettingsScreen
 import 'package:flutter_memos/screens/tasks/new_task_screen.dart';
+import 'package:flutter_memos/screens/tasks/task_detail_screen.dart'; // Import TaskDetailScreen
 import 'package:flutter_memos/screens/tasks/widgets/task_list_item.dart';
 import 'package:flutter_memos/services/vikunja_api_service.dart'; // Import for isVikunjaConfiguredProvider
 import 'package:flutter_memos/utils/thread_utils.dart'; // Import thread utils
@@ -570,9 +571,11 @@ class TasksScreen extends HookConsumerWidget {
                         _chatWithTask(itemCtx, ref, task.id);
                       },
                       onTap: () {
+                        // Navigate to TaskDetailScreen instead of edit screen
                         Navigator.of(itemCtx).push(
                           CupertinoPageRoute(
-                            builder: (ctx2) => NewTaskScreen(taskToEdit: task),
+                            builder:
+                                (ctx2) => TaskDetailScreen(taskId: task.id),
                           ),
                         );
                       },

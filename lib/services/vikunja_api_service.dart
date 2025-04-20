@@ -46,6 +46,7 @@ class VikunjaApiService implements TaskApiService {
   String _apiBaseUrl = ''; // Set during configuration
   AuthStrategy? _authStrategy; // Store the strategy
   bool _isCurrentlyConfigured = false; // Internal flag
+  String? _configuredServerId; // Store the server ID from config
 
   // Configuration and logging options
   static bool verboseLogging = false; // Keep logging option
@@ -72,6 +73,7 @@ class VikunjaApiService implements TaskApiService {
     required String baseUrl,
     AuthStrategy? authStrategy,
     @Deprecated('Use authStrategy instead') String? authToken,
+    String? serverId, // Add serverId to store for context
   }) async {
     AuthStrategy? effectiveStrategy = authStrategy;
 
@@ -90,7 +92,10 @@ class VikunjaApiService implements TaskApiService {
     // Check if configuration actually changed
     final currentToken = _authStrategy?.getSimpleToken();
     final newToken = effectiveStrategy?.getSimpleToken();
-    if (_apiBaseUrl == baseUrl && currentToken == newToken && _isCurrentlyConfigured) {
+    if (_apiBaseUrl == baseUrl &&
+        currentToken == newToken &&
+        _isCurrentlyConfigured &&
+        _configuredServerId == serverId) {
       if (verboseLogging) {
         stderr.writeln(
           '[VikunjaApiService] configureService: Configuration unchanged.',
@@ -101,14 +106,18 @@ class VikunjaApiService implements TaskApiService {
 
     _apiBaseUrl = baseUrl;
     _authStrategy = effectiveStrategy;
+    _configuredServerId = serverId; // Store the server ID
     _initializeClient(_authStrategy, _apiBaseUrl);
 
     // Update internal configuration status based on whether URL and strategy are present
-    _isCurrentlyConfigured = _authStrategy != null && _apiBaseUrl.isNotEmpty;
+    _isCurrentlyConfigured =
+        _authStrategy != null &&
+        _apiBaseUrl.isNotEmpty &&
+        _configuredServerId != null;
 
     if (verboseLogging) {
       stderr.writeln(
-        '[VikunjaApiService] Configured with Base URL: $_apiBaseUrl, Strategy: ${_authStrategy?.runtimeType}. Internal Configured Flag: $_isCurrentlyConfigured',
+        '[VikunjaApiService] Configured with Base URL: $_apiBaseUrl, Strategy: ${_authStrategy?.runtimeType}, Server ID: $_configuredServerId. Internal Configured Flag: $_isCurrentlyConfigured',
       );
     }
     // The caller MUST update the isVikunjaConfiguredProvider state after this call.
@@ -485,19 +494,59 @@ class VikunjaApiService implements TaskApiService {
     }
   }
 
-  // --- Task Comments (STUBBED - Requires Comment model adaptation) ---
+  // --- Task Comments (IMPLEMENTED) ---
   @override
   Future<List<Comment>> listComments(
     String taskId, {
     ServerConfig?
     targetServerOverride, // NOTE: Override is handled by configureService caller
   }) async {
-    if (!isConfigured) return [];
-    stderr.writeln('[VikunjaApiService] listComments for task $taskId - STUBBED');
-    // TODO: Implement using _tasksApi.tasksTaskIDCommentsGet(int.parse(taskId))
-    // TODO: Map vikunja.ModelsTaskComment to app Comment model
-    throw UnimplementedError('listComments not implemented for Vikunja yet.');
-    // return [];
+    if (!isConfigured || _configuredServerId == null) {
+      stderr.writeln(
+        '[VikunjaApiService] Not configured, cannot list comments for task $taskId.',
+      );
+      return [];
+    }
+    if (verboseLogging)
+      stderr.writeln('[VikunjaApiService] Listing comments for task $taskId');
+
+    final int taskIdInt;
+    try {
+      taskIdInt = int.parse(taskId);
+    } catch (e) {
+      throw Exception(
+        'Invalid task ID format: $taskId. Must be an integer for Vikunja.',
+      );
+    }
+
+    try {
+      final vComments = await _tasksApi.tasksTaskIDCommentsGet(taskIdInt);
+      if (verboseLogging)
+        stderr.writeln(
+          '[VikunjaApiService] Retrieved ${vComments?.length ?? 0} raw comments for task $taskId',
+        );
+
+      final comments =
+          vComments
+              ?.map(
+                (vComment) => Comment.fromVikunjaTaskComment(
+                  vComment,
+                  taskId: taskId,
+                  serverId: _configuredServerId!, // Use stored server ID
+                ),
+              )
+              .toList() ??
+          [];
+
+      if (verboseLogging)
+        stderr.writeln(
+          '[VikunjaApiService] Mapped to ${comments.length} Comment models',
+        );
+      return comments;
+    } catch (e) {
+      _handleApiError('Error listing comments for task $taskId', e);
+      rethrow;
+    }
   }
 
   @override
@@ -505,15 +554,73 @@ class VikunjaApiService implements TaskApiService {
     String commentId, {
     ServerConfig?
     targetServerOverride, // NOTE: Override is handled by configureService caller
+    String? taskId, // Add taskId for context if needed by mapping
   }) async {
-    if (!isConfigured) throw Exception('Vikunja API Service not configured.');
-    stderr.writeln('[VikunjaApiService] getComment $commentId - STUBBED');
-    // TODO: Implement using _tasksApi.tasksTaskIDCommentsCommentIDGet(taskId, commentId) - Need taskId? API seems to only need commentId. Check Vikunja docs/API spec.
-    // Assuming tasksTaskIDCommentsCommentIDGet needs both:
-    // final comment = await _tasksApi.tasksTaskIDCommentsCommentIDGet(int.parse(taskId), int.parse(commentId));
-    // TODO: Map vikunja.ModelsTaskComment to app Comment model
-    throw UnimplementedError('getComment not implemented for Vikunja yet.');
+    if (!isConfigured || _configuredServerId == null) {
+      stderr.writeln(
+        '[VikunjaApiService] Not configured, cannot get comment $commentId.',
+      );
+      throw Exception('Vikunja API Service not configured.');
+    }
+    if (verboseLogging)
+      stderr.writeln('[VikunjaApiService] Getting comment $commentId');
+
+    final int commentIdInt;
+    try {
+      commentIdInt = int.parse(commentId);
+    } catch (e) {
+      throw Exception(
+        'Invalid comment ID format: $commentId. Must be an integer for Vikunja.',
+      );
+    }
+
+    // Vikunja's GET /comments/{commentID} endpoint seems sufficient
+    try {
+      // Assuming a top-level CommentsApi exists or using a relevant TaskApi method if scoped
+      // Let's assume _tasksApi can fetch any comment by ID if it's related to tasks,
+      // or we need a dedicated CommentsApi. Using a placeholder call for now.
+      // final vComment = await _commentsApi.commentsCommentIDGet(commentIdInt); // Ideal
+      // Fallback: If comments are always tied to tasks, we might need the taskId.
+      // The API spec suggests GET /tasks/{taskid}/comments/{commentid} exists.
+      // We need the taskId context here.
+      if (taskId == null) {
+        throw ArgumentError(
+          'taskId is required to get a specific task comment in Vikunja.',
+        );
+      }
+      final int taskIdInt = int.parse(taskId);
+
+      final vComment = await _tasksApi.tasksTaskIDCommentsCommentIDGet(
+        taskIdInt,
+        commentIdInt,
+      );
+
+      if (vComment == null) {
+        throw Exception(
+          'Comment with ID $commentId not found for task $taskId.',
+        );
+      }
+
+      if (verboseLogging)
+        stderr.writeln(
+          '[VikunjaApiService] Retrieved raw comment ${vComment.id}',
+        );
+
+      final comment = Comment.fromVikunjaTaskComment(
+        vComment,
+        taskId: taskId, // Pass taskId for parentId mapping
+        serverId: _configuredServerId!, // Use stored server ID
+      );
+
+      if (verboseLogging)
+        stderr.writeln('[VikunjaApiService] Mapped to Comment model');
+      return comment;
+    } catch (e) {
+      _handleApiError('Error getting comment $commentId', e);
+      rethrow;
+    }
   }
+
 
   @override
   Future<Comment> createComment(
@@ -521,17 +628,65 @@ class VikunjaApiService implements TaskApiService {
     Comment comment, {
     ServerConfig?
     targetServerOverride, // NOTE: Override is handled by configureService caller
-    List<Map<String, dynamic>>? resources, // TODO: Handle attachments
+    List<Map<String, dynamic>>?
+    resources, // Vikunja comments don't support Memos resources
   }) async {
-    if (!isConfigured) throw Exception('Vikunja API Service not configured.');
-    stderr.writeln(
-      '[VikunjaApiService] createComment for task $taskId - STUBBED',
+    if (!isConfigured || _configuredServerId == null) {
+      stderr.writeln(
+        '[VikunjaApiService] Not configured, cannot create comment for task $taskId.',
+      );
+      throw Exception('Vikunja API Service not configured.');
+    }
+    if (verboseLogging)
+      stderr.writeln('[VikunjaApiService] Creating comment for task $taskId');
+
+    final int taskIdInt;
+    try {
+      taskIdInt = int.parse(taskId);
+    } catch (e) {
+      throw Exception(
+        'Invalid task ID format: $taskId. Must be an integer for Vikunja.',
+      );
+    }
+
+    // Map app Comment model to Vikunja request body
+    final request = vikunja.TasksTaskIDCommentsPutRequest(
+      comment: comment.content ?? '',
+      // Vikunja doesn't seem to support setting author/timestamps on creation via this endpoint
     );
-    // TODO: Map app Comment model to vikunja.ModelsTaskComment
-    // final request = vikunja.ModelsTaskComment(...);
-    // final created = await _tasksApi.tasksTaskIDCommentsPut(int.parse(taskId), request);
-    // TODO: Map result back to app Comment model
-    throw UnimplementedError('createComment not implemented for Vikunja yet.');
+
+    try {
+      final createdVComment = await _tasksApi.tasksTaskIDCommentsPut(
+        taskIdInt,
+        request,
+      );
+
+      if (createdVComment == null) {
+        throw Exception(
+          'Comment creation returned null from API for task $taskId.',
+        );
+      }
+
+      if (verboseLogging)
+        stderr.writeln(
+          '[VikunjaApiService] Raw comment created: ${createdVComment.id}',
+        );
+
+      final createdComment = Comment.fromVikunjaTaskComment(
+        createdVComment,
+        taskId: taskId,
+        serverId: _configuredServerId!,
+      );
+
+      if (verboseLogging)
+        stderr.writeln(
+          '[VikunjaApiService] Mapped created comment back to Comment model',
+        );
+      return createdComment;
+    } catch (e) {
+      _handleApiError('Error creating comment for task $taskId', e);
+      rethrow;
+    }
   }
 
   @override
@@ -541,28 +696,139 @@ class VikunjaApiService implements TaskApiService {
     ServerConfig?
     targetServerOverride, // NOTE: Override is handled by configureService caller
   }) async {
-    if (!isConfigured) throw Exception('Vikunja API Service not configured.');
-    stderr.writeln('[VikunjaApiService] updateComment $commentId - STUBBED');
-    // TODO: Map app Comment model to vikunja.ModelsTaskComment for update payload
-    // final request = vikunja.ModelsTaskComment(...); // Or just the content? API takes empty body? Check spec.
-    // final updated = await _tasksApi.tasksTaskIDCommentsCommentIDPost(int.parse(taskId), int.parse(commentId) /*, request? */);
-    // TODO: Map result back to app Comment model
-    throw UnimplementedError('updateComment not implemented for Vikunja yet.');
+    if (!isConfigured || _configuredServerId == null) {
+      stderr.writeln(
+        '[VikunjaApiService] Not configured, cannot update comment $commentId.',
+      );
+      throw Exception('Vikunja API Service not configured.');
+    }
+    if (verboseLogging)
+      stderr.writeln('[VikunjaApiService] Updating comment $commentId');
+
+    final int commentIdInt;
+    final int taskIdInt; // Need taskId for the endpoint
+    try {
+      commentIdInt = int.parse(commentId);
+      taskIdInt = int.parse(
+        comment.parentId,
+      ); // Get taskId from the comment object
+    } catch (e) {
+      throw Exception(
+        'Invalid comment ID ($commentId) or parent task ID (${comment.parentId}) format.',
+      );
+    }
+
+    // Map app Comment model to Vikunja request body for update
+    // API endpoint POST /tasks/{taskid}/comments/{commentid} seems to take an empty body
+    // but PUT /comments/{commentid} takes ModelsComment. Let's try PUT /comments/{commentid}.
+    // This requires a top-level CommentsApi. Assuming it exists as _commentsApi.
+    /*
+    final request = vikunja.ModelsComment(
+      comment_: comment.content ?? '',
+      // Include other fields if necessary, like author ID if allowed?
+    );
+    */
+    // Let's try the task-scoped endpoint POST /tasks/{taskid}/comments/{commentid}
+    // It seems designed for updates but takes an empty body? Let's assume it updates content implicitly or needs a specific payload.
+    // The generated client might expect a body. Let's try sending the content.
+    // The API spec for POST /tasks/{taskid}/comments/{commentid} is unclear.
+    // Let's assume we need PUT /comments/{commentid} which requires a ModelsComment payload.
+    // We need a CommentsApi instance for this. Let's add it.
+    // late vikunja.CommentsApi _commentsApi; // Add this near other API instances
+
+    // Re-evaluating: The TaskApi has tasksTaskIDCommentsCommentIDPost. Let's assume it updates the comment.
+    // What payload does it take? The generated code might expect `TasksTaskIDCommentsCommentIDPostRequest`.
+    // Let's assume it takes the comment content.
+    final request = vikunja.TasksTaskIDCommentsCommentIDPostRequest(
+      comment: comment.content ?? '',
+    );
+
+    try {
+      // Use the task-scoped POST endpoint
+      final updatedVComment = await _tasksApi.tasksTaskIDCommentsCommentIDPost(
+        taskIdInt,
+        commentIdInt,
+        request,
+      );
+
+      if (updatedVComment == null) {
+        // API might return null on success, refetch the comment
+        stderr.writeln(
+          '[VikunjaApiService] Update comment $commentId returned null. Refetching.',
+        );
+        return await getComment(
+          commentId,
+          taskId: comment.parentId,
+        ); // Pass taskId for refetch
+      }
+
+      if (verboseLogging)
+        stderr.writeln(
+          '[VikunjaApiService] Raw comment updated: ${updatedVComment.id}',
+        );
+
+      final updatedComment = Comment.fromVikunjaTaskComment(
+        updatedVComment,
+        taskId: comment.parentId, // Use original taskId
+        serverId: _configuredServerId!,
+      );
+
+      if (verboseLogging)
+        stderr.writeln(
+          '[VikunjaApiService] Mapped updated comment back to Comment model',
+        );
+      return updatedComment;
+    } catch (e) {
+      _handleApiError(
+        'Error updating comment $commentId for task ${comment.parentId}',
+        e,
+      );
+      rethrow;
+    }
   }
 
   @override
   Future<void> deleteComment(
-    String taskId, // Needed for API call? Check spec.
+    String taskId, // Needed for API call
     String commentId, {
     ServerConfig?
     targetServerOverride, // NOTE: Override is handled by configureService caller
   }) async {
-    if (!isConfigured) throw Exception('Vikunja API Service not configured.');
-    stderr.writeln(
-      '[VikunjaApiService] deleteComment $commentId for task $taskId - STUBBED',
-    );
-    // await _tasksApi.tasksTaskIDCommentsCommentIDDelete(int.parse(taskId), int.parse(commentId));
-    throw UnimplementedError('deleteComment not implemented for Vikunja yet.');
+    if (!isConfigured) {
+      stderr.writeln(
+        '[VikunjaApiService] Not configured, cannot delete comment $commentId for task $taskId.',
+      );
+      throw Exception('Vikunja API Service not configured.');
+    }
+    if (verboseLogging)
+      stderr.writeln(
+        '[VikunjaApiService] Deleting comment $commentId for task $taskId',
+      );
+
+    final int taskIdInt;
+    final int commentIdInt;
+    try {
+      taskIdInt = int.parse(taskId);
+      commentIdInt = int.parse(commentId);
+    } catch (e) {
+      throw Exception(
+        'Invalid task ID ($taskId) or comment ID ($commentId) format.',
+      );
+    }
+
+    try {
+      await _tasksApi.tasksTaskIDCommentsCommentIDDelete(
+        taskIdInt,
+        commentIdInt,
+      );
+      if (verboseLogging)
+        stderr.writeln(
+          '[VikunjaApiService] Comment $commentId deleted successfully for task $taskId',
+        );
+    } catch (e) {
+      _handleApiError('Error deleting comment $commentId for task $taskId', e);
+      rethrow;
+    }
   }
 
   // --- Resource Methods (Implementing BaseApiService - Generally not supported directly) ---
@@ -685,8 +951,23 @@ class VikunjaApiService implements TaskApiService {
       String rawMessage = error.message ?? 'Unknown API Exception (Code: $statusCode)';
       errorMessage = rawMessage; // Start with the raw message
 
+      // Try to decode body if available
+      if (error.body is List<int>) {
+         try {
+            final decodedBody = utf8.decode(error.body as List<int>);
+            // Vikunja often returns JSON errors like {"message": "..."}
+            final jsonBody = jsonDecode(decodedBody);
+            if (jsonBody is Map && jsonBody.containsKey('message')) {
+               errorMessage = jsonBody['message'];
+            } else {
+               errorMessage = decodedBody; // Use decoded body if not JSON message
+            }
+         } catch (_) {
+            // Ignore decoding/parsing errors, stick with original message
+         }
+      }
       // Vikunja might return HTML for errors sometimes, try to extract message
-      if (rawMessage.contains('<title>')) {
+      else if (rawMessage.contains('<title>')) {
          try {
             // Basic extraction, might need refinement
             final titleMatch = RegExp(r'<title>(.*?)<\/title>').firstMatch(rawMessage);

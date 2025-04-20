@@ -1,11 +1,14 @@
 import 'package:flutter/foundation.dart';
-import 'package:flutter_memos/todoist_api/lib/api.dart'
-    as todoist; // Import todoist models
+// Removed Todoist import
+// import 'package:flutter_memos/todoist_api/lib/api.dart' as todoist;
+
+// Import Vikunja models for the new factory
+import 'package:vikunja_flutter_api/vikunja_api/lib/api.dart' as vikunja;
 
 // Add CommentState enum
 enum CommentState { normal, archived, deleted }
 
-/// Represents a comment, adaptable for different sources (Memos, Todoist).
+/// Represents a comment, adaptable for different sources (Memos, Vikunja Tasks).
 @immutable
 class Comment {
   final String id; // Unique comment ID (source-specific format)
@@ -13,13 +16,17 @@ class Comment {
   final DateTime createdTs; // Timestamp converted to DateTime
   final DateTime? updatedTs; // Timestamp converted to DateTime
   final String? content; // The actual comment text (nullable)
-  final List<Map<String, dynamic>> resources; // Raw resource list
-  final List<Map<String, dynamic>> relations; // Raw relation list
+  final List<Map<String, dynamic>>
+  resources; // Raw resource list (e.g., Memos attachments)
+  final List<Map<String, dynamic>>
+  relations; // Raw relation list (Memos specific)
   final String parentId; // The ID of the parent entity (Note ID or Task ID)
   final String serverId; // ID of the server config this comment belongs to
-  final Object? attachment; // Todoist-specific attachment metadata
-  final bool pinned; // Added pinned state
-  final CommentState state; // Added state
+  // Removed Todoist attachment field
+  // final Object? attachment;
+  final bool
+  pinned; // Added pinned state (Memos specific, may not apply to Vikunja)
+  final CommentState state; // Added state (Memos specific)
 
   const Comment({
     required this.id,
@@ -31,9 +38,10 @@ class Comment {
     this.relations = const [],
     required this.parentId,
     required this.serverId,
-    this.attachment,
-    this.pinned = false,
-    this.state = CommentState.normal,
+    // this.attachment, // Removed
+    this.pinned =
+        false, // Default to false, Vikunja comments likely don't support pinning
+    this.state = CommentState.normal, // Default to normal
   });
 
   // Factory constructor from Memos API JSON
@@ -65,48 +73,49 @@ class Comment {
       relations: List<Map<String, dynamic>>.from(json['relations'] ?? []),
       parentId: parentId,
       serverId: serverId,
-      attachment: null, // Memos doesn't have this field directly
+      // attachment: null, // Removed
       pinned: json['pinned'] ?? false, // Parse pinned state
       state: parseState(json['state']), // Parse state
     );
   }
 
-  /// Factory constructor from Todoist Comment
+  /// Factory constructor from Vikunja Task Comment
+  factory Comment.fromVikunjaTaskComment(
+    vikunja.ModelsTaskComment vComment, {
+    required String taskId, // Parent ID is the Task ID
+    required String serverId, // Server ID for context
+  }) {
+    return Comment(
+      id: vComment.id?.toString() ?? '', // Vikunja comment ID
+      creatorId: vComment.author?.id?.toString(), // Vikunja author ID
+      createdTs:
+          (vComment.created as DateTime?) ??
+          DateTime.now(), // Vikunja created timestamp
+      updatedTs: DateTime.tryParse(
+        vComment.updated ?? '',
+      ), // Vikunja updated timestamp
+      content: vComment.comment, // Vikunja comment content field
+      resources:
+          const [], // Vikunja comments don't have Memos-style resources directly
+      relations: const [], // Not applicable to Vikunja comments
+      parentId: taskId, // The task this comment belongs to
+      serverId: serverId, // The server config ID
+      // attachment: null, // Removed
+      pinned: false, // Vikunja comments don't support pinning
+      state: CommentState.normal, // Vikunja comments don't have state
+    );
+  }
+
+  // Removed fromTodoistComment factory
+  /*
   factory Comment.fromTodoistComment(
     todoist.Comment todoistComment,
     String? parentIdContext, {
     required String serverId,
   }) {
-    // Removed trailing comma here
-    // Determine the parentId: Use context first, then task ID, then project ID from comment
-    final String effectiveParentId =
-        parentIdContext ??
-        todoistComment.taskId ??
-        todoistComment.projectId ??
-        '';
-    // Use a default serverId or determine dynamically if needed
-    const String defaultServerId = 'todoist_default';
-
-    return Comment(
-      id: todoistComment.id ?? '', // Ensure non-null ID
-      creatorId:
-          null, // Todoist API doesn't provide creator ID directly in comment object
-      createdTs:
-          todoistComment.postedAt ??
-          DateTime.now(), // Ensure non-null creation time
-      updatedTs:
-          null, // Todoist comment object doesn't have an update timestamp
-      content: todoistComment.content, // Keep potentially null
-      resources: const [], // Map attachment if needed, structure differs
-      relations: const [], // Not applicable to Todoist comments
-      parentId: effectiveParentId,
-      serverId: defaultServerId, // Use a consistent serverId for Todoist items
-      attachment:
-          todoistComment.attachment, // Store the raw attachment metadata
-      pinned: false, // Todoist comments don't have a pinned state
-      state: CommentState.normal, // Todoist comments don't have a state
-    );
+    // ... removed implementation ...
   }
+  */
 
 
   // Convert to JSON (mainly for potential caching or sending updates)
@@ -121,7 +130,7 @@ class Comment {
       'relations': relations,
       'parentId': parentId,
       'serverId': serverId,
-      'attachment': attachment,
+      // 'attachment': attachment, // Removed
       'pinned': pinned,
       'state': state.name,
     };
@@ -138,7 +147,7 @@ class Comment {
     List<Map<String, dynamic>>? relations,
     String? parentId,
     String? serverId,
-    ValueGetter<Object?>? attachment,
+    // ValueGetter<Object?>? attachment, // Removed
     bool? pinned, // Add pinned
     CommentState? state, // Add state
   }) {
@@ -152,7 +161,7 @@ class Comment {
       relations: relations ?? this.relations,
       parentId: parentId ?? this.parentId,
       serverId: serverId ?? this.serverId,
-      attachment: attachment != null ? attachment() : this.attachment,
+      // attachment: attachment != null ? attachment() : this.attachment, // Removed
       pinned: pinned ?? this.pinned, // Copy pinned
       state: state ?? this.state, // Copy state
     );
