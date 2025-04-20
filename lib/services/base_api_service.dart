@@ -21,6 +21,7 @@ abstract class BaseApiService {
     AuthStrategy? authStrategy, // New preferred way
     @Deprecated('Use authStrategy instead')
     String? authToken, // Keep for fallback
+    String? serverId, // Add optional serverId
   });
 
   /// Check the health/reachability of the configured API service.
@@ -61,6 +62,7 @@ class DummyApiService implements BaseApiService {
     required String baseUrl,
     AuthStrategy? authStrategy,
     @Deprecated('Use authStrategy instead') String? authToken,
+    String? serverId, // Add optional serverId
   }) async {
     // No-op
   }

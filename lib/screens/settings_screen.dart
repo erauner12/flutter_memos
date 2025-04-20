@@ -250,7 +250,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       );
      } finally {
       // Check mounted *after* await
-      if (!mounted) return;
+      if (!mounted)   
       setState(() {
         if (purpose == ServerPurpose.note) {
           _isTestingNoteConnection = false;

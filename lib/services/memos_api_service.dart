@@ -21,8 +21,8 @@ class MemosApiService implements NoteApiService {
   late memos_api.ApiClient _apiClient;
 
   String _baseUrl = '';
-  // String _authToken = ''; // Replaced by _authStrategy
   AuthStrategy? _authStrategy; // Store the strategy
+  String? _configuredServerId; // Store the server ID
 
   @override
   String get apiBaseUrl => _baseUrl;
@@ -48,7 +48,7 @@ class MemosApiService implements NoteApiService {
     required String baseUrl,
     AuthStrategy? authStrategy,
     @Deprecated('Use authStrategy instead') String? authToken,
-    required String serverId,
+    String? serverId, // Make serverId optional
   }) async {
     AuthStrategy? effectiveStrategy = authStrategy;
 
@@ -68,7 +68,10 @@ class MemosApiService implements NoteApiService {
     // Check if configuration actually changed
     final currentToken = _authStrategy?.getSimpleToken();
     final newToken = effectiveStrategy?.getSimpleToken();
-    if (_baseUrl == baseUrl && currentToken == newToken && isConfigured) {
+    if (_baseUrl == baseUrl &&
+        currentToken == newToken &&
+        _configuredServerId == serverId && // Also check serverId
+        isConfigured) {
       if (kDebugMode) {
         print("[MemosApiService] configureService: Configuration unchanged.");
       }
@@ -77,17 +80,19 @@ class MemosApiService implements NoteApiService {
 
     _baseUrl = baseUrl;
     _authStrategy = effectiveStrategy;
+    _configuredServerId = serverId; // Store the server ID
 
     try {
       _initializeClient(baseUrl, _authStrategy);
       if (kDebugMode) {
         print(
-          "[MemosApiService] configureService: Service configured. Base URL: $_baseUrl, Auth Strategy: ${_authStrategy?.runtimeType}",
+          "[MemosApiService] configureService: Service configured. Base URL: $_baseUrl, Auth Strategy: ${_authStrategy?.runtimeType}, Server ID: $_configuredServerId",
         );
       }
     } catch (e) {
       _baseUrl = ''; // Reset on failure
       _authStrategy = null;
+      _configuredServerId = null;
       if (kDebugMode) {
         print("[MemosApiService] configureService: Configuration failed. $e");
       }
@@ -155,7 +160,10 @@ class MemosApiService implements NoteApiService {
   }) async {
     final memoApi = _getMemoApiForServer(targetServerOverride);
     final serverIdForLog =
-        targetServerOverride?.name ?? targetServerOverride?.id ?? 'active';
+        targetServerOverride?.name ??
+        targetServerOverride?.id ??
+        _configuredServerId ??
+        'active';
     const parent = 'users/-';
     try {
       final memos_api.V1ListMemosResponse? response = await memoApi.memoServiceListMemos2(
@@ -186,7 +194,10 @@ class MemosApiService implements NoteApiService {
   }) async {
     final memoApi = _getMemoApiForServer(targetServerOverride);
     final serverIdForLog =
-        targetServerOverride?.name ?? targetServerOverride?.id ?? 'active';
+        targetServerOverride?.name ??
+        targetServerOverride?.id ??
+        _configuredServerId ??
+        'active';
     try {
       final formattedId = _formatResourceName(id, 'memos');
       final memos_api.Apiv1Memo? apiMemo = await memoApi.memoServiceGetMemo(formattedId);
@@ -206,7 +217,10 @@ class MemosApiService implements NoteApiService {
   }) async {
     final memoApi = _getMemoApiForServer(targetServerOverride);
     final serverIdForLog =
-        targetServerOverride?.name ?? targetServerOverride?.id ?? 'active';
+        targetServerOverride?.name ??
+        targetServerOverride?.id ??
+        _configuredServerId ??
+        'active';
     try {
       final apiMemo = memos_api.Apiv1Memo(
         content: note.content,
@@ -234,7 +248,10 @@ class MemosApiService implements NoteApiService {
   }) async {
     final memoApi = _getMemoApiForServer(targetServerOverride);
     final serverIdForLog =
-        targetServerOverride?.name ?? targetServerOverride?.id ?? 'active';
+        targetServerOverride?.name ??
+        targetServerOverride?.id ??
+        _configuredServerId ??
+        'active';
     try {
       final formattedId = _formatResourceName(id, 'memos');
       final originalCreateTime = note.createTime;
@@ -271,7 +288,10 @@ class MemosApiService implements NoteApiService {
   }) async {
     final memoApi = _getMemoApiForServer(targetServerOverride);
     final serverIdForLog =
-        targetServerOverride?.name ?? targetServerOverride?.id ?? 'active';
+        targetServerOverride?.name ??
+        targetServerOverride?.id ??
+        _configuredServerId ??
+        'active';
     try {
       final formattedId = _formatResourceName(id, 'memos');
       final http.Response response = await memoApi.memoServiceDeleteMemoWithHttpInfo(formattedId);
@@ -292,7 +312,10 @@ class MemosApiService implements NoteApiService {
   }) async {
     final memoApi = _getMemoApiForServer(targetServerOverride);
     final serverIdForLog =
-        targetServerOverride?.name ?? targetServerOverride?.id ?? 'active';
+        targetServerOverride?.name ??
+        targetServerOverride?.id ??
+        _configuredServerId ??
+        'active';
     try {
       final formattedId = _formatResourceName(id, 'memos');
       final memos_api.Apiv1Memo? currentApiMemo = await memoApi.memoServiceGetMemo(formattedId);
@@ -325,7 +348,10 @@ class MemosApiService implements NoteApiService {
   }) async {
     final memoApi = _getMemoApiForServer(targetServerOverride);
     final serverIdForLog =
-        targetServerOverride?.name ?? targetServerOverride?.id ?? 'active';
+        targetServerOverride?.name ??
+        targetServerOverride?.id ??
+        _configuredServerId ??
+        'active';
     try {
       final formattedId = _formatResourceName(id, 'memos');
       final memos_api.Apiv1Memo? currentApiMemo = await memoApi.memoServiceGetMemo(formattedId);
@@ -361,7 +387,10 @@ class MemosApiService implements NoteApiService {
   }) async {
     final memoApi = _getMemoApiForServer(targetServerOverride);
     final serverIdForLog =
-        targetServerOverride?.name ?? targetServerOverride?.id ?? 'active';
+        targetServerOverride?.name ??
+        targetServerOverride?.id ??
+        _configuredServerId ??
+        'active';
     try {
       final formattedId = _formatResourceName(noteId, 'memos');
       final memos_api.V1ListMemoCommentsResponse? response = await memoApi.memoServiceListMemoComments(formattedId);
@@ -371,6 +400,7 @@ class MemosApiService implements NoteApiService {
       // Pass serverId for context
       final serverId =
           targetServerOverride?.id ??
+          _configuredServerId ?? // Use configured ID if override is null
           _apiClient.basePath; // Use base path as fallback ID
       return _parseCommentsFromApiResponse(response, noteId, serverId);
     } catch (e) {
@@ -385,7 +415,10 @@ class MemosApiService implements NoteApiService {
   }) async {
     final memoApi = _getMemoApiForServer(targetServerOverride);
     final serverIdForLog =
-        targetServerOverride?.name ?? targetServerOverride?.id ?? 'active';
+        targetServerOverride?.name ??
+        targetServerOverride?.id ??
+        _configuredServerId ??
+        'active';
     try {
       final formattedId = _formatResourceName(commentId, 'memos');
       final memos_api.Apiv1Memo? apiMemo = await memoApi.memoServiceGetMemo(formattedId);
@@ -396,7 +429,10 @@ class MemosApiService implements NoteApiService {
         throw Exception('Resource $commentId is not a comment (missing parent) on $serverIdForLog');
       }
       // Pass serverId for context
-      final serverId = targetServerOverride?.id ?? _apiClient.basePath;
+      final serverId =
+          targetServerOverride?.id ??
+          _configuredServerId ??
+          _apiClient.basePath;
       return _convertApiMemoToComment(apiMemo, serverId);
     } catch (e) {
       throw Exception('Failed to load comment $commentId from $serverIdForLog: $e');
@@ -412,7 +448,10 @@ class MemosApiService implements NoteApiService {
   }) async {
     final memoApi = _getMemoApiForServer(targetServerOverride);
     final serverIdForLog =
-        targetServerOverride?.name ?? targetServerOverride?.id ?? 'active';
+        targetServerOverride?.name ??
+        targetServerOverride?.id ??
+        _configuredServerId ??
+        'active';
     try {
       final formattedMemoId = _formatResourceName(noteId, 'memos');
 
@@ -443,7 +482,10 @@ class MemosApiService implements NoteApiService {
         throw Exception('Failed to create comment on $serverIdForLog: No response');
       }
       // Pass serverId for context
-      final serverId = targetServerOverride?.id ?? _apiClient.basePath;
+      final serverId =
+          targetServerOverride?.id ??
+          _configuredServerId ??
+          _apiClient.basePath;
       return _convertApiMemoToComment(response, serverId);
     } catch (e) {
       throw Exception('Failed to create comment for note $noteId on $serverIdForLog: $e');
@@ -458,7 +500,10 @@ class MemosApiService implements NoteApiService {
   }) async {
     final memoApi = _getMemoApiForServer(targetServerOverride);
     final serverIdForLog =
-        targetServerOverride?.name ?? targetServerOverride?.id ?? 'active';
+        targetServerOverride?.name ??
+        targetServerOverride?.id ??
+        _configuredServerId ??
+        'active';
     try {
       final formattedCommentId = _formatResourceName(commentId, 'memos');
       final updateMemo = memos_api.TheMemoToUpdateTheNameFieldIsRequired(
@@ -478,7 +523,10 @@ class MemosApiService implements NoteApiService {
         throw Exception('Resource $commentId is not a comment after update (missing parent) on $serverIdForLog');
       }
       // Pass serverId for context
-      final serverId = targetServerOverride?.id ?? _apiClient.basePath;
+      final serverId =
+          targetServerOverride?.id ??
+          _configuredServerId ??
+          _apiClient.basePath;
       return _convertApiMemoToComment(response, serverId);
     } catch (e) {
       throw Exception('Failed to update comment $commentId on $serverIdForLog: $e');
@@ -493,7 +541,10 @@ class MemosApiService implements NoteApiService {
   }) async {
     final memoApi = _getMemoApiForServer(targetServerOverride);
     final serverIdForLog =
-        targetServerOverride?.name ?? targetServerOverride?.id ?? 'active';
+        targetServerOverride?.name ??
+        targetServerOverride?.id ??
+        _configuredServerId ??
+        'active';
     try {
       final formattedCommentId = _formatResourceName(commentId, 'memos');
       final http.Response response = await memoApi.memoServiceDeleteMemoWithHttpInfo(formattedCommentId);
@@ -518,7 +569,10 @@ class MemosApiService implements NoteApiService {
   }) async {
     final resourceApi = _getResourceApiForServer(targetServerOverride);
     final serverIdForLog =
-        targetServerOverride?.name ?? targetServerOverride?.id ?? 'active';
+        targetServerOverride?.name ??
+        targetServerOverride?.id ??
+        _configuredServerId ??
+        'active';
     try {
       final String base64Content = base64Encode(fileBytes);
       final resourcePayload = memos_api.V1Resource(
@@ -551,7 +605,10 @@ class MemosApiService implements NoteApiService {
   }) async {
     final apiClient = _getApiClientForServer(targetServerOverride);
     final serverIdForLog =
-        targetServerOverride?.name ?? targetServerOverride?.id ?? 'active';
+        targetServerOverride?.name ??
+        targetServerOverride?.id ??
+        _configuredServerId ??
+        'active';
     final String resourceId = _extractIdFromName(resourceIdentifier);
     final resourceUrl = '${apiClient.basePath}/o/r/$resourceId';
 
@@ -624,7 +681,10 @@ class MemosApiService implements NoteApiService {
   }) async {
     final memoApi = _getMemoApiForServer(targetServerOverride);
     final serverIdForLog =
-        targetServerOverride?.name ?? targetServerOverride?.id ?? 'active';
+        targetServerOverride?.name ??
+        targetServerOverride?.id ??
+        _configuredServerId ??
+        'active';
     try {
       final formattedId = _formatResourceName(noteId, 'memos');
       final List<memos_api.V1MemoRelation> apiRelations = relations

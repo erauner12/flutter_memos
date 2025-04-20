@@ -6,6 +6,7 @@ import 'package:flutter_memos/models/server_config.dart';
 import 'package:flutter_memos/providers/note_server_config_provider.dart';
 import 'package:flutter_memos/providers/task_server_config_provider.dart';
 // Import BaseApiService and specific services
+import 'package:flutter_memos/services/auth_strategy.dart'; // Import AuthStrategy
 import 'package:flutter_memos/services/base_api_service.dart';
 import 'package:flutter_memos/services/blinko_api_service.dart';
 import 'package:flutter_memos/services/memos_api_service.dart';
@@ -166,6 +167,9 @@ class _AddEditServerScreenState extends ConsumerState<AddEditServerScreen> {
     setState(() { _isTestingConnection = true; });
 
     BaseApiService testApiService;
+    AuthStrategy testAuthStrategy = BearerTokenAuthStrategy(
+      token,
+    ); // Assume Bearer for testing
 
     switch (serverType) {
       case ServerType.memos:
@@ -196,7 +200,13 @@ class _AddEditServerScreenState extends ConsumerState<AddEditServerScreen> {
 
     try {
       // Configure service with temporary details for testing
-      await testApiService.configureService(baseUrl: url, authToken: token);
+      // Pass null for serverId as it's optional and not needed for basic health check
+      await testApiService.configureService(
+        baseUrl: url,
+        authStrategy: testAuthStrategy, // Pass strategy
+        authToken: token, // Keep fallback for now
+        serverId: null, // Explicitly pass null for optional serverId
+      );
       bool isHealthy = await testApiService.checkHealth();
 
       if (mounted) {

@@ -58,7 +58,7 @@ final noteApiServiceProvider = Provider<NoteApiService>((ref) {
       memosService.configureService(
         baseUrl: serverUrl,
         authStrategy: authStrategy,
-        serverId: noteServerConfig.id, // Pass serverId for consistency
+        serverId: noteServerConfig.id, // Pass serverId
       );
       service = memosService;
       break;
@@ -68,7 +68,7 @@ final noteApiServiceProvider = Provider<NoteApiService>((ref) {
       blinkoService.configureService(
         baseUrl: serverUrl,
         authStrategy: authStrategy,
-        serverId: noteServerConfig.id, // Pass serverId for consistency
+        serverId: noteServerConfig.id, // Pass serverId
       );
       service = blinkoService;
       break;
@@ -446,10 +446,10 @@ class DummyNoteApiService extends BaseApiService implements NoteApiService {
 
   @override
   Future<void> configureService({
-    String? baseUrl,
-    String? authToken,
+    required String baseUrl,
     AuthStrategy? authStrategy,
-    String? serverId, // Add serverId to match interface
+    @Deprecated('Use authStrategy instead') String? authToken,
+    String? serverId, // Add optional serverId
   }) async {}
   @override
   Future<bool> checkHealth() async => false;
@@ -556,10 +556,10 @@ class DummyTaskApiService extends BaseApiService implements TaskApiService {
 
   @override
   Future<void> configureService({
-    String? baseUrl,
-    String? authToken,
+    required String baseUrl,
     AuthStrategy? authStrategy,
-    String? serverId, // Add serverId to match interface
+    @Deprecated('Use authStrategy instead') String? authToken,
+    String? serverId, // Add optional serverId
   }) async {}
   @override
   Future<bool> checkHealth() async => false;

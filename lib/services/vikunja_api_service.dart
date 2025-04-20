@@ -73,7 +73,7 @@ class VikunjaApiService implements TaskApiService {
     required String baseUrl,
     AuthStrategy? authStrategy,
     @Deprecated('Use authStrategy instead') String? authToken,
-    String? serverId, // Add serverId to store for context
+    String? serverId, // Make serverId optional
   }) async {
     AuthStrategy? effectiveStrategy = authStrategy;
 
@@ -94,8 +94,8 @@ class VikunjaApiService implements TaskApiService {
     final newToken = effectiveStrategy?.getSimpleToken();
     if (_apiBaseUrl == baseUrl &&
         currentToken == newToken &&
-        _isCurrentlyConfigured &&
-        _configuredServerId == serverId) {
+        _configuredServerId == serverId && // Also check serverId
+        _isCurrentlyConfigured) {
       if (verboseLogging) {
         stderr.writeln(
           '[VikunjaApiService] configureService: Configuration unchanged.',
@@ -112,8 +112,8 @@ class VikunjaApiService implements TaskApiService {
     // Update internal configuration status based on whether URL and strategy are present
     _isCurrentlyConfigured =
         _authStrategy != null &&
-        _apiBaseUrl.isNotEmpty &&
-        _configuredServerId != null;
+        _apiBaseUrl
+            .isNotEmpty; // Server ID is not strictly required for configuration status
 
     if (verboseLogging) {
       stderr.writeln(
@@ -501,7 +501,7 @@ class VikunjaApiService implements TaskApiService {
     ServerConfig?
     targetServerOverride, // NOTE: Override is handled by configureService caller
   }) async {
-    if (!isConfigured || _configuredServerId == null) {
+    if (!isConfigured) {
       stderr.writeln(
         '[VikunjaApiService] Not configured, cannot list comments for task $taskId.',
       );
@@ -526,13 +526,16 @@ class VikunjaApiService implements TaskApiService {
           '[VikunjaApiService] Retrieved ${vComments?.length ?? 0} raw comments for task $taskId',
         );
 
+      // Use the stored server ID if available, otherwise fallback
+      final effectiveServerId = _configuredServerId ?? _apiClient.basePath;
+
       final comments =
           vComments
               ?.map(
                 (vComment) => Comment.fromVikunjaTaskComment(
                   vComment,
                   taskId: taskId,
-                  serverId: _configuredServerId!, // Use stored server ID
+                  serverId: effectiveServerId, // Use stored server ID
                 ),
               )
               .toList() ??
@@ -556,7 +559,7 @@ class VikunjaApiService implements TaskApiService {
     targetServerOverride, // NOTE: Override is handled by configureService caller
     String? taskId, // Add taskId for context if needed by mapping
   }) async {
-    if (!isConfigured || _configuredServerId == null) {
+    if (!isConfigured) {
       stderr.writeln(
         '[VikunjaApiService] Not configured, cannot get comment $commentId.',
       );
@@ -606,10 +609,13 @@ class VikunjaApiService implements TaskApiService {
           '[VikunjaApiService] Retrieved raw comment ${vComment.id}',
         );
 
+      // Use the stored server ID if available, otherwise fallback
+      final effectiveServerId = _configuredServerId ?? _apiClient.basePath;
+
       final comment = Comment.fromVikunjaTaskComment(
         vComment,
         taskId: taskId, // Pass taskId for parentId mapping
-        serverId: _configuredServerId!, // Use stored server ID
+        serverId: effectiveServerId, // Use stored server ID
       );
 
       if (verboseLogging)
@@ -631,7 +637,7 @@ class VikunjaApiService implements TaskApiService {
     List<Map<String, dynamic>>?
     resources, // Vikunja comments don't support Memos resources
   }) async {
-    if (!isConfigured || _configuredServerId == null) {
+    if (!isConfigured) {
       stderr.writeln(
         '[VikunjaApiService] Not configured, cannot create comment for task $taskId.',
       );
@@ -674,10 +680,13 @@ class VikunjaApiService implements TaskApiService {
           '[VikunjaApiService] Raw comment created: ${createdVComment.id}',
         );
 
+      // Use the stored server ID if available, otherwise fallback
+      final effectiveServerId = _configuredServerId ?? _apiClient.basePath;
+
       final createdComment = Comment.fromVikunjaTaskComment(
         createdVComment,
         taskId: taskId,
-        serverId: _configuredServerId!,
+        serverId: effectiveServerId,
       );
 
       if (verboseLogging)
@@ -698,7 +707,7 @@ class VikunjaApiService implements TaskApiService {
     ServerConfig?
     targetServerOverride, // NOTE: Override is handled by configureService caller
   }) async {
-    if (!isConfigured || _configuredServerId == null) {
+    if (!isConfigured) {
       stderr.writeln(
         '[VikunjaApiService] Not configured, cannot update comment $commentId.',
       );
@@ -734,12 +743,12 @@ class VikunjaApiService implements TaskApiService {
         taskIdInt,
         commentIdInt,
       );
-      
+
       if (verboseLogging)
         stderr.writeln(
           '[VikunjaApiService] Old comment $commentId deleted successfully, creating new comment',
         );
-      
+
       // Then create a new comment with the updated content
       final createdVComment = await _tasksApi.tasksTaskIDCommentsPut(
         taskIdInt,
@@ -757,10 +766,13 @@ class VikunjaApiService implements TaskApiService {
           '[VikunjaApiService] New comment created with ID: ${createdVComment.id}',
         );
 
+      // Use the stored server ID if available, otherwise fallback
+      final effectiveServerId = _configuredServerId ?? _apiClient.basePath;
+
       final updatedComment = Comment.fromVikunjaTaskComment(
         createdVComment,
         taskId: comment.parentId, // Use original taskId
-        serverId: _configuredServerId!,
+        serverId: effectiveServerId,
       );
 
       if (verboseLogging)

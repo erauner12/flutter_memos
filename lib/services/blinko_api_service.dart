@@ -24,6 +24,7 @@ class BlinkoApiService implements NoteApiService {
 
   String _baseUrl = '';
   AuthStrategy? _authStrategy; // Store the strategy
+  String? _configuredServerId; // Store the server ID
 
   // Static config flags (can be instance members too)
   static bool verboseLogging = true;
@@ -48,7 +49,7 @@ class BlinkoApiService implements NoteApiService {
     AuthStrategy? authStrategy, // Add AuthStrategy parameter
     @Deprecated('Use authStrategy instead')
     String? authToken,
-    required String serverId,
+    String? serverId, // Make serverId optional
   }) async {
     AuthStrategy? effectiveStrategy = authStrategy;
 
@@ -68,7 +69,10 @@ class BlinkoApiService implements NoteApiService {
     // Check if configuration actually changed
     final currentToken = _authStrategy?.getSimpleToken();
     final newToken = effectiveStrategy?.getSimpleToken();
-    if (_baseUrl == baseUrl && currentToken == newToken && isConfigured) {
+    if (_baseUrl == baseUrl &&
+        currentToken == newToken &&
+        _configuredServerId == serverId && // Also check serverId
+        isConfigured) {
       if (kDebugMode) {
         print('[BlinkoApiService] configureService: Configuration unchanged.');
       }
@@ -77,12 +81,13 @@ class BlinkoApiService implements NoteApiService {
 
     if (kDebugMode) {
       print(
-        '[BlinkoApiService] configureService: Configuring with baseUrl=$baseUrl, Strategy=${effectiveStrategy?.runtimeType}',
+        '[BlinkoApiService] configureService: Configuring with baseUrl=$baseUrl, Strategy=${effectiveStrategy?.runtimeType}, Server ID=$serverId',
       );
     }
 
     _baseUrl = baseUrl; // Store the original URL provided
     _authStrategy = effectiveStrategy; // Store the effective strategy
+    _configuredServerId = serverId; // Store the server ID
 
     try {
       _initializeClient(baseUrl, _authStrategy);
@@ -99,6 +104,7 @@ class BlinkoApiService implements NoteApiService {
       }
       _baseUrl = ''; // Reset on failure
       _authStrategy = null;
+      _configuredServerId = null;
       rethrow;
     }
   }
@@ -1177,7 +1183,9 @@ class BlinkoApiService implements NoteApiService {
       pinned: pinned,
       state: state,
       parentId: blinkoComment.noteId.toString() ?? '', // Use noteId as parentId
-      serverId: _apiClient.basePath, // Use base path as serverId
+      serverId:
+          _configuredServerId ??
+          _apiClient.basePath, // Use configured ID or base path
       resources:
           [], // Blinko comments don't seem to have resources in the model
     );
@@ -1193,7 +1201,10 @@ class BlinkoApiService implements NoteApiService {
     // In Blinko, the identifier is likely the 'path' returned by the upload endpoint, e.g., "/file/get/some_hash.jpg"
     final apiClient = _getApiClientForServer(targetServerOverride);
     final serverIdForLog =
-        targetServerOverride?.name ?? targetServerOverride?.id ?? 'active';
+        targetServerOverride?.name ??
+        targetServerOverride?.id ??
+        _configuredServerId ??
+        'active';
     // Ensure the identifier starts with '/' if it's a path, otherwise assume it's just the filename/hash part
     final String effectivePath =
         resourceIdentifier.startsWith('/')
