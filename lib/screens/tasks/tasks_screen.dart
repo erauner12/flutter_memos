@@ -5,12 +5,12 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart'; // Import for kDebugMode
 import 'package:flutter/material.dart'; // Keep for Material in OverlayEntry
 import 'package:flutter_hooks/flutter_hooks.dart';
-import 'package:flutter_memos/main.dart'; // Import for rootNavigatorKeyProvider
 import 'package:flutter_memos/models/server_config.dart'; // Needed for ServerType enum
 import 'package:flutter_memos/models/task_filter.dart'; // Import the filter enum
 import 'package:flutter_memos/models/task_item.dart';
 import 'package:flutter_memos/models/workbench_item_reference.dart';
 import 'package:flutter_memos/models/workbench_item_type.dart'; // Import the unified enum
+import 'package:flutter_memos/providers/navigation_providers.dart';
 // Removed settings_provider import (vikunjaApiKeyProvider is checked via isVikunjaConfiguredProvider)
 import 'package:flutter_memos/providers/task_providers.dart';
 // Import new task server config provider
@@ -260,8 +260,8 @@ class TasksScreen extends HookConsumerWidget {
       return;
     }
     final rootNavigatorKey = ref.read(
-      rootNavigatorKeyProvider,
-    ); // Use imported provider
+      rootNavigatorKeyProvider, // Use imported provider
+    );
     final chatArgs = {
       'contextString': fetchedContent,
       'parentItemId': taskId,

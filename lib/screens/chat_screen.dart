@@ -2,11 +2,11 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart'; // For kDebugMode
 import 'package:flutter/material.dart' show LinearProgressIndicator; // For loading bar
 import 'package:flutter_markdown/flutter_markdown.dart'; // For rendering markdown
-import 'package:flutter_memos/main.dart'; // Import for rootNavigatorKeyProvider
 import 'package:flutter_memos/models/chat_message.dart'; // Import ChatMessage which now defines Role
 import 'package:flutter_memos/models/workbench_item_type.dart';
 // Removed chat overlay provider import
 import 'package:flutter_memos/providers/chat_providers.dart';
+import 'package:flutter_memos/providers/navigation_providers.dart';
 import 'package:flutter_memos/providers/settings_provider.dart'; // To check API key
 import 'package:flutter_memos/screens/settings_screen.dart'; // Import SettingsScreen
 import 'package:flutter_memos/services/mcp_client_service.dart'; // For mcpClientProvider
@@ -372,8 +372,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                           WorkbenchItemType.note &&
                       chatState.currentContextItemId != null) {
                     final rootNavigator = ref.read(
-                      rootNavigatorKeyProvider,
-                    ); // Use the imported provider
+                      rootNavigatorKeyProvider, // Use the imported provider
+                    );
                     rootNavigator.currentState?.pushNamed(
                       '/item-detail',
                       arguments: {'itemId': chatState.currentContextItemId},

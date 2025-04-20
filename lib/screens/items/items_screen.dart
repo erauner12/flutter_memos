@@ -539,7 +539,7 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
       notes: filteredNotes,
       notesState: notesState,
       isInHiddenView: isInHiddenView,
-      serverId: _effectiveServerId!, // Pass effective serverId
+      // serverId: _effectiveServerId!, // Removed serverId parameter
     );
   }
 
