@@ -6,7 +6,10 @@ import 'package:flutter_memos/providers/api_providers.dart'; // Import taskApiSe
 // Import new single config provider
 import 'package:flutter_memos/providers/task_server_config_provider.dart';
 import 'package:flutter_memos/services/task_api_service.dart';
+import 'package:flutter_memos/services/vikunja_api_service.dart'; // For vikunjaApiServiceProvider
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+// Import Vikunja API models and service
+import 'package:vikunja_flutter_api/vikunja_api/lib/api.dart' as vikunja;
 
 // Provider to fetch details for a single task by ID
 final taskDetailProvider = FutureProvider.family<TaskItem, String>((
@@ -96,6 +99,46 @@ final showCompletedTasksProvider = StateProvider<bool>(
   (ref) => false,
   name: 'showCompletedTasks',
 );
+
+// ADDED: Provider to fetch the list of Vikunja projects
+final vikunjaProjectsProvider = FutureProvider<List<vikunja.ModelsProject>>((
+  ref,
+) async {
+  // Watch the main task API service provider to ensure it's configured
+  final taskApiServiceAsyncValue = ref.watch(taskApiServiceProvider);
+
+  return taskApiServiceAsyncValue.when(
+    data: (taskApiService) async {
+      // Ensure it's the Vikunja service
+      if (taskApiService is VikunjaApiService) {
+        try {
+          final projects = await taskApiService.listProjects();
+          return projects;
+        } catch (e) {
+          if (kDebugMode) print('Error fetching Vikunja projects: $e');
+          throw Exception('Failed to load Vikunja projects: $e');
+        }
+      } else if (taskApiService is DummyTaskApiService) {
+        // If dummy service, means not configured
+        throw Exception('Task API (Vikunja) not configured in Settings.');
+      } else {
+        // Handle case where the service is configured but not Vikunja (shouldn't happen if logic is correct)
+        throw Exception('Configured Task API service is not Vikunja.');
+      }
+    },
+    loading:
+        () =>
+            throw Exception(
+              'Task API service is loading...',
+            ), // Or return empty list while loading?
+    error:
+        (err, stack) =>
+            throw Exception(
+              'Error loading Task API service for projects: $err',
+            ),
+  );
+});
+// END ADDED
 
 
 final tasksNotifierProvider = StateNotifierProvider<TasksNotifier, TasksState>((
@@ -237,23 +280,26 @@ class TasksNotifier extends StateNotifier<TasksState> {
             }).toList(),
       );
     }
-    if (!taskFound)
-      print("Warning: Task $id not found in local state for completion.");
+    if (!taskFound) {
+      if (kDebugMode)
+        print("Warning: Task $id not found in local state for completion.");
+    }
 
     try {
       await apiService.completeTask(id);
       return true;
     } catch (e, s) {
       if (kDebugMode) print('Error completing task $id: $e\n$s');
-      if (mounted && taskFound)
+      if (mounted && taskFound) {
         state = state.copyWith(
           tasks: originalTasks,
           error: 'Failed to complete task: ${e.toString()}',
         );
-      else if (mounted)
+      } else if (mounted) {
         state = state.copyWith(
           error: 'Failed to complete task: ${e.toString()}',
         );
+      }
       return false;
     }
   }
@@ -276,21 +322,24 @@ class TasksNotifier extends StateNotifier<TasksState> {
             }).toList(),
       );
     }
-    if (!taskFound)
-      print("Warning: Task $id not found in local state for reopening.");
+    if (!taskFound) {
+      if (kDebugMode)
+        print("Warning: Task $id not found in local state for reopening.");
+    }
 
     try {
       await apiService.reopenTask(id);
       return true;
     } catch (e, s) {
       if (kDebugMode) print('Error reopening task $id: $e\n$s');
-      if (mounted && taskFound)
+      if (mounted && taskFound) {
         state = state.copyWith(
           tasks: originalTasks,
           error: 'Failed to reopen task: ${e.toString()}',
         );
-      else if (mounted)
+      } else if (mounted) {
         state = state.copyWith(error: 'Failed to reopen task: ${e.toString()}');
+      }
       return false;
     }
   }
@@ -307,8 +356,10 @@ class TasksNotifier extends StateNotifier<TasksState> {
       if (newTasks.length < initialLength) {
         taskFound = true;
         state = state.copyWith(tasks: newTasks);
-      } else
-        print("Warning: Task $id not found in local state for deletion.");
+      } else {
+        if (kDebugMode)
+          print("Warning: Task $id not found in local state for deletion.");
+      }
     }
 
     try {
@@ -316,13 +367,14 @@ class TasksNotifier extends StateNotifier<TasksState> {
       return true;
     } catch (e, s) {
       if (kDebugMode) print('Error deleting task $id: $e\n$s');
-      if (mounted && taskFound)
+      if (mounted && taskFound) {
         state = state.copyWith(
           tasks: originalTasks,
           error: 'Failed to delete task: ${e.toString()}',
         );
-      else if (mounted)
+      } else if (mounted) {
         state = state.copyWith(error: 'Failed to delete task: ${e.toString()}');
+      }
       return false;
     }
   }
@@ -350,8 +402,9 @@ class TasksNotifier extends StateNotifier<TasksState> {
       return createdTask;
     } catch (e, s) {
       if (kDebugMode) print('Error creating task: $e\n$s');
-      if (mounted)
+      if (mounted) {
         state = state.copyWith(error: 'Failed to create task: ${e.toString()}');
+      }
       return null;
     }
   }
@@ -361,14 +414,14 @@ class TasksNotifier extends StateNotifier<TasksState> {
     if (apiService == null) return null;
 
     final originalTasks = List<TaskItem>.from(state.tasks);
-    TaskItem? originalTask;
+
     bool found = false;
     if (mounted) {
       state = state.copyWith(
         tasks:
             state.tasks.map((task) {
               if (task.id == id) {
-                originalTask = task;
+
                 found = true;
                 // Use the existing task's data and apply updates
                 return task.copyWith(
@@ -411,13 +464,14 @@ class TasksNotifier extends StateNotifier<TasksState> {
       return null; // Should not happen if mounted check passes
     } catch (e, s) {
       if (kDebugMode) print('Error updating task $id: $e\n$s');
-      if (mounted && found)
+      if (mounted && found) {
         state = state.copyWith(
           tasks: originalTasks,
           error: 'Failed to update task: ${e.toString()}',
         );
-      else if (mounted)
+      } else if (mounted) {
         state = state.copyWith(error: 'Failed to update task: ${e.toString()}');
+      }
       return null;
     }
   }

@@ -32,7 +32,7 @@ class VikunjaApiService implements TaskApiService {
   late vikunja.ApiClient _apiClient;
   late vikunja.TaskApi _tasksApi;
   // Add other Vikunja APIs as needed (Projects, Labels, etc.)
-  // late vikunja.ProjectApi _projectsApi;
+  late vikunja.ProjectApi _projectsApi; // ADDED
   // late vikunja.LabelApi _labelsApi;
 
   // --- Configuration ---
@@ -144,7 +144,7 @@ class VikunjaApiService implements TaskApiService {
 
       // Initialize Vikunja API endpoints
       _tasksApi = vikunja.TaskApi(_apiClient);
-      // _projectsApi = vikunja.ProjectApi(_apiClient);
+      _projectsApi = vikunja.ProjectApi(_apiClient); // ADDED
       // _labelsApi = vikunja.LabelApi(_apiClient);
 
       // Mark as configured *internally* only if successful and strategy/URL are present
@@ -253,6 +253,39 @@ class VikunjaApiService implements TaskApiService {
       rethrow;
     }
   }
+
+  // ADDED: Method to list Vikunja projects
+  Future<List<vikunja.ModelsProject>> listProjects({
+    ServerConfig?
+    targetServerOverride, // Keep for consistency, though handled by configureService
+  }) async {
+    if (!isConfigured) {
+      stderr.writeln(
+        '[VikunjaApiService] Not configured, cannot list projects.',
+      );
+      return [];
+    }
+    if (verboseLogging) {
+      stderr.writeln('[VikunjaApiService] Getting all projects (listProjects)');
+    }
+
+    try {
+      // Use projectAllGet for a general list
+      final projects = await _projectsApi.projectsGet();
+
+      if (verboseLogging) {
+        stderr.writeln(
+          '[VikunjaApiService] Retrieved ${projects?.length ?? 0} raw projects',
+        );
+      }
+
+      return projects ?? [];
+    } catch (e) {
+      _handleApiError('Error getting projects (listProjects)', e);
+      rethrow; // Rethrow to allow caller handling (e.g., provider error state)
+    }
+  }
+  // END ADDED
 
   @override
   Future<TaskItem> getTask(
