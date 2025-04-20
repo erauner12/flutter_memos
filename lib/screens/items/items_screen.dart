@@ -20,7 +20,7 @@ class ItemsScreen extends ConsumerStatefulWidget {
   // serverId is no longer needed as context comes from noteServerConfigProvider
   // final String serverId;
 
-  const ItemsScreen({super.key});
+  const ItemsScreen({super.key, required String serverId});
 
   @override
   ConsumerState<ItemsScreen> createState() => _ItemsScreenState();
