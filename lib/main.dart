@@ -7,13 +7,11 @@ import 'package:flutter/material.dart'
     show ThemeMode; // Keep Material import ONLY for ThemeMode enum
 import 'package:flutter_localizations/flutter_localizations.dart'; // Import localizations
 import 'package:flutter_memos/models/workbench_item_type.dart';
-// Removed chat overlay provider import
 import 'package:flutter_memos/providers/chat_providers.dart';
-import 'package:flutter_memos/providers/server_config_provider.dart';
+import 'package:flutter_memos/providers/server_config_provider.dart'; // Keep for loadServerConfigProvider
 import 'package:flutter_memos/providers/settings_provider.dart'; // Import settings providers
 import 'package:flutter_memos/providers/theme_provider.dart';
 import 'package:flutter_memos/providers/ui_providers.dart'; // Import for UI providers including highlightedCommentIdProvider
-// Removed chat overlay import
 import 'package:flutter_memos/screens/chat_screen.dart'; // Keep for potential direct navigation
 import 'package:flutter_memos/screens/edit_entity/edit_entity_screen.dart';
 import 'package:flutter_memos/screens/item_detail/item_detail_screen.dart';
@@ -41,18 +39,15 @@ Route<dynamic>? generateRoute(RouteSettings settings) {
     case '/':
       return null; // Handled by home in CupertinoApp
     case '/chat':
-      // Pass arguments directly to ChatScreen if needed via settings
       return CupertinoPageRoute(
-        builder: (_) => const ChatScreen(), // ChatScreen is now a regular route
+        builder: (_) => const ChatScreen(),
         settings: settings,
       );
     case '/item-detail':
       final args = settings.arguments as Map<String, dynamic>?;
       final itemId = args?['itemId'] as String?;
-      final serverId =
-          args?['serverId'] as String?; // Optional serverId for context
+      // serverId is no longer needed from args, context comes from noteServerConfigProvider
       if (itemId != null) {
-        // Potentially pass serverId if ItemDetailScreen needs it
         return CupertinoPageRoute(
           builder: (_) => ItemDetailScreen(itemId: itemId),
           settings: settings,
@@ -63,10 +58,8 @@ Route<dynamic>? generateRoute(RouteSettings settings) {
       final args = settings.arguments as Map<String, dynamic>?;
       final entityType = args?['entityType'] as String? ?? 'note';
       final entityId = args?['entityId'] as String?;
-      final serverId =
-          args?['serverId'] as String?; // Optional serverId for context
+      // serverId is no longer needed from args
       if (entityId != null) {
-        // Potentially pass serverId if EditEntityScreen needs it
         return CupertinoPageRoute(
           builder:
               (_) =>
@@ -76,10 +69,7 @@ Route<dynamic>? generateRoute(RouteSettings settings) {
       }
       break;
     case '/new-note':
-      final args = settings.arguments as Map<String, dynamic>?;
-      final serverId =
-          args?['serverId'] as String?; // Optional serverId for context
-      // Potentially pass serverId if NewNoteScreen needs it
+      // serverId is no longer needed from args
       return CupertinoPageRoute(
         builder: (_) => const NewNoteScreen(),
         settings: settings,
@@ -88,10 +78,8 @@ Route<dynamic>? generateRoute(RouteSettings settings) {
       final args = settings.arguments as Map<String, dynamic>? ?? {};
       final itemId = args['itemId'] as String?;
       final commentIdToHighlight = args['commentIdToHighlight'] as String?;
-      final serverId =
-          args['serverId'] as String?; // Optional serverId for context
+      // serverId is no longer needed from args
       if (itemId != null) {
-        // Potentially pass serverId if ItemDetailScreen needs it
         return CupertinoPageRoute(
           builder:
               (context) => ProviderScope(
@@ -106,22 +94,16 @@ Route<dynamic>? generateRoute(RouteSettings settings) {
         );
       }
       break;
-    // Add case for parameterized notes route
-    case String name when name.startsWith('/notes/'):
-      final serverId = name.substring('/notes/'.length);
-      if (serverId.isNotEmpty) {
-        return CupertinoPageRoute(
-          builder: (_) => ItemsScreen(serverId: serverId),
-          settings: settings, // Pass settings along
-        );
-      }
-      break; // Fall through if serverId is empty
+    // Replace parameterized notes route with a single route
+    case '/notes': // Changed from '/notes/:serverId'
+      // serverId is no longer needed, ItemsScreen will use noteServerConfigProvider
+      return CupertinoPageRoute(
+        builder: (_) => const ItemsScreen(serverId: ''),
+        settings: settings,
+      );
 
     default:
-      if (kDebugMode) {
-        print('[RootNavigator] Unknown route: ${settings.name}');
-      }
-      // Fallback for unknown routes
+      if (kDebugMode) print('[RootNavigator] Unknown route: ${settings.name}');
       return CupertinoPageRoute(
         builder:
             (context) => const CupertinoPageScaffold(
@@ -150,22 +132,18 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   const sentryDsn = String.fromEnvironment('SENTRY_DSN');
-  if (sentryDsn.isEmpty) {
-    if (kDebugMode) {
-      print(
-        'Warning: SENTRY_DSN environment variable not set. Sentry reporting will be disabled.',
-      );
-    }
+  if (sentryDsn.isEmpty && kDebugMode) {
+    print(
+      'Warning: SENTRY_DSN environment variable not set. Sentry reporting will be disabled.',
+    );
   }
 
   await SentryFlutter.init(
     (options) {
       if (sentryDsn.isNotEmpty) {
         options.dsn = sentryDsn;
-      } else {
-        if (kDebugMode) {
-          print("Sentry DSN not found, Sentry integration disabled.");
-        }
+      } else if (kDebugMode) {
+        print("Sentry DSN not found, Sentry integration disabled.");
       }
       options.tracesSampleRate = 1.0;
       options.environment =
@@ -178,17 +156,13 @@ Future<void> main() async {
         () => runApp(
           ProviderScope(
             observers: [LoggingProviderObserver()],
-            // Use MyAppCore directly as the root widget
             child: const MyAppCore(),
           ),
         ),
   );
 }
 
-// Removed AppWithChatOverlay class
-
 class MyAppCore extends ConsumerStatefulWidget {
-  // Removed themeMode parameter as it's watched inside build
   const MyAppCore({super.key});
 
   @override
@@ -206,24 +180,20 @@ class _MyAppCoreState extends ConsumerState<MyAppCore> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      // Keep triggering loads here
       _triggerInitialLoads();
       _initializePersistentNotifiers();
       _initAppLinks();
-      // Listeners are now set up in the build method
     });
   }
 
   void _triggerInitialLoads() {
-    // Just read the providers to trigger their initialization if not already loading.
-    // The actual logic to update state is now handled by the listeners in build.
-    if (kDebugMode) {
-      print(
-        '[MyAppCore] Triggering initial theme and config loads (if not already active)',
-      );
-    }
+    if (kDebugMode)
+      print('[MyAppCore] Triggering initial theme and config loads');
+    // Read the providers to trigger initialization. Listeners handle state updates.
     ref.read(loadThemeModeProvider);
-    ref.read(loadServerConfigProvider);
+    ref.read(
+      loadServerConfigProvider,
+    ); // This now loads Note, Task, MCP configs
   }
 
   @override
@@ -233,28 +203,22 @@ class _MyAppCoreState extends ConsumerState<MyAppCore> {
   }
 
   void _initializePersistentNotifiers() {
-    // Initialize all persistent notifiers concurrently
     Future.wait<void>([
-          // Removed todoistApiKeyProvider init
           ref.read(openAiApiKeyProvider.notifier).init(),
           ref.read(openAiModelIdProvider.notifier).init(),
           ref.read(geminiApiKeyProvider.notifier).init(),
-          ref.read(vikunjaApiKeyProvider.notifier).init(), // Added Vikunja
+          ref.read(vikunjaApiKeyProvider.notifier).init(),
           ref.read(manuallyHiddenNoteIdsProvider.notifier).init(),
         ])
         .then((_) {
-          if (kDebugMode) {
+          if (kDebugMode)
             print('[MyAppCore] All PersistentStringNotifiers initialized.');
-          }
         })
         .catchError((e) {
-          if (kDebugMode) {
+          if (kDebugMode)
             print(
               '[MyAppCore] Error initializing PersistentStringNotifiers: $e',
             );
-          }
-          // Decide if this error should block the UI or not.
-          // Currently, it doesn't block.
         });
   }
 
@@ -263,96 +227,72 @@ class _MyAppCoreState extends ConsumerState<MyAppCore> {
     try {
       final initialUri = await _appLinks.getInitialLink();
       if (initialUri != null) {
-        if (kDebugMode) {
-          print('[AppLinks] Initial link found: $initialUri');
-        }
+        if (kDebugMode) print('[AppLinks] Initial link found: $initialUri');
         _handleDeepLink(initialUri);
       } else {
-        if (kDebugMode) {
-          print('[AppLinks] No initial link.');
-        }
+        if (kDebugMode) print('[AppLinks] No initial link.');
       }
     } catch (e) {
-      if (kDebugMode) {
-        print('[AppLinks] Error getting initial link: $e');
-      }
+      if (kDebugMode) print('[AppLinks] Error getting initial link: $e');
     }
 
     _linkSubscription = _appLinks.uriLinkStream.listen(
       (uri) {
-        if (kDebugMode) {
-          print('[AppLinks] Link received while running: $uri');
-        }
+        if (kDebugMode) print('[AppLinks] Link received while running: $uri');
         _handleDeepLink(uri);
       },
       onError: (err) {
-        if (kDebugMode) {
+        if (kDebugMode)
           print('[AppLinks] Error listening to link stream: $err');
-        }
       },
     );
   }
 
   void _handleDeepLink(Uri? uri) {
     if (uri == null || uri.scheme != 'flutter-memos') {
-      if (kDebugMode && uri != null) {
+      if (kDebugMode && uri != null)
         print('[DeepLink] Ignoring URI: ${uri.toString()}');
-      }
       return;
     }
-    if (kDebugMode) {
-      print('[DeepLink] Handling URI: ${uri.toString()}');
-    }
+    if (kDebugMode) print('[DeepLink] Handling URI: ${uri.toString()}');
 
     final host = uri.host;
     final pathSegments = uri.pathSegments;
     final navigator = ref.read(rootNavigatorKeyProvider).currentState;
 
     if (navigator == null) {
-      if (kDebugMode) {
-        print('[DeepLink] Navigator not available yet.');
-      }
-      // Optionally retry later or queue the link
+      if (kDebugMode) print('[DeepLink] Navigator not available yet.');
       return;
     }
 
+    // Assuming deep links now implicitly target the configured Note server
+    // The 'serverId' query parameter is ignored.
 
     if (host == 'memo' && pathSegments.isNotEmpty) {
       final memoId = pathSegments[0];
-      final serverId =
-          uri.queryParameters['serverId']; // Optional server context
       navigator.pushNamed(
         '/deep-link-target',
-        arguments: {
-          'itemId': memoId,
-          'commentIdToHighlight': null,
-          'serverId': serverId, // Pass serverId if available
-        },
+        arguments: {'itemId': memoId, 'commentIdToHighlight': null},
       );
     } else if (host == 'comment' && pathSegments.length >= 2) {
       final memoId = pathSegments[0];
       final commentIdToHighlight = pathSegments[1];
-      final serverId =
-          uri.queryParameters['serverId']; // Optional server context
       navigator.pushNamed(
         '/deep-link-target',
         arguments: {
           'itemId': memoId,
           'commentIdToHighlight': commentIdToHighlight,
-          'serverId': serverId, // Pass serverId if available
         },
       );
     } else if (host == 'chat') {
-      // Navigate to the chat route instead of toggling overlay
-      if (kDebugMode) {
+      if (kDebugMode)
         print('[DeepLink] Navigating to chat route via deep link.');
-      }
       final contextItemId = uri.queryParameters['contextItemId'];
       final contextItemTypeStr = uri.queryParameters['contextItemType'];
       final contextString = uri.queryParameters['contextString'];
+      // parentServerId might still be relevant if context comes from MCP or a specific server
       final parentServerId = uri.queryParameters['parentServerId'];
 
-      // Prepare arguments for the ChatScreen route
       Map<String, dynamic>? chatArgs;
       if (contextItemId != null &&
           contextItemTypeStr != null &&
@@ -361,22 +301,18 @@ class _MyAppCoreState extends ConsumerState<MyAppCore> {
         try {
           contextItemType = WorkbenchItemType.values.byName(contextItemTypeStr);
         } catch (_) {
-          if (kDebugMode) {
+          if (kDebugMode)
             print('[DeepLink] Invalid contextItemType: $contextItemTypeStr');
-          }
           contextItemType = WorkbenchItemType.unknown;
         }
         chatArgs = {
           'contextString': contextString ?? "Context from deep link",
           'parentItemId': contextItemId,
           'parentItemType': contextItemType,
-          'parentServerId': parentServerId,
+          'parentServerId': parentServerId, // Keep serverId for context origin
         };
-        // Set context immediately if needed before navigation
-        // Use addPostFrameCallback to ensure notifier exists if called early
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) {
-            // Check mounted again inside callback
             ref
                 .read(chatProvider.notifier)
                 .startChatWithContext(
@@ -386,111 +322,79 @@ class _MyAppCoreState extends ConsumerState<MyAppCore> {
                       chatArgs['parentItemType'] as WorkbenchItemType,
                   parentServerId: chatArgs['parentServerId'] as String,
                 );
-            if (kDebugMode) {
+            if (kDebugMode)
               print(
                 '[DeepLink] Started chat with context: $contextItemId ($contextItemType)',
               );
-            }
           }
         });
       }
-      // Push the chat route, potentially with arguments
       navigator.pushNamed('/chat', arguments: chatArgs);
-
     } else {
-      if (kDebugMode) {
-        print('[DeepLink] Invalid URI structure: $uri');
-      }
-      return;
+      if (kDebugMode) print('[DeepLink] Invalid URI structure: $uri');
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    // *** Set up listeners within the build method ***
+    // Listener for theme loading
     ref.listen<AsyncValue<ThemeMode>>(loadThemeModeProvider, (previous, next) {
-      if (!next.isLoading) {
-        // Check if loading is finished (data or error)
-        if (mounted && !_initialThemeLoaded) {
-          if (kDebugMode) {
+      if (!next.isLoading && mounted && !_initialThemeLoaded) {
+        if (kDebugMode)
+          print(
+            '[MyAppCore Listener - Build] loadThemeModeProvider finished loading.',
+          );
+        if (next.hasValue) {
+          ref.read(themeModeProvider.notifier).state = next.value!;
+          if (kDebugMode)
+            print('[MyAppCore Listener - Build] Applied theme: ${next.value}');
+        } else if (next.hasError) {
+          if (kDebugMode)
             print(
-              '[MyAppCore Listener - Build] loadThemeModeProvider finished loading (State: ${next.hasError ? 'Error' : 'Data'}). Setting flag.',
+              '[MyAppCore Listener - Build] Theme loading finished with error: ${next.error}.',
             );
-          }
-          // If data is available, apply it
-          if (next.hasValue) {
-            ref.read(themeModeProvider.notifier).state = next.value!;
-            if (kDebugMode) {
-              print(
-                '[MyAppCore Listener - Build] Applied theme: ${next.value}',
-              );
-            }
-          } else if (next.hasError) {
-            if (kDebugMode) {
-              print(
-                '[MyAppCore Listener - Build] Theme loading finished with error: ${next.error}. Proceeding with default.',
-              );
-            }
-          }
-          // Use WidgetsBinding.instance.addPostFrameCallback to schedule the setState
-          // after the current build cycle completes, avoiding build-time state changes.
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted && !_initialThemeLoaded) {
-              // Double-check mounted status
-              setState(() {
-                _initialThemeLoaded = true;
-              });
-            }
-          });
         }
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && !_initialThemeLoaded)
+            setState(() {
+              _initialThemeLoaded = true;
+            });
+        });
       }
     });
 
-    ref.listen<AsyncValue<dynamic>>(loadServerConfigProvider, (previous, next) {
-      if (!next.isLoading) {
-        // Check if loading is finished (data or error)
-        if (mounted && !_initialConfigLoaded) {
-          if (kDebugMode) {
+    // Listener for config loading (Note, Task, MCP)
+    ref.listen<AsyncValue<void>>(loadServerConfigProvider, (previous, next) {
+      if (!next.isLoading && mounted && !_initialConfigLoaded) {
+        if (kDebugMode)
+          print(
+            '[MyAppCore Listener - Build] loadServerConfigProvider finished loading.',
+          );
+        if (next.hasError) {
+          if (kDebugMode)
             print(
-              '[MyAppCore Listener - Build] loadServerConfigProvider finished loading (State: ${next.hasError ? 'Error' : 'Data'}). Setting flag.',
+              '[MyAppCore Listener - Build] Server config loading finished with error: ${next.error}.',
             );
-          }
-          if (next.hasError) {
-            if (kDebugMode) {
-              print(
-                '[MyAppCore Listener - Build] Server config loading finished with error: ${next.error}.',
-              );
-            }
-          }
-          // Use WidgetsBinding.instance.addPostFrameCallback here as well
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted && !_initialConfigLoaded) {
-              // Double-check mounted status
-              setState(() {
-                _initialConfigLoaded = true;
-              });
-            }
-          });
         }
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && !_initialConfigLoaded)
+            setState(() {
+              _initialConfigLoaded = true;
+            });
+        });
       }
     });
 
-    // Read the current theme mode state for building the CupertinoApp theme
     final themePreference = ref.watch(themeModeProvider);
 
-    if (kDebugMode) {
+    if (kDebugMode)
       print(
-        '[MyAppCore Build] Checking loading state: _initialThemeLoaded=$_initialThemeLoaded, _initialConfigLoaded=$_initialConfigLoaded',
+        '[MyAppCore Build] Loading state: Theme=$_initialThemeLoaded, Config=$_initialConfigLoaded',
       );
-    }
 
     if (!_initialThemeLoaded || !_initialConfigLoaded) {
-      // Still loading theme or config
-      // Use a minimal CupertinoApp for the loading state
       return const CupertinoApp(
-        theme: CupertinoThemeData(
-          brightness: Brightness.light, // Or detect system brightness
-        ),
+        theme: CupertinoThemeData(brightness: Brightness.light),
         home: CupertinoPageScaffold(
           child: Center(child: CupertinoActivityIndicator()),
         ),
@@ -498,12 +402,9 @@ class _MyAppCoreState extends ConsumerState<MyAppCore> {
       );
     }
 
-    if (kDebugMode) {
+    if (kDebugMode)
       print('[MyAppCore Build] Loading complete, building main app UI.');
-    }
 
-    // Main app UI build logic starts here
-    // Determine brightness based on themePreference and platform
     final platformBrightness = MediaQuery.platformBrightnessOf(context);
     Brightness finalBrightness;
     switch (themePreference) {
@@ -514,7 +415,6 @@ class _MyAppCoreState extends ConsumerState<MyAppCore> {
         finalBrightness = Brightness.dark;
         break;
       case ThemeMode.system:
-      default:
         finalBrightness = platformBrightness;
         break;
     }
@@ -581,17 +481,14 @@ class _MyAppCoreState extends ConsumerState<MyAppCore> {
       ),
     );
 
-    // Build the main CupertinoApp only when loading is complete
     return Shortcuts(
-      shortcuts: buildGlobalShortcuts(), // Keep existing shortcuts
+      shortcuts: buildGlobalShortcuts(),
       child: Actions(
         actions: {
           NavigateBackIntent: CallbackAction<NavigateBackIntent>(
             onInvoke: (intent) {
               final navigator = ref.read(rootNavigatorKeyProvider).currentState;
-              if (navigator?.canPop() ?? false) {
-                navigator!.pop();
-              }
+              if (navigator?.canPop() ?? false) navigator!.pop();
               return null;
             },
           ),
@@ -599,38 +496,29 @@ class _MyAppCoreState extends ConsumerState<MyAppCore> {
               CallbackAction<ToggleCaptureUtilityIntent>(
                 onInvoke: (intent) {
                   toggleCaptureUtility(ref);
-                  if (kDebugMode) {
+                  if (kDebugMode)
                     print('[MyApp Actions] Handled ToggleCaptureUtilityIntent');
-                  }
                   return null;
                 },
               ),
           NewMemoIntent: CallbackAction<NewMemoIntent>(
             onInvoke: (intent) {
-              // Decide where to navigate: maybe the Notes Hub now?
-              // Or keep it opening the generic new note screen?
-              // Let's keep it generic for now.
+              // Navigate to the generic new note screen. It will use the configured note server.
               ref
                   .read(rootNavigatorKeyProvider)
                   .currentState
                   ?.pushNamed('/new-note');
-              if (kDebugMode) {
+              if (kDebugMode)
                 print(
                   '[MyApp Actions] Handled NewMemoIntent - opening new note screen',
                 );
-              }
               return null;
             },
           ),
-          // Removed ToggleChatOverlayIntent action
         },
         child: GestureDetector(
-          // Keep GestureDetector for unfocus
-          onTap: () {
-            FocusManager.instance.primaryFocus?.unfocus();
-          },
+          onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
           child: CupertinoApp(
-            // This is now the root UI widget
             theme: cupertinoTheme,
             navigatorKey: ref.read(rootNavigatorKeyProvider),
             title: 'Flutter Memos',
@@ -643,7 +531,6 @@ class _MyAppCoreState extends ConsumerState<MyAppCore> {
             supportedLocales: const [Locale('en', '')],
             home: const ConfigCheckWrapper(), // Initial screen after loading
             onGenerateRoute: generateRoute, // Use the global route generator
-            // Removed the builder that added the ChatOverlay
             builder: (context, child) => child ?? const SizedBox.shrink(),
           ),
         ),

@@ -2,8 +2,10 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_memos/models/server_config.dart';
-import 'package:flutter_memos/providers/server_config_provider.dart';
-// Add imports for BaseApiService and specific services
+// Import new providers
+import 'package:flutter_memos/providers/note_server_config_provider.dart';
+import 'package:flutter_memos/providers/task_server_config_provider.dart';
+// Import BaseApiService and specific services
 import 'package:flutter_memos/services/base_api_service.dart';
 import 'package:flutter_memos/services/blinko_api_service.dart';
 import 'package:flutter_memos/services/memos_api_service.dart';
@@ -12,10 +14,18 @@ import 'package:flutter_memos/services/vikunja_api_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
-class AddEditServerScreen extends ConsumerStatefulWidget {
-  final ServerConfig? serverToEdit; // Null when adding a new server
+// Enum to define the purpose of the server being added/edited
+enum ServerPurpose { note, task }
 
-  const AddEditServerScreen({super.key, this.serverToEdit});
+class AddEditServerScreen extends ConsumerStatefulWidget {
+  final ServerConfig? serverToEdit; // The existing config (if editing)
+  final ServerPurpose purpose; // Purpose: Note or Task
+
+  const AddEditServerScreen({
+    super.key,
+    this.serverToEdit,
+    required this.purpose,
+  });
 
   @override
   ConsumerState<AddEditServerScreen> createState() => _AddEditServerScreenState();
@@ -26,8 +36,8 @@ class _AddEditServerScreenState extends ConsumerState<AddEditServerScreen> {
   final _nameController = TextEditingController();
   final _urlController = TextEditingController();
   final _tokenController = TextEditingController();
-  // Default to memos
-  ServerType _selectedServerType = ServerType.memos;
+  // Default server type based on purpose
+  late ServerType _selectedServerType;
 
   bool _isTestingConnection = false;
   String? _urlError;
@@ -38,16 +48,31 @@ class _AddEditServerScreenState extends ConsumerState<AddEditServerScreen> {
   @override
   void initState() {
     super.initState();
+    // Set initial server type based on purpose
+    _selectedServerType =
+        widget.purpose == ServerPurpose.note
+            ? ServerType
+                .memos // Default for notes
+            : ServerType.vikunja; // Default for tasks
+
     if (_isEditing) {
       _nameController.text = widget.serverToEdit!.name ?? '';
       _urlController.text = widget.serverToEdit!.serverUrl;
       _tokenController.text = widget.serverToEdit!.authToken;
-      // Initialize server type, ensuring it's not Todoist
-      _selectedServerType =
-          widget.serverToEdit!.serverType == ServerType.todoist
-              ? ServerType
-                  .memos // Fallback if somehow a Todoist config is passed
-              : widget.serverToEdit!.serverType;
+      // Ensure the edited server's type is valid for the purpose
+      if (_isValidServerTypeForPurpose(
+        widget.serverToEdit!.serverType,
+        widget.purpose,
+      )) {
+        _selectedServerType = widget.serverToEdit!.serverType;
+      } else {
+        // If the existing type is somehow invalid for the purpose, log error and keep default
+        if (kDebugMode) {
+          print(
+            "[AddEditServerScreen] Warning: Editing server with type ${widget.serverToEdit!.serverType} which is invalid for purpose ${widget.purpose}. Using default type.",
+          );
+        }
+      }
     }
   }
 
@@ -88,7 +113,6 @@ class _AddEditServerScreenState extends ConsumerState<AddEditServerScreen> {
     setState(() => _tokenError = null);
     return true;
   }
-
 
   Future<void> _pasteTokenFromClipboard() async {
     final clipboardData = await Clipboard.getData(Clipboard.kTextPlain);
@@ -148,14 +172,13 @@ class _AddEditServerScreenState extends ConsumerState<AddEditServerScreen> {
       case ServerType.blinko:
         testApiService = BlinkoApiService();
         break;
-      case ServerType.vikunja: // Added Vikunja case
+      case ServerType.vikunja:
         testApiService = VikunjaApiService();
         break;
-      case ServerType.todoist:
-        // This case should technically be unreachable now
+      case ServerType.todoist: // Should not happen
         if (kDebugMode) {
           print(
-            "[AddEditServerScreen] Error: Attempted test connection with Todoist type selected.",
+            "[AddEditServerScreen] Error: Test connection attempted with Todoist type.",
           );
         }
         _showResultDialog(
@@ -170,6 +193,7 @@ class _AddEditServerScreenState extends ConsumerState<AddEditServerScreen> {
     }
 
     try {
+      // Configure service with temporary details for testing
       await testApiService.configureService(baseUrl: url, authToken: token);
       bool isHealthy = await testApiService.checkHealth();
 
@@ -216,54 +240,56 @@ class _AddEditServerScreenState extends ConsumerState<AddEditServerScreen> {
       );
       return;
     }
-
-    final name = _nameController.text.trim();
-    final url = _urlController.text.trim();
-    final token = _tokenController.text.trim();
-    final notifier = ref.read(multiServerConfigProvider.notifier);
-
-    if (kDebugMode) {
-      print(
-        '[AddEditServerScreen] Saving config. UI _selectedServerType: ${_selectedServerType.name}',
-      );
-    }
-
-    // Ensure selected type is not Todoist before creating config
-    if (_selectedServerType == ServerType.todoist) {
+    // Ensure selected type is valid for the purpose
+    if (!_isValidServerTypeForPurpose(_selectedServerType, widget.purpose)) {
       if (kDebugMode) {
         print(
-          "[AddEditServerScreen] Error: Attempted to save with Todoist type selected.",
+          "[AddEditServerScreen] Error: Attempted to save with invalid type '$_selectedServerType' for purpose '${widget.purpose}'.",
         );
       }
       _showResultDialog(
         'Internal Error',
-        'Cannot save configuration with invalid type.',
+        'Cannot save configuration with invalid type for this purpose.',
         isError: true,
       );
       return;
     }
 
+    final name = _nameController.text.trim();
+    final url = _urlController.text.trim();
+    final token = _tokenController.text.trim();
 
     final config = ServerConfig(
       id: widget.serverToEdit?.id ?? const Uuid().v4(),
       name: name.isNotEmpty ? name : null,
       serverUrl: url,
       authToken: token,
-      serverType: _selectedServerType, // Memos, Blinko, or Vikunja
+      serverType: _selectedServerType,
     );
 
     if (kDebugMode) {
       print(
-        '[AddEditServerScreen] Created ServerConfig object to save: ${config.toString()}',
+        '[AddEditServerScreen] Saving config for purpose: ${widget.purpose}. Config: ${config.toString()}',
       );
     }
 
-    bool success;
-    if (_isEditing) {
-      success = await notifier.updateServer(config);
-    } else {
-      success = await notifier.addServer(config);
+    bool success = false;
+    try {
+      // Use the appropriate notifier based on the purpose
+      if (widget.purpose == ServerPurpose.note) {
+        final notifier = ref.read(noteServerConfigProvider.notifier);
+        success = await notifier.setConfiguration(config);
+      } else {
+        // ServerPurpose.task
+        final notifier = ref.read(taskServerConfigProvider.notifier);
+        success = await notifier.setConfiguration(config);
+      }
+    } catch (e) {
+      if (kDebugMode)
+        print("[AddEditServerScreen] Error saving configuration: $e");
+      success = false;
     }
+
 
     if (success && mounted) {
       Navigator.of(context).pop(); // Go back to settings screen
@@ -272,16 +298,67 @@ class _AddEditServerScreenState extends ConsumerState<AddEditServerScreen> {
     }
   }
 
+  // Helper to check if a server type is valid for the given purpose
+  bool _isValidServerTypeForPurpose(ServerType type, ServerPurpose purpose) {
+    if (purpose == ServerPurpose.note) {
+      // Memos, Blinko, Vikunja are valid note servers
+      return type == ServerType.memos ||
+          type == ServerType.blinko ||
+          type == ServerType.vikunja;
+    } else {
+      // ServerPurpose.task
+      // Only Vikunja is a valid task server currently
+      return type == ServerType.vikunja;
+    }
+  }
+
+  // Build the segmented control options based on the purpose
+  Map<ServerType, Widget> _buildServerTypeOptions() {
+    Map<ServerType, Widget> options = {};
+    if (widget.purpose == ServerPurpose.note) {
+      options = {
+        ServerType.memos: const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 8),
+          child: Text('Memos'),
+        ),
+        ServerType.blinko: const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 8),
+          child: Text('Blinko'),
+        ),
+        ServerType.vikunja: const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 8),
+          child: Text('Vikunja (Notes)'),
+        ),
+      };
+    } else {
+      // ServerPurpose.task
+      options = {
+        ServerType.vikunja: const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 8),
+          child: Text('Vikunja (Tasks)'),
+        ),
+        // Add other task server types here in the future
+      };
+    }
+    return options;
+  }
+
   @override
   Widget build(BuildContext context) {
     const tokenLabel = 'Token';
     const tokenPlaceholder = 'Enter Access Token / API Key'; // More generic
+    final String title =
+        _isEditing
+            ? 'Edit ${widget.purpose == ServerPurpose.note ? "Note" : "Task"} Server'
+            : 'Add ${widget.purpose == ServerPurpose.note ? "Note" : "Task"} Server';
+
+    final serverTypeOptions = _buildServerTypeOptions();
 
     return GestureDetector(
        onTap: () => FocusScope.of(context).unfocus(),
        child: CupertinoPageScaffold(
         navigationBar: CupertinoNavigationBar(
-          middle: Text(_isEditing ? 'Edit Server' : 'Add Server'),
+          middle: Text(title),
           transitionBetweenRoutes: false,
           trailing: CupertinoButton(
             padding: EdgeInsets.zero,
@@ -298,32 +375,22 @@ class _AddEditServerScreenState extends ConsumerState<AddEditServerScreen> {
                 CupertinoFormSection.insetGrouped(
                   header: const Text('SERVER DETAILS'),
                   children: [
-                    // Server Type Picker - Added Vikunja
+                    // Server Type Picker - Dynamically built
                     CupertinoFormRow(
                       prefix: const Text('Type'),
                       child: CupertinoSegmentedControl<ServerType>(
-                        children: const {
-                          ServerType.memos: Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 8),
-                            child: Text('Memos'),
-                          ),
-                          ServerType.blinko: Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 8),
-                            child: Text('Blinko'),
-                          ),
-                          ServerType.vikunja: Padding(
-                            // Added Vikunja
-                            padding: EdgeInsets.symmetric(horizontal: 8),
-                            child: Text('Vikunja'),
-                          ),
-                        },
+                        children: serverTypeOptions,
                         groupValue: _selectedServerType,
                         onValueChanged: (ServerType? newValue) {
-                          // Only allow switching between Memos, Blinko, Vikunja
+                          // Only allow switching to valid types for the current purpose
                           if (newValue != null &&
-                              newValue != ServerType.todoist) {
+                              _isValidServerTypeForPurpose(
+                                newValue,
+                                widget.purpose,
+                              )) {
                             setState(() {
                               _selectedServerType = newValue;
+                              // Re-validate token if needed (e.g., different requirements per type)
                               _validateToken(_tokenController.text);
                             });
                           }
@@ -332,14 +399,13 @@ class _AddEditServerScreenState extends ConsumerState<AddEditServerScreen> {
                     ),
                     CupertinoTextFormFieldRow(
                       controller: _nameController,
-                      placeholder:
-                          'My Server (Optional)', // Generic placeholder
+                      placeholder: 'My Server (Optional)',
                       prefix: const Text('Name'),
                       textInputAction: TextInputAction.next,
                     ),
                     CupertinoTextFormFieldRow(
                       controller: _urlController,
-                      placeholder: 'https://server.example.com', // Generic
+                      placeholder: 'https://server.example.com',
                       prefix: const Text('URL'),
                       keyboardType: TextInputType.url,
                       autocorrect: false,
@@ -362,7 +428,7 @@ class _AddEditServerScreenState extends ConsumerState<AddEditServerScreen> {
                       ),
                     CupertinoTextFormFieldRow(
                       controller: _tokenController,
-                      placeholder: tokenPlaceholder, // Generic placeholder
+                      placeholder: tokenPlaceholder,
                       prefix: const Text(tokenLabel),
                       obscureText: true,
                       autocorrect: false,
@@ -426,43 +492,8 @@ class _AddEditServerScreenState extends ConsumerState<AddEditServerScreen> {
 
                  const SizedBox(height: 20),
 
-                 if (_isEditing)
-                   CupertinoButton(
-                     color: CupertinoColors.destructiveRed,
-                     onPressed: () async {
-                       final confirmed = await showCupertinoDialog<bool>(
-                         context: context,
-                         builder: (context) => CupertinoAlertDialog(
-                           title: const Text('Delete Server?'),
-                              content: Text(
-                                'Are you sure you want to delete "${widget.serverToEdit!.name ?? widget.serverToEdit!.serverUrl}"?',
-                              ),
-                           actions: [
-                             CupertinoDialogAction(
-                               child: const Text('Cancel'),
-                               onPressed: () => Navigator.of(context).pop(false),
-                             ),
-                             CupertinoDialogAction(
-                               isDestructiveAction: true,
-                               child: const Text('Delete'),
-                               onPressed: () => Navigator.of(context).pop(true),
-                             ),
-                           ],
-                         ),
-                       );
-
-                       if (confirmed == true) {
-                         final success = await ref.read(multiServerConfigProvider.notifier).removeServer(widget.serverToEdit!.id);
-                        if (!mounted) return;
-                        if (success) {
-                          Navigator.of(context).pop();
-                        } else {
-                            _showResultDialog('Error', 'Failed to delete server.', isError: true);
-                         }
-                       }
-                     },
-                     child: const Text('Delete Server'),
-                   ),
+                // Delete button is now handled in SettingsScreen
+                // if (_isEditing) ...
               ],
             ),
           ),
