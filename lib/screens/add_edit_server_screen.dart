@@ -200,12 +200,13 @@ class _AddEditServerScreenState extends ConsumerState<AddEditServerScreen> {
 
     try {
       // Configure service with temporary details for testing
-      // Pass null for serverId as it's optional and not needed for basic health check
+      // Pass the serverId if we are editing an existing server
       await testApiService.configureService(
         baseUrl: url,
         authStrategy: testAuthStrategy, // Pass strategy
-        authToken: token, // Keep fallback for now
-        serverId: null, // Explicitly pass null for optional serverId
+        authToken:
+            token, // Keep fallback for now (though strategy is preferred)
+        serverId: widget.serverToEdit?.id, // Pass ID if editing
       );
       bool isHealthy = await testApiService.checkHealth();
 
