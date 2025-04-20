@@ -650,12 +650,14 @@ class VikunjaApiService implements TaskApiService {
     }
 
     // Map app Comment model to Vikunja request body
-    final request = vikunja.TasksTaskIDCommentsPutRequest(
+    // Use ModelsTaskComment directly as the payload
+    final request = vikunja.ModelsTaskComment(
       comment: comment.content ?? '',
-      // Vikunja doesn't seem to support setting author/timestamps on creation via this endpoint
+      // Other fields like author, created, updated are usually set by the server
     );
 
     try {
+      // Pass the ModelsTaskComment object as the second argument
       final createdVComment = await _tasksApi.tasksTaskIDCommentsPut(
         taskIdInt,
         request,
@@ -719,36 +721,20 @@ class VikunjaApiService implements TaskApiService {
     }
 
     // Map app Comment model to Vikunja request body for update
-    // API endpoint POST /tasks/{taskid}/comments/{commentid} seems to take an empty body
-    // but PUT /comments/{commentid} takes ModelsComment. Let's try PUT /comments/{commentid}.
-    // This requires a top-level CommentsApi. Assuming it exists as _commentsApi.
-    /*
-    final request = vikunja.ModelsComment(
-      comment_: comment.content ?? '',
-      // Include other fields if necessary, like author ID if allowed?
-    );
-    */
-    // Let's try the task-scoped endpoint POST /tasks/{taskid}/comments/{commentid}
-    // It seems designed for updates but takes an empty body? Let's assume it updates content implicitly or needs a specific payload.
-    // The generated client might expect a body. Let's try sending the content.
-    // The API spec for POST /tasks/{taskid}/comments/{commentid} is unclear.
-    // Let's assume we need PUT /comments/{commentid} which requires a ModelsComment payload.
-    // We need a CommentsApi instance for this. Let's add it.
-    // late vikunja.CommentsApi _commentsApi; // Add this near other API instances
-
-    // Re-evaluating: The TaskApi has tasksTaskIDCommentsCommentIDPost. Let's assume it updates the comment.
-    // What payload does it take? The generated code might expect `TasksTaskIDCommentsCommentIDPostRequest`.
-    // Let's assume it takes the comment content.
-    final request = vikunja.TasksTaskIDCommentsCommentIDPostRequest(
+    // Use ModelsTaskComment as the payload for the POST request
+    final request = vikunja.ModelsTaskComment(
       comment: comment.content ?? '',
+      // Include ID? The endpoint has it in the path. Server usually ignores ID in payload for updates.
+      // id: commentIdInt, // Probably not needed
+      // Other fields like author, timestamps are usually not updatable by client
     );
 
     try {
-      // Use the task-scoped POST endpoint
+      // Use the task-scoped POST endpoint, passing the payload as the third argument
       final updatedVComment = await _tasksApi.tasksTaskIDCommentsCommentIDPost(
         taskIdInt,
         commentIdInt,
-        request,
+        request, // Pass the ModelsTaskComment payload here
       );
 
       if (updatedVComment == null) {
@@ -932,14 +918,7 @@ class VikunjaApiService implements TaskApiService {
 
   // --- HELPER METHODS ---
 
-  /// Helper to decode response body bytes safely.
-  Future<Uint8List> _decodeBodyBytes(dynamic response) async {
-    if (response is Response) {
-        return response.bodyBytes;
-    }
-    // Add handling for other response types if necessary
-    return Uint8List(0);
-  }
+  // Removed unused _decodeBodyBytes function
 
   /// Centralized error handling for API calls.
   void _handleApiError(String context, dynamic error) {
@@ -948,26 +927,12 @@ class VikunjaApiService implements TaskApiService {
 
     if (error is vikunja.ApiException) {
       statusCode = error.code;
+      // Use the message field directly from ApiException
       String rawMessage = error.message ?? 'Unknown API Exception (Code: $statusCode)';
       errorMessage = rawMessage; // Start with the raw message
 
-      // Try to decode body if available
-      if (error.body is List<int>) {
-         try {
-            final decodedBody = utf8.decode(error.body as List<int>);
-            // Vikunja often returns JSON errors like {"message": "..."}
-            final jsonBody = jsonDecode(decodedBody);
-            if (jsonBody is Map && jsonBody.containsKey('message')) {
-               errorMessage = jsonBody['message'];
-            } else {
-               errorMessage = decodedBody; // Use decoded body if not JSON message
-            }
-         } catch (_) {
-            // Ignore decoding/parsing errors, stick with original message
-         }
-      }
-      // Vikunja might return HTML for errors sometimes, try to extract message
-      else if (rawMessage.contains('<title>')) {
+      // Vikunja might return HTML for errors sometimes, try to extract message from the rawMessage
+      if (rawMessage.contains('<title>')) {
          try {
             // Basic extraction, might need refinement
             final titleMatch = RegExp(r'<title>(.*?)<\/title>').firstMatch(rawMessage);
@@ -985,6 +950,18 @@ class VikunjaApiService implements TaskApiService {
             }
          } catch (_) {} // Ignore parsing errors
       }
+      // Attempt to parse JSON error message if message is a JSON string
+      else {
+         try {
+            final jsonBody = jsonDecode(rawMessage);
+            if (jsonBody is Map && jsonBody.containsKey('message')) {
+               errorMessage = jsonBody['message'];
+            }
+         } catch (_) {
+            // Ignore JSON parsing errors, stick with the raw message
+         }
+      }
+
 
       stderr.writeln('[VikunjaApiService] API Error - $context: $errorMessage (Code: $statusCode)');
 
