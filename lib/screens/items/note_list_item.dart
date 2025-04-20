@@ -533,7 +533,9 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
         'Error',
         'Could not access root navigator.',
       );
-      if (kDebugMode) print("Error: rootNavigatorKey.currentState is null");
+      if (kDebugMode) {
+        print("Error: rootNavigatorKey.currentState is null");
+      }
     }
   }
 

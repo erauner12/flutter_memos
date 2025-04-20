@@ -55,7 +55,9 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
     _scrollController = ScrollController();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _updateEffectiveServerId(); // Determine serverId initially
-      if (mounted) _screenFocusNode.requestFocus();
+      if (mounted) {
+        _screenFocusNode.requestFocus();
+      }
     });
   }
 
@@ -92,9 +94,13 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
     if (_loadingDialogContext != null) {
       try {
         final navigator = Navigator.of(_loadingDialogContext!);
-        if (navigator.canPop()) navigator.pop();
+        if (navigator.canPop()) {
+          navigator.pop();
+        }
       } catch (e) {
-        if (kDebugMode) print("Error dismissing loading dialog: $e");
+        if (kDebugMode) {
+          print("Error dismissing loading dialog: $e");
+        }
       }
       _loadingDialogContext = null;
     }
@@ -122,11 +128,14 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
   }
 
   Future<void> _onRefresh() async {
-    if (_effectiveServerId == null) return; // Don't refresh if no server
-    if (kDebugMode)
+    if (_effectiveServerId == null) {
+      return;
+    } // Don't refresh if no server
+    if (kDebugMode) {
       print(
         '[ItemDetailScreen($_effectiveServerId)] Pull-to-refresh triggered.',
       );
+    }
     HapticFeedback.mediumImpact();
     if (!mounted) return;
     // Use non-family providers with itemId
@@ -363,8 +372,9 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
                       note_providers.deleteNoteProvider(widget.itemId),
                     )(); // Use non-family provider
                     if (!mounted) return;
-                    if (Navigator.of(context).canPop())
+                    if (Navigator.of(context).canPop()) {
                       Navigator.of(context).pop();
+                    }
                   } catch (e) {
                     if (!mounted) return;
                     _showErrorSnackbar('Failed to delete note: $e');
@@ -405,11 +415,13 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
       if (!mounted) return;
       _dismissLoadingDialog();
       _showErrorSnackbar('Failed to fix grammar: $e');
-      if (kDebugMode)
+      if (kDebugMode) {
         print('[ItemDetailScreen($_effectiveServerId)] Fix Grammar Error: $e');
+      }
     } finally {
-      if (mounted)
+      if (mounted) {
         ref.read(note_providers.isFixingGrammarProvider.notifier).state = false;
+      }
     }
   }
 
@@ -439,10 +451,11 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
     }
     if (!mounted) return;
     _dismissLoadingDialog();
-    if (fetchError != null)
+    if (fetchError != null) {
       _showErrorSnackbar('Failed to copy thread: $fetchError');
-    else
+    } else {
       _showSuccessSnackbar('Thread content copied to clipboard.');
+    }
   }
 
   Future<void> _chatWithThread(
@@ -468,8 +481,11 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
     } catch (e) {
       fetchError = e;
     }
+
+    // Check mounted *after* await
     if (!mounted) return;
     _dismissLoadingDialog();
+
     if (fetchError != null) {
       _showErrorSnackbar('Failed to start chat: $fetchError');
       return;
@@ -481,6 +497,7 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
       return;
     }
     try {
+      // Check mounted again before navigation
       if (!mounted) return;
       _navigateToChatScreen(
         buildContext,
@@ -490,7 +507,9 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
         _effectiveServerId!,
       );
     } catch (e) {
-      if (mounted) _showErrorSnackbar('Failed to navigate to chat: $e');
+      if (mounted) {
+        _showErrorSnackbar('Failed to navigate to chat: $e');
+      }
     }
   }
 
@@ -514,7 +533,9 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
       rootNavigatorKey.currentState!.pushNamed('/chat', arguments: chatArgs);
     } else {
       _showErrorSnackbar('Could not access root navigator.');
-      if (kDebugMode) print("Error: rootNavigatorKey.currentState is null");
+      if (kDebugMode) {
+        print("Error: rootNavigatorKey.currentState is null");
+      }
     }
   }
 
@@ -549,8 +570,9 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
       if (comments.isEmpty || !mounted) return;
       final currentIndex = ref.read(selectedCommentIndexProvider);
       final nextIndex = getNextIndex(currentIndex, comments.length);
-      if (nextIndex != currentIndex && mounted)
+      if (nextIndex != currentIndex && mounted) {
         ref.read(selectedCommentIndexProvider.notifier).state = nextIndex;
+      }
     });
   }
 
@@ -563,8 +585,9 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
       if (comments.isEmpty || !mounted) return;
       final currentIndex = ref.read(selectedCommentIndexProvider);
       final prevIndex = getPreviousIndex(currentIndex, comments.length);
-      if (prevIndex != currentIndex && mounted)
+      if (prevIndex != currentIndex && mounted) {
         ref.read(selectedCommentIndexProvider.notifier).state = prevIndex;
+      }
     });
   }
 
@@ -625,7 +648,7 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
                   memoId: widget.itemId,
                   hintText: 'Add a comment...',
                   buttonText: 'Add Comment',
-                  serverId: _effectiveServerId, // Pass effective serverId
+                  // serverId removed, CaptureUtility gets it from provider
                 ),
             ],
           ),
@@ -635,8 +658,9 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
   }
 
   Widget _buildBody() {
-    if (!mounted || _effectiveServerId == null)
+    if (!mounted || _effectiveServerId == null) {
       return const Center(child: CupertinoActivityIndicator());
+    }
     final noteAsync = ref.watch(
       note_providers.noteDetailProvider(widget.itemId),
     ); // Use non-family provider
@@ -660,6 +684,7 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
                 child: NoteContent(
                   note: note,
                   noteId: widget.itemId,
+                  serverId: '',
                   // serverId: _effectiveServerId!, // No longer needed by NoteContent
                 ),
               ),
