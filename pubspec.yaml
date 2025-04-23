@@ -57,8 +57,8 @@ dependencies:
   provider: ^6.0.5 # Keep if still used alongside Riverpod
   file_picker: ^10.0.0
 
-  # CloudKit Integration
-  flutter_cloud_kit: ^0.0.3 # Keep override version
+  # Supabase Integration
+  supabase_flutter: ^2.5.8 # Added Supabase client
 
   # MCP Integration
   mcp_dart: ^0.3.6 # Keep specific version from plan
@@ -91,7 +91,7 @@ dependency_overrides:
       path: packages/flutter_markdown
       ref: main
   uuid: ^4.5.1 # Keep override
-  flutter_cloud_kit: ^0.0.3 # Keep override
+  # flutter_cloud_kit: ^0.0.3 # Removed CloudKit override
   openai_dart: ^0.4.5 # Keep override
   synchronized: ^3.1.0+1 # Keep override
   mcp_dart: ^0.3.6 # Keep specific version from plan

@@ -1,10 +1,25 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_memos/widgets/config_check_wrapper.dart'; // Import the wrapper
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart'; // Import Supabase
 
-void main() {
+// TODO: Replace with your actual Supabase URL and Anon Key, potentially from env vars
+const String supabaseUrl = 'https://ugkvofhnqsqybgccxosm.supabase.co';
+const String supabaseAnonKey =
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVna3ZvZmhucXNxeWJnY2N4b3NtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDUzODc1NDYsImV4cCI6MjA2MDk2MzU0Nn0.niLzD267kFhw9SJJoloTEGVKnw-c3BbnoS1_A4kSOCQ';
+
+void main() async {
   // Ensure Flutter bindings are initialized for async operations before runApp
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize Supabase
+  await Supabase.initialize(
+    url: supabaseUrl,
+    anonKey: supabaseAnonKey,
+    // Optional: Add auth flow types, storage options, etc.
+    // authFlowType: AuthFlowType.pkce,
+  );
+
   runApp(const ProviderScope(child: MyAppRoot()));
 }
 

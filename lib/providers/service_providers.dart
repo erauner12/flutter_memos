@@ -1,29 +1,28 @@
 // Add these imports to fix the errors
 import 'package:flutter_memos/services/chat_ai.dart'; // Import for ChatAiBackend, ChatAiFacade
-import 'package:flutter_memos/services/chat_session_cloud_kit_service.dart'; // Import for ChatSessionCloudKitService
-import 'package:flutter_memos/services/cloud_kit_service.dart';
+// Removed CloudKit service imports
+// import 'package:flutter_memos/services/chat_session_cloud_kit_service.dart';
+// import 'package:flutter_memos/services/cloud_kit_service.dart';
 import 'package:flutter_memos/services/local_storage_service.dart'; // Import for LocalStorageService
 import 'package:flutter_memos/services/mcp_client_service.dart';
 import 'package:flutter_memos/services/minimal_openai_service.dart';
+import 'package:flutter_memos/services/supabase_data_service.dart'; // Import SupabaseDataService
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-/// Provider for accessing the CloudKitService instance.
-final cloudKitServiceProvider = Provider<CloudKitService>((ref) {
-  return CloudKitService();
-}, name: 'cloudKitService');
+// --- Removed CloudKit Providers ---
+// final cloudKitServiceProvider = Provider<CloudKitService>((ref) { ... });
+// final chatSessionCloudKitServiceProvider = Provider<ChatSessionCloudKitService>((ref) { ... });
 
+/// Provider for accessing the LocalStorageService instance.
 final localStorageServiceProvider = Provider<LocalStorageService>((ref) {
   return LocalStorageService();
 }, name: 'localStorageService');
 
-/// Provider for the ChatSessionCloudKitService instance.
-final chatSessionCloudKitServiceProvider = Provider<ChatSessionCloudKitService>(
-  (ref) {
-    return ChatSessionCloudKitService();
-  },
-  name: 'chatSessionCloudKitService',
+/// Provider for accessing the SupabaseDataService instance.
+final supabaseDataServiceProvider = Provider<SupabaseDataService>((ref) {
+  return SupabaseDataService();
+}, name: 'supabaseDataService');
 
-);
 
 // / Facade between OpenAI and MCP backends.
 final chatAiFacadeProvider = Provider<ChatAiBackend>((ref) {
@@ -59,14 +58,3 @@ final mcpClientProvider =
       (ref) => McpClientNotifier(ref),
       name: 'mcpClient', // Added name for clarity
     );
-
-// --- Removed old providers ---
-// If these providers are defined elsewhere (like in chat_providers.dart),
-// they should be removed from this file to avoid conflicts.
-// If they are truly unused, they can be deleted entirely.
-
-// final cloudKitServiceProvider = Provider<CloudKitService>((ref) { ... });
-// final localStorageServiceProvider = Provider<LocalStorageService>((ref) { ... });
-// final chatSessionCloudKitServiceProvider = Provider<ChatSessionCloudKitService>((ref) { ... });
-// final chatAiFacadeProvider = Provider<ChatAiBackend>((ref) { ... }); // This is now in chat_providers.dart
-// final geminiServiceProvider = Provider<GeminiService?>((ref) { ... }); // Assuming GeminiService is removed or handled differently

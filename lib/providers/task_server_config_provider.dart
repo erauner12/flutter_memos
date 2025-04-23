@@ -2,35 +2,39 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_memos/models/server_config.dart';
-// Import CloudKitService to potentially use it (though it will be disabled on web)
-import 'package:flutter_memos/providers/service_providers.dart';
-import 'package:flutter_memos/services/cloud_kit_service.dart';
+// Removed CloudKitService import
+// import 'package:flutter_memos/providers/service_providers.dart';
+// import 'package:flutter_memos/services/cloud_kit_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 const _taskServerConfigKey = 'task_server_config'; // Key for SharedPreferences
 
 /// Notifier for managing the single Task server configuration with persistence
+/// using SharedPreferences. CloudKit sync has been removed.
 class TaskServerConfigNotifier extends StateNotifier<ServerConfig?> {
-  final Ref _ref;
-  // Lazily get CloudKitService only when needed (and not on web)
-  CloudKitService? _cloudKitService;
+  // Removed Ref _ref and CloudKitService instance
+  // final Ref _ref;
+  // CloudKitService? _cloudKitService;
 
-  TaskServerConfigNotifier(this._ref) : super(null) {
-    if (!kIsWeb) {
-      _cloudKitService = _ref.read(cloudKitServiceProvider);
-    }
+  TaskServerConfigNotifier(/* Removed Ref _ref */) : super(null) {
+    // Removed CloudKit initialization
+    // if (!kIsWeb) {
+    //   _cloudKitService = _ref.read(cloudKitServiceProvider);
+    // }
   }
 
-  /// Load configuration, prioritizing local cache, then CloudKit (if not web).
+  /// Load configuration from local cache (SharedPreferences).
   Future<void> loadConfiguration() async {
     if (kDebugMode) {
-      print('[TaskServerConfigNotifier] Starting configuration load...');
+      print(
+        '[TaskServerConfigNotifier] Starting configuration load from cache...',
+      );
     }
     final prefs = await SharedPreferences.getInstance();
     ServerConfig? initialStateFromCache;
 
-    // 1. Load from local cache (SharedPreferences)
+    // Load from local cache (SharedPreferences)
     final cachedJsonString = prefs.getString(_taskServerConfigKey);
     if (cachedJsonString != null) {
       try {
@@ -72,39 +76,7 @@ class TaskServerConfigNotifier extends StateNotifier<ServerConfig?> {
       }
     }
 
-    // --- Now, fetch from CloudKit asynchronously (ONLY if not on web) ---
-    if (!kIsWeb && _cloudKitService != null) {
-      // TODO: Implement CloudKit sync logic for a single Task server config
-      // Similar to NoteServerConfigNotifier, but for a Task server record type.
-      try {
-        if (kDebugMode) {
-          print(
-            '[TaskServerConfigNotifier] Fetching Task server from CloudKit...',
-          );
-        }
-        // Example: Fetching a specific record (adapt CloudKitService if needed)
-        // final cloudConfig = await _cloudKitService.getTaskServerConfig(); // Assuming this method exists
-        // if (cloudConfig != null && cloudConfig != state) {
-        //   if (mounted) {
-        //     state = cloudConfig;
-        //     await _updateLocalCache(cloudConfig);
-        //     print('[TaskServerConfigNotifier] Updated state from CloudKit.');
-        //   }
-        // } else if (cloudConfig == null && state != null) {
-        //   print('[TaskServerConfigNotifier] CloudKit empty, local exists. Consider uploading.');
-        //   // await _cloudKitService.saveTaskServerConfig(state!); // Assuming this method exists
-        // }
-      } catch (e) {
-        if (kDebugMode) {
-          print(
-            '[TaskServerConfigNotifier] Error during CloudKit fetch: $e. Continuing with local data.',
-          );
-        }
-      }
-    } else if (kIsWeb) {
-      if (kDebugMode)
-        print('[TaskServerConfigNotifier] Skipping CloudKit fetch on web.');
-    }
+    // --- Removed CloudKit fetch logic ---
   }
 
   /// Helper to update the local SharedPreferences cache
@@ -143,7 +115,7 @@ class TaskServerConfigNotifier extends StateNotifier<ServerConfig?> {
     }
   }
 
-  /// Set the task server configuration locally and sync to CloudKit (if not web)
+  /// Set the task server configuration locally.
   Future<bool> setConfiguration(ServerConfig config) async {
      // Ensure type is valid
      if (!_isValidTaskServerType(config.serverType)) {
@@ -155,112 +127,44 @@ class TaskServerConfigNotifier extends StateNotifier<ServerConfig?> {
        return false;
      }
 
-    bool cloudSuccess = true; // Assume success if on web or CloudKit disabled
+    // --- Removed CloudKit sync logic ---
 
-    // Sync change to CloudKit FIRST (only if not on web)
-    if (!kIsWeb && _cloudKitService != null) {
-      try {
-        if (kDebugMode)
-          print(
-            '[TaskServerConfigNotifier] Syncing setConfiguration to CloudKit...',
-          );
-        // TODO: Implement saving a single Task server config to CloudKit
-        // cloudSuccess = await _cloudKitService.saveTaskServerConfig(config); // Assuming this method exists
-        cloudSuccess = true; // Placeholder until CloudKit method is implemented
-        if (kDebugMode)
-          print(
-            '[TaskServerConfigNotifier] CloudKit sync result: $cloudSuccess',
-          );
-      } catch (e) {
-        if (kDebugMode)
-          print(
-            '[TaskServerConfigNotifier] Error syncing setConfiguration to CloudKit: $e',
-          );
-        cloudSuccess = false;
-      }
-    } else if (kIsWeb) {
-      if (kDebugMode)
-        print(
-          '[TaskServerConfigNotifier] Skipping CloudKit sync for setConfiguration on web.',
-        );
-    }
-
-    if (cloudSuccess) {
-      if (!mounted)
-        return true; // CloudKit succeeded (or was skipped), but widget unmounted
-
+    // Update local state and cache directly
+    if (mounted) {
       state = config; // Update local state
       await _updateLocalCache(config); // Update local cache
       if (kDebugMode) {
         print(
-          '[TaskServerConfigNotifier] Set task server ${config.id} locally ${kIsWeb ? "(web)" : "and synced to CloudKit"}.',
+          '[TaskServerConfigNotifier] Set task server ${config.id} locally.',
         );
       }
       return true;
     } else {
-      if (kDebugMode) {
-        print(
-          '[TaskServerConfigNotifier] Failed to sync task server ${config.id} to CloudKit. Local state/cache not changed.',
-        );
-      }
-      return false; // CloudKit sync failed
+      // Attempt to update cache even if not mounted, but return based on cache success
+      return await _updateLocalCache(config);
     }
   }
 
-  /// Remove the task server configuration locally and sync deletion to CloudKit (if not web)
+  /// Remove the task server configuration locally.
   Future<bool> removeConfiguration() async {
     final currentConfigId = state?.id;
     if (currentConfigId == null) return true; // Nothing to remove
 
-    bool cloudSuccess = true; // Assume success if on web or CloudKit disabled
+    // --- Removed CloudKit sync logic ---
 
-    // Sync deletion to CloudKit FIRST (only if not on web)
-    if (!kIsWeb && _cloudKitService != null) {
-      try {
-        if (kDebugMode)
-          print(
-            '[TaskServerConfigNotifier] Syncing removeConfiguration to CloudKit...',
-          );
-        // TODO: Implement deleting a single Task server config from CloudKit
-        // cloudSuccess = await _cloudKitService.deleteTaskServerConfig(currentConfigId); // Assuming this method exists
-        cloudSuccess = true; // Placeholder until CloudKit method is implemented
-        if (kDebugMode)
-          print(
-            '[TaskServerConfigNotifier] CloudKit deletion sync result: $cloudSuccess',
-          );
-      } catch (e) {
-        if (kDebugMode)
-          print(
-            '[TaskServerConfigNotifier] Error syncing removeConfiguration to CloudKit: $e',
-          );
-        cloudSuccess = false;
-      }
-    } else if (kIsWeb) {
-      if (kDebugMode)
-        print(
-          '[TaskServerConfigNotifier] Skipping CloudKit sync for removeConfiguration on web.',
-        );
-    }
-
-    if (cloudSuccess) {
-      if (!mounted)
-        return true; // CloudKit succeeded (or was skipped), but widget unmounted
-
+    // Update local state and cache directly
+    if (mounted) {
       state = null; // Update local state
       await _updateLocalCache(null); // Update local cache
       if (kDebugMode) {
         print(
-          '[TaskServerConfigNotifier] Removed task server $currentConfigId locally ${kIsWeb ? "(web)" : "and synced deletion to CloudKit"}.',
+          '[TaskServerConfigNotifier] Removed task server $currentConfigId locally.',
         );
       }
       return true;
     } else {
-      if (kDebugMode) {
-        print(
-          '[TaskServerConfigNotifier] Failed to sync deleted task server $currentConfigId to CloudKit. Local state/cache not changed.',
-        );
-      }
-      return false; // CloudKit sync failed
+      // Attempt to update cache even if not mounted, but return based on cache success
+      return await _updateLocalCache(null);
     }
   }
 
@@ -296,5 +200,6 @@ class TaskServerConfigNotifier extends StateNotifier<ServerConfig?> {
 /// Provider for the single Task server configuration state and management
 final taskServerConfigProvider =
     StateNotifierProvider<TaskServerConfigNotifier, ServerConfig?>((ref) {
-  return TaskServerConfigNotifier(ref);
+      // Removed ref dependency in constructor
+      return TaskServerConfigNotifier();
 }, name: 'taskServerConfigProvider');
