@@ -9,6 +9,7 @@ import 'package:flutter_memos/models/workbench_item_type.dart';
 import 'package:flutter_memos/providers/api_providers.dart'; // Import API providers
 // Import new single config providers
 import 'package:flutter_memos/providers/note_server_config_provider.dart';
+import 'package:flutter_memos/providers/service_providers.dart';
 import 'package:flutter_memos/providers/shared_prefs_provider.dart'; // Import SharedPrefs
 import 'package:flutter_memos/providers/task_server_config_provider.dart';
 import 'package:flutter_memos/providers/workbench_instances_provider.dart';
@@ -530,6 +531,19 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
             '[WorkbenchNotifier($instanceId)] Added item ${itemToAdd.id} successfully locally.',
           );
         }
+        // Persist to Supabase
+        final supabaseService = _ref.read(supabaseDataServiceProvider);
+        final supabaseSuccess = await supabaseService.saveWorkbenchItem(
+          newItemWithDefaults,
+        );
+        if (!supabaseSuccess) {
+          if (kDebugMode) {
+            print(
+              '[WorkbenchNotifier($instanceId)] Failed to save item ${itemToAdd.id} to Supabase.',
+            );
+          }
+          // Optionally revert or set error state here
+        }
         // Fetch details only for the newly added item
         unawaited(_fetchAndPopulateDetails([newItemWithDefaults]));
       } else {
@@ -630,6 +644,19 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
           print(
             '[WorkbenchNotifier($instanceId)] Removed item $itemId successfully locally.',
           );
+        }
+        // Also delete from Supabase
+        final supabaseService = _ref.read(supabaseDataServiceProvider);
+        final supabaseSuccess = await supabaseService.deleteWorkbenchItem(
+          itemId,
+        );
+        if (!supabaseSuccess) {
+          if (kDebugMode) {
+            print(
+              '[WorkbenchNotifier($instanceId)] Failed to delete item $itemId from Supabase.',
+            );
+          }
+          // Optionally revert state or show error here
         }
         // Check if the removed item was the last opened one for this instance
         final lastOpened =

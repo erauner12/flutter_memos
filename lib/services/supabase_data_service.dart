@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_memos/models/chat_session.dart';
+// Add these at the top alongside existing imports:
+import 'package:flutter_memos/models/workbench_item_reference.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// Service class for interacting with Supabase.
@@ -114,6 +116,88 @@ class SupabaseDataService {
         );
       }
       return false;
+    }
+  }
+
+  /// Saves or updates a WorkbenchItemReference in Supabase.
+  Future<bool> saveWorkbenchItem(WorkbenchItemReference item) async {
+    try {
+      final data = {
+        'id': item.id,
+        'instance_id': item.instanceId,
+        'referenced_item_id': item.referencedItemId,
+        'referenced_item_type': describeEnum(item.referencedItemType),
+        'server_id': item.serverId,
+        'server_type': describeEnum(item.serverType),
+        'server_name': item.serverName,
+        'preview_content': item.previewContent,
+        'added_timestamp': item.addedTimestamp.toIso8601String(),
+        'parent_note_id': item.parentNoteId,
+        'sort_order': item.sortOrder,
+      };
+      await _supabase.from(workbenchItemsTable).upsert(data);
+      if (kDebugMode) {
+        print('[SupabaseDataService] Upserted workbench item ${item.id}');
+      }
+      return true;
+    } on PostgrestException catch (e, s) {
+      if (kDebugMode) {
+        print(
+          '[SupabaseDataService] PostgrestException saving item ${item.id}: ${e.message}',
+        );
+      }
+      return false;
+    } catch (e, s) {
+      if (kDebugMode) {
+        print('[SupabaseDataService] Error saving item ${item.id}: $e');
+      }
+      return false;
+    }
+  }
+
+  /// Deletes a WorkbenchItemReference by its ID.
+  Future<bool> deleteWorkbenchItem(String id) async {
+    try {
+      await _supabase.from(workbenchItemsTable).delete().eq('id', id);
+      if (kDebugMode) {
+        print('[SupabaseDataService] Deleted workbench item $id');
+      }
+      return true;
+    } on PostgrestException catch (e, s) {
+      if (kDebugMode) {
+        print(
+          '[SupabaseDataService] PostgrestException deleting item $id: ${e.message}',
+        );
+      }
+      return false;
+    } catch (e, s) {
+      if (kDebugMode) {
+        print('[SupabaseDataService] Error deleting item $id: $e');
+      }
+      return false;
+    }
+  }
+
+  /// Retrieves all WorkbenchItemReference records, optionally filtered by instanceId.
+  Future<List<WorkbenchItemReference>> getAllWorkbenchItems([
+    String? instanceId,
+  ]) async {
+    try {
+      final builder = _supabase.from(workbenchItemsTable).select();
+      if (instanceId != null) {
+        builder.eq('instance_id', instanceId);
+      }
+      final response = await builder;
+      return (response as List<dynamic>)
+          .map(
+            (e) => WorkbenchItemReference.fromJson(e as Map<String, dynamic>),
+          )
+          .toList();
+    } catch (e, s) {
+      if (kDebugMode) {
+        print('[SupabaseDataService] Error fetching workbench items: $e');
+      }
+      return [];
     }
   }
 
