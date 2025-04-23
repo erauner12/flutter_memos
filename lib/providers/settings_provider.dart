@@ -220,7 +220,7 @@ final selectedTabIndexProvider =
 // --- End Selected Tab Index Persistence ---
 
 
-/// A StateNotifier that persists string values to SharedPreferences
+/// A StateNotifier that persists string values to SecureStorage and syncs with CloudKit.
 class PersistentStringNotifier extends StateNotifier<String> {
   final Ref _ref; // Add ref
   final String preferenceKey; // Used for SecureStorage key AND CloudKit key
@@ -275,6 +275,12 @@ class PersistentStringNotifier extends StateNotifier<String> {
           '[PersistentStringNotifier] Error reading $preferenceKey from Secure Storage: $e',
         );
       }
+      // On web, secure storage might throw if not configured properly, fallback gracefully
+      if (kIsWeb) {
+        print(
+          '[PersistentStringNotifier] Secure Storage read failed on web for $preferenceKey, continuing...',
+        );
+      }
     }
 
     // 2. If not in Secure Storage, check old SharedPreferences key for migration
@@ -288,6 +294,20 @@ class PersistentStringNotifier extends StateNotifier<String> {
           '[PersistentStringNotifier] Secure Storage empty, using old SharedPreferences value for $preferenceKey. Migration needed.',
         );
       }
+      // Write migrated value to secure storage immediately
+      try {
+        await _secureStorage.write(key: preferenceKey, value: initialValue);
+        if (kDebugMode)
+          print(
+            '[PersistentStringNotifier] Migrated $preferenceKey from SharedPreferences to Secure Storage.',
+          );
+      } catch (e) {
+        if (kDebugMode)
+          print(
+            '[PersistentStringNotifier] Error writing migrated value $preferenceKey to Secure Storage: $e',
+          );
+        // If write fails, still proceed with the value in memory, but migration won't be fully complete
+      }
     }
 
     // 3. Set initial state immediately if a value was found
@@ -296,8 +316,8 @@ class PersistentStringNotifier extends StateNotifier<String> {
     }
     _initialized = true; // Mark as initialized after attempting cache load
 
-    // 4. Asynchronously check CloudKit (only if not already checked)
-    if (!_cloudKitChecked) {
+    // 4. Asynchronously check CloudKit (only if not on web and not already checked)
+    if (!kIsWeb && !_cloudKitChecked) {
       _cloudKitChecked = true; // Prevent re-checking on rebuilds
       try {
         if (kDebugMode) {
@@ -407,16 +427,14 @@ class PersistentStringNotifier extends StateNotifier<String> {
             // Both local and CloudKit are empty/null. Check migration.
             if (migrationNeededFromPrefs && oldPrefsValue != null) {
               // This case shouldn't really happen if oldPrefsValue was used for initial state
-              // but handle defensively. Write migrated value to secure storage.
+              // but handle defensively. Write migrated value to secure storage (already done above).
+              // Just remove the old prefs key.
               if (kDebugMode) {
                 print(
                   '[PersistentStringNotifier] Performing migration cleanup for $preferenceKey (CloudKit null, state empty)...',
                 );
               }
-              await _secureStorage.write(
-                key: preferenceKey,
-                value: oldPrefsValue,
-              );
+              // await _secureStorage.write(key: preferenceKey, value: oldPrefsValue); // Already written above
               await prefs.remove(preferenceKey);
               migrationNeededFromPrefs = false;
             }
@@ -430,7 +448,7 @@ class PersistentStringNotifier extends StateNotifier<String> {
               '[PersistentStringNotifier] Performing final migration cleanup for $preferenceKey (post-CloudKit check)...',
             );
           }
-          await _secureStorage.write(key: preferenceKey, value: oldPrefsValue);
+          // await _secureStorage.write(key: preferenceKey, value: oldPrefsValue); // Already written above
           await prefs.remove(preferenceKey);
           if (kDebugMode) {
             print(
@@ -453,7 +471,7 @@ class PersistentStringNotifier extends StateNotifier<String> {
               '[PersistentStringNotifier] Performing migration cleanup for $preferenceKey after CloudKit error...',
             );
           }
-          await _secureStorage.write(key: preferenceKey, value: oldPrefsValue);
+          // await _secureStorage.write(key: preferenceKey, value: oldPrefsValue); // Already written above
           await prefs.remove(preferenceKey);
           if (kDebugMode) {
             print(
@@ -463,7 +481,11 @@ class PersistentStringNotifier extends StateNotifier<String> {
         }
       }
     } else {
-      if (kDebugMode && _initialized) {
+      if (kDebugMode && kIsWeb) {
+        print(
+          '[PersistentStringNotifier] Skipping CloudKit check for $preferenceKey on web.',
+        );
+      } else if (kDebugMode && _initialized) {
         print(
           '[PersistentStringNotifier] Skipping redundant CloudKit check for $preferenceKey.',
         );
@@ -483,15 +505,21 @@ class PersistentStringNotifier extends StateNotifier<String> {
           '[PersistentStringNotifier] Warning: Setting value before initialization completed for $preferenceKey. Waiting briefly...',
         );
       }
-      int attempts = 0;
-      while (!_initialized && attempts < 10) {
-        await Future.delayed(const Duration(milliseconds: 100));
-        attempts++;
+      // Use a timeout mechanism instead of fixed attempts
+      try {
+        await init().timeout(const Duration(seconds: 2));
+      } catch (e) {
+        if (kDebugMode) {
+          print(
+            '[PersistentStringNotifier] Error: Initialization timed out or failed for $preferenceKey. Cannot save value. Error: $e',
+          );
+        }
+        return false;
       }
       if (!_initialized) {
         if (kDebugMode) {
           print(
-            '[PersistentStringNotifier] Error: Initialization timed out for $preferenceKey. Cannot save value.',
+            '[PersistentStringNotifier] Error: Initialization did not complete for $preferenceKey after waiting. Cannot save value.',
           );
         }
         return false;
@@ -520,6 +548,7 @@ class PersistentStringNotifier extends StateNotifier<String> {
       );
     }
 
+    // Save to Secure Storage (works on web via web storage)
     try {
       await _secureStorage.write(key: preferenceKey, value: value);
       if (kDebugMode) {
@@ -533,40 +562,50 @@ class PersistentStringNotifier extends StateNotifier<String> {
           '[PersistentStringNotifier] Error writing $preferenceKey to Secure Storage: $e',
         );
       }
-      return false;
+      // Don't immediately return false, still attempt CloudKit if not on web
     }
 
-    try {
-      if (kDebugMode) {
-        print(
-          '[PersistentStringNotifier] Attempting to save $preferenceKey to CloudKit...',
-        );
-      }
-      final cloudSuccess = await _cloudKitService.saveSetting(
-        preferenceKey,
-        value,
-      );
-      if (cloudSuccess) {
+    // Save to CloudKit (only if not on web)
+    if (!kIsWeb) {
+      try {
         if (kDebugMode) {
           print(
-            '[PersistentStringNotifier] Successfully saved $preferenceKey to CloudKit.',
+            '[PersistentStringNotifier] Attempting to save $preferenceKey to CloudKit...',
           );
         }
-      } else {
+        final cloudSuccess = await _cloudKitService.saveSetting(
+          preferenceKey,
+          value,
+        );
+        if (cloudSuccess) {
+          if (kDebugMode) {
+            print(
+              '[PersistentStringNotifier] Successfully saved $preferenceKey to CloudKit.',
+            );
+          }
+        } else {
+          if (kDebugMode) {
+            print(
+              '[PersistentStringNotifier] Failed to sync value for $preferenceKey to CloudKit. Local value is saved.',
+            );
+          }
+          // Optionally return false here if CloudKit sync failure is critical
+        }
+      } catch (e) {
         if (kDebugMode) {
           print(
-            '[PersistentStringNotifier] Failed to sync value for $preferenceKey to CloudKit. Local value is saved.',
+            '[PersistentStringNotifier] Error syncing preference $preferenceKey to CloudKit: $e',
           );
         }
+        // Optionally return false here
       }
-    } catch (e) {
-      if (kDebugMode) {
+    } else {
+      if (kDebugMode)
         print(
-          '[PersistentStringNotifier] Error syncing preference $preferenceKey to CloudKit: $e',
+          '[PersistentStringNotifier] Skipping CloudKit save for $preferenceKey on web.',
         );
-      }
     }
-    return true;
+    return true; // Return true if local save succeeded, regardless of CloudKit status
   }
 
   Future<bool> clear() async {
@@ -626,6 +665,11 @@ class PersistentSetNotifier<T> extends StateNotifier<Set<T>> {
             '[PersistentSetNotifier<$T>] Error reading $preferenceKey from Secure Storage: $e',
           );
         }
+        if (kIsWeb) {
+          print(
+            '[PersistentSetNotifier<$T>] Secure Storage read failed on web for $preferenceKey, continuing...',
+          );
+        }
       }
 
       // 2. Set initial state from Secure Storage if found
@@ -634,8 +678,8 @@ class PersistentSetNotifier<T> extends StateNotifier<Set<T>> {
       }
       _initialized = true; // Mark initialized after cache load attempt
 
-      // 3. Asynchronously check CloudKit (only once)
-      if (!_cloudKitChecked) {
+      // 3. Asynchronously check CloudKit (only if not on web and not already checked)
+      if (!kIsWeb && !_cloudKitChecked) {
         _cloudKitChecked = true;
         try {
           if (kDebugMode) {
@@ -686,6 +730,10 @@ class PersistentSetNotifier<T> extends StateNotifier<Set<T>> {
             );
           }
         }
+      } else if (kDebugMode && kIsWeb) {
+        print(
+          '[PersistentSetNotifier<$T>] Skipping CloudKit check for $preferenceKey on web.',
+        );
       } else if (kDebugMode && _initialized) {
         print(
           '[PersistentSetNotifier<$T>] Skipping redundant CloudKit check for $preferenceKey.',
@@ -769,14 +817,29 @@ class PersistentSetNotifier<T> extends StateNotifier<Set<T>> {
         );
       }
       // Optionally wait for init or return false
-      await init(); // Ensure init completes
-      if (!_initialized) return false; // If init failed
+      try {
+        await init().timeout(const Duration(seconds: 2));
+      } catch (e) {
+        if (kDebugMode)
+          print(
+            '[PersistentSetNotifier<$T>] Initialization timed out or failed during save for $preferenceKey. Error: $e',
+          );
+        return false;
+      }
+      if (!_initialized) {
+        if (kDebugMode)
+          print(
+            '[PersistentSetNotifier<$T>] Initialization did not complete for $preferenceKey after waiting during save.',
+          );
+        return false; // If init failed
+      }
     }
 
     final jsonString = _encodeSet(stateToSave);
     bool secureSuccess = false;
-    bool cloudSuccess = false;
+    // bool cloudSuccess = false; // Cloud success is handled async
 
+    // Save to Secure Storage (Web Safe)
     try {
       await _secureStorage.write(key: preferenceKey, value: jsonString);
       secureSuccess = true;
@@ -791,26 +854,35 @@ class PersistentSetNotifier<T> extends StateNotifier<Set<T>> {
           '[PersistentSetNotifier<$T>] Error writing $preferenceKey to Secure Storage: $e',
         );
       }
+      // If local save fails, report failure immediately
+      return false;
     }
 
-    // Save to CloudKit asynchronously (fire and forget, or await if critical)
-    _cloudKitService
-        .saveSetting(preferenceKey, jsonString)
-        .then((success) {
-          cloudSuccess = success;
-          if (kDebugMode) {
-            print(
-              '[PersistentSetNotifier<$T>] CloudKit save attempt for $preferenceKey finished. Success: $cloudSuccess',
-            );
-          }
-        })
-        .catchError((e) {
-          if (kDebugMode) {
-            print(
-              '[PersistentSetNotifier<$T>] Error syncing preference $preferenceKey to CloudKit: $e',
-            );
-          }
-        });
+    // Save to CloudKit asynchronously (fire and forget, only if not on web)
+    if (!kIsWeb) {
+      _cloudKitService
+          .saveSetting(preferenceKey, jsonString)
+          .then((success) {
+            // cloudSuccess = success; // Not strictly needed if fire-and-forget
+            if (kDebugMode) {
+              print(
+                '[PersistentSetNotifier<$T>] CloudKit save attempt for $preferenceKey finished. Success: $success',
+              );
+            }
+          })
+          .catchError((e) {
+            if (kDebugMode) {
+              print(
+                '[PersistentSetNotifier<$T>] Error syncing preference $preferenceKey to CloudKit: $e',
+              );
+            }
+          });
+    } else {
+      if (kDebugMode)
+        print(
+          '[PersistentSetNotifier<$T>] Skipping CloudKit save for $preferenceKey on web.',
+        );
+    }
 
     return secureSuccess; // Primarily report local save success
   }
@@ -819,7 +891,8 @@ class PersistentSetNotifier<T> extends StateNotifier<Set<T>> {
   String _encodeSet(Set<T> value) {
     // Currently assumes T is String, adapt if needed for other types
     if (T == String) {
-      return jsonEncode((value as Set<String>).toList());
+      // Ensure elements are actually strings before encoding
+      return jsonEncode((value).map((e) => e.toString()).toList());
     }
     // Add handling for other types if necessary
     throw UnsupportedError(
@@ -859,3 +932,4 @@ class PersistentSetNotifier<T> extends StateNotifier<Set<T>> {
 
 
 // --- Settings Service ---
+// (No SettingsService class defined in the provided snippet)

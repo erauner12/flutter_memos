@@ -19,8 +19,11 @@ import 'package:uuid/uuid.dart';
 ///
 /// This class handles saving, fetching, and deleting records related to
 /// server configurations, workbench items, instances, and user settings.
+/// **Note:** CloudKit operations are disabled on the web platform (`kIsWeb`).
 class CloudKitService {
-  final FlutterCloudKit _cloudKit = FlutterCloudKit(
+  // Conditionally initialize CloudKit only if not on web
+  final FlutterCloudKit? _cloudKit =
+      kIsWeb ? null : FlutterCloudKit(
     containerId: Env.cloudKitContainerId,
   );
   final String _userSettingsRecordName = 'currentUserSettings';
@@ -52,12 +55,19 @@ class CloudKitService {
   }
 
   /// Initializes the CloudKit service, potentially checking account status.
+  /// Returns `couldNotDetermine` immediately on web.
   Future<CloudKitAccountStatus> initialize() async {
+    if (kIsWeb) {
+      if (kDebugMode) {
+        print('[CloudKitService] Skipping initialization on web.');
+      }
+      return CloudKitAccountStatus.couldNotDetermine;
+    }
     if (kDebugMode) {
       print('[CloudKitService] Initializing...');
     }
     try {
-      final status = await _cloudKit.getAccountStatus();
+      final status = await _cloudKit!.getAccountStatus();
       if (kDebugMode) {
         print('[CloudKitService] CloudKit Account Status: ${status.name}');
       }
@@ -72,12 +82,17 @@ class CloudKitService {
 
   // --- ServerConfig Methods ---
   Future<bool> saveServerConfig(ServerConfig config) async {
+    if (kIsWeb) {
+      if (kDebugMode)
+        print('[CloudKitService] Skipping saveServerConfig on web.');
+      return true; // Assume success on web (no-op)
+    }
     if (kDebugMode) {
       print('[CloudKitService] saveServerConfig called for ${config.id}');
     }
     try {
       final recordData = _serializeMap(config.toJson());
-      await _cloudKit.saveRecord(
+      await _cloudKit!.saveRecord(
         scope: _scope,
         recordType: serverConfigRecordType,
         recordName: config.id,
@@ -117,9 +132,14 @@ class CloudKitService {
   }
 
   Future<ServerConfig?> getServerConfig(String id) async {
+    if (kIsWeb) {
+      if (kDebugMode)
+        print('[CloudKitService] Skipping getServerConfig on web.');
+      return null;
+    }
     if (kDebugMode) print('[CloudKitService] getServerConfig called for $id');
     try {
-      final record = await _cloudKit.getRecord(
+      final record = await _cloudKit!.getRecord(
         scope: _scope,
         recordName: id,
       );
@@ -148,9 +168,14 @@ class CloudKitService {
   }
 
   Future<List<ServerConfig>> getAllServerConfigs() async {
+    if (kIsWeb) {
+      if (kDebugMode)
+        print('[CloudKitService] Skipping getAllServerConfigs on web.');
+      return [];
+    }
     if (kDebugMode) print('[CloudKitService] getAllServerConfigs called');
     try {
-      final records = await _cloudKit.getRecordsByType(
+      final records = await _cloudKit!.getRecordsByType(
         scope: _scope,
         recordType: serverConfigRecordType,
       );
@@ -188,11 +213,16 @@ class CloudKitService {
   }
 
   Future<bool> deleteServerConfig(String id) async {
+    if (kIsWeb) {
+      if (kDebugMode)
+        print('[CloudKitService] Skipping deleteServerConfig on web.');
+      return true; // Assume success on web (no-op)
+    }
     if (kDebugMode) {
       print('[CloudKitService] deleteServerConfig called for $id');
     }
     try {
-      await _cloudKit.deleteRecord(scope: _scope, recordName: id);
+      await _cloudKit!.deleteRecord(scope: _scope, recordName: id);
       if (kDebugMode) {
         print('[CloudKitService] Successfully deleted ServerConfig $id');
       }
@@ -207,12 +237,17 @@ class CloudKitService {
 
   // --- McpServerConfig Methods ---
   Future<bool> saveMcpServerConfig(McpServerConfig config) async {
+    if (kIsWeb) {
+      if (kDebugMode)
+        print('[CloudKitService] Skipping saveMcpServerConfig on web.');
+      return true; // Assume success on web (no-op)
+    }
     if (kDebugMode) {
       print('[CloudKitService] saveMcpServerConfig called for ${config.id}');
     }
     try {
       final recordData = _serializeMap(config.toJson());
-      await _cloudKit.saveRecord(
+      await _cloudKit!.saveRecord(
         scope: _scope,
         recordType: mcpServerConfigRecordType,
         recordName: config.id,
@@ -254,9 +289,14 @@ class CloudKitService {
   }
 
   Future<List<McpServerConfig>> getAllMcpServerConfigs() async {
+    if (kIsWeb) {
+      if (kDebugMode)
+        print('[CloudKitService] Skipping getAllMcpServerConfigs on web.');
+      return [];
+    }
     if (kDebugMode) print('[CloudKitService] getAllMcpServerConfigs called');
     try {
-      final records = await _cloudKit.getRecordsByType(
+      final records = await _cloudKit!.getRecordsByType(
         scope: _scope,
         recordType: mcpServerConfigRecordType,
       );
@@ -299,11 +339,16 @@ class CloudKitService {
   }
 
   Future<bool> deleteMcpServerConfig(String id) async {
+    if (kIsWeb) {
+      if (kDebugMode)
+        print('[CloudKitService] Skipping deleteMcpServerConfig on web.');
+      return true; // Assume success on web (no-op)
+    }
     if (kDebugMode) {
       print('[CloudKitService] deleteMcpServerConfig called for $id');
     }
     try {
-      await _cloudKit.deleteRecord(scope: _scope, recordName: id);
+      await _cloudKit!.deleteRecord(scope: _scope, recordName: id);
       if (kDebugMode) {
         print('[CloudKitService] Successfully deleted McpServerConfig $id');
       }
@@ -318,6 +363,11 @@ class CloudKitService {
 
   // --- WorkbenchInstance Methods ---
   Future<bool> saveWorkbenchInstance(WorkbenchInstance instance) async {
+    if (kIsWeb) {
+      if (kDebugMode)
+        print('[CloudKitService] Skipping saveWorkbenchInstance on web.');
+      return true; // Assume success on web (no-op)
+    }
     if (kDebugMode) {
       print(
         '[CloudKitService] saveWorkbenchInstance called for ${instance.id}',
@@ -325,7 +375,7 @@ class CloudKitService {
     }
     try {
       final recordData = _serializeMap(instance.toJson());
-      await _cloudKit.saveRecord(
+      await _cloudKit!.saveRecord(
         scope: _scope,
         recordType: workbenchInstanceRecordType,
         recordName: instance.id,
@@ -367,11 +417,21 @@ class CloudKitService {
   }
 
   Future<List<WorkbenchInstance>> getAllWorkbenchInstances() async {
+    if (kIsWeb) {
+      if (kDebugMode)
+        print(
+          '[CloudKitService] Skipping getAllWorkbenchInstances on web. Returning default instance.',
+        );
+      // On web, if CloudKit is skipped, we need a default instance to exist locally.
+      // The provider logic should handle creating/managing this locally if needed.
+      // Here, we just return a list containing the default instance structure.
+      return [WorkbenchInstance.defaultInstance()];
+    }
     if (kDebugMode) {
       print('[CloudKitService] getAllWorkbenchInstances called');
     }
     try {
-      final records = await _cloudKit.getRecordsByType(
+      final records = await _cloudKit!.getRecordsByType(
         scope: _scope,
         recordType: workbenchInstanceRecordType,
       );
@@ -427,17 +487,24 @@ class CloudKitService {
       if (kDebugMode) {
         print('[CloudKitService] Error fetching WorkbenchInstances: $e\n$s');
       }
+      // Fallback: Try to create and return the default instance if fetch fails
       try {
         final defaultInstance = WorkbenchInstance.defaultInstance();
-        await saveWorkbenchInstance(defaultInstance);
+        await saveWorkbenchInstance(defaultInstance); // Attempt to save it
         return [defaultInstance];
       } catch (_) {
+        // If even saving the default fails, return an empty list
         return [];
       }
     }
   }
 
   Future<bool> deleteWorkbenchInstance(String instanceId) async {
+    if (kIsWeb) {
+      if (kDebugMode)
+        print('[CloudKitService] Skipping deleteWorkbenchInstance on web.');
+      return true; // Assume success on web (no-op)
+    }
     if (kDebugMode) {
       print('[CloudKitService] deleteWorkbenchInstance called for $instanceId');
     }
@@ -450,7 +517,7 @@ class CloudKitService {
       return false;
     }
     try {
-      await _cloudKit.deleteRecord(scope: _scope, recordName: instanceId);
+      await _cloudKit!.deleteRecord(scope: _scope, recordName: instanceId);
       if (kDebugMode) {
         print(
           '[CloudKitService] Successfully deleted WorkbenchInstance $instanceId',
@@ -470,6 +537,11 @@ class CloudKitService {
   // --- WorkbenchItemReference Methods ---
 
   Future<bool> saveWorkbenchItemReference(WorkbenchItemReference item) async {
+    if (kIsWeb) {
+      if (kDebugMode)
+        print('[CloudKitService] Skipping saveWorkbenchItemReference on web.');
+      return true; // Assume success on web (no-op)
+    }
     if (kDebugMode) {
       print(
         '[CloudKitService] saveWorkbenchItemReference called for ${item.id} in instance ${item.instanceId}',
@@ -477,7 +549,7 @@ class CloudKitService {
     }
     try {
       final recordData = _serializeMap(item.toJson());
-      await _cloudKit.saveRecord(
+      await _cloudKit!.saveRecord(
         scope: _scope,
         recordType: workbenchItemRecordType,
         recordName: item.id,
@@ -521,11 +593,21 @@ class CloudKitService {
   /// Instead of updating the existing record,
   /// we delete it and create a brand-new record with a new ID.
   /// Returns the new record ID on success, or null on failure.
+  /// Disabled on web.
   Future<String?> moveWorkbenchItemReferenceByDeleteRecreate({
     required String recordName, // old record's ID
     required String newInstanceId,
     required Map<String, dynamic> oldRecordFields, // fields from old record
   }) async {
+    if (kIsWeb) {
+      if (kDebugMode)
+        print(
+          '[CloudKitService] Skipping moveWorkbenchItemReferenceByDeleteRecreate on web.',
+        );
+      // On web, this operation doesn't make sense without CloudKit.
+      // The caller (likely WorkbenchNotifier) needs web-specific logic.
+      return null;
+    }
     if (kDebugMode) {
       print(
         '[CloudKitService] moveWorkbenchItemReferenceByDeleteRecreate called for $recordName to instance $newInstanceId',
@@ -562,7 +644,7 @@ class CloudKitService {
 
       // 4. Serialize fields & save new record
       final recordData = _serializeMap(newValues);
-      await _cloudKit.saveRecord(
+      await _cloudKit!.saveRecord(
         scope: _scope,
         recordType: workbenchItemRecordType,
         recordName: newRecordId, // Use the new UUID as the record name
@@ -589,16 +671,24 @@ class CloudKitService {
 
   /// Retrieves all workbench item references from CloudKit, optionally filtered by instanceId.
   /// Handles migration by assigning a default instanceId if missing and persists the change.
+  /// Returns empty list on web.
   Future<List<WorkbenchItemReference>> getAllWorkbenchItemReferences({
     String? instanceId,
   }) async {
+    if (kIsWeb) {
+      if (kDebugMode)
+        print(
+          '[CloudKitService] Skipping getAllWorkbenchItemReferences on web.',
+        );
+      return [];
+    }
     if (kDebugMode) {
       print(
         '[CloudKitService] getAllWorkbenchItemReferences called${instanceId != null ? ' for instance $instanceId' : ''}',
       );
     }
     try {
-      final records = await _cloudKit.getRecordsByType(
+      final records = await _cloudKit!.getRecordsByType(
         scope: _scope,
         recordType: workbenchItemRecordType,
       );
@@ -631,6 +721,7 @@ class CloudKitService {
             items.add(item);
           }
           if (needsMigrationSave) {
+            // Queue the save operation (fire-and-forget style for migration)
             migrationFutures.add(saveWorkbenchItemReference(item));
           }
         } catch (e) {
@@ -642,6 +733,7 @@ class CloudKitService {
         }
       }
 
+      // Handle migrations in the background without awaiting
       if (migrationFutures.isNotEmpty) {
         Future.wait(migrationFutures)
             .then((_) {
@@ -682,13 +774,20 @@ class CloudKitService {
   }
 
   Future<bool> deleteWorkbenchItemReference(String referenceId) async {
+    if (kIsWeb) {
+      if (kDebugMode)
+        print(
+          '[CloudKitService] Skipping deleteWorkbenchItemReference on web.',
+        );
+      return true; // Assume success on web (no-op)
+    }
     if (kDebugMode) {
       print(
         '[CloudKitService] deleteWorkbenchItemReference called for $referenceId',
       );
     }
     try {
-      await _cloudKit.deleteRecord(scope: _scope, recordName: referenceId);
+      await _cloudKit!.deleteRecord(scope: _scope, recordName: referenceId);
       if (kDebugMode) {
         print(
           '[CloudKitService] Successfully deleted WorkbenchItemReference $referenceId',
@@ -706,15 +805,23 @@ class CloudKitService {
   }
 
   Future<bool> deleteAllWorkbenchItemReferences({String? instanceId}) async {
+    if (kIsWeb) {
+      if (kDebugMode)
+        print(
+          '[CloudKitService] Skipping deleteAllWorkbenchItemReferences on web.',
+        );
+      return true; // Assume success on web (no-op)
+    }
     if (kDebugMode) {
       print(
         '[CloudKitService] deleteAllWorkbenchItemReferences called${instanceId != null ? ' for instance $instanceId' : ''}',
       );
     }
     try {
+      // Fetch items first to get their IDs
       final itemsToDelete = await getAllWorkbenchItemReferences(
         instanceId: instanceId,
-      );
+      ); // This already handles kIsWeb internally
 
       if (itemsToDelete.isEmpty) {
         if (kDebugMode) {
@@ -733,21 +840,14 @@ class CloudKitService {
 
       final recordNamesToDelete = itemsToDelete.map((item) => item.id).toList();
       bool allSucceeded = true;
+      // Batch delete might be more efficient if the plugin supports it,
+      // but iterating works fine.
       for (final recordName in recordNamesToDelete) {
-        try {
-          await _cloudKit.deleteRecord(scope: _scope, recordName: recordName);
-          if (kDebugMode) {
-            print(
-              '[CloudKitService] Deleted WorkbenchItemReference $recordName',
-            );
-          }
-        } catch (e) {
-          if (kDebugMode) {
-            print(
-              '[CloudKitService] Error deleting WorkbenchItemReference $recordName: $e',
-            );
-          }
+        // Use the single delete method which handles kIsWeb
+        final success = await deleteWorkbenchItemReference(recordName);
+        if (!success) {
           allSucceeded = false;
+          // Log is handled within deleteWorkbenchItemReference
         }
       }
 
@@ -758,6 +858,7 @@ class CloudKitService {
       }
       return allSucceeded;
     } catch (e, s) {
+      // This catch is mainly for errors during the initial fetch phase
       if (kDebugMode) {
         print(
           '[CloudKitService] Error during deleteAllWorkbenchItemReferences (fetch phase): $e\n$s',
@@ -770,9 +871,13 @@ class CloudKitService {
   // --- Settings Methods ---
 
   Future<String?> getSetting(String keyName) async {
+    if (kIsWeb) {
+      if (kDebugMode) print('[CloudKitService] Skipping getSetting on web.');
+      return null;
+    }
     if (kDebugMode) print('[CloudKitService] getSetting called for $keyName');
     try {
-      final record = await _cloudKit.getRecord(
+      final record = await _cloudKit!.getRecord(
         scope: _scope,
         recordName: _userSettingsRecordName,
       );
@@ -813,11 +918,16 @@ class CloudKitService {
   }
 
   Future<bool> saveSetting(String keyName, String value) async {
+    if (kIsWeb) {
+      if (kDebugMode) print('[CloudKitService] Skipping saveSetting on web.');
+      return true; // Assume success on web (no-op)
+    }
     if (kDebugMode) print('[CloudKitService] saveSetting called for $keyName');
     try {
       Map<String, dynamic> currentSettings = {};
       try {
-        final existingRecord = await _cloudKit.getRecord(
+        // Attempt to fetch existing record first
+        final existingRecord = await _cloudKit!.getRecord(
           scope: _scope,
           recordName: _userSettingsRecordName,
         );
@@ -832,6 +942,8 @@ class CloudKitService {
               '[CloudKitService] Existing record $_userSettingsRecordName has wrong type: ${existingRecord.recordType}. Overwriting.',
             );
           }
+          // If wrong type, start with empty settings rather than merging
+          currentSettings = {};
         }
       } on PlatformException catch (e) {
         if (e.message != null && e.message!.contains('Record not found')) {
@@ -840,6 +952,8 @@ class CloudKitService {
               '[CloudKitService] UserSettings record not found, will create new one.',
             );
           }
+          // Record doesn't exist, start with empty settings
+          currentSettings = {};
         } else {
           // Re-throw other platform exceptions during fetch
           if (kDebugMode) {
@@ -847,18 +961,26 @@ class CloudKitService {
               '[CloudKitService] Error fetching existing UserSettings, proceeding with save attempt: $e',
             );
           }
+          // Proceed cautiously, might overwrite if fetch failed unexpectedly
+          currentSettings = {};
         }
       } catch (e) {
+        // Catch non-platform exceptions during fetch
         if (kDebugMode) {
           print(
             '[CloudKitService] Non-PlatformException fetching existing UserSettings, proceeding with save attempt: $e',
           );
         }
+        // Proceed cautiously
+        currentSettings = {};
       }
 
+      // Update the specific key
       currentSettings[keyName] = value;
       final recordData = _serializeMap(currentSettings);
-      await _cloudKit.saveRecord(
+
+      // Save the potentially updated record
+      await _cloudKit!.saveRecord(
         scope: _scope,
         recordType: userSettingsRecordType,
         recordName: _userSettingsRecordName,
@@ -869,15 +991,16 @@ class CloudKitService {
       }
       return true;
     } on PlatformException catch (e) {
-      // Handle the specific case where the record already exists (upsert behavior)
+      // Handle the specific case where the record already exists during save (upsert behavior)
       if (e.message != null &&
           e.message!.contains('record to insert already exists')) {
         if (kDebugMode) {
           print(
-            '[CloudKitService] Handled "record already exists" conflict for $_userSettingsRecordName. Treating as success.',
+            '[CloudKitService] Handled "record already exists" conflict for $_userSettingsRecordName during save. Treating as success.',
           );
         }
-        return true; // Record is already there, consider it a success
+        // This might happen in race conditions, treat as success if upsert is intended
+        return true;
       } else {
         // Re-throw other platform exceptions during save
         if (kDebugMode) {
@@ -898,6 +1021,13 @@ class CloudKitService {
   // --- Utility Methods ---
 
   Future<bool> deleteAllRecordsOfType(String recordType) async {
+    if (kIsWeb) {
+      if (kDebugMode)
+        print('[CloudKitService] Skipping deleteAllRecordsOfType on web.');
+      return true; // Assume success on web (no-op)
+    }
+
+    // Existing warnings remain relevant for non-web platforms
     if (recordType == workbenchItemRecordType) {
       if (kDebugMode) {
         print(
@@ -924,7 +1054,8 @@ class CloudKitService {
       print('[CloudKitService] deleteAllRecordsOfType called for $recordType');
     }
     try {
-      final records = await _cloudKit.getRecordsByType(
+      // Fetch records first
+      final records = await _cloudKit!.getRecordsByType(
         scope: _scope,
         recordType: recordType,
       );
@@ -937,6 +1068,7 @@ class CloudKitService {
         return true;
       }
 
+      // Filter out default instance if applicable
       final recordNamesToDelete =
           records
               .map((r) => r.recordName)
@@ -965,6 +1097,7 @@ class CloudKitService {
       }
 
       bool allSucceeded = true;
+      // Delete records one by one
       for (final recordName in recordNamesToDelete) {
         try {
           await _cloudKit.deleteRecord(
@@ -987,6 +1120,7 @@ class CloudKitService {
       }
       return allSucceeded;
     } catch (e, s) {
+      // Error during the initial fetch phase
       if (kDebugMode) {
         print(
           '[CloudKitService] Error fetching records for deletion (type $recordType): $e\n$s',
@@ -997,9 +1131,14 @@ class CloudKitService {
   }
 
   Future<bool> deleteUserSettingsRecord() async {
+    if (kIsWeb) {
+      if (kDebugMode)
+        print('[CloudKitService] Skipping deleteUserSettingsRecord on web.');
+      return true; // Assume success on web (no-op)
+    }
     if (kDebugMode) print('[CloudKitService] deleteUserSettingsRecord called');
     try {
-      await _cloudKit.deleteRecord(
+      await _cloudKit!.deleteRecord(
         scope: _scope,
         recordName: _userSettingsRecordName,
       );
@@ -1016,7 +1155,7 @@ class CloudKitService {
             '[CloudKitService] UserSettings record already deleted or never existed.',
           );
         }
-        return true;
+        return true; // Not finding it is success in this context
       }
       if (kDebugMode) {
         print('[CloudKitService] Error deleting UserSettings record: $e\n$s');
