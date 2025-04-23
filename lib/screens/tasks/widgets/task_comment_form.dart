@@ -5,8 +5,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class TaskCommentForm extends ConsumerStatefulWidget {
   final String taskId;
+  // ADD: Optional FocusNode
+  final FocusNode? focusNode;
 
-  const TaskCommentForm({super.key, required this.taskId});
+  const TaskCommentForm({
+    super.key,
+    required this.taskId,
+    this.focusNode, // ADD: Initialize focusNode
+  });
 
   @override
   ConsumerState<TaskCommentForm> createState() => _TaskCommentFormState();
@@ -14,13 +20,21 @@ class TaskCommentForm extends ConsumerStatefulWidget {
 
 class _TaskCommentFormState extends ConsumerState<TaskCommentForm> {
   final _controller = TextEditingController();
-  final _focusNode = FocusNode();
+  // Keep internal focus node as fallback or if none is provided
+  final _internalFocusNode = FocusNode();
   bool _isPosting = false;
+
+  // Use provided focus node if available, otherwise internal one
+  FocusNode get _effectiveFocusNode => widget.focusNode ?? _internalFocusNode;
 
   @override
   void dispose() {
     _controller.dispose();
-    _focusNode.dispose();
+    // Only dispose the internal node if it was created here
+    // The provided node should be disposed by the parent (TaskDetailScreen)
+    if (widget.focusNode == null) {
+      _internalFocusNode.dispose();
+    }
     super.dispose();
   }
 
@@ -47,7 +61,8 @@ class _TaskCommentFormState extends ConsumerState<TaskCommentForm> {
       // Use the createTaskCommentProvider
       await ref.read(createTaskCommentProvider((taskId: widget.taskId)))(newComment);
       _controller.clear();
-      _focusNode.unfocus(); // Hide keyboard after successful post
+      // Use the effective focus node to unfocus
+      _effectiveFocusNode.unfocus(); // Hide keyboard after successful post
     } catch (e) {
       if (mounted) {
         showCupertinoDialog(
@@ -101,7 +116,8 @@ class _TaskCommentFormState extends ConsumerState<TaskCommentForm> {
           Expanded(
             child: CupertinoTextField(
               controller: _controller,
-              focusNode: _focusNode,
+              // MODIFY: Use the effective focus node
+              focusNode: _effectiveFocusNode,
               placeholder: 'Add a comment...',
               minLines: 1,
               maxLines: 5,

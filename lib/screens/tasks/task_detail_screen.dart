@@ -6,6 +6,7 @@ import 'package:flutter_memos/models/task_item.dart';
 import 'package:flutter_memos/providers/task_comment_providers.dart'; // Import task comment providers
 import 'package:flutter_memos/providers/task_providers.dart'; // Import task providers
 import 'package:flutter_memos/providers/task_server_config_provider.dart'; // To check config
+import 'package:flutter_memos/screens/tasks/new_task_screen.dart';
 import 'package:flutter_memos/screens/tasks/widgets/task_comment_form.dart';
 import 'package:flutter_memos/screens/tasks/widgets/task_comments.dart';
 import 'package:flutter_memos/screens/tasks/widgets/task_content.dart';
@@ -22,6 +23,10 @@ class TaskDetailScreen extends ConsumerStatefulWidget {
 
 class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
   final FocusNode _screenFocusNode = FocusNode(debugLabel: 'TaskDetailScreenFocus');
+  // ADD: FocusNode for the comment form
+  final FocusNode _commentFocusNode = FocusNode(
+    debugLabel: 'TaskCommentFormFocus',
+  );
   late ScrollController _scrollController;
   String? _effectiveServerId; // Store the serverId from the provider
 
@@ -61,6 +66,8 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
   void dispose() {
     _screenFocusNode.dispose();
     _scrollController.dispose();
+    // ADD: Dispose the comment focus node
+    _commentFocusNode.dispose();
     super.dispose();
   }
 
@@ -116,10 +123,12 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
               child: const Text('Edit Task'),
               onPressed: () {
                 Navigator.pop(popupContext);
-                // Navigate to edit screen (e.g., NewTaskScreen with taskToEdit)
-                Navigator.of(context, rootNavigator: true).pushNamed(
-                  '/new-task', // Assuming '/new-task' route exists for editing
-                  arguments: {'taskToEdit': task},
+                // MODIFY: Use push with CupertinoPageRoute instead of pushNamed
+                Navigator.of(context)
+                    .push(
+                      CupertinoPageRoute(
+                        builder: (ctx) => NewTaskScreen(taskToEdit: task),
+                      ),
                 ).then((_) {
                    // Refresh data after editing
                    ref.invalidate(taskDetailProvider(widget.taskId));
@@ -209,11 +218,29 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
           navigationBar: CupertinoNavigationBar(
             middle: const Text('Task Detail'),
             transitionBetweenRoutes: false, // Keep consistent with ItemDetailScreen
+            // MODIFY: Add a Row for multiple trailing buttons
             trailing: taskAsync.when(
-              data: (task) => CupertinoButton(
-                padding: EdgeInsets.zero,
-                onPressed: () => _showActions(task),
-                child: const Icon(CupertinoIcons.ellipsis_vertical),
+              data:
+                  (task) => Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // ADD: Button to focus comment field
+                      CupertinoButton(
+                        padding: const EdgeInsets.only(
+                          left: 8.0,
+                        ), // Add padding if needed
+                        onPressed: () => _commentFocusNode.requestFocus(),
+                        child: const Icon(CupertinoIcons.chat_bubble_text),
+                      ),
+                      // Existing actions button
+                      CupertinoButton(
+                        padding: const EdgeInsets.only(
+                          left: 8.0,
+                        ), // Adjust padding
+                        onPressed: () => _showActions(task),
+                        child: const Icon(CupertinoIcons.ellipsis_vertical),
+                      ),
+                    ],
               ),
               loading: () => const CupertinoActivityIndicator(radius: 10),
               error: (_, __) => const SizedBox.shrink(), // No actions if error
@@ -222,8 +249,11 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
           child: Column(
             children: [
               Expanded(child: _buildBody(taskAsync)),
-              // Add the comment form at the bottom
-              TaskCommentForm(taskId: widget.taskId),
+              // Pass the focus node to the comment form
+              TaskCommentForm(
+                taskId: widget.taskId,
+                focusNode: _commentFocusNode, // ADD: Pass focus node
+              ),
             ],
           ),
         ),
