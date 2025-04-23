@@ -1,15 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_memos/screens_web/blinko_web_home.dart';
-import 'package:flutter_memos/screens_web/blinko_web_resources.dart';
-// Import other web screens as needed
+// Import the new Settings screen
+import 'package:flutter_memos/screens_web/blinko_web_settings.dart';
+// Import the Workbench screen if you want it in the main nav
+// import 'package:flutter_memos/screens_web/blinko_web_workbench.dart';
 
 /// The main layout scaffold for the Blinko web application.
 /// Includes AppBar, potentially a Drawer or NavigationRail, and manages the main content area.
 class BlinkoWebLayout extends StatefulWidget {
-  const BlinkoWebLayout({Key? key}) : super(key: key);
+  const BlinkoWebLayout({super.key});
 
   @override
-  _BlinkoWebLayoutState createState() => _BlinkoWebLayoutState();
+  State<BlinkoWebLayout> createState() => _BlinkoWebLayoutState();
 }
 
 class _BlinkoWebLayoutState extends State<BlinkoWebLayout> {
@@ -18,69 +20,89 @@ class _BlinkoWebLayoutState extends State<BlinkoWebLayout> {
   // List of the main screens accessible from the layout
   static const List<Widget> _widgetOptions = <Widget>[
     BlinkoWebHome(),
-    BlinkoWebResources(),
-    // Add other screens like Settings, Analytics here
-    // Example: BlinkoWebSettings(),
-    Center(child: Text('Settings Placeholder')), // Placeholder for Settings
+    BlinkoWebSettings(), // Added Settings screen
+    // Optionally add Workbench here if it's a main section
+    // BlinkoWebWorkbench(),
   ];
 
   void _onItemTapped(int index) {
-    setState(() {
-      _selectedIndex = index;
-    });
+    // Prevent index out of bounds if Workbench isn't added yet
+    if (index < _widgetOptions.length) {
+      setState(() {
+        _selectedIndex = index;
+      });
+    } else {
+      // Handle tap on items beyond the main screens if necessary
+      // e.g., navigate to a separate route like /workbench
+      if (index == _widgetOptions.length) {
+        // For the next item after the last one
+         Navigator.pushNamed(context, '/workbench');
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    // Use LayoutBuilder to adapt layout based on screen width
     return LayoutBuilder(
       builder: (context, constraints) {
-        bool isLargeScreen = constraints.maxWidth > 600; // Example breakpoint
+        bool isLargeScreen = constraints.maxWidth > 600;
 
         return Scaffold(
           appBar: AppBar(
             title: const Text('Blinko Web'),
-            // Optionally hide menu icon on large screens if using NavigationRail
-            // leading: isLargeScreen ? null : IconButton(icon: Icon(Icons.menu), onPressed: () => Scaffold.of(context).openDrawer()),
+            leading: !isLargeScreen
+                ? IconButton(
+                    icon: const Icon(Icons.menu),
+                    tooltip: 'Open navigation menu',
+                    onPressed: () => Scaffold.of(context).openDrawer(),
+                  )
+                : null, // No drawer icon on large screens with NavRail
             actions: [
-              // Add actions like search, user profile, etc.
               IconButton(
                 icon: const Icon(Icons.search),
+                tooltip: 'Search',
                 onPressed: () { /* Implement search */ },
+              ),
+              // Optional: Add Workbench button here if not in main nav
+              IconButton(
+                icon: const Icon(Icons.widgets_outlined),
+                tooltip: 'Workbench',
+                onPressed: () => Navigator.pushNamed(context, '/workbench'),
               ),
               Padding(
                 padding: const EdgeInsets.only(right: 16.0),
                 child: CircleAvatar(
-                  // Replace with actual user avatar logic
-                  child: const Icon(Icons.person),
                   backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                  child: const Icon(Icons.person_outline),
                 ),
               ),
             ],
           ),
-          // Use Drawer for smaller screens
           drawer: !isLargeScreen
               ? Drawer(
                   child: ListView(
                     padding: EdgeInsets.zero,
-                    children: <Widget>[
-                      const DrawerHeader(
+                      children: <Widget>[
+                      DrawerHeader(
                         decoration: BoxDecoration(
-                          color: Colors.blue, // Customize header
+                          color: Theme.of(context).colorScheme.primary,
                         ),
-                        child: Text('Navigation'),
+                        child: Text(
+                          'Blinko Navigation',
+                          style: TextStyle(color: Theme.of(context).colorScheme.onPrimary, fontSize: 20),
+                        ),
                       ),
                       ListTile(
-                        leading: const Icon(Icons.home),
+                        leading: const Icon(Icons.home_outlined),
                         title: const Text('Home'),
                         selected: _selectedIndex == 0,
                         onTap: () {
                           _onItemTapped(0);
-                          Navigator.pop(context); // Close the drawer
+                          Navigator.pop(context);
                         },
                       ),
                       ListTile(
-                        leading: const Icon(Icons.folder),
+                        leading: const Icon(Icons.folder_outlined),
                         title: const Text('Resources'),
                         selected: _selectedIndex == 1,
                         onTap: () {
@@ -89,7 +111,7 @@ class _BlinkoWebLayoutState extends State<BlinkoWebLayout> {
                         },
                       ),
                       ListTile(
-                        leading: const Icon(Icons.settings),
+                        leading: const Icon(Icons.settings_outlined),
                         title: const Text('Settings'),
                         selected: _selectedIndex == 2,
                         onTap: () {
@@ -97,19 +119,28 @@ class _BlinkoWebLayoutState extends State<BlinkoWebLayout> {
                           Navigator.pop(context);
                         },
                       ),
-                      // Add other navigation items
+                      const Divider(),
+                      // Optional: Add Workbench link in drawer too
+                      ListTile(
+                        leading: const Icon(Icons.widgets_outlined),
+                        title: const Text('Workbench'),
+                        onTap: () {
+                           Navigator.pop(context); // Close drawer first
+                           Navigator.pushNamed(context, '/workbench');
+                        },
+                      ),
                     ],
                   ),
                 )
-              : null, // No drawer on large screens if using NavigationRail
+              : null,
           body: Row(
             children: [
-              // Use NavigationRail for larger screens
               if (isLargeScreen)
                 NavigationRail(
                   selectedIndex: _selectedIndex,
                   onDestinationSelected: _onItemTapped,
-                  labelType: NavigationRailLabelType.selected, // Show labels when selected
+                  labelType: NavigationRailLabelType.selected,
+                  // Add Settings destination
                   destinations: const <NavigationRailDestination>[
                     NavigationRailDestination(
                       icon: Icon(Icons.home_outlined),
@@ -126,20 +157,26 @@ class _BlinkoWebLayoutState extends State<BlinkoWebLayout> {
                       selectedIcon: Icon(Icons.settings),
                       label: Text('Settings'),
                     ),
-                    // Add other destinations
+                    // Optionally add Workbench here if it's a main section
+                    // NavigationRailDestination(
+                    //   icon: Icon(Icons.widgets_outlined),
+                    //   selectedIcon: Icon(Icons.widgets),
+                    //   label: Text('Workbench'),
+                    // ),
                   ],
-                  // Add leading/trailing widgets if needed (e.g., FAB, logo)
-                  // leading: FloatingActionButton(onPressed: () {}, child: Icon(Icons.add)),
                 ),
-              // Main content area
+              // Main content area displays the selected widget
               Expanded(
                 child: Center(
-                  child: _widgetOptions.elementAt(_selectedIndex),
+                  // Ensure index is within bounds
+                  child:
+                      _selectedIndex < _widgetOptions.length
+                         ? _widgetOptions.elementAt(_selectedIndex)
+                         : const Center(child: Text("Invalid selection")), // Fallback
                 ),
               ),
             ],
           ),
-          // Floating Action Button for quick actions (e.g., navigate to AI)
           floatingActionButton: FloatingActionButton(
             onPressed: () => Navigator.pushNamed(context, '/ai'),
             tooltip: 'AI Chat',
