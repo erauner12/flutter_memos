@@ -1,9 +1,10 @@
 import 'package:flutter/foundation.dart';
+import 'package:uuid/uuid.dart';
 
 @immutable
 class WorkbenchInstance {
-  final String id; // UUID / CK recordName
-  final String name; // “Work”, “Home”, “Inbox”, …
+  final String id; // UUID / CK recordName / Prefs ID
+  final String name; // "Work”, "Home”, "Inbox”, …
   final DateTime createdAt;
   // Optional flag for special UI treatment (e.g., "Inbox")
   final bool isSystemDefault;
@@ -20,7 +21,7 @@ class WorkbenchInstance {
   static const String defaultInstanceName = 'Workbench'; // Default name if needed elsewhere
 
   // --- Factory for Default ---
-  // Creates the synthetic default instance used during migration
+  // Creates the synthetic default instance used during migration or initial load
   factory WorkbenchInstance.defaultInstance() {
     return WorkbenchInstance(
       id: defaultInstanceId,
@@ -34,21 +35,38 @@ class WorkbenchInstance {
   // --- JSON Serialization ---
   Map<String, dynamic> toJson() {
     return {
-      // Do not include 'id' here as it's the CloudKit recordName
+      // Include 'id' for saving to SharedPreferences
+      'id': id,
       'name': name,
       'createdAt': createdAt.toIso8601String(),
       'isSystemDefault': isSystemDefault, // Include in JSON
     };
   }
 
+  // Updated factory for loading from JSON (e.g., SharedPreferences)
+  // recordName is now optional, primarily for CloudKit compatibility if ever needed again.
   factory WorkbenchInstance.fromJson(
-    Map<String, dynamic> json,
-    String recordName,
-  ) {
-    // Handle potential type mismatches from CloudKit's string serialization
+    Map<String, dynamic> json, [
+    String? recordName, // Make recordName optional
+  ]) {
+    // Handle potential type mismatches from JSON
+    final dynamic idValue = json['id'];
     final dynamic nameValue = json['name'];
     final dynamic createdAtValue = json['createdAt'];
     final dynamic isSystemDefaultValue = json['isSystemDefault'];
+
+    // Determine the ID: use json['id'], fallback to recordName, fallback to generating a new one?
+    // For prefs loading, json['id'] should exist.
+    String finalId = recordName ?? (idValue as String? ?? '');
+    if (finalId.isEmpty) {
+      // This case should ideally not happen if saved correctly with toJson()
+      if (kDebugMode)
+        print(
+          '[WorkbenchInstance.fromJson] Warning: Missing ID in JSON and no recordName provided. Generating new ID.',
+        );
+      finalId = const Uuid().v4(); // Or throw error?
+    }
+
 
     // Ensure required fields are present and have the correct type
     if (nameValue is! String || createdAtValue is! String) {
@@ -66,7 +84,7 @@ class WorkbenchInstance {
       );
     }
 
-    // Handle boolean parsing carefully (CloudKit might store as 'true'/'false' strings or 0/1)
+    // Handle boolean parsing carefully
     bool parsedIsSystemDefault = false;
     if (isSystemDefaultValue != null) {
       if (isSystemDefaultValue is bool) {
@@ -83,7 +101,7 @@ class WorkbenchInstance {
 
 
     return WorkbenchInstance(
-      id: recordName, // Use the recordName passed from CloudKitService
+      id: finalId, // Use the determined ID
       name: nameValue,
       createdAt: parsedCreatedAt,
       isSystemDefault: parsedIsSystemDefault, // Use parsed value

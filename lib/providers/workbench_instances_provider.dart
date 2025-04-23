@@ -1,11 +1,11 @@
 import 'dart:async';
+import 'dart:convert'; // Import dart:convert
 
 import 'package:flutter/foundation.dart';
 // Removed Material import
 import 'package:flutter_memos/models/workbench_instance.dart';
-import 'package:flutter_memos/providers/service_providers.dart'; // Import service providers
 import 'package:flutter_memos/providers/shared_prefs_provider.dart';
-import 'package:flutter_memos/services/cloud_kit_service.dart';
+// Removed CloudKitService import
 import 'package:flutter_memos/utils/shared_prefs.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
@@ -26,7 +26,12 @@ class WorkbenchInstancesState {
 
   // Initial state before loading from cache/cloud
   factory WorkbenchInstancesState.initial() {
-    return const WorkbenchInstancesState(
+    // Start with a default instance if none are loaded
+    return WorkbenchInstancesState(
+      instances: [
+        // Call the factory constructor correctly
+        WorkbenchInstance.defaultInstance(),
+      ], // Ensure default exists initially
       isLoading: true, // Start in loading state
     );
   }
@@ -68,13 +73,18 @@ class WorkbenchInstancesState {
 
 class WorkbenchInstancesNotifier extends StateNotifier<WorkbenchInstancesState> {
   final Ref _ref;
-  late final CloudKitService _cloudKitService;
+  // Removed CloudKitService instance
+  // late final CloudKitService _cloudKitService;
   late final SharedPrefsService _prefsService;
   bool _prefsInitialized = false; // Track if prefs are loaded
 
+  // Key for storing instances in SharedPreferences
+  static const String _instancesPrefsKey = 'workbench_instances_list';
+
   WorkbenchInstancesNotifier(this._ref)
     : super(WorkbenchInstancesState.initial()) {
-    _cloudKitService = _ref.read(cloudKitServiceProvider);
+    // Removed CloudKitService initialization
+    // _cloudKitService = _ref.read(cloudKitServiceProvider);
     _initializePrefsAndLoad();
   }
 
@@ -107,57 +117,100 @@ class WorkbenchInstancesNotifier extends StateNotifier<WorkbenchInstancesState> 
     final cachedLastOpenedMap = _prefsService.getLastOpenedItemMap();
 
     if (mounted) {
+      // Load instances from prefs first before setting state
+      final loadedInstances = await _loadInstancesFromPrefs();
       state = state.copyWith(
+        instances:
+            loadedInstances.isNotEmpty
+                ? loadedInstances
+                : [
+                  // Call the factory constructor correctly
+                  WorkbenchInstance.defaultInstance(),
+                ], // Ensure default if empty
         lastOpenedItemId: cachedLastOpenedMap,
-        isLoading: true,
+        isLoading: false, // Loading from prefs is complete
         clearError: true,
       );
-    }
-
-    await loadInstances();
-  }
-
-  Future<void> loadInstances() async {
-    if (!mounted) return;
-
-    if (!_prefsInitialized) {
       if (kDebugMode) {
         print(
-          '[WorkbenchInstancesNotifier] loadInstances called before prefs initialized. Waiting...',
+          '[WorkbenchInstancesNotifier] Initialized with ${state.instances.length} instances from Prefs.',
         );
       }
-      state = state.copyWith(isLoading: true);
-      return;
     }
 
-    if (!state.isLoading) {
-      state = state.copyWith(isLoading: true, clearError: true);
-    }
+    // Removed call to loadInstances (which previously loaded from CloudKit)
+    // await loadInstances();
+  }
+
+  // Renamed loadInstances to loadInstancesFromPrefs
+  // Ensure correct return type Future<List<WorkbenchInstance>>
+  Future<List<WorkbenchInstance>> _loadInstancesFromPrefs() async {
+    if (!_prefsInitialized) return []; // Cannot load if prefs not ready
 
     try {
-      final instances = await _cloudKitService.getAllWorkbenchInstances();
-      if (!mounted) return;
-
-      if (mounted) {
-        state = state.copyWith(
-          instances: instances,
-          isLoading: false,
-        );
-        if (kDebugMode) {
-          print(
-            '[WorkbenchInstancesNotifier] Loaded ${instances.length} instances.',
-          );
+      // Use the correct method name from SharedPrefsService
+      final jsonString = _prefsService.getString(_instancesPrefsKey);
+      if (jsonString != null) {
+        // Use jsonDecode from dart:convert
+        final List<dynamic> decodedList = jsonDecode(jsonString);
+        final instances =
+            decodedList
+                .map(
+                  // Call fromJson correctly (now only needs json map)
+                  (data) =>
+                      WorkbenchInstance.fromJson(data as Map<String, dynamic>),
+                )
+                .toList();
+        // Ensure the default instance is always present
+        if (!instances.any(
+          (i) => i.id == WorkbenchInstance.defaultInstanceId,
+        )) {
+          // Call the factory constructor correctly
+          instances.insert(0, WorkbenchInstance.defaultInstance());
         }
+        return instances; // Correct return type
+      } else {
+        // If nothing in prefs, return just the default
+        // Call the factory constructor correctly
+        return [WorkbenchInstance.defaultInstance()];
       }
     } catch (e, s) {
       if (kDebugMode) {
-        print('[WorkbenchInstancesNotifier] Error loading instances: $e\n$s');
+        print(
+          '[WorkbenchInstancesNotifier] Error loading instances from Prefs: $e\n$s',
+        );
       }
-      if (mounted) {
-        state = state.copyWith(error: e, isLoading: false);
-      }
+      // Fallback to default on error
+      // Call the factory constructor correctly
+      return [WorkbenchInstance.defaultInstance()];
     }
   }
+
+  // Helper to save instances to SharedPreferences
+  Future<bool> _saveInstancesToPrefs(List<WorkbenchInstance> instances) async {
+    if (!_prefsInitialized) return false;
+    try {
+      // Use jsonEncode from dart:convert
+      final jsonString = jsonEncode(instances.map((i) => i.toJson()).toList());
+      // Use the correct method name from SharedPrefsService
+      await _prefsService.setString(_instancesPrefsKey, jsonString);
+      if (kDebugMode) {
+        print(
+          '[WorkbenchInstancesNotifier] Saved ${instances.length} instances to Prefs.',
+        );
+      }
+      return true;
+    } catch (e, s) {
+      if (kDebugMode) {
+        print(
+          '[WorkbenchInstancesNotifier] Error saving instances to Prefs: $e\n$s',
+        );
+      }
+      return false;
+    }
+  }
+
+  // Removed original loadInstances method (which loaded from CloudKit)
 
   Future<bool> saveInstance(String name) async {
     if (!mounted || !_prefsInitialized) return false;
@@ -185,9 +238,8 @@ class WorkbenchInstancesNotifier extends StateNotifier<WorkbenchInstancesState> 
       createdAt: DateTime.now(),
     );
 
-    final originalState = state;
     final updatedInstances = [
-      ...originalState.instances,
+      ...state.instances,
       newInstance,
     ];
 
@@ -197,28 +249,16 @@ class WorkbenchInstancesNotifier extends StateNotifier<WorkbenchInstancesState> 
         isLoading: false,
         clearError: true,
       );
-    }
-
-    try {
-      final success = await _cloudKitService.saveWorkbenchInstance(newInstance);
-      if (!success) {
-        throw Exception('CloudKit save failed');
-      }
+      // Save updated list to prefs
+      final success = await _saveInstancesToPrefs(updatedInstances);
       if (kDebugMode) {
         print(
-          '[WorkbenchInstancesNotifier] Saved new instance ${newInstance.id}.',
+          '[WorkbenchInstancesNotifier] Saved new instance ${newInstance.id} locally.',
         );
       }
-      return true;
-    } catch (e, s) {
-      if (kDebugMode) {
-        print('[WorkbenchInstancesNotifier] Error saving instance: $e\n$s');
-      }
-      if (mounted) {
-        state = originalState.copyWith(error: e);
-      }
-      return false;
+      return success;
     }
+    return false; // Not mounted
   }
 
   Future<bool> renameInstance(String instanceId, String newName) async {
@@ -240,38 +280,37 @@ class WorkbenchInstancesNotifier extends StateNotifier<WorkbenchInstancesState> 
       return false;
     }
 
-    final instanceToRename = state.instances.firstWhere(
-      (i) => i.id == instanceId,
-      orElse:
-          () => throw Exception('Instance not found for rename: $instanceId'),
-    );
+    WorkbenchInstance? instanceToRename;
+    try {
+      instanceToRename = state.instances.firstWhere((i) => i.id == instanceId);
+    } catch (e) {
+      if (kDebugMode) {
+        print(
+          '[WorkbenchInstancesNotifier] Instance not found for rename: $instanceId',
+        );
+      }
+      state = state.copyWith(error: 'Instance not found for rename');
+      return false;
+    }
+
     final updatedInstance = instanceToRename.copyWith(name: newName.trim());
 
-    final originalInstances = List<WorkbenchInstance>.from(state.instances);
     final updatedList =
-        originalInstances
+        state.instances
             .map((i) => i.id == instanceId ? updatedInstance : i)
             .toList();
     if (mounted) {
       state = state.copyWith(instances: updatedList, clearError: true);
-    }
-
-    try {
-      final success = await _cloudKitService.saveWorkbenchInstance(updatedInstance);
-      if (!success) throw Exception('CloudKit save failed');
+      // Save updated list to prefs
+      final success = await _saveInstancesToPrefs(updatedList);
       if (kDebugMode) {
-        print('[WorkbenchInstancesNotifier] Renamed instance $instanceId to "$newName"');
+        print(
+          '[WorkbenchInstancesNotifier] Renamed instance $instanceId to "$newName" locally.',
+        );
       }
-      return true;
-    } catch (e, s) {
-      if (kDebugMode) {
-        print('[WorkbenchInstancesNotifier] Error renaming instance $instanceId: $e\n$s');
-      }
-      if (mounted) {
-        state = state.copyWith(instances: originalInstances, error: e);
-      }
-      return false;
+      return success;
     }
+    return false; // Not mounted
   }
 
   Future<bool> deleteInstance(String instanceId) async {
@@ -293,62 +332,46 @@ class WorkbenchInstancesNotifier extends StateNotifier<WorkbenchInstancesState> 
       return false;
     }
 
-    final originalState = state;
-    final originalInstances = List<WorkbenchInstance>.from(state.instances);
     final newInstances =
-        originalInstances.where((i) => i.id != instanceId).toList();
+        state.instances.where((i) => i.id != instanceId).toList();
 
     if (mounted) {
       state = state.copyWith(
         instances: newInstances,
         clearError: true,
       );
-    }
-
-    try {
-      final deleteInstanceSuccess = await _cloudKitService
-          .deleteWorkbenchInstance(instanceId);
-      if (!deleteInstanceSuccess) {
+      // Save updated list to prefs
+      final success = await _saveInstancesToPrefs(newInstances);
+      if (success) {
+        _removeInstanceFromLastOpenedMap(instanceId);
         if (kDebugMode) {
           print(
-            '[WorkbenchInstancesNotifier] CloudKit delete failed for instance $instanceId, but proceeding to delete items.',
+            '[WorkbenchInstancesNotifier] Deleted instance $instanceId locally.',
           );
         }
-      } else if (kDebugMode) {
-        print(
-          '[WorkbenchInstancesNotifier] Deleted instance $instanceId from CloudKit.',
-        );
+        // Also remove the associated items from prefs
+        await _prefsService.remove('workbench_items_$instanceId');
+        if (kDebugMode) {
+          print(
+            '[WorkbenchInstancesNotifier] Removed items for deleted instance $instanceId from Prefs.',
+          );
+        }
+
+      } else {
+        // Revert state if save failed
+        state = state.copyWith(
+          instances: state.instances,
+        ); // Revert to previous list
+        state = state.copyWith(error: 'Failed to save instance deletion');
+        return false;
       }
-
-      unawaited(
-        _cloudKitService
-            .deleteAllWorkbenchItemReferences(instanceId: instanceId)
-            .then((success) {
-              if (kDebugMode) {
-                print(
-                  '[WorkbenchInstancesNotifier] Attempted deletion of items for instance $instanceId. Success: $success',
-                );
-              }
-            }),
-      );
-
-      _removeInstanceFromLastOpenedMap(instanceId);
-
+      // Removed CloudKit deletion logic
       return true;
-    } catch (e, s) {
-      if (kDebugMode) {
-        print(
-          '[WorkbenchInstancesNotifier] Error during delete instance process for $instanceId: $e\n$s',
-        );
-      }
-      if (mounted) {
-        state = originalState.copyWith(error: e);
-      }
-      return false;
     }
+    return false; // Not mounted
   }
 
-  // --- Last Opened Item Logic ---
+  // --- Last Opened Item Logic (Uses SharedPrefsService, no change needed here) ---
 
   void setLastOpenedItem(String instanceId, String? referenceId) {
     if (!mounted || !_prefsInitialized) return;

@@ -7,12 +7,15 @@ import 'package:flutter_memos/models/chat_session.dart';
 import 'package:flutter_memos/models/workbench_item_type.dart';
 // Import service providers correctly
 import 'package:flutter_memos/providers/service_providers.dart'
-    show minimalOpenAiServiceProvider; // Remove mcpClientProvider from here
+    show
+        minimalOpenAiServiceProvider,
+        supabaseDataServiceProvider; // Add supabaseDataServiceProvider
 import 'package:flutter_memos/services/chat_ai.dart'; // Use ChatAiBackend, ChatAiFacade, OpenAiGptBackend
-import 'package:flutter_memos/services/chat_session_cloud_kit_service.dart';
+// Removed ChatSessionCloudKitService import
 import 'package:flutter_memos/services/local_storage_service.dart';
 // Import MCP client provider with prefix to avoid ambiguity
 import 'package:flutter_memos/services/mcp_client_service.dart' as mcp_service; // For McpClientNotifier
+import 'package:flutter_memos/services/supabase_data_service.dart'; // Import SupabaseDataService
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_generative_ai/google_generative_ai.dart' as gen_ai;
 
@@ -38,7 +41,7 @@ class ChatState {
   final ChatSession session;
   final bool isLoading;
   final bool isInitializing;
-  final bool isSyncing;
+  final bool isSyncing; // Kept for potential future Supabase sync indicator
   final String? errorMessage;
 
   const ChatState({
@@ -100,7 +103,8 @@ class ChatState {
 class ChatNotifier extends StateNotifier<ChatState> {
   final Ref _ref;
   final LocalStorageService _local;
-  final ChatSessionCloudKitService _cloud;
+  // Replace ChatSessionCloudKitService with SupabaseDataService
+  final SupabaseDataService _supabase;
   final ChatPersister _persister;
   final ChatAiBackend _ai; // This remains the same interface
 
@@ -112,12 +116,13 @@ class ChatNotifier extends StateNotifier<ChatState> {
   ChatNotifier(
     this._ref,
     LocalStorageService local,
-    ChatSessionCloudKitService cloud, {
+    // Update constructor parameter type
+    SupabaseDataService supabase, {
     ChatPersister? persister,
     required ChatAiBackend ai, // Injected dependency
     bool autoInit = true,
   }) : _local = local,
-       _cloud = cloud,
+       _supabase = supabase, // Assign Supabase service
        _persister = persister ?? DefaultChatPersister(local),
        _ai = ai, // Assign the injected AI backend facade
        super(ChatState.initial()) {
@@ -145,13 +150,16 @@ class ChatNotifier extends StateNotifier<ChatState> {
       // If already initialized (e.g. by external context), don't reload
     }
 
-    ChatSession? cloudSession;
+    ChatSession? supabaseSession;
     ChatSession? localSession;
     try {
-      cloudSession = await _cloud.getChatSession();
+      // Fetch from Supabase instead of CloudKit
+      supabaseSession = await _supabase.getChatSession(
+        ChatSession.activeSessionId,
+      );
     } catch (e) {
       if (kDebugMode) {
-        print("[ChatNotifier] CloudKit fetch error on init: $e");
+        print("[ChatNotifier] Supabase fetch error on init: $e");
       }
     }
     try {
@@ -166,25 +174,26 @@ class ChatNotifier extends StateNotifier<ChatState> {
 
     ChatSession chosen = ChatSession.initial();
 
-    if (cloudSession != null && localSession != null) {
+    // Compare Supabase and Local sessions
+    if (supabaseSession != null && localSession != null) {
       chosen =
-          cloudSession.lastUpdated.isAfter(localSession.lastUpdated)
-              ? cloudSession
+          supabaseSession.lastUpdated.isAfter(localSession.lastUpdated)
+              ? supabaseSession
               : localSession;
       if (kDebugMode) {
         print(
-          "[ChatNotifier] Init: Using ${chosen == cloudSession ? 'Cloud' : 'Local'} session.",
+          "[ChatNotifier] Init: Using ${chosen == supabaseSession ? 'Supabase' : 'Local'} session.",
         );
       }
-    } else if (cloudSession != null) {
-      chosen = cloudSession;
+    } else if (supabaseSession != null) {
+      chosen = supabaseSession;
       if (kDebugMode) {
-        print("[ChatNotifier] Init: Using Cloud session (local missing).");
+        print("[ChatNotifier] Init: Using Supabase session (local missing).");
       }
     } else if (localSession != null) {
       chosen = localSession;
       if (kDebugMode) {
-        print("[ChatNotifier] Init: Using Local session (cloud missing).");
+        print("[ChatNotifier] Init: Using Local session (Supabase missing).");
       }
     } else {
       if (kDebugMode) {
@@ -323,6 +332,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
 
   Future<void> clearChat() async {
     _hasExternalContext = false;
+    final sessionId = state.session.id; // Get ID before clearing state
     state = state.copyWith(
       session: ChatSession.initial(),
       clearError: true,
@@ -331,7 +341,8 @@ class ChatNotifier extends StateNotifier<ChatState> {
       isInitializing: false,
     );
     await _local.deleteActiveChatSession();
-    await _cloud.deleteChatSession();
+    // Delete from Supabase instead of CloudKit
+    await _supabase.deleteChatSession(sessionId);
   }
 
   /// Clears the context information (item ID, type, server ID) from the current chat session.
@@ -361,52 +372,56 @@ class ChatNotifier extends StateNotifier<ChatState> {
     }
   }
 
-  Future<void> forceFetchFromCloud() async {
+  // Renamed forceFetchFromCloud to forceFetchFromSupabase for clarity
+  Future<void> forceFetchFromSupabase() async {
     if (state.isSyncing || state.isInitializing) return;
 
     if (kDebugMode) {
-      print("[ChatNotifier] Starting manual fetch from CloudKit...");
+      print("[ChatNotifier] Starting manual fetch from Supabase...");
     }
     _hasExternalContext = false;
     state = state.copyWith(isSyncing: true, clearError: true);
 
     try {
-      final cloudSession = await _cloud.getChatSession();
+      // Fetch from Supabase
+      final supabaseSession = await _supabase.getChatSession(
+        ChatSession.activeSessionId,
+      );
       _skipNextPersist = true;
 
       if (!mounted) return;
 
-      if (cloudSession != null) {
+      if (supabaseSession != null) {
         if (kDebugMode) {
-          print("[ChatNotifier] Fetched session from CloudKit.");
+          print("[ChatNotifier] Fetched session from Supabase.");
         }
         state = state.copyWith(
-          session: cloudSession,
+          session: supabaseSession,
           isSyncing: false,
           isInitializing: false,
         );
-        await _local.saveActiveChatSession(cloudSession);
+        await _local.saveActiveChatSession(supabaseSession);
         if (kDebugMode) {
-          print("[ChatNotifier] Updated local state with CloudKit session.");
+          print("[ChatNotifier] Updated local state with Supabase session.");
         }
       } else {
         if (kDebugMode) {
-          print("[ChatNotifier] No chat session found in CloudKit.");
+          print("[ChatNotifier] No chat session found in Supabase.");
         }
         state = state.copyWith(
           isSyncing: false,
-          errorMessage: "No chat session found in iCloud.",
+          errorMessage: "No chat session found in Supabase.",
           isInitializing: false,
         );
       }
     } catch (e) {
       if (kDebugMode) {
-        print("[ChatNotifier] Error during forceFetchFromCloud: $e");
+        print("[ChatNotifier] Error during forceFetchFromSupabase: $e");
       }
       if (!mounted) return;
       state = state.copyWith(
         isSyncing: false,
-        errorMessage: "Failed to fetch from iCloud: ${e.toString()}",
+        errorMessage: "Failed to fetch from Supabase: ${e.toString()}",
         isInitializing: false,
       );
     } finally {
@@ -436,15 +451,17 @@ class ChatNotifier extends StateNotifier<ChatState> {
 
       try {
         // No need to update state here just for timestamp
-        await _persister.save(sessionToSave);
-        await _cloud.saveChatSession(sessionToSave);
+        await _persister.save(sessionToSave); // Save locally
+        // Save to Supabase instead of CloudKit
+        await _supabase.saveChatSession(sessionToSave);
         if (kDebugMode) {
-          print("[ChatNotifier] Debounced save complete.");
+          print("[ChatNotifier] Debounced save complete (Local & Supabase).");
         }
       } catch (e) {
         if (kDebugMode) {
           print("[ChatNotifier] Error during debounced save: $e");
         }
+        // Optionally update state with error message
       }
     });
   }
@@ -482,32 +499,36 @@ final localStorageServiceProvider = Provider<LocalStorageService>((_) {
   return LocalStorageService();
 });
 
-final chatSessionCloudKitServiceProvider = Provider<ChatSessionCloudKitService>(
-  (_) {
-    return ChatSessionCloudKitService();
-  },
-);
+// Removed chatSessionCloudKitServiceProvider
+// final chatSessionCloudKitServiceProvider = Provider<ChatSessionCloudKitService>(
+//   (_) {
+//     return ChatSessionCloudKitService();
+//   },
+// );
 
-// --- Main Chat Provider (No changes needed, uses chatAiFacadeProvider) ---
+// --- Main Chat Provider ---
 final chatProvider = StateNotifierProvider<ChatNotifier, ChatState>(
   (ref) => ChatNotifier(
     ref,
     ref.read(localStorageServiceProvider),
-    ref.read(chatSessionCloudKitServiceProvider),
+    // Provide SupabaseDataService instead of ChatSessionCloudKitService
+    ref.read(supabaseDataServiceProvider),
     ai: ref.read(chatAiFacadeProvider), // Reads the configured facade
   ),
 );
 
-// --- Test Config Provider (Update to reflect ChatAiBackend potentially being OpenAI) ---
+// --- Test Config Provider ---
 class ChatNotifierTestConfig {
   final LocalStorageService local;
-  final ChatSessionCloudKitService cloud;
+  // Replace ChatSessionCloudKitService with SupabaseDataService
+  final SupabaseDataService supabase;
   final ChatPersister? persister;
   final ChatAiBackend ai; // Keep as ChatAiBackend, could be mock, OpenAI, etc.
 
   ChatNotifierTestConfig({
     required this.local,
-    required this.cloud,
+    // Update parameter name
+    required this.supabase,
     this.persister,
     required this.ai, // Make AI required for clarity
   });
@@ -521,7 +542,8 @@ final chatProviderTesting = StateNotifierProvider.family<
   return ChatNotifier(
     ref,
     cfg.local,
-    cfg.cloud,
+    // Pass Supabase service
+    cfg.supabase,
     persister: cfg.persister,
     ai: cfg.ai, // Pass the provided AI backend
     autoInit: false,

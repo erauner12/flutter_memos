@@ -4,6 +4,7 @@ import 'package:flutter_memos/models/server_config.dart'; // For ServerType enum
 import 'package:flutter_memos/models/workbench_instance.dart'; // Import WorkbenchInstance for default ID
 import 'package:flutter_memos/models/workbench_item_type.dart'; // Import the unified enum
 import 'package:flutter_memos/utils/enum_utils.dart'; // Import the new helper
+import 'package:uuid/uuid.dart'; // Import Uuid
 
 // REMOVED local enum definition:
 // enum WorkbenchItemType { note, comment, task }
@@ -53,16 +54,6 @@ class WorkbenchItemReference {
   }) : overallLastUpdateTime =
            overallLastUpdateTime ??
            addedTimestamp; // Use passed value or default to added
-
-  // // Helper to get the timestamp of the latest comment in the preview list
-  // DateTime? get _latestPreviewCommentTimestamp {
-  //   if (previewComments.isEmpty) return null;
-  //   // Assuming previewComments are sorted newest first
-  //   final latestComment = previewComments.first;
-  //   // Handle different comment models (Memos vs Todoist)
-  //   return latestComment.updatedTs ?? latestComment.createdTs; // Memos/Blinko
-  //   // Add Todoist logic if needed, e.g. latestComment.postedAt
-  // }
 
   /// First (most-recent) preview comment, or `null` if none.
   Comment? get latestComment =>
@@ -148,7 +139,7 @@ class WorkbenchItemReference {
 
   Map<String, dynamic> toJson() {
     return {
-      // 'id' is often the recordName in CloudKit, but include for completeness/other stores
+      // Include 'id' for saving to SharedPreferences
       'id': id,
       'referencedItemId': referencedItemId,
       // Use describeEnum for consistent serialization
@@ -167,10 +158,24 @@ class WorkbenchItemReference {
     };
   }
 
+  // Updated factory for loading from JSON (e.g., SharedPreferences)
+  // recordName is now optional, primarily for CloudKit compatibility if ever needed again.
   factory WorkbenchItemReference.fromJson(
-    Map<String, dynamic> json,
-    String recordName, // CloudKit record name, often used as primary ID
-  ) {
+    Map<String, dynamic> json, [
+    String? recordName, // Make recordName optional
+  ]) {
+    // Determine the ID: use json['id'], fallback to recordName, fallback to generating a new one?
+    // For prefs loading, json['id'] should exist.
+    String finalId = recordName ?? (json['id'] as String? ?? '');
+    if (finalId.isEmpty) {
+      // This case should ideally not happen if saved correctly with toJson()
+      if (kDebugMode)
+        print(
+          '[WorkbenchItemReference.fromJson] Warning: Missing ID in JSON and no recordName provided. Generating new ID.',
+        );
+      finalId = const Uuid().v4(); // Or throw error?
+    }
+
     // Use the new case-insensitive helper for enums
     // It returns the default value if parsing fails
     final parsedReferencedItemType = enumFromString<WorkbenchItemType>(
@@ -192,7 +197,7 @@ class WorkbenchItemReference {
     if (instanceId.isEmpty) {
       if (kDebugMode) {
         print(
-          '[WorkbenchItemReference.fromJson] Warning: Missing or empty instanceId in record $recordName. Assigning default: ${WorkbenchInstance.defaultInstanceId}.',
+          '[WorkbenchItemReference.fromJson] Warning: Missing or empty instanceId in record $finalId. Assigning default: ${WorkbenchInstance.defaultInstanceId}.',
         );
       }
       instanceId = WorkbenchInstance.defaultInstanceId; // Assign default
@@ -205,15 +210,15 @@ class WorkbenchItemReference {
     } else {
       if (kDebugMode) {
         print(
-          '[WorkbenchItemReference.fromJson] Warning: Missing sortOrder in record $recordName. Assigning default: 0.',
+          '[WorkbenchItemReference.fromJson] Warning: Missing sortOrder in record $finalId. Assigning default: 0.',
         );
       }
     }
 
 
     return WorkbenchItemReference(
-      // Use recordName as the primary ID if 'id' field is missing/different
-      id: json['id'] as String? ?? recordName,
+      // Use the determined ID
+      id: finalId,
       referencedItemId: json['referencedItemId'] as String? ?? '',
       referencedItemType:
           parsedReferencedItemType, // Use result from helper (imported enum)

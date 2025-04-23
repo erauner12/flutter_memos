@@ -8,6 +8,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 class SharedPrefsService {
   // static const String _activeInstanceIdKey = 'activeWorkbenchInstanceId';
   static const String _lastOpenedItemMapKey = 'lastOpenedItemMap';
+  // Define keys related to workbench data for clearing
+  static const String _instancesPrefsKey = 'workbench_instances_list';
+  static const String _workbenchItemsPrefix = 'workbench_items_';
+
 
   late SharedPreferences _prefs;
 
@@ -33,6 +37,20 @@ class SharedPrefsService {
     if (kDebugMode) {
       print('[SharedPrefsService] Initialized.');
     }
+  }
+
+  // --- Generic Getters/Setters ---
+
+  String? getString(String key) {
+    return _prefs.getString(key);
+  }
+
+  Future<bool> setString(String key, String value) {
+    return _prefs.setString(key, value);
+  }
+
+  Future<bool> remove(String key) {
+    return _prefs.remove(key);
   }
 
   // --- Last Opened Item Map ---
@@ -80,12 +98,30 @@ class SharedPrefsService {
     return {}; // Return empty map if not found or error
   }
 
-  /// Clears all data stored by this service.
+  /// Clears all data stored by this service. Use with caution.
   Future<bool> clearAll() async {
-    final mapCleared = await _prefs.remove(_lastOpenedItemMapKey);
+    final success = await _prefs.clear();
      if (kDebugMode) {
-      print('[SharedPrefsService] Cleared all cached data.');
+      print('[SharedPrefsService] Cleared ALL SharedPreferences data.');
     }
-    return mapCleared;
+    return success;
+  }
+
+  /// Clears only data related to workbench instances and items.
+  Future<void> clearAllWorkbenchData() async {
+    await _prefs.remove(_lastOpenedItemMapKey);
+    await _prefs.remove(_instancesPrefsKey);
+    // Remove all keys starting with the workbench items prefix
+    final keys = _prefs.getKeys();
+    for (final key in keys) {
+      if (key.startsWith(_workbenchItemsPrefix)) {
+        await _prefs.remove(key);
+      }
+    }
+    if (kDebugMode) {
+      print(
+        '[SharedPrefsService] Cleared all workbench-related SharedPreferences data.',
+      );
+    }
   }
 }

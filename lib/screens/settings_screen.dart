@@ -10,8 +10,6 @@ import 'package:flutter_memos/providers/mcp_server_config_provider.dart';
 import 'package:flutter_memos/providers/note_providers.dart' as note_providers;
 // Import new single-config providers
 import 'package:flutter_memos/providers/note_server_config_provider.dart';
-// Import providers needed for reset
-import 'package:flutter_memos/providers/service_providers.dart'; // For cloudKitServiceProvider
 import 'package:flutter_memos/providers/settings_provider.dart'; // Import settings provider
 import 'package:flutter_memos/providers/shared_prefs_provider.dart';
 import 'package:flutter_memos/providers/task_providers.dart';
@@ -23,13 +21,15 @@ import 'package:flutter_memos/screens/add_edit_server_screen.dart';
 import 'package:flutter_memos/services/auth_strategy.dart'; // Import for BearerTokenAuthStrategy
 import 'package:flutter_memos/services/base_api_service.dart'; // Import BaseApiService
 import 'package:flutter_memos/services/blinko_api_service.dart';
-import 'package:flutter_memos/services/cloud_kit_service.dart'; // Import CloudKitService
+// Removed CloudKitService import
 // Import MCP client provider (for status later) - add "as mcp_service" to solve ambiguity
 import 'package:flutter_memos/services/mcp_client_service.dart' as mcp_service;
 // Import specific API services for testing
 import 'package:flutter_memos/services/memos_api_service.dart';
+import 'package:flutter_memos/services/supabase_data_service.dart'; // Import SupabaseDataService
 import 'package:flutter_memos/services/vikunja_api_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart'; // Import Supabase client for reset
 
 class SettingsScreen extends ConsumerStatefulWidget {
   final bool isInitialSetup;
@@ -55,7 +55,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   final _geminiApiKeyController = TextEditingController();
 
   // REMOVED Vikunja state
-  // final _vikunjaApiKeyController = TextEditingController();
 
   @override
   void initState() {
@@ -67,8 +66,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         final initialGeminiKey = ref.read(geminiApiKeyProvider);
         _geminiApiKeyController.text = initialGeminiKey;
         // REMOVED Vikunja key init
-        // final initialVikunjaKey = ref.read(vikunjaApiKeyProvider);
-        // _vikunjaApiKeyController.text = initialVikunjaKey;
       }
       _fetchModels();
     });
@@ -79,7 +76,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     _openaiApiKeyController.dispose();
     _geminiApiKeyController.dispose();
     // REMOVED Vikunja controller dispose
-    // _vikunjaApiKeyController.dispose();
     super.dispose();
   }
 
@@ -228,10 +224,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           'Connection to ${purpose.name} server "${config.name ?? config.serverUrl}" successful!',
         );
         // REMOVED direct setting of isVikunjaConfiguredProvider
-        // if (purpose == ServerPurpose.task &&
-        //     config.serverType == ServerType.vikunja) {
-        //   ref.read(isVikunjaConfiguredProvider.notifier).state = true;
-        // }
       } else {
         _showResultDialog(
           'Connection Failed',
@@ -250,14 +242,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       );
      } finally {
       // Check mounted *after* await
-      if (!mounted)   
-      setState(() {
-        if (purpose == ServerPurpose.note) {
-          _isTestingNoteConnection = false;
-        } else {
-          _isTestingTaskConnection = false;
-        }
-      });
+      if (mounted) {
+        // Check mounted before calling setState
+        setState(() {
+          if (purpose == ServerPurpose.note) {
+            _isTestingNoteConnection = false;
+          } else {
+            _isTestingTaskConnection = false;
+          }
+        });
+      }
     }
   }
 
@@ -304,8 +298,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       );
     } finally {
       // Check mounted *after* await
-      if (!isMounted) return;
-      setState(() => _isTestingOpenAiConnection = false);
+      if (mounted) {
+        // Check mounted before calling setState
+        setState(() => _isTestingOpenAiConnection = false);
+      }
     }
   }
 
@@ -519,50 +515,51 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     // Check mounted at the beginning
     if (!mounted) return;
 
-    final cloudKitService = ref.read(cloudKitServiceProvider);
-    bool cloudSuccess = true;
+    // Removed CloudKitService instance
+    bool cloudSuccess = true; // Assume success unless Supabase fails
     String cloudErrorMessage = '';
 
     // Get current workbench instance IDs before clearing
     final instanceIdsToClear = ref.read(workbenchInstancesProvider).instances.map((i) => i.id).toList();
 
-    // 1. Clear CloudKit Data (Adapt to potentially new single-config record types)
+    // 1. Clear Supabase Data (Optional - uncomment and adapt if needed)
     try {
-      // TODO: Update CloudKit deletion logic if single Note/Task configs use different record types
-      if (kDebugMode) print('[SettingsScreen] Deleting CloudKit ServerConfig records (old type)...');
-      bool deleteServersSuccess = await cloudKitService.deleteAllRecordsOfType(CloudKitService.serverConfigRecordType);
-      // Add deletion for new Note/Task specific record types if they exist
-      // bool deleteNoteServerSuccess = await cloudKitService.deleteNoteServerConfigRecord(); // Example
-      // bool deleteTaskServerSuccess = await cloudKitService.deleteTaskServerConfigRecord(); // Example
+      final supabase = Supabase.instance.client;
+      // Removed unused supabaseDataService variable
+      // final supabaseDataService = ref.read(supabaseDataServiceProvider);
 
-      if (kDebugMode) print('[SettingsScreen] Deleting CloudKit McpServerConfig records...');
-      bool deleteMcpSuccess = await cloudKitService.deleteAllRecordsOfType(CloudKitService.mcpServerConfigRecordType);
+      if (kDebugMode) print('[SettingsScreen] Deleting Supabase data...');
 
-      if (kDebugMode) print('[SettingsScreen] Deleting CloudKit UserSettings record...');
-      bool deleteSettingsSuccess = await cloudKitService.deleteUserSettingsRecord();
+      // Example: Clear chat sessions using SupabaseDataService method
+      // This assumes you have a method like deleteAllChatSessions or similar
+      // bool deleteChatsSuccess = await supabaseDataService.deleteAllChatSessions();
+      // Or delete directly:
+      await supabase
+          .from(SupabaseDataService.chatSessionsTable)
+          .delete()
+          .neq('id', '0'); // Delete all rows
 
-      if (kDebugMode) print('[SettingsScreen] Deleting CloudKit WorkbenchInstance records...');
-      bool deleteInstancesSuccess = await cloudKitService.deleteAllRecordsOfType(CloudKitService.workbenchInstanceRecordType);
+      // Add similar deletions for other tables if they exist in Supabase
+      // await supabase.from('server_configs').delete().neq('id', '0');
+      // await supabase.from('mcp_server_configs').delete().neq('id', '0');
+      // await supabase.from('user_settings').delete().neq('id', '0'); // Assuming a single row or user-specific filter
+      // await supabase.from('workbench_instances').delete().neq('id', '0');
+      // await supabase.from('workbench_items').delete().neq('id', '0');
 
-      if (kDebugMode) print('[SettingsScreen] Deleting CloudKit WorkbenchItemReference records...');
-      bool deleteItemsSuccess = await cloudKitService.deleteAllRecordsOfType(CloudKitService.workbenchItemRecordType);
+      // cloudSuccess = deleteChatsSuccess && ... ; // Combine results if needed
 
-      // Combine success flags
-      cloudSuccess = deleteServersSuccess && deleteMcpSuccess && deleteSettingsSuccess && deleteInstancesSuccess && deleteItemsSuccess; // Add new flags if needed
-      if (!cloudSuccess) {
-         cloudErrorMessage = 'Failed to delete some CloudKit records. Check logs.';
-         if (kDebugMode) print('[SettingsScreen] CloudKit deletion finished with errors.');
-      } else {
-         if (kDebugMode) print('[SettingsScreen] CloudKit deletion finished successfully.');
+      if (kDebugMode) {
+        print('[SettingsScreen] Supabase deletion attempt finished.');
       }
 
     } catch (e, s) {
-      if (kDebugMode) print('[SettingsScreen] Critical error during CloudKit deletion phase: $e\n$s');
-      cloudSuccess = false;
-      cloudErrorMessage = 'A critical error occurred during CloudKit deletion: $e';
+      if (kDebugMode)
+        print('[SettingsScreen] Error during Supabase deletion phase: $e\n$s');
+      cloudSuccess = false; // Mark as failed if Supabase deletion has errors
+      cloudErrorMessage = 'An error occurred during Supabase data deletion: $e';
     }
 
-    // 2. Clear Local Notifiers and Cache
+    // 2. Clear Local Notifiers and Cache (Keep this part)
     final noteServerNotifier = ref.read(noteServerConfigProvider.notifier);
     final taskServerNotifier = ref.read(taskServerConfigProvider.notifier);
     final mcpServerNotifier = ref.read(mcpServerConfigProvider.notifier);
@@ -570,8 +567,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final openAiModelNotifier = ref.read(openAiModelIdProvider.notifier);
     final geminiNotifier = ref.read(geminiApiKeyProvider.notifier);
     // REMOVED Vikunja Key Notifier
-    // final vikunjaKeyNotifier = ref.read(vikunjaApiKeyProvider.notifier);
-    final workbenchInstancesNotifier = ref.read(workbenchInstancesProvider.notifier);
+    // Removed unused workbenchInstancesNotifier variable
+    // final workbenchInstancesNotifier = ref.read(workbenchInstancesProvider.notifier);
     final tasksNotifier = ref.read(tasksNotifierProvider.notifier);
     final chatNotifier = ref.read(chatProvider.notifier);
     final sharedPrefsService = await ref.read(sharedPrefsServiceProvider.future);
@@ -586,21 +583,30 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       await openAiModelNotifier.clear();
       await geminiNotifier.clear();
       // REMOVED Vikunja Key Clear
-      // await vikunjaKeyNotifier.clear();
 
-      // Clear Data Caches
+      // Clear Data Caches / Local State
+      // Invalidate workbench providers (they load from prefs now)
       for (final instanceId in instanceIdsToClear) {
         ref.invalidate(workbenchProviderFamily(instanceId));
+        // Also clear the prefs file for each instance's items
+        // Use the correct method name from SharedPrefsService
+        await sharedPrefsService.remove('workbench_items_$instanceId');
       }
-      await workbenchInstancesNotifier.loadInstances(); // Reload after invalidation
+      // Reset and reload instances (will load default from prefs)
+      ref.invalidate(workbenchInstancesProvider);
+      // Removed call to loadInstances, invalidation handles reload
+      // await ref.read(workbenchInstancesProvider.notifier).loadInstances();
 
-      tasksNotifier.clearTasks();
-      chatNotifier.clearChat();
-      // Remove dead null-aware operator
-      await sharedPrefsService.clearAll();
+
+      tasksNotifier.clearTasks(); // Clear in-memory task state
+      await chatNotifier.clearChat(); // Clears local state and Supabase entry
+
+      // Clear remaining shared prefs (like last opened items, instance list)
+      // Use the correct method name from SharedPrefsService
+      await sharedPrefsService
+          .clearAllWorkbenchData(); // Use specific clear method if available
 
       // REMOVED direct setting of isVikunjaConfiguredProvider
-      // ref.read(isVikunjaConfiguredProvider.notifier).state = false;
 
       if (kDebugMode) print('[SettingsScreen] Local reset finished.');
     } catch (e, s) {
@@ -608,22 +614,23 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       cloudErrorMessage = cloudErrorMessage.isNotEmpty
           ? '$cloudErrorMessage\nAn error also occurred during local data reset.'
           : 'An error occurred during local data reset.';
-      cloudSuccess = false;
+      cloudSuccess = false; // Mark as failed if local reset has errors
     }
 
     // 3. Show Final Result Dialog - Check mounted *after* all awaits
     if (!mounted) {
-      if (kDebugMode)
+      if (kDebugMode) {
         print(
           '[SettingsScreen] Widget unmounted before final reset dialog could be shown.',
         );
+      }
       return;
     }
     _showResultDialog(
       cloudSuccess ? 'Reset Complete' : 'Reset Partially Failed',
       cloudSuccess
-          ? 'All cloud configurations, local settings, API keys, and cached data have been cleared. Please restart the app or reconfigure servers.'
-          : 'The reset process encountered errors:\n$cloudErrorMessage\nSome data might remain. Please check iCloud data manually and restart the app.',
+          ? 'All local configurations, settings, API keys, and cached data have been cleared. Supabase data deletion attempted. Please restart the app or reconfigure servers.'
+          : 'The reset process encountered errors:\n$cloudErrorMessage\nSome data might remain. Please check Supabase data manually and restart the app.',
       isError: !cloudSuccess,
     );
     // Invalidate providers to force reload on next access
@@ -642,7 +649,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     ref.invalidate(openAiModelIdProvider);
     ref.invalidate(geminiApiKeyProvider);
     // REMOVED Vikunja Key Invalidation
-    // ref.invalidate(vikunjaApiKeyProvider);
     // Invalidate API service providers
     ref.invalidate(noteApiServiceProvider); // Use new provider name
     ref.invalidate(taskApiServiceProvider); // Use new provider name
@@ -735,9 +741,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 } else {
                   _showResultDialog('Deleted', '${purpose.name.substring(0,1).toUpperCase()}${purpose.name.substring(1)} server "$displayName" deleted.');
                   // REMOVED direct setting of isVikunjaConfiguredProvider
-                  // if (purpose == ServerPurpose.task && config.serverType == ServerType.vikunja) {
-                  //    ref.read(isVikunjaConfiguredProvider.notifier).state = false;
-                  // }
                 }
               }
             },
@@ -878,8 +881,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 header: const Text('INTEGRATIONS'),
                 children: [
                   // REMOVED Vikunja API Key Tile (Legacy)
-                  // if (taskServerConfig?.serverType == ServerType.vikunja)
-                  //   CupertinoListTile( ... ),
 
                   // OpenAI Integration Tile
                   CupertinoListTile(
@@ -913,8 +914,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                               final isMounted =
                                   mounted; // Check mounted before await
                               final success = await ref.read(openAiApiKeyProvider.notifier).set(newKey);
-                              if (!isMounted)
+                              if (!isMounted) {
                                 return; // Check mounted after await
+                              }
                               if (success) {
                                 ref.read(openaiApiServiceProvider).configureService(authToken: newKey);
                                 _showResultDialog('API Key Updated', 'OpenAI API key has been saved.');
@@ -1012,8 +1014,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                               final isMounted =
                                   mounted; // Check mounted before await
                               final success = await ref.read(geminiApiKeyProvider.notifier).set(newKey);
-                              if (!isMounted)
+                              if (!isMounted) {
                                 return; // Check mounted after await
+                              }
                               if (success) {
                                 _showResultDialog('API Key Updated', 'Gemini API key has been saved.');
                               } else {
@@ -1080,7 +1083,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       Row(children: [ Icon(CupertinoIcons.info_circle, size: 18), SizedBox(width: 6), Text('Integrations', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))]),
                       SizedBox(height: 8),
                       Text(
-                        'API keys for integrations like OpenAI and Gemini are stored securely on your device and synced via iCloud.',
+                        'API keys for integrations like OpenAI and Gemini are stored securely on your device.', // Removed "synced via iCloud"
                         style: TextStyle(fontSize: 14),
                       ),
                     ],
@@ -1093,7 +1096,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 header: const Text('DANGER ZONE'),
                 children: [
                   CupertinoListTile(
-                    title: Text('Reset All Cloud & Local Data', style: TextStyle(color: CupertinoColors.systemRed.resolveFrom(context))),
+                    title: Text(
+                      'Reset All Local Data',
+                      style: TextStyle(
+                        color: CupertinoColors.systemRed.resolveFrom(context),
+                      ),
+                    ), // Updated title
                     leading: Icon(CupertinoIcons.exclamationmark_octagon_fill, color: CupertinoColors.systemRed.resolveFrom(context)),
                     onTap: () async {
                       // Check mounted before showing dialog
@@ -1103,7 +1111,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         builder: (dialogContext) => CupertinoAlertDialog(
                           title: const Text('Confirm Reset'),
                           content: const Text(
-                                'This will permanently delete your configured Note server, Task server, all MCP servers, API keys (OpenAI, Gemini), cached data (notes, tasks, workbench items, chat history), and local settings from this device AND from your iCloud account.\n\nThis action cannot be undone. Are you absolutely sure?',
+                                'This will permanently delete your configured Note server, Task server, all MCP servers, API keys (OpenAI, Gemini), cached data (notes, tasks, workbench items, chat history), and local settings from this device.\n\nSupabase data (like chat history) will also be deleted if configured.\n\nThis action cannot be undone. Are you absolutely sure?', // Updated content
                           ),
                           actions: [
                             CupertinoDialogAction(child: const Text('Cancel'), onPressed: () => Navigator.pop(dialogContext, false)),

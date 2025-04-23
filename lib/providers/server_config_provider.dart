@@ -6,7 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_memos/models/server_config.dart';
 import 'package:flutter_memos/providers/mcp_server_config_provider.dart';
 import 'package:flutter_memos/providers/note_server_config_provider.dart'; // Import new provider
-import 'package:flutter_memos/providers/service_providers.dart'; // Import service provider
+// Removed service provider import if only CloudKit was used
 import 'package:flutter_memos/providers/settings_provider.dart';
 import 'package:flutter_memos/providers/task_server_config_provider.dart'; // Import new provider
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -109,30 +109,20 @@ final loadServerConfigProvider = FutureProvider<void>((ref) async {
     }
   }
   // REMOVED Vikunja API Key init
+
+  // Removed CloudKit initialization/status check
   // try {
-  //   await ref.read(vikunjaApiKeyProvider.notifier).init(); // Added Vikunja init
+  //   await ref.read(cloudKitServiceProvider).initialize();
   //   if (kDebugMode) {
-  //     print('[loadServerConfigProvider] Vikunja API key load triggered.');
+  //     print(
+  //       '[loadServerConfigProvider] CloudKit account status check complete.',
+  //     );
   //   }
   // } catch (e) {
   //   if (kDebugMode) {
-  //     print(
-  //       '[loadServerConfigProvider] Error initializing Vikunja provider: $e',
-  //     );
+  //     print('[loadServerConfigProvider] Error checking CloudKit status: $e');
   //   }
   // }
-  try {
-    await ref.read(cloudKitServiceProvider).initialize();
-    if (kDebugMode) {
-      print(
-        '[loadServerConfigProvider] CloudKit account status check complete.',
-      );
-    }
-  } catch (e) {
-    if (kDebugMode) {
-      print('[loadServerConfigProvider] Error checking CloudKit status: $e');
-    }
-  }
 
   if (kDebugMode) {
     print('[loadServerConfigProvider] Initial data load sequence finished.');

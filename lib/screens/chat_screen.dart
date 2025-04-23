@@ -237,7 +237,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   chatState.isSyncing || chatState.isInitializing
                       ? null
                       : () =>
-                          ref.read(chatProvider.notifier).forceFetchFromCloud(),
+                          ref
+                              .read(chatProvider.notifier)
+                              .forceFetchFromSupabase(),
               child:
                   chatState.isSyncing
                       ? const CupertinoActivityIndicator(radius: 10)

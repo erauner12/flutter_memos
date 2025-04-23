@@ -265,17 +265,18 @@ class _WorkbenchHubScreenState extends ConsumerState<WorkbenchHubScreen> {
           padding: EdgeInsets.zero,
           child: const Icon(CupertinoIcons.refresh),
           onPressed: () {
-            // Get all instance IDs
-            final instancesState = ref.read(workbenchInstancesProvider);
-            final instanceIds =
-                instancesState.instances
-                    .map((instance) => instance.id)
+            // Invalidate providers to trigger reload
+            ref.invalidate(workbenchInstancesProvider);
+            final currentInstanceIds =
+                ref
+                    .read(workbenchInstancesProvider)
+                    .instances
+                    .map((i) => i.id)
                     .toList();
-
-            // Trigger loadItems for each instance
-            for (final id in instanceIds) {
-              ref.read(workbenchProviderFamily(id).notifier).loadItems();
+            for (final id in currentInstanceIds) {
+              ref.invalidate(workbenchProviderFamily(id));
             }
+
             // Optional: Show a confirmation or feedback
             // ScaffoldMessenger.of(context).showSnackBar(
             //   const SnackBar(content: Text('Refreshing all workbenches...')),
@@ -320,9 +321,8 @@ class _WorkbenchHubScreenState extends ConsumerState<WorkbenchHubScreen> {
                         child: const Text('Retry'),
                         onPressed:
                             () =>
-                                ref
-                                    .read(workbenchInstancesProvider.notifier)
-                                    .loadInstances(),
+                            // Invalidate provider to retry loading
+                            ref.invalidate(workbenchInstancesProvider),
                       ),
                     ],
                   ),

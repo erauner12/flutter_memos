@@ -12,11 +12,13 @@ class SupabaseDataService {
 
   // Define table name constants
   static const String chatSessionsTable = 'chat_sessions';
-  // Add other table names as needed
-  // static const String serverConfigsTable = 'server_configs';
-  // static const String workbenchItemsTable = 'workbench_items';
-  // static const String workbenchInstancesTable = 'workbench_instances';
-  // static const String userSettingsTable = 'user_settings';
+  // Add other table names as needed if these entities are moved to Supabase
+  static const String serverConfigsTable = 'server_configs'; // Example
+  static const String mcpServerConfigsTable = 'mcp_server_configs'; // Example
+  static const String workbenchItemsTable = 'workbench_items'; // Example
+  static const String workbenchInstancesTable =
+      'workbench_instances'; // Example
+  static const String userSettingsTable = 'user_settings'; // Example
 
   // --- ChatSession Methods ---
 
@@ -33,11 +35,19 @@ class SupabaseDataService {
         print('[SupabaseDataService] Saved/Updated chat session ${session.id}');
       }
       return true;
+    } on PostgrestException catch (e, s) {
+      if (kDebugMode) {
+        print(
+          '[SupabaseDataService] PostgrestException saving chat session ${session.id}: ${e.message}\nCode: ${e.code}\nDetails: ${e.details}\nHint: ${e.hint}\n$s',
+        );
+      }
+      return false;
     } catch (e, s) {
       if (kDebugMode) {
-        print('[SupabaseDataService] Error saving chat session ${session.id}: $e\n$s');
+        print(
+          '[SupabaseDataService] Generic error saving chat session ${session.id}: $e\n$s',
+        );
       }
-      // Consider more specific error handling (e.g., PostgrestException)
       return false;
     }
   }
@@ -65,9 +75,18 @@ class SupabaseDataService {
         print('[SupabaseDataService] Fetched chat session $id');
       }
       return session;
+    } on PostgrestException catch (e, s) {
+      if (kDebugMode) {
+        print(
+          '[SupabaseDataService] PostgrestException fetching chat session $id: ${e.message}\nCode: ${e.code}\nDetails: ${e.details}\nHint: ${e.hint}\n$s',
+        );
+      }
+      return null;
     } catch (e, s) {
       if (kDebugMode) {
-        print('[SupabaseDataService] Error fetching chat session $id: $e\n$s');
+        print(
+          '[SupabaseDataService] Generic error fetching chat session $id: $e\n$s',
+        );
       }
       return null;
     }
@@ -81,9 +100,18 @@ class SupabaseDataService {
         print('[SupabaseDataService] Deleted chat session $id');
       }
       return true;
+    } on PostgrestException catch (e, s) {
+      if (kDebugMode) {
+        print(
+          '[SupabaseDataService] PostgrestException deleting chat session $id: ${e.message}\nCode: ${e.code}\nDetails: ${e.details}\nHint: ${e.hint}\n$s',
+        );
+      }
+      return false;
     } catch (e, s) {
       if (kDebugMode) {
-        print('[SupabaseDataService] Error deleting chat session $id: $e\n$s');
+        print(
+          '[SupabaseDataService] Generic error deleting chat session $id: $e\n$s',
+        );
       }
       return false;
     }
