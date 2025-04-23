@@ -90,7 +90,8 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
         print(
           '[WorkbenchNotifier($instanceId)] loadItems: Fetched ${references.length} raw references from CloudKit.',
         );
-      references.sort((a, b) => b.addedTimestamp.compareTo(a.addedTimestamp));
+      // Keep original sort order from CloudKit for now, sort later if needed
+      // references.sort((a, b) => b.addedTimestamp.compareTo(a.addedTimestamp));
       if (mounted) {
         state = state.copyWith(items: references, isLoading: false);
         if (kDebugMode)
@@ -121,30 +122,28 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
       return;
     }
 
+    // Ensure we only process items belonging to *this* notifier's instanceId
+    final relevantItems =
+        itemsToProcess.where((item) => item.instanceId == instanceId).toList();
+    if (relevantItems.isEmpty) {
+      if (kDebugMode)
+        print(
+          '[WorkbenchNotifier($instanceId)] _fetchAndPopulateDetails called but no items belong to this instance.',
+        );
+      if (mounted && state.isRefreshingDetails)
+        state = state.copyWith(isRefreshingDetails: false);
+      return;
+    }
+
+
     final Map<String, List<WorkbenchItemReference>> itemsByServer = {};
-    for (final item in itemsToProcess) {
-      if (item.instanceId != instanceId) {
-        if (kDebugMode)
-          print(
-            '[WorkbenchNotifier($instanceId)] _fetchAndPopulateDetails: Skipping item ${item.id} because its instanceId (${item.instanceId}) does not match.',
-          );
-        continue;
-      }
+    for (final item in relevantItems) {
+      // Use filtered list
       if (kDebugMode)
         print(
           '[WorkbenchNotifier($instanceId)] _fetchAndPopulateDetails: Processing item ${item.id} for server ${item.serverId}.',
         );
       (itemsByServer[item.serverId] ??= []).add(item);
-    }
-
-    if (itemsByServer.isEmpty && itemsToProcess.isNotEmpty) {
-      if (kDebugMode)
-        print(
-          '[WorkbenchNotifier($instanceId)] _fetchAndPopulateDetails called with items not belonging to this instance.',
-        );
-      if (mounted && state.isRefreshingDetails)
-        state = state.copyWith(isRefreshingDetails: false);
-      return;
     }
 
     final List<Future<WorkbenchItemReference>> detailFetchFutures = [];
@@ -301,13 +300,29 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
     );
 
     if (mounted) {
-      final currentItemsMap = {for (var item in state.items) item.id: item};
+      // Get current items *only for this instance*
+      final currentItemsMap = {
+        for (var item in state.items.where((i) => i.instanceId == instanceId))
+          item.id: item,
+      };
+      // Update the map with new results (which should also belong to this instance)
       for (final updatedItem in results) {
         if (updatedItem.instanceId == instanceId) {
           currentItemsMap[updatedItem.id] = updatedItem;
+        } else if (kDebugMode) {
+          print(
+            '[WorkbenchNotifier($instanceId)] WARNING: Received updated item ${updatedItem.id} belonging to wrong instance ${updatedItem.instanceId} during detail fetch.',
+          );
         }
       }
-      final finalItems = currentItemsMap.values.toList();
+      // Get items from *other* instances that might be in the state (shouldn't happen ideally)
+      final otherInstanceItems =
+          state.items.where((i) => i.instanceId != instanceId).toList();
+
+      // Combine this instance's updated items with any others
+      final finalItems = [...currentItemsMap.values, ...otherInstanceItems];
+
+      // Sort based on the desired criteria (e.g., overallLastUpdateTime)
       finalItems.sort(
         (a, b) => b.overallLastUpdateTime.compareTo(a.overallLastUpdateTime),
       );
@@ -316,11 +331,12 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
         state = state.copyWith(
           items: finalItems,
           isRefreshingDetails: false,
-          isLoading: false,
+          isLoading:
+              false, // Ensure loading is set to false after details are fetched
         );
         if (kDebugMode)
           print(
-            '[WorkbenchNotifier($instanceId)] Finished fetching details for ${results.length} items.',
+            '[WorkbenchNotifier($instanceId)] Finished fetching details for ${results.length} items belonging to this instance.',
           );
       }
     }
@@ -330,10 +346,12 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
   Future<void> refreshItemDetails() async {
     if (state.isLoading || state.isRefreshingDetails) return;
     if (!mounted) return;
-    if (state.items.isEmpty) {
+    final itemsForThisInstance =
+        state.items.where((i) => i.instanceId == instanceId).toList();
+    if (itemsForThisInstance.isEmpty) {
       if (kDebugMode)
         print(
-          '[WorkbenchNotifier($instanceId)] No items to refresh details for.',
+          '[WorkbenchNotifier($instanceId)] No items in this instance to refresh details for.',
         );
       return;
     }
@@ -341,15 +359,17 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
       state = state.copyWith(isRefreshingDetails: true, clearError: true);
       if (kDebugMode)
         print(
-          '[WorkbenchNotifier($instanceId)] Refreshing details for ${state.items.length} items.',
+          '[WorkbenchNotifier($instanceId)] Refreshing details for ${itemsForThisInstance.length} items in this instance.',
         );
-      await _fetchAndPopulateDetails(List.from(state.items));
+      // Pass only the items belonging to this instance
+      await _fetchAndPopulateDetails(itemsForThisInstance);
     }
   }
 
   void resetOrder() {
     if (!mounted) return;
     final List<WorkbenchItemReference> currentItems = List.from(state.items);
+    // Only sort items belonging to this instance? Or all items? Let's sort all for now.
     currentItems.sort(
       (a, b) => b.overallLastUpdateTime.compareTo(a.overallLastUpdateTime),
     );
@@ -372,7 +392,8 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
     final isDuplicate = state.items.any(
       (existingItem) =>
           existingItem.referencedItemId == item.referencedItemId &&
-          existingItem.serverId == item.serverId,
+          existingItem.serverId == item.serverId &&
+          existingItem.instanceId == instanceId, // Check instanceId too
     );
     if (isDuplicate) {
       if (kDebugMode)
@@ -399,10 +420,12 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
         print(
           '[WorkbenchNotifier($instanceId)] Added item ${item.id} successfully.',
         );
+      // Find the added item in the *current* state to fetch details
       final addedItemInState = state.items.firstWhere(
         (i) => i.id == item.id,
-        orElse: () => newItemWithDefaults,
+        orElse: () => newItemWithDefaults, // Fallback just in case
       );
+      // Fetch details only for the newly added item
       unawaited(_fetchAndPopulateDetails([addedItemInState]));
     } catch (e, s) {
       if (kDebugMode)
@@ -410,6 +433,7 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
           '[WorkbenchNotifier($instanceId)] Error adding item ${item.id}: $e\n$s',
         );
       if (mounted) {
+        // Restore original state on error
         originalItems.sort(
           (a, b) => b.overallLastUpdateTime.compareTo(a.overallLastUpdateTime),
         );
@@ -418,15 +442,32 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
     }
   }
 
-  void _addExistingItem(WorkbenchItemReference item) {
+  // Internal method to add an item locally without saving to CloudKit
+  // Used when an item is moved *into* this instance.
+  void _addExistingItemLocally(WorkbenchItemReference item) {
     if (!mounted) return;
     if (item.instanceId != instanceId) {
       if (kDebugMode)
         print(
-          '[WorkbenchNotifier($instanceId)] _addExistingItem called with item ${item.id} for wrong instance ${item.instanceId}. Skipping.',
+          '[WorkbenchNotifier($instanceId)] _addExistingItemLocally called with item ${item.id} for wrong instance ${item.instanceId}. Skipping.',
         );
       return;
     }
+    final isDuplicate = state.items.any(
+      (existingItem) =>
+          existingItem.id == item.id || // Check by new ID
+          (existingItem.referencedItemId == item.referencedItemId &&
+              existingItem.serverId == item.serverId &&
+              existingItem.instanceId == instanceId), // Check content
+    );
+    if (isDuplicate) {
+      if (kDebugMode)
+        print(
+          '[WorkbenchNotifier($instanceId)] _addExistingItemLocally: Item ${item.id} (refId ${item.referencedItemId}) already exists. Skipping.',
+        );
+      return;
+    }
+
     final newItems = [...state.items, item];
     newItems.sort(
       (a, b) => b.overallLastUpdateTime.compareTo(a.overallLastUpdateTime),
@@ -434,21 +475,22 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
     state = state.copyWith(items: newItems, clearError: true);
     if (kDebugMode)
       print(
-        '[WorkbenchNotifier($instanceId)] Added existing item ${item.id} locally.',
+        '[WorkbenchNotifier($instanceId)] Added existing item ${item.id} locally after move.',
       );
+    // Fetch details for the newly added item
     unawaited(_fetchAndPopulateDetails([item]));
   }
 
   Future<void> removeItem(String itemId) async {
     if (!mounted) return;
-    final itemExists = state.items.any((item) => item.id == itemId);
-    if (!itemExists) {
+    try {} catch (e) {
       if (kDebugMode)
         print(
           '[WorkbenchNotifier($instanceId)] Item with ID $itemId not found in this instance. Skipping remove.',
         );
       return;
     }
+
 
     final originalItems = List<WorkbenchItemReference>.from(state.items);
     final newItems = originalItems.where((item) => item.id != itemId).toList();
@@ -463,15 +505,22 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
         print(
           '[WorkbenchNotifier($instanceId)] Removed item $itemId successfully.',
         );
-      _ref
+      // Check if the removed item was the last opened one for this instance
+      final lastOpened =
+          _ref.read(workbenchInstancesProvider).lastOpenedItemId[instanceId];
+      if (lastOpened == itemId) {
+        _ref
           .read(workbenchInstancesProvider.notifier)
           .setLastOpenedItem(instanceId, null);
+      }
+
     } catch (e, s) {
       if (kDebugMode)
         print(
           '[WorkbenchNotifier($instanceId)] Error removing item $itemId: $e\n$s',
         );
       if (mounted) {
+        // Restore original state on error
         originalItems.sort(
           (a, b) => b.overallLastUpdateTime.compareTo(a.overallLastUpdateTime),
         );
@@ -495,18 +544,24 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
 
     WorkbenchItemReference? itemToMove;
     try {
-      itemToMove = state.items.firstWhere((i) => i.id == itemId);
+      // Ensure the item exists in *this* instance before attempting to move it
+      itemToMove = state.items.firstWhere(
+        (i) => i.id == itemId && i.instanceId == instanceId,
+      );
     } catch (e) {
       if (kDebugMode)
         print(
-          '[WorkbenchNotifier($instanceId)] Item with ID $itemId not found for move operation.',
+          '[WorkbenchNotifier($instanceId)] Item with ID $itemId not found in this instance for move operation.',
         );
       if (mounted)
-        state = state.copyWith(error: Exception('Item to move not found.'));
+        state = state.copyWith(
+          error: Exception('Item to move not found in this instance.'),
+        );
       return;
     }
 
     final originalItems = List<WorkbenchItemReference>.from(state.items);
+    // Optimistically remove the item from the current instance's state
     final newItems = originalItems.where((item) => item.id != itemId).toList();
     if (mounted) {
       state = state.copyWith(items: newItems, clearError: true);
@@ -518,53 +573,50 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
 
     try {
       final oldRecordFields = itemToMove.toJson();
+      // Perform the move in CloudKit (delete old, create new with targetInstanceId)
       final maybeNewCloudKitId = await _cloudKitService
           .moveWorkbenchItemReferenceByDeleteRecreate(
-            recordName: itemId,
+            recordName: itemId, // The ID of the record to delete
             newInstanceId: targetInstanceId,
-            oldRecordFields: oldRecordFields,
+            oldRecordFields:
+                oldRecordFields, // Pass existing fields for recreation
           );
 
       if (maybeNewCloudKitId == null)
         throw Exception('CloudKit delete-recreate move operation failed');
 
+      // Create the representation of the item in the target instance
       final newItemForTarget = itemToMove.copyWith(
-        id: maybeNewCloudKitId,
+        id: maybeNewCloudKitId, // Use the new ID returned by CloudKit
         instanceId: targetInstanceId,
+        // Reset transient fields for the target instance
+        previewComments: [],
+        referencedItemUpdateTime: () => null,
+        overallLastUpdateTime:
+            itemToMove.addedTimestamp, // Reset to added time initially
       );
 
       if (mounted) {
+        // Get the notifier for the target instance
         final targetNotifier = _ref.read(
           workbenchProviderFamily(targetInstanceId).notifier,
         );
-        targetNotifier._addExistingItem(newItemForTarget);
-        if (kDebugMode)
-          print(
-            '[WorkbenchNotifier($instanceId)] Added item to target instance. Now adding delayed refresh to handle CloudKit consistency.',
-          );
-
-        if (mounted) {
-          Future.delayed(const Duration(milliseconds: 1500), () {
-            if (mounted) {
-              targetNotifier.loadItems();
-              if (kDebugMode)
-                print(
-                  '[WorkbenchNotifier($instanceId)] Executed delayed loadItems() on target instance after move.',
-                );
-            }
-          });
-        }
+        // Add the item locally to the target notifier's state
+        targetNotifier._addExistingItemLocally(newItemForTarget);
 
         if (kDebugMode)
           print(
-            '[WorkbenchNotifier($instanceId)] Successfully processed move for item original ID $itemId to instance $targetInstanceId (new CloudKit ID: $maybeNewCloudKitId).',
+            '[WorkbenchNotifier($instanceId)] Successfully processed move for item original ID $itemId to instance $targetInstanceId (new CloudKit ID: $maybeNewCloudKitId). Item added locally to target.',
           );
+
+        // Check if the moved item was the last opened one for this instance
         final lastOpened =
             _ref.read(workbenchInstancesProvider).lastOpenedItemId[instanceId];
-        if (lastOpened == itemId)
+        if (lastOpened == itemId) {
           _ref
               .read(workbenchInstancesProvider.notifier)
               .setLastOpenedItem(instanceId, null);
+        }
       }
     } catch (e, s) {
       if (kDebugMode)
@@ -572,52 +624,79 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
           '[WorkbenchNotifier($instanceId)] Error moving item $itemId to $targetInstanceId: $e\n$s',
         );
       if (mounted) {
+        // Revert: Add the item back to the current instance's state if the move failed
         final itemsToRestore = List<WorkbenchItemReference>.from(originalItems);
-        if (!itemsToRestore.any((i) => i.id == itemId))
-          itemsToRestore.add(itemToMove);
+        // Ensure sorting is reapplied if needed
         itemsToRestore.sort(
           (a, b) => b.overallLastUpdateTime.compareTo(a.overallLastUpdateTime),
         );
         state = state.copyWith(items: itemsToRestore, error: e);
+        if (kDebugMode)
+          print(
+            '[WorkbenchNotifier($instanceId)] Reverted state after failed move for item $itemId.',
+          );
       }
     }
   }
 
   void reorderItems(int oldIndex, int newIndex) {
     if (!mounted) return;
-    if (oldIndex < 0 || oldIndex >= state.items.length) return;
-    if (newIndex < 0 || newIndex > state.items.length) return;
 
-    final currentItems = List<WorkbenchItemReference>.from(state.items);
-    final item = currentItems.removeAt(oldIndex);
+    // Operate only on items belonging to this instance
+    final instanceItems =
+        state.items.where((i) => i.instanceId == instanceId).toList();
+    final otherItems =
+        state.items.where((i) => i.instanceId != instanceId).toList();
+
+    if (oldIndex < 0 || oldIndex >= instanceItems.length) return;
+    // Allow newIndex to be equal to length for moving to the end
+    if (newIndex < 0 || newIndex > instanceItems.length) return;
+
+    final item = instanceItems.removeAt(oldIndex);
+    // Adjust newIndex if removing item before it shifts the target position
     final effectiveNewIndex = (newIndex > oldIndex) ? newIndex - 1 : newIndex;
-    if (effectiveNewIndex < 0 || effectiveNewIndex > currentItems.length)
+
+    // Ensure effectiveNewIndex is within bounds after removal
+    if (effectiveNewIndex < 0 || effectiveNewIndex > instanceItems.length)
       return;
 
-    currentItems.insert(effectiveNewIndex, item);
+    instanceItems.insert(effectiveNewIndex, item);
+
+    // Combine the reordered instance items with items from other instances
+    final combinedItems = [...instanceItems, ...otherItems];
+    // Optional: Re-sort the combined list if needed, or maintain separation
+    // For now, just update the state with the combined list
     if (mounted) {
-      state = state.copyWith(items: currentItems);
+      state = state.copyWith(items: combinedItems);
       if (kDebugMode)
         print(
-          '[WorkbenchNotifier($instanceId)] Reordered items: $oldIndex -> $effectiveNewIndex',
+          '[WorkbenchNotifier($instanceId)] Reordered items within instance: $oldIndex -> $effectiveNewIndex',
         );
+      // TODO: Persist the new order (e.g., update sortOrder field and save)
     }
   }
 
   Future<void> clearItems() async {
     if (!mounted) return;
-    if (state.items.isEmpty) {
+    final itemsInThisInstance =
+        state.items.where((i) => i.instanceId == instanceId).toList();
+    if (itemsInThisInstance.isEmpty) {
       if (kDebugMode)
-        print('[WorkbenchNotifier($instanceId)] No items to clear.');
+        print(
+          '[WorkbenchNotifier($instanceId)] No items in this instance to clear.',
+        );
       return;
     }
 
     final originalItems = List<WorkbenchItemReference>.from(state.items);
+    // Optimistically remove items belonging to this instance from local state
+    final itemsToKeep =
+        state.items.where((i) => i.instanceId != instanceId).toList();
     if (mounted) {
-      state = state.copyWith(items: [], clearError: true);
+      state = state.copyWith(items: itemsToKeep, clearError: true);
       if (kDebugMode)
         print(
-          '[WorkbenchNotifier($instanceId)] Cleared local items optimistically.',
+          '[WorkbenchNotifier($instanceId)] Cleared local items for this instance optimistically.',
         );
     }
 
@@ -625,6 +704,7 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
     bool success = false;
 
     try {
+      // Call CloudKit to delete all items *for this specific instance*
       success = await _cloudKitService.deleteAllWorkbenchItemReferences(
         instanceId: instanceId,
       );
@@ -639,29 +719,34 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
       firstError = e;
       if (kDebugMode)
         print(
-          '[WorkbenchNotifier($instanceId)] Error clearing items from CloudKit: $e\n$s',
+          '[WorkbenchNotifier($instanceId)] Error clearing items from CloudKit for this instance: $e\n$s',
         );
       success = false;
     }
 
     if (!success && mounted) {
+      // Revert state if CloudKit deletion failed
       originalItems.sort(
         (a, b) => b.overallLastUpdateTime.compareTo(a.overallLastUpdateTime),
       );
       state = state.copyWith(
         items: originalItems,
-        error: firstError ?? Exception('Failed to clear items from CloudKit'),
+        error:
+            firstError ??
+            Exception('Failed to clear items from CloudKit for this instance'),
       );
       if (kDebugMode)
         print(
-          '[WorkbenchNotifier($instanceId)] Reverted state due to CloudKit clear failure. ${originalItems.length} items remain.',
+          '[WorkbenchNotifier($instanceId)] Reverted state due to CloudKit clear failure. ${itemsInThisInstance.length} items restored for this instance.',
         );
     } else if (mounted) {
       if (kDebugMode)
         print(
           '[WorkbenchNotifier($instanceId)] All items successfully cleared from CloudKit for this instance.',
         );
+      // Clear any previous error state if successful
       if (state.error != null) state = state.copyWith(clearError: true);
+      // Clear last opened item for this instance
       _ref
           .read(workbenchInstancesProvider.notifier)
           .setLastOpenedItem(instanceId, null);
@@ -680,3 +765,70 @@ final workbenchProviderFamily =
       notifier.loadItems(); // Initial load
       return notifier;
     });
+
+
+// --- Combined State for All Items ---
+
+@immutable
+class WorkbenchCombinedState {
+  final List<WorkbenchItemReference> items;
+  final bool isLoading;
+  final Object? error;
+
+  const WorkbenchCombinedState({
+    this.items = const [],
+    this.isLoading = false,
+    this.error,
+  });
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is WorkbenchCombinedState &&
+        listEquals(other.items, items) &&
+        other.isLoading == isLoading &&
+        other.error == error;
+  }
+
+  @override
+  int get hashCode => Object.hash(Object.hashAll(items), isLoading, error);
+}
+
+// Provider to get all items from all instances, handling loading/error states
+final allWorkbenchItemsProvider = Provider<WorkbenchCombinedState>((ref) {
+  final instancesState = ref.watch(workbenchInstancesProvider);
+  final List<WorkbenchItemReference> allItems = [];
+  bool isLoading =
+      instancesState.isLoading; // Start with instance loading state
+  Object? error = instancesState.error;
+
+  if (!isLoading && error == null) {
+    for (final instance in instancesState.instances) {
+      final instanceItemsState = ref.watch(
+        workbenchProviderFamily(instance.id),
+      );
+      allItems.addAll(instanceItemsState.items);
+      if (instanceItemsState.isLoading ||
+          instanceItemsState.isRefreshingDetails) {
+        isLoading =
+            true; // If any instance is loading/refreshing, overall state is loading
+      }
+      if (error == null && instanceItemsState.error != null) {
+        error = instanceItemsState.error; // Capture the first error encountered
+      }
+    }
+  }
+
+  // Sort the combined list only if not loading and no error occurred during instance fetch
+  if (!isLoading && error == null) {
+    allItems.sort(
+      (a, b) => b.overallLastUpdateTime.compareTo(a.overallLastUpdateTime),
+    );
+  }
+
+  return WorkbenchCombinedState(
+    items: allItems,
+    isLoading: isLoading,
+    error: error,
+  );
+});
