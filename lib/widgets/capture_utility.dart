@@ -104,10 +104,10 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
       parentId: noteId, // Pass parent ID
       serverId: _effectiveServerId!, // Pass server ID
     );
-    // Use non-family provider with memoId parameter
+    // Use non-family provider with memoId parameter passed as a record
     await ref.read(
       comment_providers.createCommentProvider(
-        noteId as comment_providers.CreateCommentParams,
+        (memoId: noteId), // Pass as record {memoId: noteId}
       ),
     )(
       newComment,
@@ -836,9 +836,11 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
                   );
               }
               // Use non-family provider
+              // ignore: unused_result
               ref.refresh(
                 note_providers.noteDetailProvider(noteId).future,
               );
+              // ignore: unused_result
               ref.refresh(
                 note_providers.notesNotifierProvider,
               ); // Refresh the main list
@@ -957,13 +959,17 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
   }
 
   Widget buildExpandedContent(String hintText, String buttonText) {
+    // This Column contains the text field, attachment preview, and buttons.
+    // It should fit within the parent Expanded widget.
     return Column(
-      mainAxisSize: MainAxisSize.min,
+      mainAxisSize: MainAxisSize.min, // Important: prevent infinite height
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // TextField should expand to fill available space
         Expanded(
           child: KeyboardListener(
-            focusNode: FocusNode(),
+            focusNode:
+                FocusNode(), // Use a dedicated node if needed for specific key handling here
             onKeyEvent: handleKeyEvent,
             child: CupertinoTextField(
               controller: _textController,
@@ -985,8 +991,9 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
               padding: const EdgeInsets.symmetric(vertical: 8.0),
               cursorColor: CupertinoTheme.of(context).primaryColor,
               cursorWidth: 2,
-              maxLines: 6,
-              minLines: 1,
+              maxLines: null, // Allows internal scrolling
+              minLines: null, // Allows internal scrolling
+              expands: true, // Make TextField fill the Expanded space
               textCapitalization: TextCapitalization.sentences,
               keyboardType: TextInputType.multiline,
               onTap: () {
@@ -995,6 +1002,7 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
             ),
           ),
         ),
+        // Attachment preview (conditionally shown)
         if (_selectedFileData != null) ...[
           Padding(
             padding: const EdgeInsets.only(
@@ -1065,6 +1073,7 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
             ),
           ),
         ],
+        // Bottom row with buttons (fixed height)
         SizedBox(
           height: 44,
           child: Row(
@@ -1314,9 +1323,11 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
             child: ClipRRect(
               borderRadius: BorderRadius.circular(36),
               child: Column(
-                mainAxisSize: MainAxisSize.max,
+                mainAxisSize:
+                    MainAxisSize.max, // Use max to fill the container height
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
+                  // Drag handle
                   Container(
                     width: 32,
                     height: 4,
@@ -1326,7 +1337,9 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
+                  // Content area (Expanded)
                   Expanded(
+                    // Make this Column take the remaining space
                     child: Padding(
                       padding: EdgeInsets.symmetric(
                         horizontal:
@@ -1337,9 +1350,13 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
                       child:
                           showExpandedContent
                               ? Column(
+                                // Use a Column directly, no SingleChildScrollView
+                                mainAxisSize:
+                                    MainAxisSize
+                                        .min, // Allow column to shrink if content is small
                                 children: [
-                                  if (widget.mode == CaptureMode.addComment &&
-                                      showExpandedContent)
+                                  // Segmented control (conditionally shown)
+                                  if (widget.mode == CaptureMode.addComment)
                                     Padding(
                                       padding: const EdgeInsets.only(
                                         bottom: 8.0,
@@ -1395,6 +1412,9 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
                                         ),
                                       ),
                                     ),
+                                  // Main expanded content (TextField, attachment, buttons)
+                                  // Wrap buildExpandedContent in Expanded so its internal Column
+                                  // can correctly use its own Expanded child (the TextField).
                                   Expanded(
                                     child: buildExpandedContent(
                                       hintText,
@@ -1403,7 +1423,9 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
                                   ),
                                 ],
                               )
-                              : buildCollapsedContent(placeholderText),
+                              : buildCollapsedContent(
+                                placeholderText,
+                              ), // Collapsed state
                     ),
                   ),
                 ],
