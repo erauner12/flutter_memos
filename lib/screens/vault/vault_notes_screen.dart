@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:flutter_memos/providers/note_providers.dart'; // Import note providers
 import 'package:flutter_memos/screens/items/items_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -7,25 +8,31 @@ class VaultNotesScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Option 1: Use ProviderScope override if ItemsScreen reads the preset directly
-    // return ProviderScope(
-    //   overrides: [
-    //     quickFilterPresetProvider.overrideWithValue('vault'), // Assuming 'vault' preset exists
-    //   ],
-    //   child: const ItemsScreen(),
-    // );
-
-    // Option 2: Pass presetKey via constructor (requires ItemsScreen modification)
-    return const ItemsScreen(presetKey: 'vault');
-
-    // Basic Placeholder:
-    // return const CupertinoPageScaffold(
-    //   navigationBar: CupertinoNavigationBar(
-    //     middle: Text('Vault'),
-    //   ),
-    //   child: Center(
-    //     child: Text('Vault Notes Placeholder'),
-    //   ),
-    // );
+    // Use ProviderScope to override the generic notesNotifierProvider
+    // with the specific vaultNotesNotifierProvider for the ItemsScreen below.
+    return CupertinoPageScaffold(
+      navigationBar: const CupertinoNavigationBar(
+        middle: Text('Vault'),
+        // Add other nav bar elements if needed (e.g., add button)
+        // trailing: CupertinoButton(
+        //   padding: EdgeInsets.zero,
+        //   child: const Icon(CupertinoIcons.add),
+        //   onPressed: () {
+        //     // Navigate to new note screen, potentially passing BlinkoNoteType.vault
+        //     Navigator.of(context, rootNavigator: true).pushNamed('/new-note', arguments: {'blinkoType': BlinkoNoteType.vault});
+        //   },
+        // ),
+      ),
+      child: ProviderScope(
+        overrides: [
+          // Override the generic provider with the vault-specific one
+          notesNotifierProvider.overrideWithProvider(
+            vaultNotesNotifierProvider,
+          ),
+        ],
+        // Render ItemsScreen without its internal navigation bar
+        child: const ItemsScreen(showNavigationBar: false),
+      ),
+    );
   }
 }

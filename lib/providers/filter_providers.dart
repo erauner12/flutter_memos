@@ -20,6 +20,7 @@ class QuickFilterPreset {
 }
 
 // Define the available quick filter presets
+// REMOVED 'cache' and 'vault' presets
 final Map<String, QuickFilterPreset> quickFilterPresets = {
   'inbox': QuickFilterPreset(
     key: 'inbox',
@@ -161,8 +162,9 @@ final combinedFilterProvider = Provider<String>((ref) {
   } else {
     // Look up the CEL filter associated with the selected quick preset
     final preset = quickFilterPresets[selectedPresetKey];
-    final presetFilter =
-        preset?.celFilter ?? ''; // Default to empty if key not found
+    // Default to empty if key not found (shouldn't happen if key is valid)
+    // or if the preset itself has an empty filter (like 'hidden')
+    final presetFilter = preset?.celFilter ?? '';
     if (kDebugMode) {
       print(
         '[combinedFilterProvider] Using filter for preset "$selectedPresetKey": $presetFilter',
@@ -171,6 +173,7 @@ final combinedFilterProvider = Provider<String>((ref) {
     return presetFilter;
   }
 }, name: 'combinedFilter');
+
 
 /// Provider for storing filter preferences (now stores the preset key)
 final filterPreferencesProvider = Provider<
@@ -184,7 +187,7 @@ final filterPreferencesProvider = Provider<
         );
       }
       final prefs = await SharedPreferences.getInstance();
-      // Ensure we only save valid preset keys (excluding 'custom')
+      // Ensure we only save valid preset keys (excluding 'custom', 'cache', 'vault')
       final keyToSave =
           quickFilterPresets.containsKey(presetKey) && presetKey != 'custom'
               ? presetKey
@@ -232,14 +235,16 @@ final loadFilterPreferencesProvider = FutureProvider<bool>((ref) async {
     } else if (lastPresetKey != null) {
       if (kDebugMode) {
         print(
-          '[loadFilterPreferencesProvider] Ignored invalid saved preset key: $lastPresetKey',
+          '[loadFilterPreferencesProvider] Ignored invalid saved preset key: $lastPresetKey. Defaulting to today.',
         );
       }
-      // Optionally set to default if saved key is invalid
-      // ref.read(quickFilterPresetProvider.notifier).state = 'today'; // Default to 'today'
+      // Set to default if saved key is invalid (e.g., was 'cache' or 'vault')
+      ref.read(quickFilterPresetProvider.notifier).state =
+          'today'; // Default to 'today'
     } else {
       // If no preference saved, ensure default is set (although provider default handles this)
-      // ref.read(quickFilterPresetProvider.notifier).state = 'today'; // Default to 'today'
+      ref.read(quickFilterPresetProvider.notifier).state =
+          'today'; // Default to 'today'
     }
 
     return true;
@@ -249,9 +254,12 @@ final loadFilterPreferencesProvider = FutureProvider<bool>((ref) async {
         '[loadFilterPreferencesProvider] Error loading preset preference: $e',
       );
     }
+    // Ensure default is set even on error
+    ref.read(quickFilterPresetProvider.notifier).state = 'today';
     return false;
   }
 }, name: 'loadFilterPreferences');
+
 
 /// OPTIMIZATION: Provider that keeps track of filter change history
 final filterHistoryProvider = StateProvider<List<Map<String, String>>>((ref) {

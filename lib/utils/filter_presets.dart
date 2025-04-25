@@ -57,23 +57,25 @@ class FilterPresets {
     return '';
   }
 
-  /// Cache notes (placeholder - assumes a '#cache' tag)
-  static String cacheFilter() {
-    // Example: Filter by tag '#cache'
-    // Replace with actual logic (e.g., checking a 'kind' field if added)
-    return FilterBuilder.byTags(['cache']);
-  }
+  // REMOVED: cacheFilter()
+  // static String cacheFilter() {
+  //   // Example: Filter by tag '#cache'
+  //   // Replace with actual logic (e.g., checking a 'kind' field if added)
+  //   return FilterBuilder.byTags(['cache']);
+  // }
 
-  /// Vault notes (placeholder - assumes a '#vault' tag)
-  static String vaultFilter() {
-    // Example: Filter by tag '#vault'
-    // Replace with actual logic
-    return FilterBuilder.byTags(['vault']);
-  }
+  // REMOVED: vaultFilter()
+  // static String vaultFilter() {
+  //   // Example: Filter by tag '#vault'
+  //   // Replace with actual logic
+  //   return FilterBuilder.byTags(['vault']);
+  // }
 
-  /// Inbox notes (placeholder - assumes an '#inbox' tag)
+  /// Inbox notes (placeholder - assumes an '#inbox' tag or untagged)
   static String inboxFilter() {
-    return FilterBuilder.byTags(['inbox']);
+    // Let's assume inbox means untagged for now
+    return untaggedFilter();
+    // Or return FilterBuilder.byTags(['inbox']); if using a tag
   }
 
   /// Hidden notes (placeholder - relies on provider logic, not a direct filter expression)

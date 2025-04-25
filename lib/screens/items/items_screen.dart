@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart'; // Keep for Tooltip
@@ -17,11 +19,11 @@ import 'package:flutter_memos/widgets/advanced_filter_panel.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class ItemsScreen extends ConsumerStatefulWidget {
-  // Optional key to initialize the filter preset for this screen instance
-  final String? presetKey;
+  // Flag to control internal navigation bar visibility
+  final bool showNavigationBar;
 
-  // Remove serverId from constructor, add presetKey
-  const ItemsScreen({super.key, this.presetKey});
+  // Remove presetKey, add showNavigationBar
+  const ItemsScreen({super.key, this.showNavigationBar = true});
 
   @override
   ConsumerState<ItemsScreen> createState() => _ItemsScreenState();
@@ -38,31 +40,12 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _updateEffectiveServerId(); // Determine serverId initially
-      // Initialize filter based on presetKey if provided
-      if (widget.presetKey != null &&
-          quickFilterPresets.containsKey(widget.presetKey)) {
-        // Check if the current preset is different before updating
-        final currentPreset = ref.read(quickFilterPresetProvider);
-        if (currentPreset != widget.presetKey) {
-          ref.read(quickFilterPresetProvider.notifier).state =
-              widget.presetKey!;
-          // Optionally clear other filters when a preset is applied via constructor
-          ref.read(rawCelFilterProvider.notifier).state = '';
-          ref.read(searchQueryProvider.notifier).state = '';
-          // Persist this initial preset if desired
-          ref.read(filterPreferencesProvider)(widget.presetKey!);
-          if (kDebugMode) {
-            print(
-              '[ItemsScreen] Initialized with presetKey: ${widget.presetKey}',
-            );
-          }
-          // Trigger a refresh to load data with the new preset/type filter
-          ref.read(note_providers.notesNotifierProvider.notifier).refresh();
-        }
-      } else {
-        // Load saved preferences if no specific preset is passed
-        ref.read(loadFilterPreferencesProvider);
-      }
+
+      // Removed logic that set quickFilterPresetProvider based on widget.presetKey
+
+      // Load saved preferences (will default to 'today' if invalid preset was saved)
+      ref.read(loadFilterPreferencesProvider);
+
       if (mounted) FocusScope.of(context).requestFocus(_focusNode);
     });
   }
@@ -84,9 +67,10 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
       if (newServerId != null) {
         // Trigger initial fetch if needed for the new serverId
         // The provider family might handle this automatically if watched correctly
+        // Ensure the active notifier (potentially overridden) is initialized/refreshed
         ref.read(
           note_providers.notesNotifierProvider,
-        ); // Ensure notifier is initialized
+        );
       }
     }
   }
@@ -100,6 +84,7 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
   }
 
   CupertinoNavigationBar _buildMultiSelectNavBar(int selectedCount) {
+    // This remains unchanged as multi-select is independent of cache/vault logic
     return CupertinoNavigationBar(
       transitionBetweenRoutes: false,
       leading: CupertinoButton(
@@ -169,9 +154,10 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
 
   void _selectNextNote() {
     if (_effectiveServerId == null) return;
+    // Use the active notes provider (could be generic, cache, or vault)
     final notes = ref.read(
       note_providers.filteredNotesProvider,
-    ); // Use non-family provider
+    );
     if (kDebugMode)
       print(
         '[ItemsScreen($_effectiveServerId) _selectNextNote] Called. Filtered notes count: ${notes.length}',
@@ -195,9 +181,10 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
 
   void _selectPreviousNote() {
     if (_effectiveServerId == null) return;
+    // Use the active notes provider
     final notes = ref.read(
       note_providers.filteredNotesProvider,
-    ); // Use non-family provider
+    );
     if (kDebugMode)
       print(
         '[ItemsScreen($_effectiveServerId) _selectPreviousNote] Called. Filtered notes count: ${notes.length}',
@@ -269,12 +256,17 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
   Widget build(BuildContext context) {
     // Ensure serverId is available before building UI that depends on it
     if (_effectiveServerId == null) {
-      return const CupertinoPageScaffold(
-        navigationBar: CupertinoNavigationBar(middle: Text('Notes')),
-        child: Center(child: Text('No Note Server Configured')),
+      // Only show nav bar if requested by the widget parameter
+      final navBar =
+          widget.showNavigationBar
+              ? const CupertinoNavigationBar(middle: Text('Notes'))
+              : null;
+      return CupertinoPageScaffold(
+        navigationBar: navBar,
+        child: const Center(child: Text('No Note Server Configured')),
       );
     }
-    // Use the single notesNotifierProvider
+    // Use the active notesNotifierProvider (could be generic or overridden)
     final notesState = ref.watch(note_providers.notesNotifierProvider);
     final visibleNotes = ref.watch(note_providers.filteredNotesProvider);
     final selectedPresetKey = ref.watch(quickFilterPresetProvider);
@@ -287,41 +279,44 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
 
     // Handle case where server config might become null after initial check
     if (currentServer == null) {
-      return const CupertinoPageScaffold(
-        navigationBar: CupertinoNavigationBar(middle: Text('Error')),
-        child: Center(child: Text('Server configuration not found.')),
+      final navBar =
+          widget.showNavigationBar
+              ? const CupertinoNavigationBar(middle: Text('Error'))
+              : null;
+      return CupertinoPageScaffold(
+        navigationBar: navBar,
+        child: const Center(child: Text('Server configuration not found.')),
       );
     }
 
     // Determine the title based on the preset key or server name
+    // This title is only used if widget.showNavigationBar is true
     String screenTitle;
-    if (widget.presetKey == 'cache') {
-      screenTitle = 'Cache'; // Explicit title for Cache screen
-    } else if (widget.presetKey == 'vault') {
-      screenTitle = 'Vault'; // Explicit title for Vault screen
+    // Removed checks for widget.presetKey == 'cache'/'vault'
+    final preset = quickFilterPresets[selectedPresetKey];
+    if (preset != null) {
+      screenTitle = preset.label;
     } else {
-      // Use preset label if available and not cache/vault, otherwise server name/URL
-      final preset = quickFilterPresets[selectedPresetKey];
-      if (preset != null && preset.key != 'cache' && preset.key != 'vault') {
-        screenTitle = preset.label;
-      } else {
-        screenTitle = currentServer.name ?? currentServer.serverUrl;
-      }
+      // Fallback to server name/URL if preset not found or is a tag etc.
+      screenTitle = currentServer.name ?? currentServer.serverUrl;
     }
 
-
-    return CupertinoPageScaffold(
-      navigationBar: isMultiSelectMode
-          ? _buildMultiSelectNavBar(selectedIds.length)
-              : CupertinoNavigationBar(
+    // Build the navigation bar only if requested
+    final navBar =
+        !widget.showNavigationBar
+            ? null
+            : isMultiSelectMode
+            ? _buildMultiSelectNavBar(selectedIds.length)
+            : CupertinoNavigationBar(
               middle: GestureDetector(
                   onTap: () {
-                    if (_scrollController.hasClients)
+                  if (_scrollController.hasClients) {
                       _scrollController.animateTo(
                         0.0,
                         duration: const Duration(milliseconds: 300),
                         curve: Curves.easeOut,
                       );
+                  }
                   },
                 child: Container(
                   color: CupertinoColors.transparent,
@@ -337,35 +332,36 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
                     CupertinoButton(
                       padding: const EdgeInsets.symmetric(horizontal: 8.0),
                       minSize: 0,
-                      onPressed:
-                          () =>
-                              ref.read(
-                                ui_providers.toggleItemMultiSelectModeProvider,
-                              )(),
+                    onPressed:
+                        () =>
+                            ref.read(
+                              ui_providers.toggleItemMultiSelectModeProvider,
+                            )(),
                       child: const Icon(CupertinoIcons.checkmark_seal),
                     ),
                     if (hiddenCount > 0)
                       CupertinoButton(
                         padding: const EdgeInsets.symmetric(horizontal: 8.0),
                         minSize: 0,
-                        onPressed:
-                            () => ref
-                                .read(showHiddenNotesProvider.notifier)
-                                .update((state) => !state),
+                      onPressed:
+                          () => ref
+                              .read(showHiddenNotesProvider.notifier)
+                              .update((state) => !state),
                         child: Tooltip(
-                          message:
-                              showHidden
-                                  ? 'Hide Hidden Notes'
-                                  : 'Show Hidden Notes ($hiddenCount)',
+                        message:
+                            showHidden
+                                ? 'Hide Hidden Notes'
+                                : 'Show Hidden Notes ($hiddenCount)',
                           child: Icon(
                             showHidden
                                 ? CupertinoIcons.eye_slash_fill
                                 : CupertinoIcons.eye_fill,
-                            color:
-                                showHidden
-                                    ? theme.primaryColor
-                                    : CupertinoColors.secondaryLabel
-                                        .resolveFrom(context),
+                          color:
+                              showHidden
+                                  ? theme.primaryColor
+                                  : CupertinoColors.secondaryLabel.resolveFrom(
+                                    context,
+                                  ),
                           ),
                         ),
                       ),
@@ -381,9 +377,9 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
                       onPressed:
                           // Use rootNavigator: true for named route
                           () => Navigator.of(
-                            context,
-                            rootNavigator: true,
-                          ).pushNamed('/new-note'),
+                          context,
+                          rootNavigator: true,
+                        ).pushNamed('/new-note'),
                       child: const Icon(CupertinoIcons.add),
                     ),
                     CupertinoButton(
@@ -393,17 +389,26 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
                       onPressed:
                           // Use rootNavigator: true for page route
                           () => Navigator.of(context, rootNavigator: true).push(
-                            CupertinoPageRoute(
-                              builder:
-                                  (context) => const SettingsScreen(
-                                    isInitialSetup: false,
-                                  ),
-                            ),
+                          CupertinoPageRoute(
+                            builder:
+                                (context) =>
+                                    const SettingsScreen(isInitialSetup: false),
                           ),
+                        ),
                     ),
                 ],
               ),
-            ),
+            );
+
+    // Determine if quick filters should be shown
+    // Show if nav bar is shown AND it's not multi-select mode AND no type is forced
+    final bool showQuickFilters =
+        widget.showNavigationBar &&
+        !isMultiSelectMode &&
+        notesState.forcedBlinkoType == null;
+
+    return CupertinoPageScaffold(
+      navigationBar: navBar, // Use the conditionally built navBar
       child: SafeArea(
         child: Focus(
           focusNode: _focusNode,
@@ -411,18 +416,21 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
           onKeyEvent: _handleKeyEvent,
           child: Column(
             children: [
-              if (!isMultiSelectMode)
+              // Show search bar if nav bar is shown and not multi-select
+              if (widget.showNavigationBar && !isMultiSelectMode)
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 0.0),
                   child: _buildSearchBar(),
                 ),
-              // Only show quick filters if no specific preset was forced via constructor
-              if (!isMultiSelectMode && widget.presetKey == null)
+              // Show quick filters conditionally
+              if (showQuickFilters)
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 8.0),
                   child: _buildQuickFilterControl(),
                 ),
-              if (!isMultiSelectMode &&
+              // Show hidden count info only if nav bar is shown and relevant
+              if (widget.showNavigationBar &&
+                  !isMultiSelectMode &&
                   hiddenCount > 0 &&
                   !showHidden &&
                   selectedPresetKey != 'hidden')
@@ -441,7 +449,10 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
                     ),
                   ),
                 ),
-              if (!isMultiSelectMode && selectedPresetKey == 'hidden')
+              // Show unhide all button only if nav bar is shown and relevant
+              if (widget.showNavigationBar &&
+                  !isMultiSelectMode &&
+                  selectedPresetKey == 'hidden')
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16.0, 0, 16.0, 8.0),
                   child: Align(
@@ -465,7 +476,7 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
                               fontSize: 14,
                               color: theme.primaryColor,
                             ),
-                          ), // Use non-family provider
+                          ),
                         ],
                       ),
                     ),
@@ -483,20 +494,19 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
     final selectedPresetKey = ref.watch(quickFilterPresetProvider);
     final theme = CupertinoTheme.of(context);
     // Define the order and available presets for the general view
+    // Excluded 'cache' and 'vault'
     const List<String> desiredOrder = [
       'today',
       'inbox',
       'all',
       'hidden',
-    ]; // Example order
+    ];
     final Map<String, Widget> segments = {};
     for (var key in desiredOrder) {
       final preset = quickFilterPresets[key];
       // Only include presets relevant for the general segmented control
-      if (preset != null &&
-          preset.key != 'custom' &&
-          preset.key != 'cache' &&
-          preset.key != 'vault') {
+      if (preset != null && preset.key != 'custom') {
+        // Removed cache/vault check
         segments[preset.key] = Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 6.0),
           child: Row(
@@ -535,6 +545,8 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
             if (ref.read(rawCelFilterProvider).isNotEmpty)
               ref.read(rawCelFilterProvider.notifier).state = '';
             ref.read(filterPreferencesProvider)(newPresetKey);
+            // Refresh the active notes provider
+            ref.read(note_providers.notesNotifierProvider.notifier).refresh();
           }
         },
       ),
@@ -546,17 +558,15 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
       context: context,
       barrierDismissible: true,
       builder: (BuildContext context) {
-        return ProviderScope(
-          overrides: [], // No serverId override needed here
-          child: DraggableScrollableSheet(
-            initialChildSize: 0.8,
-            minChildSize: 0.4,
-            maxChildSize: 0.9,
-            expand: false,
-            builder:
-                (_, scrollController) =>
-                    AdvancedFilterPanel(onClose: () => Navigator.pop(context)),
-          ),
+        // No ProviderScope override needed here as it uses the default providers
+        return DraggableScrollableSheet(
+          initialChildSize: 0.8,
+          minChildSize: 0.4,
+          maxChildSize: 0.9,
+          expand: false,
+          builder:
+              (_, scrollController) =>
+                  AdvancedFilterPanel(onClose: () => Navigator.pop(context)),
         );
       },
     );
@@ -570,6 +580,8 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
     controller.selection = TextSelection.fromPosition(
       TextPosition(offset: controller.text.length),
     );
+    // Debounced search trigger
+    Timer? debounce;
     return CupertinoSearchTextField(
       controller: controller,
       placeholder: 'Search notes...',
@@ -578,9 +590,22 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
         color: CupertinoColors.systemFill.resolveFrom(context),
         borderRadius: BorderRadius.circular(10.0),
       ),
-      onChanged:
-          (value) => ref.read(searchQueryProvider.notifier).state = value,
-      onSubmitted: (value) {},
+      onChanged: (value) {
+        if (debounce?.isActive ?? false) debounce?.cancel();
+        debounce = Timer(const Duration(milliseconds: 300), () {
+          if (mounted) {
+            ref.read(searchQueryProvider.notifier).state = value;
+            // Refresh the active notes provider when search changes
+            ref.read(note_providers.notesNotifierProvider.notifier).refresh();
+          }
+        });
+      },
+      onSubmitted: (value) {
+        if (debounce?.isActive ?? false) debounce?.cancel();
+        ref.read(searchQueryProvider.notifier).state = value;
+        // Refresh immediately on submit
+        ref.read(note_providers.notesNotifierProvider.notifier).refresh();
+      },
     );
   }
 
@@ -591,7 +616,9 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
     List<NoteItem> filteredNotes,
   ) {
     final selectedPresetKey = ref.watch(quickFilterPresetProvider);
-    final bool isInHiddenView = selectedPresetKey == 'hidden';
+    // isInHiddenView is only relevant if the generic provider is active
+    final bool isInHiddenView =
+        notesState.forcedBlinkoType == null && selectedPresetKey == 'hidden';
     return NotesListBody(
       scrollController: _scrollController,
       // onMoveNoteToServer: _handleMoveNoteToServer, // Removed
@@ -603,9 +630,10 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
   }
 
   void _showUnhideAllConfirmation() {
+    // Use the active notes provider
     final manualHiddenCount = ref.read(
       note_providers.manuallyHiddenNoteCountProvider,
-    ); // Use non-family provider
+    );
     if (manualHiddenCount == 0) return;
     showCupertinoDialog<bool>(
       context: context,
@@ -633,16 +661,17 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
           print(
             '[ItemsScreen($_effectiveServerId)] Confirmed Unhide All Manually Hidden.',
           );
+        // Use the active notes provider's unhide action
         ref
             .read(note_providers.unhideAllNotesProvider)()
             .then((_) {
-              // Use non-family provider
+              // If currently in hidden view (only possible for generic provider), switch back
               if (mounted && ref.read(quickFilterPresetProvider) == 'hidden') {
-                // Decide where to navigate after unhiding all - maybe 'today' or 'all'
-                final targetPreset = widget.presetKey ?? 'today';
+                final targetPreset = 'today'; // Default back to today
                 ref.read(quickFilterPresetProvider.notifier).state =
                     targetPreset;
                 ref.read(filterPreferencesProvider)(targetPreset);
+                // Refresh is handled by unhideAllNotesProvider
               }
             })
             .catchError((e, s) {
