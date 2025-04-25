@@ -635,7 +635,7 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
         child: CupertinoPageScaffold(
           navigationBar: CupertinoNavigationBar(
             middle: const Text('Note Detail'),
-            transitionBetweenRoutes: false,
+            transitionBetweenRoutes: false, // Keep this as false for now
             trailing: CupertinoButton(
               padding: EdgeInsets.zero,
               onPressed: _showActions,
@@ -688,9 +688,8 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
 
               // 2) Wrap the rest of the content in a SliverSafeArea
               SliverSafeArea(
-                // `top: false` allows the refresh control to occupy the top area.
-                // Set to `true` if content still clips under the nav bar.
-                top: false,
+                // Set top to true to ensure content starts below the nav bar.
+                top: true,
                 sliver: SliverList(
                   delegate: SliverChildListDelegate([
                     // Content widgets are now children of the SliverList delegate
