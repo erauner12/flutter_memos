@@ -268,7 +268,7 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
         setState(() {
           _currentHeight =
               targetValue == 1.0 ? _expandedHeight : _collapsedHeight;
-          if ((_animationController.value - targetValue).abs() > 0.01) {
+          if ((targetValue - _animationController.value).abs() > 0.01) {
             _animationController.value = targetValue;
           }
         });
@@ -1324,8 +1324,7 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
             child: ClipRRect(
               borderRadius: BorderRadius.circular(36),
               child: Column(
-                mainAxisSize:
-                    MainAxisSize.max, // Use max to fill the container height
+                mainAxisSize: MainAxisSize.max,
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   // Drag handle
@@ -1338,21 +1337,25 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
-                  // Content area (Expanded)
+                  // Content area with scrolling
                   Expanded(
-                    // Make this Column take the remaining space
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(
-                        horizontal:
-                            MediaQuery.of(context).size.width > 1200 ? 36 : 24,
-                        vertical:
-                            MediaQuery.of(context).size.width > 1200 ? 12 : 8,
-                      ),
-                      child:
-                          showExpandedContent
-                              ? Column(
-                                // Change to max to allow inner Expanded to work correctly
-                                mainAxisSize: MainAxisSize.max,
+                    child:
+                        showExpandedContent
+                            ? SingleChildScrollView(
+                              child: Padding(
+                                padding: EdgeInsets.symmetric(
+                                  horizontal:
+                                      MediaQuery.of(context).size.width > 1200
+                                          ? 36
+                                          : 24,
+                                  vertical:
+                                      MediaQuery.of(context).size.width > 1200
+                                          ? 12
+                                          : 8,
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
                                 children: [
                                   // Segmented control (conditionally shown)
                                   if (widget.mode == CaptureMode.addComment)
@@ -1411,20 +1414,241 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
                                         ),
                                       ),
                                     ),
-                                  // Main expanded content (TextField, attachment, buttons)
-                                  // This Expanded now correctly receives bounded constraints
-                                  Expanded(
-                                    child: buildExpandedContent(
-                                      hintText,
-                                      buttonText,
+                                  
+                                    // Text input field (NOT in an Expanded)
+                                    KeyboardListener(
+                                      focusNode: FocusNode(),
+                                      onKeyEvent: handleKeyEvent,
+                                      child: Container(
+                                        constraints: BoxConstraints(
+                                          minHeight: 100,
+                                          maxHeight: _expandedHeight - 120,
+                                        ),
+                                        child: CupertinoTextField(
+                                          controller: _textController,
+                                          focusNode: _focusNode,
+                                          style: TextStyle(
+                                            fontSize: 16,
+                                            height: 1.4,
+                                            color: CupertinoColors.label
+                                                .resolveFrom(context),
+                                            fontFamily:
+                                                'Menlo, Monaco, Consolas, "Courier New", monospace',
+                                          ),
+                                          placeholder: hintText,
+                                          placeholderStyle: TextStyle(
+                                            color: CupertinoColors
+                                                .placeholderText
+                                                .resolveFrom(context),
+                                            fontSize: 16,
+                                          ),
+                                          decoration: const BoxDecoration(
+                                            color: CupertinoColors.transparent,
+                                          ),
+                                          padding: const EdgeInsets.symmetric(
+                                            vertical: 8.0,
+                                          ),
+                                          cursorColor:
+                                              CupertinoTheme.of(
+                                                context,
+                                              ).primaryColor,
+                                          cursorWidth: 2,
+                                          maxLines: null,
+                                          minLines: 5,
+                                          textCapitalization:
+                                              TextCapitalization.sentences,
+                                          keyboardType: TextInputType.multiline,
+                                          onTap: () {
+                                            if (!_isExpanded) _expand();
+                                          },
+                                        ),
+                                      ),
+                                    ),
+
+                                    // Attachment preview (conditionally shown)
+                                    if (_selectedFileData != null)
+                                      Container(
+                                        padding: const EdgeInsets.only(
+                                          top: 8.0,
+                                          bottom: 4.0,
+                                          left: 4.0,
+                                          right: 4.0,
+                                        ),
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 8.0,
+                                            vertical: 4.0,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: CupertinoColors.systemGrey5
+                                                .resolveFrom(context),
+                                            borderRadius: BorderRadius.circular(
+                                              8.0,
+                                            ),
+                                          ),
+                                          child: Row(
+                                            children: [
+                                              if (_selectedContentType
+                                                      ?.startsWith('image/') ==
+                                                  true)
+                                                ClipRRect(
+                                                  borderRadius:
+                                                      BorderRadius.circular(
+                                                        4.0,
+                                                      ),
+                                                  child: Image.memory(
+                                                    _selectedFileData!,
+                                                    width: 30,
+                                                    height: 30,
+                                                    fit: BoxFit.cover,
+                                                    errorBuilder:
+                                                        (
+                                                          context,
+                                                          error,
+                                                          stackTrace,
+                                                        ) => const Icon(
+                                                          CupertinoIcons
+                                                              .exclamationmark_circle,
+                                                          size: 30,
+                                                        ),
+                                                  ),
+                                                )
+                                              else
+                                                Icon(
+                                                  CupertinoIcons.doc_fill,
+                                                  size: 24,
+                                                  color: CupertinoColors
+                                                      .secondaryLabel
+                                                      .resolveFrom(context),
+                                                ),
+                                              const SizedBox(width: 8),
+                                              Expanded(
+                                                child: Text(
+                                                  _selectedFilename ??
+                                                      'Attached File',
+                                                  style: TextStyle(
+                                                    fontSize: 13,
+                                                    color: CupertinoColors.label
+                                                        .resolveFrom(context),
+                                                  ),
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                ),
+                                              ),
+                                              CupertinoButton(
+                                                padding: EdgeInsets.zero,
+                                                minSize: 0,
+                                                onPressed: _removeAttachment,
+                                                child: Icon(
+                                                  CupertinoIcons
+                                                      .clear_circled_solid,
+                                                  size: 18,
+                                                  color: CupertinoColors
+                                                      .secondaryLabel
+                                                      .resolveFrom(context),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+
+                                    // Bottom row with buttons
+                                    Container(
+                                      height: 44,
+                                      margin: const EdgeInsets.only(top: 4),
+                                      child: Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              CupertinoButton(
+                                                padding: EdgeInsets.zero,
+                                                minSize: 40,
+                                                onPressed:
+                                                    showOverflowActionSheet,
+                                                child: Icon(
+                                                  CupertinoIcons
+                                                      .ellipsis_circle,
+                                                  size: 20,
+                                                  color: CupertinoColors
+                                                      .secondaryLabel
+                                                      .resolveFrom(context),
+                                                ),
+                                              ),
+                                              CupertinoButton(
+                                                padding: EdgeInsets.zero,
+                                                minSize: 40,
+                                                onPressed: _pickFile,
+                                                child: Icon(
+                                                  CupertinoIcons.paperclip,
+                                                  size: 20,
+                                                  color: CupertinoColors
+                                                      .secondaryLabel
+                                                      .resolveFrom(context),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          CupertinoButton(
+                                            padding: const EdgeInsets.all(10.0),
+                                            borderRadius: BorderRadius.circular(
+                                              24,
+                                            ),
+                                            color:
+                                                _isSubmitting
+                                                    ? CupertinoTheme.of(context)
+                                                        .primaryColor
+                                                        .withAlpha(179)
+                                                    : CupertinoTheme.of(
+                                                      context,
+                                                    ).primaryColor,
+                                            onPressed:
+                                                _isSubmitting
+                                                    ? null
+                                                    : _handleSubmit,
+                                            child: SizedBox(
+                                              width: 20,
+                                              height: 20,
+                                              child:
+                                                  _isSubmitting
+                                                      ? const CupertinoActivityIndicator(
+                                                        color:
+                                                            CupertinoColors
+                                                                .white,
+                                                        radius: 10,
+                                                      )
+                                                      : const Icon(
+                                                        CupertinoIcons.arrow_up,
+                                                        color:
+                                                            CupertinoColors
+                                                                .white,
+                                                        size: 20,
+                                                      ),
+                                            ),
+                                          ),
+                                        ],
                                     ),
                                   ),
                                 ],
-                              )
-                              : buildCollapsedContent(
-                                placeholderText,
-                              ), // Collapsed state
-                    ),
+                                ),
+                              ),
+                            )
+                            : Padding(
+                              padding: EdgeInsets.symmetric(
+                                horizontal:
+                                    MediaQuery.of(context).size.width > 1200
+                                        ? 36
+                                        : 24,
+                                vertical:
+                                    MediaQuery.of(context).size.width > 1200
+                                        ? 12
+                                        : 8,
+                              ),
+                              child: buildCollapsedContent(placeholderText),
+                            ),
                   ),
                 ],
               ),
