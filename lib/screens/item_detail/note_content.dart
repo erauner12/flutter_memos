@@ -36,8 +36,8 @@ class NoteContent extends ConsumerWidget { // Renamed class
     final String formattedCreateDate = dateFormat.format(createDate);
     final String formattedUpdateDate = dateFormat.format(updateDate);
 
-    // Normalize the note content before using it
-    final normalizedContent = TextNormalizer.normalize(note.content);
+    // Iteratively normalize the note content before using it
+    final normalizedContent = TextNormalizer.iterativeNormalize(note.content);
 
     if (kDebugMode) {
       print('[NoteContent] Rendering note $noteId'); // Updated log identifier
@@ -55,7 +55,9 @@ class NoteContent extends ConsumerWidget { // Renamed class
         );
       }
       if (note.content != normalizedContent) {
-        print('[NoteContent] Content was normalized.');
+        print('[NoteContent] Content was normalized using iterative method.');
+        // Optionally log the original content if debugging is needed
+        // print('[NoteContent] Original Content: "${note.content}"');
       }
     }
 
@@ -66,7 +68,7 @@ class NoteContent extends ConsumerWidget { // Renamed class
         children: [
           // Note Content using MarkdownBody with normalized content
           MarkdownBody(
-            data: normalizedContent, // Use normalized content
+            data: normalizedContent, // Use iteratively normalized content
             selectable: true,
             styleSheet: MarkdownStyleSheet.fromCupertinoTheme(theme).copyWith(
               p: theme.textTheme.textStyle.copyWith(
@@ -184,8 +186,8 @@ class NoteContent extends ConsumerWidget { // Renamed class
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
-                            // Normalize tag display if needed (less common but possible)
-                            TextNormalizer.normalize(tag),
+                            // Normalize tag display using iterative method
+                            TextNormalizer.iterativeNormalize(tag),
                             style: TextStyle(
                               fontSize: 12,
                               color: secondaryTextColor,
