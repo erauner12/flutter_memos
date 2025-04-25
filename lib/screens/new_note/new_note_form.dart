@@ -4,8 +4,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_memos/models/note_item.dart'; // Import NoteItem model
 import 'package:flutter_memos/models/server_config.dart';
-// Import note_providers and use non-family providers
-import 'package:flutter_memos/providers/note_providers.dart' as note_providers;
+// Import note_providers and use new family/API providers
+import 'package:flutter_memos/providers/note_providers.dart' as note_p;
 // Import single server config provider
 import 'package:flutter_memos/providers/note_server_config_provider.dart';
 import 'package:flutter_memos/utils/keyboard_navigation.dart';
@@ -193,8 +193,8 @@ class _NewNoteFormState extends ConsumerState<NewNoteForm>
         endDate: null,
       );
 
-      // Use the non-family createNoteProvider
-      await ref.read(note_providers.createNoteProvider)(newNote);
+      // Use the createNoteApiProvider
+      await ref.read(note_p.createNoteApiProvider)(newNote);
 
       if (kDebugMode) {
         print(
@@ -202,8 +202,8 @@ class _NewNoteFormState extends ConsumerState<NewNoteForm>
         );
       }
 
-      // Invalidate the non-family notes list provider
-      ref.invalidate(note_providers.notesNotifierProvider);
+      // Invalidate the notes list family (broadly)
+      ref.invalidate(note_p.notesNotifierFamily);
 
       if (mounted) {
         // Pop back instead of replacing

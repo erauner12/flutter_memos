@@ -7,8 +7,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_memos/models/note_item.dart'; // Import NoteItem
 import 'package:flutter_memos/models/workbench_item_reference.dart'; // Import workbench model
 import 'package:flutter_memos/models/workbench_item_type.dart'; // Import the unified enum
-// Import note_providers and use non-family providers
-import 'package:flutter_memos/providers/note_providers.dart' as note_providers;
+// Import note_providers and use new family/API providers
+import 'package:flutter_memos/providers/note_providers.dart' as note_p;
 // Import new single config provider
 import 'package:flutter_memos/providers/note_server_config_provider.dart';
 // Import settings_provider for manuallyHiddenNoteIdsProvider
@@ -74,8 +74,8 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
       });
       // Invalidate providers that depend on serverId when it changes
       if (newServerId != null) {
-        ref.invalidate(note_providers.noteDetailProvider(widget.itemId));
-        ref.invalidate(note_providers.noteCommentsProvider(widget.itemId));
+        ref.invalidate(note_p.noteDetailProvider(widget.itemId));
+        ref.invalidate(note_p.noteCommentsProvider(widget.itemId));
       }
     }
   }
@@ -136,9 +136,9 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
     }
     HapticFeedback.mediumImpact();
     if (!mounted) return;
-    // Use non-family providers with itemId
-    ref.invalidate(note_providers.noteDetailProvider(widget.itemId));
-    ref.invalidate(note_providers.noteCommentsProvider(widget.itemId));
+    // Use noteDetailProvider and noteCommentsProvider families
+    ref.invalidate(note_p.noteDetailProvider(widget.itemId));
+    ref.invalidate(note_p.noteCommentsProvider(widget.itemId));
   }
 
   Widget _buildRefreshIndicator(
@@ -232,10 +232,11 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
 
   void _showActions() {
     if (!mounted || _effectiveServerId == null) return;
-    final isFixingGrammar = ref.read(note_providers.isFixingGrammarProvider);
+    // Use the family provider with itemId
+    final isFixingGrammar = ref.watch(note_p.isFixingGrammarProvider(widget.itemId));
     final noteAsync = ref.read(
-      note_providers.noteDetailProvider(widget.itemId),
-    ); // Use non-family provider
+      note_p.noteDetailProvider(widget.itemId),
+    ); // Use noteDetailProvider family
     final bool canInteractWithServer = _effectiveServerId != null;
 
     showCupertinoModalPopup<void>(
@@ -259,10 +260,10 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
                     .then((_) {
                       if (!mounted || _effectiveServerId == null) return;
                       ref.invalidate(
-                        note_providers.noteDetailProvider(widget.itemId),
+                        note_p.noteDetailProvider(widget.itemId),
                       );
                       ref.invalidate(
-                        note_providers.noteCommentsProvider(widget.itemId),
+                        note_p.noteCommentsProvider(widget.itemId),
                       );
                       ref
                           .read(
@@ -374,9 +375,10 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
                 if (confirmed == true) {
                   if (!mounted || _effectiveServerId == null) return;
                   try {
+                    // Use deleteNoteApiProvider which returns a callable function
                     await ref.read(
-                      note_providers.deleteNoteProvider(widget.itemId),
-                    )(); // Use non-family provider
+                      note_p.deleteNoteApiProvider(widget.itemId),
+                    )();
                     if (!mounted) return;
                     if (Navigator.of(context).canPop()) {
                       Navigator.of(context).pop();
@@ -406,14 +408,16 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
 
   Future<void> _fixGrammar() async {
     if (!mounted || _effectiveServerId == null) return;
-    ref.read(note_providers.isFixingGrammarProvider.notifier).state = true;
+    // Use the family provider with itemId
+    ref.read(note_p.isFixingGrammarProvider(widget.itemId).notifier).state = true;
     HapticFeedback.mediumImpact();
     _showLoadingDialog('Fixing grammar...');
 
     try {
+      // Use fixNoteGrammarApiProvider which returns a callable function
       await ref.read(
-        note_providers.fixNoteGrammarProvider(widget.itemId).future,
-      ); // Use non-family provider
+        note_p.fixNoteGrammarApiProvider(widget.itemId),
+      )();
       if (!mounted) return;
       _dismissLoadingDialog();
       _showSuccessSnackbar('Grammar corrected successfully!');
@@ -426,7 +430,8 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
       }
     } finally {
       if (mounted) {
-        ref.read(note_providers.isFixingGrammarProvider.notifier).state = false;
+        // Use the family provider with itemId
+        ref.read(note_p.isFixingGrammarProvider(widget.itemId).notifier).state = false;
       }
     }
   }
@@ -568,8 +573,8 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
   void _selectNextComment() {
     if (!mounted || _effectiveServerId == null) return;
     final commentsAsync = ref.read(
-      note_providers.noteCommentsProvider(widget.itemId),
-    ); // Use non-family provider
+      note_p.noteCommentsProvider(widget.itemId),
+    ); // Use noteCommentsProvider family
     commentsAsync.whenData((comments) {
       if (comments.isEmpty || !mounted) return;
       final currentIndex = ref.read(selectedCommentIndexProvider);
@@ -583,8 +588,8 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
   void _selectPreviousComment() {
     if (!mounted || _effectiveServerId == null) return;
     final commentsAsync = ref.read(
-      note_providers.noteCommentsProvider(widget.itemId),
-    ); // Use non-family provider
+      note_p.noteCommentsProvider(widget.itemId),
+    ); // Use noteCommentsProvider family
     commentsAsync.whenData((comments) {
       if (comments.isEmpty || !mounted) return;
       final currentIndex = ref.read(selectedCommentIndexProvider);
@@ -605,8 +610,8 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
     }
     // Watch the detail provider to trigger rebuilds when data changes
     ref.watch(
-      note_providers.noteDetailProvider(widget.itemId),
-    ); // Use non-family provider
+      note_p.noteDetailProvider(widget.itemId),
+    ); // Use noteDetailProvider family
     final bool canInteractWithServer = _effectiveServerId != null;
 
     return Focus(
@@ -666,8 +671,8 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
       return const Center(child: CupertinoActivityIndicator());
     }
     final noteAsync = ref.watch(
-      note_providers.noteDetailProvider(widget.itemId),
-    ); // Use non-family provider
+      note_p.noteDetailProvider(widget.itemId),
+    ); // Use noteDetailProvider family
 
     return noteAsync.when(
       data: (note) {

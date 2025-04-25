@@ -10,7 +10,6 @@ import 'package:flutter_memos/models/workbench_item_reference.dart'; // Keep gen
 import 'package:flutter_memos/models/workbench_item_type.dart'; // Keep generic name for now, or rename if needed
 // import 'package:flutter_memos/main.dart'; // Import for rootNavigatorKeyProvider
 import 'package:flutter_memos/providers/navigation_providers.dart';
-import 'package:flutter_memos/providers/note_providers.dart' as note_providers;
 // Import new single config provider
 import 'package:flutter_memos/providers/note_server_config_provider.dart';
 import 'package:flutter_memos/providers/settings_provider.dart' as settings_p;
@@ -30,15 +29,29 @@ class NoteListItem extends ConsumerStatefulWidget {
   final int index;
   final VoidCallback? onMoveToServer;
   final bool isInHiddenView;
-  // serverId is no longer needed as context comes from noteServerConfigProvider
-  // final String serverId;
+  final BlinkoNoteType? type; // Add type
+  // Action handlers passed down from NotesListBody
+  final Future<void> Function() onArchive;
+  final Future<void> Function() onDelete;
+  final Future<void> Function() onTogglePin;
+  final Future<void> Function() onBump;
+  final Future<void> Function(DateTime?) onUpdateStartDate;
+  final void Function() onToggleVisibility;
+  final void Function() onUnhide;
 
   const NoteListItem({
     super.key,
     required this.note,
     required this.index,
     required this.isInHiddenView,
-    // required this.serverId, // Removed serverId
+    required this.type, // Require type
+    required this.onArchive,
+    required this.onDelete,
+    required this.onTogglePin,
+    required this.onBump,
+    required this.onUpdateStartDate,
+    required this.onToggleVisibility,
+    required this.onUnhide,
     this.onMoveToServer,
   });
 
@@ -315,9 +328,8 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
                       !canInteractWithServer
                           ? null
                           : () {
-                            ref.read(
-                              note_providers.unhideNoteProvider(widget.note.id),
-                            )();
+                            // Use the passed down function
+                            widget.onUnhide();
                             Navigator.pop(popupContext);
                           },
                   child: const Text('Unhide'),
@@ -328,7 +340,8 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
                       !canInteractWithServer
                           ? null
                           : () {
-                            _toggleHideItem(scaffoldContext, ref);
+                            // Use the passed down function
+                            widget.onToggleVisibility();
                             Navigator.pop(popupContext);
                           },
                   child: const Text('Hide'),
@@ -358,17 +371,8 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
                           final newStartDate = currentStart.add(
                             const Duration(days: 1),
                           );
-                          // Use non-family provider
-                          ref
-                              .read(
-                                note_providers
-                                    .notesNotifierProvider
-                                    .notifier,
-                              )
-                              .updateNoteStartDate(
-                                widget.note.id,
-                                newStartDate,
-                              );
+                          // Use the passed down function
+                          widget.onUpdateStartDate(newStartDate);
                           Navigator.pop(popupContext);
                         },
                 child: const Text('Kick Start +1 Day'),
@@ -383,17 +387,8 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
                           final newStartDate = currentStart.add(
                             const Duration(days: 7),
                           );
-                          // Use non-family provider
-                          ref
-                              .read(
-                                note_providers
-                                    .notesNotifierProvider
-                                    .notifier,
-                              )
-                              .updateNoteStartDate(
-                                widget.note.id,
-                                newStartDate,
-                              );
+                          // Use the passed down function
+                          widget.onUpdateStartDate(newStartDate);
                           Navigator.pop(popupContext);
                         },
                 child: const Text('Kick Start +1 Week'),
@@ -405,14 +400,8 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
                       !canInteractWithServer
                           ? null
                           : () {
-                            // Use non-family provider
-                            ref
-                                .read(
-                                  note_providers
-                                      .notesNotifierProvider
-                                      .notifier,
-                                )
-                                .updateNoteStartDate(widget.note.id, null);
+                            // Use the passed down function
+                            widget.onUpdateStartDate(null);
                             Navigator.pop(popupContext);
                           },
                   child: const Text('Clear Start Date'),
@@ -598,46 +587,6 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
     }
   }
 
-  void _toggleHideItem(BuildContext scaffoldContext, WidgetRef ref) {
-    final hiddenItemIds = ref.read(settings_p.manuallyHiddenNoteIdsProvider);
-    final itemIdToToggle = widget.note.id;
-    if (hiddenItemIds.contains(itemIdToToggle)) {
-      ref
-          .read(settings_p.manuallyHiddenNoteIdsProvider.notifier)
-          .remove(itemIdToToggle);
-    } else {
-      final currentSelectedId = ref.read(ui_providers.selectedItemIdProvider);
-      // Use non-family provider
-      final notesBeforeAction = ref.read(
-        note_providers.filteredNotesProvider,
-      );
-      String? nextSelectedId = currentSelectedId;
-      if (currentSelectedId == itemIdToToggle && notesBeforeAction.isNotEmpty) {
-        final actionIndex = notesBeforeAction.indexWhere(
-          (n) => n.id == itemIdToToggle,
-        );
-        if (actionIndex != -1) {
-          if (notesBeforeAction.length == 1) {
-            nextSelectedId = null;
-          } else if (actionIndex < notesBeforeAction.length - 1) {
-            nextSelectedId = notesBeforeAction[actionIndex + 1].id;
-          } else {
-            nextSelectedId = notesBeforeAction[actionIndex - 1].id;
-          }
-        } else {
-          nextSelectedId = null;
-        }
-      }
-      ref
-          .read(settings_p.manuallyHiddenNoteIdsProvider.notifier)
-          .add(itemIdToToggle);
-      if (nextSelectedId != currentSelectedId) {
-        ref.read(ui_providers.selectedItemIdProvider.notifier).state =
-            nextSelectedId;
-      }
-    }
-  }
-
   void _navigateToItemDetail(BuildContext scaffoldContext, WidgetRef ref) {
     ref.read(ui_providers.selectedItemIdProvider.notifier).state =
         widget.note.id;
@@ -707,18 +656,10 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
     );
     if (confirm == true && mounted) {
       try {
-        ref
-            .read(settings_p.manuallyHiddenNoteIdsProvider.notifier)
-            .add(widget.note.id);
-        // Use non-family provider
-        await ref.read(
-          note_providers.deleteNoteProvider(widget.note.id),
-        )();
+        // Use the passed down function
+        await widget.onDelete();
       } catch (e) {
         if (mounted) {
-          ref
-              .read(settings_p.manuallyHiddenNoteIdsProvider.notifier)
-              .remove(widget.note.id);
           _showAlertDialog(
             scaffoldContext,
             'Error',
@@ -729,46 +670,50 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
     }
   }
 
-  void onArchive(BuildContext scaffoldContext) {
-    ref
-        .read(settings_p.manuallyHiddenNoteIdsProvider.notifier)
-        .add(widget.note.id);
-    // Use non-family provider
-    ref
-        .read(
-          note_providers.archiveNoteProvider(widget.note.id),
-        )()
-        .catchError((e) {
+  void onArchive(BuildContext scaffoldContext) async {
+    try {
+      // Use the passed down function
+      await widget.onArchive();
+    } catch (e) {
       if (mounted) {
-            ref
-                .read(settings_p.manuallyHiddenNoteIdsProvider.notifier)
-                .remove(widget.note.id);
-            _showAlertDialog(
-              scaffoldContext,
-              'Error',
-              'Failed to archive note: ${e.toString()}',
-            );
+        _showAlertDialog(
+          scaffoldContext,
+          'Error',
+          'Failed to archive note: ${e.toString()}',
+        );
       }
-    });
+    }
   }
 
-  void onTogglePin(BuildContext scaffoldContext) {
-    // Use non-family provider
-    ref
-        .read(
-          note_providers.togglePinNoteProvider(widget.note.id),
-        )()
-    // ignore: body_might_complete_normally_catch_error
-        .catchError((e) {
-          if (mounted) {
-            _showAlertDialog(
-              scaffoldContext,
-              'Error',
-              'Failed to toggle pin: ${e.toString()}',
-            );
-          }
-        });
+  void onTogglePin(BuildContext scaffoldContext) async {
+    try {
+      // Use the passed down function
+      await widget.onTogglePin();
+    } catch (e) {
+      if (mounted) {
+        _showAlertDialog(
+          scaffoldContext,
+          'Error',
+          'Failed to toggle pin: ${e.toString()}',
+        );
+      }
+    }
   }
+
+  void onBump(BuildContext scaffoldContext) async {
+     try {
+       // Use the passed down function
+       await widget.onBump();
+     } catch (e) {
+       if (mounted) {
+         _showAlertDialog(
+           scaffoldContext,
+           'Error',
+           'Failed to bump note: ${e.toString()}',
+         );
+       }
+     }
+   }
 
   @override
   Widget build(BuildContext context) {
@@ -801,24 +746,9 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
               : () => _navigateToItemDetail(scaffoldContext, ref),
       onArchive: () => onArchive(scaffoldContext),
       onDelete: () => onDelete(scaffoldContext),
-      onHide: () => _toggleHideItem(scaffoldContext, ref),
+      onHide: widget.onToggleVisibility, // Use passed down function
       onTogglePin: () => onTogglePin(scaffoldContext),
-      onBump: () async {
-        try {
-          // Use non-family provider
-          await ref.read(
-            note_providers.bumpNoteProvider(widget.note.id),
-          )();
-        } catch (e) {
-          if (mounted) {
-            _showAlertDialog(
-              scaffoldContext,
-              'Error',
-              'Failed to bump note: ${e.toString()}',
-            );
-          }
-        }
-      },
+      onBump: () => onBump(scaffoldContext), // Use passed down function
       onMoveToServer: widget.onMoveToServer,
     );
 
@@ -909,11 +839,7 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
           ),
           if (widget.isInHiddenView)
             SlidableAction(
-              onPressed:
-                  (_) =>
-                      ref.read(
-                        note_providers.unhideNoteProvider(widget.note.id),
-                      )(),
+              onPressed: (_) => widget.onUnhide(), // Use passed down function
               backgroundColor: CupertinoColors.systemGreen,
               foregroundColor: CupertinoColors.white,
               icon: CupertinoIcons.eye_fill,
@@ -922,7 +848,7 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
             )
           else
             SlidableAction(
-              onPressed: (_) => _toggleHideItem(scaffoldContext, ref),
+              onPressed: (_) => widget.onToggleVisibility(), // Use passed down function
               backgroundColor: CupertinoColors.systemGrey,
               foregroundColor: CupertinoColors.white,
               icon: CupertinoIcons.eye_slash_fill,

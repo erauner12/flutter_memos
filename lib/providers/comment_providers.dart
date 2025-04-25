@@ -1,8 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/models/note_item.dart'; // Import NoteItem
-// Import note_providers and use non-family providers
-import 'package:flutter_memos/providers/note_providers.dart' as note_providers;
+// Import note_providers and use new family/API providers
+import 'package:flutter_memos/providers/note_providers.dart' as note_p;
 import 'package:flutter_memos/services/minimal_openai_service.dart'; // Import MinimalOpenAiService
 import 'package:flutter_memos/services/note_api_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -46,8 +46,8 @@ final archiveCommentProvider = Provider.family<
       );
       await apiService.updateNoteComment(commentId, updatedComment);
       ref.invalidate(
-        note_providers.noteCommentsProvider(params.memoId),
-      ); // Use non-family provider
+        note_p.noteCommentsProvider(params.memoId),
+      ); // Use noteCommentsProvider family
       if (kDebugMode)
         print('[archiveCommentProvider] Comment archived: ${params.commentId}');
     } catch (e) {
@@ -70,8 +70,8 @@ final deleteCommentProvider = Provider.family<
       final commentId = params.commentId;
       await apiService.deleteNoteComment(memoId, commentId);
       ref.invalidate(
-        note_providers.noteCommentsProvider(memoId),
-      ); // Use non-family provider
+        note_p.noteCommentsProvider(memoId),
+      ); // Use noteCommentsProvider family
       if (kDebugMode)
         print('[deleteCommentProvider] Comment deleted: ${params.commentId}');
     } catch (e) {
@@ -96,8 +96,8 @@ final togglePinCommentProvider = Provider.family<
       final updatedComment = comment.copyWith(pinned: !comment.pinned);
       await apiService.updateNoteComment(commentId, updatedComment);
       ref.invalidate(
-        note_providers.noteCommentsProvider(memoId),
-      ); // Use non-family provider
+        note_p.noteCommentsProvider(memoId),
+      ); // Use noteCommentsProvider family
       if (kDebugMode)
         print(
           '[togglePinCommentProvider] Comment pin toggled: ${params.commentId}',
@@ -147,7 +147,8 @@ final convertCommentToNoteProvider = Provider.family<
         creatorId: comment.creatorId,
         parentId: null,
       );
-      final createdNote = await apiService.createNote(newNote);
+      // Use the createNoteApiProvider
+      final createdNote = await ref.read(note_p.createNoteApiProvider)(newNote);
 
       if (memoId.isNotEmpty) {
         try {
@@ -164,9 +165,8 @@ final convertCommentToNoteProvider = Provider.family<
         }
       }
 
-      await ref
-          .read(note_providers.notesNotifierProvider.notifier)
-          .refresh(); // Use non-family provider
+      // Invalidate the notes list family (broadly)
+      ref.invalidate(note_p.notesNotifierFamily);
       if (kDebugMode)
         print(
           '[convertCommentToNoteProvider] Converted comment to note: ${createdNote.id}',
@@ -261,9 +261,9 @@ final createCommentProvider = Provider.family<
           print(
             '[createCommentProvider] Bumping parent memo $memoId after comment creation.',
           );
+        // Use bumpNoteApiProvider
         await ref.read(
-          note_providers.bumpNoteProvider(memoId),
-        )(); // Use non-family provider
+          note_p.bumpNoteApiProvider(memoId))();
       } catch (e) {
         if (kDebugMode)
           print(
@@ -272,8 +272,8 @@ final createCommentProvider = Provider.family<
       }
 
       ref.invalidate(
-        note_providers.noteCommentsProvider(memoId),
-      ); // Use non-family provider
+        note_p.noteCommentsProvider(memoId),
+      ); // Use noteCommentsProvider family
       return createdComment;
     } catch (e, stackTrace) {
       if (kDebugMode)
@@ -309,8 +309,8 @@ final updateCommentProvider = Provider.family<
         updatedCommentData,
       );
       ref.invalidate(
-        note_providers.noteCommentsProvider(memoId),
-      ); // Use non-family provider
+        note_p.noteCommentsProvider(memoId),
+      ); // Use noteCommentsProvider family
       if (kDebugMode)
         print(
           '[updateCommentProvider] Comment $commentId updated successfully.',
@@ -327,82 +327,103 @@ final updateCommentProvider = Provider.family<
 });
 
 /// Provider to fix grammar of a comment using OpenAI
-final fixCommentGrammarProvider = FutureProvider.family<
-  void,
+final fixCommentGrammarProvider = Provider.family<
+  Future<void> Function(),
   CommentActionParams
->((ref, params) async {
-  final memoId = params.memoId;
-  final commentId = params.commentId;
-  if (kDebugMode)
-    print(
-      '[fixCommentGrammarProvider] Starting grammar fix for comment: $commentId',
-    );
+>((ref, params) {
+  return () async {
+    final memoId = params.memoId;
+    final commentId = params.commentId;
+    final combinedId =
+        '$memoId/$commentId'; // Use a combined ID for the grammar state
 
-  final MinimalOpenAiService openaiApiService = ref.read(
-    api_p.openaiApiServiceProvider,
-  );
-  final String selectedModelId = ref.read(settings_p.openAiModelIdProvider);
-
-  if (!openaiApiService.isConfigured) {
     if (kDebugMode)
       print(
-        '[fixCommentGrammarProvider] OpenAI service not configured. Aborting.',
+        '[fixCommentGrammarProvider] Starting grammar fix for comment: $commentId',
       );
-    throw Exception('OpenAI API key is not configured in settings.');
-  }
 
-  try {
-    if (kDebugMode)
-      print('[fixCommentGrammarProvider] Fetching comment content...');
-    final NoteApiService apiService = _getNoteApiService(ref);
-    final Comment currentComment = await apiService.getNoteComment(commentId);
-    final String originalContent = currentComment.content ?? '';
+    // Use the family provider for the loading state
+    ref.read(note_p.isFixingGrammarProvider(combinedId).notifier).state = true;
 
-    if (originalContent.trim().isEmpty) {
+    final MinimalOpenAiService openaiApiService = ref.read(
+      api_p.openaiApiServiceProvider,
+    );
+    final String selectedModelId = ref.read(settings_p.openAiModelIdProvider);
+
+    if (!openaiApiService.isConfigured) {
       if (kDebugMode)
         print(
-          '[fixCommentGrammarProvider] Comment content is empty. Skipping.',
+          '[fixCommentGrammarProvider] OpenAI service not configured. Aborting.',
         );
-      return;
+      // Reset loading state before throwing
+      ref.read(note_p.isFixingGrammarProvider(combinedId).notifier).state =
+          false;
+      throw Exception('OpenAI API key is not configured in settings.');
     }
 
-    if (kDebugMode)
-      print(
-        '[fixCommentGrammarProvider] Calling OpenAI API with model $selectedModelId...',
-      );
-    final String correctedContent = await openaiApiService.fixGrammar(
-      originalContent,
-      modelId: selectedModelId,
-    );
-    if (correctedContent == originalContent ||
-        correctedContent.trim().isEmpty) {
+    try {
+      if (kDebugMode)
+        print('[fixCommentGrammarProvider] Fetching comment content...');
+      final NoteApiService apiService = _getNoteApiService(ref);
+      final Comment currentComment = await apiService.getNoteComment(commentId);
+      final String originalContent = currentComment.content ?? '';
+
+      if (originalContent.trim().isEmpty) {
+        if (kDebugMode)
+          print(
+            '[fixCommentGrammarProvider] Comment content is empty. Skipping.',
+          );
+        ref.read(note_p.isFixingGrammarProvider(combinedId).notifier).state =
+            false;
+        return;
+      }
+
       if (kDebugMode)
         print(
-          '[fixCommentGrammarProvider] Content unchanged or correction empty. No update needed.',
+          '[fixCommentGrammarProvider] Calling OpenAI API with model $selectedModelId...',
         );
-      return;
-    }
+      final String correctedContent = await openaiApiService.fixGrammar(
+        originalContent,
+        modelId: selectedModelId,
+      );
+      if (correctedContent == originalContent ||
+          correctedContent.trim().isEmpty) {
+        if (kDebugMode)
+          print(
+            '[fixCommentGrammarProvider] Content unchanged or correction empty. No update needed.',
+          );
+        ref.read(note_p.isFixingGrammarProvider(combinedId).notifier).state =
+            false;
+        return;
+      }
 
-    if (kDebugMode)
-      print(
-        '[fixCommentGrammarProvider] Content corrected. Updating comment...',
+      if (kDebugMode)
+        print(
+          '[fixCommentGrammarProvider] Content corrected. Updating comment...',
+        );
+      final Comment updatedCommentData = currentComment.copyWith(
+        content: () => correctedContent,
       );
-    final Comment updatedCommentData = currentComment.copyWith(
-      content: () => correctedContent,
-    );
-    await apiService.updateNoteComment(commentId, updatedCommentData);
-    ref.invalidate(
-      note_providers.noteCommentsProvider(memoId),
-    ); // Use non-family provider
-    if (kDebugMode)
-      print(
-        '[fixCommentGrammarProvider] Comment $commentId updated successfully with corrected grammar.',
-      );
-  } catch (e, stackTrace) {
-    if (kDebugMode)
-      print(
-        '[fixCommentGrammarProvider] Error fixing grammar for comment $commentId: $e\n$stackTrace',
-      );
-    rethrow;
-  }
+      await apiService.updateNoteComment(commentId, updatedCommentData);
+      ref.invalidate(
+        note_p.noteCommentsProvider(memoId),
+      ); // Use noteCommentsProvider family
+      if (kDebugMode)
+        print(
+          '[fixCommentGrammarProvider] Comment $commentId updated successfully with corrected grammar.',
+        );
+    } catch (e, stackTrace) {
+      if (kDebugMode)
+        print(
+          '[fixCommentGrammarProvider] Error fixing grammar for comment $commentId: $e\n$stackTrace',
+        );
+      rethrow; // Rethrow after logging
+    } finally {
+      // Ensure loading state is always reset
+      if (ref.exists(note_p.isFixingGrammarProvider(combinedId))) {
+        ref.read(note_p.isFixingGrammarProvider(combinedId).notifier).state =
+            false;
+      }
+    }
+  };
 });

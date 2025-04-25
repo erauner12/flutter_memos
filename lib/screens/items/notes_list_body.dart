@@ -2,7 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_memos/models/note_item.dart'; // Import NoteItem model
-import 'package:flutter_memos/providers/note_providers.dart' as note_providers;
+import 'package:flutter_memos/providers/note_providers.dart' as note_p;
 import 'package:flutter_memos/providers/ui_providers.dart' as ui_providers;
 import 'package:flutter_memos/screens/items/note_list_item.dart';
 import 'package:flutter_memos/screens/memos/memos_empty_state.dart'; // Keep for now, rename later if needed
@@ -12,10 +12,18 @@ class NotesListBody extends ConsumerStatefulWidget {
   final void Function(String noteId)? onMoveNoteToServer;
   final ScrollController scrollController;
   final List<NoteItem> notes;
-  final note_providers.NotesState notesState;
+  final note_p.NotesState notesState;
   final bool isInHiddenView;
-  // serverId is no longer needed as context comes from noteServerConfigProvider
-  // final String serverId;
+  final BlinkoNoteType? type; // Add type parameter
+  // Action handlers passed down
+  final Future<void> Function(String noteId) onArchiveNote;
+  final Future<void> Function(String noteId) onDeleteNote;
+  final Future<void> Function(String noteId) onTogglePinNote;
+  final Future<void> Function(String noteId) onBumpNote;
+  final Future<void> Function(String noteId, DateTime? newStartDate)
+  onUpdateNoteStartDate;
+  final void Function() Function(String id) toggleItemVisibilityProvider;
+  final void Function() Function(String id) unhideNoteProvider;
 
   const NotesListBody({
     super.key,
@@ -23,17 +31,15 @@ class NotesListBody extends ConsumerStatefulWidget {
     required this.notes,
     required this.notesState,
     required this.isInHiddenView,
-    // required this.serverId, // Removed serverId
+    required this.type, // Require type
+    required this.onArchiveNote,
+    required this.onDeleteNote,
+    required this.onTogglePinNote,
+    required this.onBumpNote,
+    required this.onUpdateNoteStartDate,
+    required this.toggleItemVisibilityProvider,
+    required this.unhideNoteProvider,
     this.onMoveNoteToServer,
-    BlinkoNoteType? type,
-    required void Function() Function(dynamic id) unhideNoteProvider,
-    required void Function() Function(dynamic id) toggleItemVisibilityProvider,
-    required Future<void> Function(String noteId) onBumpNote,
-    required Future<void> Function(String noteId) onTogglePinNote,
-    required Future<void> Function(String noteId) onArchiveNote,
-    required Future<void> Function(String noteId) onDeleteNote,
-    required Future<void> Function(String noteId, DateTime? newStartDate)
-    onUpdateNoteStartDate,
   });
 
   @override
@@ -64,7 +70,7 @@ class _NotesListBodyState extends ConsumerState<NotesListBody> {
       ref.read(ui_providers.selectedItemIdProvider.notifier).state = firstNoteId;
       if (kDebugMode) {
         print(
-          '[NotesListBody] Selected first note (ID=$firstNoteId) after initial load/refresh.',
+          '[NotesListBody(${widget.type})] Selected first note (ID=$firstNoteId) after initial load/refresh.',
         );
       }
     } else if (notes.isNotEmpty && selectedId != null) {
@@ -75,7 +81,7 @@ class _NotesListBodyState extends ConsumerState<NotesListBody> {
             firstNoteId;
         if (kDebugMode) {
           print(
-            '[NotesListBody] Current selection $selectedId not found in list, selecting first note (ID=$firstNoteId).',
+            '[NotesListBody(${widget.type})] Current selection $selectedId not found in list, selecting first note (ID=$firstNoteId).',
           );
         }
       }
@@ -83,7 +89,9 @@ class _NotesListBodyState extends ConsumerState<NotesListBody> {
       // Clear selection if list becomes empty
       ref.read(ui_providers.selectedItemIdProvider.notifier).state = null;
       if (kDebugMode) {
-        print('[NotesListBody] List is empty, clearing selection.');
+        print(
+          '[NotesListBody(${widget.type})] List is empty, clearing selection.',
+        );
       }
     }
   }
@@ -112,35 +120,35 @@ class _NotesListBodyState extends ConsumerState<NotesListBody> {
   void _onScroll() {
     if (widget.scrollController.position.pixels >=
         widget.scrollController.position.maxScrollExtent - 200) {
-      // Use the non-family provider
+      // Use the family provider with the current type
       final notifier = ref.read(
-        note_providers.notesNotifierProvider.notifier,
+        note_p.notesNotifierFamily(widget.type).notifier,
       );
-      // Use the non-family provider state
-      if (ref.read(note_providers.notesNotifierProvider).canLoadMore) {
+      // Use the family provider state
+      if (ref.read(note_p.notesNotifierFamily(widget.type)).canLoadMore) {
         if (kDebugMode) {
           print(
-            '[NotesListBody] Reached near bottom, attempting to fetch more notes.',
+            '[NotesListBody(${widget.type})] Reached near bottom, attempting to fetch more notes.',
           );
         }
         notifier.fetchMoreNotes();
       } else {
         // Optional: log if needed
-        // if (kDebugMode) { print('[NotesListBody] Reached near bottom, but cannot load more.'); }
+        // if (kDebugMode) { print('[NotesListBody(${widget.type})] Reached near bottom, but cannot load more.'); }
       }
     }
   }
 
   Future<void> _onRefresh() async {
     if (kDebugMode) {
-      print('[NotesListBody] Pull-to-refresh triggered.');
+      print('[NotesListBody(${widget.type})] Pull-to-refresh triggered.');
     }
     HapticFeedback.lightImpact();
 
-    // Use the non-family provider
+    // Use the family provider with the current type
     await ref
         .read(
-          note_providers.notesNotifierProvider.notifier,
+          note_p.notesNotifierFamily(widget.type).notifier,
         )
         .refresh();
 
@@ -247,11 +255,22 @@ class _NotesListBodyState extends ConsumerState<NotesListBody> {
                     note: note,
                     index: index,
                     isInHiddenView: widget.isInHiddenView,
+                    type: widget.type, // Pass type down
                     onMoveToServer:
                         widget.onMoveNoteToServer != null
                         ? () => widget.onMoveNoteToServer!(note.id)
                         : null,
-                    // serverId parameter already removed
+                    // Pass down action handlers
+                    onArchive: () => widget.onArchiveNote(note.id),
+                    onDelete: () => widget.onDeleteNote(note.id),
+                    onTogglePin: () => widget.onTogglePinNote(note.id),
+                    onBump: () => widget.onBumpNote(note.id),
+                    onUpdateStartDate:
+                        (date) => widget.onUpdateNoteStartDate(note.id, date),
+                    onToggleVisibility: widget.toggleItemVisibilityProvider(
+                      note.id,
+                    ),
+                    onUnhide: widget.unhideNoteProvider(note.id),
                   );
                 }, childCount: visibleNotes.length),
               ),

@@ -731,7 +731,7 @@ final hasSearchResultsFamily = Provider.family<bool, BlinkoNoteType?>((
 }, name: 'hasSearchResultsFamily');
 
 
-// --- API Action Providers (Simplified: Perform API call, return result/error) ---
+// --- API Action Providers (Return callable functions) ---
 
 /// API call to unhide a note (removes from manual hidden list).
 final unhideNoteProvider = Provider.family<void Function(), String>((ref, id) {
@@ -774,11 +774,12 @@ final archiveNoteApiProvider =
               .read(noteDetailCacheProvider.notifier)
               .update((state) => state..remove(noteId));
           ref.invalidate(noteDetailProvider(noteId));
+          // Invalidate relevant list(s)
+          ref.invalidate(notesNotifierFamily);
           return result;
     } catch (e) {
           if (kDebugMode)
             print('[archiveNoteApiProvider] Error archiving note $noteId: $e');
-          // Don't refresh here, let the caller handle error/refresh.
       rethrow;
     }
   };
@@ -808,12 +809,13 @@ final deleteNoteApiProvider = Provider.family<Future<void> Function(), String>((
           .read(noteDetailCacheProvider.notifier)
           .update((state) => state..remove(noteId));
       ref.invalidate(noteDetailProvider(noteId));
+      // Invalidate relevant list(s)
+      ref.invalidate(notesNotifierFamily);
     } catch (e, stackTrace) {
       if (kDebugMode)
         print(
           '[deleteNoteApiProvider] Error deleting note $noteId via API: $e\n$stackTrace',
         );
-      // Don't refresh here, let the caller handle error/refresh.
       rethrow;
     }
   };
@@ -845,6 +847,9 @@ final bumpNoteApiProvider = Provider.family<
           .read(noteDetailCacheProvider.notifier)
           .update((state) => {...state, result.id: result});
       ref.invalidate(noteDetailProvider(noteId));
+      // Invalidate relevant list(s)
+      ref.invalidate(notesNotifierFamily(result.blinkoType));
+      ref.invalidate(notesNotifierFamily(null));
       return result;
     } catch (e, stackTrace) {
       if (kDebugMode)
@@ -879,6 +884,9 @@ final updateNoteApiProvider = Provider.family<
           .read(noteDetailCacheProvider.notifier)
           .update((state) => {...state, result.id: result});
       ref.invalidate(noteDetailProvider(noteId));
+      // Invalidate relevant list(s)
+      ref.invalidate(notesNotifierFamily(result.blinkoType));
+      ref.invalidate(notesNotifierFamily(null));
       return result;
     } catch (e, stackTrace) {
       if (kDebugMode)
@@ -911,6 +919,9 @@ final togglePinNoteApiProvider = Provider.family<
           .read(noteDetailCacheProvider.notifier)
           .update((state) => {...state, result.id: result});
       ref.invalidate(noteDetailProvider(noteId));
+      // Invalidate relevant list(s)
+      ref.invalidate(notesNotifierFamily(result.blinkoType));
+      ref.invalidate(notesNotifierFamily(null));
       return result;
     } catch (e, stackTrace) {
       if (kDebugMode)
@@ -937,14 +948,16 @@ final createNoteApiProvider = Provider<Future<NoteItem> Function(NoteItem)>((
     } catch (e) {
       if (kDebugMode)
         print('[createNoteApiProvider] Error creating note via API: $e');
-      // Don't invalidate here, let caller handle error
       rethrow;
     }
   };
 });
 
 /// API call to fix grammar using OpenAI and update the note. Returns updated NoteItem.
-final fixNoteGrammarApiProvider = Provider.family<Future<NoteItem>, String>((
+final fixNoteGrammarApiProvider = Provider.family<
+  Future<NoteItem> Function(),
+  String
+>((
   ref,
   noteId,
 ) {
@@ -1000,6 +1013,9 @@ final fixNoteGrammarApiProvider = Provider.family<Future<NoteItem>, String>((
           .read(noteDetailCacheProvider.notifier)
           .update((state) => {...state, noteId: resultNote});
       ref.invalidate(noteDetailProvider(noteId));
+      // Invalidate relevant list(s)
+      ref.invalidate(notesNotifierFamily(resultNote.blinkoType));
+      ref.invalidate(notesNotifierFamily(null));
 
       if (kDebugMode)
         print(
@@ -1053,8 +1069,8 @@ final noteCommentsProvider = FutureProvider.family<List<Comment>, String>((
   return comments;
 }, name: 'noteCommentsProvider');
 
-// Simple state provider for UI loading indicator
+// Simple state provider for UI loading indicator (per note/comment ID)
 final isFixingGrammarProvider = StateProvider.family<bool, String>(
-  (ref, noteId) => false,
+  (ref, id) => false, // id can be noteId or commentId
   name: 'isFixingGrammarProvider',
 );

@@ -5,7 +5,7 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/providers/comment_providers.dart'
     as comment_providers;
-import 'package:flutter_memos/providers/note_providers.dart' as note_providers;
+import 'package:flutter_memos/providers/note_providers.dart' as note_p;
 import 'package:flutter_memos/providers/ui_providers.dart'; // Replace workbench_providers.dart with ui_providers.dart
 import 'package:flutter_memos/utils/url_helper.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -29,10 +29,15 @@ class CommentCard extends ConsumerWidget {
   });
 
   void _showActions(BuildContext context, WidgetRef ref) {
+    final combinedId =
+        '$memoId/${comment.id}'; // Use combined ID for grammar state
     final isHidden = ref.read(
-      comment_providers.isCommentHiddenProvider('$memoId/${comment.id}'),
+      comment_providers.isCommentHiddenProvider(combinedId),
     );
-    final isFixingGrammar = ref.read(note_providers.isFixingGrammarProvider);
+    // Use the family provider with the combined ID
+    final isFixingGrammar = ref.watch(
+      note_p.isFixingGrammarProvider(combinedId),
+    );
 
     showCupertinoModalPopup<void>(
       context: context,
@@ -48,7 +53,7 @@ class CommentCard extends ConsumerWidget {
                   '/edit-entity',
                   arguments: {
                     'entityType': 'comment',
-                    'entityId': '$memoId/${comment.id}', // Pass combined ID
+                    'entityId': combinedId, // Pass combined ID
                     // serverId is no longer needed for edit screen
                   },
                 );
@@ -134,7 +139,7 @@ class CommentCard extends ConsumerWidget {
                 Navigator.pop(popupContext);
                 ref.read(
                   comment_providers.toggleHideCommentProvider(
-                    '$memoId/${comment.id}',
+                    combinedId,
                   ),
                 )();
               },
@@ -191,18 +196,21 @@ class CommentCard extends ConsumerWidget {
   }
 
   Future<void> _fixGrammar(BuildContext context, WidgetRef ref) async {
-    ref.read(note_providers.isFixingGrammarProvider.notifier).state = true;
+    final combinedId =
+        '$memoId/${comment.id}'; // Use combined ID for grammar state
+    // Use the family provider with the combined ID
+    // State is set within the fixCommentGrammarProvider now
     HapticFeedback.mediumImpact();
     // Consider showing a loading indicator specific to this comment card if needed
 
     try {
-      // Use non-family provider with params record
+      // Use the callable function returned by the provider
       await ref.read(
         comment_providers.fixCommentGrammarProvider((
           memoId: memoId,
           commentId: comment.id,
-        )).future,
-      );
+        )),
+      )();
       // Optionally show success feedback
     } catch (e) {
       if (context.mounted) {
@@ -222,11 +230,8 @@ class CommentCard extends ConsumerWidget {
               ),
         );
       }
-    } finally {
-      if (context.mounted) {
-        ref.read(note_providers.isFixingGrammarProvider.notifier).state = false;
-      }
     }
+    // Loading state is reset within fixCommentGrammarProvider's finally block
   }
 
   @override

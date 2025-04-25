@@ -1,6 +1,6 @@
 import 'package:flutter/cupertino.dart';
 // Import note_providers and use families
-import 'package:flutter_memos/providers/note_providers.dart' as note_providers;
+import 'package:flutter_memos/providers/note_providers.dart' as note_p;
 // Import new single config providers
 import 'package:flutter_memos/providers/note_server_config_provider.dart';
 // Import settings_provider for manuallyHiddenNoteIdsProvider
@@ -59,11 +59,10 @@ class EditEntityScreen extends ConsumerWidget {
           // Check serverId again
           // Refresh based on entity type
           if (entityType == 'note') {
+            // Invalidate the notes list family (broadly)
+            ref.invalidate(note_p.notesNotifierFamily);
             ref.invalidate(
-              note_providers.notesNotifierProvider,
-            ); // Refresh main list
-            ref.invalidate(
-              note_providers.noteDetailProvider(entityId),
+              note_p.noteDetailProvider(entityId),
             ); // Refresh detail
             ref
                 .read(settings_p.manuallyHiddenNoteIdsProvider.notifier)
@@ -75,9 +74,11 @@ class EditEntityScreen extends ConsumerWidget {
             ); // Assuming format "noteId/commentId"
             if (parts.length >= 2) {
               final parentNoteId = parts[0];
-              ref.invalidate(note_providers.noteCommentsProvider(parentNoteId));
+              ref.invalidate(note_p.noteCommentsProvider(parentNoteId));
               // Also refresh the parent note detail as comments changed
-              ref.invalidate(note_providers.noteDetailProvider(parentNoteId));
+              ref.invalidate(note_p.noteDetailProvider(parentNoteId));
+              // Also invalidate the main notes list as the parent note's update time might have bumped
+              ref.invalidate(note_p.notesNotifierFamily);
             }
           } else if (entityType == 'task') {
             // TODO: Refresh task list and detail if task editing is implemented

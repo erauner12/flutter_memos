@@ -102,6 +102,7 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
 
     // API Call
     try {
+      // Use the API provider which returns a callable function
       await ref.read(note_p.archiveNoteApiProvider(noteId))();
       // Success: UI already updated
     } catch (e) {
@@ -140,6 +141,7 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
 
     // API Call
     try {
+      // Use the API provider which returns a callable function
       await ref.read(note_p.deleteNoteApiProvider(noteId))();
       // Success: UI already updated
     } catch (e) {
@@ -158,6 +160,7 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
 
      // API Call
      try {
+       // Use the API provider which returns a callable function
        await ref.read(note_p.togglePinNoteApiProvider(noteId))();
        // Success: UI already updated
      } catch (e) {
@@ -176,6 +179,7 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
 
       // API Call
       try {
+        // Use the API provider which returns a callable function
         await ref.read(note_p.bumpNoteApiProvider(noteId))();
         // Success: UI already updated
       } catch (e) {
@@ -196,6 +200,7 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
        // API Call (using the generic update provider)
        try {
          final updatedNoteData = originalNote.copyWith(startDate: newStartDate); // Prepare data for API
+         // Use the API provider which returns a callable function
          await ref.read(note_p.updateNoteApiProvider(noteId))(updatedNoteData);
          // Success: UI already updated
        } catch (e) {
@@ -247,6 +252,7 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
                 for (final id in selectedIdsList) {
                   notifier.removeNoteOptimistically(id);
                 }
+                // Use the re-added clearMultiSelectProvider
                 ref.read(ui_providers.clearMultiSelectProvider)(); // Clear selection UI
                 ref.read(ui_providers.toggleItemMultiSelectModeProvider)(); // Exit multi-select mode
 
@@ -254,6 +260,7 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
                 List<String> failedDeletes = [];
                 for (final id in selectedIdsList) {
                   try {
+                    // Use the API provider which returns a callable function
                     await ref.read(note_p.deleteNoteApiProvider(id))();
                   } catch (e) {
                     failedDeletes.add(id);
@@ -284,6 +291,7 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
                  for (final id in selectedIdsList) {
                    notifier.archiveNoteOptimistically(id);
                  }
+                 // Use the re-added clearMultiSelectProvider
                  ref.read(ui_providers.clearMultiSelectProvider)(); // Clear selection UI
                  ref.read(ui_providers.toggleItemMultiSelectModeProvider)(); // Exit multi-select mode
 
@@ -291,6 +299,7 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
                  List<String> failedArchives = [];
                  for (final id in selectedIdsList) {
                    try {
+                     // Use the API provider which returns a callable function
                      await ref.read(note_p.archiveNoteApiProvider(id))();
                    } catch (e) {
                      failedArchives.add(id);

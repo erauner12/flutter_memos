@@ -3,8 +3,8 @@ import 'package:flutter_memos/models/comment.dart'; // Import Comment model
 import 'package:flutter_memos/models/note_item.dart'; // Import NoteItem model
 import 'package:flutter_memos/providers/api_providers.dart'
     as api_p; // Import for noteApiServiceProvider
-// Import note_providers and use non-family providers
-import 'package:flutter_memos/providers/note_providers.dart' as note_providers;
+// Import note_providers and use new family/API providers
+import 'package:flutter_memos/providers/note_providers.dart' as note_p;
 // Import settings_provider for manuallyHiddenNoteIdsProvider
 import 'package:flutter_memos/providers/settings_provider.dart' as settings_p;
 import 'package:flutter_memos/services/note_api_service.dart';
@@ -88,9 +88,9 @@ final saveEntityProvider = Provider.family<
       try {
         if (kDebugMode)
           print('[saveEntityProvider] Bumping parent note: $parentNoteId');
+        // Use bumpNoteApiProvider which returns a callable function
         await ref.read(
-          note_providers.bumpNoteProvider(parentNoteId),
-        )(); // Use non-family provider
+          note_p.bumpNoteApiProvider(parentNoteId))();
         if (kDebugMode)
           print(
             '[saveEntityProvider] Parent note $parentNoteId bumped successfully.',
@@ -103,11 +103,10 @@ final saveEntityProvider = Provider.family<
       }
 
       ref.invalidate(
-        note_providers.noteCommentsProvider(parentNoteId),
-      ); // Use non-family provider
-      await ref
-          .read(note_providers.notesNotifierProvider.notifier)
-          .refresh(); // Use non-family provider
+        note_p.noteCommentsProvider(parentNoteId),
+      ); // Use noteCommentsProvider family
+      // Invalidate the notes list family (broadly)
+      ref.invalidate(note_p.notesNotifierFamily);
 
     } else {
       // type == 'note'
@@ -116,18 +115,17 @@ final saveEntityProvider = Provider.family<
       if (kDebugMode)
         print('[saveEntityProvider] Note $id updated successfully.');
 
-      if (ref.exists(note_providers.noteDetailCacheProvider)) {
+      if (ref.exists(note_p.noteDetailCacheProvider)) {
         ref
-            .read(note_providers.noteDetailCacheProvider.notifier)
+            .read(note_p.noteDetailCacheProvider.notifier)
             .update((state) => {...state, id: savedNote});
       }
 
-      await ref
-          .read(note_providers.notesNotifierProvider.notifier)
-          .refresh(); // Use non-family provider
+      // Invalidate the notes list family (broadly)
+      ref.invalidate(note_p.notesNotifierFamily);
       ref.invalidate(
-        note_providers.noteDetailProvider(id),
-      ); // Use non-family provider
+        note_p.noteDetailProvider(id),
+      ); // Use noteDetailProvider family
       ref.read(settings_p.manuallyHiddenNoteIdsProvider.notifier).remove(id);
     }
   };

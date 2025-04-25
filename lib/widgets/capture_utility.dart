@@ -10,8 +10,8 @@ import 'package:flutter_memos/models/comment.dart';
 import 'package:flutter_memos/models/note_item.dart';
 import 'package:flutter_memos/providers/comment_providers.dart'
     as comment_providers;
-// Import note_providers and use non-family providers
-import 'package:flutter_memos/providers/note_providers.dart' as note_providers;
+// Import note_providers and use new family/API providers
+import 'package:flutter_memos/providers/note_providers.dart' as note_p;
 // Import new single config providers
 import 'package:flutter_memos/providers/note_server_config_provider.dart';
 import 'package:flutter_memos/providers/ui_providers.dart' as ui_providers;
@@ -77,8 +77,8 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
 
   // --- Helper Methods ---
   Future<void> createNote(NoteItem note) async {
-    // Use non-family provider
-    await ref.read(note_providers.createNoteProvider)(note);
+    // Use createNoteApiProvider
+    await ref.read(note_p.createNoteApiProvider)(note);
   }
 
   Future<void> addComment(
@@ -772,16 +772,16 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
           widget.memoId != null) {
         final noteId = widget.memoId!;
         final currentContent = _textController.text.trim();
-        // Use non-family provider
+        // Use noteCommentsProvider family
         final commentsAsync = ref.read(
-          note_providers.noteCommentsProvider(noteId),
+          note_p.noteCommentsProvider(noteId),
         );
         final comments = commentsAsync.valueOrNull ?? [];
         comments.sort((a, b) => a.createdTs.compareTo(b.createdTs));
         final lastComment = comments.isNotEmpty ? comments.last : null;
-        // Use non-family provider
+        // Use noteDetailProvider family
         final memoAsync = ref.read(
-          note_providers.noteDetailProvider(noteId),
+          note_p.noteDetailProvider(noteId),
         );
         final parentNote = memoAsync.valueOrNull;
         final currentAction =
@@ -797,9 +797,9 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
               filename: _selectedFilename,
               contentType: _selectedContentType,
             );
-            // Use non-family provider
+            // Use noteDetailProvider family
             ref.invalidate(
-              note_providers.noteDetailProvider(noteId),
+              note_p.noteDetailProvider(noteId),
             );
             break;
           case SubmitAction.appendToLastComment:
@@ -813,9 +813,9 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
                   commentId: lastComment.id,
                 )),
               )(updatedContent);
-              // Use non-family provider
+              // Use noteDetailProvider family
               ref.invalidate(
-                note_providers.noteDetailProvider(noteId),
+                note_p.noteDetailProvider(noteId),
               );
             } else
               throw Exception("Cannot append: No last comment found.");
@@ -831,9 +831,9 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
                   commentId: lastComment.id,
                 )),
               )(updatedContent);
-              // Use non-family provider
+              // Use noteDetailProvider family
               ref.invalidate(
-                note_providers.noteDetailProvider(noteId),
+                note_p.noteDetailProvider(noteId),
               );
             } else
               throw Exception("Cannot prepend: No last comment found.");
@@ -849,28 +849,26 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
                 content: updatedContent,
                 updateTime: DateTime.now(),
               );
-              // Use non-family provider
+              // Use updateNoteApiProvider which returns a callable function
               updatedMemoResult = await ref.read(
-                note_providers.updateNoteProvider(noteId),
+                note_p.updateNoteApiProvider(noteId),
               )(updatedNoteData);
-              if (ref.exists(note_providers.noteDetailCacheProvider)) {
+              if (ref.exists(note_p.noteDetailCacheProvider)) {
                 ref
-                    .read(note_providers.noteDetailCacheProvider.notifier)
+                    .read(note_p.noteDetailCacheProvider.notifier)
                     .update((state) => {...state, noteId: updatedMemoResult!});
                 if (kDebugMode)
                   print(
                     '[CaptureUtility] Manually updated noteDetailCacheProvider for $noteId',
                   );
               }
-              // Use non-family provider
+              // Use noteDetailProvider family
               // ignore: unused_result
               ref.refresh(
-                note_providers.noteDetailProvider(noteId).future,
+                note_p.noteDetailProvider(noteId).future,
               );
-              // ignore: unused_result
-              ref.refresh(
-                note_providers.notesNotifierProvider,
-              ); // Refresh the main list
+              // Invalidate the notes list family (broadly)
+              ref.invalidate(note_p.notesNotifierFamily);
               if (kDebugMode)
                 print(
                   '[CaptureUtility] Explicitly refreshed providers for $noteId on server $_effectiveServerId',
@@ -1071,13 +1069,13 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
             ? 'Capture something...'
             : 'Add a comment...';
 
-    // Use non-family provider
+    // Use noteCommentsProvider family
     final commentsAsync =
         widget.mode == CaptureMode.addComment &&
                 widget.memoId != null &&
                 _effectiveServerId != null
             ? ref.watch(
-              note_providers.noteCommentsProvider(widget.memoId!),
+              note_p.noteCommentsProvider(widget.memoId!),
             )
             : const AsyncValue.data(<Comment>[]);
     final bool hasComments = commentsAsync.maybeWhen(
@@ -1086,13 +1084,13 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
     );
     final bool hasAttachment = _selectedFileData != null;
 
-    // Use non-family provider
+    // Use noteDetailProvider family
     final parentMemoAsyncValue =
         widget.mode == CaptureMode.addComment &&
                 widget.memoId != null &&
                 _effectiveServerId != null
             ? ref.watch(
-              note_providers.noteDetailProvider(widget.memoId!),
+              note_p.noteDetailProvider(widget.memoId!),
             )
             : const AsyncValue.data(null);
     final bool isParentMemoLoaded =

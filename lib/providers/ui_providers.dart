@@ -136,3 +136,13 @@ final toggleCommentMultiSelectModeProvider = Provider<void Function()>((ref) {
     }
   };
 }, name: 'toggleCommentMultiSelectMode');
+
+/// Provider to clear the item multi-select list
+final clearMultiSelectProvider = Provider<void Function()>((ref) {
+  return () {
+    if (kDebugMode) {
+      print('[clearMultiSelectProvider] Clearing multi-select item IDs.');
+    }
+    ref.read(selectedItemIdsForMultiSelectProvider.notifier).state = {};
+  };
+}, name: 'clearMultiSelectProvider');
