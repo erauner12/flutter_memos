@@ -7,8 +7,12 @@ enum NoteState { normal, archived }
 
 enum NoteVisibility { public, private, protected }
 
-// Optional: Add NoteKind if differentiating Cache/Vault in the model
-// enum NoteKind { cache, vault, other }
+/// A simple enum to represent Blinko's 'type' field (0, 1, etc.)
+enum BlinkoNoteType {
+  cache, // corresponds to integer 0
+  vault, // corresponds to integer 1
+  unknown,
+}
 
 @immutable
 class NoteItem implements BaseItem {
@@ -29,7 +33,9 @@ class NoteItem implements BaseItem {
   final String? parentId;
   final DateTime? startDate;
   final DateTime? endDate;
-  // final NoteKind kind; // Add if using model-based differentiation
+
+  /// Represents the integer-based 'type' from the Blinko API.
+  final BlinkoNoteType blinkoType;
 
   const NoteItem({
     required this.id,
@@ -47,7 +53,7 @@ class NoteItem implements BaseItem {
     this.parentId,
     this.startDate,
     this.endDate,
-    // this.kind = NoteKind.other, // Default kind if added
+    this.blinkoType = BlinkoNoteType.unknown,
   });
 
   // --- BaseItem Implementation ---
@@ -65,15 +71,8 @@ class NoteItem implements BaseItem {
 
   @override
   String? get description {
-    // Return null for description for now, or potentially the rest of the content?
-    // Let's return null for simplicity, UI can show full content if needed.
+    // Return null for description for now, or potentially the rest of the content
     return null;
-    // Alternative: return content excluding the first line if it exists
-    // final lines = content.split('\n').where((line) => line.trim().isNotEmpty).toList();
-    // if (lines.length > 1) {
-    //   return lines.skip(1).join('\n').trim();
-    // }
-    // return null;
   }
 
   @override
@@ -83,7 +82,6 @@ class NoteItem implements BaseItem {
   BaseItemType get itemType => BaseItemType.note; // This is a Note
 
   // --- End BaseItem Implementation ---
-
 
   NoteItem copyWith({
     String? id,
@@ -101,7 +99,7 @@ class NoteItem implements BaseItem {
     String? parentId,
     DateTime? startDate,
     DateTime? endDate,
-    // NoteKind? kind, // Add if using model-based differentiation
+    BlinkoNoteType? blinkoType,
   }) {
     return NoteItem(
       id: id ?? this.id,
@@ -119,7 +117,7 @@ class NoteItem implements BaseItem {
       parentId: parentId ?? this.parentId,
       startDate: startDate ?? this.startDate,
       endDate: endDate ?? this.endDate,
-      // kind: kind ?? this.kind, // Add if using model-based differentiation
+      blinkoType: blinkoType ?? this.blinkoType,
     );
   }
 
@@ -143,8 +141,8 @@ class NoteItem implements BaseItem {
         other.creatorId == creatorId &&
         other.parentId == parentId &&
         other.startDate == startDate &&
-        other.endDate == endDate;
-        // && other.kind == kind; // Add if using model-based differentiation
+        other.endDate == endDate &&
+        other.blinkoType == blinkoType;
   }
 
   @override
@@ -166,12 +164,12 @@ class NoteItem implements BaseItem {
       parentId,
       startDate,
       endDate,
-      // kind, // Add if using model-based differentiation
+      blinkoType,
     );
   }
 
   @override
   String toString() {
-    return 'NoteItem(id: $id, state: ${state.name}, pinned: $pinned, startDate: $startDate, title: ${title.substring(0, (title.length > 20 ? 20 : title.length))}...)';
+    return 'NoteItem(id: $id, state: ${state.name}, pinned: $pinned, type: ${blinkoType.name}, startDate: $startDate, title: ${title.substring(0, (title.length > 20 ? 20 : title.length))}...)';
   }
 }

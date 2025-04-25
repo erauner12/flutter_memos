@@ -47,8 +47,7 @@ class BlinkoApiService implements NoteApiService {
   Future<void> configureService({
     required String baseUrl,
     AuthStrategy? authStrategy, // Add AuthStrategy parameter
-    @Deprecated('Use authStrategy instead')
-    String? authToken,
+    @Deprecated('Use authStrategy instead') String? authToken,
     String? serverId, // Make serverId optional
   }) async {
     AuthStrategy? effectiveStrategy = authStrategy;
@@ -71,7 +70,7 @@ class BlinkoApiService implements NoteApiService {
     final newToken = effectiveStrategy?.getSimpleToken();
     if (_baseUrl == baseUrl &&
         currentToken == newToken &&
-        _configuredServerId == serverId && // Also check serverId
+        _configuredServerId == serverId &&
         isConfigured) {
       if (kDebugMode) {
         print('[BlinkoApiService] configureService: Configuration unchanged.');
@@ -121,7 +120,6 @@ class BlinkoApiService implements NoteApiService {
     }
 
     // Use the strategy to create the Authentication object
-    // Fix: Use the correct createBlinkoAuth method and remove unnecessary cast
     blinko_api.Authentication authentication;
     if (authStrategy != null) {
       // Use the new method specifically for Blinko
@@ -133,11 +131,8 @@ class BlinkoApiService implements NoteApiService {
 
     try {
       _apiClient = blinko_api.ApiClient(
-        basePath:
-            effectiveBaseUrl.isEmpty
-                ? 'http://dummy'
-                : effectiveBaseUrl, // Provide dummy if empty
-        authentication: authentication, // Pass nullable Authentication
+        basePath: effectiveBaseUrl.isEmpty ? 'http://dummy' : effectiveBaseUrl,
+        authentication: authentication,
       );
       _fileApi = blinko_api.FileApi(_apiClient);
       if (kDebugMode && effectiveBaseUrl.isNotEmpty) {
@@ -225,8 +220,6 @@ class BlinkoApiService implements NoteApiService {
     String commentId, {
     ServerConfig? targetServerOverride,
   }) async {
-    // Blinko API might not support fetching a single comment directly by its ID
-    // without knowing the note ID. Throwing error as per plan.
     throw UnimplementedError(
       'BlinkoApiService does not support getting a single comment by ID.',
     );
@@ -271,15 +264,15 @@ class BlinkoApiService implements NoteApiService {
           final uploadResponse =
               await apiClient.deserializeAsync(
                     response.body,
-                    'UploadFile200Response', // Target Blinko response model
+                    'UploadFile200Response',
                   )
                   as blinko_api.UploadFile200Response?;
 
           if (uploadResponse != null && uploadResponse.path != null) {
             // Blinko API response might not have a 'name' field, use 'path' or original filename.
             String resourceName =
-                'blinkoResources/${uploadResponse.path!.split('/').last}'; // Construct a unique name
-            String? responseFilename; // Blinko API doesn't have a 'name' field
+                'blinkoResources/${uploadResponse.path!.split('/').last}';
+            String? responseFilename;
             if (kDebugMode) {
               print(
                 '[BlinkoApiService.uploadResource] Upload successful. Path: ${uploadResponse.path}, Type: ${uploadResponse.type}, Size: ${uploadResponse.size}',
@@ -287,18 +280,11 @@ class BlinkoApiService implements NoteApiService {
             }
             // Map to the generic structure expected by BaseApiService
             return {
-              'name': resourceName, // Use constructed name as identifier
-              'filename':
-                  responseFilename ??
-                  filename, // Prefer API filename if available
-              'contentType':
-                  uploadResponse.type ??
-                  contentType, // Prefer API type if available
-              'size':
-                  uploadResponse.size
-                      ?.toString(), // Size from API response as String
-              'externalLink':
-                  uploadResponse.path!, // Blinko path likely serves as link
+              'name': resourceName,
+              'filename': responseFilename ?? filename,
+              'contentType': uploadResponse.type ?? contentType,
+              'size': uploadResponse.size?.toString(),
+              'externalLink': uploadResponse.path!,
             };
           } else {
             if (kDebugMode) {
@@ -346,7 +332,6 @@ class BlinkoApiService implements NoteApiService {
     }
   }
 
-  // --- Implement NoteApiService Methods ---
   @override
   Future<ListNotesResponse> listNotes({
     int? pageSize = 30,
@@ -356,6 +341,8 @@ class BlinkoApiService implements NoteApiService {
     String? sort,
     String? direction,
     ServerConfig? targetServerOverride,
+    // Optional: add a param for blinkoType
+    BlinkoNoteType? blinkoType,
   }) async {
     final noteApi = _getNoteApiForServer(targetServerOverride);
     final apiClient = noteApi.apiClient;
@@ -386,6 +373,7 @@ class BlinkoApiService implements NoteApiService {
     final formParams = <String, String>{};
     const accepts = ['application/json'];
     const requestContentType = null;
+
     queryParams.add(blinko_api.QueryParam('page', pageNumber.toString()));
     queryParams.add(blinko_api.QueryParam('size', (pageSize ?? 30).toString()));
     queryParams.add(blinko_api.QueryParam('orderBy', orderBy.toJson()));
@@ -400,7 +388,17 @@ class BlinkoApiService implements NoteApiService {
     if (searchText.isNotEmpty) {
       queryParams.add(blinko_api.QueryParam('searchText', searchText));
     }
+
+    // Optionally filter by type if the server supports it
+    if (blinkoType != null) {
+      final typeValue = _toBlinkoTypeValue(blinkoType);
+      if (typeValue != null) {
+        queryParams.add(blinko_api.QueryParam('type', typeValue.toString()));
+      }
+    }
+
     headerParams['Accept'] = accepts.join(',');
+
     try {
       if (kDebugMode) {
         print('[BlinkoApiService.listNotes] Calling invokeAPI POST $path');
@@ -483,6 +481,9 @@ class BlinkoApiService implements NoteApiService {
       isArchived: note.state == NoteState.archived,
       isTop: note.pinned,
     );
+    // Set the type field (via our added typeVal) so the server knows which type
+    request.typeVal = _toBlinkoTypeValue(note.blinkoType);
+
     try {
       if (kDebugMode) {
         print(
@@ -564,6 +565,9 @@ class BlinkoApiService implements NoteApiService {
       isArchived: note.state == NoteState.archived,
       isTop: note.pinned,
     );
+    // Also set type so updates reflect correct type
+    request.typeVal = _toBlinkoTypeValue(note.blinkoType);
+
     try {
       if (kDebugMode) {
         print(
@@ -747,11 +751,9 @@ class BlinkoApiService implements NoteApiService {
     }
     final request = blinko_api.CommentsCreateRequest(
       noteId: noteIdNum,
-      content: comment.content ?? '', // Handle nullable content
-      guestName:
-          '', // Blinko specific, maybe map from comment.creatorId if needed?
-      parentId:
-          null, // Blinko specific, maybe map from comment if it has parent info?
+      content: comment.content ?? '',
+      guestName: '',
+      parentId: null,
     );
     try {
       final response = await commentApi.commentsCreateWithHttpInfo(request);
@@ -793,7 +795,7 @@ class BlinkoApiService implements NoteApiService {
     }
     final request = blinko_api.CommentsUpdateRequest(
       id: commentIdNum,
-      content: comment.content ?? '', // Handle nullable content
+      content: comment.content ?? '',
     );
     try {
       final response = await commentApi.commentsUpdateWithHttpInfo(request);
@@ -878,9 +880,7 @@ class BlinkoApiService implements NoteApiService {
       );
     }
     List<Exception> errors = [];
-    // Iterate through the generic map list
     for (final relationMap in relations) {
-      // Extract related ID and type (Blinko only supports REFERENCE implicitly)
       final String? relatedNoteIdStr = relationMap['relatedMemoId'] as String?;
       final num? relatedNoteIdNum = num.tryParse(relatedNoteIdStr ?? '');
       if (relatedNoteIdNum == null) {
@@ -891,7 +891,6 @@ class BlinkoApiService implements NoteApiService {
         }
         continue;
       }
-      // Create Blinko request
       final request = blinko_api.NotesAddReferenceRequest(
         fromNoteId: noteIdNum,
         toNoteId: relatedNoteIdNum,
@@ -925,6 +924,34 @@ class BlinkoApiService implements NoteApiService {
     }
   }
 
+  // Helper method to map an integer from the API to our BlinkoNoteType
+  BlinkoNoteType _mapBlinkoType(int? typeValue) {
+    if (typeValue == null) {
+      return BlinkoNoteType.unknown;
+    }
+    switch (typeValue) {
+      case 0:
+        return BlinkoNoteType.cache;
+      case 1:
+        return BlinkoNoteType.vault;
+      default:
+        return BlinkoNoteType.unknown;
+    }
+  }
+
+  // Helper to convert BlinkoNoteType to the integer for the server
+  int? _toBlinkoTypeValue(BlinkoNoteType type) {
+    switch (type) {
+      case BlinkoNoteType.cache:
+        return 0;
+      case BlinkoNoteType.vault:
+        return 1;
+      case BlinkoNoteType.unknown:
+      default:
+        return null; // or 0 if you prefer a fallback
+    }
+  }
+
   // Helper method to get FileApi for a specific server or default
   blinko_api.FileApi _getFileApiForServer(ServerConfig? serverConfig) {
     return blinko_api.FileApi(_getApiClientForServer(serverConfig));
@@ -933,7 +960,6 @@ class BlinkoApiService implements NoteApiService {
   // Helper method to get ApiClient for a specific server or default
   blinko_api.ApiClient _getApiClientForServer(ServerConfig? serverConfig) {
     if (serverConfig == null) {
-      // Ensure the default client is initialized if accessed directly
       if (!_apiClient.basePath.startsWith('http')) {
         if (kDebugMode) {
           print(
@@ -951,10 +977,7 @@ class BlinkoApiService implements NoteApiService {
       return _apiClient;
     }
 
-    // Create a temporary AuthStrategy for the target server
-    // Assuming ServerConfig holds authToken for this override scenario
     final targetAuthStrategy = BearerTokenAuthStrategy(serverConfig.authToken);
-    // Fix: Use the correct createBlinkoAuth method and remove unnecessary cast
     final blinko_api.Authentication targetAuthentication =
         targetAuthStrategy.createBlinkoAuth();
 
@@ -1046,6 +1069,9 @@ class BlinkoApiService implements NoteApiService {
             .whereType<Map<String, dynamic>>()
             .toList();
 
+    // Parse the integer-based type
+    final BlinkoNoteType noteType = _mapBlinkoType(blinkoDetail.type);
+
     return NoteItem(
       id: idStr,
       content: contentStr,
@@ -1061,6 +1087,7 @@ class BlinkoApiService implements NoteApiService {
       creatorId: creatorIdStr,
       startDate: startDate,
       endDate: endDate,
+      blinkoType: noteType,
     );
   }
 
@@ -1131,6 +1158,9 @@ class BlinkoApiService implements NoteApiService {
             .whereType<Map<String, dynamic>>()
             .toList();
 
+    // Parse the integer-based type
+    final BlinkoNoteType noteType = _mapBlinkoType(blinkoNote.type);
+
     return NoteItem(
       id: idStr,
       content: contentStr,
@@ -1146,6 +1176,7 @@ class BlinkoApiService implements NoteApiService {
       creatorId: creatorIdStr,
       startDate: startDate,
       endDate: endDate,
+      blinkoType: noteType,
     );
   }
 
@@ -1166,6 +1197,7 @@ class BlinkoApiService implements NoteApiService {
         return DateTime.tryParse(dateString) ?? DateTime(1970);
       }
     }
+
     CommentState state = CommentState.normal;
     bool pinned = false;
     final String idStr = blinkoComment.id.toString();
@@ -1174,38 +1206,32 @@ class BlinkoApiService implements NoteApiService {
     final DateTime updatedAt = parseBlinkoDate(blinkoComment.updatedAt);
     final String creatorIdStr =
         blinkoComment.accountId?.toString() ?? 'unknown_creator';
+
     return Comment(
       id: idStr,
       content: contentStr,
-      createdTs: createdAt, // Use DateTime
-      updatedTs: updatedAt, // Use DateTime?
+      createdTs: createdAt,
+      updatedTs: updatedAt,
       creatorId: creatorIdStr,
       pinned: pinned,
       state: state,
-      parentId: blinkoComment.noteId.toString() ?? '', // Use noteId as parentId
-      serverId:
-          _configuredServerId ??
-          _apiClient.basePath, // Use configured ID or base path
-      resources:
-          [], // Blinko comments don't seem to have resources in the model
+      parentId: blinkoComment.noteId.toString(),
+      serverId: _configuredServerId ?? _apiClient.basePath,
+      resources: [],
     );
   }
-
-  // --- RESOURCE DATA FETCHING ---
 
   @override
   Future<Uint8List> getResourceData(
     String resourceIdentifier, {
     ServerConfig? targetServerOverride,
   }) async {
-    // In Blinko, the identifier is likely the 'path' returned by the upload endpoint, e.g., "/file/get/some_hash.jpg"
     final apiClient = _getApiClientForServer(targetServerOverride);
     final serverIdForLog =
         targetServerOverride?.name ??
         targetServerOverride?.id ??
         _configuredServerId ??
         'active';
-    // Ensure the identifier starts with '/' if it's a path, otherwise assume it's just the filename/hash part
     final String effectivePath =
         resourceIdentifier.startsWith('/')
             ? resourceIdentifier
@@ -1219,12 +1245,8 @@ class BlinkoApiService implements NoteApiService {
     }
 
     try {
-      // Get headers from the ApiClient's Authentication object
       final headers = <String, String>{'Accept': '*/*'};
-      await apiClient.authentication?.applyToParams(
-        [],
-        headers,
-      ); // Populates headers
+      await apiClient.authentication?.applyToParams([], headers);
 
       final response = await http.get(
         Uri.parse(resourceUrl),
