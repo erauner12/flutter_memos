@@ -72,13 +72,12 @@ class _EditEntityFormState extends ConsumerState<EditEntityForm> {
           throw Exception('Invalid entity type or data for saving.');
         }
 
-        // Call the save provider with the correct parameters including serverId
+        // Call the save provider with the correct parameters (serverId removed from params)
         await ref.read(
           saveEntityProvider(
             EntityProviderParams(
               id: widget.entityId,
               type: widget.entityType,
-              serverId: widget.serverId, // Pass serverId here
             ),
           ),
         )(updatedEntity);

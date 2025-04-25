@@ -680,36 +680,48 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
             controller: _scrollController,
             physics: const AlwaysScrollableScrollPhysics(),
             slivers: [
+              // 1) Keep the refresh control as the first sliver
               CupertinoSliverRefreshControl(
                 onRefresh: _onRefresh,
                 builder: _buildRefreshIndicator,
               ),
-              SliverToBoxAdapter(
-                child: NoteContent(
-                  note: note,
-                  noteId: widget.itemId,
-                  serverId: '',
-                  // serverId: _effectiveServerId!, // No longer needed by NoteContent
+
+              // 2) Wrap the rest of the content in a SliverSafeArea
+              SliverSafeArea(
+                // `top: false` allows the refresh control to occupy the top area.
+                // Set to `true` if content still clips under the nav bar.
+                top: false,
+                sliver: SliverList(
+                  delegate: SliverChildListDelegate([
+                    // Content widgets are now children of the SliverList delegate
+                    NoteContent(
+                      note: note,
+                      noteId: widget.itemId,
+                      serverId: '', // No longer needed by NoteContent
+                    ),
+
+                    // The separator container
+                    Container(
+                      height: 0.5,
+                      color: CupertinoColors.separator.resolveFrom(context),
+                      margin: const EdgeInsets.symmetric(
+                        vertical: 8.0,
+                        horizontal: 16.0,
+                      ),
+                    ),
+
+                    // Note Comments
+                    NoteComments(
+                      noteId: widget.itemId,
+                      serverId:
+                          _effectiveServerId!, // NoteComments still needs serverId
+                    ),
+
+                    // Bottom padding
+                    const SizedBox(height: 20),
+                  ]),
                 ),
               ),
-              SliverToBoxAdapter(
-                child: Container(
-                  height: 0.5,
-                  color: CupertinoColors.separator.resolveFrom(context),
-                  margin: const EdgeInsets.symmetric(
-                    vertical: 8.0,
-                    horizontal: 16.0,
-                  ),
-                ),
-              ),
-              SliverToBoxAdapter(
-                child: NoteComments(
-                  noteId: widget.itemId,
-                  serverId:
-                      _effectiveServerId!, // NoteComments still needs serverId
-                ),
-              ),
-              const SliverPadding(padding: EdgeInsets.only(bottom: 20)),
             ],
           ),
         );
