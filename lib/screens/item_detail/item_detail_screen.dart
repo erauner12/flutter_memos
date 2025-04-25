@@ -8,8 +8,6 @@ import 'package:flutter_memos/models/note_item.dart'; // Import NoteItem
 import 'package:flutter_memos/models/workbench_item_reference.dart'; // Import workbench model
 import 'package:flutter_memos/models/workbench_item_type.dart'; // Import the unified enum
 import 'package:flutter_memos/providers/focus_provider.dart'; // Correct import: workbench -> focus
-// Add import for the provider
-import 'package:flutter_memos/providers/navigation_providers.dart';
 // Import note_providers and use non-family providers
 import 'package:flutter_memos/providers/note_providers.dart' as note_providers;
 // Import new single config provider
@@ -249,7 +247,7 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
             CupertinoActionSheetAction(
               onPressed: () {
                 Navigator.pop(popupContext);
-                Navigator.of(context, rootNavigator: true)
+                Navigator.of(context)
                     .pushNamed(
                       '/edit-entity',
                       arguments: {
@@ -514,9 +512,7 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
         _effectiveServerId!,
       );
     } catch (e) {
-      if (mounted) {
-        _showErrorSnackbar('Failed to navigate to chat: $e');
-      }
+      _showErrorSnackbar('Failed to navigate to chat: $e');
     }
   }
 
@@ -533,17 +529,15 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
       'parentItemType': itemType,
       'parentServerId': serverId,
     };
-    // Read the provider (now imported from navigation_providers.dart)
-    final rootNavigatorKey = ref.read(
-      rootNavigatorKeyProvider,
-    ); // Use imported provider
-    if (rootNavigatorKey.currentState != null) {
-      // TODO: Update route name if chat is replaced by studio
-      rootNavigatorKey.currentState!.pushNamed('/chat', arguments: chatArgs);
-    } else {
-      _showErrorSnackbar('Could not access root navigator.');
+    // Use context-based navigation instead of rootNavigatorKey
+    // This is consistent with the navigation changes in other files
+    try {
+      // Use the provided buildContext for navigation
+      Navigator.of(buildContext).pushNamed('/chat', arguments: chatArgs);
+    } catch (e) {
+      _showErrorSnackbar('Failed to navigate to chat: $e');
       if (kDebugMode) {
-        print("Error: rootNavigatorKey.currentState is null");
+        print("Error navigating to chat screen: $e");
       }
     }
   }

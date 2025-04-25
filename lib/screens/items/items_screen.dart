@@ -226,7 +226,8 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
           '[ItemsScreen($_effectiveServerId)] Viewing selected item: ID $selectedId',
         );
       if (mounted) {
-        Navigator.of(context, rootNavigator: true).pushNamed(
+        // Removed rootNavigator: true
+        Navigator.of(context).pushNamed(
           '/item-detail',
           arguments: {
             'itemId': selectedId,
@@ -369,10 +370,8 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
                       padding: const EdgeInsets.symmetric(horizontal: 8.0),
                       minSize: 0,
                       onPressed:
-                          () => Navigator.of(
-                            context,
-                            rootNavigator: true,
-                          ).pushNamed('/new-note'),
+                          // Removed rootNavigator: true
+                          () => Navigator.of(context).pushNamed('/new-note'),
                       child: const Icon(CupertinoIcons.add),
                     ),
                     CupertinoButton(
@@ -380,7 +379,8 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
                       minSize: 0,
                       child: const Icon(CupertinoIcons.settings, size: 22),
                       onPressed:
-                          () => Navigator.of(context, rootNavigator: true).push(
+                          // Removed rootNavigator: true
+                          () => Navigator.of(context).push(
                             CupertinoPageRoute(
                               builder:
                                   (context) => const SettingsScreen(

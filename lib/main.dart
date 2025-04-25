@@ -1,4 +1,7 @@
 import 'package:flutter/cupertino.dart';
+// Assume ItemDetailScreen exists here or create it
+import 'package:flutter_memos/screens/item_detail/item_detail_screen.dart';
+import 'package:flutter_memos/screens/new_note/new_note_screen.dart'; // Import NewNoteScreen
 import 'package:flutter_memos/widgets/config_check_wrapper.dart'; // Import the wrapper
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart'; // Import Supabase
@@ -31,13 +34,77 @@ class MyAppRoot extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // ConfigCheckWrapper will handle the initial loading and routing logic.
-    return const CupertinoApp(
+    return CupertinoApp(
       title: 'ThoughtCache', // Updated app title
-      theme: CupertinoThemeData(
+      theme: const CupertinoThemeData(
         brightness: Brightness.light,
       ), // Optional: Set theme
       debugShowCheckedModeBanner: false,
-      home: ConfigCheckWrapper(), // Start with the wrapper
+      home: const ConfigCheckWrapper(), // Start with the wrapper
+      // Add onGenerateRoute to handle named navigation
+      onGenerateRoute: (RouteSettings settings) {
+        switch (settings.name) {
+          case '/new-note':
+            return CupertinoPageRoute(
+              builder: (_) => const NewNoteScreen(),
+              settings: settings, // Pass settings along
+            );
+          case '/item-detail':
+            // Extract arguments safely
+            final args = settings.arguments as Map?;
+            final itemId = args?['itemId'] as String?;
+            // Ensure itemId is provided, otherwise handle error or default
+            if (itemId != null) {
+              return CupertinoPageRoute(
+                builder: (_) => ItemDetailScreen(itemId: itemId),
+                settings: settings, // Pass settings along
+              );
+            } else {
+              // Handle error: itemId was expected but not provided
+              // You could navigate to an error screen or back
+              print(
+                'Error: Navigating to /item-detail without providing an itemId.',
+              );
+              // Example: Navigate back or to a default screen
+              return CupertinoPageRoute(
+                builder:
+                    (_) => const ConfigCheckWrapper(), // Or an error screen
+                settings: settings,
+              );
+            }
+          // Add cases for other named routes here if needed
+          // case '/settings':
+          //   return CupertinoPageRoute(builder: (_) => SettingsScreen());
+          default:
+            // If the route name is not recognized,
+            // navigate to the home/default screen or show an error.
+            // Returning null will cause an error, so handle it gracefully.
+            print('Warning: Unhandled route: ${settings.name}');
+            return CupertinoPageRoute(
+              builder: (_) => const ConfigCheckWrapper(), // Fallback route
+              settings: settings,
+            );
+        }
+      },
     );
   }
 }
+
+// Placeholder for ItemDetailScreen if it doesn't exist yet.
+// Create this file: lib/screens/item_detail/item_detail_screen.dart
+// class ItemDetailScreen extends StatelessWidget {
+//   final String itemId;
+//   const ItemDetailScreen({super.key, required this.itemId});
+//
+//   @override
+//   Widget build(BuildContext context) {
+//     return CupertinoPageScaffold(
+//       navigationBar: CupertinoNavigationBar(
+//         middle: Text('Item Detail: $itemId'),
+//       ),
+//       child: Center(
+//         child: Text('Details for item ID: $itemId'),
+//       ),
+//     );
+//   }
+// }
