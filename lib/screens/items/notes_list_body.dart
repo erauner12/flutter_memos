@@ -25,6 +25,15 @@ class NotesListBody extends ConsumerStatefulWidget {
     required this.isInHiddenView,
     // required this.serverId, // Removed serverId
     this.onMoveNoteToServer,
+    BlinkoNoteType? type,
+    required void Function() Function(dynamic id) unhideNoteProvider,
+    required void Function() Function(dynamic id) toggleItemVisibilityProvider,
+    required Future<void> Function(String noteId) onBumpNote,
+    required Future<void> Function(String noteId) onTogglePinNote,
+    required Future<void> Function(String noteId) onArchiveNote,
+    required Future<void> Function(String noteId) onDeleteNote,
+    required Future<void> Function(String noteId, DateTime? newStartDate)
+    onUpdateNoteStartDate,
   });
 
   @override

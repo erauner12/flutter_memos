@@ -7,8 +7,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_memos/models/note_item.dart'; // Import NoteItem
 import 'package:flutter_memos/models/server_config.dart';
 import 'package:flutter_memos/providers/filter_providers.dart';
-// Import note_providers and use families
-import 'package:flutter_memos/providers/note_providers.dart' as note_providers;
+// Import note_providers families
+import 'package:flutter_memos/providers/note_providers.dart' as note_p;
 // Import new single config provider
 import 'package:flutter_memos/providers/note_server_config_provider.dart';
 import 'package:flutter_memos/providers/ui_providers.dart' as ui_providers;
@@ -21,9 +21,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 class ItemsScreen extends ConsumerStatefulWidget {
   // Flag to control internal navigation bar visibility
   final bool showNavigationBar;
+  // Type parameter to determine which notes to show (null for generic)
+  final BlinkoNoteType? type;
 
-  // Remove presetKey, add showNavigationBar
-  const ItemsScreen({super.key, this.showNavigationBar = true});
+  const ItemsScreen({
+    super.key,
+    this.showNavigationBar = true,
+    this.type, // Add type parameter
+  });
 
   @override
   ConsumerState<ItemsScreen> createState() => _ItemsScreenState();
@@ -33,48 +38,27 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
     with KeyboardNavigationMixin<ItemsScreen> {
   final FocusNode _focusNode = FocusNode();
   final ScrollController _scrollController = ScrollController();
-  String? _effectiveServerId; // Store the serverId from the provider
+  // Removed _effectiveServerId, server config is fetched directly when needed
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _updateEffectiveServerId(); // Determine serverId initially
+      // Load saved preferences only for the generic view
+      if (widget.type == null) {
+        ref.read(loadFilterPreferencesProvider);
+      } else {
+        // For Cache/Vault, maybe reset filters or set a default?
+        // For now, let's assume they inherit global filters unless explicitly set otherwise.
+      }
 
-      // Removed logic that set quickFilterPresetProvider based on widget.presetKey
-
-      // Load saved preferences (will default to 'today' if invalid preset was saved)
-      ref.read(loadFilterPreferencesProvider);
+      // Initial fetch is handled by the notesNotifierFamily provider itself
+      // Ensure the correct family instance is watched/read early if needed.
+      ref.read(note_p.notesNotifierFamily(widget.type));
 
       if (mounted) FocusScope.of(context).requestFocus(_focusNode);
     });
   }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _updateEffectiveServerId(); // Update if dependencies change
-  }
-
-  void _updateEffectiveServerId() {
-    // Get serverId directly from the single note provider
-    final newServerId = ref.read(noteServerConfigProvider)?.id;
-    if (_effectiveServerId != newServerId) {
-      setState(() {
-        _effectiveServerId = newServerId;
-      });
-      // If serverId changes, we might need to refresh data or handle state transition
-      if (newServerId != null) {
-        // Trigger initial fetch if needed for the new serverId
-        // The provider family might handle this automatically if watched correctly
-        // Ensure the active notifier (potentially overridden) is initialized/refreshed
-        ref.read(
-          note_providers.notesNotifierProvider,
-        );
-      }
-    }
-  }
-
 
   @override
   void dispose() {
@@ -83,8 +67,147 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
     super.dispose();
   }
 
+  // Helper to get the current server config (remains useful)
+  ServerConfig? _getCurrentServerConfig() {
+    return ref.read(noteServerConfigProvider);
+  }
+
+  // --- Action Handlers (Now include optimistic updates) ---
+
+  Future<void> _handleArchiveNote(String noteId) async {
+    final notifier = ref.read(note_p.notesNotifierFamily(widget.type).notifier);
+    final currentSelectedId = ref.read(ui_providers.selectedItemIdProvider);
+    final notesBeforeAction = ref.read(note_p.filteredNotesFamily(widget.type));
+    String? nextSelectedId = currentSelectedId;
+
+    // Determine next selection before optimistic update
+    if (currentSelectedId == noteId && notesBeforeAction.isNotEmpty) {
+      final actionIndex = notesBeforeAction.indexWhere((n) => n.id == noteId);
+      if (actionIndex != -1) {
+        if (notesBeforeAction.length == 1) {
+          nextSelectedId = null;
+        } else if (actionIndex < notesBeforeAction.length - 1) {
+          nextSelectedId = notesBeforeAction[actionIndex + 1].id;
+        } else {
+          nextSelectedId = notesBeforeAction[actionIndex - 1].id;
+        }
+      } else {
+        nextSelectedId = null;
+      }
+    }
+
+    // Optimistic UI update
+    notifier.archiveNoteOptimistically(noteId);
+    ref.read(ui_providers.selectedItemIdProvider.notifier).state = nextSelectedId;
+
+    // API Call
+    try {
+      await ref.read(note_p.archiveNoteApiProvider(noteId))();
+      // Success: UI already updated
+    } catch (e) {
+      if (kDebugMode) print('[ItemsScreen] Error archiving note $noteId: $e');
+      // Revert or refresh on error
+      notifier.refresh();
+      // Optionally show error message
+    }
+  }
+
+  Future<void> _handleDeleteNote(String noteId) async {
+    final notifier = ref.read(note_p.notesNotifierFamily(widget.type).notifier);
+    final currentSelectedId = ref.read(ui_providers.selectedItemIdProvider);
+    final notesBeforeAction = ref.read(note_p.filteredNotesFamily(widget.type));
+    String? nextSelectedId = currentSelectedId;
+
+    // Determine next selection
+    if (currentSelectedId == noteId && notesBeforeAction.isNotEmpty) {
+       final actionIndex = notesBeforeAction.indexWhere((n) => n.id == noteId);
+       if (actionIndex != -1) {
+         if (notesBeforeAction.length == 1) {
+           nextSelectedId = null;
+         } else if (actionIndex < notesBeforeAction.length - 1) {
+           nextSelectedId = notesBeforeAction[actionIndex + 1].id;
+         } else {
+           nextSelectedId = notesBeforeAction[actionIndex - 1].id;
+         }
+       } else {
+         nextSelectedId = null;
+       }
+     }
+
+    // Optimistic UI update
+    notifier.removeNoteOptimistically(noteId);
+    ref.read(ui_providers.selectedItemIdProvider.notifier).state = nextSelectedId;
+
+    // API Call
+    try {
+      await ref.read(note_p.deleteNoteApiProvider(noteId))();
+      // Success: UI already updated
+    } catch (e) {
+      if (kDebugMode) print('[ItemsScreen] Error deleting note $noteId: $e');
+      // Revert or refresh on error
+      notifier.refresh();
+      // Optionally show error message
+    }
+  }
+
+  Future<void> _handleTogglePinNote(String noteId) async {
+     final notifier = ref.read(note_p.notesNotifierFamily(widget.type).notifier);
+
+     // Optimistic UI update
+     notifier.togglePinOptimistically(noteId);
+
+     // API Call
+     try {
+       await ref.read(note_p.togglePinNoteApiProvider(noteId))();
+       // Success: UI already updated
+     } catch (e) {
+       if (kDebugMode) print('[ItemsScreen] Error toggling pin for note $noteId: $e');
+       // Revert or refresh on error
+       notifier.refresh();
+       // Optionally show error message
+     }
+   }
+
+   Future<void> _handleBumpNote(String noteId) async {
+      final notifier = ref.read(note_p.notesNotifierFamily(widget.type).notifier);
+
+      // Optimistic UI update
+      notifier.bumpNoteOptimistically(noteId);
+
+      // API Call
+      try {
+        await ref.read(note_p.bumpNoteApiProvider(noteId))();
+        // Success: UI already updated
+      } catch (e) {
+        if (kDebugMode) print('[ItemsScreen] Error bumping note $noteId: $e');
+        // Revert or refresh on error
+        notifier.refresh();
+        // Optionally show error message
+      }
+    }
+
+    Future<void> _handleUpdateNoteStartDate(String noteId, DateTime? newStartDate) async {
+       final notifier = ref.read(note_p.notesNotifierFamily(widget.type).notifier);
+       final originalNote = notifier.state.notes.firstWhere((n) => n.id == noteId, orElse: () => throw Exception("Note not found")); // Need original for revert
+
+       // Optimistic UI update
+       notifier.updateNoteStartDateOptimistically(noteId, newStartDate);
+
+       // API Call (using the generic update provider)
+       try {
+         final updatedNoteData = originalNote.copyWith(startDate: newStartDate); // Prepare data for API
+         await ref.read(note_p.updateNoteApiProvider(noteId))(updatedNoteData);
+         // Success: UI already updated
+       } catch (e) {
+         if (kDebugMode) print('[ItemsScreen] Error updating start date for note $noteId: $e');
+         // Revert UI on error
+         notifier.updateNoteOptimistically(originalNote); // Revert to original state
+         // Optionally show error message
+       }
+     }
+
+  // --- Multi-Select Navigation Bar ---
   CupertinoNavigationBar _buildMultiSelectNavBar(int selectedCount) {
-    // This remains unchanged as multi-select is independent of cache/vault logic
     return CupertinoNavigationBar(
       transitionBetweenRoutes: false,
       leading: CupertinoButton(
@@ -103,43 +226,86 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
           CupertinoButton(
             padding: const EdgeInsets.symmetric(horizontal: 8.0),
             minSize: 0,
-            onPressed:
-                selectedCount > 0
-                    ? () {
-                      // TODO: Implement multi-delete using deleteNoteProvider
-                      if (kDebugMode)
-                        print(
-                          '[ItemsScreen] Multi-delete action placeholder triggered for $selectedCount items.',
-                        );
-                    }
-                    : null,
+            onPressed: selectedCount > 0 ? () async {
+              final selectedIdsList = ref.read(ui_providers.selectedItemIdsForMultiSelectProvider).toList();
+              if (kDebugMode) print('[ItemsScreen] Multi-delete action triggered for $selectedCount items.');
+              // Show confirmation dialog
+              final confirmed = await showCupertinoDialog<bool>(
+                context: context,
+                builder: (context) => CupertinoAlertDialog(
+                  title: Text('Delete $selectedCount Notes?'),
+                  content: const Text('Are you sure you want to permanently delete the selected notes?'),
+                  actions: [
+                    CupertinoDialogAction(child: const Text('Cancel'), onPressed: () => Navigator.pop(context, false)),
+                    CupertinoDialogAction(isDestructiveAction: true, child: const Text('Delete'), onPressed: () => Navigator.pop(context, true)),
+                  ],
+                ),
+              );
+              if (confirmed == true && mounted) {
+                final notifier = ref.read(note_p.notesNotifierFamily(widget.type).notifier);
+                // Optimistic removal
+                for (final id in selectedIdsList) {
+                  notifier.removeNoteOptimistically(id);
+                }
+                ref.read(ui_providers.clearMultiSelectProvider)(); // Clear selection UI
+                ref.read(ui_providers.toggleItemMultiSelectModeProvider)(); // Exit multi-select mode
+
+                // Perform API calls
+                List<String> failedDeletes = [];
+                for (final id in selectedIdsList) {
+                  try {
+                    await ref.read(note_p.deleteNoteApiProvider(id))();
+                  } catch (e) {
+                    failedDeletes.add(id);
+                    if (kDebugMode) print('[ItemsScreen] Failed to multi-delete note $id: $e');
+                  }
+                }
+                if (failedDeletes.isNotEmpty) {
+                  notifier.refresh(); // Refresh list if some deletes failed
+                  // Show error message
+                }
+              }
+            } : null,
             child: Icon(
               CupertinoIcons.delete,
-              color:
-                  selectedCount > 0
-                      ? CupertinoColors.destructiveRed
-                      : CupertinoColors.inactiveGray,
+              color: selectedCount > 0 ? CupertinoColors.destructiveRed : CupertinoColors.inactiveGray,
             ),
           ),
           CupertinoButton(
             padding: const EdgeInsets.symmetric(horizontal: 8.0),
             minSize: 0,
-            onPressed:
-                selectedCount > 0
-                    ? () {
-                      // TODO: Implement multi-archive using archiveNoteProvider
-                      if (kDebugMode)
-                        print(
-                          '[ItemsScreen] Multi-archive action placeholder triggered for $selectedCount items.',
-                        );
-                    }
-                    : null,
+            onPressed: selectedCount > 0 ? () async {
+              final selectedIdsList = ref.read(ui_providers.selectedItemIdsForMultiSelectProvider).toList();
+              if (kDebugMode) print('[ItemsScreen] Multi-archive action triggered for $selectedCount items.');
+              // No confirmation needed for archive? Or add one similar to delete.
+              if (mounted) {
+                 final notifier = ref.read(note_p.notesNotifierFamily(widget.type).notifier);
+                 // Optimistic removal
+                 for (final id in selectedIdsList) {
+                   notifier.archiveNoteOptimistically(id);
+                 }
+                 ref.read(ui_providers.clearMultiSelectProvider)(); // Clear selection UI
+                 ref.read(ui_providers.toggleItemMultiSelectModeProvider)(); // Exit multi-select mode
+
+                 // Perform API calls
+                 List<String> failedArchives = [];
+                 for (final id in selectedIdsList) {
+                   try {
+                     await ref.read(note_p.archiveNoteApiProvider(id))();
+                   } catch (e) {
+                     failedArchives.add(id);
+                     if (kDebugMode) print('[ItemsScreen] Failed to multi-archive note $id: $e');
+                   }
+                 }
+                 if (failedArchives.isNotEmpty) {
+                   notifier.refresh(); // Refresh list if some archives failed
+                   // Show error message
+                 }
+               }
+            } : null,
             child: Icon(
               CupertinoIcons.archivebox,
-              color:
-                  selectedCount > 0
-                      ? CupertinoTheme.of(context).primaryColor
-                      : CupertinoColors.inactiveGray,
+              color: selectedCount > 0 ? CupertinoTheme.of(context).primaryColor : CupertinoColors.inactiveGray,
             ),
           ),
         ],
@@ -147,80 +313,46 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
     );
   }
 
-  // Helper to get the current server config
-  ServerConfig? _getCurrentServerConfig() {
-    return ref.read(noteServerConfigProvider);
-  }
+  // --- Keyboard Navigation ---
 
   void _selectNextNote() {
-    if (_effectiveServerId == null) return;
-    // Use the active notes provider (could be generic, cache, or vault)
-    final notes = ref.read(
-      note_providers.filteredNotesProvider,
-    );
-    if (kDebugMode)
-      print(
-        '[ItemsScreen($_effectiveServerId) _selectNextNote] Called. Filtered notes count: ${notes.length}',
-      );
+    // Use the family provider with the current type
+    final notes = ref.read(note_p.filteredNotesFamily(widget.type));
+    if (kDebugMode) print('[ItemsScreen(${widget.type})] _selectNextNote Called. Filtered notes count: ${notes.length}');
     if (notes.isEmpty) return;
     final currentId = ref.read(ui_providers.selectedItemIdProvider);
-    int currentIndex =
-        currentId != null
-            ? notes.indexWhere((note) => note.id == currentId)
-            : -1;
+    int currentIndex = currentId != null ? notes.indexWhere((note) => note.id == currentId) : -1;
     final nextIndex = getNextIndex(currentIndex, notes.length);
     if (nextIndex != -1) {
       final nextNoteId = notes[nextIndex].id;
       ref.read(ui_providers.selectedItemIdProvider.notifier).state = nextNoteId;
-      if (kDebugMode)
-        print(
-          '[ItemsScreen($_effectiveServerId) _selectNextNote] Updated selectedItemIdProvider to: $nextNoteId',
-        );
+      if (kDebugMode) print('[ItemsScreen(${widget.type})] _selectNextNote Updated selectedItemIdProvider to: $nextNoteId');
     }
   }
 
   void _selectPreviousNote() {
-    if (_effectiveServerId == null) return;
-    // Use the active notes provider
-    final notes = ref.read(
-      note_providers.filteredNotesProvider,
-    );
-    if (kDebugMode)
-      print(
-        '[ItemsScreen($_effectiveServerId) _selectPreviousNote] Called. Filtered notes count: ${notes.length}',
-      );
+    // Use the family provider with the current type
+    final notes = ref.read(note_p.filteredNotesFamily(widget.type));
+    if (kDebugMode) print('[ItemsScreen(${widget.type})] _selectPreviousNote Called. Filtered notes count: ${notes.length}');
     if (notes.isEmpty) return;
     final currentId = ref.read(ui_providers.selectedItemIdProvider);
-    int currentIndex =
-        currentId != null
-            ? notes.indexWhere((note) => note.id == currentId)
-            : -1;
+    int currentIndex = currentId != null ? notes.indexWhere((note) => note.id == currentId) : -1;
     final prevIndex = getPreviousIndex(currentIndex, notes.length);
     if (prevIndex != -1) {
       final prevNoteId = notes[prevIndex].id;
       ref.read(ui_providers.selectedItemIdProvider.notifier).state = prevNoteId;
-      if (kDebugMode)
-        print(
-          '[ItemsScreen($_effectiveServerId) _selectPreviousNote] Updated selectedItemIdProvider to: $prevNoteId',
-        );
+      if (kDebugMode) print('[ItemsScreen(${widget.type})] _selectPreviousNote Updated selectedItemIdProvider to: $prevNoteId');
     }
   }
 
   void _viewSelectedItem() {
-    if (_effectiveServerId == null) return;
     final selectedId = ref.read(ui_providers.selectedItemIdProvider);
     if (selectedId != null) {
-      if (kDebugMode)
-        print(
-          '[ItemsScreen($_effectiveServerId)] Viewing selected item: ID $selectedId',
-        );
+      if (kDebugMode) print('[ItemsScreen(${widget.type})] Viewing selected item: ID $selectedId');
       if (mounted) {
-        // Use rootNavigator: true to ensure the root route handler is used
         Navigator.of(context, rootNavigator: true).pushNamed(
           '/item-detail',
-          arguments: {
-            'itemId': selectedId,
-          }, // serverId no longer needed in args
+          arguments: {'itemId': selectedId}, // Pass only itemId
         );
       }
     }
@@ -229,10 +361,7 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
   void _clearSelectionOrUnfocus() {
     final selectedId = ref.read(ui_providers.selectedItemIdProvider);
     if (selectedId != null) {
-      if (kDebugMode)
-        print(
-          '[ItemsScreen($_effectiveServerId)] Clearing selection via Escape',
-        );
+      if (kDebugMode) print('[ItemsScreen(${widget.type})] Clearing selection via Escape');
       ref.read(ui_providers.selectedItemIdProvider.notifier).state = null;
     } else {
       FocusScope.of(context).unfocus();
@@ -254,161 +383,119 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
 
   @override
   Widget build(BuildContext context) {
-    // Ensure serverId is available before building UI that depends on it
-    if (_effectiveServerId == null) {
-      // Only show nav bar if requested by the widget parameter
-      final navBar =
-          widget.showNavigationBar
-              ? const CupertinoNavigationBar(middle: Text('Notes'))
-              : null;
-      return CupertinoPageScaffold(
-        navigationBar: navBar,
-        child: const Center(child: Text('No Note Server Configured')),
-      );
-    }
-    // Use the active notesNotifierProvider (could be generic or overridden)
-    final notesState = ref.watch(note_providers.notesNotifierProvider);
-    final visibleNotes = ref.watch(note_providers.filteredNotesProvider);
-    final selectedPresetKey = ref.watch(quickFilterPresetProvider);
-    final isMultiSelectMode = ref.watch(ui_providers.itemMultiSelectModeProvider);
-    final selectedIds = ref.watch(ui_providers.selectedItemIdsForMultiSelectProvider);
-    final hiddenCount = ref.watch(note_providers.totalHiddenNoteCountProvider);
-    final showHidden = ref.watch(showHiddenNotesProvider);
-    final theme = CupertinoTheme.of(context);
-    final currentServer = _getCurrentServerConfig(); // Get current server info
-
-    // Handle case where server config might become null after initial check
+    final currentServer = _getCurrentServerConfig();
+    // Handle case where server config might be null
     if (currentServer == null) {
-      final navBar =
-          widget.showNavigationBar
-              ? const CupertinoNavigationBar(middle: Text('Error'))
-              : null;
+      final navBar = widget.showNavigationBar ? const CupertinoNavigationBar(middle: Text('Error')) : null;
       return CupertinoPageScaffold(
         navigationBar: navBar,
         child: const Center(child: Text('Server configuration not found.')),
       );
     }
 
-    // Determine the title based on the preset key or server name
-    // This title is only used if widget.showNavigationBar is true
+    // Watch the specific family instances needed for this screen type
+    final notesState = ref.watch(note_p.notesNotifierFamily(widget.type));
+    final visibleNotes = ref.watch(note_p.filteredNotesFamily(widget.type));
+    final selectedPresetKey = ref.watch(quickFilterPresetProvider); // Still needed for title/logic in generic view
+    final isMultiSelectMode = ref.watch(ui_providers.itemMultiSelectModeProvider);
+    final selectedIds = ref.watch(ui_providers.selectedItemIdsForMultiSelectProvider);
+    // Use hidden count family
+    final hiddenCount = ref.watch(note_p.totalHiddenNoteCountFamily(widget.type));
+    final showHidden = ref.watch(showHiddenNotesProvider);
+    final theme = CupertinoTheme.of(context);
+
+    // Determine the title based on type or preset key
     String screenTitle;
-    // Removed checks for widget.presetKey == 'cache'/'vault'
-    final preset = quickFilterPresets[selectedPresetKey];
-    if (preset != null) {
-      screenTitle = preset.label;
-    } else {
-      // Fallback to server name/URL if preset not found or is a tag etc.
-      screenTitle = currentServer.name ?? currentServer.serverUrl;
+    if (widget.type == BlinkoNoteType.cache) {
+      screenTitle = 'Cache';
+    } else if (widget.type == BlinkoNoteType.vault) {
+      screenTitle = 'Vault';
+    } else { // Generic view (type == null)
+      final preset = quickFilterPresets[selectedPresetKey];
+      if (preset != null) {
+        screenTitle = preset.label;
+      } else {
+        screenTitle = currentServer.name ?? currentServer.serverUrl; // Fallback
+      }
     }
 
     // Build the navigation bar only if requested
-    final navBar =
-        !widget.showNavigationBar
-            ? null
-            : isMultiSelectMode
-            ? _buildMultiSelectNavBar(selectedIds.length)
-            : CupertinoNavigationBar(
-              middle: GestureDetector(
-                  onTap: () {
-                  if (_scrollController.hasClients) {
-                      _scrollController.animateTo(
-                        0.0,
-                        duration: const Duration(milliseconds: 300),
-                        curve: Curves.easeOut,
-                      );
-                  }
-                  },
-                child: Container(
-                  color: CupertinoColors.transparent,
-                    child: Text(
-                      screenTitle, // Use dynamic title
-                      overflow: TextOverflow.ellipsis,
-                    ),
+    final navBar = !widget.showNavigationBar ? null : isMultiSelectMode
+        ? _buildMultiSelectNavBar(selectedIds.length)
+        : CupertinoNavigationBar(
+            middle: GestureDetector(
+              onTap: () {
+                if (_scrollController.hasClients) {
+                  _scrollController.animateTo(
+                    0.0,
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeOut,
+                  );
+                }
+              },
+              child: Container(
+                color: CupertinoColors.transparent,
+                child: Text(screenTitle, overflow: TextOverflow.ellipsis),
+              ),
+            ),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CupertinoButton(
+                  padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                  minSize: 0,
+                  onPressed: () => ref.read(ui_providers.toggleItemMultiSelectModeProvider)(),
+                  child: const Icon(CupertinoIcons.checkmark_seal),
                 ),
-              ),
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                    CupertinoButton(
-                      padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                      minSize: 0,
-                    onPressed:
-                        () =>
-                            ref.read(
-                              ui_providers.toggleItemMultiSelectModeProvider,
-                            )(),
-                      child: const Icon(CupertinoIcons.checkmark_seal),
-                    ),
-                    if (hiddenCount > 0)
-                      CupertinoButton(
-                        padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                        minSize: 0,
-                      onPressed:
-                          () => ref
-                              .read(showHiddenNotesProvider.notifier)
-                              .update((state) => !state),
-                        child: Tooltip(
-                        message:
-                            showHidden
-                                ? 'Hide Hidden Notes'
-                                : 'Show Hidden Notes ($hiddenCount)',
-                          child: Icon(
-                            showHidden
-                                ? CupertinoIcons.eye_slash_fill
-                                : CupertinoIcons.eye_fill,
-                          color:
-                              showHidden
-                                  ? theme.primaryColor
-                                  : CupertinoColors.secondaryLabel.resolveFrom(
-                                    context,
-                                  ),
-                          ),
-                        ),
+                if (hiddenCount > 0)
+                  CupertinoButton(
+                    padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                    minSize: 0,
+                    onPressed: () => ref.read(showHiddenNotesProvider.notifier).update((state) => !state),
+                    child: Tooltip(
+                      message: showHidden ? 'Hide Hidden Notes' : 'Show Hidden Notes ($hiddenCount)',
+                      child: Icon(
+                        showHidden ? CupertinoIcons.eye_slash_fill : CupertinoIcons.eye_fill,
+                        color: showHidden ? theme.primaryColor : CupertinoColors.secondaryLabel.resolveFrom(context),
                       ),
-                    CupertinoButton(
-                      padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                      minSize: 0,
-                      onPressed: () => _showAdvancedFilterPanel(context),
-                      child: const Icon(CupertinoIcons.tuningfork),
                     ),
-                    CupertinoButton(
-                      padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                      minSize: 0,
-                      onPressed:
-                          // Use rootNavigator: true for named route
-                          () => Navigator.of(
-                          context,
-                          rootNavigator: true,
-                        ).pushNamed('/new-note'),
-                      child: const Icon(CupertinoIcons.add),
+                  ),
+                // Show advanced filter only in generic view? Or always? Let's keep it always for now.
+                CupertinoButton(
+                  padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                  minSize: 0,
+                  onPressed: () => _showAdvancedFilterPanel(context),
+                  child: const Icon(CupertinoIcons.tuningfork),
+                ),
+                CupertinoButton(
+                  padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                  minSize: 0,
+                  onPressed: () => Navigator.of(context, rootNavigator: true).pushNamed(
+                    '/new-note',
+                    // Pass the current type so the new note screen knows default type
+                    arguments: {'blinkoType': widget.type},
+                  ),
+                  child: const Icon(CupertinoIcons.add),
+                ),
+                CupertinoButton(
+                  padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                  minSize: 0,
+                  child: const Icon(CupertinoIcons.settings, size: 22),
+                  onPressed: () => Navigator.of(context, rootNavigator: true).push(
+                    CupertinoPageRoute(
+                      builder: (context) => const SettingsScreen(isInitialSetup: false),
                     ),
-                    CupertinoButton(
-                      padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                      minSize: 0,
-                      child: const Icon(CupertinoIcons.settings, size: 22),
-                      onPressed:
-                          // Use rootNavigator: true for page route
-                          () => Navigator.of(context, rootNavigator: true).push(
-                          CupertinoPageRoute(
-                            builder:
-                                (context) =>
-                                    const SettingsScreen(isInitialSetup: false),
-                          ),
-                        ),
-                    ),
-                ],
-              ),
-            );
+                  ),
+                ),
+              ],
+            ),
+          );
 
-    // Determine if quick filters should be shown
-    // Show if nav bar is shown AND it's not multi-select mode AND no type is forced
-    final bool showQuickFilters =
-        widget.showNavigationBar &&
-        !isMultiSelectMode &&
-        notesState.forcedBlinkoType == null;
+    // Show quick filters only if nav bar is shown, not multi-select, AND it's the generic view
+    final bool showQuickFilters = widget.showNavigationBar && !isMultiSelectMode && widget.type == null;
 
     return CupertinoPageScaffold(
-      navigationBar: navBar, // Use the conditionally built navBar
+      navigationBar: navBar,
       child: SafeArea(
         child: Focus(
           focusNode: _focusNode,
@@ -422,18 +509,14 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
                   padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 0.0),
                   child: _buildSearchBar(),
                 ),
-              // Show quick filters conditionally
+              // Show quick filters conditionally (only for generic view)
               if (showQuickFilters)
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 8.0),
                   child: _buildQuickFilterControl(),
                 ),
-              // Show hidden count info only if nav bar is shown and relevant
-              if (widget.showNavigationBar &&
-                  !isMultiSelectMode &&
-                  hiddenCount > 0 &&
-                  !showHidden &&
-                  selectedPresetKey != 'hidden')
+              // Show hidden count info only if nav bar is shown, relevant, and in generic view
+              if (widget.showNavigationBar && !isMultiSelectMode && widget.type == null && hiddenCount > 0 && !showHidden && selectedPresetKey != 'hidden')
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16.0, 0, 16.0, 8.0),
                   child: Align(
@@ -442,17 +525,13 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
                       '$hiddenCount hidden notes',
                       style: TextStyle(
                         fontSize: 13,
-                        color: CupertinoColors.secondaryLabel.resolveFrom(
-                          context,
-                        ),
+                        color: CupertinoColors.secondaryLabel.resolveFrom(context),
                       ),
                     ),
                   ),
                 ),
-              // Show unhide all button only if nav bar is shown and relevant
-              if (widget.showNavigationBar &&
-                  !isMultiSelectMode &&
-                  selectedPresetKey == 'hidden')
+              // Show unhide all button only if nav bar is shown, relevant, and in generic hidden view
+              if (widget.showNavigationBar && !isMultiSelectMode && widget.type == null && selectedPresetKey == 'hidden')
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16.0, 0, 16.0, 8.0),
                   child: Align(
@@ -464,18 +543,12 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(
-                            CupertinoIcons.eye,
-                            size: 18,
-                            color: theme.primaryColor,
-                          ),
+                          Icon(CupertinoIcons.eye, size: 18, color: theme.primaryColor),
                           const SizedBox(width: 4),
+                          // Use the family for manually hidden count
                           Text(
-                            'Unhide All Manually Hidden (${ref.watch(note_providers.manuallyHiddenNoteCountProvider)})',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: theme.primaryColor,
-                            ),
+                            'Unhide All Manually Hidden (${ref.watch(note_p.manuallyHiddenNoteCountFamily(widget.type))})',
+                            style: TextStyle(fontSize: 14, color: theme.primaryColor),
                           ),
                         ],
                       ),
@@ -491,22 +564,14 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
   }
 
   Widget _buildQuickFilterControl() {
+    // This control is only shown for the generic view (widget.type == null)
     final selectedPresetKey = ref.watch(quickFilterPresetProvider);
     final theme = CupertinoTheme.of(context);
-    // Define the order and available presets for the general view
-    // Excluded 'cache' and 'vault'
-    const List<String> desiredOrder = [
-      'today',
-      'inbox',
-      'all',
-      'hidden',
-    ];
+    const List<String> desiredOrder = ['today', 'inbox', 'all', 'hidden']; // Exclude cache/vault
     final Map<String, Widget> segments = {};
     for (var key in desiredOrder) {
       final preset = quickFilterPresets[key];
-      // Only include presets relevant for the general segmented control
       if (preset != null && preset.key != 'custom') {
-        // Removed cache/vault check
         segments[preset.key] = Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 6.0),
           child: Row(
@@ -521,10 +586,7 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
         );
       }
     }
-    // If no relevant presets found, don't build the control
-    if (segments.isEmpty) {
-      return const SizedBox.shrink();
-    }
+    if (segments.isEmpty) return const SizedBox.shrink();
 
     return SizedBox(
       width: double.infinity,
@@ -532,21 +594,15 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
         children: segments,
         groupValue: selectedPresetKey == 'custom' ? null : selectedPresetKey,
         thumbColor: theme.primaryColor,
-        backgroundColor: CupertinoColors.secondarySystemFill.resolveFrom(
-          context,
-        ),
+        backgroundColor: CupertinoColors.secondarySystemFill.resolveFrom(context),
         onValueChanged: (String? newPresetKey) {
           if (newPresetKey != null) {
-            if (kDebugMode)
-              print(
-                '[ItemsScreen($_effectiveServerId)] Quick filter selected: $newPresetKey',
-              );
+            if (kDebugMode) print('[ItemsScreen(generic)] Quick filter selected: $newPresetKey');
             ref.read(quickFilterPresetProvider.notifier).state = newPresetKey;
-            if (ref.read(rawCelFilterProvider).isNotEmpty)
-              ref.read(rawCelFilterProvider.notifier).state = '';
+            if (ref.read(rawCelFilterProvider).isNotEmpty) ref.read(rawCelFilterProvider.notifier).state = '';
             ref.read(filterPreferencesProvider)(newPresetKey);
-            // Refresh the active notes provider
-            ref.read(note_providers.notesNotifierProvider.notifier).refresh();
+            // Refresh the generic notes provider instance
+            ref.read(note_p.notesNotifierFamily(null).notifier).refresh();
           }
         },
       ),
@@ -558,15 +614,11 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
       context: context,
       barrierDismissible: true,
       builder: (BuildContext context) {
-        // No ProviderScope override needed here as it uses the default providers
+        // Pass the current type to the filter panel if it needs to adjust behavior?
+        // For now, assume filters apply globally or the panel reads the context itself.
         return DraggableScrollableSheet(
-          initialChildSize: 0.8,
-          minChildSize: 0.4,
-          maxChildSize: 0.9,
-          expand: false,
-          builder:
-              (_, scrollController) =>
-                  AdvancedFilterPanel(onClose: () => Navigator.pop(context)),
+          initialChildSize: 0.8, minChildSize: 0.4, maxChildSize: 0.9, expand: false,
+          builder: (_, scrollController) => AdvancedFilterPanel(onClose: () => Navigator.pop(context)),
         );
       },
     );
@@ -574,14 +626,10 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
 
   Widget _buildSearchBar() {
     final searchQuery = ref.watch(searchQueryProvider);
-    final TextEditingController controller = TextEditingController(
-      text: searchQuery,
-    );
-    controller.selection = TextSelection.fromPosition(
-      TextPosition(offset: controller.text.length),
-    );
-    // Debounced search trigger
+    final TextEditingController controller = TextEditingController(text: searchQuery);
+    controller.selection = TextSelection.fromPosition(TextPosition(offset: controller.text.length));
     Timer? debounce;
+
     return CupertinoSearchTextField(
       controller: controller,
       placeholder: 'Search notes...',
@@ -595,8 +643,8 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
         debounce = Timer(const Duration(milliseconds: 300), () {
           if (mounted) {
             ref.read(searchQueryProvider.notifier).state = value;
-            // Refresh the active notes provider when search changes
-            ref.read(note_providers.notesNotifierProvider.notifier).refresh();
+            // Refresh the specific notes provider instance for this screen's type
+            ref.read(note_p.notesNotifierFamily(widget.type).notifier).refresh();
           }
         });
       },
@@ -604,82 +652,68 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
         if (debounce?.isActive ?? false) debounce?.cancel();
         ref.read(searchQueryProvider.notifier).state = value;
         // Refresh immediately on submit
-        ref.read(note_providers.notesNotifierProvider.notifier).refresh();
+        ref.read(note_p.notesNotifierFamily(widget.type).notifier).refresh();
       },
     );
   }
 
-  // Removed _handleMoveNoteToServer as moveNoteProvider was removed
-
   Widget _buildNotesList(
-    note_providers.NotesState notesState,
+    note_p.NotesState notesState,
     List<NoteItem> filteredNotes,
   ) {
     final selectedPresetKey = ref.watch(quickFilterPresetProvider);
-    // isInHiddenView is only relevant if the generic provider is active
-    final bool isInHiddenView =
-        notesState.forcedBlinkoType == null && selectedPresetKey == 'hidden';
+    // isInHiddenView is only relevant for the generic view
+    final bool isInHiddenView = widget.type == null && selectedPresetKey == 'hidden';
+
     return NotesListBody(
       scrollController: _scrollController,
-      // onMoveNoteToServer: _handleMoveNoteToServer, // Removed
       notes: filteredNotes,
       notesState: notesState,
       isInHiddenView: isInHiddenView,
-      // serverId: _effectiveServerId!, // Removed serverId parameter
+      type: widget.type, // Pass type down
+      // Pass down action handlers
+      onArchiveNote: _handleArchiveNote,
+      onDeleteNote: _handleDeleteNote,
+      onTogglePinNote: _handleTogglePinNote,
+      onBumpNote: _handleBumpNote,
+      onUpdateNoteStartDate: _handleUpdateNoteStartDate,
+      // Pass down toggle visibility provider with context
+      toggleItemVisibilityProvider: (id) => ref.read(note_p.toggleItemVisibilityProvider((id: id, type: widget.type))),
+      unhideNoteProvider: (id) => ref.read(note_p.unhideNoteProvider(id)),
     );
   }
 
   void _showUnhideAllConfirmation() {
-    // Use the active notes provider
-    final manualHiddenCount = ref.read(
-      note_providers.manuallyHiddenNoteCountProvider,
-    );
+    // Use the family provider for the count
+    final manualHiddenCount = ref.read(note_p.manuallyHiddenNoteCountFamily(widget.type));
     if (manualHiddenCount == 0) return;
+
     showCupertinoDialog<bool>(
       context: context,
-      builder:
-          (BuildContext dialogContext) => CupertinoAlertDialog(
-            title: const Text('Unhide All Manually Hidden Notes?'),
-            content: Text(
-              'Are you sure you want to unhide all $manualHiddenCount manually hidden notes? Notes hidden due to future start dates will remain hidden.',
-            ),
-            actions: <Widget>[
-              CupertinoDialogAction(
-                child: const Text('Cancel'),
-                onPressed: () => Navigator.pop(dialogContext, false),
-              ),
-              CupertinoDialogAction(
-                isDefaultAction: true,
-                child: const Text('Unhide All'),
-                onPressed: () => Navigator.pop(dialogContext, true),
-              ),
-            ],
-          ),
+      builder: (BuildContext dialogContext) => CupertinoAlertDialog(
+        title: const Text('Unhide All Manually Hidden Notes?'),
+        content: Text('Are you sure you want to unhide all $manualHiddenCount manually hidden notes? Notes hidden due to future start dates will remain hidden.'),
+        actions: <Widget>[
+          CupertinoDialogAction(child: const Text('Cancel'), onPressed: () => Navigator.pop(dialogContext, false)),
+          CupertinoDialogAction(isDefaultAction: true, child: const Text('Unhide All'), onPressed: () => Navigator.pop(dialogContext, true)),
+        ],
+      ),
     ).then((confirmed) {
       if (confirmed == true) {
-        if (kDebugMode)
-          print(
-            '[ItemsScreen($_effectiveServerId)] Confirmed Unhide All Manually Hidden.',
-          );
-        // Use the active notes provider's unhide action
-        ref
-            .read(note_providers.unhideAllNotesProvider)()
-            .then((_) {
-              // If currently in hidden view (only possible for generic provider), switch back
-              if (mounted && ref.read(quickFilterPresetProvider) == 'hidden') {
-                final targetPreset = 'today'; // Default back to today
-                ref.read(quickFilterPresetProvider.notifier).state =
-                    targetPreset;
-                ref.read(filterPreferencesProvider)(targetPreset);
-                // Refresh is handled by unhideAllNotesProvider
-              }
-            })
-            .catchError((e, s) {
-              if (kDebugMode)
-                print(
-                  '[ItemsScreen($_effectiveServerId)] Error during Unhide All: $e\n$s',
-                );
-            });
+        if (kDebugMode) print('[ItemsScreen(${widget.type})] Confirmed Unhide All Manually Hidden.');
+        // Call the unhide all provider (which invalidates the family)
+        ref.read(note_p.unhideAllNotesProvider)().then((_) {
+          // If currently in hidden view (only possible for generic type), switch back
+          if (mounted && widget.type == null && ref.read(quickFilterPresetProvider) == 'hidden') {
+            final targetPreset = 'today'; // Default back to today
+            ref.read(quickFilterPresetProvider.notifier).state = targetPreset;
+            ref.read(filterPreferencesProvider)(targetPreset);
+            // Refresh is handled by unhideAllNotesProvider invalidating the family
+          }
+        }).catchError((e, s) {
+          if (kDebugMode) print('[ItemsScreen(${widget.type})] Error during Unhide All: $e\n$s');
+          // Optionally show error
+        });
       }
     });
   }

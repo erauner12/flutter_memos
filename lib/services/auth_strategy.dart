@@ -18,6 +18,7 @@ abstract class AuthStrategy {
   Future<void> refreshIfNeeded() async {}
 
   /// Creates an Authentication object suitable for the Memos API client.
+  /// Kept in case Memos server type is used, assuming its client uses Bearer.
   memos_api.Authentication createMemosAuth();
 
   // Removed createTodoistAuth abstract method
@@ -73,10 +74,10 @@ class BearerTokenAuthStrategy implements AuthStrategy {
 }
 
 /// An AuthStrategy using a custom header, like Memos' X-Use-Access-Token.
-/// Note: Memos API client generator actually expects Bearer token,
-/// so this might be less useful unless the generator is customized or
-/// headers are manually added. For now, we assume Memos uses Bearer.
-/// If a different header is needed, a custom Authentication wrapper is required.
+/// Note: Most generated clients expect Bearer token. This strategy primarily
+/// provides the header via `getAuthHeaders` for manual injection if needed.
+/// The `create...Auth` methods default to using the key as a Bearer token
+/// for compatibility with generated clients.
 class ApiKeyAuthStrategy implements AuthStrategy {
   final String _apiKey;
   final String _headerName;
@@ -94,39 +95,25 @@ class ApiKeyAuthStrategy implements AuthStrategy {
 
   @override
   memos_api.Authentication createMemosAuth() {
-    // Memos generated client uses HttpBearerAuth. If API Key header is needed,
-    // we need a custom wrapper or manual header injection.
-    // Assuming Bearer for now based on MemosApiService implementation.
-    // If Memos *truly* needs X-Use-Access-Token, this needs adjustment.
-    // Let's return a Bearer token auth for compatibility with the current Memos client.
-    // Consider adding proper logging instead of print if this warning is important.
-    // print("Warning: ApiKeyAuthStrategy used for Memos, but client expects Bearer. Using token as Bearer.");
+    // Memos generated client likely uses HttpBearerAuth.
+    // Return Bearer token auth using the API key for compatibility.
+    // If Memos *truly* needs X-Use-Access-Token header via the Auth object,
+    // a custom Authentication wrapper would be needed (like the removed MemosAuthWrapper).
     return memos_api.HttpBearerAuth()..accessToken = _apiKey;
-    // If a custom header is strictly required:
-    // return MemosAuthWrapper(this); // Requires MemosAuthWrapper implementation
   }
 
   // Removed createTodoistAuth implementation
 
   @override
   blinko_api.Authentication createBlinkoAuth() {
-    // Blinko generated client uses HttpBearerAuth.
-    // Assuming Bearer for now based on BlinkoApiService implementation.
-    // Consider adding proper logging instead of print if this warning is important.
-    // print("Warning: ApiKeyAuthStrategy used for Blinko, but client expects Bearer. Using key as Bearer.");
+    // Blinko generated client uses HttpBearerAuth. Use key as Bearer token.
     return blinko_api.HttpBearerAuth()..accessToken = _apiKey;
-    // If a custom header is strictly required:
-    // return BlinkoAuthWrapper(this); // Requires BlinkoAuthWrapper implementation
   }
 
   @override
   vikunja.Authentication createVikunjaAuth() {
-    // For Vikunja, we'll use bearer auth by default even with API key strategy
-    // Consider adding proper logging if this warning is important
-    // print("Warning: ApiKeyAuthStrategy used for Vikunja, which expects Bearer. Using key as Bearer.");
+    // Vikunja generated client uses HttpBearerAuth. Use key as Bearer token.
     return vikunja.HttpBearerAuth()..accessToken = _apiKey;
-    // If a custom header is needed:
-    // return VikunjaAuthWrapper(this);
   }
 
   // Add concrete implementation for refreshIfNeeded
@@ -141,25 +128,11 @@ class ApiKeyAuthStrategy implements AuthStrategy {
 // directly support the required authentication method (e.g., custom headers
 // instead of Bearer tokens) and manual header injection isn't feasible.
 
-/// Wraps an AuthStrategy for the Memos API client's Authentication interface.
-class MemosAuthWrapper implements memos_api.Authentication {
-  final AuthStrategy _strategy;
-
-  MemosAuthWrapper(this._strategy);
-
-  @override
-  Future<void> applyToParams(
-    List<memos_api.QueryParam> queryParams,
-    Map<String, String> headerParams,
-  ) async {
-    await _strategy.refreshIfNeeded();
-    headerParams.addAll(_strategy.getAuthHeaders());
-  }
-}
-
+// Removed MemosAuthWrapper class
 // Removed TodoistAuthWrapper class
 
 /// Wraps an AuthStrategy for the Blinko API client's Authentication interface.
+/// Useful if Blinko ever required a non-Bearer auth method handled by the client.
 class BlinkoAuthWrapper implements blinko_api.Authentication {
   final AuthStrategy _strategy;
 
@@ -176,6 +149,7 @@ class BlinkoAuthWrapper implements blinko_api.Authentication {
 }
 
 /// Wraps an AuthStrategy for the Vikunja API client's Authentication interface.
+/// Useful if Vikunja ever required a non-Bearer auth method handled by the client.
 class VikunjaAuthWrapper implements vikunja.Authentication {
   final AuthStrategy _strategy;
 

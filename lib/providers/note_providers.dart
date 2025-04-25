@@ -10,7 +10,6 @@ import 'package:flutter_memos/providers/filter_providers.dart';
 // Import new single config providers
 import 'package:flutter_memos/providers/note_server_config_provider.dart';
 import 'package:flutter_memos/providers/settings_provider.dart' as settings_p;
-import 'package:flutter_memos/providers/ui_providers.dart' as ui_providers;
 import 'package:flutter_memos/services/minimal_openai_service.dart';
 import 'package:flutter_memos/services/note_api_service.dart';
 import 'package:flutter_memos/utils/comment_utils.dart';
@@ -30,7 +29,7 @@ class NotesState {
   final Object? error;
   final bool hasReachedEnd;
   final int totalLoaded;
-  final BlinkoNoteType? forcedBlinkoType; // Added to store forced type
+  final BlinkoNoteType? forcedBlinkoType; // Keep to inform notifier logic
 
   const NotesState({
     this.notes = const [],
@@ -40,7 +39,7 @@ class NotesState {
     this.error,
     this.hasReachedEnd = false,
     this.totalLoaded = 0,
-    this.forcedBlinkoType, // Added
+    this.forcedBlinkoType,
   });
 
   NotesState copyWith({
@@ -51,7 +50,7 @@ class NotesState {
     Object? error,
     bool? hasReachedEnd,
     int? totalLoaded,
-    BlinkoNoteType? forcedBlinkoType, // Added
+    BlinkoNoteType? forcedBlinkoType,
     bool clearNextPageToken = false,
     bool clearError = false,
   }) {
@@ -64,7 +63,7 @@ class NotesState {
       error: clearError ? null : (error ?? this.error),
       hasReachedEnd: hasReachedEnd ?? this.hasReachedEnd,
       totalLoaded: totalLoaded ?? this.totalLoaded,
-      forcedBlinkoType: forcedBlinkoType ?? this.forcedBlinkoType, // Added
+      forcedBlinkoType: forcedBlinkoType ?? this.forcedBlinkoType,
     );
   }
 
@@ -82,7 +81,7 @@ class NotesState {
         other.error == error &&
         other.hasReachedEnd == hasReachedEnd &&
         other.totalLoaded == totalLoaded &&
-        other.forcedBlinkoType == forcedBlinkoType; // Added comparison
+        other.forcedBlinkoType == forcedBlinkoType;
   }
 
   @override
@@ -95,19 +94,17 @@ class NotesState {
       error,
       hasReachedEnd,
       totalLoaded,
-      forcedBlinkoType, // Added to hash
+      forcedBlinkoType,
     );
   }
 }
 
-// Helper function to get the configured NoteApiService (moved from previous version)
-// Throws if no note server is configured or if the service is invalid.
+// Helper function to get the configured NoteApiService
 NoteApiService _getNoteApiService(Ref ref) {
   final noteServerConfig = ref.read(noteServerConfigProvider);
   if (noteServerConfig == null) {
     throw Exception("No Note server configured.");
   }
-  // Use the dedicated provider which handles configuration and returns the correct type
   final service = ref.read(api_p.noteApiServiceProvider);
   if (service is api_p.DummyNoteApiService) {
     throw Exception(
@@ -120,8 +117,7 @@ NoteApiService _getNoteApiService(Ref ref) {
 
 class NotesNotifier extends StateNotifier<NotesState> {
   final Ref _ref;
-  late final NoteApiService
-  _apiService; // Store the configured service instance
+  late final NoteApiService _apiService;
   static const int _pageSize = 20;
   final bool _skipInitialFetchForTesting;
   final BlinkoNoteType? _forcedBlinkoType; // Store the forced type
@@ -129,16 +125,16 @@ class NotesNotifier extends StateNotifier<NotesState> {
   NotesNotifier(
     this._ref, {
     bool skipInitialFetchForTesting = false,
-    BlinkoNoteType? forcedBlinkoType, // Accept forced type
+    BlinkoNoteType? forcedBlinkoType,
   }) : _skipInitialFetchForTesting = skipInitialFetchForTesting,
-       _forcedBlinkoType = forcedBlinkoType, // Store it
+       _forcedBlinkoType = forcedBlinkoType,
        super(NotesState(isLoading: true, forcedBlinkoType: forcedBlinkoType)) {
-    // Initialize state with type
     try {
       _apiService = _getNoteApiService(_ref);
       _initialize();
     } catch (e) {
-      if (kDebugMode) print('[NotesNotifier] Initialization error: $e');
+      if (kDebugMode)
+        print('[NotesNotifier($_forcedBlinkoType)] Initialization error: $e');
       state = state.copyWith(isLoading: false, error: e);
     }
   }
@@ -146,26 +142,26 @@ class NotesNotifier extends StateNotifier<NotesState> {
   void _initialize() {
     if (_skipInitialFetchForTesting) {
       if (kDebugMode)
-        print('[NotesNotifier] Skipping initialization for testing');
+        print(
+          '[NotesNotifier($_forcedBlinkoType)] Skipping initialization for testing',
+        );
       return;
     }
 
-    // Only listen to general filters if no type is forced
-    if (_forcedBlinkoType == null) {
-      _ref.listen(combinedFilterProvider, (_, __) {
-        if (mounted) refresh();
-      });
-      _ref.listen(filterKeyProvider, (_, __) {
-        if (mounted) refresh();
-      });
-      _ref.listen(quickFilterPresetProvider, (_, __) {
-        if (mounted) refresh();
-      });
-      _ref.listen(searchQueryProvider, (_, __) {
-        if (mounted) refresh();
-      });
-    }
-    // Always listen to these regardless of forced type
+    // Listen to general filters (these might affect any instance of the notifier)
+    // Consider if these listeners should be conditional based on _forcedBlinkoType
+    _ref.listen(combinedFilterProvider, (_, __) {
+      if (mounted) refresh();
+    });
+    _ref.listen(filterKeyProvider, (_, __) {
+      if (mounted) refresh();
+    });
+    _ref.listen(quickFilterPresetProvider, (_, __) {
+      if (mounted) refresh();
+    });
+    _ref.listen(searchQueryProvider, (_, __) {
+      if (mounted) refresh();
+    });
     _ref.listen(showHiddenNotesProvider, (_, __) {
       if (mounted) refresh();
     });
@@ -183,35 +179,21 @@ class NotesNotifier extends StateNotifier<NotesState> {
     final searchQuery = _ref.read(searchQueryProvider).trim();
 
     String stateFilter = '';
-    // State filtering based on presets (only if type is not forced)
-    if (_forcedBlinkoType == null) {
+    // State filtering: If a type is forced (Cache/Vault), always fetch NORMAL.
+    // Otherwise, use preset logic.
+    if (_forcedBlinkoType != null) {
+      stateFilter = 'NORMAL';
+    } else {
       if (selectedPresetKey == 'inbox')
         stateFilter = 'NORMAL';
       else if (selectedPresetKey == 'archive')
         stateFilter = 'ARCHIVED';
-    } else {
-      // If type is forced (Cache/Vault), always fetch NORMAL state
-      // Archived items are typically not shown in Cache/Vault views
-      stateFilter = 'NORMAL';
+      // 'all', 'today', 'hidden', tags, etc. usually imply NORMAL unless overridden by filter
+      // Let the API default or specific filter handle state otherwise
     }
 
-
-    // Determine BlinkoNoteType based on forced type first, then preset
-    BlinkoNoteType? blinkoTypeFilter =
-        _forcedBlinkoType; // Use forced type if available
-
-    // Removed: Logic deriving blinkoTypeFilter from selectedPresetKey ('cache'/'vault')
-    // switch (selectedPresetKey) {
-    //   case 'cache':
-    //     blinkoTypeFilter = BlinkoNoteType.cache;
-    //     break;
-    //   case 'vault':
-    //     blinkoTypeFilter = BlinkoNoteType.vault;
-    //     break;
-    //   default:
-    //     // Keep null if not cache/vault preset
-    //     break;
-    // }
+    // Use the forced type directly for the API call
+    BlinkoNoteType? blinkoTypeFilter = _forcedBlinkoType;
 
     final rawCelFilter = _ref.read(rawCelFilterProvider);
     bool usingRawFilter = rawCelFilter.isNotEmpty;
@@ -236,7 +218,6 @@ class NotesNotifier extends StateNotifier<NotesState> {
           'hidden',
           'custom',
           'tagged',
-          // Removed 'cache', 'vault'
         ].contains(selectedPresetKey)) {
       final tagFilter = 'tag == "$selectedPresetKey"';
       finalFilter =
@@ -253,10 +234,10 @@ class NotesNotifier extends StateNotifier<NotesState> {
         direction: 'DESC',
         pageSize: _pageSize,
         pageToken: pageToken,
-        blinkoType: blinkoTypeFilter, // Pass the determined type filter
+        blinkoType: blinkoTypeFilter, // Pass the forced type filter
       );
 
-      // Client-side filtering safeguard: Ensure only notes of the forced type are kept
+      // Client-side filtering safeguard (still useful)
       List<NoteItem> fetchedNotes = response.notes;
       if (_forcedBlinkoType != null) {
         fetchedNotes =
@@ -265,7 +246,7 @@ class NotesNotifier extends StateNotifier<NotesState> {
                 .toList();
         if (kDebugMode && fetchedNotes.length < response.notes.length) {
           print(
-            '[NotesNotifier] Client-side filter removed ${response.notes.length - fetchedNotes.length} notes with incorrect Blinko type.',
+            '[NotesNotifier($_forcedBlinkoType)] Client-side filter removed ${response.notes.length - fetchedNotes.length} notes with incorrect Blinko type.',
           );
         }
       }
@@ -277,12 +258,10 @@ class NotesNotifier extends StateNotifier<NotesState> {
 
       var newNotes = fetchedNotes;
       final nextPageToken = response.nextPageToken;
-      // Adjust hasReachedEnd based on potentially filtered list length
       final bool hasReachedEnd =
           (nextPageToken == null ||
               nextPageToken.isEmpty ||
-              (response.notes.length <
-                  (_pageSize))); // Check original response length
+              (response.notes.length < _pageSize));
       final newTotalLoaded =
           (pageToken == null)
               ? newNotes.length
@@ -314,7 +293,10 @@ class NotesNotifier extends StateNotifier<NotesState> {
         );
       }
     } catch (e, st) {
-      if (kDebugMode) print('[NotesNotifier] Error fetching page: $e\n$st');
+      if (kDebugMode)
+        print(
+          '[NotesNotifier($_forcedBlinkoType)] Error fetching page: $e\n$st',
+        );
       if (mounted)
         state = state.copyWith(
           isLoading: false,
@@ -326,7 +308,7 @@ class NotesNotifier extends StateNotifier<NotesState> {
 
   Future<void> fetchInitialPage() async {
     try {
-      _getNoteApiService(_ref);
+      _getNoteApiService(_ref); // Check config before proceeding
     } catch (e) {
       if (mounted)
         state = state.copyWith(
@@ -359,8 +341,33 @@ class NotesNotifier extends StateNotifier<NotesState> {
   }
 
   Future<void> refresh() async {
-    if (kDebugMode) print('[NotesNotifier] Refresh triggered.');
+    if (kDebugMode)
+      print('[NotesNotifier($_forcedBlinkoType)] Refresh triggered.');
     await fetchInitialPage();
+  }
+
+  // --- Optimistic Update Methods (Called by UI) ---
+
+  void addNoteOptimistically(NoteItem newNote) {
+    if (!mounted) return;
+    // Only add if the note's type matches the forced type (if any)
+    if (_forcedBlinkoType != null && newNote.blinkoType != _forcedBlinkoType) {
+      if (kDebugMode)
+        print(
+          '[NotesNotifier($_forcedBlinkoType)] Skipped optimistic add for note ${newNote.id} due to type mismatch.',
+        );
+      return;
+    }
+    final updatedNotes = [newNote, ...state.notes];
+    updatedNotes.sort((a, b) {
+      if (a.pinned != b.pinned) return a.pinned ? -1 : 1;
+      return b.updateTime.compareTo(a.updateTime);
+    });
+    state = state.copyWith(notes: updatedNotes);
+    if (kDebugMode)
+      print(
+        '[NotesNotifier($_forcedBlinkoType)] Optimistically added note: ${newNote.id}',
+      );
   }
 
   void updateNoteOptimistically(NoteItem updatedNote) {
@@ -370,10 +377,9 @@ class NotesNotifier extends StateNotifier<NotesState> {
         updatedNote.blinkoType != _forcedBlinkoType) {
       if (kDebugMode)
         print(
-          '[NotesNotifier] Skipped optimistic update for note ${updatedNote.id} due to type mismatch.',
+          '[NotesNotifier($_forcedBlinkoType)] Skipped optimistic update for note ${updatedNote.id} due to type mismatch. Removing instead.',
         );
-      // Optionally remove it if it somehow ended up in the list
-      removeNoteOptimistically(updatedNote.id);
+      removeNoteOptimistically(updatedNote.id); // Remove if type changed
       return;
     }
 
@@ -387,7 +393,9 @@ class NotesNotifier extends StateNotifier<NotesState> {
     });
     state = state.copyWith(notes: updatedNotes);
     if (kDebugMode)
-      print('[NotesNotifier] Optimistically updated note: ${updatedNote.id}');
+      print(
+        '[NotesNotifier($_forcedBlinkoType)] Optimistically updated note: ${updatedNote.id}',
+      );
   }
 
   void removeNoteOptimistically(String noteId) {
@@ -399,37 +407,25 @@ class NotesNotifier extends StateNotifier<NotesState> {
       state = state.copyWith(notes: updatedNotes);
       if (kDebugMode)
         print(
-          '[NotesNotifier] removeNoteOptimistically: Removed note $noteId.',
+          '[NotesNotifier($_forcedBlinkoType)] removeNoteOptimistically: Removed note $noteId.',
         );
     } else if (kDebugMode) {
       print(
-        '[NotesNotifier] removeNoteOptimistically: Note $noteId not found.',
+        '[NotesNotifier($_forcedBlinkoType)] removeNoteOptimistically: Note $noteId not found.',
       );
     }
   }
 
   void archiveNoteOptimistically(String noteId) {
     if (!mounted) return;
-    // Archiving removes the note from Cache/Vault views
-    if (_forcedBlinkoType != null) {
-      removeNoteOptimistically(noteId);
-      if (kDebugMode)
-        print(
-          '[NotesNotifier] Optimistically removed archived note $noteId from Cache/Vault view.',
-        );
-    } else {
-      // Standard archive logic for general views
-      state = state.copyWith(
-        notes:
-            state.notes.map((note) {
-              if (note.id == noteId)
-                return note.copyWith(state: NoteState.archived, pinned: false);
-              return note;
-            }).toList(),
+    // Archiving always removes the note from Cache/Vault views or any view showing NORMAL state
+    removeNoteOptimistically(noteId);
+    if (kDebugMode)
+      print(
+        '[NotesNotifier($_forcedBlinkoType)] Optimistically removed archived note $noteId from view.',
       );
-      if (kDebugMode)
-        print('[NotesNotifier] Optimistically archived note: $noteId');
-    }
+    // No need for the old else block, as filtering handles showing archived notes
+    // in the 'archive' preset for the generic (null type) notifier.
   }
 
   void togglePinOptimistically(String noteId) {
@@ -445,7 +441,9 @@ class NotesNotifier extends StateNotifier<NotesState> {
     });
     state = state.copyWith(notes: updatedNotes);
     if (kDebugMode)
-      print('[NotesNotifier] Optimistically toggled pin for note: $noteId');
+      print(
+        '[NotesNotifier($_forcedBlinkoType)] Optimistically toggled pin for note: $noteId',
+      );
   }
 
   void bumpNoteOptimistically(String noteId) {
@@ -462,37 +460,44 @@ class NotesNotifier extends StateNotifier<NotesState> {
       });
       state = state.copyWith(notes: updatedNotes);
       if (kDebugMode)
-        print('[NotesNotifier] Optimistically bumped note: $noteId');
+        print(
+          '[NotesNotifier($_forcedBlinkoType)] Optimistically bumped note: $noteId',
+        );
     }
   }
 
-  Future<void> updateNoteStartDate(
+  void updateNoteStartDateOptimistically(
     String noteId,
     DateTime? newStartDate,
-  ) async {
+  ) {
     if (!mounted) return;
     final noteIndex = state.notes.indexWhere((n) => n.id == noteId);
     if (noteIndex == -1) {
       if (kDebugMode)
-        print('[NotesNotifier] Note $noteId not found for start date update.');
+        print(
+          '[NotesNotifier($_forcedBlinkoType)] Note $noteId not found for start date update.',
+        );
       return;
     }
 
     final originalNote = state.notes[noteIndex];
+    // Basic validation (can be enhanced)
     if (newStartDate != null &&
         originalNote.endDate != null &&
         newStartDate.isAfter(originalNote.endDate!)) {
       if (kDebugMode)
         print(
-          '[NotesNotifier] Cannot set start date ($newStartDate) after end date (${originalNote.endDate}) for note $noteId.',
+          '[NotesNotifier($_forcedBlinkoType)] Cannot set start date ($newStartDate) after end date (${originalNote.endDate}) for note $noteId.',
         );
+      // Maybe throw an error or show a message to the user?
       return;
     }
 
     final updatedNote = originalNote.copyWith(
       startDate: newStartDate,
-      updateTime: DateTime.now(),
+      updateTime: DateTime.now(), // Bump update time
     );
+
     final currentNotes = List<NoteItem>.from(state.notes);
     currentNotes[noteIndex] = updatedNote;
     currentNotes.sort((a, b) {
@@ -502,151 +507,76 @@ class NotesNotifier extends StateNotifier<NotesState> {
     state = state.copyWith(notes: currentNotes);
     if (kDebugMode)
       print(
-        '[NotesNotifier] Optimistically updated start date for note $noteId to $newStartDate.',
+        '[NotesNotifier($_forcedBlinkoType)] Optimistically updated start date for note $noteId to $newStartDate.',
       );
-
-    try {
-      final NoteApiService apiService = _apiService;
-      final NoteItem confirmedNoteFromApi = await apiService.updateNote(
-        noteId,
-        updatedNote,
-      );
-      final NoteItem noteForStateUpdate = confirmedNoteFromApi.copyWith(
-        startDate: newStartDate,
-      );
-
-      if (!mounted) return;
-
-      // Check type match before updating state
-      if (_forcedBlinkoType != null &&
-          noteForStateUpdate.blinkoType != _forcedBlinkoType) {
-        if (kDebugMode)
-          print(
-            '[NotesNotifier] Note $noteId type changed after API update. Removing from current view.',
-          );
-        removeNoteOptimistically(noteId);
-        return;
-      }
-
-
-      final finalNotes = List<NoteItem>.from(state.notes);
-      final confirmedIndex = finalNotes.indexWhere((n) => n.id == noteId);
-      if (confirmedIndex != -1) {
-        finalNotes[confirmedIndex] = noteForStateUpdate;
-        finalNotes.sort((a, b) {
-          if (a.pinned != b.pinned) return a.pinned ? -1 : 1;
-          return b.updateTime.compareTo(a.updateTime);
-        });
-        state = state.copyWith(notes: finalNotes);
-        if (kDebugMode)
-          print(
-            '[NotesNotifier] Confirmed start date update for note $noteId from API (merged state).',
-          );
-      } else {
-        if (kDebugMode)
-          print(
-            '[NotesNotifier] Note $noteId disappeared after API update confirmation? Refreshing list.',
-          );
-        refresh();
-      }
-    } catch (e, stackTrace) {
-      if (kDebugMode)
-        print(
-          '[NotesNotifier] Failed to update start date via API for note $noteId: $e\n$stackTrace',
-        );
-      if (!mounted) return;
-      final revertedNotes = List<NoteItem>.from(state.notes);
-      final revertIndex = revertedNotes.indexWhere((n) => n.id == noteId);
-      if (revertIndex != -1) {
-        revertedNotes[revertIndex] = originalNote;
-        revertedNotes.sort((a, b) {
-          if (a.pinned != b.pinned) return a.pinned ? -1 : 1;
-          return b.updateTime.compareTo(a.updateTime);
-        });
-        state = state.copyWith(notes: revertedNotes);
-        if (kDebugMode)
-          print(
-            '[NotesNotifier] Reverted optimistic start date update for note $noteId.',
-          );
-      }
-    }
   }
 }
 
 // --- Provider Definitions ---
 
-/// Generic Notes Notifier Provider - Use overrides for specific types (Cache/Vault)
-final notesNotifierProvider = StateNotifierProvider<NotesNotifier, NotesState>((
-  ref,
-) {
-  // This default instance fetches notes without a forced type.
-  // It will be overridden by cacheNotesNotifierProvider/vaultNotesNotifierProvider
-  // when used within CacheNotesScreen/VaultNotesScreen.
-  return NotesNotifier(ref);
-}, name: 'notesNotifierProvider');
+/// **Family** Provider for Notes Notifier.
+/// Pass `null` for general notes, or a specific `BlinkoNoteType` for Cache/Vault.
+final notesNotifierFamily =
+    StateNotifierProvider.family<NotesNotifier, NotesState, BlinkoNoteType?>((
+      ref,
+      blinkoTypeParam,
+    ) {
+      // Each family member gets its own notifier instance.
+      return NotesNotifier(ref,
+      forcedBlinkoType: blinkoTypeParam);
+    }, name: 'notesNotifierFamily');
 
-/// Specific Notifier Provider for Cache Notes
-final cacheNotesNotifierProvider =
-    StateNotifierProvider<NotesNotifier, NotesState>((ref) {
-      return NotesNotifier(ref, forcedBlinkoType: BlinkoNoteType.cache);
-    }, name: 'cacheNotesNotifierProvider');
-
-/// Specific Notifier Provider for Vault Notes
-final vaultNotesNotifierProvider =
-    StateNotifierProvider<NotesNotifier, NotesState>((ref) {
-      return NotesNotifier(ref, forcedBlinkoType: BlinkoNoteType.vault);
-    }, name: 'vaultNotesNotifierProvider');
+// --- REMOVED Old Global Providers ---
+// final notesNotifierProvider = ...
+// final cacheNotesNotifierProvider = ...
+// final vaultNotesNotifierProvider = ...
 
 
-// --- Derived Providers ---
+// --- Derived Providers (Now Families) ---
 
-// This provider now reflects the state of whichever notesNotifierProvider is active
-// (either the generic one or an overridden one like cache/vault).
-final _baseFilteredNotesProvider = Provider<List<NoteItem>>((ref) {
-  final notesState = ref.watch(notesNotifierProvider);
+/// Base filtered list based on the notifier's state and forced type.
+/// Filters out archived notes unless the 'archive' preset is active for the generic type.
+final baseFilteredNotesFamily = Provider.family<
+  List<NoteItem>,
+  BlinkoNoteType?
+>((ref, type) {
+  // Watch the specific notifier instance for the given type
+  final notesState = ref.watch(notesNotifierFamily(type));
   final selectedPresetKey = ref.watch(quickFilterPresetProvider);
-  final forcedType = notesState.forcedBlinkoType; // Get forced type from state
 
-  // If a type is forced (Cache/Vault), we primarily rely on the notifier fetching the correct type.
-  // The state filter here is mainly for the generic provider.
+  // If a type is forced (Cache/Vault), the notifier should only fetch NORMAL state notes.
+  // If type is null (generic), filter based on preset.
+  final bool showArchived = (type == null && selectedPresetKey == 'archive');
+
   return notesState.notes.where((note) {
-    if (forcedType != null) {
-      // For Cache/Vault, notes should already be filtered by type and state=NORMAL by the notifier.
-      // We just return true here, assuming the notifier did its job.
-      // An extra check `note.blinkoType == forcedType && note.state != NoteState.archived` could be added for safety.
-      return note.blinkoType == forcedType && note.state != NoteState.archived;
+    // Basic state filtering
+    if (showArchived) {
+      return note.state == NoteState.archived;
     } else {
-      // Logic for the generic provider based on presets
-      switch (selectedPresetKey) {
-        case 'inbox':
-        case 'all':
-        case 'today':
-        case 'tagged':
-        case 'custom':
-          // Removed 'cache', 'vault' cases
-          return note.state != NoteState.archived;
-        case 'archive':
-          return note.state == NoteState.archived;
-        case 'hidden':
-          // Hidden view shows non-archived notes that meet hidden criteria (handled later)
-          return note.state != NoteState.archived;
-        default: // Assumed to be a tag filter
-          return note.tags.contains(selectedPresetKey) &&
-              note.state != NoteState.archived;
-      }
+      return note.state != NoteState.archived;
     }
+    // Note: The notifier already attempts to fetch the correct state based on type/preset.
+    // This `where` clause acts as a secondary client-side filter/confirmation.
   }).toList();
-}, name: '_baseFilteredNotesProvider');
+}, name: 'baseFilteredNotesFamily');
 
 
-final manuallyHiddenNoteCountProvider = Provider<int>((ref) {
-  final baseNotes = ref.watch(_baseFilteredNotesProvider);
+/// Provides the count of manually hidden notes within the base filtered list for a specific type.
+final manuallyHiddenNoteCountFamily = Provider.family<int, BlinkoNoteType?>((
+  ref,
+  type,
+) {
+  final baseNotes = ref.watch(baseFilteredNotesFamily(type));
   final manuallyHiddenIds = ref.watch(settings_p.manuallyHiddenNoteIdsProvider);
   return baseNotes.where((note) => manuallyHiddenIds.contains(note.id)).length;
-}, name: 'manuallyHiddenNoteCountProvider');
+}, name: 'manuallyHiddenNoteCountFamily');
 
-final futureDatedHiddenNoteCountProvider = Provider<int>((ref) {
-  final baseNotes = ref.watch(_baseFilteredNotesProvider);
+/// Provides the count of future-dated hidden notes within the base filtered list for a specific type.
+final futureDatedHiddenNoteCountFamily = Provider.family<int, BlinkoNoteType?>((
+  ref,
+  type,
+) {
+  final baseNotes = ref.watch(baseFilteredNotesFamily(type));
   final manuallyHiddenIds = ref.watch(settings_p.manuallyHiddenNoteIdsProvider);
   final now = DateTime.now();
   return baseNotes
@@ -657,50 +587,67 @@ final futureDatedHiddenNoteCountProvider = Provider<int>((ref) {
             note.startDate!.isAfter(now),
       )
       .length;
-}, name: 'futureDatedHiddenNoteCountProvider');
+}, name: 'futureDatedHiddenNoteCountFamily');
 
-final totalHiddenNoteCountProvider = Provider<int>((ref) {
-  final manualCount = ref.watch(manuallyHiddenNoteCountProvider);
-  final futureCount = ref.watch(futureDatedHiddenNoteCountProvider);
+/// Provides the total count of hidden notes (manual + future-dated) for a specific type.
+final totalHiddenNoteCountFamily = Provider.family<int, BlinkoNoteType?>((
+  ref,
+  type,
+) {
+  final manualCount = ref.watch(manuallyHiddenNoteCountFamily(type));
+  final futureCount = ref.watch(futureDatedHiddenNoteCountFamily(type));
   return manualCount + futureCount;
-}, name: 'totalHiddenNoteCountProvider');
+}, name: 'totalHiddenNoteCountFamily');
 
+/// Checks if a specific item ID is manually hidden. (Independent of type)
 final isItemHiddenProvider = Provider.family<bool, String>((ref, id) {
   final hiddenItemIds = ref.watch(settings_p.manuallyHiddenNoteIdsProvider);
   return hiddenItemIds.contains(id);
 }, name: 'isItemHiddenProvider');
 
-final toggleItemVisibilityProvider = Provider.family<void Function(), String>((
+/// Provides a function to toggle the manual hidden state of an item.
+/// **Important**: This needs to invalidate the correct notifier family instance(s).
+final toggleItemVisibilityProvider = Provider.family<
+  void Function(),
+  ({String id, BlinkoNoteType? type})
+>((
   ref,
-  id,
+  params,
 ) {
   return () {
     final manuallyHiddenIdsNotifier = ref.read(
       settings_p.manuallyHiddenNoteIdsProvider.notifier,
     );
     final currentHiddenIds = ref.read(settings_p.manuallyHiddenNoteIdsProvider);
-    if (currentHiddenIds.contains(id)) {
-      manuallyHiddenIdsNotifier.remove(id);
+    if (currentHiddenIds.contains(params.id)) {
+      manuallyHiddenIdsNotifier.remove(params.id);
       if (kDebugMode)
-        print('[toggleItemVisibilityProvider] Unhid item (manual): $id');
+        print(
+          '[toggleItemVisibilityProvider] Unhid item (manual): ${params.id}',
+        );
     } else {
-      manuallyHiddenIdsNotifier.add(id);
+      manuallyHiddenIdsNotifier.add(params.id);
       if (kDebugMode)
-        print('[toggleItemVisibilityProvider] Hid item (manual): $id');
+        print('[toggleItemVisibilityProvider] Hid item (manual): ${params.id}');
     }
-    // Invalidate the currently active notifier (could be generic, cache, or vault)
-    ref.invalidate(notesNotifierProvider);
+    // Invalidate the specific notifier instance related to the context where toggle was called.
+    // Also invalidate the generic (null) instance as the item might appear/disappear there too.
+    ref.invalidate(notesNotifierFamily(params.type));
+    if (params.type != null) {
+      ref.invalidate(notesNotifierFamily(null));
+    }
   };
 }, name: 'toggleItemVisibilityProvider');
 
-final filteredNotesProvider = Provider<List<NoteItem>>((ref) {
-  // Start with the notes already filtered by type/state from _baseFilteredNotesProvider
-  List<NoteItem> currentList = ref.watch(_baseFilteredNotesProvider);
-  final notesState = ref.watch(
-    notesNotifierProvider,
-  ); // Get state for forced type info
-  final forcedType = notesState.forcedBlinkoType;
+/// Provides the final filtered and sorted list of notes for display, based on type and UI filters.
+final filteredNotesFamily = Provider.family<List<NoteItem>, BlinkoNoteType?>((
+  ref,
+  type,
+) {
+  // Start with the base list (already filtered by state/type partially)
+  List<NoteItem> currentList = ref.watch(baseFilteredNotesFamily(type));
 
+  // Get UI filter states
   final selectedPresetKey = ref.watch(quickFilterPresetProvider);
   final hidePinned = ref.watch(hidePinnedProvider);
   final showHiddenToggle = ref.watch(showHiddenNotesProvider);
@@ -708,31 +655,8 @@ final filteredNotesProvider = Provider<List<NoteItem>>((ref) {
   final searchQuery = ref.watch(searchQueryProvider).trim().toLowerCase();
   final now = DateTime.now();
 
-
-  // Removed: State filtering based on preset (handled in _baseFilteredNotesProvider or by notifier)
-  // if (selectedPresetKey == 'archive')
-  //   currentList =
-  //       currentList.where((note) => note.state == NoteState.archived).toList();
-  // else if (selectedPresetKey != 'hidden') // Keep non-archived for hidden view base
-  //   currentList =
-  //       currentList.where((note) => note.state != NoteState.archived).toList();
-
-
-  // Removed: Blinko Type filtering based on preset (handled by notifier/forcedType)
-  // if (selectedPresetKey == 'cache') {
-  //   currentList =
-  //       currentList
-  //           .where((note) => note.blinkoType == BlinkoNoteType.cache)
-  //           .toList();
-  // } else if (selectedPresetKey == 'vault') {
-  //   currentList =
-  //       currentList
-  //           .where((note) => note.blinkoType == BlinkoNoteType.vault)
-  //           .toList();
-  // }
-
-  // Filter by tags if a tag preset is selected (only applies if no forced type)
-  if (forcedType == null) {
+  // Apply tag filtering (only for generic type)
+  if (type == null) {
     if (![
       'all',
       'inbox',
@@ -741,8 +665,8 @@ final filteredNotesProvider = Provider<List<NoteItem>>((ref) {
       'hidden',
       'custom',
       'tagged',
-      // Removed 'cache', 'vault'
     ].contains(selectedPresetKey)) {
+      // Assumed tag preset
       currentList =
           currentList
               .where((note) => note.tags.contains(selectedPresetKey))
@@ -752,19 +676,19 @@ final filteredNotesProvider = Provider<List<NoteItem>>((ref) {
     }
   }
 
-
-  // Handle 'hidden' preset view (only applies if no forced type)
-  if (forcedType == null && selectedPresetKey == 'hidden') {
+  // Apply visibility filtering (manual hide, future dates)
+  // Handle 'hidden' preset view (only applies if type is null)
+  if (type == null && selectedPresetKey == 'hidden') {
+    // Base list for hidden view is already non-archived
     currentList =
         currentList.where((note) {
-          // Base list for hidden view is already non-archived
           final isManuallyHidden = manuallyHiddenIds.contains(note.id);
           final isFutureDated =
               note.startDate != null && note.startDate!.isAfter(now);
           return isManuallyHidden || isFutureDated;
         }).toList();
   } else if (!showHiddenToggle) {
-    // Hide manually hidden and future-dated notes if toggle is off (applies to all views)
+    // If not in hidden view AND toggle is off, hide hidden items
     currentList =
         currentList.where((note) {
           final isManuallyHidden = manuallyHiddenIds.contains(note.id);
@@ -785,201 +709,204 @@ final filteredNotesProvider = Provider<List<NoteItem>>((ref) {
             .where((note) => note.content.toLowerCase().contains(searchQuery))
             .toList();
 
-  // Sort the final list
+  // Final Sort
   currentList.sort((a, b) {
     if (a.pinned != b.pinned) return a.pinned ? -1 : 1;
-    // Use updateTime for sorting Cache/Vault, displayTime otherwise? Or always updateTime?
-    // Let's stick to updateTime for consistency for now.
-    final timeA = a.updateTime; // Changed from displayTime
-    final timeB = b.updateTime; // Changed from displayTime
-    return timeB.compareTo(timeA);
+    // Sort by updateTime consistently
+    return b.updateTime.compareTo(a.updateTime);
   });
 
   return currentList;
-}, name: 'filteredNotesProvider');
+}, name: 'filteredNotesFamily');
 
-
-final hasSearchResultsProvider = Provider<bool>((ref) {
+/// Checks if the current search query yields results for a specific type.
+final hasSearchResultsFamily = Provider.family<bool, BlinkoNoteType?>((
+  ref,
+  type,
+) {
   final searchQuery = ref.watch(searchQueryProvider);
-  final filteredNotes = ref.watch(filteredNotesProvider);
+  // Watch the final filtered list for the specific type
+  final filteredNotes = ref.watch(filteredNotesFamily(type));
   return searchQuery.isEmpty || filteredNotes.isNotEmpty;
-}, name: 'hasSearchResultsProvider');
+}, name: 'hasSearchResultsFamily');
 
-// --- Action Providers ---
 
+// --- API Action Providers (Simplified: Perform API call, return result/error) ---
+
+/// API call to unhide a note (removes from manual hidden list).
 final unhideNoteProvider = Provider.family<void Function(), String>((ref, id) {
+  // This action modifies settings, not directly the API notes state.
+  // The toggleItemVisibilityProvider handles invalidation.
   return () {
     if (kDebugMode) print('[unhideNoteProvider] Unhiding note: $id');
     ref.read(settings_p.manuallyHiddenNoteIdsProvider.notifier).remove(id);
-    // Invalidate the currently active notifier
-    ref.invalidate(notesNotifierProvider);
+    // Invalidation is handled by the listener on manuallyHiddenNoteIdsProvider
+    // or by toggleItemVisibilityProvider if called from there.
+    // We might need to explicitly invalidate *all* families if unhiding from hidden view.
+    ref.invalidate(notesNotifierFamily);
   };
 }, name: 'unhideNoteProvider');
 
+/// API call to unhide all manually hidden notes.
 final unhideAllNotesProvider = Provider<Future<void> Function()>((ref) {
+  // This action modifies settings and triggers refresh.
   return () async {
     if (kDebugMode)
       print('[unhideAllNotesProvider] Clearing all manually hidden notes.');
     await ref.read(settings_p.manuallyHiddenNoteIdsProvider.notifier).clear();
-    // Refresh the currently active notifier
-    await ref.read(notesNotifierProvider.notifier).refresh();
+    // Refresh all potentially affected notifier instances.
+    ref.invalidate(notesNotifierFamily);
   };
 }, name: 'unhideAllNotesProvider');
 
-final archiveNoteProvider = Provider.family<Future<void> Function(), String>((
+/// API call to archive a note. Returns the updated NoteItem or throws error.
+final archiveNoteApiProvider =
+    Provider.family<Future<NoteItem> Function(), String>((
   ref,
   noteId,
 ) {
   return () async {
-    final apiService = _getNoteApiService(ref);
-    final currentSelectedId = ref.read(ui_providers.selectedItemIdProvider);
-    // Use the active notes provider to get notes before action
-    final notesBeforeAction = ref.read(filteredNotesProvider);
-    String? nextSelectedId = currentSelectedId;
-
-    if (currentSelectedId == noteId && notesBeforeAction.isNotEmpty) {
-      final actionIndex = notesBeforeAction.indexWhere((n) => n.id == noteId);
-      if (actionIndex != -1) {
-        if (notesBeforeAction.length == 1)
-          nextSelectedId = null;
-        else if (actionIndex < notesBeforeAction.length - 1)
-          nextSelectedId = notesBeforeAction[actionIndex + 1].id;
-        else
-          nextSelectedId = notesBeforeAction[actionIndex - 1].id;
-      } else
-        nextSelectedId = null;
-    }
-
-    // Use the active notes provider's notifier
-    ref.read(notesNotifierProvider.notifier).archiveNoteOptimistically(noteId);
-    ref.read(ui_providers.selectedItemIdProvider.notifier).state =
-        nextSelectedId;
-
+        final apiService = _getNoteApiService(ref);
     try {
-      await apiService.archiveNote(noteId);
+          final NoteItem result = await apiService.archiveNote(noteId);
+          // Invalidate detail cache
+          ref
+              .read(noteDetailCacheProvider.notifier)
+              .update((state) => state..remove(noteId));
+          ref.invalidate(noteDetailProvider(noteId));
+          return result;
     } catch (e) {
-      if (kDebugMode) print('[archiveNoteProvider] Error archiving note: $e');
-      // Refresh the active notes provider
-      await ref.read(notesNotifierProvider.notifier).refresh();
+          if (kDebugMode)
+            print('[archiveNoteApiProvider] Error archiving note $noteId: $e');
+          // Don't refresh here, let the caller handle error/refresh.
       rethrow;
     }
   };
 });
 
-final deleteNoteProvider = Provider.family<Future<void> Function(), String>((
+/// API call to delete a note. Throws error on failure.
+final deleteNoteApiProvider = Provider.family<Future<void> Function(), String>((
   ref,
   noteId,
 ) {
   return () async {
-    if (kDebugMode) print('[deleteNoteProvider] Deleting note: $noteId');
+    if (kDebugMode)
+      print('[deleteNoteApiProvider] Deleting note via API: $noteId');
     final apiService = _getNoteApiService(ref);
-    final currentSelectedId = ref.read(ui_providers.selectedItemIdProvider);
-    // Use the active notes provider
-    final notesBeforeAction = ref.read(filteredNotesProvider);
-    String? nextSelectedId = currentSelectedId;
-
-    if (currentSelectedId == noteId && notesBeforeAction.isNotEmpty) {
-      final actionIndex = notesBeforeAction.indexWhere((n) => n.id == noteId);
-      if (actionIndex != -1) {
-        if (notesBeforeAction.length == 1)
-          nextSelectedId = null;
-        else if (actionIndex < notesBeforeAction.length - 1)
-          nextSelectedId = notesBeforeAction[actionIndex + 1].id;
-        else
-          nextSelectedId = notesBeforeAction[actionIndex - 1].id;
-      } else
-        nextSelectedId = null;
-    }
-
-    // Use the active notes provider's notifier
-    ref.read(notesNotifierProvider.notifier).removeNoteOptimistically(noteId);
-    ref.read(ui_providers.selectedItemIdProvider.notifier).state =
-        nextSelectedId;
-
     try {
       await apiService.deleteNote(noteId);
       if (kDebugMode)
-        print('[deleteNoteProvider] Successfully deleted note: $noteId');
+        print(
+          '[deleteNoteApiProvider] Successfully deleted note via API: $noteId',
+        );
+      // Clear from manual hidden list if it was there
       ref
           .read(settings_p.manuallyHiddenNoteIdsProvider.notifier)
           .remove(noteId);
+      // Invalidate detail cache
+      ref
+          .read(noteDetailCacheProvider.notifier)
+          .update((state) => state..remove(noteId));
+      ref.invalidate(noteDetailProvider(noteId));
     } catch (e, stackTrace) {
       if (kDebugMode)
         print(
-          '[deleteNoteProvider] Error deleting note $noteId: $e\n$stackTrace',
+          '[deleteNoteApiProvider] Error deleting note $noteId via API: $e\n$stackTrace',
         );
-      // Refresh the active notes provider
-      await ref.read(notesNotifierProvider.notifier).refresh();
+      // Don't refresh here, let the caller handle error/refresh.
       rethrow;
     }
   };
 });
 
-final bumpNoteProvider = Provider.family<Future<void> Function(), String>((
+/// API call to "bump" a note (effectively update its updateTime). Returns updated NoteItem.
+final bumpNoteApiProvider = Provider.family<
+  Future<NoteItem> Function(),
+  String
+>((
   ref,
   noteId,
 ) {
   return () async {
-    if (kDebugMode) print('[bumpNoteProvider] Bumping note: $noteId');
+    if (kDebugMode)
+      print('[bumpNoteApiProvider] Bumping note via API: $noteId');
     final apiService = _getNoteApiService(ref);
-    // Use the active notes provider's notifier
-    ref.read(notesNotifierProvider.notifier).bumpNoteOptimistically(noteId);
     try {
+      // Fetch current note, then immediately update it to bump timestamp server-side
       final NoteItem currentNote = await apiService.getNote(noteId);
-      await apiService.updateNote(noteId, currentNote);
+      // Create a copy with potentially updated time (API might handle this automatically)
+      final NoteItem result = await apiService.updateNote(noteId, currentNote);
       if (kDebugMode)
-        print('[bumpNoteProvider] Successfully bumped note: $noteId');
-    } catch (e, stackTrace) {
-      if (kDebugMode)
-        print('[bumpNoteProvider] Error bumping note $noteId: $e\n$stackTrace');
-      // Refresh the active notes provider
-      await ref.read(notesNotifierProvider.notifier).refresh();
-      rethrow;
-    }
-  };
-}, name: 'bumpNoteProvider');
-
-final updateNoteProvider = Provider.family<
-  Future<NoteItem> Function(NoteItem),
-  String
->((ref, noteId) {
-  return (NoteItem updatedNote) async {
-    if (kDebugMode) print('[updateNoteProvider] Updating note: $noteId');
-    final apiService = _getNoteApiService(ref);
-    try {
-      final NoteItem result = await apiService.updateNote(noteId, updatedNote);
-      // Use the active notes provider's notifier
-      ref.read(notesNotifierProvider.notifier).updateNoteOptimistically(result);
+        print(
+          '[bumpNoteApiProvider] Successfully bumped note via API: $noteId',
+        );
+      // Update detail cache
       ref
           .read(noteDetailCacheProvider.notifier)
           .update((state) => {...state, result.id: result});
-      if (kDebugMode)
-        print('[updateNoteProvider] Note $noteId updated successfully.');
       ref.invalidate(noteDetailProvider(noteId));
       return result;
     } catch (e, stackTrace) {
       if (kDebugMode)
-        print('[updateNoteProvider] Error updating note: $e\n$stackTrace');
-      // Invalidate the active notes provider
-      ref.invalidate(notesNotifierProvider);
+        print(
+          '[bumpNoteApiProvider] Error bumping note $noteId via API: $e\n$stackTrace',
+        );
+      rethrow;
+    }
+  };
+}, name: 'bumpNoteApiProvider');
+
+/// API call to update a note. Returns the updated NoteItem.
+final updateNoteApiProvider = Provider.family<
+  Future<NoteItem> Function(NoteItem),
+  String
+>((ref, noteId) {
+  return (NoteItem updatedNoteData) async {
+    if (kDebugMode)
+      print('[updateNoteApiProvider] Updating note via API: $noteId');
+    final apiService = _getNoteApiService(ref);
+    try {
+      final NoteItem result = await apiService.updateNote(
+        noteId,
+        updatedNoteData,
+      );
+      if (kDebugMode)
+        print(
+          '[updateNoteApiProvider] Note $noteId updated successfully via API.',
+        );
+      // Update detail cache
+      ref
+          .read(noteDetailCacheProvider.notifier)
+          .update((state) => {...state, result.id: result});
       ref.invalidate(noteDetailProvider(noteId));
+      return result;
+    } catch (e, stackTrace) {
+      if (kDebugMode)
+        print(
+          '[updateNoteApiProvider] Error updating note $noteId via API: $e\n$stackTrace',
+        );
+      ref.invalidate(
+        noteDetailProvider(noteId),
+      ); // Invalidate detail on error too
       rethrow;
     }
   };
 });
 
-final togglePinNoteProvider = Provider.family<
+/// API call to toggle the pin status of a note. Returns the updated NoteItem.
+final togglePinNoteApiProvider = Provider.family<
   Future<NoteItem> Function(),
   String
 >((ref, noteId) {
   return () async {
     if (kDebugMode)
-      print('[togglePinNoteProvider] Toggling pin state for note: $noteId');
+      print(
+        '[togglePinNoteApiProvider] Toggling pin state via API for note: $noteId',
+      );
     final apiService = _getNoteApiService(ref);
-    // Use the active notes provider's notifier
-    ref.read(notesNotifierProvider.notifier).togglePinOptimistically(noteId);
     try {
       final NoteItem result = await apiService.togglePinNote(noteId);
+      // Update detail cache
       ref
           .read(noteDetailCacheProvider.notifier)
           .update((state) => {...state, result.id: result});
@@ -988,135 +915,132 @@ final togglePinNoteProvider = Provider.family<
     } catch (e, stackTrace) {
       if (kDebugMode)
         print(
-          '[togglePinNoteProvider] Error toggling pin state for note: $noteId\n$stackTrace',
+          '[togglePinNoteApiProvider] Error toggling pin state for note $noteId via API: $e\n$stackTrace',
         );
-      // Refresh the active notes provider
-      await ref.read(notesNotifierProvider.notifier).refresh();
       rethrow;
     }
   };
 });
 
-// --- Removed Move Note Logic ---
+/// API call to create a new note. Returns the created NoteItem.
+final createNoteApiProvider = Provider<Future<NoteItem> Function(NoteItem)>((
+  ref,
+) {
+  return (NoteItem note) async {
+    final apiService = _getNoteApiService(ref);
+    try {
+      final NoteItem createdNote = await apiService.createNote(note);
+      // Invalidate the relevant notifier family instance(s) after creation
+      ref.invalidate(notesNotifierFamily(note.blinkoType));
+      ref.invalidate(notesNotifierFamily(null)); // Invalidate generic too
+      return createdNote;
+    } catch (e) {
+      if (kDebugMode)
+        print('[createNoteApiProvider] Error creating note via API: $e');
+      // Don't invalidate here, let caller handle error
+      rethrow;
+    }
+  };
+});
 
-// --- Detail/Comment Providers ---
+/// API call to fix grammar using OpenAI and update the note. Returns updated NoteItem.
+final fixNoteGrammarApiProvider = Provider.family<Future<NoteItem>, String>((
+  ref,
+  noteId,
+) {
+  return () async {
+    if (kDebugMode)
+      print(
+        '[fixNoteGrammarApiProvider] Starting grammar fix API process for note: $noteId',
+      );
+    final notesApiService = _getNoteApiService(ref);
+    final MinimalOpenAiService openaiApiService = ref.read(
+      api_p.openaiApiServiceProvider,
+    );
+    final String selectedModelId = ref.read(settings_p.openAiModelIdProvider);
+
+    if (!openaiApiService.isConfigured) {
+      throw Exception('OpenAI API key is not configured in settings.');
+    }
+
+    try {
+      final NoteItem currentNote = await notesApiService.getNote(noteId);
+      final String originalContent = currentNote.content;
+      if (originalContent.trim().isEmpty) {
+        if (kDebugMode)
+          print(
+            '[fixNoteGrammarApiProvider] Note content empty, skipping API call.',
+          );
+        return currentNote; // Return current note, no change
+      }
+
+      final String correctedContent = await openaiApiService.fixGrammar(
+        originalContent,
+        modelId: selectedModelId,
+      );
+      if (correctedContent == originalContent ||
+          correctedContent.trim().isEmpty) {
+        if (kDebugMode)
+          print(
+            '[fixNoteGrammarApiProvider] Content unchanged or correction empty.',
+          );
+        return currentNote; // Return current note, no change
+      }
+
+      final NoteItem updatedNoteData = currentNote.copyWith(
+        content: correctedContent,
+      );
+      final NoteItem resultNote = await notesApiService.updateNote(
+        noteId,
+        updatedNoteData,
+      );
+
+      // Update detail cache
+      ref
+          .read(noteDetailCacheProvider.notifier)
+          .update((state) => {...state, noteId: resultNote});
+      ref.invalidate(noteDetailProvider(noteId));
+
+      if (kDebugMode)
+        print(
+          '[fixNoteGrammarApiProvider] Note $noteId updated successfully via API.',
+        );
+      return resultNote;
+    } catch (e, stackTrace) {
+      if (kDebugMode)
+        print(
+          '[fixNoteGrammarApiProvider] Error fixing grammar for note $noteId via API: $e\n$stackTrace',
+        );
+      rethrow;
+    }
+  };
+});
+
+
+// --- Detail/Comment Providers (Mostly Unchanged) ---
 
 final noteDetailCacheProvider = StateProvider<Map<String, NoteItem>>(
   (ref) => {},
   name: 'noteDetailCacheProvider',
 );
 
-final createNoteProvider = Provider<Future<void> Function(NoteItem)>((ref) {
-  return (NoteItem note) async {
-    final apiService = _getNoteApiService(ref);
-    try {
-      await apiService.createNote(note);
-    } catch (e) {
-      if (kDebugMode) print('[createNoteProvider] Error creating note: $e');
-      rethrow;
-    } finally {
-      if (kDebugMode)
-        print(
-          '[createNoteProvider] Invalidating notesNotifierProvider after create attempt.',
-        );
-      // Invalidate the active notes provider
-      ref.invalidate(notesNotifierProvider);
-      // Also invalidate specific providers if they exist and might be relevant
-      if (note.blinkoType == BlinkoNoteType.cache) {
-        ref.invalidate(cacheNotesNotifierProvider);
-      } else if (note.blinkoType == BlinkoNoteType.vault) {
-        ref.invalidate(vaultNotesNotifierProvider);
-      }
-    }
-  };
-});
-
-
-final fixNoteGrammarProvider = FutureProvider.family<void, String>((
-  ref,
-  noteId,
-) async {
-  if (kDebugMode)
-    print('[fixNoteGrammarProvider] Starting grammar fix for note: $noteId');
-  final notesApiService = _getNoteApiService(ref);
-  final MinimalOpenAiService openaiApiService = ref.read(
-    api_p.openaiApiServiceProvider,
-  );
-  final String selectedModelId = ref.read(settings_p.openAiModelIdProvider);
-
-  if (!openaiApiService.isConfigured) {
-    if (kDebugMode)
-      print(
-        '[fixNoteGrammarProvider] OpenAI service not configured. Aborting.',
-      );
-    throw Exception('OpenAI API key is not configured in settings.');
-  }
-
-  try {
-    if (kDebugMode) print('[fixNoteGrammarProvider] Fetching note content...');
-    final NoteItem currentNote = await notesApiService.getNote(noteId);
-    final String originalContent = currentNote.content;
-    if (originalContent.trim().isEmpty) {
-      if (kDebugMode)
-        print('[fixNoteGrammarProvider] Note content is empty. Skipping.');
-      return;
-    }
-
-    if (kDebugMode)
-      print(
-        '[fixNoteGrammarProvider] Calling OpenAI API with model: $selectedModelId...',
-      );
-    final String correctedContent = await openaiApiService.fixGrammar(
-      originalContent,
-      modelId: selectedModelId,
-    );
-    if (correctedContent == originalContent ||
-        correctedContent.trim().isEmpty) {
-      if (kDebugMode)
-        print(
-          '[fixNoteGrammarProvider] Content unchanged or correction empty. No update needed.',
-        );
-      return;
-    }
-
-    if (kDebugMode)
-      print('[fixNoteGrammarProvider] Content corrected. Updating note...');
-    final NoteItem updatedNoteData = currentNote.copyWith(
-      content: correctedContent,
-    );
-    final NoteItem resultNote = await notesApiService.updateNote(
-      noteId,
-      updatedNoteData,
-    );
-
-    // Use the active notes provider's notifier
-    ref
-        .read(notesNotifierProvider.notifier)
-        .updateNoteOptimistically(resultNote);
-    ref
-        .read(noteDetailCacheProvider.notifier)
-        .update((state) => {...state, noteId: resultNote});
-    ref.invalidate(noteDetailProvider(noteId));
-
-    if (kDebugMode)
-      print(
-        '[fixNoteGrammarProvider] Note $noteId updated successfully with corrected grammar.',
-      );
-  } catch (e, stackTrace) {
-    if (kDebugMode)
-      print(
-        '[fixNoteGrammarProvider] Error fixing grammar for note $noteId: $e\n$stackTrace',
-      );
-    rethrow;
-  }
-});
-
 final noteDetailProvider = FutureProvider.family<NoteItem, String>((
   ref,
   noteId,
 ) async {
+  // Check cache first
+  final cachedNote = ref.watch(noteDetailCacheProvider)[noteId];
+  if (cachedNote != null) {
+    return cachedNote;
+  }
+  // Fetch from API if not cached
   final apiService = _getNoteApiService(ref);
-  return apiService.getNote(noteId);
+  final note = await apiService.getNote(noteId);
+  // Update cache
+  ref
+      .read(noteDetailCacheProvider.notifier)
+      .update((state) => {...state, noteId: note});
+  return note;
 }, name: 'noteDetailProvider');
 
 final noteCommentsProvider = FutureProvider.family<List<Comment>, String>((
@@ -1129,7 +1053,8 @@ final noteCommentsProvider = FutureProvider.family<List<Comment>, String>((
   return comments;
 }, name: 'noteCommentsProvider');
 
-final isFixingGrammarProvider = StateProvider<bool>(
-  (ref) => false,
+// Simple state provider for UI loading indicator
+final isFixingGrammarProvider = StateProvider.family<bool, String>(
+  (ref, noteId) => false,
   name: 'isFixingGrammarProvider',
 );

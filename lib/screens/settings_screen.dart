@@ -620,10 +620,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     ref.invalidate(taskServerConfigProvider);
     ref.invalidate(mcpServerConfigProvider);
     ref.invalidate(workbenchInstancesProvider); // Use workbench provider
-    // Invalidate note/task data providers (if they exist and depend on the config)
+    // Invalidate note/task data providers
     ref.invalidate(
-      note_providers.notesNotifierProvider,
-    ); // Use non-family provider
+      note_providers.notesNotifierFamily,
+    ); // Invalidate the entire family
     ref.invalidate(tasksNotifierProvider);
     ref.invalidate(chatProvider);
     // Invalidate API key providers
@@ -723,6 +723,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     'Deleted',
                     '${purpose.name.substring(0, 1).toUpperCase()}${purpose.name.substring(1)} server "$displayName" deleted.',
                   );
+                  // Invalidate relevant providers after successful deletion
+                  if (purpose == ServerPurpose.note) {
+                    ref.invalidate(note_providers.notesNotifierFamily);
+                    ref.invalidate(noteApiServiceProvider);
+                  } else {
+                    ref.invalidate(tasksNotifierProvider);
+                    ref.invalidate(taskApiServiceProvider);
+                  }
                 }
               }
             },
