@@ -1,5 +1,5 @@
 //
-// AUTO-GENERATED FILE, DO NOT MODIFY!
+// AUTO-GENERATED FILE, DO NOT MODIFY! (Manually extended for 'typeVal')
 //
 // @dart=2.18
 
@@ -25,15 +25,16 @@ class NotesUpsertRequest {
     this.createdAt,
     this.updatedAt,
     this.metadata,
+
+    /// Manually added field to store the integer 'type' for the request.
+    this.typeVal,
   });
 
   String? content;
 
   ///
-  /// Please note: This property should have been non-nullable! Since the specification file
-  /// does not include a default value (using the "default:" property), however, the generated
-  /// source code must fall back to having a nullable type.
-  /// Consider adding a "default:" property in the specification file to hide this note.
+  /// Please note: This property is auto-generated but doesn't map to an int in the generated code.
+  /// We keep it for backward compatibility, though it is typically not used.
   ///
   NotesListRequestType? type;
 
@@ -75,51 +76,63 @@ class NotesUpsertRequest {
 
   Object? metadata;
 
-  @override
-  bool operator ==(Object other) => identical(this, other) || other is NotesUpsertRequest &&
-    other.content == content &&
-    other.type == type &&
-    _deepEquality.equals(other.attachments, attachments) &&
-    other.id == id &&
-    other.isArchived == isArchived &&
-    other.isTop == isTop &&
-    other.isShare == isShare &&
-    other.isRecycle == isRecycle &&
-    _deepEquality.equals(other.references, references) &&
-    other.createdAt == createdAt &&
-    other.updatedAt == updatedAt &&
-    other.metadata == metadata;
+  /// Manually added field to store the integer 'type' (0 for cache, 1 for vault, etc.)
+  int? typeVal;
 
   @override
-  int get hashCode =>
-    // ignore: unnecessary_parenthesis
-    (content == null ? 0 : content!.hashCode) +
-    (type == null ? 0 : type!.hashCode) +
-    (attachments.hashCode) +
-    (id == null ? 0 : id!.hashCode) +
-    (isArchived == null ? 0 : isArchived!.hashCode) +
-    (isTop == null ? 0 : isTop!.hashCode) +
-    (isShare == null ? 0 : isShare!.hashCode) +
-    (isRecycle == null ? 0 : isRecycle!.hashCode) +
-    (references.hashCode) +
-    (createdAt == null ? 0 : createdAt!.hashCode) +
-    (updatedAt == null ? 0 : updatedAt!.hashCode) +
-    (metadata == null ? 0 : metadata!.hashCode);
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is NotesUpsertRequest &&
+          other.content == content &&
+          other.type == type &&
+          _deepEquality.equals(other.attachments, attachments) &&
+          other.id == id &&
+          other.isArchived == isArchived &&
+          other.isTop == isTop &&
+          other.isShare == isShare &&
+          other.isRecycle == isRecycle &&
+          _deepEquality.equals(other.references, references) &&
+          other.createdAt == createdAt &&
+          other.updatedAt == updatedAt &&
+          other.metadata == metadata &&
+          other.typeVal == typeVal;
 
   @override
-  String toString() => 'NotesUpsertRequest[content=$content, type=$type, attachments=$attachments, id=$id, isArchived=$isArchived, isTop=$isTop, isShare=$isShare, isRecycle=$isRecycle, references=$references, createdAt=$createdAt, updatedAt=$updatedAt, metadata=$metadata]';
+  int get hashCode {
+    final listEquality = const DeepCollectionEquality();
+    return (content == null ? 0 : content!.hashCode) +
+        (type == null ? 0 : type!.hashCode) +
+        (listEquality.hash(attachments)) +
+        (id == null ? 0 : id!.hashCode) +
+        (isArchived == null ? 0 : isArchived!.hashCode) +
+        (isTop == null ? 0 : isTop!.hashCode) +
+        (isShare == null ? 0 : isShare!.hashCode) +
+        (isRecycle == null ? 0 : isRecycle!.hashCode) +
+        (listEquality.hash(references)) +
+        (createdAt == null ? 0 : createdAt!.hashCode) +
+        (updatedAt == null ? 0 : updatedAt!.hashCode) +
+        (metadata == null ? 0 : metadata!.hashCode) +
+        (typeVal == null ? 0 : typeVal!.hashCode);
+  }
+
+  @override
+  String toString() =>
+      'NotesUpsertRequest[content=$content, type=$type, attachments=$attachments, id=$id, '
+      'isArchived=$isArchived, isTop=$isTop, isShare=$isShare, isRecycle=$isRecycle, '
+      'references=$references, createdAt=$createdAt, updatedAt=$updatedAt, metadata=$metadata, '
+      'typeVal=$typeVal]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
-    // Only include optional fields if they are not null
+
     if (this.content != null) {
       json[r'content'] = this.content;
     }
     if (this.type != null) {
-      json[r'type'] = this.type;
+      json[r'typeObj'] =
+          this.type; // keep the original "type" object in a different field
     }
-    // Include lists even if empty, as they are not nullable in the model
-      json[r'attachments'] = this.attachments;
+    json[r'attachments'] = this.attachments;
     if (this.id != null) {
       json[r'id'] = this.id;
     }
@@ -135,8 +148,7 @@ class NotesUpsertRequest {
     if (this.isRecycle != null) {
       json[r'isRecycle'] = this.isRecycle;
     }
-    // Include lists even if empty
-      json[r'references'] = this.references;
+    json[r'references'] = this.references;
     if (this.createdAt != null) {
       json[r'createdAt'] = this.createdAt;
     }
@@ -146,32 +158,26 @@ class NotesUpsertRequest {
     if (this.metadata != null) {
       json[r'metadata'] = this.metadata;
     }
+
+    // Our manually added field: if it exists, place it under "type" in JSON
+    if (this.typeVal != null) {
+      json[r'type'] = this.typeVal;
+    }
+
     return json;
   }
 
   /// Returns a new [NotesUpsertRequest] instance and imports its values from
   /// [value] if it's a [Map], null otherwise.
-  // ignore: prefer_constructors_over_static_methods
   static NotesUpsertRequest? fromJson(dynamic value) {
     if (value is Map) {
       final json = value.cast<String, dynamic>();
 
-      // Ensure that the map contains the required keys.
-      // Note 1: the values aren't checked for validity beyond being non-null.
-      // Note 2: this code is stripped in release mode!
-      assert(() {
-        requiredKeys.forEach((key) {
-          assert(json.containsKey(key), 'Required key "NotesUpsertRequest[$key]" is missing from JSON.');
-          assert(json[key] != null, 'Required key "NotesUpsertRequest[$key]" has a null value in JSON.');
-        });
-        return true;
-      }());
-
       return NotesUpsertRequest(
         content: mapValueOfType<String>(json, r'content'),
-        type: NotesListRequestType.fromJson(json[r'type']),
+        type: NotesListRequestType.fromJson(json[r'typeObj']),
         attachments: NotesUpsertRequestAttachmentsInner.listFromJson(json[r'attachments']),
-        id: num.parse('${json[r'id']}'),
+        id: json[r'id'] == null ? null : num.parse('${json[r'id']}'),
         isArchived: mapValueOfType<bool>(json, r'isArchived'),
         isTop: mapValueOfType<bool>(json, r'isTop'),
         isShare: mapValueOfType<bool>(json, r'isShare'),
@@ -182,6 +188,7 @@ class NotesUpsertRequest {
         createdAt: mapValueOfType<String>(json, r'createdAt'),
         updatedAt: mapValueOfType<String>(json, r'updatedAt'),
         metadata: mapValueOfType<Object>(json, r'metadata'),
+        typeVal: mapValueOfType<int>(json, r'type'),
       );
     }
     return null;
@@ -203,7 +210,7 @@ class NotesUpsertRequest {
   static Map<String, NotesUpsertRequest> mapFromJson(dynamic json) {
     final map = <String, NotesUpsertRequest>{};
     if (json is Map && json.isNotEmpty) {
-      json = json.cast<String, dynamic>(); // ignore: parameter_assignments
+      json = json.cast<String, dynamic>();
       for (final entry in json.entries) {
         final value = NotesUpsertRequest.fromJson(entry.value);
         if (value != null) {
@@ -218,7 +225,6 @@ class NotesUpsertRequest {
   static Map<String, List<NotesUpsertRequest>> mapListFromJson(dynamic json, {bool growable = false,}) {
     final map = <String, List<NotesUpsertRequest>>{};
     if (json is Map && json.isNotEmpty) {
-      // ignore: parameter_assignments
       json = json.cast<String, dynamic>();
       for (final entry in json.entries) {
         map[entry.key] = NotesUpsertRequest.listFromJson(entry.value, growable: growable,);
@@ -227,7 +233,7 @@ class NotesUpsertRequest {
     return map;
   }
 
-  /// The list of required keys that must be present in a JSON.
-  static const requiredKeys = <String>{
-  };
+  static const requiredKeys = <String>{};
+
+  static final _deepEquality = const DeepCollectionEquality();
 }
