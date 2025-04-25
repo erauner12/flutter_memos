@@ -5,6 +5,8 @@ import 'package:flutter_memos/models/mcp_server_config.dart';
 import 'package:flutter_memos/models/server_config.dart';
 import 'package:flutter_memos/providers/api_providers.dart';
 import 'package:flutter_memos/providers/chat_providers.dart';
+import 'package:flutter_memos/providers/focus_instances_provider.dart'; // Correct import
+import 'package:flutter_memos/providers/focus_provider.dart'; // Correct import
 // ADD: Import the new MCP config provider
 import 'package:flutter_memos/providers/mcp_server_config_provider.dart';
 import 'package:flutter_memos/providers/note_providers.dart' as note_providers;
@@ -14,8 +16,6 @@ import 'package:flutter_memos/providers/settings_provider.dart'; // Import setti
 import 'package:flutter_memos/providers/shared_prefs_provider.dart';
 import 'package:flutter_memos/providers/task_providers.dart';
 import 'package:flutter_memos/providers/task_server_config_provider.dart';
-import 'package:flutter_memos/providers/workbench_instances_provider.dart'; // Add import for workbench instances
-import 'package:flutter_memos/providers/workbench_provider.dart';
 import 'package:flutter_memos/screens/add_edit_mcp_server_screen.dart'; // Will be created next
 import 'package:flutter_memos/screens/add_edit_server_screen.dart';
 import 'package:flutter_memos/services/auth_strategy.dart'; // Import for BearerTokenAuthStrategy
@@ -54,8 +54,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   // Gemini state
   final _geminiApiKeyController = TextEditingController();
 
-  // REMOVED Vikunja state
-
   @override
   void initState() {
     super.initState();
@@ -65,7 +63,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         _openaiApiKeyController.text = initialOpenAiKey;
         final initialGeminiKey = ref.read(geminiApiKeyProvider);
         _geminiApiKeyController.text = initialGeminiKey;
-        // REMOVED Vikunja key init
       }
       _fetchModels();
     });
@@ -75,7 +72,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   void dispose() {
     _openaiApiKeyController.dispose();
     _geminiApiKeyController.dispose();
-    // REMOVED Vikunja controller dispose
     super.dispose();
   }
 
@@ -173,7 +169,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
        case ServerType.vikunja:
          testApiService = VikunjaApiService();
         // Vikunja uses Bearer token auth, already covered by default
-        // REMOVED check for legacy key
         if (purpose == ServerPurpose.task && config.authToken.isEmpty) {
           if (isMounted) {
             _showResultDialog(
@@ -223,7 +218,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           'Success',
           'Connection to ${purpose.name} server "${config.name ?? config.serverUrl}" successful!',
         );
-        // REMOVED direct setting of isVikunjaConfiguredProvider
       } else {
         _showResultDialog(
           'Connection Failed',
@@ -304,8 +298,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       }
     }
   }
-
-  // --- Removed _showServerActions (replaced by Edit/Delete buttons per config) ---
 
   // Helper method to build MCP server list tiles (Unchanged from original, seems fine)
   List<Widget> _buildMcpServerListTiles(BuildContext context, WidgetRef ref) {
@@ -515,38 +507,25 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     // Check mounted at the beginning
     if (!mounted) return;
 
-    // Removed CloudKitService instance
     bool cloudSuccess = true; // Assume success unless Supabase fails
     String cloudErrorMessage = '';
 
-    // Get current workbench instance IDs before clearing
-    final instanceIdsToClear = ref.read(workbenchInstancesProvider).instances.map((i) => i.id).toList();
+    // Get current focus instance IDs before clearing
+    // Use focusInstancesProvider and cast 'i' to FocusInstance
+    final instanceIdsToClear =
+        ref.read(focusInstancesProvider).instances.map((i) => (i).id).toList();
 
     // 1. Clear Supabase Data (Optional - uncomment and adapt if needed)
     try {
       final supabase = Supabase.instance.client;
-      // Removed unused supabaseDataService variable
-      // final supabaseDataService = ref.read(supabaseDataServiceProvider);
 
       if (kDebugMode) print('[SettingsScreen] Deleting Supabase data...');
 
       // Example: Clear chat sessions using SupabaseDataService method
-      // This assumes you have a method like deleteAllChatSessions or similar
-      // bool deleteChatsSuccess = await supabaseDataService.deleteAllChatSessions();
-      // Or delete directly:
       await supabase
           .from(SupabaseDataService.chatSessionsTable)
           .delete()
           .neq('id', '0'); // Delete all rows
-
-      // Add similar deletions for other tables if they exist in Supabase
-      // await supabase.from('server_configs').delete().neq('id', '0');
-      // await supabase.from('mcp_server_configs').delete().neq('id', '0');
-      // await supabase.from('user_settings').delete().neq('id', '0'); // Assuming a single row or user-specific filter
-      // await supabase.from('workbench_instances').delete().neq('id', '0');
-      // await supabase.from('workbench_items').delete().neq('id', '0');
-
-      // cloudSuccess = deleteChatsSuccess && ... ; // Combine results if needed
 
       if (kDebugMode) {
         print('[SettingsScreen] Supabase deletion attempt finished.');
@@ -566,9 +545,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final openAiKeyNotifier = ref.read(openAiApiKeyProvider.notifier);
     final openAiModelNotifier = ref.read(openAiModelIdProvider.notifier);
     final geminiNotifier = ref.read(geminiApiKeyProvider.notifier);
-    // REMOVED Vikunja Key Notifier
-    // Removed unused workbenchInstancesNotifier variable
-    // final workbenchInstancesNotifier = ref.read(workbenchInstancesProvider.notifier);
     final tasksNotifier = ref.read(tasksNotifierProvider.notifier);
     final chatNotifier = ref.read(chatProvider.notifier);
     final sharedPrefsService = await ref.read(sharedPrefsServiceProvider.future);
@@ -582,31 +558,27 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       await openAiKeyNotifier.clear();
       await openAiModelNotifier.clear();
       await geminiNotifier.clear();
-      // REMOVED Vikunja Key Clear
 
       // Clear Data Caches / Local State
-      // Invalidate workbench providers (they load from prefs now)
+      // Invalidate focus providers (they load from prefs now)
       for (final instanceId in instanceIdsToClear) {
-        ref.invalidate(workbenchProviderFamily(instanceId));
+        ref.invalidate(
+          focusProviderFamily(instanceId),
+        ); // Use focus provider family
         // Also clear the prefs file for each instance's items
-        // Use the correct method name from SharedPrefsService
-        await sharedPrefsService.remove('workbench_items_$instanceId');
+        await sharedPrefsService.remove(
+          'focus_items_$instanceId',
+        ); // Updated key prefix
       }
       // Reset and reload instances (will load default from prefs)
-      ref.invalidate(workbenchInstancesProvider);
-      // Removed call to loadInstances, invalidation handles reload
-      // await ref.read(workbenchInstancesProvider.notifier).loadInstances();
-
+      ref.invalidate(focusInstancesProvider); // Use focus provider
 
       tasksNotifier.clearTasks(); // Clear in-memory task state
       await chatNotifier.clearChat(); // Clears local state and Supabase entry
 
       // Clear remaining shared prefs (like last opened items, instance list)
-      // Use the correct method name from SharedPrefsService
       await sharedPrefsService
           .clearAllWorkbenchData(); // Use specific clear method if available
-
-      // REMOVED direct setting of isVikunjaConfiguredProvider
 
       if (kDebugMode) print('[SettingsScreen] Local reset finished.');
     } catch (e, s) {
@@ -637,7 +609,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     ref.invalidate(noteServerConfigProvider);
     ref.invalidate(taskServerConfigProvider);
     ref.invalidate(mcpServerConfigProvider);
-    ref.invalidate(workbenchInstancesProvider);
+    ref.invalidate(focusInstancesProvider); // Use focus provider
     // Invalidate note/task data providers (if they exist and depend on the config)
     ref.invalidate(
       note_providers.notesNotifierProvider,
@@ -648,7 +620,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     ref.invalidate(openAiApiKeyProvider);
     ref.invalidate(openAiModelIdProvider);
     ref.invalidate(geminiApiKeyProvider);
-    // REMOVED Vikunja Key Invalidation
     // Invalidate API service providers
     ref.invalidate(noteApiServiceProvider); // Use new provider name
     ref.invalidate(taskApiServiceProvider); // Use new provider name
@@ -662,7 +633,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   // Helper to build the configuration tile for Note or Task server
   Widget _buildServerConfigTile(ServerConfig? config, ServerPurpose purpose) {
-    // final String title = purpose == ServerPurpose.note ? 'Note Server' : 'Task Server'; // Unused variable
     final String addText = 'Tap to Add ${purpose.name.substring(0,1).toUpperCase()}${purpose.name.substring(1)} Server';
     // Explicitly type the notifier based on purpose
     final StateNotifier<ServerConfig?> notifier =
@@ -739,8 +709,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 if (!success) {
                   _showResultDialog('Error', 'Failed to delete ${purpose.name} server.', isError: true);
                 } else {
-                  _showResultDialog('Deleted', '${purpose.name.substring(0,1).toUpperCase()}${purpose.name.substring(1)} server "$displayName" deleted.');
-                  // REMOVED direct setting of isVikunjaConfiguredProvider
+                  _showResultDialog(
+                    'Deleted',
+                    '${purpose.name.substring(0, 1).toUpperCase()}${purpose.name.substring(1)} server "$displayName" deleted.',
+                  );
                 }
               }
             },
@@ -880,8 +852,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               CupertinoListSection.insetGrouped(
                 header: const Text('INTEGRATIONS'),
                 children: [
-                  // REMOVED Vikunja API Key Tile (Legacy)
-
                   // OpenAI Integration Tile
                   CupertinoListTile(
                     padding: const EdgeInsets.symmetric(horizontal: 15.0, vertical: 10.0),
@@ -1111,7 +1081,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         builder: (dialogContext) => CupertinoAlertDialog(
                           title: const Text('Confirm Reset'),
                           content: const Text(
-                                'This will permanently delete your configured Note server, Task server, all MCP servers, API keys (OpenAI, Gemini), cached data (notes, tasks, workbench items, chat history), and local settings from this device.\n\nSupabase data (like chat history) will also be deleted if configured.\n\nThis action cannot be undone. Are you absolutely sure?', // Updated content
+                                'This will permanently delete your configured Note server, Task server, all MCP servers, API keys (OpenAI, Gemini), cached data (notes, tasks, focus board items, chat history), and local settings from this device.\n\nSupabase data (like chat history) will also be deleted if configured.\n\nThis action cannot be undone. Are you absolutely sure?', // Updated content
                           ),
                           actions: [
                             CupertinoDialogAction(child: const Text('Cancel'), onPressed: () => Navigator.pop(dialogContext, false)),

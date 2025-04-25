@@ -17,11 +17,11 @@ import 'package:flutter_memos/widgets/advanced_filter_panel.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class ItemsScreen extends ConsumerStatefulWidget {
-  // serverId is no longer needed as context comes from noteServerConfigProvider
-  // final String serverId;
+  // Optional key to initialize the filter preset for this screen instance
+  final String? presetKey;
 
-  // Remove serverId from constructor
-  const ItemsScreen({super.key});
+  // Remove serverId from constructor, add presetKey
+  const ItemsScreen({super.key, this.presetKey});
 
   @override
   ConsumerState<ItemsScreen> createState() => _ItemsScreenState();
@@ -38,7 +38,29 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _updateEffectiveServerId(); // Determine serverId initially
-      ref.read(loadFilterPreferencesProvider);
+      // Initialize filter based on presetKey if provided
+      if (widget.presetKey != null &&
+          quickFilterPresets.containsKey(widget.presetKey)) {
+        // Check if the current preset is different before updating
+        final currentPreset = ref.read(quickFilterPresetProvider);
+        if (currentPreset != widget.presetKey) {
+          ref.read(quickFilterPresetProvider.notifier).state =
+              widget.presetKey!;
+          // Optionally clear other filters when a preset is applied via constructor
+          ref.read(rawCelFilterProvider.notifier).state = '';
+          ref.read(searchQueryProvider.notifier).state = '';
+          // Persist this initial preset if desired
+          ref.read(filterPreferencesProvider)(widget.presetKey!);
+          if (kDebugMode) {
+            print(
+              '[ItemsScreen] Initialized with presetKey: ${widget.presetKey}',
+            );
+          }
+        }
+      } else {
+        // Load saved preferences if no specific preset is passed
+        ref.read(loadFilterPreferencesProvider);
+      }
       if (mounted) FocusScope.of(context).requestFocus(_focusNode);
     });
   }
@@ -268,12 +290,20 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
       );
     }
 
+    // Determine the title based on the preset key or server name
+    String screenTitle = currentServer.name ?? currentServer.serverUrl;
+    if (widget.presetKey != null) {
+      final preset = quickFilterPresets[widget.presetKey];
+      if (preset != null) {
+        screenTitle = preset.label; // Use preset label for title
+      }
+    }
+
+
     return CupertinoPageScaffold(
       navigationBar: isMultiSelectMode
           ? _buildMultiSelectNavBar(selectedIds.length)
               : CupertinoNavigationBar(
-                // Use previousPageTitle for automatic back button text (points back to Hub)
-                // previousPageTitle: 'Servers', // Removed Hub concept for single server
               middle: GestureDetector(
                   onTap: () {
                     if (_scrollController.hasClients)
@@ -286,7 +316,7 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
                 child: Container(
                   color: CupertinoColors.transparent,
                     child: Text(
-                      currentServer.name ?? currentServer.serverUrl,
+                      screenTitle, // Use dynamic title
                       overflow: TextOverflow.ellipsis,
                     ),
                 ),
@@ -374,7 +404,8 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
                   padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 0.0),
                   child: _buildSearchBar(),
                 ),
-              if (!isMultiSelectMode)
+              // Only show quick filters if no specific preset was forced via constructor
+              if (!isMultiSelectMode && widget.presetKey == null)
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 8.0),
                   child: _buildQuickFilterControl(),
@@ -439,11 +470,21 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
   Widget _buildQuickFilterControl() {
     final selectedPresetKey = ref.watch(quickFilterPresetProvider);
     final theme = CupertinoTheme.of(context);
-    const List<String> desiredOrder = ['today', 'inbox', 'all', 'hidden'];
+    // Define the order and available presets for the general view
+    const List<String> desiredOrder = [
+      'today',
+      'inbox',
+      'all',
+      'hidden',
+    ]; // Example order
     final Map<String, Widget> segments = {};
     for (var key in desiredOrder) {
       final preset = quickFilterPresets[key];
-      if (preset != null && preset.key != 'custom') {
+      // Only include presets relevant for the general segmented control
+      if (preset != null &&
+          preset.key != 'custom' &&
+          preset.key != 'cache' &&
+          preset.key != 'vault') {
         segments[preset.key] = Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 6.0),
           child: Row(
@@ -458,6 +499,11 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
         );
       }
     }
+    // If no relevant presets found, don't build the control
+    if (segments.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
     return SizedBox(
       width: double.infinity,
       child: CupertinoSlidingSegmentedControl<String>(
@@ -580,8 +626,11 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
             .then((_) {
               // Use non-family provider
               if (mounted && ref.read(quickFilterPresetProvider) == 'hidden') {
-                ref.read(quickFilterPresetProvider.notifier).state = 'today';
-                ref.read(filterPreferencesProvider)('today');
+                // Decide where to navigate after unhiding all - maybe 'today' or 'all'
+                final targetPreset = widget.presetKey ?? 'today';
+                ref.read(quickFilterPresetProvider.notifier).state =
+                    targetPreset;
+                ref.read(filterPreferencesProvider)(targetPreset);
               }
             })
             .catchError((e, s) {

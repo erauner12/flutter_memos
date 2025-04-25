@@ -32,7 +32,7 @@ class MyAppRoot extends StatelessWidget {
   Widget build(BuildContext context) {
     // ConfigCheckWrapper will handle the initial loading and routing logic.
     return const CupertinoApp(
-      title: 'Flutter Memos', // Optional: Add an app title
+      title: 'ThoughtCache', // Updated app title
       theme: CupertinoThemeData(
         brightness: Brightness.light,
       ), // Optional: Set theme

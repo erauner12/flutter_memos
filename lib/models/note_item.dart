@@ -7,6 +7,9 @@ enum NoteState { normal, archived }
 
 enum NoteVisibility { public, private, protected }
 
+// Optional: Add NoteKind if differentiating Cache/Vault in the model
+// enum NoteKind { cache, vault, other }
+
 @immutable
 class NoteItem implements BaseItem {
   // Implement BaseItem
@@ -26,6 +29,7 @@ class NoteItem implements BaseItem {
   final String? parentId;
   final DateTime? startDate;
   final DateTime? endDate;
+  // final NoteKind kind; // Add if using model-based differentiation
 
   const NoteItem({
     required this.id,
@@ -43,6 +47,7 @@ class NoteItem implements BaseItem {
     this.parentId,
     this.startDate,
     this.endDate,
+    // this.kind = NoteKind.other, // Default kind if added
   });
 
   // --- BaseItem Implementation ---
@@ -96,6 +101,7 @@ class NoteItem implements BaseItem {
     String? parentId,
     DateTime? startDate,
     DateTime? endDate,
+    // NoteKind? kind, // Add if using model-based differentiation
   }) {
     return NoteItem(
       id: id ?? this.id,
@@ -113,6 +119,7 @@ class NoteItem implements BaseItem {
       parentId: parentId ?? this.parentId,
       startDate: startDate ?? this.startDate,
       endDate: endDate ?? this.endDate,
+      // kind: kind ?? this.kind, // Add if using model-based differentiation
     );
   }
 
@@ -131,18 +138,13 @@ class NoteItem implements BaseItem {
         other.updateTime == updateTime &&
         other.displayTime == displayTime &&
         listEquals(other.tags, tags) &&
-        listEquals(
-          other.resources,
-          resources,
-        ) && // Corrected: compare other.resources with this.resources
-        listEquals(
-          other.relations,
-          relations,
-        ) && // Corrected: compare other.relations with this.relations
+        listEquals(other.resources, resources) &&
+        listEquals(other.relations, relations) &&
         other.creatorId == creatorId &&
         other.parentId == parentId &&
         other.startDate == startDate &&
         other.endDate == endDate;
+        // && other.kind == kind; // Add if using model-based differentiation
   }
 
   @override
@@ -164,6 +166,7 @@ class NoteItem implements BaseItem {
       parentId,
       startDate,
       endDate,
+      // kind, // Add if using model-based differentiation
     );
   }
 

@@ -56,4 +56,32 @@ class FilterPresets {
   static String allFilter() {
     return '';
   }
+
+  /// Cache notes (placeholder - assumes a '#cache' tag)
+  static String cacheFilter() {
+    // Example: Filter by tag '#cache'
+    // Replace with actual logic (e.g., checking a 'kind' field if added)
+    return FilterBuilder.byTags(['cache']);
+  }
+
+  /// Vault notes (placeholder - assumes a '#vault' tag)
+  static String vaultFilter() {
+    // Example: Filter by tag '#vault'
+    // Replace with actual logic
+    return FilterBuilder.byTags(['vault']);
+  }
+
+  /// Inbox notes (placeholder - assumes an '#inbox' tag)
+  static String inboxFilter() {
+    return FilterBuilder.byTags(['inbox']);
+  }
+
+  /// Hidden notes (placeholder - relies on provider logic, not a direct filter expression)
+  /// This preset is typically handled by toggling visibility in the provider/UI layer.
+  /// Returning an empty string or a specific filter if applicable.
+  static String hiddenFilter() {
+    // Usually handled by `showHiddenNotesProvider`, not a CEL filter.
+    // Return empty or a specific filter if your backend supports it.
+    return ''; // Or perhaps 'state == "ARCHIVED"' if hidden means archived?
+  }
 }

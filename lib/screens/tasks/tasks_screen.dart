@@ -8,23 +8,23 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:flutter_memos/models/server_config.dart'; // Needed for ServerType enum
 import 'package:flutter_memos/models/task_filter.dart'; // Import the filter enum
 import 'package:flutter_memos/models/task_item.dart';
-import 'package:flutter_memos/models/workbench_item_reference.dart';
+import 'package:flutter_memos/models/workbench_item_reference.dart'; // Keep generic name or rename
 import 'package:flutter_memos/models/workbench_item_type.dart'; // Import the unified enum
 // Import the CORRECT provider
 import 'package:flutter_memos/providers/api_providers.dart'
     show isVikunjaConfiguredProvider;
+import 'package:flutter_memos/providers/focus_provider.dart'; // Correct import: workbench -> focus
 import 'package:flutter_memos/providers/navigation_providers.dart';
 import 'package:flutter_memos/providers/task_providers.dart';
 // Import new task server config provider
 import 'package:flutter_memos/providers/task_server_config_provider.dart';
-import 'package:flutter_memos/providers/workbench_provider.dart';
 import 'package:flutter_memos/screens/settings_screen.dart'; // Import SettingsScreen
 import 'package:flutter_memos/screens/tasks/new_task_screen.dart';
 import 'package:flutter_memos/screens/tasks/task_detail_screen.dart'; // Import TaskDetailScreen
 import 'package:flutter_memos/screens/tasks/widgets/task_list_item.dart';
+import 'package:flutter_memos/utils/focus_utils.dart'; // Correct import: workbench -> focus
 // REMOVED incorrect import: import 'package:flutter_memos/services/vikunja_api_service.dart';
 import 'package:flutter_memos/utils/thread_utils.dart'; // Import thread utils
-import 'package:flutter_memos/utils/workbench_utils.dart'; // Import instance picker utility
 import 'package:hooks_riverpod/hooks_riverpod.dart'; // Import hooks_riverpod
 import 'package:uuid/uuid.dart';
 
@@ -62,8 +62,9 @@ class TasksScreen extends HookConsumerWidget {
     );
   }
 
-  // Add task to workbench - updated to use active Vikunja server
-  Future<void> _addTaskToWorkbench(
+  // Add task to focus board - updated to use active Vikunja server
+  Future<void> _addTaskToFocusBoard(
+    // Updated name
     BuildContext context,
     WidgetRef ref,
     TaskItem task,
@@ -84,10 +85,11 @@ class TasksScreen extends HookConsumerWidget {
       return;
     }
 
-    final selectedInstance = await showWorkbenchInstancePicker(
+    final selectedInstance = await showFocusInstancePicker(
+      // Use focus picker
       context,
       ref,
-      title: 'Add Task To Workbench',
+      title: 'Add Task To Focus Board', // Updated text
     );
     if (selectedInstance == null) {
       return;
@@ -98,6 +100,7 @@ class TasksScreen extends HookConsumerWidget {
 
     // Use active Vikunja server details
     final reference = WorkbenchItemReference(
+      // Keep generic name or rename
       id: const Uuid().v4(),
       referencedItemId: task.id, // Vikunja task ID (String)
       referencedItemType: WorkbenchItemType.task,
@@ -112,7 +115,9 @@ class TasksScreen extends HookConsumerWidget {
 
     unawaited(
       ref
-          .read(workbenchProviderFamily(targetInstanceId).notifier)
+          .read(
+            focusProviderFamily(targetInstanceId).notifier,
+          ) // Use focus provider family
           .addItem(reference),
     );
 
@@ -122,7 +127,7 @@ class TasksScreen extends HookConsumerWidget {
             ? 'Task'
             : '${previewText.substring(0, min(30, previewText.length))}${previewText.length > 30 ? '...' : ''}';
     final dialogContent =
-        'Added "$safePreview" to Workbench "$targetInstanceName"';
+        'Added "$safePreview" to Focus Board "$targetInstanceName"'; // Updated text
 
     _showAlertDialog(
       context,
@@ -271,6 +276,7 @@ class TasksScreen extends HookConsumerWidget {
       'parentItemType': WorkbenchItemType.task,
       'parentServerId': serverId, // Pass Vikunja server ID
     };
+    // TODO: Update route name if chat is replaced by studio
     rootNavigatorKey.currentState?.pushNamed('/chat', arguments: chatArgs);
   }
 
@@ -568,8 +574,13 @@ class TasksScreen extends HookConsumerWidget {
                           }
                         }
                         },
-                        onAddToWorkbench: () {
-                        _addTaskToWorkbench(itemCtx, ref, task);
+                      onAddToWorkbench: () {
+                        // Renamed to onAddToFocusBoard
+                        _addTaskToFocusBoard(
+                          itemCtx,
+                          ref,
+                          task,
+                        ); // Updated method call
                       },
                       onChatWithTask: () {
                         _chatWithTask(itemCtx, ref, task.id);

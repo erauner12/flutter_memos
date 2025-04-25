@@ -50,14 +50,49 @@ class _NotesListBodyState extends ConsumerState<NotesListBody> {
 
     if (notes.isNotEmpty && selectedId == null) {
       final firstNoteId = notes.first.id;
+      // Check if the first note is actually visible before selecting it
+      // This might be complex depending on filters; for now, select the first in the list.
       ref.read(ui_providers.selectedItemIdProvider.notifier).state = firstNoteId;
       if (kDebugMode) {
         print(
           '[NotesListBody] Selected first note (ID=$firstNoteId) after initial load/refresh.',
         );
       }
+    } else if (notes.isNotEmpty && selectedId != null) {
+      // Ensure the currently selected ID still exists in the list
+      if (!notes.any((note) => note.id == selectedId)) {
+        final firstNoteId = notes.first.id;
+        ref.read(ui_providers.selectedItemIdProvider.notifier).state =
+            firstNoteId;
+        if (kDebugMode) {
+          print(
+            '[NotesListBody] Current selection $selectedId not found in list, selecting first note (ID=$firstNoteId).',
+          );
+        }
+      }
+    } else if (notes.isEmpty && selectedId != null) {
+      // Clear selection if list becomes empty
+      ref.read(ui_providers.selectedItemIdProvider.notifier).state = null;
+      if (kDebugMode) {
+        print('[NotesListBody] List is empty, clearing selection.');
+      }
     }
   }
+
+  @override
+  void didUpdateWidget(covariant NotesListBody oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Re-check selection if the notes list changes significantly
+    if (!listEquals(
+      oldWidget.notes.map((e) => e.id).toList(),
+      widget.notes.map((e) => e.id).toList(),
+    )) {
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _ensureInitialSelection(),
+      );
+    }
+  }
+
 
   @override
   void dispose() {
@@ -195,15 +230,11 @@ class _NotesListBodyState extends ConsumerState<NotesListBody> {
               sliver: SliverList(
                 delegate: SliverChildBuilderDelegate((context, index) {
                   final note = visibleNotes[index];
-                  if (kDebugMode) {
-                    if (widget.onMoveNoteToServer != null) {
-                      // print(
-                      //   '[NotesListBody] Building NoteListItem for ${note.id}, passing onMoveNoteToServer callback.',
-                      // );
-                    }
-                  }
+                  // Debug print removed for brevity
                   return NoteListItem(
-                    key: ValueKey(note.id),
+                    key: ValueKey(
+                      note.id,
+                    ), // Use ValueKey for better performance
                     note: note,
                     index: index,
                     isInHiddenView: widget.isInHiddenView,
@@ -211,8 +242,7 @@ class _NotesListBodyState extends ConsumerState<NotesListBody> {
                         widget.onMoveNoteToServer != null
                         ? () => widget.onMoveNoteToServer!(note.id)
                         : null,
-                    // serverId: widget.serverId, // Removed serverId
-                    // TODO: Add 'Add to Workbench' action here
+                    // serverId parameter already removed
                   );
                 }, childCount: visibleNotes.length),
               ),

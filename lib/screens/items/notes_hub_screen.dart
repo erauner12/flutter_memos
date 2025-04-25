@@ -2,10 +2,13 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_memos/models/server_config.dart';
 // Import new single config provider
 import 'package:flutter_memos/providers/note_server_config_provider.dart';
-import 'package:flutter_memos/screens/items/items_screen.dart';
+// ItemsScreen might not be directly navigated to from here anymore
+// import 'package:flutter_memos/screens/items/items_screen.dart';
 import 'package:flutter_memos/screens/settings_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+// This screen might become less relevant if Vault/Cache tabs directly show ItemsScreen.
+// It could still serve as a fallback or entry point if no server is configured.
 class NotesHubScreen extends ConsumerWidget {
   const NotesHubScreen({super.key});
 
@@ -28,8 +31,9 @@ class NotesHubScreen extends ConsumerWidget {
     final noteServerConfig = ref.watch(noteServerConfigProvider);
 
     return CupertinoPageScaffold(
+      // Navigation bar might be redundant if this screen isn't a primary navigation target
       navigationBar: CupertinoNavigationBar(
-        middle: const Text('Notes'),
+        middle: const Text('Notes Setup'), // Adjusted title
         trailing: CupertinoButton(
           padding: EdgeInsets.zero,
           child: const Icon(CupertinoIcons.settings, size: 22),
@@ -78,7 +82,7 @@ class NotesHubScreen extends ConsumerWidget {
                             CupertinoPageRoute(
                               builder:
                                   (ctx) => const SettingsScreen(
-                                    isInitialSetup: false,
+                                    isInitialSetup: false, // Or true if needed
                                   ),
                             ),
                           );
@@ -89,6 +93,7 @@ class NotesHubScreen extends ConsumerWidget {
                 ),
               )
             else
+              // This section might be removed if Vault/Cache tabs are the primary way to view notes
               CupertinoListSection.insetGrouped(
                 header: const Text('CONFIGURED NOTE SERVER'),
                 children: [
@@ -99,28 +104,24 @@ class NotesHubScreen extends ConsumerWidget {
                     subtitle: Text(
                       noteServerConfig.name != null
                           ? noteServerConfig.serverUrl
-                          : 'Tap to view notes',
+                          : 'Server configured', // Updated subtitle
                     ),
                     leading: Icon(_getServerIcon(noteServerConfig.serverType)),
-                    trailing: const CupertinoListTileChevron(),
-                    onTap: () {
-                      // Navigate to the ItemsScreen for this server
-                      // The route '/notes/:serverId' is now just '/notes'
-                      // ItemsScreen no longer takes serverId
-                      Navigator.of(context).push(
-                        CupertinoPageRoute(
-                          builder:
-                              (_) => const ItemsScreen(), // Remove serverId arg
-                          settings: const RouteSettings(
-                            name: '/notes',
-                          ), // Use generic route name
-                        ),
-                      );
-                    },
+                    // Remove chevron and onTap if direct navigation is handled by tabs
+                    // trailing: const CupertinoListTileChevron(),
+                    // onTap: () {
+                    //   // Navigation likely handled by Vault/Cache tabs now
+                    //   // Navigator.of(context).push(
+                    //   //   CupertinoPageRoute(
+                    //   //     builder: (_) => const ItemsScreen(), // Example: Default view
+                    //   //     settings: const RouteSettings(name: '/notes'),
+                    //   //   ),
+                    //   // );
+                    // },
                   ),
                 ],
               ),
-            // Add other sections to the hub if needed (e.g., recent items, quick actions)
+            // Add other sections if this hub serves another purpose
           ],
         ),
       ),

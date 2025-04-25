@@ -7,12 +7,12 @@ import 'package:flutter_memos/models/server_config.dart';
 import 'package:flutter_memos/models/workbench_item_reference.dart';
 import 'package:flutter_memos/models/workbench_item_type.dart';
 import 'package:flutter_memos/providers/api_providers.dart'; // Import API providers
+import 'package:flutter_memos/providers/focus_instances_provider.dart'; // Correct import
 // Import new single config providers
 import 'package:flutter_memos/providers/note_server_config_provider.dart';
 import 'package:flutter_memos/providers/service_providers.dart';
 import 'package:flutter_memos/providers/shared_prefs_provider.dart'; // Import SharedPrefs
 import 'package:flutter_memos/providers/task_server_config_provider.dart';
-import 'package:flutter_memos/providers/workbench_instances_provider.dart';
 import 'package:flutter_memos/services/base_api_service.dart'; // Import BaseApiService
 // Removed CloudKitService import
 import 'package:flutter_memos/services/note_api_service.dart';
@@ -659,11 +659,14 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
           // Optionally revert state or show error here
         }
         // Check if the removed item was the last opened one for this instance
+        // Use focusInstancesProvider
         final lastOpened =
-            _ref.read(workbenchInstancesProvider).lastOpenedItemId[instanceId];
+            _ref.read(focusInstancesProvider).lastOpenedItemId[instanceId];
         if (lastOpened == itemId) {
           _ref
-              .read(workbenchInstancesProvider.notifier)
+              .read(
+                focusInstancesProvider.notifier,
+              ) // Use focusInstancesProvider
               .setLastOpenedItem(instanceId, null);
         }
       } else {
@@ -771,11 +774,12 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
       }
 
       // Check if the moved item was the last opened one for this instance
+      // Use focusInstancesProvider
       final lastOpened =
-          _ref.read(workbenchInstancesProvider).lastOpenedItemId[instanceId];
+          _ref.read(focusInstancesProvider).lastOpenedItemId[instanceId];
       if (lastOpened == itemId) {
         _ref
-            .read(workbenchInstancesProvider.notifier)
+            .read(focusInstancesProvider.notifier) // Use focusInstancesProvider
             .setLastOpenedItem(instanceId, null);
       }
     }
@@ -868,8 +872,9 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
         // Clear any previous error state if successful
         if (state.error != null) state = state.copyWith(clearError: true);
         // Clear last opened item for this instance
+        // Use focusInstancesProvider
         _ref
-            .read(workbenchInstancesProvider.notifier)
+            .read(focusInstancesProvider.notifier) // Use focusInstancesProvider
             .setLastOpenedItem(instanceId, null);
       } else {
         if (kDebugMode) {
@@ -890,6 +895,7 @@ class WorkbenchNotifier extends StateNotifier<WorkbenchState> {
 
 // --- Provider Definitions ---
 
+// Renamed from workbenchProviderFamily
 final workbenchProviderFamily =
     StateNotifierProvider.family<WorkbenchNotifier, WorkbenchState, String>((
       ref,
@@ -928,8 +934,10 @@ class WorkbenchCombinedState {
 }
 
 // Provider to get all items from all instances, handling loading/error states
+// Renamed from allWorkbenchItemsProvider
 final allWorkbenchItemsProvider = Provider<WorkbenchCombinedState>((ref) {
-  final instancesState = ref.watch(workbenchInstancesProvider);
+  // Use focusInstancesProvider
+  final instancesState = ref.watch(focusInstancesProvider);
   final List<WorkbenchItemReference> allItems = [];
   // isLoading now primarily depends on whether instances themselves are loading
   // or if individual workbench notifiers are still initializing/loading from prefs.
@@ -939,6 +947,7 @@ final allWorkbenchItemsProvider = Provider<WorkbenchCombinedState>((ref) {
   if (!isLoading && error == null) {
     for (final instance in instancesState.instances) {
       // Watch the individual notifier for this instance
+      // Use workbenchProviderFamily (assuming it's renamed to focusProviderFamily elsewhere)
       final instanceItemsState = ref.watch(
         workbenchProviderFamily(instance.id),
       );

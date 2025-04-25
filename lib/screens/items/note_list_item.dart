@@ -6,8 +6,9 @@ import 'package:flutter/foundation.dart';
 // import 'package:flutter/material.dart'; // Removed unused Material import
 import 'package:flutter/services.dart';
 import 'package:flutter_memos/models/note_item.dart';
-import 'package:flutter_memos/models/workbench_item_reference.dart';
-import 'package:flutter_memos/models/workbench_item_type.dart';
+import 'package:flutter_memos/models/workbench_item_reference.dart'; // Keep generic name for now, or rename if needed
+import 'package:flutter_memos/models/workbench_item_type.dart'; // Keep generic name for now, or rename if needed
+import 'package:flutter_memos/providers/focus_provider.dart'; // Correct import
 // import 'package:flutter_memos/main.dart'; // Import for rootNavigatorKeyProvider
 import 'package:flutter_memos/providers/navigation_providers.dart';
 import 'package:flutter_memos/providers/note_providers.dart' as note_providers;
@@ -15,10 +16,9 @@ import 'package:flutter_memos/providers/note_providers.dart' as note_providers;
 import 'package:flutter_memos/providers/note_server_config_provider.dart';
 import 'package:flutter_memos/providers/settings_provider.dart' as settings_p;
 import 'package:flutter_memos/providers/ui_providers.dart' as ui_providers;
-import 'package:flutter_memos/providers/workbench_provider.dart';
+import 'package:flutter_memos/utils/focus_utils.dart'; // Correct import
 import 'package:flutter_memos/utils/note_utils.dart';
 import 'package:flutter_memos/utils/thread_utils.dart';
-import 'package:flutter_memos/utils/workbench_utils.dart'; // Import the new utility
 import 'package:flutter_memos/widgets/note_card.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
@@ -241,7 +241,8 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
                             scaffoldContext,
                             ref,
                             widget.note.id,
-                            WorkbenchItemType.note,
+                            WorkbenchItemType
+                                .note, // Assuming this enum remains generic
                           );
                         },
                 child: const Text('Copy Full Thread'),
@@ -256,7 +257,8 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
                             scaffoldContext,
                             ref,
                             widget.note.id,
-                            WorkbenchItemType.note,
+                            WorkbenchItemType
+                                .note, // Assuming this enum remains generic
                           );
                         },
                 child: const Text('Chat about Thread'),
@@ -291,13 +293,14 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
                         ? null
                         : () {
                           Navigator.pop(popupContext);
-                          _addNoteToWorkbenchFromList(
+                          _addNoteToFocusFromList(
+                            // Updated method name
                             scaffoldContext,
                             ref,
                             widget.note,
                           );
                         },
-                child: const Text('Add to Workbench...'),
+                child: const Text('Add to Focus...'), // Updated text
               ),
               CupertinoContextMenuAction(
                 onPressed:
@@ -379,8 +382,8 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
     );
   }
 
-  // --- Helper to add note to workbench ---
-  Future<void> _addNoteToWorkbenchFromList(
+  // --- Helper to add note to focus board --- Updated name and references
+  Future<void> _addNoteToFocusFromList(
     BuildContext context, // Use BuildContext
     WidgetRef ref,
     NoteItem note,
@@ -393,16 +396,17 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
       _showAlertDialog(
         context,
         'Error',
-        "Cannot add to workbench: Note server config not found.",
+        "Cannot add to focus board: Note server config not found.", // Updated text
       );
       return;
     }
 
-    // Use the utility function to get the target instance
-    final selectedInstance = await showWorkbenchInstancePicker(
+    // Use the updated utility function to get the target instance
+    final selectedInstance = await showFocusInstancePicker(
+      // Correct function call
       context,
       ref,
-      title: 'Add Note To Workbench',
+      title: 'Add Note To Focus Board', // Updated text
     );
 
     // If user cancelled or no instance selected, do nothing
@@ -415,28 +419,31 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
 
     final preview = note.content.split('\n').first;
 
+    // Assuming WorkbenchItemReference and WorkbenchItemType remain generic or are renamed elsewhere
     final reference = WorkbenchItemReference(
       id: const Uuid().v4(),
       referencedItemId: note.id,
-      referencedItemType: WorkbenchItemType.note, // USES IMPORTED ENUM
-      serverId: serverConfig.id, // Use the note's serverId
+      referencedItemType: WorkbenchItemType.note,
+      serverId: serverConfig.id,
       serverType: serverConfig.serverType,
       serverName: serverConfig.name,
       previewContent:
           preview.length > 100 ? '${preview.substring(0, 97)}...' : preview,
       addedTimestamp: DateTime.now(),
       parentNoteId: null,
-      instanceId: targetInstanceId, // <-- PASS SELECTED instanceId
+      instanceId: targetInstanceId,
     );
 
-    // Use the notifier for the *target* instance
+    // Use the updated provider family for the *target* instance
     ref
-        .read(workbenchProviderFamily(targetInstanceId).notifier)
+        .read(
+          focusProviderFamily(targetInstanceId).notifier,
+        ) // Correct provider family
         .addItem(reference);
 
     final previewText = reference.previewContent ?? 'Item';
     final dialogContent =
-        'Added "${previewText.substring(0, min(30, previewText.length))}${previewText.length > 30 ? '...' : ''}" to Workbench "$targetInstanceName"';
+        'Added "${previewText.substring(0, min(30, previewText.length))}${previewText.length > 30 ? '...' : ''}" to Focus Board "$targetInstanceName"'; // Updated text
 
     _showAlertDialog(context, 'Success', dialogContent);
   }
@@ -445,7 +452,7 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
     BuildContext buildContext,
     WidgetRef ref,
     String itemId,
-    WorkbenchItemType itemType,
+    WorkbenchItemType itemType, // Assuming generic type
   ) async {
     // Get serverId from the single provider
     final serverId = ref.read(noteServerConfigProvider)?.id;
@@ -482,7 +489,7 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
     BuildContext buildContext,
     WidgetRef ref,
     String itemId,
-    WorkbenchItemType itemType,
+    WorkbenchItemType itemType, // Assuming generic type
   ) async {
     // Get serverId from the single provider
     final serverId = ref.read(noteServerConfigProvider)?.id;
@@ -513,7 +520,7 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
     BuildContext buildContext,
     String fetchedContent,
     String itemId,
-    WorkbenchItemType itemType,
+    WorkbenchItemType itemType, // Assuming generic type
     String serverId,
   ) {
     final chatArgs = {
@@ -527,6 +534,8 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
       rootNavigatorKeyProvider,
     ); // Use imported provider
     if (rootNavigatorKey.currentState != null) {
+      // Assuming '/chat' route still exists or is replaced by '/studio' route
+      // TODO: Update route name if chat is replaced by studio
       rootNavigatorKey.currentState!.pushNamed('/chat', arguments: chatArgs);
     } else {
       _showAlertDialog(
