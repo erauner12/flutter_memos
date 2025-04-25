@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 // Import the NoteItem model
 import 'package:flutter_memos/models/note_item.dart';
+import 'package:flutter_memos/utils/text_normalizer.dart'; // Import the normalizer
 import 'package:flutter_memos/utils/url_helper.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -35,16 +36,26 @@ class NoteContent extends ConsumerWidget { // Renamed class
     final String formattedCreateDate = dateFormat.format(createDate);
     final String formattedUpdateDate = dateFormat.format(updateDate);
 
+    // Normalize the note content before using it
+    final normalizedContent = TextNormalizer.normalize(note.content);
+
     if (kDebugMode) {
       print('[NoteContent] Rendering note $noteId'); // Updated log identifier
-      final contentLength = note.content.length;
-      print('[NoteContent] Content length: $contentLength chars'); // Updated log identifier
-      if (contentLength < 200) {
-        print('[NoteContent] Content preview: "${note.content}"'); // Updated log identifier
+      final originalLength = note.content.length;
+      final normalizedLength = normalizedContent.length;
+      print('[NoteContent] Original content length: $originalLength chars');
+      print('[NoteContent] Normalized content length: $normalizedLength chars');
+      if (normalizedLength < 200) {
+        print(
+          '[NoteContent] Normalized Content preview: "$normalizedContent"',
+        ); // Updated log identifier
       } else {
         print(
-          '[NoteContent] Content preview: "${note.content.substring(0, 197)}..."', // Updated log identifier
+          '[NoteContent] Normalized Content preview: "${normalizedContent.substring(0, 197)}..."', // Updated log identifier
         );
+      }
+      if (note.content != normalizedContent) {
+        print('[NoteContent] Content was normalized.');
       }
     }
 
@@ -53,9 +64,9 @@ class NoteContent extends ConsumerWidget { // Renamed class
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Note Content using MarkdownBody
+          // Note Content using MarkdownBody with normalized content
           MarkdownBody(
-            data: note.content, // Access content from NoteItem
+            data: normalizedContent, // Use normalized content
             selectable: true,
             styleSheet: MarkdownStyleSheet.fromCupertinoTheme(theme).copyWith(
               p: theme.textTheme.textStyle.copyWith(
@@ -173,7 +184,8 @@ class NoteContent extends ConsumerWidget { // Renamed class
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
-                            tag,
+                            // Normalize tag display if needed (less common but possible)
+                            TextNormalizer.normalize(tag),
                             style: TextStyle(
                               fontSize: 12,
                               color: secondaryTextColor,
