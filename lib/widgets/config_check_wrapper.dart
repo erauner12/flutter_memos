@@ -1,17 +1,13 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_memos/providers/note_server_config_provider.dart'; // Import Note provider
 import 'package:flutter_memos/providers/server_config_provider.dart'; // Keep for loadServerConfigProvider
-import 'package:flutter_memos/providers/task_server_config_provider.dart'; // Import Task provider
-import 'package:flutter_memos/screens/chat_screen.dart';
+import 'package:flutter_memos/screens/cache/cache_notes_screen.dart'; // Import Cache screen
+import 'package:flutter_memos/screens/focus/focus_hub_screen.dart'; // Import Focus Hub screen
 import 'package:flutter_memos/screens/home_tabs.dart'; // Import HomeTab enum and extension
-import 'package:flutter_memos/screens/items/items_screen.dart'; // Keep for route generation
-import 'package:flutter_memos/screens/items/notes_hub_screen.dart'; // Import Notes Hub
 import 'package:flutter_memos/screens/settings_screen.dart';
-import 'package:flutter_memos/screens/tasks/tasks_screen.dart'; // Import TasksScreen
-import 'package:flutter_memos/screens/workbench/workbench_hub_screen.dart';
-import 'package:flutter_memos/screens/workbench/workbench_screen.dart';
+import 'package:flutter_memos/screens/studio/studio_screen.dart'; // Import Studio screen
+import 'package:flutter_memos/screens/vault/vault_notes_screen.dart'; // Import Vault screen
 import 'package:flutter_riverpod/flutter_riverpod.dart'; // Keep for ConfigCheckWrapper
-
 
 class ConfigCheckWrapper extends ConsumerWidget {
   const ConfigCheckWrapper({super.key});
@@ -29,11 +25,12 @@ class ConfigCheckWrapper extends ConsumerWidget {
     }
 
     // After loading, check if at least one server (Note or Task) is configured
+    // TODO: Adjust this logic if Task server is no longer relevant or required
     final noteServerConfig = ref.watch(noteServerConfigProvider);
-    final taskServerConfig = ref.watch(taskServerConfigProvider);
+    // final taskServerConfig = ref.watch(taskServerConfigProvider); // If you had other entity types, would load them here
     // Consider setup needed if BOTH are null. Adjust if only one is required.
-    final bool needsSetup =
-        noteServerConfig == null && taskServerConfig == null;
+    // For now, assuming only Note server config matters for initial setup.
+    final bool needsSetup = noteServerConfig == null;
 
     if (needsSetup) {
       // Show SettingsScreen for initial setup
@@ -49,7 +46,6 @@ class ConfigCheckWrapper extends ConsumerWidget {
   }
 }
 
-// MainAppTabs remains the same as in the previous response
 class MainAppTabs extends StatefulWidget {
   const MainAppTabs({super.key});
 
@@ -60,17 +56,19 @@ class MainAppTabs extends StatefulWidget {
 class _MainAppTabsState extends State<MainAppTabs> {
   late CupertinoTabController _controller;
 
+  // Updated map to use new HomeTab enum values
   final Map<int, GlobalKey<NavigatorState>> tabViewNavKeys = {
-    HomeTab.chat.index: GlobalKey<NavigatorState>(),
-    HomeTab.workbench.index: GlobalKey<NavigatorState>(),
-    HomeTab.notes.index: GlobalKey<NavigatorState>(),
-    HomeTab.tasks.index: GlobalKey<NavigatorState>(),
+    HomeTab.vault.index: GlobalKey<NavigatorState>(),
+    HomeTab.cache.index: GlobalKey<NavigatorState>(),
+    HomeTab.focus.index: GlobalKey<NavigatorState>(),
+    HomeTab.studio.index: GlobalKey<NavigatorState>(),
   };
 
   @override
   void initState() {
     super.initState();
-    _controller = CupertinoTabController(initialIndex: HomeTab.chat.index);
+    // Set initial tab to one of the new tabs, e.g., Vault
+    _controller = CupertinoTabController(initialIndex: HomeTab.vault.index);
   }
 
   @override
@@ -79,58 +77,11 @@ class _MainAppTabsState extends State<MainAppTabs> {
     super.dispose();
   }
 
-  Route<dynamic>? _notesOnGenerateRoute(RouteSettings settings) {
-    WidgetBuilder builder;
-    switch (settings.name) {
-      case '/':
-        builder = (BuildContext _) => const NotesHubScreen();
-        break;
-      // Match '/notes' or '/notes/' - this now points to ItemsScreen directly
-      case '/notes':
-      case '/notes/':
-        builder = (BuildContext _) => const ItemsScreen();
-        break;
-      // Handle potential legacy routes or specific note routes if needed later
-      // case String name when name.startsWith('/notes/'):
-      //   final serverId = name.substring('/notes/'.length);
-      //   if (serverId.isNotEmpty) {
-      //     // ItemsScreen no longer takes serverId
-      //     builder = (BuildContext _) => const ItemsScreen();
-      //   } else {
-      //     builder = (BuildContext _) => const NotesHubScreen();
-      //   }
-      //   break;
-      default:
-        // Fallback to the main ItemsScreen (which uses the provider)
-        // or NotesHubScreen if no server is configured (handled internally by ItemsScreen)
-        builder = (BuildContext _) => const ItemsScreen();
-    }
-    return CupertinoPageRoute(builder: builder, settings: settings);
-  }
-
-  Route<dynamic>? _workbenchOnGenerateRoute(RouteSettings settings) {
-    WidgetBuilder builder;
-    switch (settings.name) {
-      case '/':
-        builder = (BuildContext _) => const WorkbenchHubScreen();
-        break;
-      case String name when name.startsWith('/workbench/'):
-        final instanceId = name.substring('/workbench/'.length);
-        if (instanceId.isNotEmpty) {
-          builder = (BuildContext _) => WorkbenchScreen(instanceId: instanceId);
-        } else {
-          builder = (BuildContext _) => const WorkbenchHubScreen();
-        }
-        break;
-      default:
-        builder = (BuildContext _) => const WorkbenchHubScreen();
-    }
-    return CupertinoPageRoute(builder: builder, settings: settings);
-  }
-
+  // Removed _notesOnGenerateRoute and _workbenchOnGenerateRoute as they are no longer needed
 
   @override
   Widget build(BuildContext context) {
+    // Generate BottomNavigationBarItems from the new HomeTab enum
     final List<BottomNavigationBarItem> navBarItems =
         HomeTab.values
             .map(
@@ -147,6 +98,7 @@ class _MainAppTabsState extends State<MainAppTabs> {
         items: navBarItems,
         currentIndex: _controller.index,
         onTap: (tappedIndex) {
+          // Standard pop-to-root or switch tab logic
           setState(() {
             if (_controller.index == tappedIndex) {
               final currentTabViewNavKey = tabViewNavKeys[tappedIndex];
@@ -159,31 +111,33 @@ class _MainAppTabsState extends State<MainAppTabs> {
           });
         },
       ),
+      // Updated tabBuilder to use new HomeTab enum and screens
       tabBuilder: (BuildContext context, int index) {
         final HomeTab currentTab = HomeTab.values[index];
         switch (currentTab) {
-          case HomeTab.chat:
+          case HomeTab.vault:
             return CupertinoTabView(
-              navigatorKey: tabViewNavKeys[HomeTab.chat.index],
-              builder: (BuildContext context) => const ChatScreen(),
+              navigatorKey: tabViewNavKeys[HomeTab.vault.index],
+              // Removed onGenerateRoute
+              builder: (BuildContext context) => const VaultNotesScreen(),
             );
-          case HomeTab.workbench:
+          case HomeTab.cache:
             return CupertinoTabView(
-              navigatorKey: tabViewNavKeys[HomeTab.workbench.index],
-              onGenerateRoute: _workbenchOnGenerateRoute,
-              builder: (BuildContext context) => const WorkbenchHubScreen(),
+              navigatorKey: tabViewNavKeys[HomeTab.cache.index],
+              // Removed onGenerateRoute
+              builder: (BuildContext context) => const CacheNotesScreen(),
             );
-          case HomeTab.notes:
+          case HomeTab.focus:
             return CupertinoTabView(
-              navigatorKey: tabViewNavKeys[HomeTab.notes.index],
-              onGenerateRoute: _notesOnGenerateRoute,
-              // The builder now points directly to NotesHubScreen as the root
-              builder: (BuildContext context) => const NotesHubScreen(),
+              navigatorKey: tabViewNavKeys[HomeTab.focus.index],
+              // Removed onGenerateRoute
+              builder: (BuildContext context) => const FocusHubScreen(),
             );
-          case HomeTab.tasks:
+          case HomeTab.studio:
             return CupertinoTabView(
-              navigatorKey: tabViewNavKeys[HomeTab.tasks.index],
-              builder: (BuildContext context) => const TasksScreen(),
+              navigatorKey: tabViewNavKeys[HomeTab.studio.index],
+              // Removed onGenerateRoute
+              builder: (BuildContext context) => const StudioScreen(),
             );
         }
       },
