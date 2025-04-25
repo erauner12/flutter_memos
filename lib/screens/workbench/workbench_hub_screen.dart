@@ -1,22 +1,18 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter_memos/models/focus_instance.dart'; // Correct import
-import 'package:flutter_memos/providers/focus_instances_provider.dart'; // Correct import
-// Use package import for provider within lib
-import 'package:flutter_memos/providers/focus_provider.dart';
-// Updated import path for FocusInstanceTile now that it's inside lib
-import 'package:flutter_memos/screens/focus/widgets/focus_instance_tile.dart';
+import 'package:flutter_memos/models/workbench_instance.dart';
+import 'package:flutter_memos/providers/workbench_instances_provider.dart';
+import 'package:flutter_memos/providers/workbench_provider.dart'; // Import workbench provider
+import 'package:flutter_memos/screens/workbench/widgets/workbench_instance_tile.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-// Renamed from WorkbenchHubScreen
-class FocusHubScreen extends ConsumerStatefulWidget {
-  const FocusHubScreen({super.key});
+class WorkbenchHubScreen extends ConsumerStatefulWidget {
+  const WorkbenchHubScreen({super.key});
 
   @override
-  ConsumerState<FocusHubScreen> createState() => _FocusHubScreenState();
+  ConsumerState<WorkbenchHubScreen> createState() => _WorkbenchHubScreenState();
 }
 
-// Renamed from _WorkbenchHubScreenState
-class _FocusHubScreenState extends ConsumerState<FocusHubScreen> {
+class _WorkbenchHubScreenState extends ConsumerState<WorkbenchHubScreen> {
   final TextEditingController _instanceNameController = TextEditingController();
 
   @override
@@ -31,12 +27,12 @@ class _FocusHubScreenState extends ConsumerState<FocusHubScreen> {
       context: context,
       builder:
           (context) => CupertinoAlertDialog(
-            title: const Text('New Focus Board'), // Updated text
+            title: const Text('New Workbench'),
             content: Padding(
               padding: const EdgeInsets.only(top: 8.0),
               child: CupertinoTextField(
                 controller: _instanceNameController,
-                placeholder: 'Board Name (e.g., Work, Project X)', // Updated text
+                placeholder: 'Instance Name (e.g., Work, Project X)',
                 autofocus: true,
                 onSubmitted: (_) => _createInstance(),
               ),
@@ -62,16 +58,17 @@ class _FocusHubScreenState extends ConsumerState<FocusHubScreen> {
       Navigator.pop(context);
     }
     if (name.isNotEmpty) {
+      // REMOVED Pass switchToNew: false
       ref
-          .read(focusInstancesProvider.notifier) // Correct provider
-          .saveInstance(name)
+          .read(workbenchInstancesProvider.notifier)
+          .saveInstance(name) // Removed switchToNew parameter
           .then((success) {
             if (success) {
               // No automatic navigation or active setting after creation
               if (mounted) {
                 // Optionally show a confirmation SnackBar or similar
                 // ScaffoldMessenger.of(context).showSnackBar(
-                //   SnackBar(content: Text('Focus Board "$name" created.')), // Updated text
+                //   SnackBar(content: Text('Workbench "$name" created.')),
                 // );
               }
             } else {
@@ -81,19 +78,18 @@ class _FocusHubScreenState extends ConsumerState<FocusHubScreen> {
     }
   }
 
-  void _showRenameInstanceDialog(FocusInstance instance) {
-    // Correct type
+  void _showRenameInstanceDialog(WorkbenchInstance instance) {
     _instanceNameController.text = instance.name;
     showCupertinoDialog(
       context: context,
       builder:
           (context) => CupertinoAlertDialog(
-            title: const Text('Rename Focus Board'), // Updated text
+            title: const Text('Rename Workbench'),
             content: Padding(
               padding: const EdgeInsets.only(top: 8.0),
               child: CupertinoTextField(
                 controller: _instanceNameController,
-                placeholder: 'New Board Name', // Updated text
+                placeholder: 'New Instance Name',
                 autofocus: true,
                 onSubmitted: (_) => _renameInstance(instance.id),
               ),
@@ -120,14 +116,13 @@ class _FocusHubScreenState extends ConsumerState<FocusHubScreen> {
     }
     if (newName.isNotEmpty) {
       ref
-          .read(focusInstancesProvider.notifier) // Correct provider
+          .read(workbenchInstancesProvider.notifier)
           .renameInstance(instanceId, newName);
     }
   }
 
-  void _showDeleteConfirmationDialog(FocusInstance instance) {
-    // Correct type
-    final instancesState = ref.read(focusInstancesProvider); // Correct provider
+  void _showDeleteConfirmationDialog(WorkbenchInstance instance) {
+    final instancesState = ref.read(workbenchInstancesProvider);
     if (instancesState.instances.length <= 1 || instance.isSystemDefault) {
       showCupertinoDialog(
         context: context,
@@ -136,8 +131,8 @@ class _FocusHubScreenState extends ConsumerState<FocusHubScreen> {
               title: const Text('Cannot Delete'),
               content: Text(
                 instance.isSystemDefault
-                    ? 'The default "${instance.name}" board cannot be deleted.' // Updated text
-                    : 'Cannot delete the last remaining board.', // Updated text
+                    ? 'The default "${instance.name}" instance cannot be deleted.'
+                    : 'Cannot delete the last remaining instance.',
               ),
               actions: [
                 CupertinoDialogAction(
@@ -157,7 +152,7 @@ class _FocusHubScreenState extends ConsumerState<FocusHubScreen> {
           (context) => CupertinoAlertDialog(
             title: Text('Delete "${instance.name}"?'),
             content: const Text(
-              'Are you sure? All items within this focus board will also be permanently deleted.', // Updated text
+              'Are you sure? All items within this workbench will also be permanently deleted.',
             ),
             actions: [
               CupertinoDialogAction(
@@ -173,11 +168,11 @@ class _FocusHubScreenState extends ConsumerState<FocusHubScreen> {
                   }
                   // Also delete items associated with the instance
                   ref
-                      .read(focusProviderFamily(instance.id).notifier)
-                      .clearAllItems();
+                      .read(workbenchProviderFamily(instance.id).notifier)
+                      .clearItems(); // Use clearItems to remove from prefs
                   // Then delete the instance itself
                   ref
-                      .read(focusInstancesProvider.notifier) // Correct provider
+                      .read(workbenchInstancesProvider.notifier)
                       .deleteInstance(instance.id);
                 },
               ),
@@ -186,20 +181,31 @@ class _FocusHubScreenState extends ConsumerState<FocusHubScreen> {
     );
   }
 
-  void _showInstanceActions(FocusInstance instance) {
-    // Correct type
-    final instancesState = ref.read(focusInstancesProvider); // Correct provider
+  void _showInstanceActions(WorkbenchInstance instance) {
+    final instancesState = ref.read(workbenchInstancesProvider);
     final bool canDelete =
         instancesState.instances.length > 1 && !instance.isSystemDefault;
+    // final bool isActive = instancesState.activeInstanceId == instance.id; // REMOVED isActive check
 
     showCupertinoModalPopup(
       context: context,
       builder:
           (context) => CupertinoActionSheet(
             title: Text(
-              'Actions for "${instance.name}"',
+              'Actions for "${instance.name}"', // REMOVED indication of active status
             ),
             actions: [
+              // REMOVED "Set Active" action
+              // if (!isActive)
+              //   CupertinoActionSheetAction(
+              //     child: const Text('Set Active'),
+              //     onPressed: () {
+              //       Navigator.pop(context); // Close action sheet
+              //       ref
+              //           .read(workbenchInstancesProvider.notifier)
+              //           .setActiveInstance(instance.id);
+              //     },
+              //   ),
               CupertinoActionSheetAction(
                 child: const Text('Rename'),
                 onPressed: () {
@@ -229,12 +235,11 @@ class _FocusHubScreenState extends ConsumerState<FocusHubScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final instancesState = ref.watch(
-      focusInstancesProvider,
-    ); // Correct provider
+    final instancesState = ref.watch(workbenchInstancesProvider);
     final instances = instancesState.instances;
     final isLoading = instancesState.isLoading;
     final error = instancesState.error;
+    // final activeInstanceId = instancesState.activeInstanceId; // REMOVED - No longer needed
 
     // Sort instances: default first, then by creation date or name
     final sortedInstances = [...instances]..sort((a, b) {
@@ -259,19 +264,29 @@ class _FocusHubScreenState extends ConsumerState<FocusHubScreen> {
         context,
       ),
       navigationBar: CupertinoNavigationBar(
-        middle: const Text("Focus Boards"), // Updated text
-        automaticallyImplyLeading: false, // Assuming this is a root tab screen
+        middle: const Text("Workbenches"),
+        // No back button needed on the hub screen
+        automaticallyImplyLeading: false,
+        // Add trailing refresh button
         trailing: CupertinoButton(
           padding: EdgeInsets.zero,
           child: const Icon(CupertinoIcons.refresh),
           onPressed: () {
             // Invalidate providers to trigger reload
-            ref.invalidate(focusInstancesProvider); // Correct provider
-            // No need to invalidate individual family providers here,
-            // as they depend on focusInstancesProvider and will rebuild if needed.
+            ref.invalidate(workbenchInstancesProvider);
+            final currentInstanceIds =
+                ref
+                    .read(workbenchInstancesProvider)
+                    .instances
+                    .map((i) => i.id)
+                    .toList();
+            for (final id in currentInstanceIds) {
+              ref.invalidate(workbenchProviderFamily(id));
+            }
+
             // Optional: Show a confirmation or feedback
             // ScaffoldMessenger.of(context).showSnackBar(
-            //   const SnackBar(content: Text('Refreshing focus boards...')), // Updated text
+            //   const SnackBar(content: Text('Refreshing all workbenches...')),
             // );
           },
         ),
@@ -299,7 +314,7 @@ class _FocusHubScreenState extends ConsumerState<FocusHubScreen> {
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16.0),
                         child: Text(
-                          'Error loading Focus Boards: $error', // Updated text
+                          'Error loading Workbenches: $error',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             color: CupertinoColors.secondaryLabel.resolveFrom(
@@ -313,9 +328,8 @@ class _FocusHubScreenState extends ConsumerState<FocusHubScreen> {
                         child: const Text('Retry'),
                         onPressed:
                             () =>
-                            ref.invalidate(
-                              focusInstancesProvider,
-                            ), // Correct provider
+                            // Invalidate provider to retry loading
+                            ref.invalidate(workbenchInstancesProvider),
                       ),
                     ],
                   ),
@@ -330,16 +344,16 @@ class _FocusHubScreenState extends ConsumerState<FocusHubScreen> {
                   delegate: SliverChildBuilderDelegate((context, index) {
                     final instance = sortedInstances[index];
                     final isLast = index == sortedInstances.length - 1;
+                    // final bool isActive = instance.id == activeInstanceId; // REMOVED isActive check
 
-                    Widget tile = FocusInstanceTile(
-                      // Correct widget
+                    Widget tile = WorkbenchInstanceTile(
                       instance: instance,
                       onTap: () {
                         // Navigate to the detail screen using the ROOT navigator
                         // This ensures the route defined in main.dart is used.
                         Navigator.of(context, rootNavigator: true).pushNamed(
-                          '/focus/${instance.id}',
-                        ); // Updated route path
+                          '/workbench/${instance.id}',
+                        );
                       },
                       onLongPress: () => _showInstanceActions(instance),
                     );
@@ -381,7 +395,7 @@ class _FocusHubScreenState extends ConsumerState<FocusHubScreen> {
                         const SizedBox(width: 16),
                         Expanded(
                           child: Text(
-                            'New Focus Board', // Updated text
+                            'New Workbench',
                             style:
                                 CupertinoTheme.of(context).textTheme.textStyle,
                           ),

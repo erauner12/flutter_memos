@@ -1,5 +1,5 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter_memos/screens/workbench/workbench_hub_screen.dart';
+import 'package:flutter_memos/screens/workbench/workbench_hub_screen.dart'; // Ensure correct import
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 // Removed imports for navigation_providers and workbench_screen as they are no longer needed here
 
@@ -14,6 +14,6 @@ class WorkbenchNavigator extends ConsumerWidget {
     // The CupertinoTabView handles the navigation stack.
 
     // Return the initial screen for the Workbench tab.
-    return const WorkbenchHubScreen();
+    return const WorkbenchHubScreen(); // Use WorkbenchHubScreen
   }
 }

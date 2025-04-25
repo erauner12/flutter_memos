@@ -1,41 +1,32 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter_memos/models/focus_instance.dart'; // Correct import
-import 'package:flutter_memos/providers/focus_instances_provider.dart'; // Correct import
-import 'package:flutter_memos/providers/focus_provider.dart'; // Correct import
-// Use package import for widget within lib/screens
-import 'package:flutter_memos/screens/focus/widgets/focus_detail_view.dart';
+import 'package:flutter_memos/models/workbench_instance.dart';
+import 'package:flutter_memos/providers/workbench_instances_provider.dart';
+import 'package:flutter_memos/providers/workbench_provider.dart';
+import 'package:flutter_memos/screens/workbench/widgets/workbench_detail_view.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-// Renamed from WorkbenchScreen
-class FocusScreen extends ConsumerWidget {
+class WorkbenchScreen extends ConsumerWidget {
   final String instanceId;
 
-  const FocusScreen({super.key, required this.instanceId});
+  const WorkbenchScreen({super.key, required this.instanceId});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     // Watch the specific instance details to get the name for the AppBar
-    // Use the existing focusInstanceProvider defined below
-    final instanceAsync = ref.watch(focusInstanceProvider(instanceId));
+    final instanceAsync = ref.watch(workbenchInstanceProvider(instanceId));
     // Watch the items provider for this specific instance
-    final focusState = ref.watch(focusProviderFamily(instanceId)); // Use focus provider family
+    final workbenchState = ref.watch(workbenchProviderFamily(instanceId));
 
-    // Check if focusState itself indicates loading or error for item details refresh
-    final bool isRefreshing =
-        focusState.isLoading; // Assuming isLoading covers refresh
-    final bool canRefresh = !isRefreshing;
+    final bool canRefresh = !workbenchState.isLoading && !workbenchState.isRefreshingDetails;
 
     return CupertinoPageScaffold(
       backgroundColor: CupertinoColors.systemGroupedBackground.resolveFrom(context),
       navigationBar: CupertinoNavigationBar(
         // Use instance name from provider, show loading/error if needed
-        // Use .when on the AsyncValue
         middle: instanceAsync.when(
-          data:
-              (instance) =>
-                  Text(instance?.name ?? 'Focus Board'), // Handle null instance
-                  loading: () => const CupertinoActivityIndicator(radius: 10),
-          error: (err, stack) => const Text("Focus Board"), // Fallback title
+          data: (instance) => Text(instance?.name ?? 'Workbench'), // Handle null instance
+          loading: () => const CupertinoActivityIndicator(radius: 10),
+          error: (err, stack) => const Text("Workbench"), // Fallback title
         ),
         // Standard back button will be added by Navigator
         // Add trailing actions specific to the detail view
@@ -45,7 +36,7 @@ class FocusScreen extends ConsumerWidget {
             CupertinoButton(
               padding: const EdgeInsets.only(left: 8.0),
               onPressed: canRefresh
-                  ? () => ref.read(focusProviderFamily(instanceId).notifier).refreshItemDetails() // Use focus provider family
+                  ? () => ref.read(workbenchProviderFamily(instanceId).notifier).refreshItemDetails()
                   : null,
               child: canRefresh
                   ? const Icon(CupertinoIcons.refresh)
@@ -57,6 +48,18 @@ class FocusScreen extends ConsumerWidget {
               child: const Icon(CupertinoIcons.ellipsis_vertical),
               onPressed: () => _showDetailActions(context, ref),
             ),
+            // Optional: Settings button if needed here
+            // CupertinoButton(
+            //   padding: EdgeInsets.zero,
+            //   child: const Icon(CupertinoIcons.settings, size: 22),
+            //   onPressed: () {
+            //     Navigator.of(context, rootNavigator: true).push( // Use rootNavigator if pushing outside nested nav
+            //       CupertinoPageRoute(
+            //         builder: (context) => const SettingsScreen(isInitialSetup: false),
+            //       ),
+            //     );
+            //   },
+            // ),
           ],
         ),
       ),
@@ -69,8 +72,7 @@ class FocusScreen extends ConsumerWidget {
           child: CustomScrollView(
             slivers: [
               // Pass the instanceId to the detail view
-              // Ensure FocusDetailView exists and is imported correctly
-              FocusDetailView(instanceId: instanceId),
+              WorkbenchDetailView(instanceId: instanceId),
             ],
           ),
         ),
@@ -82,10 +84,10 @@ class FocusScreen extends ConsumerWidget {
     showCupertinoModalPopup(
       context: context,
       builder: (context) => CupertinoActionSheet(
-        title: const Text('Focus Board Actions'), // Updated text
+        title: const Text('Workbench Actions'),
         actions: [
           CupertinoActionSheetAction(
-            child: const Text('Back to Focus List'), // Updated text
+            child: const Text('Back to Instances List'),
             onPressed: () {
               Navigator.pop(context); // Close action sheet
               // Pop the current detail screen from the nested navigator
@@ -99,7 +101,7 @@ class FocusScreen extends ConsumerWidget {
                   Navigator.pop(context); // Close action sheet
                   // Call resetOrder on the notifier for the current instance
                   ref
-                      .read(focusProviderFamily(instanceId).notifier) // Use focus provider family
+                      .read(workbenchProviderFamily(instanceId).notifier)
                       .resetOrder();
                 },
               ),
@@ -114,13 +116,10 @@ class FocusScreen extends ConsumerWidget {
 }
 
 // Helper provider to watch a single instance by ID (useful for AppBar title)
-// Return AsyncValue<FocusInstance?> to handle loading/error states and nullability
-// NOTE: This duplicates the provider in focus_instances_provider.dart.
-// Consider removing this and importing/using the one from focus_instances_provider.dart
-// For now, keeping it to minimize changes, but it should be consolidated.
-final focusInstanceProvider =
-    Provider.family<AsyncValue<FocusInstance?>, String>((ref, instanceId) {
-  final instancesState = ref.watch(focusInstancesProvider); // Use focus provider
+// Return AsyncValue<WorkbenchInstance?> to handle loading/error states and nullability
+final workbenchInstanceProvider =
+    Provider.family<AsyncValue<WorkbenchInstance?>, String>((ref, instanceId) {
+  final instancesState = ref.watch(workbenchInstancesProvider);
 
       if (instancesState.isLoading) {
         return const AsyncValue.loading();
@@ -131,7 +130,7 @@ final focusInstanceProvider =
 
   try {
     // Use firstWhereOrNull from collection package for safety
-    // Cast 'i' to FocusInstance before accessing id
+    // Cast 'i' to WorkbenchInstance before accessing id
         final instance = instancesState.instances.firstWhere(
           (i) => (i).id == instanceId,
         );
@@ -141,24 +140,3 @@ final focusInstanceProvider =
         return const AsyncValue.data(null);
   }
 });
-
-
-// Add missing isRefreshingDetails to FocusState if needed
-extension FocusStateExtension on FocusState {
-  // Assuming isRefreshingDetails is not part of the state, return false or implement logic
-  bool get isRefreshingDetails => false; // Placeholder
-}
-
-// Add missing refreshItemDetails to FocusNotifier if needed
-extension FocusNotifierExtension on FocusNotifier {
-  Future<void> refreshItemDetails() async {
-    // Placeholder: Implement logic to refresh details of items in the focus board
-    print("Placeholder: Refreshing item details for instance $instanceId");
-    // Example: await _loadItems(); // If _loadItems also refreshes details
-  }
-  Future<void> resetOrder() async {
-    // Placeholder: Implement logic to reset item order
-    print("Placeholder: Resetting item order for instance $instanceId");
-    // Example: await _saveItemsToPrefs(state.items..sort(...)); // Re-save with default sort
-  }
-}

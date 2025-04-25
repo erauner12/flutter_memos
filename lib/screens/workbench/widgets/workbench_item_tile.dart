@@ -1,11 +1,11 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_memos/models/comment.dart';
-import 'package:flutter_memos/models/focus_instance.dart'; // Correct import
-import 'package:flutter_memos/models/workbench_item_reference.dart'; // Keep generic name or rename
-import 'package:flutter_memos/models/workbench_item_type.dart'; // Keep generic name or rename
-import 'package:flutter_memos/providers/focus_instances_provider.dart'; // Correct import
-import 'package:flutter_memos/providers/focus_provider.dart'; // Correct import
+import 'package:flutter_memos/models/workbench_instance.dart';
+import 'package:flutter_memos/models/workbench_item_reference.dart';
+import 'package:flutter_memos/models/workbench_item_type.dart';
 import 'package:flutter_memos/providers/ui_providers.dart';
+import 'package:flutter_memos/providers/workbench_instances_provider.dart';
+import 'package:flutter_memos/providers/workbench_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 String formatRelativeTime(DateTime dateTime) {
@@ -26,39 +26,39 @@ String formatRelativeTime(DateTime dateTime) {
   }
 }
 
-// Renamed from WorkbenchItemTile
-class FocusItemTile extends ConsumerWidget {
-  final WorkbenchItemReference itemReference; // Keep generic name or rename
+class WorkbenchItemTile extends ConsumerWidget {
+  final WorkbenchItemReference itemReference;
   final VoidCallback onTap;
-  final int index; // Keep index for reordering
+  // Add index back - needed for ReorderableDragStartListener
+  final int index;
 
-  const FocusItemTile({
+  const WorkbenchItemTile({
     super.key,
     required this.itemReference,
     required this.onTap,
-    required this.index,
+    required this.index, // Make index required again
   });
 
   void _showItemActions(
     BuildContext context,
     WidgetRef ref,
-    WorkbenchItemReference item, // Keep generic name or rename
+    WorkbenchItemReference item,
     VoidCallback originalOnTap,
   ) {
     // Capture necessary providers/notifiers before showing the sheet
-    final instancesState = ref.read(focusInstancesProvider); // Use focus provider
-    final focusNotifier = ref.read(
-      focusProviderFamily(item.instanceId).notifier, // Use focus provider family
+    final instancesState = ref.read(workbenchInstancesProvider);
+    final workbenchNotifier = ref.read(
+      workbenchProviderFamily(item.instanceId).notifier,
     );
     final activeCommentNotifier = ref.read(activeCommentIdProvider.notifier);
     final selectedItemNotifier = ref.read(
-      selectedWorkbenchItemIdProvider.notifier, // Keep generic name or rename
+      selectedWorkbenchItemIdProvider.notifier,
     );
     final selectedCommentNotifier = ref.read(
-      selectedWorkbenchCommentIdProvider.notifier, // Keep generic name or rename
+      selectedWorkbenchCommentIdProvider.notifier,
     );
     final currentSelectedItemId = ref.read(
-      selectedWorkbenchItemIdProvider, // Keep generic name or rename
+      selectedWorkbenchItemIdProvider,
     );
     final currentInstanceId = item.instanceId;
     final otherInstances =
@@ -102,10 +102,10 @@ class FocusItemTile extends ConsumerWidget {
               ...moveActions,
               CupertinoActionSheetAction(
                 isDestructiveAction: true,
-                child: const Text('Remove from Focus Board'), // Updated text
+                child: const Text('Remove from Workbench'),
                 onPressed: () {
                   Navigator.pop(context);
-                  focusNotifier.removeItem(item.id); // Use focus notifier
+                  workbenchNotifier.removeItem(item.id);
                   if (currentSelectedItemId == item.id) {
                     selectedItemNotifier.state = null;
                   }
@@ -123,11 +123,11 @@ class FocusItemTile extends ConsumerWidget {
   void _showMoveDestinationSheet(
     BuildContext context,
     WidgetRef ref,
-    WorkbenchItemReference itemToMove, // Keep generic name or rename
-    List<FocusInstance> destinations, // Use FocusInstance
+    WorkbenchItemReference itemToMove,
+    List<WorkbenchInstance> destinations,
   ) {
     final sourceNotifier = ref.read(
-      focusProviderFamily(itemToMove.instanceId).notifier, // Use focus provider family
+      workbenchProviderFamily(itemToMove.instanceId).notifier,
     );
 
     showCupertinoModalPopup(
@@ -141,7 +141,7 @@ class FocusItemTile extends ConsumerWidget {
                     child: Text(dest.name),
                     onPressed: () {
                       Navigator.pop(context);
-                      sourceNotifier.moveItem( // Assuming moveItem exists on FocusNotifier
+                      sourceNotifier.moveItem(
                         itemId: itemToMove.id,
                         targetInstanceId: dest.id,
                       );
@@ -163,7 +163,7 @@ class FocusItemTile extends ConsumerWidget {
       itemReference.overallLastUpdateTime,
     );
 
-    final selectedItemId = ref.watch(selectedWorkbenchItemIdProvider); // Keep generic name or rename
+    final selectedItemId = ref.watch(selectedWorkbenchItemIdProvider);
     final isSelected = selectedItemId == itemReference.id;
 
     final tileColor =
@@ -205,13 +205,13 @@ class FocusItemTile extends ConsumerWidget {
             child: GestureDetector(
               onTap: () {
                 final notifier = ref.read(
-                  selectedWorkbenchItemIdProvider.notifier, // Keep generic name or rename
+                  selectedWorkbenchItemIdProvider.notifier,
                 );
                 if (isSelected) {
                   notifier.state = null;
                 } else {
                   notifier.state = itemReference.id;
-                  ref.read(selectedWorkbenchCommentIdProvider.notifier).state = // Keep generic name or rename
+                  ref.read(selectedWorkbenchCommentIdProvider.notifier).state =
                       null;
                 }
                 onTap();
@@ -321,7 +321,7 @@ class FocusItemTile extends ConsumerWidget {
       comment.updatedTs ?? comment.createdTs,
     );
 
-    final selectedCommentId = ref.watch(selectedWorkbenchCommentIdProvider); // Keep generic name or rename
+    final selectedCommentId = ref.watch(selectedWorkbenchCommentIdProvider);
     final isCommentSelected = selectedCommentId == comment.id;
 
     final bubbleColor =
@@ -339,13 +339,13 @@ class FocusItemTile extends ConsumerWidget {
               behavior: HitTestBehavior.opaque,
               onTap: () {
                 final notifier = ref.read(
-                  selectedWorkbenchCommentIdProvider.notifier, // Keep generic name or rename
+                  selectedWorkbenchCommentIdProvider.notifier,
                 );
                 if (isCommentSelected) {
                   notifier.state = null;
                 } else {
                   notifier.state = comment.id;
-                  ref.read(selectedWorkbenchItemIdProvider.notifier).state = // Keep generic name or rename
+                  ref.read(selectedWorkbenchItemIdProvider.notifier).state =
                       null;
                 }
               },
@@ -436,7 +436,7 @@ class FocusItemTile extends ConsumerWidget {
     Comment comment,
   ) {
     final selectedCommentNotifier = ref.read(
-      selectedWorkbenchCommentIdProvider.notifier, // Keep generic name or rename
+      selectedWorkbenchCommentIdProvider.notifier,
     );
     // final currentSelectedCommentId = ref.read( // Unused variable
     //   selectedWorkbenchCommentIdProvider,
@@ -472,38 +472,4 @@ class FocusItemTile extends ConsumerWidget {
       ),
     );
   }
-}
-
-// Add missing moveItem to FocusNotifier if needed
-extension FocusNotifierMoveExtension on FocusNotifier {
-  Future<void> moveItem({required String itemId, required String targetInstanceId}) async {
-     // Placeholder implementation - needs actual logic
-     print('[FocusNotifier($instanceId)] Moving item $itemId to instance $targetInstanceId (Placeholder)');
-     // 1. Find the item to move in the current state
-     final itemIndex = state.items.indexWhere((item) => item.id == itemId);
-     if (itemIndex == -1) {
-       print('[FocusNotifier($instanceId)] Item $itemId not found for moving.');
-       state = state.copyWith(error: 'Item to move not found.');
-       return;
-     }
-     final itemToMove = state.items[itemIndex];
-
-     // 2. Remove item from the current instance's list
-     final updatedSourceItems = List<WorkbenchItemReference>.from(state.items)..removeAt(itemIndex);
-     await _saveItemsToPrefs(updatedSourceItems); // Save source list
-     state = state.copyWith(items: updatedSourceItems); // Update source state
-
-     // 3. Add item to the target instance's list
-     // This requires interacting with the target FocusNotifier.
-     // This is tricky directly from another notifier. Usually, this logic
-     // would be orchestrated by a higher-level service or UI interaction
-     // that can read/write to both notifiers.
-     // For now, we'll just log it. A full implementation might involve:
-     // - Reading the target notifier via ref.read(focusProviderFamily(targetInstanceId).notifier) (if ref is available)
-     // - Calling addItem on the target notifier.
-     print('[FocusNotifier($instanceId)] Needs mechanism to add item ${itemToMove.id} to target instance $targetInstanceId.');
-
-     // Potential issue: If the target notifier isn't loaded/active, adding might fail.
-     // Consider using a shared service or repository pattern.
-   }
 }

@@ -1,8 +1,7 @@
 import 'package:flutter/cupertino.dart';
-// Updated import path for FocusScreen now that it's inside lib
-import 'package:flutter_memos/screens/focus/focus_screen.dart';
 import 'package:flutter_memos/screens/item_detail/item_detail_screen.dart';
 import 'package:flutter_memos/screens/new_note/new_note_screen.dart'; // Import NewNoteScreen
+import 'package:flutter_memos/screens/workbench/workbench_screen.dart'; // Import WorkbenchScreen
 import 'package:flutter_memos/widgets/config_check_wrapper.dart'; // Import the wrapper
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart'; // Import Supabase
@@ -44,18 +43,21 @@ class MyAppRoot extends StatelessWidget {
       home: const ConfigCheckWrapper(), // Start with the wrapper
       // Add onGenerateRoute to handle named navigation
       onGenerateRoute: (RouteSettings settings) {
-        // Handle /focus/:instanceId routes first
-        if (settings.name != null && settings.name!.startsWith('/focus/')) {
+        // Handle /workbench/:instanceId routes first
+        if (settings.name != null && settings.name!.startsWith('/workbench/')) {
           final routeName = settings.name!;
-          // Extract instanceId after '/focus/'
-          if (routeName.length > '/focus/'.length) {
-            final instanceId = routeName.substring('/focus/'.length);
+          // Extract instanceId after '/workbench/'
+          if (routeName.length > '/workbench/'.length) {
+            final instanceId = routeName.substring('/workbench/'.length);
             return CupertinoPageRoute(
-              builder: (_) => FocusScreen(instanceId: instanceId), // Use FocusScreen here
+              builder:
+                  (_) => WorkbenchScreen(
+                    instanceId: instanceId,
+                  ), // Use WorkbenchScreen here
               settings: settings, // Pass settings along
             );
           } else {
-            // Handle case where route is just '/focus/' (invalid in this context)
+            // Handle case where route is just '/workbench/' (invalid in this context)
             print('Error: Invalid route format: ${settings.name}');
             // Fallback to default or error screen
             return CupertinoPageRoute(
@@ -78,10 +80,6 @@ class MyAppRoot extends StatelessWidget {
             final itemId = args?['itemId'] as String?;
             // Ensure itemId is provided, otherwise handle error or default
             if (itemId != null) {
-              // Assuming ItemDetailScreen is also moved or already in lib
-              // If ItemDetailScreen is outside lib, it needs moving too.
-              // For now, assume it's correctly located or will be moved.
-              // If it's at lib/screens/item_detail/item_detail_screen.dart
               return CupertinoPageRoute(
                 builder: (_) => ItemDetailScreen(itemId: itemId),
                 settings: settings, // Pass settings along
@@ -114,22 +112,3 @@ class MyAppRoot extends StatelessWidget {
     );
   }
 }
-
-// Placeholder for ItemDetailScreen if it doesn't exist yet.
-// Ensure this file exists at lib/screens/item_detail/item_detail_screen.dart
-// class ItemDetailScreen extends StatelessWidget {
-//   final String itemId;
-//   const ItemDetailScreen({super.key, required this.itemId});
-//
-//   @override
-//   Widget build(BuildContext context) {
-//     return CupertinoPageScaffold(
-//       navigationBar: CupertinoNavigationBar(
-//         middle: Text('Item Detail: $itemId'),
-//       ),
-//       child: Center(
-//         child: Text('Details for item ID: $itemId'),
-//       ),
-//     );
-//   }
-// }

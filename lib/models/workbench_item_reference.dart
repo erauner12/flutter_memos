@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_memos/models/comment.dart'; // Import Comment model
-import 'package:flutter_memos/models/focus_instance.dart'; // Correct import
 import 'package:flutter_memos/models/server_config.dart'; // For ServerType enum (including todoist)
+import 'package:flutter_memos/models/workbench_instance.dart'; // Import WorkbenchInstance for default ID
 import 'package:flutter_memos/models/workbench_item_type.dart'; // Import the unified enum
 import 'package:flutter_memos/utils/enum_utils.dart'; // Import the new helper
 import 'package:uuid/uuid.dart'; // Import Uuid
@@ -198,11 +198,10 @@ class WorkbenchItemReference {
     if (instanceId.isEmpty) {
       if (kDebugMode) {
         print(
-          '[WorkbenchItemReference.fromJson] Warning: Missing or empty instanceId in record $finalId. Assigning default: ${FocusInstance.defaultInstanceId}.', // Use FocusInstance
+          '[WorkbenchItemReference.fromJson] Warning: Missing or empty instanceId in record $finalId. Assigning default: ${WorkbenchInstance.defaultInstanceId}.',
         );
       }
-      instanceId =
-          FocusInstance.defaultInstanceId; // Assign default using FocusInstance
+      instanceId = WorkbenchInstance.defaultInstanceId; // Assign default
     }
 
     // Read sortOrder from JSON, default to 0 for migration if missing/invalid
