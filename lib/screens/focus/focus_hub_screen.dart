@@ -335,11 +335,11 @@ class _FocusHubScreenState extends ConsumerState<FocusHubScreen> {
                       // Correct widget
                       instance: instance,
                       onTap: () {
-                        // Navigate to the detail screen using the nested navigator
-                        // Update route path if necessary
-                        Navigator.of(
-                          context,
-                        ).pushNamed('/focus/${instance.id}'); // Updated route path
+                        // Navigate to the detail screen using the ROOT navigator
+                        // This ensures the route defined in main.dart is used.
+                        Navigator.of(context, rootNavigator: true).pushNamed(
+                          '/focus/${instance.id}',
+                        ); // Updated route path
                       },
                       onLongPress: () => _showInstanceActions(instance),
                     );
