@@ -1,18 +1,16 @@
-import 'package:collection/collection.dart'; // Import collection package
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_memos/models/note_item.dart'; // Import NoteItem model
 import 'package:flutter_memos/models/server_config.dart';
-// Import note_providers and use families
+// Import note_providers and use non-family providers
 import 'package:flutter_memos/providers/note_providers.dart' as note_providers;
-import 'package:flutter_memos/providers/server_config_provider.dart';
+// Import single server config provider
+import 'package:flutter_memos/providers/note_server_config_provider.dart';
 import 'package:flutter_memos/utils/keyboard_navigation.dart';
 import 'package:flutter_memos/utils/url_helper.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
-// Remove local createNoteProvider definition
 
 class NewNoteForm extends ConsumerStatefulWidget {
   const NewNoteForm({super.key});
@@ -32,44 +30,26 @@ class _NewNoteFormState extends ConsumerState<NewNoteForm>
   String? _error;
   bool _showMarkdownHelp = false;
   bool _previewMode = false;
-  ServerConfig? _selectedServerConfig;
+  ServerConfig? _selectedServerConfig; // Holds the single configured server
 
   @override
   void initState() {
     super.initState();
-    // Get serverId from route arguments if available, else use active
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final args =
-          ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
-      final routeServerId = args?['serverId'] as String?;
-      final activeServer = ref.read(activeServerConfigProvider);
-      final targetServerId = routeServerId ?? activeServer?.id;
-
-      if (targetServerId != null) {
-        final server = ref
-            .read(multiServerConfigProvider)
-            .servers
-            .firstWhereOrNull(
-              (s) => s.id == targetServerId,
-            ); // Use firstWhereOrNull
-        if (mounted) {
-          setState(() {
-            _selectedServerConfig = server;
-          });
-        }
-      } else {
-        // If no serverId from route or active, default to first available? Or show error?
-        final firstServer =
-            ref.read(multiServerConfigProvider).servers.firstOrNull;
-        if (mounted) {
-          setState(() {
-            _selectedServerConfig = firstServer;
-          });
-        }
-      }
+      // Read the single note server config
+      final singleServer = ref.read(noteServerConfigProvider);
 
       if (mounted) {
-        FocusScope.of(context).requestFocus(_contentFocusNode);
+        setState(() {
+          _selectedServerConfig = singleServer;
+        });
+        // Focus the content field if a server is configured
+        if (singleServer != null) {
+          FocusScope.of(context).requestFocus(_contentFocusNode);
+        } else {
+          // Optionally show a dialog if no server is configured
+          _showNoServerDialog();
+        }
       }
     });
   }
@@ -80,6 +60,27 @@ class _NewNoteFormState extends ConsumerState<NewNoteForm>
     _contentFocusNode.dispose();
     _formFocusNode.dispose();
     super.dispose();
+  }
+
+  void _showNoServerDialog() {
+    if (!mounted) return;
+    showCupertinoDialog(
+      context: context,
+      builder:
+          (context) => CupertinoAlertDialog(
+            title: const Text('No Server Configured'),
+            content: const Text(
+              'Please configure a Note server in Settings before creating a note.',
+            ),
+            actions: [
+              CupertinoDialogAction(
+                isDefaultAction: true,
+                child: const Text('OK'),
+                onPressed: () => Navigator.pop(context),
+              ),
+            ],
+          ),
+    );
   }
 
   Widget _buildMarkdownHelpItem(String syntax, String description) {
@@ -108,87 +109,19 @@ class _NewNoteFormState extends ConsumerState<NewNoteForm>
     );
   }
 
-  void _showServerSelection() {
-    final multiServerState = ref.read(multiServerConfigProvider);
-    final servers = multiServerState.servers;
-
-    if (servers.isEmpty) {
-      showCupertinoDialog(
-        context: context,
-        builder:
-            (context) => CupertinoAlertDialog(
-              title: const Text('No Servers Available'),
-              content: const Text(
-                'Please configure a server in Settings first.',
-              ),
-              actions: [
-                CupertinoDialogAction(
-                  isDefaultAction: true,
-                  child: const Text('OK'),
-                  onPressed: () => Navigator.pop(context),
-                ),
-              ],
-            ),
-      );
-      return;
-    }
-
-    showCupertinoModalPopup<void>(
-      context: context,
-      builder:
-          (BuildContext context) => CupertinoActionSheet(
-            title: const Text('Select Target Server'),
-            actions:
-                servers.map((server) {
-                  final bool isSelected =
-                      server.id == _selectedServerConfig?.id;
-                  return CupertinoActionSheetAction(
-                    isDefaultAction: isSelected,
-                    onPressed: () {
-                      setState(() {
-                        _selectedServerConfig = server;
-                      });
-                      Navigator.pop(context);
-                    },
-                    child: Text(server.name ?? server.serverUrl),
-                  );
-                }).toList(),
-            cancelButton: CupertinoActionSheetAction(
-              child: const Text('Cancel'),
-              onPressed: () {
-                Navigator.pop(context);
-              },
-            ),
-          ),
-    );
-  }
+  // Removed _showServerSelection method as we now use a single server config
 
   Future<void> _handleCreateNote() async {
     final content = _contentController.text.trim();
 
+    // Check if a server is configured
     if (_selectedServerConfig == null) {
       if (mounted) {
-        showCupertinoDialog(
-          context: context,
-          builder:
-              (context) => CupertinoAlertDialog(
-                title: const Text('No Server Selected'),
-                content: const Text(
-                  'Please select a target server for this note.',
-                ),
-                actions: [
-                  CupertinoDialogAction(
-                    isDefaultAction: true,
-                    child: const Text('OK'),
-                    onPressed: () => Navigator.of(context).pop(),
-                  ),
-                ],
-              ),
-        );
+        _showNoServerDialog(); // Show the no server dialog again
       }
       return;
     }
-    final targetServerId = _selectedServerConfig!.id; // Use non-null serverId
+    // No need for targetServerId, we use the single _selectedServerConfig
 
     if (content.isEmpty) {
       if (mounted) {
@@ -214,7 +147,7 @@ class _NewNoteFormState extends ConsumerState<NewNoteForm>
     if (kDebugMode) {
       print('[NewNoteForm] Creating new note via _handleCreateNote');
       print(
-        '[NewNoteForm] Target Server: ${_selectedServerConfig?.name ?? targetServerId}',
+        '[NewNoteForm] Target Server: ${_selectedServerConfig?.name ?? _selectedServerConfig?.id}',
       );
       print('[NewNoteForm] Content length: ${content.length} characters');
       if (content.length < 200) {
@@ -243,9 +176,9 @@ class _NewNoteFormState extends ConsumerState<NewNoteForm>
 
     try {
       final newNote = NoteItem(
-        id: 'temp',
+        id: 'temp', // Server will assign the real ID
         content: content,
-        visibility: NoteVisibility.public,
+        visibility: NoteVisibility.public, // Default visibility
         pinned: false,
         state: NoteState.normal,
         createTime: DateTime.now(),
@@ -260,26 +193,22 @@ class _NewNoteFormState extends ConsumerState<NewNoteForm>
         endDate: null,
       );
 
-      // Use createNoteProviderFamily with the target server ID
-      await ref.read(note_providers.createNoteProviderFamily(targetServerId))(
-        newNote,
-      );
+      // Use the non-family createNoteProvider
+      await ref.read(note_providers.createNoteProvider)(newNote);
 
       if (kDebugMode) {
         print(
-          '[NewNoteForm] Note created successfully on server $targetServerId',
+          '[NewNoteForm] Note created successfully on server ${_selectedServerConfig!.id}',
         );
       }
 
-      // Invalidate the notes list for the target server
-      ref.invalidate(
-        note_providers.notesNotifierProviderFamily(targetServerId),
-      );
+      // Invalidate the non-family notes list provider
+      ref.invalidate(note_providers.notesNotifierProvider);
 
       if (mounted) {
-        // Pop back instead of replacing, assuming user wants to return to previous screen (Hub or Items)
+        // Pop back instead of replacing
         Navigator.of(context).pop();
-        // Optionally show a success message
+        // Optionally show a success message (e.g., using a SnackBar or Toast)
       }
     } catch (e) {
       if (kDebugMode) {
@@ -318,15 +247,45 @@ class _NewNoteFormState extends ConsumerState<NewNoteForm>
 
   @override
   Widget build(BuildContext context) {
+    // Display message if no server is configured
+    if (_selectedServerConfig == null && !_loading) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(CupertinoIcons.exclamationmark_shield, size: 50),
+              const SizedBox(height: 16),
+              const Text(
+                'No Note Server Configured',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Please go to Settings and configure a Memos or Blinko server to create notes.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: CupertinoColors.secondaryLabel.resolveFrom(context),
+                ),
+              ),
+              const SizedBox(height: 20),
+              CupertinoButton(
+                child: const Text('Go Back'),
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Focus(
       focusNode: _formFocusNode,
       onKeyEvent: (node, event) {
         if (kDebugMode) {
           // print('[NewNoteForm] Received key event: ${event.logicalKey.keyLabel}');
-          // if (event.logicalKey == LogicalKeyboardKey.enter) {
-          //   final metaPressed = HardwareKeyboard.instance.isMetaPressed;
-          //   print('[NewNoteForm] Enter key pressed. Meta key pressed: $metaPressed');
-          // }
         }
 
         if (event is KeyDownEvent &&
@@ -370,45 +329,7 @@ class _NewNoteFormState extends ConsumerState<NewNoteForm>
         child: ListView(
           padding: const EdgeInsets.all(16.0),
           children: [
-            CupertinoFormSection.insetGrouped(
-              header: const Text('TARGET SERVER'),
-              children: [
-                CupertinoFormRow(
-                  prefix: const Text('Server'),
-                  child: CupertinoButton(
-                    padding: EdgeInsets.zero,
-                    alignment: Alignment.centerRight,
-                    onPressed: _showServerSelection,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        Text(
-                          _selectedServerConfig?.name ??
-                              _selectedServerConfig?.serverUrl ??
-                              'Select Server',
-                          style: TextStyle(
-                            color:
-                                _selectedServerConfig == null
-                                    ? CupertinoColors.placeholderText
-                                        .resolveFrom(context)
-                                    : CupertinoTheme.of(
-                                      context,
-                                    ).textTheme.textStyle.color,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(width: 4),
-                        const Icon(
-                          CupertinoIcons.chevron_up_chevron_down,
-                          size: 16,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
+            // Removed Server Selection Section
             CupertinoFormSection.insetGrouped(
               header: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -653,6 +574,7 @@ class _NewNoteFormState extends ConsumerState<NewNoteForm>
               width: double.infinity,
               child: CupertinoButton.filled(
                 padding: const EdgeInsets.symmetric(vertical: 12),
+                // Disable button if loading or no server is selected
                 onPressed:
                     _loading || _selectedServerConfig == null
                         ? null
