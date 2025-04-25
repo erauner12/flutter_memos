@@ -1,5 +1,5 @@
 import 'package:flutter/cupertino.dart';
-// Assume ItemDetailScreen exists here or create it
+import 'package:flutter_memos/screens/focus/focus_screen.dart'; // Import FocusScreen
 import 'package:flutter_memos/screens/item_detail/item_detail_screen.dart';
 import 'package:flutter_memos/screens/new_note/new_note_screen.dart'; // Import NewNoteScreen
 import 'package:flutter_memos/widgets/config_check_wrapper.dart'; // Import the wrapper
@@ -43,6 +43,28 @@ class MyAppRoot extends StatelessWidget {
       home: const ConfigCheckWrapper(), // Start with the wrapper
       // Add onGenerateRoute to handle named navigation
       onGenerateRoute: (RouteSettings settings) {
+        // Handle /focus/:instanceId routes first
+        if (settings.name != null && settings.name!.startsWith('/focus/')) {
+          final routeName = settings.name!;
+          // Extract instanceId after '/focus/'
+          if (routeName.length > '/focus/'.length) {
+            final instanceId = routeName.substring('/focus/'.length);
+            return CupertinoPageRoute(
+              builder: (_) => FocusScreen(instanceId: instanceId), // Use FocusScreen here
+              settings: settings, // Pass settings along
+            );
+          } else {
+            // Handle case where route is just '/focus/' (invalid in this context)
+            print('Error: Invalid route format: ${settings.name}');
+            // Fallback to default or error screen
+            return CupertinoPageRoute(
+              builder: (_) => const ConfigCheckWrapper(), // Or an error screen
+              settings: settings,
+            );
+          }
+        }
+
+        // Handle other specific named routes
         switch (settings.name) {
           case '/new-note':
             return CupertinoPageRoute(
@@ -61,7 +83,6 @@ class MyAppRoot extends StatelessWidget {
               );
             } else {
               // Handle error: itemId was expected but not provided
-              // You could navigate to an error screen or back
               print(
                 'Error: Navigating to /item-detail without providing an itemId.',
               );
@@ -76,9 +97,8 @@ class MyAppRoot extends StatelessWidget {
           // case '/settings':
           //   return CupertinoPageRoute(builder: (_) => SettingsScreen());
           default:
-            // If the route name is not recognized,
+            // If the route name is not recognized by the above checks or switch,
             // navigate to the home/default screen or show an error.
-            // Returning null will cause an error, so handle it gracefully.
             print('Warning: Unhandled route: ${settings.name}');
             return CupertinoPageRoute(
               builder: (_) => const ConfigCheckWrapper(), // Fallback route
