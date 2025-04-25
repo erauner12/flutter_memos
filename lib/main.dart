@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:flutter_memos/screens/edit_entity/edit_entity_screen.dart'; // Import EditEntityScreen
 import 'package:flutter_memos/screens/item_detail/item_detail_screen.dart';
 import 'package:flutter_memos/screens/new_note/new_note_screen.dart'; // Import NewNoteScreen
 import 'package:flutter_memos/screens/workbench/workbench_screen.dart'; // Import WorkbenchScreen
@@ -96,13 +97,45 @@ class MyAppRoot extends StatelessWidget {
                 settings: settings,
               );
             }
+          // --- ADDED ROUTE FOR EDIT ENTITY ---
+          case '/edit-entity':
+            final args = settings.arguments as Map<String, dynamic>?;
+            final entityType = args?['entityType'] as String?;
+            final entityId = args?['entityId'] as String?;
+
+            // Basic validation: Ensure required arguments are present
+            if (entityType != null && entityId != null) {
+              return CupertinoPageRoute(
+                builder:
+                    (_) => EditEntityScreen(
+                      entityId: entityId,
+                      entityType: entityType,
+                    ),
+                settings: settings, // Pass settings along
+              );
+            } else {
+              // Handle error: Missing required arguments
+              print(
+                'Error: Navigating to /edit-entity without required arguments (entityId: $entityId, entityType: $entityType).',
+              );
+              // Fallback to default or error screen
+              return CupertinoPageRoute(
+                builder:
+                    (_) => const ConfigCheckWrapper(), // Or an error screen
+                settings: settings,
+              );
+            }
           // Add cases for other named routes here if needed
           // case '/settings':
           //   return CupertinoPageRoute(builder: (_) => SettingsScreen());
           default:
             // If the route name is not recognized by the above checks or switch,
             // navigate to the home/default screen or show an error.
-            print('Warning: Unhandled route: ${settings.name}');
+            // Only print warning if it's not an internal Flutter route
+            if (settings.name != null &&
+                !settings.name!.startsWith('flutter/')) {
+              print('Warning: Unhandled route: ${settings.name}');
+            }
             return CupertinoPageRoute(
               builder: (_) => const ConfigCheckWrapper(), // Fallback route
               settings: settings,
