@@ -14,13 +14,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 class EntityProviderParams {
   final String id;
   final String type; // 'note' or 'comment'
-  // serverId is no longer needed as context comes from noteServerConfigProvider
-  // final String serverId;
 
   EntityProviderParams({
     required this.id,
     required this.type,
-    // required this.serverId, // Removed
   });
 
   @override

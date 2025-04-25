@@ -14,19 +14,16 @@ import 'edit_entity_providers.dart'; // Updated import
 class EditEntityScreen extends ConsumerWidget {
   final String entityId;
   final String entityType; // 'note' or 'comment' or 'task'
-  // serverIdOverride is no longer needed as context comes from note/task providers
-  // final String? serverIdOverride;
 
   const EditEntityScreen({
     super.key,
     required this.entityId,
     required this.entityType,
-    // this.serverIdOverride, // Removed
   });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Determine the serverId based on entityType
+    // Determine the serverId based on entityType - needed for PopScope logic and potentially form context
     String? serverId;
     if (entityType == 'note' || entityType == 'comment') {
       serverId = ref.watch(noteServerConfigProvider)?.id;
@@ -44,13 +41,13 @@ class EditEntityScreen extends ConsumerWidget {
       );
     }
 
-    // Watch the generalized provider, passing parameters including serverId
+    // Watch the generalized provider, passing parameters (serverId removed from params)
     final entityAsync = ref.watch(
       editEntityProvider(
         EntityProviderParams(
           id: entityId,
           type: entityType,
-          serverId: serverId, // Pass the determined serverId
+          // serverId: serverId, // Removed: serverId is not part of EntityProviderParams
         ),
       ),
     );
@@ -106,8 +103,8 @@ class EditEntityScreen extends ConsumerWidget {
                   entity: entity,
                   entityId: entityId,
                   entityType: entityType,
-                  serverId:
-                      serverId ?? '', // Pass determined serverId to the form
+                  serverId: '',
+                  // serverId: serverId, // Removed: Form likely gets serverId from provider if needed
                 ),
             loading: () => const Center(child: CupertinoActivityIndicator()),
             error:
