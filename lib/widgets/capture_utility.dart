@@ -268,7 +268,7 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
         setState(() {
           _currentHeight =
               targetValue == 1.0 ? _expandedHeight : _collapsedHeight;
-          if ((_animationController.value - targetValue).abs() > 0.01) {
+          if ((targetValue - _animationController.value).abs() > 0.01) {
             _animationController.value = targetValue;
           }
         });
@@ -962,7 +962,8 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
     // This Column contains the text field, attachment preview, and buttons.
     // It should fit within the parent Expanded widget.
     return Column(
-      mainAxisSize: MainAxisSize.min, // Important: prevent infinite height
+      // Use max to allow the Expanded child to fill space
+      mainAxisSize: MainAxisSize.max,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // TextField should expand to fill available space
@@ -1004,7 +1005,8 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
         ),
         // Attachment preview (conditionally shown)
         if (_selectedFileData != null) ...[
-          Padding(
+          Container(
+            constraints: const BoxConstraints(maxHeight: 50),
             padding: const EdgeInsets.only(
               top: 8.0,
               bottom: 4.0,
@@ -1074,8 +1076,9 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
           ),
         ],
         // Bottom row with buttons (fixed height)
-        SizedBox(
+        Container(
           height: 44,
+          constraints: const BoxConstraints(minHeight: 44, maxHeight: 44),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -1350,10 +1353,8 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
                       child:
                           showExpandedContent
                               ? Column(
-                                // Use a Column directly, no SingleChildScrollView
-                                mainAxisSize:
-                                    MainAxisSize
-                                        .min, // Allow column to shrink if content is small
+                                // Change to max to allow inner Expanded to work correctly
+                                mainAxisSize: MainAxisSize.max,
                                 children: [
                                   // Segmented control (conditionally shown)
                                   if (widget.mode == CaptureMode.addComment)
@@ -1413,8 +1414,7 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
                                       ),
                                     ),
                                   // Main expanded content (TextField, attachment, buttons)
-                                  // Wrap buildExpandedContent in Expanded so its internal Column
-                                  // can correctly use its own Expanded child (the TextField).
+                                  // This Expanded now correctly receives bounded constraints
                                   Expanded(
                                     child: buildExpandedContent(
                                       hintText,
