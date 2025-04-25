@@ -56,6 +56,8 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
               '[ItemsScreen] Initialized with presetKey: ${widget.presetKey}',
             );
           }
+          // Trigger a refresh to load data with the new preset/type filter
+          ref.read(note_providers.notesNotifierProvider.notifier).refresh();
         }
       } else {
         // Load saved preferences if no specific preset is passed
@@ -292,11 +294,18 @@ class _ItemsScreenState extends ConsumerState<ItemsScreen>
     }
 
     // Determine the title based on the preset key or server name
-    String screenTitle = currentServer.name ?? currentServer.serverUrl;
-    if (widget.presetKey != null) {
-      final preset = quickFilterPresets[widget.presetKey];
-      if (preset != null) {
-        screenTitle = preset.label; // Use preset label for title
+    String screenTitle;
+    if (widget.presetKey == 'cache') {
+      screenTitle = 'Cache'; // Explicit title for Cache screen
+    } else if (widget.presetKey == 'vault') {
+      screenTitle = 'Vault'; // Explicit title for Vault screen
+    } else {
+      // Use preset label if available and not cache/vault, otherwise server name/URL
+      final preset = quickFilterPresets[selectedPresetKey];
+      if (preset != null && preset.key != 'cache' && preset.key != 'vault') {
+        screenTitle = preset.label;
+      } else {
+        screenTitle = currentServer.name ?? currentServer.serverUrl;
       }
     }
 

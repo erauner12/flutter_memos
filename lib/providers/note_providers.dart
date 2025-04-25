@@ -172,6 +172,19 @@ class NotesNotifier extends StateNotifier<NotesState> {
     else if (selectedPresetKey == 'archive')
       stateFilter = 'ARCHIVED';
 
+    // Determine BlinkoNoteType based on preset
+    BlinkoNoteType? blinkoTypeFilter;
+    switch (selectedPresetKey) {
+      case 'cache':
+        blinkoTypeFilter = BlinkoNoteType.cache;
+        break;
+      case 'vault':
+        blinkoTypeFilter = BlinkoNoteType.vault;
+        break;
+      default:
+        blinkoTypeFilter = null; // No specific type filter for other presets
+    }
+
     final rawCelFilter = _ref.read(rawCelFilterProvider);
     bool usingRawFilter = rawCelFilter.isNotEmpty;
     String? finalFilter = combinedFilter.isNotEmpty ? combinedFilter : null;
@@ -193,6 +206,8 @@ class NotesNotifier extends StateNotifier<NotesState> {
           'hidden',
           'custom',
           'tagged',
+          'cache', // Add cache and vault to prevent tag filtering
+          'vault',
         ].contains(selectedPresetKey)) {
       final tagFilter = 'tag == "$selectedPresetKey"';
       finalFilter =
@@ -209,6 +224,7 @@ class NotesNotifier extends StateNotifier<NotesState> {
         direction: 'DESC',
         pageSize: _pageSize,
         pageToken: pageToken,
+        blinkoType: blinkoTypeFilter, // Pass the determined type filter
       );
 
       response.notes.sort((a, b) {
@@ -498,6 +514,8 @@ final _baseFilteredNotesProvider = Provider<List<NoteItem>>((ref) {
       case 'today':
       case 'tagged':
       case 'custom':
+      case 'cache': // Include cache and vault in non-archived views
+      case 'vault':
         return note.state != NoteState.archived;
       case 'archive':
         return note.state == NoteState.archived;
@@ -575,6 +593,7 @@ final filteredNotesProvider = Provider<List<NoteItem>>((ref) {
 
   List<NoteItem> currentList = notesState.notes;
 
+  // Filter by state (archived/not archived) based on preset
   if (selectedPresetKey == 'archive')
     currentList =
         currentList.where((note) => note.state == NoteState.archived).toList();
@@ -582,6 +601,22 @@ final filteredNotesProvider = Provider<List<NoteItem>>((ref) {
     currentList =
         currentList.where((note) => note.state != NoteState.archived).toList();
 
+  // Filter by Blinko Type if preset is 'cache' or 'vault'
+  // This is client-side filtering, API filtering is preferred (handled in Notifier)
+  // but this ensures consistency if API filtering fails or isn't fully implemented.
+  if (selectedPresetKey == 'cache') {
+    currentList =
+        currentList
+            .where((note) => note.blinkoType == BlinkoNoteType.cache)
+            .toList();
+  } else if (selectedPresetKey == 'vault') {
+    currentList =
+        currentList
+            .where((note) => note.blinkoType == BlinkoNoteType.vault)
+            .toList();
+  }
+
+  // Filter by tags if a tag preset is selected
   if (![
     'all',
     'inbox',
@@ -590,6 +625,8 @@ final filteredNotesProvider = Provider<List<NoteItem>>((ref) {
     'hidden',
     'custom',
     'tagged',
+    'cache', // Don't filter by tag for cache/vault presets
+    'vault',
   ].contains(selectedPresetKey))
     currentList =
         currentList
@@ -598,6 +635,7 @@ final filteredNotesProvider = Provider<List<NoteItem>>((ref) {
   else if (selectedPresetKey == 'tagged')
     currentList = currentList.where((note) => note.tags.isNotEmpty).toList();
 
+  // Handle 'hidden' preset view
   if (selectedPresetKey == 'hidden') {
     currentList =
         currentList.where((note) {
@@ -608,6 +646,7 @@ final filteredNotesProvider = Provider<List<NoteItem>>((ref) {
           return isManuallyHidden || isFutureDated;
         }).toList();
   } else if (!showHiddenToggle) {
+    // Hide manually hidden and future-dated notes if toggle is off
     currentList =
         currentList.where((note) {
           final isManuallyHidden = manuallyHiddenIds.contains(note.id);
@@ -617,14 +656,18 @@ final filteredNotesProvider = Provider<List<NoteItem>>((ref) {
         }).toList();
   }
 
+  // Filter by pinned status
   if (hidePinned)
     currentList = currentList.where((note) => !note.pinned).toList();
+
+  // Filter by search query
   if (searchQuery.isNotEmpty)
     currentList =
         currentList
             .where((note) => note.content.toLowerCase().contains(searchQuery))
             .toList();
 
+  // Sort the final list
   currentList.sort((a, b) {
     if (a.pinned != b.pinned) return a.pinned ? -1 : 1;
     final timeA = a.displayTime;

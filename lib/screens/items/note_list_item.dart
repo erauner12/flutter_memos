@@ -159,6 +159,52 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
     );
   }
 
+  // Helper to build the Blinko Type indicator
+  Widget? _buildBlinkoTypeIndicator(BuildContext context, NoteItem note) {
+    String? label;
+    Color? color;
+    IconData? icon;
+
+    switch (note.blinkoType) {
+      case BlinkoNoteType.cache:
+        label = 'Cache';
+        color = CupertinoColors.systemGreen.resolveFrom(context);
+        icon = CupertinoIcons.archivebox; // Example icon
+        break;
+      case BlinkoNoteType.vault:
+        label = 'Vault';
+        color = CupertinoColors.systemPurple.resolveFrom(context);
+        icon = CupertinoIcons.lock_shield; // Example icon
+        break;
+      case BlinkoNoteType.unknown:
+        return null; // Don't show anything for unknown type
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(left: 12.0, top: 4.0),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            size: 14,
+            color: color ?? CupertinoColors.secondaryLabel.resolveFrom(context),
+          ),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color:
+                  color ?? CupertinoColors.secondaryLabel.resolveFrom(context),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showCustomContextMenu(BuildContext scaffoldContext) {
     final isManuallyHidden = ref
         .read(settings_p.manuallyHiddenNoteIdsProvider)
@@ -777,14 +823,24 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
     );
 
     final dateInfoWidget = _buildDateInfo(scaffoldContext, widget.note);
-    Widget cardWithDateInfo = Column(
+    final blinkoTypeIndicator = _buildBlinkoTypeIndicator(
+      scaffoldContext,
+      widget.note,
+    );
+
+    Widget cardWithExtras = Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [noteCardWidget, if (dateInfoWidget != null) dateInfoWidget],
+      children: [
+        if (blinkoTypeIndicator != null)
+          blinkoTypeIndicator, // Add type indicator above card
+        noteCardWidget,
+        if (dateInfoWidget != null) dateInfoWidget,
+      ],
     );
 
     if (isMultiSelectMode) {
-      cardWithDateInfo = Container(
+      cardWithExtras = Container(
         decoration: BoxDecoration(
           border: Border.all(
             color:
@@ -796,7 +852,7 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
           borderRadius: BorderRadius.circular(10),
         ),
         clipBehavior: Clip.antiAlias,
-        child: cardWithDateInfo,
+        child: cardWithExtras,
       );
 
       return Padding(
@@ -811,7 +867,7 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
                 onChanged: (value) => _toggleMultiSelection(widget.note.id),
               ),
             ),
-            Expanded(child: cardWithDateInfo),
+            Expanded(child: cardWithExtras),
           ],
         ),
       );
@@ -907,7 +963,7 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
                 isMultiSelectMode
                     ? () => _toggleMultiSelection(widget.note.id)
                     : () => _navigateToItemDetail(scaffoldContext, ref),
-            child: Stack(children: [cardWithDateInfo]),
+            child: Stack(children: [cardWithExtras]),
           );
         },
       ),

@@ -15,6 +15,7 @@ abstract class NoteApiService extends BaseApiService {
     String? sort,
     String? direction,
     ServerConfig? targetServerOverride,
+    BlinkoNoteType? blinkoType,
   });
 
   Future<NoteItem> getNote(String id, {ServerConfig? targetServerOverride});
