@@ -2,11 +2,11 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_memos/providers/note_server_config_provider.dart'; // Import Note provider
 import 'package:flutter_memos/providers/server_config_provider.dart'; // Keep for loadServerConfigProvider
 import 'package:flutter_memos/screens/cache/cache_notes_screen.dart'; // Import Cache screen
-import 'package:flutter_memos/screens/focus/focus_hub_screen.dart'; // Import Focus Hub screen
 import 'package:flutter_memos/screens/home_tabs.dart'; // Import HomeTab enum and extension
 import 'package:flutter_memos/screens/settings_screen.dart';
 import 'package:flutter_memos/screens/studio/studio_screen.dart'; // Import Studio screen
 import 'package:flutter_memos/screens/vault/vault_notes_screen.dart'; // Import Vault screen
+import 'package:flutter_memos/screens/workbench/workbench_hub_screen.dart'; // Import Workbench Hub screen
 import 'package:flutter_riverpod/flutter_riverpod.dart'; // Keep for ConfigCheckWrapper
 
 class ConfigCheckWrapper extends ConsumerWidget {
@@ -60,7 +60,10 @@ class _MainAppTabsState extends State<MainAppTabs> {
   final Map<int, GlobalKey<NavigatorState>> tabViewNavKeys = {
     HomeTab.vault.index: GlobalKey<NavigatorState>(),
     HomeTab.cache.index: GlobalKey<NavigatorState>(),
-    HomeTab.focus.index: GlobalKey<NavigatorState>(),
+    HomeTab.focus.index:
+        GlobalKey<
+          NavigatorState
+        >(), // Renamed to focus, but uses WorkbenchHubScreen
     HomeTab.studio.index: GlobalKey<NavigatorState>(),
   };
 
@@ -127,11 +130,13 @@ class _MainAppTabsState extends State<MainAppTabs> {
               // Removed onGenerateRoute
               builder: (BuildContext context) => const CacheNotesScreen(),
             );
-          case HomeTab.focus:
+          case HomeTab.focus: // Keep enum name, but use WorkbenchHubScreen
             return CupertinoTabView(
               navigatorKey: tabViewNavKeys[HomeTab.focus.index],
               // Removed onGenerateRoute
-              builder: (BuildContext context) => const FocusHubScreen(),
+              builder:
+                  (BuildContext context) =>
+                      const WorkbenchHubScreen(), // Use WorkbenchHubScreen
             );
           case HomeTab.studio:
             return CupertinoTabView(

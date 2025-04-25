@@ -7,7 +7,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_memos/models/note_item.dart'; // Import NoteItem
 import 'package:flutter_memos/models/workbench_item_reference.dart'; // Import workbench model
 import 'package:flutter_memos/models/workbench_item_type.dart'; // Import the unified enum
-import 'package:flutter_memos/providers/focus_provider.dart'; // Correct import: workbench -> focus
 // Import note_providers and use non-family providers
 import 'package:flutter_memos/providers/note_providers.dart' as note_providers;
 // Import new single config provider
@@ -15,9 +14,10 @@ import 'package:flutter_memos/providers/note_server_config_provider.dart';
 // Import settings_provider for manuallyHiddenNoteIdsProvider
 import 'package:flutter_memos/providers/settings_provider.dart' as settings_p;
 import 'package:flutter_memos/providers/ui_providers.dart';
-import 'package:flutter_memos/utils/focus_utils.dart'; // Correct import: workbench -> focus
+import 'package:flutter_memos/providers/workbench_provider.dart'; // Correct import: focus -> workbench
 import 'package:flutter_memos/utils/keyboard_navigation.dart';
 import 'package:flutter_memos/utils/thread_utils.dart'; // Import the utility
+import 'package:flutter_memos/utils/workbench_utils.dart'; // Correct import: focus -> workbench
 import 'package:flutter_memos/widgets/capture_utility.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart'; // Import Uuid
@@ -174,13 +174,13 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
     );
   }
 
-  // --- Add to Focus Board Action --- Updated name
-  Future<void> _addNoteToFocusBoard(NoteItem note) async {
+  // --- Add to Workbench Action --- Updated name
+  Future<void> _addNoteToWorkbench(NoteItem note) async {
     // Updated name
     if (_effectiveServerId == null) {
       _showErrorSnackbar(
-        "Cannot add to focus board: Server context missing.",
-      ); // Updated text
+        "Cannot add to workbench: Server context missing.", // Updated text
+      );
       return;
     }
     // Get the config from the provider
@@ -188,16 +188,16 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
 
     if (serverConfig == null) {
       _showErrorSnackbar(
-        "Cannot add to focus board: Note server config not found.", // Updated text
+        "Cannot add to workbench: Note server config not found.", // Updated text
       );
       return;
     }
 
-    final selectedInstance = await showFocusInstancePicker(
-      // Use focus picker
+    final selectedInstance = await showWorkbenchInstancePicker(
+      // Use workbench picker
       context,
       ref,
-      title: 'Add Note To Focus Board', // Updated text
+      title: 'Add Note To Workbench', // Updated text
     );
     if (selectedInstance == null) return;
 
@@ -206,7 +206,6 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
     final preview = note.content.split('\n').first;
 
     final reference = WorkbenchItemReference(
-      // Keep generic name or rename
       id: const Uuid().v4(),
       instanceId: targetInstanceId,
       referencedItemId: note.id,
@@ -222,12 +221,14 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
 
     ref
         .read(
-          focusProviderFamily(targetInstanceId).notifier,
-        ) // Use focus provider family
+          workbenchProviderFamily(
+            targetInstanceId,
+          ).notifier, // Use workbench provider family
+        )
         .addItem(reference);
     _showSuccessSnackbar('Added note to "$targetInstanceName"');
   }
-  // --- End Add to Focus Board Action ---
+  // --- End Add to Workbench Action ---
 
   void _showActions() {
     if (!mounted || _effectiveServerId == null) return;
@@ -280,9 +281,9 @@ class _ItemDetailScreenState extends ConsumerState<ItemDetailScreen>
             CupertinoActionSheetAction(
               onPressed: () {
                 Navigator.pop(popupContext);
-                _addNoteToFocusBoard(noteAsync.value); // Updated method call
+                _addNoteToWorkbench(noteAsync.value); // Updated method call
               },
-              child: const Text('Add to Focus Board'), // Updated text
+              child: const Text('Add to Workbench'), // Updated text
             ),
           );
         }

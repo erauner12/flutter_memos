@@ -8,7 +8,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_memos/models/note_item.dart';
 import 'package:flutter_memos/models/workbench_item_reference.dart'; // Keep generic name for now, or rename if needed
 import 'package:flutter_memos/models/workbench_item_type.dart'; // Keep generic name for now, or rename if needed
-import 'package:flutter_memos/providers/focus_provider.dart'; // Correct import
 // import 'package:flutter_memos/main.dart'; // Import for rootNavigatorKeyProvider
 import 'package:flutter_memos/providers/navigation_providers.dart';
 import 'package:flutter_memos/providers/note_providers.dart' as note_providers;
@@ -16,9 +15,10 @@ import 'package:flutter_memos/providers/note_providers.dart' as note_providers;
 import 'package:flutter_memos/providers/note_server_config_provider.dart';
 import 'package:flutter_memos/providers/settings_provider.dart' as settings_p;
 import 'package:flutter_memos/providers/ui_providers.dart' as ui_providers;
-import 'package:flutter_memos/utils/focus_utils.dart'; // Correct import
+import 'package:flutter_memos/providers/workbench_provider.dart'; // Correct import: focus -> workbench
 import 'package:flutter_memos/utils/note_utils.dart';
 import 'package:flutter_memos/utils/thread_utils.dart';
+import 'package:flutter_memos/utils/workbench_utils.dart'; // Correct import: focus -> workbench
 import 'package:flutter_memos/widgets/note_card.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
@@ -293,14 +293,14 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
                         ? null
                         : () {
                           Navigator.pop(popupContext);
-                          _addNoteToFocusFromList(
+                          _addNoteToWorkbenchFromList(
                             // Updated method name
                             scaffoldContext,
                             ref,
                             widget.note,
                           );
                         },
-                child: const Text('Add to Focus...'), // Updated text
+                child: const Text('Add to Workbench...'), // Updated text
               ),
               CupertinoContextMenuAction(
                 onPressed:
@@ -382,8 +382,9 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
     );
   }
 
-  // --- Helper to add note to focus board --- Updated name and references
-  Future<void> _addNoteToFocusFromList(
+  // --- Helper to add note to workbench --- Updated name and references
+  Future<void> _addNoteToWorkbenchFromList(
+    // Updated name
     BuildContext context, // Use BuildContext
     WidgetRef ref,
     NoteItem note,
@@ -396,17 +397,17 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
       _showAlertDialog(
         context,
         'Error',
-        "Cannot add to focus board: Note server config not found.", // Updated text
+        "Cannot add to workbench: Note server config not found.", // Updated text
       );
       return;
     }
 
     // Use the updated utility function to get the target instance
-    final selectedInstance = await showFocusInstancePicker(
+    final selectedInstance = await showWorkbenchInstancePicker(
       // Correct function call
       context,
       ref,
-      title: 'Add Note To Focus Board', // Updated text
+      title: 'Add Note To Workbench', // Updated text
     );
 
     // If user cancelled or no instance selected, do nothing
@@ -437,13 +438,15 @@ class NoteListItemState extends ConsumerState<NoteListItem> {
     // Use the updated provider family for the *target* instance
     ref
         .read(
-          focusProviderFamily(targetInstanceId).notifier,
-        ) // Correct provider family
+          workbenchProviderFamily(
+            targetInstanceId,
+          ).notifier, // Correct provider family
+        )
         .addItem(reference);
 
     final previewText = reference.previewContent ?? 'Item';
     final dialogContent =
-        'Added "${previewText.substring(0, min(30, previewText.length))}${previewText.length > 30 ? '...' : ''}" to Focus Board "$targetInstanceName"'; // Updated text
+        'Added "${previewText.substring(0, min(30, previewText.length))}${previewText.length > 30 ? '...' : ''}" to Workbench "$targetInstanceName"'; // Updated text
 
     _showAlertDialog(context, 'Success', dialogContent);
   }

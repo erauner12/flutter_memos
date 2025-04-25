@@ -5,8 +5,6 @@ import 'package:flutter_memos/models/mcp_server_config.dart';
 import 'package:flutter_memos/models/server_config.dart';
 import 'package:flutter_memos/providers/api_providers.dart';
 import 'package:flutter_memos/providers/chat_providers.dart';
-import 'package:flutter_memos/providers/focus_instances_provider.dart'; // Correct import
-import 'package:flutter_memos/providers/focus_provider.dart'; // Correct import
 // ADD: Import the new MCP config provider
 import 'package:flutter_memos/providers/mcp_server_config_provider.dart';
 import 'package:flutter_memos/providers/note_providers.dart' as note_providers;
@@ -16,6 +14,8 @@ import 'package:flutter_memos/providers/settings_provider.dart'; // Import setti
 import 'package:flutter_memos/providers/shared_prefs_provider.dart';
 import 'package:flutter_memos/providers/task_providers.dart';
 import 'package:flutter_memos/providers/task_server_config_provider.dart';
+import 'package:flutter_memos/providers/workbench_instances_provider.dart'; // Correct import: focus -> workbench
+import 'package:flutter_memos/providers/workbench_provider.dart'; // Correct import: focus -> workbench
 import 'package:flutter_memos/screens/add_edit_mcp_server_screen.dart'; // Will be created next
 import 'package:flutter_memos/screens/add_edit_server_screen.dart';
 import 'package:flutter_memos/services/auth_strategy.dart'; // Import for BearerTokenAuthStrategy
@@ -510,10 +510,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     bool cloudSuccess = true; // Assume success unless Supabase fails
     String cloudErrorMessage = '';
 
-    // Get current focus instance IDs before clearing
-    // Use focusInstancesProvider and cast 'i' to FocusInstance
+    // Get current workbench instance IDs before clearing
+    // Use workbenchInstancesProvider and cast 'i' to WorkbenchInstance
     final instanceIdsToClear =
-        ref.read(focusInstancesProvider).instances.map((i) => (i).id).toList();
+        ref
+            .read(workbenchInstancesProvider)
+            .instances
+            .map((i) => (i).id)
+            .toList();
 
     // 1. Clear Supabase Data (Optional - uncomment and adapt if needed)
     try {
@@ -524,6 +528,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       // Example: Clear chat sessions using SupabaseDataService method
       await supabase
           .from(SupabaseDataService.chatSessionsTable)
+          .delete()
+          .neq('id', '0'); // Delete all rows
+
+      // Example: Clear workbench items from Supabase
+      await supabase
+          .from(SupabaseDataService.workbenchItemsTable)
           .delete()
           .neq('id', '0'); // Delete all rows
 
@@ -560,18 +570,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       await geminiNotifier.clear();
 
       // Clear Data Caches / Local State
-      // Invalidate focus providers (they load from prefs now)
+      // Invalidate workbench providers (they load from prefs now)
       for (final instanceId in instanceIdsToClear) {
         ref.invalidate(
-          focusProviderFamily(instanceId),
-        ); // Use focus provider family
+          workbenchProviderFamily(instanceId), // Use workbench provider family
+        );
         // Also clear the prefs file for each instance's items
         await sharedPrefsService.remove(
-          'focus_items_$instanceId',
-        ); // Updated key prefix
+          'workbench_items_$instanceId', // Updated key prefix
+        );
       }
       // Reset and reload instances (will load default from prefs)
-      ref.invalidate(focusInstancesProvider); // Use focus provider
+      ref.invalidate(workbenchInstancesProvider); // Use workbench provider
 
       tasksNotifier.clearTasks(); // Clear in-memory task state
       await chatNotifier.clearChat(); // Clears local state and Supabase entry
@@ -609,7 +619,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     ref.invalidate(noteServerConfigProvider);
     ref.invalidate(taskServerConfigProvider);
     ref.invalidate(mcpServerConfigProvider);
-    ref.invalidate(focusInstancesProvider); // Use focus provider
+    ref.invalidate(workbenchInstancesProvider); // Use workbench provider
     // Invalidate note/task data providers (if they exist and depend on the config)
     ref.invalidate(
       note_providers.notesNotifierProvider,
@@ -1081,7 +1091,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         builder: (dialogContext) => CupertinoAlertDialog(
                           title: const Text('Confirm Reset'),
                           content: const Text(
-                                'This will permanently delete your configured Note server, Task server, all MCP servers, API keys (OpenAI, Gemini), cached data (notes, tasks, focus board items, chat history), and local settings from this device.\n\nSupabase data (like chat history) will also be deleted if configured.\n\nThis action cannot be undone. Are you absolutely sure?', // Updated content
+                                'This will permanently delete your configured Note server, Task server, all MCP servers, API keys (OpenAI, Gemini), cached data (notes, tasks, workbench items, chat history), and local settings from this device.\n\nSupabase data (like chat history and workbench items) will also be deleted if configured.\n\nThis action cannot be undone. Are you absolutely sure?', // Updated content
                           ),
                           actions: [
                             CupertinoDialogAction(child: const Text('Cancel'), onPressed: () => Navigator.pop(dialogContext, false)),
