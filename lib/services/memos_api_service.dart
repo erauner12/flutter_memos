@@ -157,6 +157,7 @@ class MemosApiService implements NoteApiService {
     String? sort = 'updateTime',
     String? direction = 'DESC',
     ServerConfig? targetServerOverride,
+    BlinkoNoteType? blinkoType, // Add parameter, but ignore it
   }) async {
     final memoApi = _getMemoApiForServer(targetServerOverride);
     final serverIdForLog =
@@ -847,6 +848,8 @@ class MemosApiService implements NoteApiService {
       startDate:
           null, // Memos API doesn't have start/end dates directly on memo
       endDate: null,
+      // Memos doesn't have Blinko types, default to unknown
+      blinkoType: BlinkoNoteType.unknown,
     );
   }
 

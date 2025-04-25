@@ -567,6 +567,7 @@ class DummyNoteApiService extends BaseApiService implements NoteApiService {
     int? pageSize,
     String? pageToken,
     ServerConfig? targetServerOverride,
+    BlinkoNoteType? blinkoType, // Add missing parameter
   }) async => ListNotesResponse(notes: [], nextPageToken: null);
   @override
   Future<NoteItem> updateNote(
