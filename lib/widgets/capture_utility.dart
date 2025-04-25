@@ -268,7 +268,7 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
         setState(() {
           _currentHeight =
               targetValue == 1.0 ? _expandedHeight : _collapsedHeight;
-          if ((targetValue - _animationController.value).abs() > 0.01) {
+          if ((_animationController.value - targetValue).abs() > 0.01) {
             _animationController.value = targetValue;
           }
         });
@@ -1005,8 +1005,7 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
         ),
         // Attachment preview (conditionally shown)
         if (_selectedFileData != null) ...[
-          Container(
-            constraints: const BoxConstraints(maxHeight: 50),
+          Padding(
             padding: const EdgeInsets.only(
               top: 8.0,
               bottom: 4.0,
@@ -1076,9 +1075,8 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
           ),
         ],
         // Bottom row with buttons (fixed height)
-        Container(
+        SizedBox(
           height: 44,
-          constraints: const BoxConstraints(minHeight: 44, maxHeight: 44),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
