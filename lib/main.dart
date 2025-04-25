@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter_memos/screens/focus/focus_screen.dart'; // Import FocusScreen
+// Updated import path for FocusScreen now that it's inside lib
+import 'package:flutter_memos/screens/focus/focus_screen.dart';
 import 'package:flutter_memos/screens/item_detail/item_detail_screen.dart';
 import 'package:flutter_memos/screens/new_note/new_note_screen.dart'; // Import NewNoteScreen
 import 'package:flutter_memos/widgets/config_check_wrapper.dart'; // Import the wrapper
@@ -77,6 +78,10 @@ class MyAppRoot extends StatelessWidget {
             final itemId = args?['itemId'] as String?;
             // Ensure itemId is provided, otherwise handle error or default
             if (itemId != null) {
+              // Assuming ItemDetailScreen is also moved or already in lib
+              // If ItemDetailScreen is outside lib, it needs moving too.
+              // For now, assume it's correctly located or will be moved.
+              // If it's at lib/screens/item_detail/item_detail_screen.dart
               return CupertinoPageRoute(
                 builder: (_) => ItemDetailScreen(itemId: itemId),
                 settings: settings, // Pass settings along
@@ -111,7 +116,7 @@ class MyAppRoot extends StatelessWidget {
 }
 
 // Placeholder for ItemDetailScreen if it doesn't exist yet.
-// Create this file: lib/screens/item_detail/item_detail_screen.dart
+// Ensure this file exists at lib/screens/item_detail/item_detail_screen.dart
 // class ItemDetailScreen extends StatelessWidget {
 //   final String itemId;
 //   const ItemDetailScreen({super.key, required this.itemId});

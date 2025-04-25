@@ -2,10 +2,9 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_memos/models/focus_instance.dart'; // Correct import
 import 'package:flutter_memos/providers/focus_instances_provider.dart'; // Correct import
 import 'package:flutter_memos/providers/focus_provider.dart'; // Correct import
+// Use package import for widget within lib/screens
+import 'package:flutter_memos/screens/focus/widgets/focus_detail_view.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
-import 'widgets/focus_detail_view.dart';
-// Removed duplicate import: import 'widgets/focus_detail_view.dart';
 
 // Renamed from WorkbenchScreen
 class FocusScreen extends ConsumerWidget {
@@ -16,7 +15,8 @@ class FocusScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     // Watch the specific instance details to get the name for the AppBar
-    final instanceAsync = ref.watch(focusInstanceProvider(instanceId)); // Use focus provider
+    // Use the existing focusInstanceProvider defined below
+    final instanceAsync = ref.watch(focusInstanceProvider(instanceId));
     // Watch the items provider for this specific instance
     final focusState = ref.watch(focusProviderFamily(instanceId)); // Use focus provider family
 
@@ -115,6 +115,9 @@ class FocusScreen extends ConsumerWidget {
 
 // Helper provider to watch a single instance by ID (useful for AppBar title)
 // Return AsyncValue<FocusInstance?> to handle loading/error states and nullability
+// NOTE: This duplicates the provider in focus_instances_provider.dart.
+// Consider removing this and importing/using the one from focus_instances_provider.dart
+// For now, keeping it to minimize changes, but it should be consolidated.
 final focusInstanceProvider =
     Provider.family<AsyncValue<FocusInstance?>, String>((ref, instanceId) {
   final instancesState = ref.watch(focusInstancesProvider); // Use focus provider

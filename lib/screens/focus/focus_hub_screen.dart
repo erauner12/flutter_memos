@@ -1,10 +1,11 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_memos/models/focus_instance.dart'; // Correct import
 import 'package:flutter_memos/providers/focus_instances_provider.dart'; // Correct import
-import 'package:flutter_memos/screens/focus/widgets/focus_instance_tile.dart'; // Correct import path
+// Use package import for provider within lib
+import 'package:flutter_memos/providers/focus_provider.dart';
+// Updated import path for FocusInstanceTile now that it's inside lib
+import 'package:flutter_memos/screens/focus/widgets/focus_instance_tile.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
-import '../../providers/focus_provider.dart'; // Correct import
 
 // Renamed from WorkbenchHubScreen
 class FocusHubScreen extends ConsumerStatefulWidget {
@@ -170,6 +171,11 @@ class _FocusHubScreenState extends ConsumerState<FocusHubScreen> {
                   if (Navigator.of(context).canPop()) {
                     Navigator.pop(context); // Close confirmation
                   }
+                  // Also delete items associated with the instance
+                  ref
+                      .read(focusProviderFamily(instance.id).notifier)
+                      .clearAllItems();
+                  // Then delete the instance itself
                   ref
                       .read(focusInstancesProvider.notifier) // Correct provider
                       .deleteInstance(instance.id);
@@ -234,10 +240,13 @@ class _FocusHubScreenState extends ConsumerState<FocusHubScreen> {
     final sortedInstances = [...instances]..sort((a, b) {
       if (a.isSystemDefault) return -1;
       if (b.isSystemDefault) return 1;
-      return a.createdAt.compareTo(
-        b.createdAt,
-      );
+      // Sort by name alphabetically as secondary criteria
+      int nameCompare = a.name.toLowerCase().compareTo(b.name.toLowerCase());
+      if (nameCompare != 0) return nameCompare;
+      // Fallback to creation date if names are identical (unlikely with UUIDs)
+      return a.createdAt.compareTo(b.createdAt);
     });
+
 
     final separator = Container(
       height: 1,
@@ -251,27 +260,18 @@ class _FocusHubScreenState extends ConsumerState<FocusHubScreen> {
       ),
       navigationBar: CupertinoNavigationBar(
         middle: const Text("Focus Boards"), // Updated text
-        automaticallyImplyLeading: false,
+        automaticallyImplyLeading: false, // Assuming this is a root tab screen
         trailing: CupertinoButton(
           padding: EdgeInsets.zero,
           child: const Icon(CupertinoIcons.refresh),
           onPressed: () {
             // Invalidate providers to trigger reload
             ref.invalidate(focusInstancesProvider); // Correct provider
-            final currentInstanceIds =
-                ref
-                    .read(focusInstancesProvider) // Correct provider
-                    .instances
-                    .map((i) => i.id)
-                    .toList();
-            for (final id in currentInstanceIds) {
-              ref.invalidate(
-                focusProviderFamily(id),
-              ); // Correct provider family
-            }
+            // No need to invalidate individual family providers here,
+            // as they depend on focusInstancesProvider and will rebuild if needed.
             // Optional: Show a confirmation or feedback
             // ScaffoldMessenger.of(context).showSnackBar(
-            //   const SnackBar(content: Text('Refreshing all focus boards...')), // Updated text
+            //   const SnackBar(content: Text('Refreshing focus boards...')), // Updated text
             // );
           },
         ),

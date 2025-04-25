@@ -476,5 +476,34 @@ class FocusItemTile extends ConsumerWidget {
 
 // Add missing moveItem to FocusNotifier if needed
 extension FocusNotifierMoveExtension on FocusNotifier {
-  Future<void> moveItem({required String itemId, required String targetInstanceId}) async { /* Placeholder */ }
+  Future<void> moveItem({required String itemId, required String targetInstanceId}) async {
+     // Placeholder implementation - needs actual logic
+     print('[FocusNotifier($instanceId)] Moving item $itemId to instance $targetInstanceId (Placeholder)');
+     // 1. Find the item to move in the current state
+     final itemIndex = state.items.indexWhere((item) => item.id == itemId);
+     if (itemIndex == -1) {
+       print('[FocusNotifier($instanceId)] Item $itemId not found for moving.');
+       state = state.copyWith(error: 'Item to move not found.');
+       return;
+     }
+     final itemToMove = state.items[itemIndex];
+
+     // 2. Remove item from the current instance's list
+     final updatedSourceItems = List<WorkbenchItemReference>.from(state.items)..removeAt(itemIndex);
+     await _saveItemsToPrefs(updatedSourceItems); // Save source list
+     state = state.copyWith(items: updatedSourceItems); // Update source state
+
+     // 3. Add item to the target instance's list
+     // This requires interacting with the target FocusNotifier.
+     // This is tricky directly from another notifier. Usually, this logic
+     // would be orchestrated by a higher-level service or UI interaction
+     // that can read/write to both notifiers.
+     // For now, we'll just log it. A full implementation might involve:
+     // - Reading the target notifier via ref.read(focusProviderFamily(targetInstanceId).notifier) (if ref is available)
+     // - Calling addItem on the target notifier.
+     print('[FocusNotifier($instanceId)] Needs mechanism to add item ${itemToMove.id} to target instance $targetInstanceId.');
+
+     // Potential issue: If the target notifier isn't loaded/active, adding might fail.
+     // Consider using a shared service or repository pattern.
+   }
 }
