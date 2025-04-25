@@ -113,4 +113,46 @@ class TextNormalizer {
     // Consider more sophisticated checks if needed, e.g., regex for specific patterns
     // like /Ã[A-Z]/ or checking character codes.
   }
+
+  // --- Hackathon Patch: Emoji Removal ---
+
+  // TODO: Remove this emoji-stripping hack after server data is fixed (post-hackathon).
+  // This is a temporary measure to hide corrupted emoji artifacts.
+  /// Removes common emoji characters from a string using a regex heuristic.
+  static String removeEmojis(String input) {
+    // Basic example with multiple common emoji ranges. Not exhaustive.
+    final emojiRegex = RegExp(
+      r'[\u{1F300}-\u{1F5FF}' // Miscellaneous Symbols and Pictographs
+      r'\u{1F600}-\u{1F64F}' // Emoticons
+      r'\u{1F680}-\u{1F6FF}' // Transport and Map Symbols
+      r'\u{2600}-\u{26FF}' // Miscellaneous Symbols
+      r'\u{2700}-\u{27BF}' // Dingbats
+      r'\u{FE00}-\u{FE0F}' // Variation Selectors
+      r'\u{1FA70}-\u{1FAFF}' // Symbols and Pictographs Extended-A
+      r']+', // Match one or more emojis together
+      unicode: true,
+      // dotAll: true, // dotAll not needed for character class matching
+    );
+    final result = input.replaceAll(emojiRegex, '');
+    if (kDebugMode && result != input) {
+      print('[TextNormalizer] Removed potential emoji characters.');
+    }
+    return result;
+  }
+
+  // TODO: Remove this emoji-stripping hack after server data is fixed (post-hackathon).
+  /// Applies iterative normalization and then removes potential emoji characters.
+  /// This is a temporary hack to hide corrupted emoji artifacts for the demo.
+  static String iterativeNormalizeAndRemoveEmojis(
+    String input, {
+    int maxRounds = 3,
+  }) {
+    // 1. Iteratively fix double-encoding
+    final normalized = iterativeNormalize(input, maxRounds: maxRounds);
+
+    // 2. Remove any remaining emojis (or corrupted artifacts)
+    final noEmojis = removeEmojis(normalized);
+
+    return noEmojis;
+  }
 }

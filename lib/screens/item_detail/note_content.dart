@@ -36,15 +36,19 @@ class NoteContent extends ConsumerWidget { // Renamed class
     final String formattedCreateDate = dateFormat.format(createDate);
     final String formattedUpdateDate = dateFormat.format(updateDate);
 
-    // Iteratively normalize the note content before using it
-    final normalizedContent = TextNormalizer.iterativeNormalize(note.content);
+    // Apply iterative normalization AND remove emojis (temporary hack)
+    final normalizedContent = TextNormalizer.iterativeNormalizeAndRemoveEmojis(
+      note.content,
+    );
 
     if (kDebugMode) {
       print('[NoteContent] Rendering note $noteId'); // Updated log identifier
       final originalLength = note.content.length;
       final normalizedLength = normalizedContent.length;
       print('[NoteContent] Original content length: $originalLength chars');
-      print('[NoteContent] Normalized content length: $normalizedLength chars');
+      print(
+        '[NoteContent] Normalized content length (after emoji removal): $normalizedLength chars',
+      );
       if (normalizedLength < 200) {
         print(
           '[NoteContent] Normalized Content preview: "$normalizedContent"',
@@ -55,7 +59,9 @@ class NoteContent extends ConsumerWidget { // Renamed class
         );
       }
       if (note.content != normalizedContent) {
-        print('[NoteContent] Content was normalized using iterative method.');
+        print(
+          '[NoteContent] Content was normalized and/or had emojis removed.',
+        );
         // Optionally log the original content if debugging is needed
         // print('[NoteContent] Original Content: "${note.content}"');
       }
@@ -68,7 +74,8 @@ class NoteContent extends ConsumerWidget { // Renamed class
         children: [
           // Note Content using MarkdownBody with normalized content
           MarkdownBody(
-            data: normalizedContent, // Use iteratively normalized content
+            data:
+                normalizedContent, // Use iteratively normalized & emoji-stripped content
             selectable: true,
             styleSheet: MarkdownStyleSheet.fromCupertinoTheme(theme).copyWith(
               p: theme.textTheme.textStyle.copyWith(
@@ -186,8 +193,10 @@ class NoteContent extends ConsumerWidget { // Renamed class
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
-                            // Normalize tag display using iterative method
-                            TextNormalizer.iterativeNormalize(tag),
+                            // Normalize tag display using iterative method (emojis less likely here, but keep consistent)
+                            TextNormalizer.iterativeNormalizeAndRemoveEmojis(
+                              tag,
+                            ),
                             style: TextStyle(
                               fontSize: 12,
                               color: secondaryTextColor,
