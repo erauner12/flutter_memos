@@ -159,7 +159,7 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
   late AnimationController _animationController;
   bool _isDragging = false;
   double _collapsedHeight = 60.0;
-  double _expandedHeight = 240.0;
+  double _expandedHeight = 240.0; // Adjust if needed for segmented control
   double _currentHeight = 60.0;
 
   static const SpringDescription _springDescription = SpringDescription(
@@ -167,6 +167,31 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
     stiffness: 100.0,
     damping: 15.0,
   );
+
+  // Data for the segmented control segments
+  static const Map<SubmitAction, ({IconData icon, String label})> _segmentData =
+      {
+        SubmitAction.newComment: (
+          icon: CupertinoIcons.chat_bubble_2_fill,
+          label: 'New',
+        ),
+        SubmitAction.appendToLastComment: (
+          icon: CupertinoIcons.text_append,
+          label: 'Append 💬',
+        ),
+        SubmitAction.prependToLastComment: (
+          icon: CupertinoIcons.text_insert,
+          label: 'Prepend 💬',
+        ),
+        SubmitAction.appendToMemo: (
+          icon: CupertinoIcons.doc_append,
+          label: 'Append 📝',
+        ),
+        SubmitAction.prependToMemo: (
+          icon: CupertinoIcons.doc_plaintext,
+          label: 'Prepend 📝',
+        ),
+      };
 
   @override
   void initState() {
@@ -227,12 +252,14 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
 
   void _updateHeights(BuildContext context) {
     final size = MediaQuery.of(context).size;
+    // Adjust heights slightly if needed to accommodate segmented control better
     double newCollapsedHeight = 60.0;
-    double newExpandedHeight = 240.0;
+    // Increased expanded height slightly for better spacing with segmented control
+    double newExpandedHeight = 260.0;
 
     if (size.width > 1400) {
       newCollapsedHeight = 70.0;
-      newExpandedHeight = 280.0;
+      newExpandedHeight = 300.0; // Increased expanded height
     }
 
     if (newCollapsedHeight != _collapsedHeight ||
@@ -958,185 +985,31 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
     );
   }
 
-  Widget buildExpandedContent(String hintText, String buttonText) {
-    // This Column contains the text field, attachment preview, and buttons.
-    // It should fit within the parent Expanded widget.
-    return Column(
-      // Use max to allow the Expanded child to fill space
-      mainAxisSize: MainAxisSize.max,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // TextField should expand to fill available space
-        Expanded(
-          child: KeyboardListener(
-            focusNode:
-                FocusNode(), // Use a dedicated node if needed for specific key handling here
-            onKeyEvent: handleKeyEvent,
-            child: CupertinoTextField(
-              controller: _textController,
-              focusNode: _focusNode,
-              style: TextStyle(
-                fontSize: 16,
-                height: 1.4,
-                color: CupertinoColors.label.resolveFrom(context),
-                fontFamily: 'Menlo, Monaco, Consolas, "Courier New", monospace',
-              ),
-              placeholder: hintText,
-              placeholderStyle: TextStyle(
-                color: CupertinoColors.placeholderText.resolveFrom(context),
-                fontSize: 16,
-              ),
-              decoration: const BoxDecoration(
-                color: CupertinoColors.transparent,
-              ),
-              padding: const EdgeInsets.symmetric(vertical: 8.0),
-              cursorColor: CupertinoTheme.of(context).primaryColor,
-              cursorWidth: 2,
-              maxLines: null, // Allows internal scrolling
-              minLines: null, // Allows internal scrolling
-              expands: true, // Make TextField fill the Expanded space
-              textCapitalization: TextCapitalization.sentences,
-              keyboardType: TextInputType.multiline,
-              onTap: () {
-                if (!_isExpanded) _expand();
-              },
+  // Helper widget to build the content for each segment
+  Widget _buildSegmentWidget(IconData icon, String label, bool enabled) {
+    final color =
+        enabled
+            ? CupertinoColors.label.resolveFrom(context)
+            : CupertinoColors.secondaryLabel.resolveFrom(context);
+
+    return Opacity(
+      opacity: enabled ? 1.0 : 0.5,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 4.0),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 16, color: color),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: TextStyle(fontSize: 13, color: color),
+              overflow: TextOverflow.ellipsis,
             ),
-          ),
+          ],
         ),
-        // Attachment preview (conditionally shown)
-        if (_selectedFileData != null) ...[
-          Padding(
-            padding: const EdgeInsets.only(
-              top: 8.0,
-              bottom: 4.0,
-              left: 4.0,
-              right: 4.0,
-            ),
-            child: Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 8.0,
-                vertical: 4.0,
-              ),
-              decoration: BoxDecoration(
-                color: CupertinoColors.systemGrey5.resolveFrom(context),
-                borderRadius: BorderRadius.circular(8.0),
-              ),
-              child: Row(
-                children: [
-                  if (_selectedContentType?.startsWith('image/') == true)
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(4.0),
-                      child: Image.memory(
-                        _selectedFileData!,
-                        width: 30,
-                        height: 30,
-                        fit: BoxFit.cover,
-                        errorBuilder:
-                            (context, error, stackTrace) => const Icon(
-                              CupertinoIcons.exclamationmark_circle,
-                              size: 30,
-                            ),
-                      ),
-                    )
-                  else
-                    Icon(
-                      CupertinoIcons.doc_fill,
-                      size: 24,
-                      color: CupertinoColors.secondaryLabel.resolveFrom(
-                        context,
-                      ),
-                    ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      _selectedFilename ?? 'Attached File',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: CupertinoColors.label.resolveFrom(context),
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  CupertinoButton(
-                    padding: EdgeInsets.zero,
-                    minSize: 0,
-                    onPressed: _removeAttachment,
-                    child: Icon(
-                      CupertinoIcons.clear_circled_solid,
-                      size: 18,
-                      color: CupertinoColors.secondaryLabel.resolveFrom(
-                        context,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-        // Bottom row with buttons (fixed height)
-        SizedBox(
-          height: 44,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  CupertinoButton(
-                    padding: EdgeInsets.zero,
-                    minSize: 40,
-                    onPressed: showOverflowActionSheet,
-                    child: Icon(
-                      CupertinoIcons.ellipsis_circle,
-                      size: 20,
-                      color: CupertinoColors.secondaryLabel.resolveFrom(
-                        context,
-                      ),
-                    ),
-                  ),
-                  CupertinoButton(
-                    padding: EdgeInsets.zero,
-                    minSize: 40,
-                    onPressed: _pickFile,
-                    child: Icon(
-                      CupertinoIcons.paperclip,
-                      size: 20,
-                      color: CupertinoColors.secondaryLabel.resolveFrom(
-                        context,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              CupertinoButton(
-                padding: const EdgeInsets.all(10.0),
-                borderRadius: BorderRadius.circular(24),
-                color:
-                    _isSubmitting
-                        ? CupertinoTheme.of(context).primaryColor.withAlpha(179)
-                        : CupertinoTheme.of(context).primaryColor,
-                onPressed: _isSubmitting ? null : _handleSubmit,
-                child: SizedBox(
-                  width: 20,
-                  height: 20,
-                  child:
-                      _isSubmitting
-                          ? const CupertinoActivityIndicator(
-                            color: CupertinoColors.white,
-                            radius: 10,
-                          )
-                          : const Icon(
-                            CupertinoIcons.arrow_up,
-                            color: CupertinoColors.white,
-                            size: 20,
-                          ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
+      ),
     );
   }
 
@@ -1226,40 +1099,31 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
         parentMemoAsyncValue.hasValue && parentMemoAsyncValue.value != null;
     final bool canAppendPrependComment = hasComments && !hasAttachment;
     final bool canAppendPrependMemo = isParentMemoLoaded && !hasAttachment;
-    final Map<SubmitAction, Widget> segmentedControlChildren = {
-      SubmitAction.newComment: const Padding(
-        padding: EdgeInsets.symmetric(horizontal: 6),
-        child: Text('New 💬'),
-      ),
-      SubmitAction.appendToLastComment: Opacity(
-        opacity: canAppendPrependComment ? 1.0 : 0.5,
-        child: const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 6),
-          child: Text('Append 💬'),
-        ),
-      ),
-      SubmitAction.prependToLastComment: Opacity(
-        opacity: canAppendPrependComment ? 1.0 : 0.5,
-        child: const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 6),
-          child: Text('Prepend 💬'),
-        ),
-      ),
-      SubmitAction.appendToMemo: Opacity(
-        opacity: canAppendPrependMemo ? 1.0 : 0.5,
-        child: const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 6),
-          child: Text('Append 📝'),
-        ),
-      ),
-      SubmitAction.prependToMemo: Opacity(
-        opacity: canAppendPrependMemo ? 1.0 : 0.5,
-        child: const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 6),
-          child: Text('Prepend 📝'),
-        ),
-      ),
-    };
+
+    // Build the segmented control children using the helper
+    final Map<SubmitAction, Widget> segmentedControlChildren = {};
+    for (final action in SubmitAction.values) {
+      final data = _segmentData[action]!;
+      bool enabled = true;
+      switch (action) {
+        case SubmitAction.newComment:
+          enabled = true; // Always enabled
+          break;
+        case SubmitAction.appendToLastComment:
+        case SubmitAction.prependToLastComment:
+          enabled = canAppendPrependComment;
+          break;
+        case SubmitAction.appendToMemo:
+        case SubmitAction.prependToMemo:
+          enabled = canAppendPrependMemo;
+          break;
+      }
+      segmentedControlChildren[action] = _buildSegmentWidget(
+        data.icon,
+        data.label,
+        enabled,
+      );
+    }
 
     _updateHeights(context);
 
@@ -1337,11 +1201,14 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
-                  // Content area with scrolling
+                  // Content area
                   Expanded(
                     child:
                         showExpandedContent
                             ? SingleChildScrollView(
+                              // Allows content to scroll if needed
+                              physics:
+                                  const ClampingScrollPhysics(), // Prevents overscroll glow
                               child: Padding(
                                 padding: EdgeInsets.symmetric(
                                   horizontal:
@@ -1355,74 +1222,101 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
                                 ),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
-                                  mainAxisSize: MainAxisSize.min,
+                                  mainAxisSize:
+                                      MainAxisSize
+                                          .min, // Fit content vertically
                                 children: [
                                   // Segmented control (conditionally shown)
                                   if (widget.mode == CaptureMode.addComment)
                                     Padding(
                                       padding: const EdgeInsets.only(
-                                        bottom: 8.0,
+                                          bottom:
+                                              10.0, // Increased bottom padding
                                       ),
                                       child: SizedBox(
                                         width: double.infinity,
-                                        child: CupertinoSegmentedControl<
-                                          SubmitAction
-                                        >(
-                                          children: segmentedControlChildren,
-                                          groupValue: _submitAction,
-                                          onValueChanged: (
-                                            SubmitAction newValue,
-                                          ) {
-                                            bool allowed = false;
-                                            switch (newValue) {
-                                              case SubmitAction.newComment:
-                                                allowed = true;
-                                                break;
-                                              case SubmitAction
-                                                  .appendToLastComment:
-                                              case SubmitAction
-                                                  .prependToLastComment:
-                                                allowed =
-                                                    canAppendPrependComment;
-                                                break;
-                                              case SubmitAction.appendToMemo:
-                                              case SubmitAction.prependToMemo:
-                                                allowed = canAppendPrependMemo;
-                                                break;
-                                            }
-                                            if (allowed)
-                                              setState(() {
-                                                _submitAction = newValue;
-                                              });
-                                            else if (kDebugMode)
-                                              print(
-                                                "[CaptureUtility] Action '$newValue' disallowed.",
-                                              );
-                                          },
-                                          borderColor: CupertinoColors
-                                              .systemGrey
-                                              .resolveFrom(context),
-                                          selectedColor:
-                                              CupertinoTheme.of(
+                                          child: ClipRRect(
+                                            // Apply rounding to the control
+                                            borderRadius: BorderRadius.circular(
+                                              8.0,
+                                            ),
+                                            child: CupertinoSegmentedControl<
+                                              SubmitAction
+                                            >(
+                                              children:
+                                                  segmentedControlChildren,
+                                              groupValue: _submitAction,
+                                              onValueChanged: (
+                                                SubmitAction newValue,
+                                              ) {
+                                                bool allowed = false;
+                                                switch (newValue) {
+                                                  case SubmitAction.newComment:
+                                                    allowed = true;
+                                                    break;
+                                                  case SubmitAction
+                                                      .appendToLastComment:
+                                                  case SubmitAction
+                                                      .prependToLastComment:
+                                                    allowed =
+                                                        canAppendPrependComment;
+                                                    break;
+                                                  case SubmitAction
+                                                      .appendToMemo:
+                                                  case SubmitAction
+                                                      .prependToMemo:
+                                                    allowed =
+                                                        canAppendPrependMemo;
+                                                    break;
+                                                }
+                                                if (allowed)
+                                                  setState(() {
+                                                    _submitAction = newValue;
+                                                  });
+                                                else if (kDebugMode)
+                                                  print(
+                                                    "[CaptureUtility] Action '$newValue' disallowed.",
+                                                  );
+                                              },
+                                              borderColor: CupertinoColors
+                                                  .systemGrey3
+                                                  .resolveFrom(context),
+                                              selectedColor: CupertinoTheme.of(
                                                 context,
-                                              ).primaryColor,
-                                          unselectedColor:
-                                              CupertinoColors.transparent,
-                                          pressedColor: CupertinoTheme.of(
-                                            context,
-                                          ).primaryColor.withAlpha(51),
+                                              ).primaryColor.withOpacity(
+                                                0.8,
+                                              ), // Slightly transparent primary
+                                              unselectedColor:
+                                                  isDarkMode
+                                                      ? CupertinoColors
+                                                          .darkBackgroundGray
+                                                          .withOpacity(0.5)
+                                                      : CupertinoColors
+                                                          .systemGrey6, // Lighter grey for light mode
+                                              pressedColor: CupertinoTheme.of(
+                                                context,
+                                              ).primaryColor.withAlpha(51),
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    vertical: 2,
+                                                  ), // Add vertical padding
+                                            ),
                                         ),
                                       ),
                                     ),
-                                  
-                                    // Text input field (NOT in an Expanded)
+
+                                    // Text input field
                                     KeyboardListener(
                                       focusNode: FocusNode(),
                                       onKeyEvent: handleKeyEvent,
-                                      child: Container(
+                                      // Constrain the TextField height to prevent infinite growth
+                                      // Max height calculation needs refinement based on other elements
+                                      child: ConstrainedBox(
                                         constraints: BoxConstraints(
-                                          minHeight: 100,
-                                          maxHeight: _expandedHeight - 120,
+                                          // Adjust max height based on expanded height and other elements
+                                          maxHeight:
+                                              _expandedHeight -
+                                              150, // Example adjustment
                                         ),
                                         child: CupertinoTextField(
                                           controller: _textController,
@@ -1453,8 +1347,10 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
                                                 context,
                                               ).primaryColor,
                                           cursorWidth: 2,
-                                          maxLines: null,
-                                          minLines: 5,
+                                          maxLines:
+                                              null, // Allow multiple lines
+                                          minLines:
+                                              3, // Start with a few lines visible
                                           textCapitalization:
                                               TextCapitalization.sentences,
                                           keyboardType: TextInputType.multiline,
@@ -1467,12 +1363,13 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
 
                                     // Attachment preview (conditionally shown)
                                     if (_selectedFileData != null)
-                                      Container(
+                                      Padding(
+                                        // Use Padding instead of Container for spacing
                                         padding: const EdgeInsets.only(
                                           top: 8.0,
                                           bottom: 4.0,
-                                          left: 4.0,
-                                          right: 4.0,
+                                          // left: 4.0, // Remove horizontal padding if not needed
+                                          // right: 4.0,
                                         ),
                                         child: Container(
                                           padding: const EdgeInsets.symmetric(
@@ -1637,6 +1534,7 @@ class _CaptureUtilityState extends ConsumerState<CaptureUtility>
                               ),
                             )
                             : Padding(
+                              // Collapsed content padding
                               padding: EdgeInsets.symmetric(
                                 horizontal:
                                     MediaQuery.of(context).size.width > 1200

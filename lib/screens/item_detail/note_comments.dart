@@ -3,7 +3,7 @@ import 'package:flutter_memos/providers/comment_providers.dart';
 // Import note_providers and use non-family providers
 import 'package:flutter_memos/providers/note_providers.dart' as note_providers;
 import 'package:flutter_memos/providers/ui_providers.dart';
-import 'package:flutter_memos/utils/comment_utils.dart';
+// import 'package:flutter_memos/utils/comment_utils.dart'; // No longer needed for sorting here
 import 'package:flutter_memos/widgets/comment_card.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -30,17 +30,33 @@ class NoteComments extends ConsumerWidget {
 
     return commentsAsync.when(
       data: (comments) {
-        final visibleComments =
+        final visibleCommentsRaw =
             comments
                 .where((c) => !hiddenCommentIds.contains('$noteId/${c.id}')) // Use noteId
                 .toList();
 
-        // Sort comments chronologically for thread view (pinned first, then oldest to newest)
-        CommentUtils.sortForThreadView(
-          visibleComments,
-        ); // Use thread view sort
+        // --- New Sorting Logic: Pinned first (newest to oldest), then Non-pinned (newest to oldest) ---
+        final pinnedComments =
+            visibleCommentsRaw.where((c) => c.pinned).toList();
+        final nonPinnedComments =
+            visibleCommentsRaw.where((c) => !c.pinned).toList();
 
-        if (visibleComments.isEmpty) {
+        // Sort pinned comments descending by creation date
+        pinnedComments.sort((a, b) => b.createdTs.compareTo(a.createdTs));
+
+        // Sort non-pinned comments descending by creation date
+        nonPinnedComments.sort((a, b) => b.createdTs.compareTo(a.createdTs));
+
+        // Combine the lists
+        final sortedVisibleComments = [...pinnedComments, ...nonPinnedComments];
+        // --- End New Sorting Logic ---
+
+        // Old sorting logic (removed):
+        // CommentUtils.sortForThreadView(
+        //   visibleComments,
+        // ); // Use thread view sort
+
+        if (sortedVisibleComments.isEmpty) {
           return Padding(
             padding: const EdgeInsets.symmetric(vertical: 32.0),
             child: Center(
@@ -62,11 +78,11 @@ class NoteComments extends ConsumerWidget {
             shrinkWrap: true,
             physics:
                 const NeverScrollableScrollPhysics(), // Handled by parent scroll
-            itemCount: visibleComments.length,
+            itemCount: sortedVisibleComments.length,
             itemBuilder: (context, index) {
-              final comment = visibleComments[index];
-              final isSelected =
-                  !isMultiSelectMode && index == selectedCommentIndex;
+              final comment = sortedVisibleComments[index];
+              // Note: selectedCommentIndex might need adjustment if its logic
+              // relied on the previous sort order. Assuming it's independent for now.
 
               // Add padding between comment cards and horizontal padding
               return Padding(
